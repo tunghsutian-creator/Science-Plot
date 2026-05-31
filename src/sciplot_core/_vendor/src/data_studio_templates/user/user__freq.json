@@ -1,0 +1,135 @@
+{
+  "version": 2,
+  "id": "user/freq",
+  "label": "Freq",
+  "family": "table_import",
+  "builtin": false,
+  "description": "Template created from E0.csv.",
+  "file_types": [
+    "csv",
+    "txt",
+    "tsv",
+    "xls",
+    "xlsx",
+    "xlsm"
+  ],
+  "parse_strategy": "table_template_v2",
+  "match_conditions": [
+    {
+      "sheet_name_contains": [
+        "Sheet1"
+      ],
+      "text_contains": [
+        "Frequency sweep 1",
+        "Angular Frequency",
+        "Storage Modulus",
+        "Loss Modulus"
+      ],
+      "field_kinds": [
+        "curve_x",
+        "curve_y"
+      ],
+      "minimum_score": 0.3
+    }
+  ],
+  "field_bindings": [
+    {
+      "id": "x_angular_frequency",
+      "role": "curve_x",
+      "label": "Angular Frequency",
+      "sheet_name": "Sheet1",
+      "block_id": "Sheet1::segment1",
+      "column_name": "Angular Frequency",
+      "column_index": null,
+      "row_label_contains": null,
+      "cell_value_contains": [],
+      "unit_hint": "rad/s",
+      "optional": false
+    },
+    {
+      "id": "y_storage_modulus",
+      "role": "curve_y",
+      "label": "Storage Modulus",
+      "sheet_name": "Sheet1",
+      "block_id": "Sheet1::segment1",
+      "column_name": "Storage Modulus",
+      "column_index": null,
+      "row_label_contains": null,
+      "cell_value_contains": [],
+      "unit_hint": "Pa",
+      "optional": false
+    },
+    {
+      "id": "y_loss_modulus",
+      "role": "curve_y",
+      "label": "Loss Modulus",
+      "sheet_name": "Sheet1",
+      "block_id": "Sheet1::segment1",
+      "column_name": "Loss Modulus",
+      "column_index": null,
+      "row_label_contains": null,
+      "cell_value_contains": [],
+      "unit_hint": "Pa",
+      "optional": false
+    },
+    {
+      "id": "y_complex_viscosity",
+      "role": "curve_y",
+      "label": "Complex Viscosity",
+      "sheet_name": "Sheet1",
+      "block_id": "Sheet1::segment1",
+      "column_name": "Complex Viscosity",
+      "column_index": null,
+      "row_label_contains": null,
+      "cell_value_contains": [],
+      "unit_hint": "mPa·s",
+      "optional": false
+    },
+    {
+      "id": "y_loss_factor",
+      "role": "curve_y",
+      "label": "Loss Factor",
+      "sheet_name": "Sheet1",
+      "block_id": "Sheet1::segment1",
+      "column_name": "Loss Factor",
+      "column_index": null,
+      "row_label_contains": null,
+      "cell_value_contains": [],
+      "unit_hint": "1",
+      "optional": false
+    }
+  ],
+  "workbook_metric_ids": [],
+  "default_group_name_strategy": "common_prefix",
+  "preferred_sheet_name": "Storage_Loss_Modulus",
+  "output_kind": "curve_metrics",
+  "comparison_enabled": false,
+  "source_format": {
+    "encoding": "utf-16",
+    "delimiter": "\t",
+    "sheet_name": "Sheet1"
+  },
+  "segment_policy": "series_per_segment",
+  "segment_selectors": [
+    {
+      "id": "Sheet1::segment1",
+      "label": "Frequency sweep 1 / Interval 1",
+      "result_label": "Frequency sweep 1",
+      "interval_index": 1,
+      "header_row_index": 7,
+      "unit_row_index": 9,
+      "data_start_row_index": 10,
+      "start_row": 7,
+      "end_row": 25
+    }
+  ],
+  "metadata": {
+    "created_by": "data_studio_import_template_v2",
+    "figure_layout": "rheology_frequency_multi_sheet",
+    "sample_sort": {
+      "metric": "storage_modulus",
+      "reference_x": "max_common",
+      "direction": "desc"
+    }
+  }
+}

@@ -1,0 +1,2682 @@
+{
+  "version": 3,
+  "defaults": {
+    "style_preset": "nature",
+    "palette_preset": "colorblind_safe"
+  },
+  "aliases": {
+    "style_presets": {
+      "default": "nature",
+      "lab_default": "nature",
+      "science_editorial": "nature",
+      "jacs_analytical": "nature",
+      "advanced_materials_spacious": "nature",
+      "jacs": "acs",
+      "aaas": "science",
+      "advanced_materials": "wiley",
+      "editorial": "nature",
+      "presentation": "nature",
+      "poster": "nature"
+    }
+  },
+  "global_frame": {
+    "panel_width_mm": 60.0,
+    "panel_height_mm": 55.0,
+    "left_margin_mm": 14.0,
+    "right_margin_mm": 4.5,
+    "bottom_margin_mm": 11.0,
+    "top_margin_mm": 5.5
+  },
+  "axis_policy": {
+    "linear_nice_steps": [
+      1.0,
+      2.0,
+      5.0
+    ],
+    "linear_outer_padding_fraction": 0.05,
+    "linear_force_visible_labeled_endpoints": true,
+    "log_display_steps": [
+      1.0,
+      2.0,
+      5.0
+    ],
+    "log_label_mode": "decade_only",
+    "log_allow_unlabeled_outer_padding": true,
+    "bar_zero_baseline_no_lower_padding": true,
+    "tensile_y_include_zero": true,
+    "stacked_x_use_standard_endpoint_policy": true
+  },
+  "size_presets": {
+    "60x55": {
+      "label": "Single 60 x 55 mm",
+      "width_mm": 60.0,
+      "height_mm": 55.0
+    },
+    "120x55": {
+      "label": "Wide 120 x 55 mm",
+      "width_mm": 120.0,
+      "height_mm": 55.0
+    },
+    "180x55": {
+      "label": "Full row 180 x 55 mm",
+      "width_mm": 180.0,
+      "height_mm": 55.0
+    },
+    "60x110": {
+      "label": "Tall 60 x 110 mm",
+      "width_mm": 60.0,
+      "height_mm": 110.0
+    },
+    "120x110": {
+      "label": "Large 120 x 110 mm",
+      "width_mm": 120.0,
+      "height_mm": 110.0
+    },
+    "180x110": {
+      "label": "Full tall 180 x 110 mm",
+      "width_mm": 180.0,
+      "height_mm": 110.0
+    }
+  },
+  "special_layouts": {
+    "heatmap": {
+      "colorbar_x_offset_fraction": 0.38,
+      "colorbar_width_fraction": 0.5,
+      "colorbar_y_offset_fraction": 0.18,
+      "colorbar_y_offset_min": 0.018,
+      "colorbar_y_offset_max_fraction": 0.42,
+      "colorbar_height_fraction": 0.13,
+      "colorbar_height_min": 0.013,
+      "colorbar_bottom_gap": 0.012,
+      "label_y_fraction": 0.56,
+      "label_font_size_pt": 4.8,
+      "tick_font_size_pt": 4.3,
+      "tick_length_pt": 2.0
+    },
+    "wide_nmr": {
+      "width_mm": 60.0,
+      "total_height_mm": 110.0,
+      "structure_reserved_mm": 18.0,
+      "spectrum_height_mm": 92.0
+    }
+  },
+  "qa_profiles": {
+    "alignment": {
+      "preserve_shared_axis_frame": true,
+      "single_panel_width_mm": 60.0,
+      "single_panel_height_mm": 55.0,
+      "double_panel_width_mm": 120.0
+    },
+    "curve": {
+      "small_panel_width_mm": 60.0,
+      "small_panel_height_mm": 55.0,
+      "direct_label_max_series": 4,
+      "legend_candidate_order": [
+        "upper_right",
+        "lower_right",
+        "upper_left",
+        "lower_left"
+      ],
+      "legend_candidate_bias_step": 0.75,
+      "tensile_legend_candidate_order": [
+        "lower_right",
+        "upper_right",
+        "lower_left",
+        "upper_left"
+      ],
+      "tensile_legend_candidate_bias_step": 25.0,
+      "compact_direct_label_inset_fraction": 0.04,
+      "compact_direct_label_offset_pt": 4.0,
+      "compact_direct_label_search_band_fraction": 0.12,
+      "compact_tick_width_scale": 0.82,
+      "compact_tick_length_scale": 0.88,
+      "compact_legend_max_series": 3,
+      "compact_legend_columns": 2,
+      "compact_legend_font_scale": 0.92,
+      "compact_legend_handlelength": 1.35,
+      "compact_legend_handletextpad": 0.35,
+      "compact_legend_columnspacing": 0.8,
+      "compact_legend_borderpad": 0.15,
+      "compact_legend_candidate_order": [
+        "upper_center",
+        "upper_right",
+        "lower_right",
+        "upper_left",
+        "lower_left",
+        "lower_center"
+      ],
+      "compact_legend_candidate_bias_step": 0.75,
+      "tensile_compact_legend_candidate_order": [
+        "lower_right",
+        "upper_right",
+        "lower_left",
+        "upper_left",
+        "upper_center",
+        "lower_center"
+      ],
+      "tensile_compact_legend_candidate_bias_step": 25.0,
+      "legend_area_ratio_warn": 0.055,
+      "legend_area_ratio_fail": 0.07,
+      "dense_marker_point_threshold": 24,
+      "dense_markevery_min": 2,
+      "dense_markevery_max": 6,
+      "dense_marker_scale": 0.88,
+      "dense_tick_width_scale": 0.85,
+      "dense_tick_length_scale": 0.9,
+      "dense_line_width_scale": 0.96,
+      "stroke_hierarchy_target": 0.3,
+      "label_collision_margin_px": 3.0
+    },
+    "heatmap": {
+      "small_panel_width_mm": 60.0,
+      "small_panel_height_mm": 55.0,
+      "colorbar_x_offset_fraction": 0.29,
+      "colorbar_width_fraction": 0.56,
+      "colorbar_y_offset_fraction": 0.2,
+      "colorbar_height_fraction": 0.1,
+      "colorbar_tick_count": 4,
+      "label_gap_pt": 6.0,
+      "min_label_gap_px": 6.0,
+      "safe_sequential_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "bright",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "okabe_ito",
+        "tol_muted",
+        "materials_warm",
+        "shine",
+        "vintage"
+      ]
+    },
+    "stats": {
+      "min_bar_width": 0.28,
+      "max_bar_width": 0.42,
+      "min_spacing_scale": 1.0,
+      "max_spacing_scale": 1.18,
+      "raw_point_max_groups": 6,
+      "raw_point_max_replicates": 10,
+      "raw_point_size": 11.0,
+      "raw_point_alpha": 0.75,
+      "bar_width_ratio_warn": 0.34,
+      "bar_width_ratio_fail": 0.42,
+      "error_cap_ratio_target": 0.22
+    },
+    "stacked": {
+      "label_density_warn_per_axis": 5.0,
+      "reserve_tolerance_mm": 1.0
+    },
+    "composer": {
+      "min_text_size_pt": 6.0,
+      "text_overlap_margin_mm": 1.0,
+      "canvas_margin_mm": 0.5,
+      "binding_overflow_tolerance_mm": 0.25
+    }
+  },
+  "styles": {
+    "nature": {
+      "label": "Nature",
+      "public": true,
+      "description": "Nature: a compact research-figure style that prioritizes official constraints.",
+      "hard_constraints": true,
+      "preset_note": "Built around the current public Nature image constraints.",
+      "recommended_palette_preset": "colorblind_safe",
+      "recommended_visual_theme_id": "clean_light",
+      "axis_frame": {
+        "left": true,
+        "bottom": true,
+        "top": false,
+        "right": false
+      },
+      "typography": {
+        "font_family": [
+          "Arial",
+          "Helvetica",
+          "DejaVu Sans"
+        ],
+        "font_size_pt": 6.5,
+        "legend_font_size_pt": 5.8,
+        "panel_label_size_pt": 8.0,
+        "panel_label_weight": "bold"
+      },
+      "stroke": {
+        "axis_linewidth_pt": 1.0,
+        "tick_width_pt": 1.0,
+        "tick_length_pt": 3.4,
+        "minor_tick_width_pt": 0.8,
+        "minor_tick_length_pt": 2.0,
+        "line_width_pt": 1.2,
+        "line_alpha": 0.92,
+        "marker_alpha": 0.95,
+        "fill_alpha": 0.34,
+        "max_fill_alpha": 0.45,
+        "marker_size_pt": 3.4
+      },
+      "spacing": {
+        "axes_labelpad": 2.0,
+        "xtick_major_pad": 1.4,
+        "ytick_major_pad": 1.4,
+        "legend_inset_fraction": 0.025
+      },
+      "annotation": {
+        "legend_frameon": false,
+        "legend_tightness": "tight",
+        "label_tightness": "tight"
+      },
+      "export": {
+        "figure_dpi": 150,
+        "savefig_dpi": 300,
+        "savefig_format": "pdf",
+        "pdf_fonttype": 42,
+        "ps_fonttype": 42,
+        "color_space": "RGB",
+        "vector_preferred": true,
+        "accessibility_note": "Sans-serif, 5-7 pt text, RGB, vector PDF, avoid red-green conflicts."
+      },
+      "display_group": "publication"
+    },
+    "acs": {
+      "label": "ACS",
+      "public": true,
+      "display_group": "publication",
+      "description": "ACS-inspired compact publication style with Helvetica/Arial lettering and conservative line weights.",
+      "hard_constraints": false,
+      "preset_note": "Approximate ACS/JACS graph metrics: legible small lettering, clear symbols, and lines kept above hairline weight.",
+      "recommended_palette_preset": "okabe_ito",
+      "recommended_visual_theme_id": "clean_light",
+      "axis_frame": {
+        "left": true,
+        "bottom": true,
+        "top": false,
+        "right": false
+      },
+      "typography": {
+        "font_family": [
+          "Arial",
+          "Helvetica",
+          "DejaVu Sans"
+        ],
+        "font_size_pt": 7.0,
+        "legend_font_size_pt": 6.2,
+        "panel_label_size_pt": 8.6,
+        "panel_label_weight": "bold"
+      },
+      "stroke": {
+        "axis_linewidth_pt": 1.0,
+        "tick_width_pt": 1.0,
+        "tick_length_pt": 3.4,
+        "minor_tick_width_pt": 0.8,
+        "minor_tick_length_pt": 2.0,
+        "line_width_pt": 1.3,
+        "line_alpha": 0.94,
+        "marker_alpha": 0.96,
+        "fill_alpha": 0.32,
+        "max_fill_alpha": 0.42,
+        "marker_size_pt": 3.6
+      },
+      "spacing": {
+        "axes_labelpad": 2.2,
+        "xtick_major_pad": 1.5,
+        "ytick_major_pad": 1.5,
+        "legend_inset_fraction": 0.028
+      },
+      "annotation": {
+        "legend_frameon": false,
+        "legend_tightness": "tight",
+        "label_tightness": "tight"
+      },
+      "export": {
+        "figure_dpi": 150,
+        "savefig_dpi": 300,
+        "savefig_format": "pdf",
+        "pdf_fonttype": 42,
+        "ps_fonttype": 42,
+        "color_space": "RGB",
+        "vector_preferred": true,
+        "accessibility_note": "Sans-serif, 5-7 pt text, RGB, vector PDF, avoid red-green conflicts."
+      }
+    },
+    "science": {
+      "label": "Science",
+      "public": true,
+      "display_group": "publication",
+      "description": "Science/AAAS-inspired compact publication style with restrained strokes and minimal visual decoration.",
+      "hard_constraints": false,
+      "preset_note": "Conservative Science-style profile: keep figures simple, readable, and lightly colored.",
+      "recommended_palette_preset": "colorblind_safe",
+      "recommended_visual_theme_id": "clean_light",
+      "axis_frame": {
+        "left": true,
+        "bottom": true,
+        "top": false,
+        "right": false
+      },
+      "typography": {
+        "font_family": [
+          "Arial",
+          "Helvetica",
+          "DejaVu Sans"
+        ],
+        "font_size_pt": 7.0,
+        "legend_font_size_pt": 6.2,
+        "panel_label_size_pt": 8.6,
+        "panel_label_weight": "bold"
+      },
+      "stroke": {
+        "axis_linewidth_pt": 1.0,
+        "tick_width_pt": 1.0,
+        "tick_length_pt": 3.3,
+        "minor_tick_width_pt": 0.8,
+        "minor_tick_length_pt": 2.0,
+        "line_width_pt": 1.25,
+        "line_alpha": 0.94,
+        "marker_alpha": 0.96,
+        "fill_alpha": 0.32,
+        "max_fill_alpha": 0.42,
+        "marker_size_pt": 3.5
+      },
+      "spacing": {
+        "axes_labelpad": 2.2,
+        "xtick_major_pad": 1.5,
+        "ytick_major_pad": 1.5,
+        "legend_inset_fraction": 0.028
+      },
+      "annotation": {
+        "legend_frameon": false,
+        "legend_tightness": "tight",
+        "label_tightness": "tight"
+      },
+      "export": {
+        "figure_dpi": 150,
+        "savefig_dpi": 300,
+        "savefig_format": "pdf",
+        "pdf_fonttype": 42,
+        "ps_fonttype": 42,
+        "color_space": "RGB",
+        "vector_preferred": true,
+        "accessibility_note": "Sans-serif, 5-7 pt text, RGB, vector PDF, avoid red-green conflicts."
+      }
+    },
+    "wiley": {
+      "label": "Wiley",
+      "public": true,
+      "display_group": "publication",
+      "description": "Wiley-inspired publication style with slightly roomier text and balanced muted colors.",
+      "hard_constraints": false,
+      "preset_note": "Approximate Wiley journal figure profile: prioritize readable words and symbols at final figure size.",
+      "recommended_palette_preset": "tol_muted",
+      "recommended_visual_theme_id": "clean_light",
+      "axis_frame": {
+        "left": true,
+        "bottom": true,
+        "top": false,
+        "right": false
+      },
+      "typography": {
+        "font_family": [
+          "Arial",
+          "Helvetica",
+          "DejaVu Sans"
+        ],
+        "font_size_pt": 7.2,
+        "legend_font_size_pt": 6.4,
+        "panel_label_size_pt": 8.8,
+        "panel_label_weight": "bold"
+      },
+      "stroke": {
+        "axis_linewidth_pt": 1.05,
+        "tick_width_pt": 1.05,
+        "tick_length_pt": 3.6,
+        "minor_tick_width_pt": 0.85,
+        "minor_tick_length_pt": 2.1,
+        "line_width_pt": 1.4,
+        "line_alpha": 0.94,
+        "marker_alpha": 0.96,
+        "fill_alpha": 0.3,
+        "max_fill_alpha": 0.4,
+        "marker_size_pt": 3.8
+      },
+      "spacing": {
+        "axes_labelpad": 2.3,
+        "xtick_major_pad": 1.6,
+        "ytick_major_pad": 1.6,
+        "legend_inset_fraction": 0.028
+      },
+      "annotation": {
+        "legend_frameon": false,
+        "legend_tightness": "tight",
+        "label_tightness": "tight"
+      },
+      "export": {
+        "figure_dpi": 150,
+        "savefig_dpi": 300,
+        "savefig_format": "pdf",
+        "pdf_fonttype": 42,
+        "ps_fonttype": 42,
+        "color_space": "RGB",
+        "vector_preferred": true,
+        "accessibility_note": "Sans-serif, 5-7 pt text, RGB, vector PDF, avoid red-green conflicts."
+      }
+    },
+    "elsevier": {
+      "label": "Elsevier",
+      "public": true,
+      "display_group": "publication",
+      "description": "Elsevier-inspired publication style centered on 7 pt lettering and uniform artwork proportions.",
+      "hard_constraints": false,
+      "preset_note": "Approximate Elsevier graph profile: standard fonts, uniform sizing, and readable line/symbol hierarchy.",
+      "recommended_palette_preset": "muted",
+      "recommended_visual_theme_id": "clean_light",
+      "axis_frame": {
+        "left": true,
+        "bottom": true,
+        "top": true,
+        "right": true
+      },
+      "typography": {
+        "font_family": [
+          "Arial",
+          "Helvetica",
+          "DejaVu Sans"
+        ],
+        "font_size_pt": 7.0,
+        "legend_font_size_pt": 6.2,
+        "panel_label_size_pt": 8.6,
+        "panel_label_weight": "bold"
+      },
+      "stroke": {
+        "axis_linewidth_pt": 1.0,
+        "tick_width_pt": 1.0,
+        "tick_length_pt": 3.4,
+        "minor_tick_width_pt": 0.8,
+        "minor_tick_length_pt": 2.0,
+        "line_width_pt": 1.3,
+        "line_alpha": 0.94,
+        "marker_alpha": 0.96,
+        "fill_alpha": 0.32,
+        "max_fill_alpha": 0.42,
+        "marker_size_pt": 3.6
+      },
+      "spacing": {
+        "axes_labelpad": 2.2,
+        "xtick_major_pad": 1.5,
+        "ytick_major_pad": 1.5,
+        "legend_inset_fraction": 0.028
+      },
+      "annotation": {
+        "legend_frameon": false,
+        "legend_tightness": "tight",
+        "label_tightness": "tight"
+      },
+      "export": {
+        "figure_dpi": 150,
+        "savefig_dpi": 300,
+        "savefig_format": "pdf",
+        "pdf_fonttype": 42,
+        "ps_fonttype": 42,
+        "color_space": "RGB",
+        "vector_preferred": true,
+        "accessibility_note": "Sans-serif, 5-7 pt text, RGB, vector PDF, avoid red-green conflicts."
+      }
+    }
+  },
+  "palettes": {
+    "colorblind_safe": {
+      "label": "Colorblind Safe",
+      "public": true,
+      "description": "Default safe palette: colorblind-friendly categorical colors with cividis for sequential scales.",
+      "categorical": [
+        "#0173b2",
+        "#de8f05",
+        "#029e73",
+        "#d55e00",
+        "#cc78bc",
+        "#ca9161",
+        "#fbafe4",
+        "#949494",
+        "#ece133",
+        "#56b4e9"
+      ],
+      "sequential": "cividis",
+      "diverging": "vlag"
+    },
+    "deep": {
+      "label": "Deep",
+      "public": true,
+      "description": "Seaborn deep: balanced, calm, and broadly useful.",
+      "categorical": [
+        "#4c72b0",
+        "#dd8452",
+        "#55a868",
+        "#c44e52",
+        "#8172b3",
+        "#937860",
+        "#da8bc3",
+        "#8c8c8c",
+        "#ccb974",
+        "#64b5cd"
+      ],
+      "sequential": "crest",
+      "diverging": "vlag"
+    },
+    "muted": {
+      "label": "Muted",
+      "public": true,
+      "description": "Seaborn muted: restrained and soft, suited to multi-group comparisons.",
+      "categorical": [
+        "#4878d0",
+        "#ee854a",
+        "#6acc64",
+        "#d65f5f",
+        "#956cb4",
+        "#8c613c",
+        "#dc7ec0",
+        "#797979",
+        "#d5bb67",
+        "#82c6e2"
+      ],
+      "sequential": "rocket",
+      "diverging": "coolwarm"
+    },
+    "bright": {
+      "label": "Bright",
+      "public": false,
+      "description": "Seaborn bright: higher saturation with stronger contrast.",
+      "categorical": [
+        "#023eff",
+        "#ff7c00",
+        "#1ac938",
+        "#e8000b",
+        "#8b2be2",
+        "#9f4800",
+        "#f14cc1",
+        "#a3a3a3",
+        "#ffc400",
+        "#00d7ff"
+      ],
+      "sequential": "mako",
+      "diverging": "icefire"
+    },
+    "mono": {
+      "label": "Mono",
+      "public": true,
+      "description": "Monochrome grayscale: good for analytical figures and black-and-white printing.",
+      "categorical": [
+        "#111827",
+        "#374151",
+        "#6b7280",
+        "#9ca3af",
+        "#d1d5db"
+      ],
+      "sequential": "Greys",
+      "diverging": "Greys"
+    },
+    "infographic": {
+      "label": "Infographic",
+      "public": true,
+      "description": "ECharts-inspired palette with brighter editorial contrast and clean category separation.",
+      "categorical": [
+        "#5470c6",
+        "#91cc75",
+        "#fac858",
+        "#ee6666",
+        "#73c0de",
+        "#3ba272",
+        "#fc8452",
+        "#9a60b4",
+        "#ea7ccc"
+      ],
+      "sequential": "viridis",
+      "diverging": "PuOr"
+    },
+    "roma": {
+      "label": "Roma",
+      "public": true,
+      "description": "Soft warm-cool palette inspired by ECharts theme galleries, suited to cleaner comparison figures.",
+      "categorical": [
+        "#e01f54",
+        "#001852",
+        "#f5e8c8",
+        "#b8d2c7",
+        "#c6b38e",
+        "#82b6e9",
+        "#ff6347",
+        "#a092f1",
+        "#0e6e55"
+      ],
+      "sequential": "magma",
+      "diverging": "BrBG"
+    },
+    "macarons": {
+      "label": "Macarons",
+      "public": true,
+      "description": "Pastel-forward ECharts-inspired palette that stays readable in scientific multi-group charts.",
+      "categorical": [
+        "#2ec7c9",
+        "#b6a2de",
+        "#5ab1ef",
+        "#ffb980",
+        "#d87a80",
+        "#8d98b3",
+        "#e5cf0d",
+        "#97b552",
+        "#95706d",
+        "#dc69aa"
+      ],
+      "sequential": "cividis",
+      "diverging": "vlag"
+    },
+    "shine": {
+      "label": "Shine",
+      "public": true,
+      "description": "Official ECharts Shine palette with high-contrast warm primaries and cooler accents.",
+      "categorical": [
+        "#c12e34",
+        "#e6b600",
+        "#0098d9",
+        "#2b821d",
+        "#005eaa",
+        "#339ca8",
+        "#cda819",
+        "#32a487"
+      ],
+      "sequential": "viridis",
+      "diverging": "PuOr"
+    },
+    "vintage": {
+      "label": "Vintage",
+      "public": true,
+      "description": "Official ECharts Vintage palette with warm paper-tone neutrals and restrained contrast.",
+      "categorical": [
+        "#d87c7c",
+        "#919e8b",
+        "#d7ab82",
+        "#6e7074",
+        "#61a0a8",
+        "#efa18d",
+        "#787464",
+        "#cc7e63",
+        "#724e58",
+        "#4b565b"
+      ],
+      "sequential": "cividis",
+      "diverging": "BrBG"
+    },
+    "okabe_ito": {
+      "label": "Okabe-Ito",
+      "public": true,
+      "description": "Okabe-Ito: a classic colorblind-friendly scientific palette.",
+      "categorical": [
+        "#000000",
+        "#e69f00",
+        "#56b4e9",
+        "#009e73",
+        "#f0e442",
+        "#0072b2",
+        "#d55e00",
+        "#cc79a7"
+      ],
+      "sequential": "cividis",
+      "diverging": "PuOr"
+    },
+    "tol_muted": {
+      "label": "Tol Muted",
+      "public": true,
+      "description": "Paul Tol muted: low-stimulation, balanced categorical colors.",
+      "categorical": [
+        "#332288",
+        "#88ccee",
+        "#44aa99",
+        "#117733",
+        "#999933",
+        "#ddcc77",
+        "#cc6677",
+        "#882255",
+        "#aa4499"
+      ],
+      "sequential": "YlGnBu",
+      "diverging": "BrBG"
+    },
+    "materials_warm": {
+      "label": "Materials Warm",
+      "public": false,
+      "description": "Warm presentation palette with a stronger materials-showcase feel.",
+      "categorical": [
+        "#355070",
+        "#6d597a",
+        "#b56576",
+        "#e56b6f",
+        "#eaac8b",
+        "#f6bd60",
+        "#84a59d"
+      ],
+      "sequential": "rocket",
+      "diverging": "Spectral"
+    },
+    "tableau_10": {
+      "label": "Tableau 10",
+      "public": true,
+      "description": "Matplotlib Tableau 10 categorical cycle for broad software compatibility.",
+      "categorical": [
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf"
+      ],
+      "sequential": "viridis",
+      "diverging": "coolwarm"
+    },
+    "seaborn_pastel": {
+      "label": "Seaborn Pastel",
+      "public": true,
+      "description": "Soft Seaborn pastel cycle for low-contrast categorical figures.",
+      "categorical": [
+        "#a1c9f4",
+        "#ffb482",
+        "#8de5a1",
+        "#ff9f9b",
+        "#d0bbff",
+        "#debb9b",
+        "#fab0e4",
+        "#cfcfcf",
+        "#fffea3",
+        "#b9f2f0"
+      ],
+      "sequential": "crest",
+      "diverging": "vlag"
+    },
+    "seaborn_dark": {
+      "label": "Seaborn Dark",
+      "public": true,
+      "description": "Darker Seaborn categorical cycle for stronger contrast on light figure surfaces.",
+      "categorical": [
+        "#001c7f",
+        "#b1400d",
+        "#12711c",
+        "#8c0800",
+        "#591e71",
+        "#592f0d",
+        "#a23582",
+        "#3c3c3c",
+        "#b8850a",
+        "#006374"
+      ],
+      "sequential": "mako",
+      "diverging": "icefire"
+    },
+    "primer_accessible": {
+      "label": "Primer Accessible",
+      "public": true,
+      "description": "GitHub Primer-inspired accessible role colors for technical plots and dashboards.",
+      "categorical": [
+        "#0969da",
+        "#1a7f37",
+        "#bf8700",
+        "#bc4c00",
+        "#cf222e",
+        "#8250df",
+        "#bf3989",
+        "#57606a"
+      ],
+      "sequential": "Blues",
+      "diverging": "RdBu"
+    },
+    "viridis_discrete": {
+      "label": "Viridis Discrete",
+      "public": true,
+      "description": "Discrete samples from viridis for perceptually ordered categorical sequences.",
+      "categorical": [
+        "#440154",
+        "#482878",
+        "#3e4989",
+        "#31688e",
+        "#26828e",
+        "#1f9e89",
+        "#35b779",
+        "#6ece58",
+        "#b5de2b",
+        "#fde725"
+      ],
+      "sequential": "viridis",
+      "diverging": "viridis"
+    }
+  },
+  "templates": {
+    "curve": {
+      "label": "Curve",
+      "description": "Standard single-panel curve plot.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "xscale",
+        "yscale",
+        "reverse_x",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "extra_x_axis",
+        "extra_y_axis",
+        "x_axis_breaks",
+        "y_axis_breaks",
+        "series_order",
+        "series_styles",
+        "series_offsets",
+        "legend_position",
+        "series_label_mode",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "xscale": "linear",
+        "yscale": "linear",
+        "reverse_x": false,
+        "series_label_mode": "legend",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "curve"
+    },
+    "function_curve": {
+      "label": "Function curve",
+      "description": "Curve plot with bounded analytic function layers sampled from safe math expressions.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "xscale",
+        "yscale",
+        "reverse_x",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "extra_x_axis",
+        "extra_y_axis",
+        "series_order",
+        "series_styles",
+        "series_offsets",
+        "analytical_layers",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "xscale": "linear",
+        "yscale": "linear",
+        "reverse_x": false,
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "function_curve"
+    },
+    "point_line": {
+      "label": "Point line",
+      "description": "Standard single-panel curve plot with markers.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "xscale",
+        "yscale",
+        "reverse_x",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "extra_x_axis",
+        "extra_y_axis",
+        "x_axis_breaks",
+        "y_axis_breaks",
+        "series_order",
+        "series_styles",
+        "series_offsets",
+        "legend_position",
+        "series_label_mode",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "xscale": "linear",
+        "yscale": "linear",
+        "reverse_x": false,
+        "series_label_mode": "legend",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [
+        "multi_output_bundle_notice"
+      ],
+      "presentation_kind": "point_line"
+    },
+    "area_curve": {
+      "label": "Area curve",
+      "description": "Single-panel line chart with a translucent area fill, inspired by ECharts area-line patterns.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "xscale",
+        "yscale",
+        "reverse_x",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "extra_x_axis",
+        "extra_y_axis",
+        "series_order",
+        "series_styles",
+        "series_offsets",
+        "legend_position",
+        "series_label_mode",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "xscale": "linear",
+        "yscale": "linear",
+        "reverse_x": false,
+        "series_label_mode": "legend",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "area_curve"
+    },
+    "step_line": {
+      "label": "Step line",
+      "description": "Single-panel step-line chart for abrupt state changes, inspired by ECharts step-line patterns.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "xscale",
+        "yscale",
+        "reverse_x",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "extra_x_axis",
+        "extra_y_axis",
+        "x_axis_breaks",
+        "y_axis_breaks",
+        "series_order",
+        "series_styles",
+        "series_offsets",
+        "legend_position",
+        "series_label_mode",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "xscale": "linear",
+        "yscale": "linear",
+        "reverse_x": false,
+        "series_label_mode": "legend",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "step_line"
+    },
+    "stacked_curve": {
+      "label": "Stacked curve",
+      "description": "Single-column stacked curves for spectrum-like figures.",
+      "category": "stacked_spectrum",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "reverse_x",
+        "baseline",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "reverse_x": false,
+        "baseline": "none",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "stacked_curve"
+    },
+    "stacked_area": {
+      "label": "Stacked area",
+      "description": "Single-column stacked curves with translucent area fills for layered spectrum-like comparisons.",
+      "category": "stacked_spectrum",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "reverse_x",
+        "baseline",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "reverse_x": false,
+        "baseline": "none",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "stacked_area"
+    },
+    "segmented_stacked_curve": {
+      "label": "Segmented stacked curve",
+      "description": "Wide NMR double-height panel with left/right/bottom alignment and a reserved structure area on top.",
+      "category": "wide_nmr",
+      "default_size": "60x110",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "reverse_x",
+        "baseline",
+        "series_order",
+        "style_preset",
+        "palette_preset",
+        "use_sidecar"
+      ],
+      "default_options": {
+        "size": "60x110",
+        "reverse_x": true,
+        "baseline": "linear_endpoints",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light",
+        "use_sidecar": true
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "wide_nmr_horizontal_alignment",
+        "wide_nmr_structure_reserve",
+        "wide_nmr_segment_alignment",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "segmented_stacked_curve"
+    },
+    "bar": {
+      "label": "Bar",
+      "description": "Statistical bar chart with summary bars and error bars only.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "y_min",
+        "y_max",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [
+        "dense_group_label_warning"
+      ],
+      "presentation_kind": "bar"
+    },
+    "box": {
+      "label": "Box",
+      "description": "Statistical box plot summary without raw-point overlays.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "y_min",
+        "y_max",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [
+        "dense_group_label_warning"
+      ],
+      "presentation_kind": "box"
+    },
+    "box_strip": {
+      "label": "Box + strip",
+      "description": "Box plot with deterministic strip-point overlay emphasis.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "y_min",
+        "y_max",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [
+        "dense_group_label_warning"
+      ],
+      "presentation_kind": "box_strip"
+    },
+    "violin": {
+      "label": "Violin",
+      "description": "Statistical violin plot.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "y_min",
+        "y_max",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [
+        "dense_group_label_warning"
+      ],
+      "presentation_kind": "violin"
+    },
+    "violin_box": {
+      "label": "Violin + box",
+      "description": "Violin distribution with a compact box-summary overlay.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "y_min",
+        "y_max",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [
+        "dense_group_label_warning"
+      ],
+      "presentation_kind": "violin_box"
+    },
+    "point_error": {
+      "label": "Point + error",
+      "description": "Group means as points with deterministic error bars and optional raw-point overlays.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "y_min",
+        "y_max",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [
+        "dense_group_label_warning"
+      ],
+      "presentation_kind": "point_error"
+    },
+    "lollipop_error": {
+      "label": "Lollipop + error",
+      "description": "Group means as lollipop stems with deterministic error bars and optional raw-point overlays.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "y_min",
+        "y_max",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [
+        "dense_group_label_warning"
+      ],
+      "presentation_kind": "lollipop_error"
+    },
+    "histogram_density": {
+      "label": "Histogram density",
+      "description": "Density-normalized histogram overlays with deterministic smoothed density lines.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "extra_x_axis",
+        "extra_y_axis",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [
+        "dense_group_label_warning"
+      ],
+      "presentation_kind": "histogram_density"
+    },
+    "density_area": {
+      "label": "Density area",
+      "description": "Smoothed distribution density areas with outline overlays for clearer replicate comparisons.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "extra_x_axis",
+        "extra_y_axis",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [
+        "dense_group_label_warning"
+      ],
+      "presentation_kind": "density_area"
+    },
+    "scatter": {
+      "label": "Scatter",
+      "description": "Single-panel scatter plot.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "xscale",
+        "yscale",
+        "reverse_x",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "extra_x_axis",
+        "extra_y_axis",
+        "x_axis_breaks",
+        "y_axis_breaks",
+        "series_order",
+        "series_styles",
+        "series_offsets",
+        "legend_position",
+        "series_label_mode",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "xscale": "linear",
+        "yscale": "linear",
+        "reverse_x": false,
+        "series_label_mode": "legend",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "scatter"
+    },
+    "bubble_scatter": {
+      "label": "Bubble scatter",
+      "description": "Single-panel scatter plot with deterministic bubble-size encoding from signal magnitude.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "xscale",
+        "yscale",
+        "reverse_x",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "extra_x_axis",
+        "extra_y_axis",
+        "x_axis_breaks",
+        "y_axis_breaks",
+        "series_order",
+        "legend_position",
+        "series_label_mode",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "xscale": "linear",
+        "yscale": "linear",
+        "reverse_x": false,
+        "series_label_mode": "legend",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "bubble_scatter"
+    },
+    "scatter_fit": {
+      "label": "Scatter fit",
+      "description": "Single-panel scatter plot with a deterministic linear fit overlay.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "xscale",
+        "yscale",
+        "reverse_x",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "extra_x_axis",
+        "extra_y_axis",
+        "x_axis_breaks",
+        "y_axis_breaks",
+        "series_order",
+        "legend_position",
+        "series_label_mode",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "xscale": "linear",
+        "yscale": "linear",
+        "reverse_x": false,
+        "series_label_mode": "legend",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "scatter_fit"
+    },
+    "mean_band": {
+      "label": "Mean band",
+      "description": "Single-panel curve plot with a replicate mean band overlay.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "xscale",
+        "yscale",
+        "reverse_x",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_density",
+        "y_tick_edge_labels",
+        "extra_x_axis",
+        "extra_y_axis",
+        "series_order",
+        "legend_position",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "xscale": "linear",
+        "yscale": "linear",
+        "reverse_x": false,
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "mean_band"
+    },
+    "heatmap": {
+      "label": "Heatmap",
+      "description": "Heatmap with the main frame aligned to standard single-panel plots and an independent top colorbar.",
+      "category": "heatmap",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "show_colorbar",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "show_colorbar": true,
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "heatmap_main_frame",
+        "heatmap_horizontal_colorbar",
+        "heatmap_colorbar_inside_canvas",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "heatmap"
+    },
+    "contour_field": {
+      "label": "Contour field",
+      "description": "Scalar field rendered as filled contours from matrix or XYZ-long data.",
+      "category": "heatmap",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "show_colorbar",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "show_colorbar": true,
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "contour_field"
+    },
+    "polar_curve": {
+      "label": "Polar curve",
+      "description": "Theta-radius data rendered on a polar axis for radial curves and scatter-like traces.",
+      "category": "single_panel",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "y_min",
+        "y_max",
+        "series_order",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "polar_curve"
+    },
+    "table_figure": {
+      "label": "Table figure",
+      "description": "Compact table output for small data tables and summary command-style figures.",
+      "category": "table",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "table"
+    },
+    "annotated_heatmap": {
+      "label": "Annotated heatmap",
+      "description": "Heatmap with cell annotations layered on top of the matrix.",
+      "category": "heatmap",
+      "default_size": "60x55",
+      "allowed_sizes": [
+        "60x55",
+        "120x55",
+        "180x55",
+        "60x110",
+        "120x110",
+        "180x110"
+      ],
+      "editable_options": [
+        "size",
+        "show_colorbar",
+        "style_preset",
+        "palette_preset"
+      ],
+      "default_options": {
+        "size": "60x55",
+        "show_colorbar": true,
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "visual_theme_id": "clean_light"
+      },
+      "available_styles": [
+        "nature",
+        "acs",
+        "science",
+        "wiley",
+        "elsevier"
+      ],
+      "available_palettes": [
+        "colorblind_safe",
+        "deep",
+        "muted",
+        "mono",
+        "infographic",
+        "roma",
+        "macarons",
+        "shine",
+        "vintage",
+        "okabe_ito",
+        "tol_muted",
+        "tableau_10",
+        "seaborn_pastel",
+        "seaborn_dark",
+        "primer_accessible",
+        "viridis_discrete"
+      ],
+      "hard_rules": [
+        "single_panel_axis_frame",
+        "heatmap_main_frame",
+        "heatmap_horizontal_colorbar",
+        "heatmap_colorbar_inside_canvas",
+        "non_blank_pdf"
+      ],
+      "soft_rules": [],
+      "presentation_kind": "annotated_heatmap"
+    }
+  },
+  "validation_rules": {
+    "single_panel_axis_frame": {
+      "label": "Single-panel axis frame alignment",
+      "description": "Standard single-panel templates must share the same physical axis frame.",
+      "severity": "error",
+      "tolerance_mm": 0.05
+    },
+    "wide_nmr_horizontal_alignment": {
+      "label": "Wide NMR left/right/bottom alignment",
+      "description": "Wide NMR only requires the left, right, and bottom edges to share anchors with the standard single-panel frame.",
+      "severity": "error",
+      "tolerance_mm": 0.05
+    },
+    "wide_nmr_structure_reserve": {
+      "label": "Wide NMR top structure reserve",
+      "description": "Wide NMR must keep a reserved structure area at the top.",
+      "severity": "error",
+      "tolerance_mm": 1.0
+    },
+    "wide_nmr_segment_alignment": {
+      "label": "Wide NMR segmented-axis alignment",
+      "description": "Wide NMR segmented axes must share the same top and bottom bounds.",
+      "severity": "error",
+      "tolerance_mm": 0.05
+    },
+    "heatmap_main_frame": {
+      "label": "Heatmap main-frame alignment",
+      "description": "The heatmap main frame must share the same axis frame as standard single-panel plots.",
+      "severity": "error",
+      "tolerance_mm": 0.05
+    },
+    "heatmap_horizontal_colorbar": {
+      "label": "Heatmap top horizontal colorbar",
+      "description": "Heatmaps must use a top horizontal colorbar without squeezing the main frame.",
+      "severity": "error",
+      "tolerance_mm": 0.05
+    },
+    "heatmap_colorbar_inside_canvas": {
+      "label": "Heatmap colorbar inside canvas",
+      "description": "The heatmap colorbar and z label must stay fully inside the canvas.",
+      "severity": "error",
+      "tolerance_mm": 0.2
+    },
+    "non_blank_pdf": {
+      "label": "Non-blank exported PDF",
+      "description": "Every exported PDF must contain visible content and rasterize correctly.",
+      "severity": "error"
+    },
+    "multi_output_bundle_notice": {
+      "label": "Multi-output notice",
+      "description": "Multi-output bundles should warn how many files will be exported.",
+      "severity": "warning"
+    },
+    "dense_group_label_warning": {
+      "label": "Dense group-label warning",
+      "description": "Statistical plots should warn that x-axis labels may become crowded when many groups are present.",
+      "severity": "warning"
+    }
+  }
+}

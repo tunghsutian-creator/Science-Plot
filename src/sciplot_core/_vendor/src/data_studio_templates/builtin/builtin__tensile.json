@@ -1,0 +1,83 @@
+{
+  "version": 2,
+  "id": "builtin/tensile",
+  "label": "Tensile",
+  "family": "tensile",
+  "builtin": true,
+  "description": "Built-in tensile experiment template with automatic replicate workbook construction and comparison outputs.",
+  "file_types": [
+    "csv",
+    "txt",
+    "tsv"
+  ],
+  "parse_strategy": "builtin:tensile",
+  "match_conditions": [
+    {
+      "text_contains": [
+        "结果表格",
+        "拉伸应力",
+        "result table",
+        "tensile stress"
+      ],
+      "field_kinds": [
+        "curve_x",
+        "curve_y"
+      ],
+      "minimum_score": 0.5
+    }
+  ],
+  "field_bindings": [
+    {
+      "id": "builtin/tensile::strain",
+      "role": "curve_x",
+      "label": "Strain",
+      "optional": false
+    },
+    {
+      "id": "builtin/tensile::stress",
+      "role": "curve_y",
+      "label": "Stress",
+      "optional": false
+    },
+    {
+      "id": "builtin/tensile::strength",
+      "role": "metric",
+      "label": "Strength",
+      "unit_hint": "MPa",
+      "optional": false
+    },
+    {
+      "id": "builtin/tensile::modulus",
+      "role": "metric",
+      "label": "Modulus",
+      "unit_hint": "MPa",
+      "optional": false
+    },
+    {
+      "id": "builtin/tensile::elongation",
+      "role": "metric",
+      "label": "Elongation",
+      "unit_hint": "%",
+      "optional": false
+    }
+  ],
+  "workbook_metric_ids": [
+    "Strength",
+    "Modulus",
+    "Elongation"
+  ],
+  "default_group_name_strategy": "common_prefix",
+  "preferred_sheet_name": "Representative_Curve",
+  "output_kind": "curve_metrics",
+  "source_format": {
+    "encoding": null,
+    "delimiter": null,
+    "sheet_name": null
+  },
+  "segment_policy": "single_table",
+  "segment_selectors": [],
+  "metadata": {
+    "legacy_family": "tensile",
+    "migrated_from": "src/tensile_replicates.py"
+  }
+}

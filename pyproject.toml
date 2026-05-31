@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sciplot-codex-core"
+version = "0.1.0"
+description = "Headless SciPlot core and Codex recipes for scientific plotting."
+requires-python = ">=3.11"
+dependencies = [
+  "matplotlib",
+  "seaborn",
+  "scienceplots",
+  "numpy",
+  "pandas",
+  "charset-normalizer",
+  "scipy",
+  "statsmodels",
+  "openpyxl",
+  "xlrd",
+  "PyMuPDF",
+  "Pillow",
+  "platformdirs",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "ruff",
+]
+
+[project.scripts]
+sciplot = "sciplot_core.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+sciplot_core = [
+  "plot_contract.json",
+  "_vendor/src/plot_contract.json",
+  "_vendor/src/data_studio_templates/builtin/*.json",
+  "_vendor/src/data_studio_templates/user/*.json",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = ["src/sciplot_core/_vendor"]
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]

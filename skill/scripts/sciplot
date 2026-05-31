@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO="${SCIPLOT_CODEX_REPO:-/Users/dongxutian/Documents/research-plots}"
+PYTHON="$REPO/.venv/bin/python"
+
+if [[ ! -x "$PYTHON" ]]; then
+  PYTHON="python3"
+fi
+
+cd "$REPO"
+exec "$PYTHON" -m sciplot_core.cli "$@"
