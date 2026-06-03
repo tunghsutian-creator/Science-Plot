@@ -64,6 +64,7 @@ def run_material_recipe(
 
     options = dict(options or {})
     render_options = dict(options.get("render_options") or {})
+    export_formats = options.get("exports") or options.get("export_formats")
     template = str(options.get("template") or default_template)
     source = _first_table_source(input_path.expanduser())
     processed_source = output_dir / "processed" / source.name
@@ -85,6 +86,7 @@ def run_material_recipe(
         template=template,
         output_dir=output_dir / "figures",
         options=render_options,
+        export_formats=export_formats,
     )
     manifest = {
         "kind": "sciplot_recipe",
@@ -94,6 +96,8 @@ def run_material_recipe(
         "processed_source": str(processed_source),
         "template": template,
         "render_options": render_options,
+        "export_formats": render_payload["export_formats"],
+        "exports": render_payload["exports"],
         "inspection": inspection,
         "figures": render_payload["outputs"],
         "qa_reports": render_payload["qa_reports"],

@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SciPlot Intake</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f5f7;
+      --surface: rgba(255, 255, 255, 0.74);
+      --surface-strong: rgba(255, 255, 255, 0.92);
+      --line: rgba(60, 60, 67, 0.16);
+      --line-strong: rgba(0, 122, 255, 0.45);
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --accent: #007aff;
+      --accent-soft: rgba(0, 122, 255, 0.12);
+      --shadow: 0 22px 70px rgba(0, 0, 0, 0.1);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      color: var(--text);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(245, 245, 247, 0.96)),
+        var(--bg);
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+    }
+
+    .app {
+      width: min(1180px, calc(100vw - 40px));
+      min-height: calc(100vh - 40px);
+      margin: 20px auto;
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      border-radius: 24px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(26px) saturate(1.3);
+      overflow: hidden;
+    }
+
+    .sidebar {
+      padding: 22px;
+      border-right: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.42);
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .traffic {
+      display: flex;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ff5f57;
+    }
+
+    .dot:nth-child(2) {
+      background: #ffbd2e;
+    }
+
+    .dot:nth-child(3) {
+      background: #28c840;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      color: white;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, #1d1d1f, #616167);
+    }
+
+    .steps {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .step {
+      height: 42px;
+      border-radius: 12px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-weight: 560;
+      user-select: none;
+    }
+
+    .step-index {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+      color: var(--muted);
+      background: rgba(118, 118, 128, 0.12);
+    }
+
+    .step.active {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.9);
+    }
+
+    .step.done .step-index,
+    .step.active .step-index {
+      color: white;
+      background: var(--accent);
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .main {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .topbar {
+      height: 82px;
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .title {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.1;
+      letter-spacing: 0;
+      font-weight: 700;
+    }
+
+    .project-name {
+      width: min(320px, 42vw);
+      height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--text);
+      background: var(--surface-strong);
+      outline: none;
+    }
+
+    .project-name:focus {
+      border-color: var(--line-strong);
+      box-shadow: 0 0 0 4px var(--accent-soft);
+    }
+
+    .stage {
+      min-height: 0;
+      padding: 30px 32px;
+      overflow: auto;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
+    }
+
+    .tile {
+      min-height: 158px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.66);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+      display: grid;
+      gap: 12px;
+      align-content: space-between;
+      text-align: left;
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+    }
+
+    .tile:hover {
+      transform: translateY(-2px);
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    .tile.selected {
+      border-color: var(--line-strong);
+      background: rgba(239, 247, 255, 0.94);
+      box-shadow: 0 0 0 4px var(--accent-soft);
+    }
+
+    .tile-title {
+      font-size: 17px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+
+    .thumb {
+      width: 100%;
+      height: 76px;
+      color: #2c2c2e;
+    }
+
+    .thumb svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .groups {
+      display: grid;
+      grid-template-columns: minmax(240px, 310px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.7);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      height: 54px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      font-weight: 650;
+    }
+
+    .sample-list {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .sample-row {
+      min-height: 52px;
+      padding: 8px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      background: transparent;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .sample-row.active {
+      border-color: var(--line-strong);
+      background: var(--accent-soft);
+    }
+
+    .sample-input {
+      min-width: 0;
+      height: 34px;
+      padding: 0 9px;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.72);
+      outline: none;
+    }
+
+    .sample-input:focus {
+      border-color: var(--line-strong);
+    }
+
+    .file-count {
+      min-width: 26px;
+      height: 26px;
+      padding: 0 8px;
+      border-radius: 999px;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      background: rgba(118, 118, 128, 0.12);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .dropzone {
+      min-height: 350px;
+      margin: 14px;
+      border: 1.5px dashed rgba(60, 60, 67, 0.28);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.54);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(0, 122, 255, 0.1);
+    }
+
+    .drop-title {
+      font-size: 22px;
+      font-weight: 680;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .file-list {
+      width: 100%;
+      display: grid;
+      gap: 8px;
+      padding: 14px;
+    }
+
+    .file-row {
+      min-height: 42px;
+      padding: 0 12px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.76);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .file-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .file-size {
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .metric {
+      min-height: 100px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.7);
+      display: grid;
+      align-content: center;
+      gap: 6px;
+    }
+
+    .metric-value {
+      font-size: 28px;
+      font-weight: 730;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .result {
+      display: none;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.76);
+      gap: 10px;
+    }
+
+    .result.visible {
+      display: grid;
+    }
+
+    .result-path {
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+      color: var(--muted);
+    }
+
+    .footer {
+      height: 78px;
+      padding: 0 32px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .btn {
+      min-width: 92px;
+      height: 42px;
+      padding: 0 18px;
+      border-radius: 12px;
+      font-weight: 650;
+      color: var(--text);
+      background: rgba(118, 118, 128, 0.14);
+    }
+
+    .btn.primary {
+      color: white;
+      background: var(--accent);
+    }
+
+    .btn:disabled {
+      cursor: default;
+      opacity: 0.42;
+    }
+
+    .status {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 14px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 860px) {
+      .app {
+        width: 100vw;
+        min-height: 100vh;
+        margin: 0;
+        border-radius: 0;
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .topbar,
+      .footer {
+        padding-inline: 18px;
+      }
+
+      .stage {
+        padding: 20px 18px;
+      }
+
+      .groups {
+        grid-template-columns: 1fr;
+      }
+
+      .summary {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar">
+      <div class="traffic" aria-hidden="true">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none">
+            <path d="M5 17.5 10 9l4 5 5-8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+            <path d="M5 18h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+          </svg>
+        </div>
+        <span>SciPlot</span>
+      </div>
+      <div class="steps" id="steps"></div>
+      <div class="sidebar-footer" id="sidebarStatus">PDF + TIFF 300 DPI</div>
+    </aside>
+
+    <section class="main">
+      <header class="topbar">
+        <h1 class="title" id="pageTitle">数据类型</h1>
+        <input id="projectName" class="project-name" type="text" autocomplete="off" placeholder="项目名">
+      </header>
+      <section class="stage" id="stage"></section>
+      <footer class="footer">
+        <button id="backButton" class="btn" type="button">返回</button>
+        <div id="status" class="status"></div>
+        <button id="nextButton" class="btn primary" type="button">继续</button>
+      </footer>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      step: 0,
+      catalog: [],
+      dataTypeId: "",
+      experimentTypeId: "",
+      groups: [
+        { sample: "Sample A", files: [] },
+        { sample: "Sample B", files: [] }
+      ],
+      activeGroup: 0,
+      session: null,
+      lastProject: null
+    };
+
+    const stepLabels = ["数据类型", "图类型", "样品", "导出"];
+    const stage = document.querySelector("#stage");
+    const pageTitle = document.querySelector("#pageTitle");
+    const stepsEl = document.querySelector("#steps");
+    const backButton = document.querySelector("#backButton");
+    const nextButton = document.querySelector("#nextButton");
+    const statusEl = document.querySelector("#status");
+    const projectNameEl = document.querySelector("#projectName");
+    const sidebarStatus = document.querySelector("#sidebarStatus");
+
+    function iconSvg(kind) {
+      const stroke = "currentColor";
+      const base = `stroke="${stroke}" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" fill="none"`;
+      const icons = {
+        curves: `<svg viewBox="0 0 160 76"><path ${base} d="M18 59h124M23 57c18-38 36-39 54-6 19 35 39 26 60-26"/><path ${base} opacity=".35" d="M24 47c23-4 37-2 52 6 24 13 42 8 61-17"/></svg>`,
+        tensile: `<svg viewBox="0 0 160 76"><path ${base} d="M26 57h112M34 57c22-44 42-47 59-18 13 22 26 24 43-6"/><path ${base} opacity=".35" d="M52 18v13M102 45v13"/></svg>`,
+        thermal: `<svg viewBox="0 0 160 76"><path ${base} d="M23 58h116M32 49c18 0 19-28 38-28s18 28 37 28 19-16 32-16"/><path ${base} opacity=".35" d="M43 18h83"/></svg>`,
+        spectrum: `<svg viewBox="0 0 160 76"><path ${base} d="M20 59h120M31 56l11-28 9 22 13-35 11 41 12-24 10 16 10-26 11 34"/></svg>`,
+        scattering: `<svg viewBox="0 0 160 76"><path ${base} d="M18 59h124M32 55l14-25 8 25 23-42 11 42 17-31 11 31 14-19"/><circle cx="77" cy="14" r="3.5" fill="currentColor"/></svg>`,
+        chromatography: `<svg viewBox="0 0 160 76"><path ${base} d="M20 59h120M33 55c6-1 12-5 17-15 8-15 18-15 26 11 4 10 12 10 16 0 11-31 24-33 36 4"/></svg>`,
+        metrics: `<svg viewBox="0 0 160 76"><path ${base} d="M27 58V28M61 58V18M95 58V36M129 58V24M20 58h124"/><circle cx="61" cy="18" r="4" fill="currentColor"/></svg>`,
+        unknown: `<svg viewBox="0 0 160 76"><path ${base} d="M28 58h104M47 45c9-18 24-23 37-11 9 8 15 7 24-7"/><path ${base} opacity=".35" d="M111 42v.2"/></svg>`,
+        stacked_curve: `<svg viewBox="0 0 160 76"><path ${base} opacity=".35" d="M24 59h116M30 54c20-23 40-18 58-6 20 13 32 5 45-10"/><path ${base} d="M30 38c20-23 40-18 58-6 20 13 32 5 45-10"/><path ${base} opacity=".55" d="M30 46c20-23 40-18 58-6 20 13 32 5 45-10"/></svg>`,
+        box_with_points: `<svg viewBox="0 0 160 76"><path ${base} d="M31 56h98M42 24h22v32H42zM87 18h22v38H87z"/><path ${base} opacity=".55" d="M53 18v6M53 56v8M98 12v6M98 56v8"/><circle cx="37" cy="42" r="3" fill="currentColor"/><circle cx="69" cy="34" r="3" fill="currentColor"/><circle cx="82" cy="45" r="3" fill="currentColor"/><circle cx="114" cy="29" r="3" fill="currentColor"/></svg>`
+      };
+      return icons[kind] || icons.unknown;
+    }
+
+    function selectedDataType() {
+      return state.catalog.find((item) => item.id === state.dataTypeId);
+    }
+
+    function selectedExperiment() {
+      const dataType = selectedDataType();
+      return dataType?.experiments.find((item) => item.id === state.experimentTypeId);
+    }
+
+    function defaultProjectName() {
+      const dataType = selectedDataType();
+      const experiment = selectedExperiment();
+      const samples = state.groups
+        .map((group) => group.sample.trim())
+        .filter(Boolean)
+        .slice(0, 3)
+        .join("_");
+      return [experiment?.label, samples || dataType?.label].filter(Boolean).join("_") || "SciPlot_Project";
+    }
+
+    function renderSteps() {
+      stepsEl.innerHTML = stepLabels.map((label, index) => {
+        const cls = ["step", index === state.step ? "active" : "", index < state.step ? "done" : ""].join(" ");
+        return `<div class="${cls}"><span class="step-index">${index + 1}</span><span>${label}</span></div>`;
+      }).join("");
+    }
+
+    function tile(item, selected, iconKind) {
+      return `
+        <button class="tile ${selected ? "selected" : ""}" type="button" data-id="${item.id}">
+          <div class="thumb">${iconSvg(item.chart || iconKind || item.icon)}</div>
+          <div class="tile-title">${item.label}</div>
+        </button>
+      `;
+    }
+
+    function renderDataTypeStep() {
+      pageTitle.textContent = "数据类型";
+      stage.innerHTML = `<div class="grid">${state.catalog.map((item) => tile(item, item.id === state.dataTypeId)).join("")}</div>`;
+      stage.querySelectorAll(".tile").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.dataTypeId = button.dataset.id;
+          const experiments = selectedDataType()?.experiments || [];
+          state.experimentTypeId = experiments[0]?.id || "";
+          render();
+        });
+      });
+    }
+
+    function renderExperimentStep() {
+      const dataType = selectedDataType();
+      pageTitle.textContent = dataType?.label || "图类型";
+      const experiments = dataType?.experiments || [];
+      stage.innerHTML = `<div class="grid">${experiments.map((item) => tile(item, item.id === state.experimentTypeId, dataType.icon)).join("")}</div>`;
+      stage.querySelectorAll(".tile").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.experimentTypeId = button.dataset.id;
+          render();
+        });
+      });
+    }
+
+    function formatSize(size) {
+      if (!Number.isFinite(Number(size))) return "";
+      if (size < 1024) return `${size} B`;
+      if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+      return `${(size / 1024 / 1024).toFixed(1)} MB`;
+    }
+
+    function renderGroupStep() {
+      pageTitle.textContent = "样品";
+      const active = state.groups[state.activeGroup] || state.groups[0];
+      const files = active?.files || [];
+      stage.innerHTML = `
+        <div class="groups">
+          <div class="panel">
+            <div class="panel-head">
+              <span>分组</span>
+              <button class="btn" id="addGroup" type="button">添加</button>
+            </div>
+            <div class="sample-list" id="sampleList">
+              ${state.groups.map((group, index) => `
+                <div class="sample-row ${index === state.activeGroup ? "active" : ""}" data-index="${index}">
+                  <input class="sample-input" value="${escapeHtml(group.sample)}" aria-label="样品名">
+                  <span class="file-count">${group.files.length}</span>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head">
+              <span>${escapeHtml(active?.sample || "Sample")}</span>
+              <input id="fileInput" type="file" multiple hidden>
+              <button class="btn" id="chooseFiles" type="button">选择文件</button>
+            </div>
+            <div class="dropzone" id="dropzone">
+              <div>
+                <div class="drop-title">拖入文件</div>
+                <div>${escapeHtml(active?.sample || "Sample")}</div>
+              </div>
+            </div>
+            <div class="file-list">
+              ${files.map((file, index) => `
+                <div class="file-row">
+                  <span class="file-name">${escapeHtml(file.name)}</span>
+                  <span class="file-size">${formatSize(file.size || file.size_bytes)}</span>
+                  <button class="btn remove-file" data-index="${index}" type="button">移除</button>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        </div>
+      `;
+      stage.querySelector("#addGroup").addEventListener("click", () => {
+        state.groups.push({ sample: `Sample ${state.groups.length + 1}`, files: [] });
+        state.activeGroup = state.groups.length - 1;
+        render();
+      });
+      stage.querySelectorAll(".sample-row").forEach((row) => {
+        row.addEventListener("click", () => {
+          state.activeGroup = Number(row.dataset.index);
+          render();
+        });
+        row.querySelector(".sample-input").addEventListener("input", (event) => {
+          state.groups[Number(row.dataset.index)].sample = event.target.value;
+          updateFooter();
+        });
+      });
+      const fileInput = stage.querySelector("#fileInput");
+      stage.querySelector("#chooseFiles").addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", () => {
+        addFiles(Array.from(fileInput.files || []));
+        fileInput.value = "";
+      });
+      const dropzone = stage.querySelector("#dropzone");
+      ["dragenter", "dragover"].forEach((name) => {
+        dropzone.addEventListener(name, (event) => {
+          event.preventDefault();
+          dropzone.classList.add("dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach((name) => {
+        dropzone.addEventListener(name, (event) => {
+          event.preventDefault();
+          dropzone.classList.remove("dragover");
+        });
+      });
+      dropzone.addEventListener("drop", (event) => addFiles(Array.from(event.dataTransfer.files || [])));
+      stage.querySelectorAll(".remove-file").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          state.groups[state.activeGroup].files.splice(Number(button.dataset.index), 1);
+          render();
+        });
+      });
+    }
+
+    function renderExportStep() {
+      pageTitle.textContent = "导出";
+      const fileCount = state.groups.reduce((sum, group) => sum + group.files.length, 0);
+      const namedGroups = state.groups.filter((group) => group.sample.trim() && group.files.length);
+      stage.innerHTML = `
+        <div class="summary">
+          <div class="metric"><div class="metric-value">${namedGroups.length}</div><div class="metric-label">样品组</div></div>
+          <div class="metric"><div class="metric-value">${fileCount}</div><div class="metric-label">数据文件</div></div>
+          <div class="metric"><div class="metric-value">PDF/TIFF</div><div class="metric-label">默认导出</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span>${escapeHtml(projectNameEl.value || defaultProjectName())}</span></div>
+          <div class="sample-list">
+            ${namedGroups.map((group) => `
+              <div class="file-row">
+                <span class="file-name">${escapeHtml(group.sample)}</span>
+                <span class="file-size">${group.files.length} files</span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+        <div class="result ${state.lastProject ? "visible" : ""}" id="resultBox">
+          ${state.lastProject ? resultHtml(state.lastProject) : ""}
+        </div>
+      `;
+    }
+
+    function resultHtml(project) {
+      return `
+        <strong>工程包已生成</strong>
+        <div class="result-path">${escapeHtml(project.project_dir)}</div>
+        <a class="btn primary" style="width:max-content;text-decoration:none;display:grid;place-items:center;" href="/api/download/${encodeURIComponent(project.download_name)}">下载 ZIP</a>
+      `;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function addFiles(files) {
+      if (!files.length) return;
+      state.groups[state.activeGroup].files.push(...files.map((file) => ({
+        name: file.name,
+        size: file.size,
+        file
+      })));
+      render();
+    }
+
+    async function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",", 2)[1] || "");
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function exportProject() {
+      const groups = [];
+      for (const group of state.groups) {
+        if (!group.sample.trim() || !group.files.length) continue;
+        const files = [];
+        for (const item of group.files) {
+          if (item.source_path) {
+            files.push({ name: item.name, source_path: item.source_path });
+          } else {
+            files.push({ name: item.name, content_base64: await fileToBase64(item.file) });
+          }
+        }
+        groups.push({ sample: group.sample.trim(), files });
+      }
+      statusEl.textContent = "导出中";
+      nextButton.disabled = true;
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_name: projectNameEl.value.trim() || defaultProjectName(),
+          data_type_id: state.dataTypeId,
+          experiment_type_id: state.experimentTypeId,
+          groups
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "导出失败");
+      }
+      state.lastProject = payload;
+      statusEl.textContent = "已导出";
+      render();
+    }
+
+    function canContinue() {
+      if (state.step === 0) return Boolean(state.dataTypeId);
+      if (state.step === 1) return Boolean(state.experimentTypeId);
+      if (state.step === 2) return state.groups.some((group) => group.sample.trim() && group.files.length);
+      return state.groups.some((group) => group.sample.trim() && group.files.length);
+    }
+
+    function updateFooter() {
+      backButton.disabled = state.step === 0;
+      nextButton.textContent = state.step === 3 ? "导出" : "继续";
+      nextButton.disabled = !canContinue();
+      const experiment = selectedExperiment();
+      const dataType = selectedDataType();
+      const prefix = state.session ? "已预识别" : "";
+      statusEl.textContent = [prefix, dataType?.label, experiment?.label].filter(Boolean).join(" / ");
+      sidebarStatus.textContent = "PDF + TIFF 300 DPI";
+    }
+
+    function render() {
+      renderSteps();
+      if (state.step === 0) renderDataTypeStep();
+      if (state.step === 1) renderExperimentStep();
+      if (state.step === 2) renderGroupStep();
+      if (state.step === 3) renderExportStep();
+      updateFooter();
+    }
+
+    backButton.addEventListener("click", () => {
+      state.step = Math.max(0, state.step - 1);
+      render();
+    });
+
+    nextButton.addEventListener("click", async () => {
+      if (state.step < 3) {
+        state.step += 1;
+        if (!projectNameEl.value.trim()) projectNameEl.value = defaultProjectName();
+        render();
+        return;
+      }
+      try {
+        await exportProject();
+      } catch (error) {
+        statusEl.textContent = error.message;
+        nextButton.disabled = false;
+      }
+    });
+
+    projectNameEl.addEventListener("input", updateFooter);
+
+    function applySession(session) {
+      state.session = session;
+      state.dataTypeId = session.data_type_id || state.dataTypeId;
+      state.experimentTypeId = session.experiment_type_id || state.experimentTypeId;
+      if (Array.isArray(session.groups) && session.groups.length) {
+        state.groups = session.groups.map((group) => ({
+          sample: group.sample || "Sample",
+          files: (group.files || []).map((file) => ({
+            name: file.name,
+            size: file.size_bytes,
+            size_bytes: file.size_bytes,
+            source_path: file.source_path
+          }))
+        }));
+        state.activeGroup = 0;
+        state.step = 2;
+      }
+      if (session.project_name) {
+        projectNameEl.value = session.project_name;
+      }
+    }
+
+    async function loadSessionFromQuery() {
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get("session");
+      if (!sessionId) return;
+      const response = await fetch(`/api/session/${encodeURIComponent(sessionId)}`);
+      if (!response.ok) throw new Error("Session not found");
+      applySession(await response.json());
+    }
+
+    async function bootstrap() {
+      const response = await fetch("/api/catalog");
+      const payload = await response.json();
+      state.catalog = payload.data_types || [];
+      state.dataTypeId = state.catalog[0]?.id || "";
+      state.experimentTypeId = state.catalog[0]?.experiments?.[0]?.id || "";
+      projectNameEl.value = defaultProjectName();
+      await loadSessionFromQuery();
+      render();
+    }
+
+    bootstrap().catch((error) => {
+      pageTitle.textContent = "SciPlot";
+      stage.innerHTML = `<div class="result visible"><strong>${escapeHtml(error.message)}</strong></div>`;
+    });
+  </script>
+</body>
+</html>

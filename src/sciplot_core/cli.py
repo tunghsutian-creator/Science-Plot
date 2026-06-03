@@ -6,8 +6,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.batch import run_batch
+from sciplot_core.curate import curate_torque_project
+from sciplot_core.intake import intake_catalog_payload, prepare_intake_session, serve_intake
+from sciplot_core.materials_rules import list_rules_payload, show_rule_payload
 from sciplot_core.qa import run_qa
 from sciplot_core.render import inspect_payload, render_to_dir
+from sciplot_core.workflow import run_request
 from sciplot_recipes import run_recipe
 
 
@@ -52,6 +57,51 @@ def _build_parser() -> argparse.ArgumentParser:
     recipe_parser.add_argument("--options", help="JSON object or @path JSON file with recipe/render options.")
     recipe_parser.add_argument("--out", type=Path, required=True)
 
+    run_parser = subparsers.add_parser("run", help="Run a plot_request.json workflow.")
+    run_parser.add_argument("request", type=Path)
+
+    curate_parser = subparsers.add_parser("curate", help="Create a reviewable curation project.")
+    curate_subparsers = curate_parser.add_subparsers(dest="curate_command", required=True)
+    curate_torque_parser = curate_subparsers.add_parser("torque", help="Curate torque event segments.")
+    curate_torque_parser.add_argument("input", type=Path)
+    curate_torque_parser.add_argument("--name", required=True, help="User-facing project name.")
+    curate_torque_parser.add_argument("--out", type=Path, default=Path("outputs") / "curation_projects")
+    curate_torque_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    curate_torque_parser.add_argument("--open", action="store_true", help="Open the review HTML after export.")
+
+    prepare_parser = subparsers.add_parser("prepare", help="Prepare a Codex-first intake session from a path.")
+    prepare_parser.add_argument("input", type=Path)
+    prepare_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
+    prepare_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+    rules_parser = subparsers.add_parser("rules", help="Inspect SciPlot material semantic rules.")
+    rules_subparsers = rules_parser.add_subparsers(dest="rules_command", required=True)
+    rules_list_parser = rules_subparsers.add_parser("list", help="List material semantic rules.")
+    rules_list_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    rules_show_parser = rules_subparsers.add_parser("show", help="Show one material semantic rule.")
+    rules_show_parser.add_argument("rule_id")
+    rules_show_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+    batch_parser = subparsers.add_parser("batch", help="Run a batch over a data folder.")
+    batch_parser.add_argument("input_dir", type=Path)
+    batch_parser.add_argument("--out", type=Path, required=True)
+    batch_parser.add_argument("--mode", choices=["smoke", "all"], default="smoke")
+    batch_parser.add_argument(
+        "--tensile-root",
+        action="append",
+        type=Path,
+        help="Allow-list tensile data root. Repeat to allow multiple tensile folders.",
+    )
+
+    intake_parser = subparsers.add_parser("intake", help="Open the SciPlot intake project builder.")
+    intake_parser.add_argument("input", nargs="?", type=Path)
+    intake_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
+    intake_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    intake_parser.add_argument("--host", default="127.0.0.1")
+    intake_parser.add_argument("--port", type=int, default=8765)
+    intake_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
+    intake_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
+
     qa_parser = subparsers.add_parser("qa", help="Validate rendered SciPlot outputs.")
     qa_parser.add_argument("output_dir", type=Path)
     qa_parser.add_argument("--goldens", type=Path)
@@ -88,6 +138,76 @@ def main(argv: list[str] | None = None) -> int:
                 options=_load_options(args.options),
             )
             _print_json(payload)
+            return 0
+        if args.command == "run":
+            _print_json(run_request(args.request.expanduser()))
+            return 0
+        if args.command == "curate":
+            if args.curate_command == "torque":
+                payload = curate_torque_project(
+                    args.input.expanduser(),
+                    output_root=args.out.expanduser(),
+                    project_name=args.name,
+                    open_review=args.open,
+                )
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(payload["review_html"])
+                return 0
+        if args.command == "prepare":
+            payload = prepare_intake_session(args.input.expanduser(), output_root=args.out.expanduser())
+            if args.json:
+                _print_json(payload)
+            else:
+                print(payload["session_path"])
+            return 0
+        if args.command == "rules":
+            if args.rules_command == "list":
+                payload = list_rules_payload()
+                if args.json:
+                    _print_json(payload)
+                else:
+                    for item in payload["rules"]:
+                        print(f"{item['rule_id']}: {item['x']} -> {item['y']}")
+                return 0
+            if args.rules_command == "show":
+                payload = show_rule_payload(args.rule_id)
+                if args.json:
+                    _print_json(payload)
+                else:
+                    x_label = payload["axis_plan"]["x"]["display_label"]
+                    y_label = payload["axis_plan"]["y"]["display_label"]
+                    print(f"{payload['rule_id']}: {x_label} -> {y_label}")
+                return 0
+        if args.command == "batch":
+            _print_json(
+                run_batch(
+                    args.input_dir.expanduser(),
+                    output_dir=args.out.expanduser(),
+                    mode=args.mode,
+                    tensile_roots=args.tensile_root,
+                )
+            )
+            return 0
+        if args.command == "intake":
+            if args.catalog:
+                payload = intake_catalog_payload()
+                if args.json:
+                    _print_json(payload)
+                else:
+                    for data_type in payload["data_types"]:
+                        print(data_type["label"])
+                        for experiment in data_type["experiments"]:
+                            print(f"  {experiment['id']}: {experiment['label']}")
+                return 0
+            serve_intake(
+                input_path=args.input.expanduser() if args.input else None,
+                host=args.host,
+                port=args.port,
+                output_root=args.out.expanduser(),
+                open_browser=not args.no_open,
+            )
             return 0
         if args.command == "qa":
             _print_json(

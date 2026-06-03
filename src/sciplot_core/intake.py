@@ -1,0 +1,635 @@
+from __future__ import annotations
+
+import base64
+import json
+import mimetypes
+import re
+import shutil
+import webbrowser
+import zipfile
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from socketserver import TCPServer
+from typing import Any
+from urllib.parse import parse_qs, quote, unquote, urlparse
+
+from sciplot_core.render import DEFAULT_EXPORT_FORMATS, json_safe
+from sciplot_core.semantic import classify_source
+
+_STATIC_DIR = Path(__file__).with_name("intake_static")
+_DEFAULT_OUTPUT_ROOT = Path("outputs") / "intake_projects"
+_TEXT_EXTENSIONS = {".csv", ".tsv", ".txt"}
+_TABLE_EXTENSIONS = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
+_TEXT_ENCODINGS = ("utf-8", "utf-8-sig", "utf-16", "gb18030", "gbk", "latin-1")
+
+
+@dataclass(frozen=True)
+class IncomingFile:
+    name: str
+    content: bytes
+
+
+@dataclass(frozen=True)
+class IntakeGroupInput:
+    sample: str
+    files: tuple[IncomingFile, ...]
+
+
+INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
+    {
+        "id": "rheology_dma",
+        "label": "流变 / DMA",
+        "icon": "curves",
+        "experiments": (
+            {"id": "rheology_frequency_sweep", "label": "频率扫描", "rule_id": "rheology_frequency_sweep"},
+            {"id": "rheology_temperature_sweep", "label": "温度扫描", "rule_id": "rheology_temperature_sweep"},
+            {"id": "rheology_stress_relaxation", "label": "应力松弛", "rule_id": "rheology_stress_relaxation"},
+            {"id": "rheology_creep", "label": "蠕变", "rule_id": "rheology_creep"},
+            {"id": "rheology_time_sweep", "label": "时间扫描", "rule_id": "rheology_time_sweep"},
+            {"id": "rheology_strain_sweep", "label": "应变扫描", "rule_id": "rheology_strain_sweep"},
+            {"id": "rheology_stress_sweep", "label": "应力扫描", "rule_id": "rheology_stress_sweep"},
+            {"id": "dma_temperature_sweep", "label": "DMA 温扫", "rule_id": "dma_temperature_sweep"},
+            {"id": "unknown_rheology", "label": "未知流变", "rule_id": None},
+        ),
+    },
+    {
+        "id": "mechanical",
+        "label": "力学",
+        "icon": "tensile",
+        "experiments": (
+            {"id": "tensile_curve", "label": "拉伸曲线", "rule_id": "tensile_curve"},
+            {"id": "tensile_strength", "label": "拉伸强度", "rule_id": "tensile_curve", "chart": "box_with_points"},
+            {
+                "id": "elongation_at_break",
+                "label": "断裂伸长率",
+                "rule_id": "tensile_curve",
+                "chart": "box_with_points",
+            },
+            {"id": "youngs_modulus", "label": "杨氏模量", "rule_id": "tensile_curve", "chart": "box_with_points"},
+            {"id": "compression_curve", "label": "压缩", "rule_id": "compression_curve"},
+            {"id": "flexural_curve", "label": "弯曲", "rule_id": "flexural_curve"},
+            {"id": "torque_curve", "label": "转矩曲线", "rule_id": "torque_curve"},
+            {"id": "impact_metric", "label": "冲击", "rule_id": "impact_metric", "chart": "box_with_points"},
+            {"id": "fracture_metric", "label": "断裂", "rule_id": "fracture_metric", "chart": "box_with_points"},
+            {"id": "fatigue_cycle_metric", "label": "疲劳", "rule_id": "fatigue_cycle_metric"},
+            {"id": "unknown_mechanical", "label": "未知力学", "rule_id": None},
+        ),
+    },
+    {
+        "id": "thermal",
+        "label": "热分析",
+        "icon": "thermal",
+        "experiments": (
+            {"id": "dsc_curve", "label": "DSC", "rule_id": "dsc_curve", "chart": "stacked_curve"},
+            {"id": "tga_curve", "label": "TGA", "rule_id": "tga_curve"},
+            {"id": "dtg_curve", "label": "DTG", "rule_id": "dtg_curve"},
+            {"id": "unknown_thermal", "label": "未知热分析", "rule_id": None},
+        ),
+    },
+    {
+        "id": "spectroscopy",
+        "label": "光谱",
+        "icon": "spectrum",
+        "experiments": (
+            {"id": "ftir_spectrum", "label": "FTIR", "rule_id": "ftir_spectrum"},
+            {"id": "raman_spectrum", "label": "Raman", "rule_id": "raman_spectrum"},
+            {"id": "uvvis_spectrum", "label": "UV-vis", "rule_id": "uvvis_spectrum"},
+            {"id": "nmr_spectrum", "label": "NMR", "rule_id": "nmr_spectrum"},
+            {"id": "xps_spectrum", "label": "XPS", "rule_id": "xps_spectrum"},
+            {"id": "unknown_spectroscopy", "label": "未知光谱", "rule_id": None},
+        ),
+    },
+    {
+        "id": "scattering",
+        "label": "衍射 / 散射",
+        "icon": "scattering",
+        "experiments": (
+            {"id": "xrd_pattern", "label": "XRD", "rule_id": "xrd_pattern"},
+            {"id": "waxs_pattern", "label": "WAXS", "rule_id": "waxs_pattern"},
+            {"id": "saxs_profile", "label": "SAXS", "rule_id": "saxs_profile"},
+            {"id": "sans_profile", "label": "SANS", "rule_id": "sans_profile"},
+            {"id": "unknown_scattering", "label": "未知散射", "rule_id": None},
+        ),
+    },
+    {
+        "id": "chromatography",
+        "label": "色谱 / 分子量",
+        "icon": "chromatography",
+        "experiments": (
+            {"id": "gpc_sec_chromatogram", "label": "GPC / SEC", "rule_id": "gpc_sec_chromatogram"},
+            {
+                "id": "molecular_weight_distribution",
+                "label": "分子量分布",
+                "rule_id": "molecular_weight_distribution",
+            },
+            {"id": "unknown_chromatography", "label": "未知色谱", "rule_id": None},
+        ),
+    },
+    {
+        "id": "metrics_time",
+        "label": "指标 / 时序",
+        "icon": "metrics",
+        "experiments": (
+            {"id": "swelling_curve", "label": "溶胀", "rule_id": "swelling_curve"},
+            {"id": "gel_fraction_metric", "label": "凝胶含量", "rule_id": "gel_fraction_metric"},
+            {"id": "degradation_mass_loss", "label": "降解失重", "rule_id": "degradation_mass_loss"},
+            {"id": "conductivity_curve", "label": "电导率", "rule_id": "conductivity_curve"},
+            {"id": "arrhenius_conductivity", "label": "Arrhenius", "rule_id": "arrhenius_conductivity"},
+            {"id": "dls_size_distribution", "label": "DLS", "rule_id": "dls_size_distribution"},
+            {"id": "bet_isotherm", "label": "BET", "rule_id": "bet_isotherm"},
+            {"id": "unknown_metrics", "label": "未知指标", "rule_id": None},
+        ),
+    },
+    {
+        "id": "unknown",
+        "label": "未知",
+        "icon": "unknown",
+        "experiments": ({"id": "unknown", "label": "未知", "rule_id": None},),
+    },
+)
+
+
+def intake_catalog_payload() -> dict[str, Any]:
+    return {"kind": "sciplot_intake_catalog", "data_types": json_safe(INTAKE_CATALOG)}
+
+
+def _catalog_item(data_type_id: str, experiment_type_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    for data_type in INTAKE_CATALOG:
+        if data_type["id"] != data_type_id:
+            continue
+        for experiment in data_type["experiments"]:
+            if experiment["id"] == experiment_type_id:
+                return data_type, experiment
+        raise ValueError(f"Unknown experiment type `{experiment_type_id}` for data type `{data_type_id}`.")
+    raise ValueError(f"Unknown data type `{data_type_id}`.")
+
+
+def _catalog_item_for_rule(rule_id: str | None) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    if not rule_id:
+        return None
+    for data_type in INTAKE_CATALOG:
+        for experiment in data_type["experiments"]:
+            if experiment.get("rule_id") == rule_id:
+                return data_type, experiment
+    return None
+
+
+def _slug(value: str) -> str:
+    cleaned = re.sub(r"[^0-9A-Za-z._\-\u4e00-\u9fff]+", "_", value).strip("._-")
+    return cleaned[:80] or "sciplot_project"
+
+
+def _safe_filename(value: str) -> str:
+    name = Path(value).name
+    cleaned = re.sub(r"[/:\\]+", "_", name).strip() or "file"
+    return cleaned[:120]
+
+
+def _unique_path(directory: Path, filename: str) -> Path:
+    path = directory / filename
+    if not path.exists():
+        return path
+    stem = path.stem
+    suffix = path.suffix
+    index = 2
+    while True:
+        candidate = directory / f"{stem}_{index}{suffix}"
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+def _write_zip(project_dir: Path, zip_path: Path) -> None:
+    if zip_path.exists():
+        zip_path.unlink()
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(project_dir.rglob("*")):
+            if path.is_file():
+                archive.write(path, path.relative_to(project_dir.parent))
+
+
+def refresh_intake_project_zip(project_dir: str | Path) -> Path:
+    project_dir = Path(project_dir).expanduser().resolve()
+    manifest_path = project_dir / "intake_manifest.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        zip_name = f"{manifest.get('project_slug') or project_dir.name}.zip"
+    else:
+        zip_name = f"{project_dir.name}.zip"
+    zip_path = project_dir.parent / _safe_filename(zip_name)
+    _write_zip(project_dir, zip_path)
+    return zip_path
+
+
+def _decode_text_preview(path: Path, *, max_bytes: int = 8192) -> str:
+    payload = path.read_bytes()[:max_bytes]
+    for encoding in _TEXT_ENCODINGS:
+        try:
+            return payload.decode(encoding)
+        except UnicodeError:
+            continue
+    return ""
+
+
+def _looks_like_tensile_export_dir(path: Path) -> bool:
+    return path.is_dir() and path.name.casefold().endswith(".is_tens_exports")
+
+
+def _tensile_export_dirs(source: Path) -> list[Path]:
+    if _looks_like_tensile_export_dir(source):
+        return [source]
+    if not source.is_dir():
+        return []
+    direct = [path for path in source.iterdir() if _looks_like_tensile_export_dir(path)]
+    if direct:
+        return sorted(direct, key=lambda path: path.name.casefold())
+    return sorted(
+        (path for path in source.rglob("*") if _looks_like_tensile_export_dir(path)),
+        key=lambda path: path.name,
+    )
+
+
+def _is_torque_file(path: Path) -> bool:
+    if not path.is_file() or path.suffix.lower() not in _TEXT_EXTENSIONS:
+        return False
+    text = _decode_text_preview(path).casefold()
+    return "screw torque" in text or "torque" in text or "转矩" in text
+
+
+def _torque_files(source: Path) -> list[Path]:
+    if _is_torque_file(source):
+        return [source]
+    if not source.is_dir():
+        return []
+    return sorted((path for path in source.iterdir() if _is_torque_file(path)), key=lambda path: path.name.casefold())
+
+
+def _table_files(source: Path) -> list[Path]:
+    if source.is_file() and source.suffix.lower() in _TABLE_EXTENSIONS:
+        return [source]
+    if not source.is_dir():
+        return []
+    return sorted(
+        (path for path in source.iterdir() if path.is_file() and path.suffix.lower() in _TABLE_EXTENSIONS),
+        key=lambda path: path.name.casefold(),
+    )
+
+
+def _file_payload(path: Path) -> dict[str, Any]:
+    return {
+        "name": path.name,
+        "source_path": str(path.expanduser().resolve()),
+        "size_bytes": path.stat().st_size,
+    }
+
+
+def _group_payload(sample: str, files: list[Path]) -> dict[str, Any]:
+    return {"sample": sample, "files": [_file_payload(path) for path in files]}
+
+
+def _session_path(output_root: Path, project_name: str) -> Path:
+    sessions_dir = output_root / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    return _unique_path(sessions_dir, f"{_slug(project_name)}.json")
+
+
+def _session_project_name(source: Path, experiment_label: str) -> str:
+    return _slug(f"{source.name}_{experiment_label}")
+
+
+def prepare_intake_session(
+    input_path: str | Path,
+    *,
+    output_root: Path = _DEFAULT_OUTPUT_ROOT,
+) -> dict[str, Any]:
+    source = Path(input_path).expanduser().resolve()
+    if not source.exists():
+        raise ValueError(f"Input path does not exist: {source}")
+    output_root = output_root.expanduser().resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+
+    tensile_dirs = _tensile_export_dirs(source)
+    torque_files = _torque_files(source)
+    semantic: dict[str, Any] | None = None
+
+    if tensile_dirs:
+        data_type_id = "mechanical"
+        experiment_type_id = "tensile_curve"
+        rule_id = "tensile_curve"
+        reason = "Detected tensile export directories and mapped each export folder to one sample group."
+        confidence = 98.0
+        groups = [
+            _group_payload(path.name.removesuffix(".is_tens_Exports"), sorted(path.glob("*.csv")))
+            for path in tensile_dirs
+        ]
+    elif torque_files:
+        data_type_id = "mechanical"
+        experiment_type_id = "torque_curve"
+        rule_id = "torque_curve"
+        reason = "Detected torque text exports with a Screw Torque column."
+        confidence = 96.0
+        groups = [_group_payload(path.stem, [path]) for path in torque_files]
+    else:
+        semantic = classify_source(source)
+        matched = _catalog_item_for_rule(str(semantic.get("rule_id") or ""))
+        if matched is None:
+            data_type_id = "unknown"
+            experiment_type_id = "unknown"
+            rule_id = None
+        else:
+            data_type, experiment = matched
+            data_type_id = str(data_type["id"])
+            experiment_type_id = str(experiment["id"])
+            rule_id = str(experiment.get("rule_id") or "") or None
+        reason = str(semantic.get("reason") or "No specific material rule matched.")
+        confidence = float(semantic.get("confidence") or 0.0)
+        files = _table_files(source)
+        groups = [_group_payload(path.stem, [path]) for path in files] if files else []
+
+    data_type, experiment = _catalog_item(data_type_id, experiment_type_id)
+    project_name = _session_project_name(source, str(experiment["label"]))
+    path = _session_path(output_root, project_name)
+    payload = {
+        "kind": "sciplot_intake_session",
+        "version": 1,
+        "created_at": datetime.now(UTC).isoformat(),
+        "session_id": path.stem,
+        "session_path": str(path),
+        "input_path": str(source),
+        "output_root": str(output_root),
+        "project_name": project_name,
+        "data_type_id": data_type_id,
+        "data_type_label": data_type["label"],
+        "experiment_type_id": experiment_type_id,
+        "experiment_label": experiment["label"],
+        "rule_id": rule_id,
+        "confidence": confidence,
+        "reason": reason,
+        "groups": groups,
+        "semantic": semantic,
+    }
+    path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+    return payload
+
+
+def create_intake_project_from_session(session: str | Path | dict[str, Any]) -> dict[str, Any]:
+    if isinstance(session, str | Path):
+        payload = json.loads(Path(session).expanduser().read_text(encoding="utf-8"))
+    else:
+        payload = dict(session)
+    groups: list[IntakeGroupInput] = []
+    for group in payload.get("groups", []):
+        files: list[IncomingFile] = []
+        for item in group.get("files", []):
+            source_path = Path(str(item.get("source_path") or "")).expanduser()
+            if not source_path.exists():
+                continue
+            files.append(IncomingFile(name=str(item.get("name") or source_path.name), content=source_path.read_bytes()))
+        groups.append(IntakeGroupInput(sample=str(group.get("sample") or ""), files=tuple(files)))
+    return create_intake_project(
+        project_name=str(payload.get("project_name") or ""),
+        data_type_id=str(payload.get("data_type_id") or "unknown"),
+        experiment_type_id=str(payload.get("experiment_type_id") or "unknown"),
+        groups=groups,
+        output_root=Path(str(payload.get("output_root") or _DEFAULT_OUTPUT_ROOT)),
+    )
+
+
+def create_intake_project(
+    *,
+    project_name: str,
+    data_type_id: str,
+    experiment_type_id: str,
+    groups: list[IntakeGroupInput],
+    output_root: Path = _DEFAULT_OUTPUT_ROOT,
+) -> dict[str, Any]:
+    data_type, experiment = _catalog_item(data_type_id, experiment_type_id)
+    cleaned_groups = [group for group in groups if group.sample.strip() and group.files]
+    if not cleaned_groups:
+        raise ValueError("At least one named sample group with files is required.")
+
+    project_slug = _slug(project_name or f"{experiment['label']}_{'_'.join(group.sample for group in cleaned_groups)}")
+    output_root = output_root.expanduser().resolve()
+    project_dir = output_root / project_slug
+    if project_dir.exists():
+        shutil.rmtree(project_dir)
+    raw_dir = project_dir / "raw"
+    source_dir = project_dir / "source"
+    runs_dir = project_dir / "runs"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    source_dir.mkdir(parents=True, exist_ok=True)
+    runs_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest_groups: list[dict[str, Any]] = []
+    for group in cleaned_groups:
+        sample = group.sample.strip()
+        sample_dir = raw_dir / _slug(sample)
+        sample_dir.mkdir(parents=True, exist_ok=True)
+        group_files: list[dict[str, Any]] = []
+        for incoming in group.files:
+            raw_path = _unique_path(sample_dir, _safe_filename(incoming.name))
+            raw_path.write_bytes(incoming.content)
+            source_name = _safe_filename(f"{sample}__{raw_path.name}")
+            source_path = _unique_path(source_dir, source_name)
+            source_path.write_bytes(incoming.content)
+            group_files.append(
+                {
+                    "original_name": incoming.name,
+                    "raw_path": str(raw_path),
+                    "source_path": str(source_path),
+                    "size_bytes": len(incoming.content),
+                }
+            )
+        manifest_groups.append({"sample": sample, "files": group_files})
+
+    rule_id = experiment.get("rule_id")
+    plot_request = {
+        "recipe": "auto",
+        "input": str(source_dir),
+        "output": str(runs_dir / "run_001"),
+        "exports": list(DEFAULT_EXPORT_FORMATS),
+        "review_notes": ["Generated by SciPlot Intake UI."],
+    }
+    if rule_id:
+        plot_request["rule_id"] = rule_id
+
+    created_at = datetime.now(UTC).isoformat()
+    manifest = {
+        "kind": "sciplot_intake_project",
+        "version": 1,
+        "created_at": created_at,
+        "project_name": project_name,
+        "project_slug": project_slug,
+        "data_type": {"id": data_type["id"], "label": data_type["label"]},
+        "experiment": {
+            "id": experiment["id"],
+            "label": experiment["label"],
+            "rule_id": rule_id,
+            "chart": experiment.get("chart"),
+        },
+        "groups": manifest_groups,
+        "source_dir": str(source_dir),
+        "plot_request": str(project_dir / "plot_request.json"),
+        "outputs_dir": str(runs_dir / "run_001"),
+    }
+    (project_dir / "intake_manifest.json").write_text(
+        json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (project_dir / f"{project_slug}.sciplot.json").write_text(
+        json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (project_dir / "plot_request.json").write_text(
+        json.dumps(json_safe(plot_request), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    zip_path = output_root / f"{project_slug}.zip"
+    _write_zip(project_dir, zip_path)
+    return {
+        **manifest,
+        "project_dir": str(project_dir),
+        "zip_path": str(zip_path),
+        "download_name": zip_path.name,
+    }
+
+
+def _decode_group_payload(payload: dict[str, Any]) -> list[IntakeGroupInput]:
+    groups: list[IntakeGroupInput] = []
+    for group in payload.get("groups", []):
+        sample = str(group.get("sample") or "").strip()
+        files: list[IncomingFile] = []
+        for item in group.get("files", []):
+            name = str(item.get("name") or "file")
+            source_path = str(item.get("source_path") or "").strip()
+            if source_path:
+                path = Path(source_path).expanduser()
+                files.append(IncomingFile(name=name or path.name, content=path.read_bytes()))
+            else:
+                content_base64 = str(item.get("content_base64") or "")
+                if "," in content_base64:
+                    content_base64 = content_base64.split(",", 1)[1]
+                files.append(IncomingFile(name=name, content=base64.b64decode(content_base64)))
+        groups.append(IntakeGroupInput(sample=sample, files=tuple(files)))
+    return groups
+
+
+class _IntakeHandler(BaseHTTPRequestHandler):
+    server: _IntakeServer
+
+    def log_message(self, _format: str, *args: object) -> None:
+        return
+
+    def _send_json(self, payload: object, status: HTTPStatus = HTTPStatus.OK) -> None:
+        body = json.dumps(json_safe(payload), ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_file(self, path: Path) -> None:
+        if not path.exists() or not path.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        body = path.read_bytes()
+        content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path in {"/", "/index.html"}:
+            self._send_file(_STATIC_DIR / "index.html")
+            return
+        if parsed.path == "/api/catalog":
+            self._send_json(intake_catalog_payload())
+            return
+        if parsed.path.startswith("/api/session/"):
+            session_id = _safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
+            self._send_file(self.server.output_root / "sessions" / f"{session_id}.json")
+            return
+        if parsed.path == "/api/session":
+            query = parse_qs(parsed.query)
+            session_id = _safe_filename(query.get("id", [""])[0])
+            self._send_file(self.server.output_root / "sessions" / f"{session_id}.json")
+            return
+        if parsed.path.startswith("/api/download/"):
+            filename = _safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
+            self._send_file(self.server.output_root / filename)
+            return
+        self.send_error(HTTPStatus.NOT_FOUND)
+
+    def do_POST(self) -> None:
+        if self.path != "/api/projects":
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+            project = create_intake_project(
+                project_name=str(payload.get("project_name") or ""),
+                data_type_id=str(payload.get("data_type_id") or ""),
+                experiment_type_id=str(payload.get("experiment_type_id") or ""),
+                groups=_decode_group_payload(payload),
+                output_root=self.server.output_root,
+            )
+        except Exception as exc:
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+        self._send_json(project)
+
+
+class _IntakeServer(ThreadingHTTPServer):
+    def server_bind(self) -> None:
+        TCPServer.server_bind(self)
+        self.server_name = str(self.server_address[0])
+        self.server_port = int(self.server_address[1])
+
+    def __init__(self, server_address: tuple[str, int], output_root: Path):
+        super().__init__(server_address, _IntakeHandler)
+        self.output_root = output_root.expanduser().resolve()
+        self.output_root.mkdir(parents=True, exist_ok=True)
+
+
+def serve_intake(
+    *,
+    input_path: str | Path | None = None,
+    host: str = "127.0.0.1",
+    port: int = 0,
+    output_root: Path = _DEFAULT_OUTPUT_ROOT,
+    open_browser: bool = True,
+) -> None:
+    server = _IntakeServer((host, port), output_root)
+    actual_host, actual_port = server.server_address
+    url = f"http://{actual_host}:{actual_port}"
+    payload: dict[str, Any] = {"url": url, "output_root": str(server.output_root)}
+    if input_path is not None:
+        session = prepare_intake_session(input_path, output_root=server.output_root)
+        url = f"{url}?session={quote(str(session['session_id']))}"
+        payload.update({"url": url, "session_path": session["session_path"], "session_id": session["session_id"]})
+    print(json.dumps(payload, ensure_ascii=False), flush=True)
+    if open_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+
+
+__all__ = [
+    "IncomingFile",
+    "IntakeGroupInput",
+    "create_intake_project_from_session",
+    "create_intake_project",
+    "intake_catalog_payload",
+    "prepare_intake_session",
+    "refresh_intake_project_zip",
+    "serve_intake",
+]
