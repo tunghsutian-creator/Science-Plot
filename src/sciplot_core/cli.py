@@ -102,6 +102,15 @@ def _build_parser() -> argparse.ArgumentParser:
     intake_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
     intake_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
 
+    workbench_parser = subparsers.add_parser("workbench", help="Open the SciPlot Codex-aware Web workbench.")
+    workbench_parser.add_argument("input", nargs="?", type=Path)
+    workbench_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
+    workbench_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    workbench_parser.add_argument("--host", default="127.0.0.1")
+    workbench_parser.add_argument("--port", type=int, default=8765)
+    workbench_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
+    workbench_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
+
     qa_parser = subparsers.add_parser("qa", help="Validate rendered SciPlot outputs.")
     qa_parser.add_argument("output_dir", type=Path)
     qa_parser.add_argument("--goldens", type=Path)
@@ -190,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             return 0
-        if args.command == "intake":
+        if args.command in {"intake", "workbench"}:
             if args.catalog:
                 payload = intake_catalog_payload()
                 if args.json:

@@ -982,6 +982,34 @@ def _write_curve_table(series_list: list[CurveSeriesPayload], output_path: Path)
     pd.DataFrame(rows).to_csv(output_path, header=False, index=False)
 
 
+def _series_order_map(series_order: object) -> dict[str, int]:
+    if not isinstance(series_order, list | tuple):
+        return {}
+    ordered: dict[str, int] = {}
+    for index, value in enumerate(series_order):
+        label = _clean_text(value)
+        if label and label not in ordered:
+            ordered[label] = index
+    return ordered
+
+
+def _order_curve_series(
+    series_list: list[CurveSeriesPayload],
+    series_order: object,
+) -> list[CurveSeriesPayload]:
+    order = _series_order_map(series_order)
+    if not order:
+        return series_list
+
+    def key(item: tuple[int, CurveSeriesPayload]) -> tuple[int, int]:
+        index, series = item
+        group_name = _intake_group_name(series.sample) or series.sample
+        rank = order.get(series.sample, order.get(group_name, len(order) + index))
+        return (rank, index)
+
+    return [series for _index, series in sorted(enumerate(series_list), key=key)]
+
+
 def _compact_torque_sample_labels(labels: list[str]) -> list[str]:
     if len(labels) < 2:
         return labels
@@ -1344,6 +1372,7 @@ def prepare_semantic_source(
     output_dir: Path,
     semantic: dict[str, Any],
     curation_path: str | Path | None = None,
+    series_order: object = None,
 ) -> dict[str, Any]:
     source = Path(input_path).expanduser()
     processed_dir = output_dir / "processed"
@@ -1412,6 +1441,7 @@ def prepare_semantic_source(
                 series_list = [_normalize_series(series, y_label="Normalized modulus", y_unit="G/G0")]
         else:
             series_list = [series]
+        series_list = _order_curve_series(series_list, series_order)
         _write_curve_table(series_list, processed_source)
         return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
 
@@ -1422,12 +1452,14 @@ def prepare_semantic_source(
             all_source = processed_source.with_name(f"{processed_source.stem}_all.csv")
             _write_curve_table(series_list, all_source)
             series_list = _representative_tensile_series(series_list)
+        series_list = _order_curve_series(series_list, series_order)
         _write_curve_table(series_list, processed_source)
         return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
 
     if family == "tensile_curve" and source.suffix.lower() in {".xlsx", ".xls"}:
         processed_source = processed_dir / f"{source.stem}_tensile_workbook_curves.csv"
         series_list = _read_tensile_workbook_series(source)
+        series_list = _order_curve_series(series_list, series_order)
         _write_curve_table(series_list, processed_source)
         return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
 
@@ -1437,7 +1469,8 @@ def prepare_semantic_source(
         series_list = [_read_torque_series(path, curation=curation) for path in _torque_source_files(source)]
         if not series_list:
             raise ValueError(f"No torque exports found under {source}.")
-        if curation is None:
+        series_list = _order_curve_series(series_list, series_order)
+        if curation is None and not _series_order_map(series_order):
             series_list = _compact_torque_series_labels(series_list)
         _write_curve_table(series_list, processed_source)
         return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}

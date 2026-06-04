@@ -119,10 +119,11 @@ Installing the package also exposes the console script:
 ## Intake UI
 
 Use `intake` when a human wants to sort files into named sample groups before
-Codex renders figures:
+Codex renders figures. `workbench` is an alias for the same local GUI:
 
 ```bash
 sciplot intake --out outputs/intake_projects
+sciplot workbench --out outputs/intake_projects
 ```
 
 For the Codex-first workflow, pass the data path directly. SciPlot prepares a
@@ -134,15 +135,20 @@ sciplot prepare PATH --out outputs/intake_projects --json
 sciplot intake PATH --out outputs/intake_projects
 ```
 
-The local page uses four steps:
+The local page is a Codex-aware Plot Canvas workbench:
 
 ```text
-data type -> experiment/plot type -> sample groups -> export
+Source -> Inspect -> Samples -> Export -> Codex Runs
 ```
 
-It writes a project folder and ZIP package containing `raw/`,
-`intake_manifest.json`, a `.sciplot.json` project file, and `plot_request.json`.
-The request is ready for the normal script-first route:
+The export step lets the reviewer choose the run output directory, figure size,
+and export formats before a request is written. Figure-size choices follow the
+SciPlot contract presets: `60x55`, `120x55`, `180x55`, `60x110`, `120x110`, and
+`180x110`, so panel frames keep their shared physical alignment in assembled
+figures. The Web UI writes a project folder and ZIP package containing `raw/`,
+`intake_manifest.json`, a `.sciplot.json` project file, `plot_request.json`, and
+rendered figures from the selected request options. The request can also be
+rerun through the normal script-first route:
 
 ```bash
 sciplot run outputs/intake_projects/PROJECT/plot_request.json
@@ -151,6 +157,13 @@ sciplot run outputs/intake_projects/PROJECT/plot_request.json
 Known experiment types are backed by the local materials rule registry. Unknown
 entries are allowed as intentional handoff points for Codex intervention and
 future rule coverage.
+
+If a render writes `intervention_request.json`, reports `needs_ai_intervention`,
+or fails during render/QA, the GUI exposes a `Run Codex` handoff. That button
+writes `codex_jobs/JOB/sciplot_codex_handoff.json` inside the intake project and
+starts `codex exec` with workspace-write sandboxing. Codex jobs record JSONL
+stdout, stderr, status, and the final message; no background Codex work starts
+until the user presses the button.
 
 The first prepared workflows include tensile export folders such as
 `.is_tens_Exports` and torque-rheometer text exports with `Screw Torque` columns.

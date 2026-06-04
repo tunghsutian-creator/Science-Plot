@@ -407,7 +407,7 @@ RULES: tuple[SemanticRule, ...] = (
                 "N m",
             ),
         ),
-        render_options={**_DEFAULT_RENDER_OPTIONS, "series_label_mode": "inline", "size": "180x55"},
+        render_options={**_DEFAULT_RENDER_OPTIONS, "series_label_mode": "inline", "size": "120x55"},
         fixture_status="pending",
         priority=42,
         reason="Torque rheometer export with Screw Torque over time.",

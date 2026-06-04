@@ -16,11 +16,13 @@ from socketserver import TCPServer
 from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
+from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex_job, start_codex_job
 from sciplot_core.render import DEFAULT_EXPORT_FORMATS, json_safe
 from sciplot_core.semantic import classify_source
 
 _STATIC_DIR = Path(__file__).with_name("intake_static")
 _DEFAULT_OUTPUT_ROOT = Path("outputs") / "intake_projects"
+APPROVED_INTAKE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
 _TEXT_EXTENSIONS = {".csv", ".tsv", ".txt"}
 _TABLE_EXTENSIONS = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
 _TEXT_ENCODINGS = ("utf-8", "utf-8-sig", "utf-16", "gb18030", "gbk", "latin-1")
@@ -153,7 +155,11 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
 
 
 def intake_catalog_payload() -> dict[str, Any]:
-    return {"kind": "sciplot_intake_catalog", "data_types": json_safe(INTAKE_CATALOG)}
+    return {
+        "kind": "sciplot_intake_catalog",
+        "data_types": json_safe(INTAKE_CATALOG),
+        "figure_size_presets": list(APPROVED_INTAKE_SIZE_PRESETS),
+    }
 
 
 def _catalog_item(data_type_id: str, experiment_type_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -222,6 +228,113 @@ def refresh_intake_project_zip(project_dir: str | Path) -> Path:
     zip_path = project_dir.parent / _safe_filename(zip_name)
     _write_zip(project_dir, zip_path)
     return zip_path
+
+
+def _path_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _read_json_if_exists(path: Path) -> dict[str, Any] | None:
+    if not path.exists() or not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _project_dir_from_slug(output_root: Path, project_slug: str) -> Path:
+    safe_slug = _safe_filename(project_slug)
+    project_dir = (output_root.expanduser().resolve() / safe_slug).resolve()
+    if not _path_within(project_dir, output_root.expanduser().resolve()):
+        raise PermissionError("Project path is outside the configured output root.")
+    return project_dir
+
+
+def _artifact_info(path: Path, *, project_slug: str) -> dict[str, Any]:
+    exists = path.exists() and path.is_file()
+    return {
+        "exists": exists,
+        "path": str(path),
+        "name": path.name,
+        "size_bytes": path.stat().st_size if exists else 0,
+        "url": f"/api/projects/{quote(project_slug)}/artifact?path={quote(str(path), safe='')}" if exists else None,
+    }
+
+
+def _allowed_artifact_roots(project_dir: Path) -> list[Path]:
+    roots = [project_dir.resolve()]
+    manifest = _read_json_if_exists(project_dir / "intake_manifest.json") or {}
+    for value in (
+        manifest.get("outputs_dir"),
+        (manifest.get("last_run") or {}).get("output") if isinstance(manifest.get("last_run"), dict) else None,
+    ):
+        if isinstance(value, str) and value.strip():
+            roots.append(Path(value).expanduser().resolve())
+    return roots
+
+
+def _resolve_project_artifact(project_dir: Path, artifact_path: str) -> Path:
+    if not artifact_path.strip():
+        raise ValueError("Artifact path is required.")
+    requested = Path(artifact_path).expanduser()
+    roots = _allowed_artifact_roots(project_dir)
+    if requested.is_absolute():
+        candidate = requested.resolve()
+        if any(_path_within(candidate, root) for root in roots):
+            return candidate
+        raise PermissionError("Artifact path is outside this SciPlot project.")
+    for root in roots:
+        candidate = (root / requested).resolve()
+        if _path_within(candidate, root):
+            return candidate
+    raise PermissionError("Artifact path is outside this SciPlot project.")
+
+
+def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
+    project_path = Path(project_dir).expanduser().resolve()
+    manifest_path = project_path / "intake_manifest.json"
+    manifest = _read_json_if_exists(manifest_path)
+    if manifest is None:
+        raise FileNotFoundError(f"No intake project manifest found at {manifest_path}.")
+    project_slug = str(manifest.get("project_slug") or project_path.name)
+    last_run = manifest.get("last_run") if isinstance(manifest.get("last_run"), dict) else {}
+    run_output = Path(str(last_run.get("output") or manifest.get("outputs_dir") or project_path / "runs" / "run_001"))
+    intervention_path = run_output / "intervention_request.json"
+    artifacts = {
+        "manifest": _artifact_info(run_output / "manifest.json", project_slug=project_slug),
+        "analysis_report": _artifact_info(run_output / "analysis_report.md", project_slug=project_slug),
+        "analysis_metrics": _artifact_info(run_output / "tables" / "analysis_metrics.csv", project_slug=project_slug),
+        "review_html": _artifact_info(run_output / "review.html", project_slug=project_slug),
+        "intervention_request": _artifact_info(intervention_path, project_slug=project_slug),
+    }
+    figures = [
+        _artifact_info(Path(str(path)), project_slug=project_slug)
+        for path in last_run.get("figures", [])
+        if isinstance(path, str)
+    ]
+    needs_codex = bool(last_run.get("failure") or artifacts["intervention_request"]["exists"])
+    return {
+        "kind": "sciplot_project_status",
+        "project_slug": project_slug,
+        "project_dir": str(project_path),
+        "manifest": json_safe(manifest),
+        "plot_request": manifest.get("plot_request"),
+        "outputs_dir": str(run_output),
+        "last_run": json_safe(last_run),
+        "artifacts": artifacts,
+        "figures": figures,
+        "needs_codex": needs_codex,
+        "codex": {
+            "available": codex_available(),
+            "jobs": list_codex_jobs(project_path),
+        },
+    }
 
 
 def _decode_text_preview(path: Path, *, max_bytes: int = 8192) -> str:
@@ -395,7 +508,39 @@ def create_intake_project_from_session(session: str | Path | dict[str, Any]) -> 
         experiment_type_id=str(payload.get("experiment_type_id") or "unknown"),
         groups=groups,
         output_root=Path(str(payload.get("output_root") or _DEFAULT_OUTPUT_ROOT)),
+        plot_output=payload.get("plot_output"),
+        exports=payload.get("exports"),
+        render_options=payload.get("render_options"),
     )
+
+
+def _resolve_plot_output(plot_output: object, *, project_dir: Path, default_output: Path) -> Path:
+    if plot_output is None or str(plot_output).strip() == "":
+        return default_output
+    output_path = Path(str(plot_output).strip()).expanduser()
+    if not output_path.is_absolute():
+        output_path = project_dir / output_path
+    return output_path
+
+
+def _selected_exports(exports: object) -> list[str]:
+    if not isinstance(exports, list | tuple):
+        return list(DEFAULT_EXPORT_FORMATS)
+    selected = [str(item).strip().lower() for item in exports if str(item).strip()]
+    return selected or list(DEFAULT_EXPORT_FORMATS)
+
+
+def _selected_render_options(render_options: object) -> dict[str, Any]:
+    if not isinstance(render_options, dict):
+        return {}
+    selected = {str(key): value for key, value in render_options.items() if value not in (None, "")}
+    size = selected.get("size")
+    if size is not None and str(size) not in APPROVED_INTAKE_SIZE_PRESETS:
+        raise ValueError(
+            "Unsupported figure size "
+            f"`{size}`. Allowed sizes: {', '.join(APPROVED_INTAKE_SIZE_PRESETS)}."
+        )
+    return selected
 
 
 def create_intake_project(
@@ -405,12 +550,16 @@ def create_intake_project(
     experiment_type_id: str,
     groups: list[IntakeGroupInput],
     output_root: Path = _DEFAULT_OUTPUT_ROOT,
+    plot_output: str | Path | None = None,
+    exports: list[str] | tuple[str, ...] | None = None,
+    render_options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     data_type, experiment = _catalog_item(data_type_id, experiment_type_id)
     cleaned_groups = [group for group in groups if group.sample.strip() and group.files]
     if not cleaned_groups:
         raise ValueError("At least one named sample group with files is required.")
 
+    series_order = [group.sample.strip() for group in cleaned_groups]
     project_slug = _slug(project_name or f"{experiment['label']}_{'_'.join(group.sample for group in cleaned_groups)}")
     output_root = output_root.expanduser().resolve()
     project_dir = output_root / project_slug
@@ -446,13 +595,23 @@ def create_intake_project(
         manifest_groups.append({"sample": sample, "files": group_files})
 
     rule_id = experiment.get("rule_id")
+    selected_output = _resolve_plot_output(
+        plot_output,
+        project_dir=project_dir,
+        default_output=runs_dir / "run_001",
+    )
+    selected_exports = _selected_exports(exports)
+    selected_render_options = _selected_render_options(render_options)
     plot_request = {
         "recipe": "auto",
         "input": str(source_dir),
-        "output": str(runs_dir / "run_001"),
-        "exports": list(DEFAULT_EXPORT_FORMATS),
+        "output": str(selected_output),
+        "exports": selected_exports,
+        "series_order": series_order,
         "review_notes": ["Generated by SciPlot Intake UI."],
     }
+    if selected_render_options:
+        plot_request["render_options"] = selected_render_options
     if rule_id:
         plot_request["rule_id"] = rule_id
 
@@ -473,7 +632,13 @@ def create_intake_project(
         "groups": manifest_groups,
         "source_dir": str(source_dir),
         "plot_request": str(project_dir / "plot_request.json"),
-        "outputs_dir": str(runs_dir / "run_001"),
+        "outputs_dir": str(selected_output),
+        "plot_options": {
+            "output": str(selected_output),
+            "exports": selected_exports,
+            "render_options": selected_render_options,
+            "series_order": series_order,
+        },
     }
     (project_dir / "intake_manifest.json").write_text(
         json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
@@ -494,6 +659,78 @@ def create_intake_project(
         "project_dir": str(project_dir),
         "zip_path": str(zip_path),
         "download_name": zip_path.name,
+    }
+
+
+def create_and_run_intake_project(
+    *,
+    project_name: str,
+    data_type_id: str,
+    experiment_type_id: str,
+    groups: list[IntakeGroupInput],
+    output_root: Path = _DEFAULT_OUTPUT_ROOT,
+    plot_output: str | Path | None = None,
+    exports: list[str] | tuple[str, ...] | None = None,
+    render_options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    from sciplot_core.workflow import run_request
+
+    project = create_intake_project(
+        project_name=project_name,
+        data_type_id=data_type_id,
+        experiment_type_id=experiment_type_id,
+        groups=groups,
+        output_root=output_root,
+        plot_output=plot_output,
+        exports=exports,
+        render_options=render_options,
+    )
+    project_dir = Path(str(project["project_dir"]))
+    plot_request_path = Path(str(project["plot_request"]))
+    try:
+        manifest = run_request(plot_request_path)
+    except Exception as exc:
+        intake_manifest = json.loads((project_dir / "intake_manifest.json").read_text(encoding="utf-8"))
+        request = json.loads(plot_request_path.read_text(encoding="utf-8"))
+        run_output = Path(str(request.get("output") or intake_manifest.get("outputs_dir")))
+        intervention = run_output / "intervention_request.json"
+        failed_run = {
+            "failed_at": datetime.now(UTC).isoformat(),
+            "output": str(run_output),
+            "figures": [],
+            "analysis_metrics": [],
+            "qa": {},
+            "failure": str(exc),
+            "needs_codex": True,
+            "intervention_request": str(intervention) if intervention.exists() else None,
+        }
+        intake_manifest["last_run"] = failed_run
+        intake_manifest["run_failed"] = True
+        intake_manifest["failure"] = str(exc)
+        (project_dir / "intake_manifest.json").write_text(
+            json.dumps(json_safe(intake_manifest), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        for path in sorted(project_dir.glob("*.sciplot.json")):
+            path.write_text(json.dumps(json_safe(intake_manifest), indent=2, ensure_ascii=False), encoding="utf-8")
+        refreshed_zip = refresh_intake_project_zip(project_dir)
+        return {
+            **project,
+            **intake_manifest,
+            "project_dir": str(project_dir),
+            "zip_path": str(refreshed_zip),
+            "download_name": refreshed_zip.name,
+            "last_run": failed_run,
+        }
+    intake_manifest = json.loads((project_dir / "intake_manifest.json").read_text(encoding="utf-8"))
+    refreshed_zip = refresh_intake_project_zip(project_dir)
+    return {
+        **project,
+        **intake_manifest,
+        "project_dir": str(project_dir),
+        "zip_path": str(refreshed_zip),
+        "download_name": refreshed_zip.name,
+        "last_run": intake_manifest.get("last_run", manifest),
     }
 
 
@@ -543,6 +780,17 @@ class _IntakeHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_text(self, text: str, status: HTTPStatus = HTTPStatus.OK) -> None:
+        body = text.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _project_dir_from_request(self, project_slug: str) -> Path:
+        return _project_dir_from_slug(self.server.output_root, unquote(project_slug))
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         if parsed.path in {"/", "/index.html"}:
@@ -564,21 +812,100 @@ class _IntakeHandler(BaseHTTPRequestHandler):
             filename = _safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
             self._send_file(self.server.output_root / filename)
             return
+        if parsed.path.startswith("/api/projects/"):
+            parts = parsed.path.strip("/").split("/")
+            if len(parts) >= 4 and parts[0] == "api" and parts[1] == "projects":
+                project_dir = self._project_dir_from_request(parts[2])
+                try:
+                    if parts[3] == "status":
+                        self._send_json(intake_project_status(project_dir))
+                        return
+                    if parts[3] == "artifact":
+                        query = parse_qs(parsed.query)
+                        artifact_path = query.get("path", [""])[0]
+                        artifact = _resolve_project_artifact(project_dir, artifact_path)
+                        self._send_file(artifact)
+                        return
+                except PermissionError as exc:
+                    self.send_error(HTTPStatus.FORBIDDEN, str(exc))
+                    return
+                except FileNotFoundError:
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                except ValueError as exc:
+                    self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                    return
+        if parsed.path.startswith("/api/codex/jobs/"):
+            parts = parsed.path.strip("/").split("/")
+            query = parse_qs(parsed.query)
+            project_slug = query.get("project", [""])[0]
+            if len(parts) >= 4 and project_slug:
+                try:
+                    project_dir = self._project_dir_from_request(project_slug)
+                    job_dir = project_dir / "codex_jobs" / _safe_filename(unquote(parts[3]))
+                    if len(parts) == 5 and parts[4] == "logs":
+                        stdout_path = job_dir / "stdout.jsonl"
+                        self._send_text(stdout_path.read_text(encoding="utf-8") if stdout_path.exists() else "")
+                        return
+                    self._send_json(load_codex_job(job_dir))
+                    return
+                except (FileNotFoundError, OSError):
+                    self.send_error(HTTPStatus.NOT_FOUND)
+                    return
+                except PermissionError as exc:
+                    self.send_error(HTTPStatus.FORBIDDEN, str(exc))
+                    return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
-        if self.path != "/api/projects":
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/codex/jobs":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                project_slug = str(payload.get("project_slug") or "").strip()
+                project_dir_value = str(payload.get("project_dir") or "").strip()
+                if project_slug:
+                    project_dir = self._project_dir_from_request(project_slug)
+                elif project_dir_value:
+                    project_dir = Path(project_dir_value).expanduser().resolve()
+                    if not _path_within(project_dir, self.server.output_root):
+                        raise PermissionError("Codex jobs must belong to an intake project.")
+                else:
+                    raise ValueError("Codex job payload must include `project_slug` or `project_dir`.")
+                job = start_codex_job(
+                    project_dir=project_dir,
+                    plot_request=payload.get("plot_request"),
+                    run_output=payload.get("run_output"),
+                    intervention_request=payload.get("intervention_request"),
+                    failure=payload.get("failure"),
+                    user_goal=payload.get("user_goal"),
+                    run_async=True,
+                )
+            except PermissionError as exc:
+                self.send_error(HTTPStatus.FORBIDDEN, str(exc))
+                return
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                return
+            self._send_json(job)
+            return
+        if parsed.path != "/api/projects":
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            project = create_intake_project(
+            create_project = create_and_run_intake_project if payload.get("run_after_create") else create_intake_project
+            project = create_project(
                 project_name=str(payload.get("project_name") or ""),
                 data_type_id=str(payload.get("data_type_id") or ""),
                 experiment_type_id=str(payload.get("experiment_type_id") or ""),
                 groups=_decode_group_payload(payload),
                 output_root=self.server.output_root,
+                plot_output=payload.get("plot_output"),
+                exports=payload.get("exports"),
+                render_options=payload.get("render_options"),
             )
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
@@ -626,9 +953,12 @@ def serve_intake(
 __all__ = [
     "IncomingFile",
     "IntakeGroupInput",
+    "APPROVED_INTAKE_SIZE_PRESETS",
+    "create_and_run_intake_project",
     "create_intake_project_from_session",
     "create_intake_project",
     "intake_catalog_payload",
+    "intake_project_status",
     "prepare_intake_session",
     "refresh_intake_project_zip",
     "serve_intake",

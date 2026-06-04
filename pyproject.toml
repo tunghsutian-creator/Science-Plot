@@ -52,7 +52,7 @@ addopts = "-q"
 [tool.ruff]
 target-version = "py311"
 line-length = 120
-extend-exclude = ["src/sciplot_core/_vendor"]
+extend-exclude = ["src/sciplot_core/_vendor", "sciplot-main"]
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "UP"]

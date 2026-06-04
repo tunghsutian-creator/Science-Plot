@@ -256,6 +256,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
             output_dir=output_dir,
             semantic=semantic,
             curation_path=_resolve_optional_request_path(request.get("curation"), base_dir=base_dir),
+            series_order=request.get("series_order"),
         )
         render_options = dict(semantic.get("render_options") or {})
         request_render_options = request.get("render_options")
