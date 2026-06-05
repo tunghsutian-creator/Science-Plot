@@ -11,23 +11,13 @@ from typing import Any
 import pandas as pd
 
 from sciplot_core._bootstrap import ensure_legacy_core
+from sciplot_core.ingest import decode_text_file
 from sciplot_core.materials_rules import match_rule, semantic_payload_from_rule
 
 ensure_legacy_core()
 
 from src.data_loader import read_raw_table  # noqa: E402
 from src.rendering.recommendation import inspect_input_file  # noqa: E402
-
-_TEXT_ENCODINGS = (
-    "utf-8",
-    "utf-8-sig",
-    "utf-16",
-    "utf-16-le",
-    "utf-16-be",
-    "gb18030",
-    "gbk",
-    "latin-1",
-)
 
 _DEFAULT_RENDER_OPTIONS = {
     "legend_position": "auto",
@@ -83,18 +73,7 @@ def _token(value: object) -> str:
 
 
 def _decode_text(path: Path) -> str:
-    payload = path.read_bytes()
-    last_error: Exception | None = None
-    for encoding in _TEXT_ENCODINGS:
-        try:
-            text = payload.decode(encoding)
-        except UnicodeError as exc:
-            last_error = exc
-            continue
-        if text.startswith("\ufffe"):
-            continue
-        return text
-    raise ValueError(f"Failed to decode text from {path}") from last_error
+    return decode_text_file(path)
 
 
 def _text_preview(path: Path, *, lines: int = 40) -> str:

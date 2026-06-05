@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core._bootstrap import ensure_legacy_core
+from sciplot_core.ingest import normalized_source
 from sciplot_core.semantic import classify_source
 
 ensure_legacy_core()
@@ -44,10 +45,11 @@ def json_safe(value: Any) -> Any:
 
 
 def inspect_payload(input_path: Path, *, sheet: str | int = 0) -> dict[str, Any]:
-    payload = json_safe(inspect_input_file(input_path, sheet))
-    payload["sciplot_semantics"] = json_safe(
-        classify_source(input_path, sheet=sheet, vendor_inspection=payload),
-    )
+    with normalized_source(input_path) as source:
+        payload = json_safe(inspect_input_file(source, sheet))
+        payload["sciplot_semantics"] = json_safe(
+            classify_source(source, sheet=sheet, vendor_inspection=payload),
+        )
     return payload
 
 
@@ -109,20 +111,21 @@ def render_to_dir(
 ) -> dict[str, Any]:
     options = dict(options or {})
     normalized_exports = _normalize_export_formats(export_formats)
-    rendered = build_rendered_plots(template, input_path, sheet, **options)
-    try:
-        outputs, export_records = _export_rendered_plots(rendered, output_dir, normalized_exports)
-        return {
-            "template": template,
-            "input": str(input_path),
-            "sheet": sheet,
-            "export_formats": list(normalized_exports),
-            "exports": export_records,
-            "outputs": [str(path) for path in outputs],
-            "qa_reports": [json_safe(plot.qa_report) for plot in rendered],
-        }
-    finally:
-        close_rendered_plots(rendered)
+    with normalized_source(input_path) as source:
+        rendered = build_rendered_plots(template, source, sheet, **options)
+        try:
+            outputs, export_records = _export_rendered_plots(rendered, output_dir, normalized_exports)
+            return {
+                "template": template,
+                "input": str(input_path),
+                "sheet": sheet,
+                "export_formats": list(normalized_exports),
+                "exports": export_records,
+                "outputs": [str(path) for path in outputs],
+                "qa_reports": [json_safe(plot.qa_report) for plot in rendered],
+            }
+        finally:
+            close_rendered_plots(rendered)
 
 
 __all__ = ["DEFAULT_EXPORT_FORMATS", "inspect_payload", "json_safe", "render_to_dir"]

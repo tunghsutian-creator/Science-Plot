@@ -23,6 +23,39 @@ def _coerce_sheet(value: str) -> str | int:
         return value
 
 
+def _resolve_input(path: Path, *, kind: str = "Input") -> Path:
+    """Expand and existence-check a user-supplied path before handing it on.
+
+    Produces a clear ``Input not found: PATH`` instead of leaking a raw
+    ``[Errno 2]`` from deep in the loader.
+    """
+    resolved = path.expanduser()
+    if not resolved.exists():
+        raise FileNotFoundError(f"{kind} not found: {path}")
+    return resolved
+
+
+# Substrings that mark a "we couldn't make sense of this table" failure, for
+# which a recovery hint is genuinely useful (unlike, say, a bad-template error
+# that already lists every valid option).
+_RECOGNITION_ERROR_MARKERS = (
+    "recognize",
+    "numeric curve series",
+    "unsupported file format",
+    "must match",
+    "no numeric",
+)
+
+
+def _recovery_hint(input_path: Path | None) -> str:
+    target = str(input_path) if input_path is not None else "<input>"
+    return (
+        f"Hint: run `sciplot inspect {target} --json` to see how SciPlot read the table, "
+        f"reshape it as a 2-column curve / replicate / heatmap table, "
+        f"or open it in the workbench with `sciplot intake {target}`."
+    )
+
+
 def _load_options(value: str | None) -> dict[str, Any]:
     if not value:
         return {}
@@ -123,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "inspect":
-            payload = inspect_payload(args.input.expanduser(), sheet=_coerce_sheet(args.sheet))
+            payload = inspect_payload(_resolve_input(args.input), sheet=_coerce_sheet(args.sheet))
             if args.json:
                 _print_json(payload)
             else:
@@ -131,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "render":
             payload = render_to_dir(
-                args.input.expanduser(),
+                _resolve_input(args.input),
                 template=args.template,
                 output_dir=args.out.expanduser(),
                 sheet=_coerce_sheet(args.sheet),
@@ -142,14 +175,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "recipe":
             payload = run_recipe(
                 args.name,
-                args.input.expanduser(),
+                _resolve_input(args.input),
                 output_dir=args.out.expanduser(),
                 options=_load_options(args.options),
             )
             _print_json(payload)
             return 0
         if args.command == "run":
-            _print_json(run_request(args.request.expanduser()))
+            _print_json(run_request(_resolve_input(args.request, kind="Request file")))
             return 0
         if args.command == "curate":
             if args.curate_command == "torque":
@@ -228,6 +261,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
+        if args.command in {"inspect", "render", "recipe"} and any(
+            marker in str(exc).casefold() for marker in _RECOGNITION_ERROR_MARKERS
+        ):
+            print(_recovery_hint(getattr(args, "input", None)), file=sys.stderr)
         return 1
     parser.error(f"Unsupported command: {args.command}")
     return 2

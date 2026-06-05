@@ -98,6 +98,19 @@ need to modify project code during normal plotting.
 
 ## Quick Start
 
+The fastest path uses the bundled `Makefile`:
+
+```bash
+make setup     # create .venv and install the package + dev tools
+make demo      # render the bundled example and run QA on it
+make workbench # open the drag-and-drop workbench in a browser
+```
+
+Run `make` on its own to list every target (`setup`, `demo`, `test`, `lint`,
+`fix`, `workbench`, `clean`).
+
+The equivalent manual steps:
+
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e '.[dev]'
@@ -141,6 +154,12 @@ The local page is a Codex-aware Plot Canvas workbench:
 Source -> Inspect -> Samples -> Export -> Codex Runs
 ```
 
+Workbench stage rules:
+
+- Source, Inspect, and Samples are data-confirmation stages, not plot-preview stages.
+- Use them to confirm source binding, detected rules/templates, grouping, sample names, and legend order.
+- Do not use an empty plot preview as a placeholder during import, inspection, or grouping.
+
 The export step lets the reviewer choose the run output directory, figure size,
 and export formats before a request is written. Figure-size choices follow the
 SciPlot contract presets: `60x55`, `120x55`, `180x55`, `60x110`, `120x110`, and
@@ -153,6 +172,11 @@ rerun through the normal script-first route:
 ```bash
 sciplot run outputs/intake_projects/PROJECT/plot_request.json
 ```
+
+Result review rules:
+
+- Result Review appears only after Export or Codex produces rendered artifacts.
+- Read Result Review artifacts (`review.html`, figures, manifest, metrics, and QA) before reporting output.
 
 Known experiment types are backed by the local materials rule registry. Unknown
 entries are allowed as intentional handoff points for Codex intervention and

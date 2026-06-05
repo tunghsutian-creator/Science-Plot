@@ -17,6 +17,7 @@ from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex_job, start_codex_job
+from sciplot_core.ingest import smart_decode
 from sciplot_core.render import DEFAULT_EXPORT_FORMATS, json_safe
 from sciplot_core.semantic import classify_source
 
@@ -25,7 +26,6 @@ _DEFAULT_OUTPUT_ROOT = Path("outputs") / "intake_projects"
 APPROVED_INTAKE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
 _TEXT_EXTENSIONS = {".csv", ".tsv", ".txt"}
 _TABLE_EXTENSIONS = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
-_TEXT_ENCODINGS = ("utf-8", "utf-8-sig", "utf-16", "gb18030", "gbk", "latin-1")
 
 
 @dataclass(frozen=True)
@@ -338,13 +338,7 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
 
 
 def _decode_text_preview(path: Path, *, max_bytes: int = 8192) -> str:
-    payload = path.read_bytes()[:max_bytes]
-    for encoding in _TEXT_ENCODINGS:
-        try:
-            return payload.decode(encoding)
-        except UnicodeError:
-            continue
-    return ""
+    return smart_decode(path.read_bytes()[:max_bytes])[0]
 
 
 def _looks_like_tensile_export_dir(path: Path) -> bool:
