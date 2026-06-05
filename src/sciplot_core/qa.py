@@ -27,13 +27,14 @@ def _pdf_info(path: Path) -> dict[str, Any]:
     }
 
 
-def run_qa(output_dir: Path, *, goldens_dir: Path | None = None) -> dict[str, Any]:
+def run_qa(output_dir: Path, *, goldens_dir: Path | None = None, require_all_goldens: bool = False) -> dict[str, Any]:
     pdfs = sorted(output_dir.rglob("*.pdf"))
     if not pdfs:
         raise ValueError(f"No PDF outputs found in {output_dir}.")
     pdf_reports = [_pdf_info(path) for path in pdfs]
     reports_by_name = {Path(report["path"]).name: report for report in pdf_reports}
     golden_reports: list[dict[str, Any]] = []
+    skipped_goldens: list[str] = []
     if goldens_dir is not None and goldens_dir.exists():
         for path in sorted(goldens_dir.glob("*.json")):
             golden = json.loads(path.read_text(encoding="utf-8"))
@@ -41,7 +42,10 @@ def run_qa(output_dir: Path, *, goldens_dir: Path | None = None) -> dict[str, An
                 filename = str(golden["filename"])
                 actual = reports_by_name.get(filename)
                 if actual is None:
-                    raise ValueError(f"Golden media box target {filename} was not rendered.")
+                    if require_all_goldens:
+                        raise ValueError(f"Golden media box target {filename} was not rendered.")
+                    skipped_goldens.append(filename)
+                    continue
                 expected = [float(item) for item in golden["media_box_pt"]]
                 observed = [float(item) for item in actual["media_box_pt"]]
                 tolerance = float(golden.get("tolerance_pt", 0.5))
@@ -57,6 +61,7 @@ def run_qa(output_dir: Path, *, goldens_dir: Path | None = None) -> dict[str, An
         "pdf_count": len(pdf_reports),
         "pdfs": pdf_reports,
         "goldens_checked": len(golden_reports),
+        "goldens_skipped": skipped_goldens,
     }
 
 

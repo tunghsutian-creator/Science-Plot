@@ -521,6 +521,9 @@ and tests. For new dataset handling or an `intervention_request.json`:
 4. Add or update a test or golden QA assertion.
 5. Render through `sciplot run`, `sciplot_core.render_to_dir`, or `sciplot render`.
 6. Run `pytest` and, when relevant, `sciplot qa`.
+   `sciplot qa --goldens GOLDENS_DIR` checks matching golden targets by
+   default; add `--strict-goldens` for full acceptance runs where every golden
+   target must be rendered.
 
 Generated outputs should go under ignored folders such as `.tmp_verify/`,
 `outputs/`, or `figures/`.

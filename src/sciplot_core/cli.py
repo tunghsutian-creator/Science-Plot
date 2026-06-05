@@ -153,6 +153,11 @@ def _build_parser() -> argparse.ArgumentParser:
     qa_parser = subparsers.add_parser("qa", help="Validate rendered SciPlot outputs.")
     qa_parser.add_argument("output_dir", type=Path)
     qa_parser.add_argument("--goldens", type=Path)
+    qa_parser.add_argument(
+        "--strict-goldens",
+        action="store_true",
+        help="Fail when any golden target is missing from the rendered output.",
+    )
 
     return parser
 
@@ -277,6 +282,7 @@ def main(argv: list[str] | None = None) -> int:
                 run_qa(
                     args.output_dir.expanduser(),
                     goldens_dir=args.goldens.expanduser() if args.goldens else None,
+                    require_all_goldens=args.strict_goldens,
                 )
             )
             return 0

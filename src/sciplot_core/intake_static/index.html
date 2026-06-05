@@ -7,16 +7,16 @@
   <style>
     :root {
       color-scheme: light;
-      --bg: #eef1f5;
-      --window: rgba(255, 255, 255, 0.78);
-      --chrome: rgba(246, 248, 251, 0.78);
-      --panel: rgba(255, 255, 255, 0.86);
-      --panel-strong: #ffffff;
-      --line: rgba(50, 56, 67, 0.14);
+      --bg: #f1efe8;
+      --window: rgba(253, 252, 248, 0.9);
+      --chrome: rgba(246, 244, 238, 0.86);
+      --panel: rgba(255, 255, 252, 0.9);
+      --panel-strong: #fffffc;
+      --line: rgba(55, 50, 42, 0.13);
       --line-strong: rgba(0, 122, 255, 0.48);
       --text: #1d1d1f;
-      --muted: #6e7480;
-      --quiet: #939aa6;
+      --muted: #6f6b63;
+      --quiet: #9a958c;
       --accent: #007aff;
       --accent-soft: rgba(0, 122, 255, 0.12);
       --warning: #b26a00;
@@ -33,9 +33,7 @@
       margin: 0;
       min-height: 100vh;
       color: var(--text);
-      background:
-        radial-gradient(circle at 12% 8%, rgba(0, 122, 255, 0.12), transparent 28%),
-        linear-gradient(180deg, #f8fafc, var(--bg));
+      background: linear-gradient(180deg, #faf9f5 0%, var(--bg) 100%);
     }
 
     button, input, textarea { font: inherit; }
@@ -52,9 +50,9 @@
       min-height: calc(100vh - 40px);
       margin: 20px auto;
       display: grid;
-      grid-template-columns: 220px minmax(0, 1fr) 310px;
+      grid-template-columns: 232px minmax(0, 1fr) 320px;
       border: 1px solid rgba(255, 255, 255, 0.82);
-      border-radius: 24px;
+      border-radius: 22px;
       overflow: hidden;
       background: var(--window);
       box-shadow: var(--shadow);
@@ -67,7 +65,7 @@
       border-right: 1px solid var(--line);
       background: var(--chrome);
       display: grid;
-      grid-template-rows: auto auto 1fr auto;
+      grid-template-rows: auto auto 1fr;
       gap: 18px;
     }
 
@@ -125,22 +123,65 @@
 
     .nav-button.active {
       color: var(--text);
-      background: rgba(255, 255, 255, 0.86);
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.86);
-    }
-
-    .rail-note {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.45;
+      background: rgba(255, 255, 252, 0.92);
+      box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.92),
+        0 8px 22px rgba(32, 28, 22, 0.06);
     }
 
     .workspace {
       min-width: 0;
       display: grid;
-      grid-template-rows: 74px minmax(0, 1fr) 68px;
-      background: rgba(248, 250, 253, 0.72);
+      grid-template-rows: 74px auto minmax(0, 1fr) 68px;
+      background: rgba(249, 248, 244, 0.76);
     }
+
+    .banner {
+      margin: 14px 22px 0;
+      padding: 11px 14px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .banner[hidden] { display: none; }
+
+    .banner.error {
+      color: var(--danger);
+      background: #fdecea;
+      border: 1px solid rgba(179, 38, 30, 0.28);
+    }
+
+    .banner.busy {
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid var(--line-strong);
+    }
+
+    .banner-dismiss {
+      min-width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      color: inherit;
+      background: rgba(0, 0, 0, 0.06);
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     .topbar {
       padding: 0 24px;
@@ -231,7 +272,7 @@
       gap: 12px;
     }
 
-    .preview-stage {
+    .result-stage {
       min-height: 420px;
       border-radius: 16px;
       border: 1px solid var(--line);
@@ -241,8 +282,8 @@
       overflow: hidden;
     }
 
-    .preview-stage iframe,
-    .preview-stage object {
+    .result-stage iframe,
+    .result-stage object {
       width: 100%;
       height: 100%;
       min-height: 420px;
@@ -627,7 +668,6 @@
         <span>SciPlot</span>
       </div>
       <nav class="nav" id="railNav" aria-label="Workbench sections"></nav>
-      <div class="rail-note">Plot Canvas workbench for Source, Inspect, Samples, Export, and Codex Runs.</div>
     </aside>
 
     <section class="workspace">
@@ -669,7 +709,7 @@
       plotOutput: "runs/run_001",
       exports: ["pdf", "tiff_300"],
       figureSize: "120x55",
-      codexGoal: "Fix the SciPlot semantic or recipe gap, add focused tests, rerun the request, and verify QA.",
+      codexGoal: "",
       statusText: "",
       error: ""
     };
@@ -798,7 +838,7 @@
           <div style="height:68px;color:#2f3540">${iconSvg(item.chart || iconKind || item.icon)}</div>
           <div>
             <div style="font-weight:720">${escapeHtml(item.label)}</div>
-            ${item.rule_id ? `<div class="row-subtitle">${escapeHtml(item.rule_id)}</div>` : `<div class="row-subtitle">Codex handoff when unsupported</div>`}
+            ${item.rule_id ? `<div class="row-subtitle">${escapeHtml(item.rule_id)}</div>` : ""}
           </div>
         </button>
       `;
@@ -807,38 +847,34 @@
     function renderSourceView() {
       const dataTypes = state.catalog;
       canvas.innerHTML = `
-        <div class="canvas-grid">
-          <div class="panel">
-            <div class="panel-head">
-              <span>Source Binding</span>
-              ${state.session ? '<span class="chip success">Prefilled</span>' : '<span class="chip">Manual</span>'}
+        <div class="panel">
+          <div class="panel-head">
+            <span>Source Binding</span>
+            ${state.session ? '<span class="chip success">Prefilled</span>' : '<span class="chip">Manual</span>'}
+          </div>
+          <div class="panel-body">
+            <div class="metric-row">
+              <div class="metric"><div class="metric-value">${escapeHtml(state.session?.confidence ?? "0")}</div><div class="metric-label">Detection confidence</div></div>
+              <div class="metric"><div class="metric-value">${state.groups.length}</div><div class="metric-label">Sample groups</div></div>
+              <div class="metric"><div class="metric-value">${groupFileCount()}</div><div class="metric-label">Files</div></div>
             </div>
-            <div class="panel-body">
-              <div class="metric-row">
-                <div class="metric"><div class="metric-value">${escapeHtml(state.session?.confidence ?? "0")}</div><div class="metric-label">Detection confidence</div></div>
-                <div class="metric"><div class="metric-value">${state.groups.length}</div><div class="metric-label">Sample groups</div></div>
-                <div class="metric"><div class="metric-value">${groupFileCount()}</div><div class="metric-label">Files</div></div>
-              </div>
-              <div class="panel">
-                <div class="panel-head"><span>Prepared source</span></div>
-                <div class="panel-body">
-                  <div class="row">
-                    <div class="row-main">
-                      <span class="row-title">${escapeHtml(state.session?.input_path || "No source path supplied")}</span>
-                      <span class="row-subtitle">${escapeHtml(state.session?.reason || "Choose a data type, then attach files in Samples.")}</span>
-                    </div>
+            <div class="panel">
+              <div class="panel-head"><span>Prepared source</span></div>
+              <div class="panel-body">
+                <div class="row">
+                  <div class="row-main">
+                    <span class="row-title">${escapeHtml(state.session?.input_path || "No source")}</span>
                   </div>
                 </div>
               </div>
-              <div class="panel">
-                <div class="panel-head"><span>Data type</span></div>
-                <div class="panel-body" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
-                  ${dataTypes.map((item) => tile(item, item.id === state.dataTypeId)).join("")}
-                </div>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><span>Data type</span></div>
+              <div class="panel-body" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
+                ${dataTypes.map((item) => tile(item, item.id === state.dataTypeId)).join("")}
               </div>
             </div>
           </div>
-          ${renderPreviewPanel()}
         </div>
       `;
       canvas.querySelectorAll("[data-id]").forEach((button) => {
@@ -855,26 +891,22 @@
       const dataType = selectedDataType();
       const experiments = dataType?.experiments || [];
       canvas.innerHTML = `
-        <div class="canvas-grid">
-          <div class="panel">
-            <div class="panel-head"><span>Inspect Recommendation</span><span class="chip">${escapeHtml(dataType?.label || "No data type")}</span></div>
-            <div class="panel-body">
-              <div class="row">
-                <div class="row-main">
-                  <span class="row-title">${escapeHtml(state.session?.experiment_label || selectedExperiment()?.label || "Choose an experiment")}</span>
-                  <span class="row-subtitle">${escapeHtml(state.session?.reason || "SciPlot will use the local materials rule registry when a rule is selected.")}</span>
-                </div>
-                <span class="chip">${escapeHtml(state.session?.rule_id || selectedExperiment()?.rule_id || "unknown")}</span>
+        <div class="panel">
+          <div class="panel-head"><span>Inspect Recommendation</span><span class="chip">${escapeHtml(dataType?.label || "No data type")}</span></div>
+          <div class="panel-body">
+            <div class="row">
+              <div class="row-main">
+                <span class="row-title">${escapeHtml(state.session?.experiment_label || selectedExperiment()?.label || "No experiment")}</span>
               </div>
-              <div class="panel">
-                <div class="panel-head"><span>Experiment / plot type</span></div>
-                <div class="panel-body" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));">
-                  ${experiments.map((item) => tile(item, item.id === state.experimentTypeId, dataType?.icon)).join("")}
-                </div>
+              <span class="chip">${escapeHtml(state.session?.rule_id || selectedExperiment()?.rule_id || "unknown")}</span>
+            </div>
+            <div class="panel">
+              <div class="panel-head"><span>Experiment / plot type</span></div>
+              <div class="panel-body" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));">
+                ${experiments.map((item) => tile(item, item.id === state.experimentTypeId, dataType?.icon)).join("")}
               </div>
             </div>
           </div>
-          ${renderPreviewPanel()}
         </div>
       `;
       canvas.querySelectorAll("[data-id]").forEach((button) => {
@@ -1026,7 +1058,7 @@
     function renderExportView() {
       const status = state.projectStatus;
       canvas.innerHTML = `
-        <div class="canvas-grid">
+        <div class="${hasResultReview() ? "canvas-grid" : ""}">
           <div class="panel">
             <div class="panel-head"><span>Export request</span><span class="chip">${escapeHtml(selectedFigureSize())}</span></div>
             <div class="panel-body">
@@ -1040,7 +1072,7 @@
               ${state.lastProject ? resultHtml(state.lastProject, status) : ""}
             </div>
           </div>
-          ${renderPreviewPanel()}
+          ${hasResultReview() ? renderResultReview() : ""}
         </div>
       `;
       attachExportHandlers();
@@ -1086,17 +1118,17 @@
       const jobs = status?.codex?.jobs || [];
       const needsCodex = Boolean(status?.needs_codex || state.lastProject?.run_failed);
       canvas.innerHTML = `
-        <div class="canvas-grid">
+        <div class="${hasResultReview() ? "canvas-grid" : ""}">
           <div class="panel">
             <div class="panel-head">
               <span>Codex Handoff</span>
-              ${needsCodex ? '<span class="chip warning">Needs Codex</span>' : '<span class="chip success">No handoff needed</span>'}
+              ${needsCodex ? '<span class="chip warning">Needs Codex</span>' : '<span class="chip success">Idle</span>'}
             </div>
             <div class="panel-body">
               <div class="row">
                 <div class="row-main">
-                  <span class="row-title">${needsCodex ? "SciPlot found a gap Codex can patch" : "No intervention request is active"}</span>
-                  <span class="row-subtitle">${escapeHtml(status?.last_run?.failure || "Codex runs are explicit: click Run Codex before any background code edits happen.")}</span>
+                  <span class="row-title">${needsCodex ? "Intervention" : "Idle"}</span>
+                  ${status?.last_run?.failure ? `<span class="row-subtitle">${escapeHtml(status.last_run.failure)}</span>` : ""}
                 </div>
               </div>
               <label class="field">
@@ -1107,12 +1139,12 @@
               <div class="panel">
                 <div class="panel-head"><span>Codex Runs</span></div>
                 <div class="panel-body">
-                  ${jobs.length ? jobs.map(jobHtml).join("") : '<div class="placeholder">No Codex jobs yet.</div>'}
+                  ${jobs.length ? jobs.map(jobHtml).join("") : '<div class="placeholder">No jobs</div>'}
                 </div>
               </div>
             </div>
           </div>
-          ${renderPreviewPanel()}
+          ${hasResultReview() ? renderResultReview() : ""}
         </div>
       `;
       const goal = canvas.querySelector("#codexGoal");
@@ -1134,23 +1166,49 @@
       `;
     }
 
-    function renderPreviewPanel() {
+    function hasResultReview() {
+      const status = state.projectStatus;
+      const figures = resultFigures();
+      return Boolean(status?.artifacts?.review_html?.exists || figures.length);
+    }
+
+    function resultFigures() {
+      const statusFigures = state.projectStatus?.figures || [];
+      if (statusFigures.length) return statusFigures;
+      return (state.lastProject?.last_run?.figures || []).map((path) => ({
+        name: String(path).split("/").pop(),
+        path: String(path),
+        url: "",
+        size_bytes: null
+      }));
+    }
+
+    function renderResultReview() {
       const status = state.projectStatus;
       const review = status?.artifacts?.review_html;
       const manifest = status?.artifacts?.manifest;
+      const figures = resultFigures();
       return `
         <div class="panel">
           <div class="panel-head">
-            <span>Review preview</span>
+            <span>Result Review</span>
             ${status?.last_run?.qa?.status ? `<span class="chip success">QA ${escapeHtml(status.last_run.qa.status)}</span>` : '<span class="chip">Waiting</span>'}
           </div>
           <div class="panel-body">
-            <div class="preview-stage">
-              ${review?.exists ? `<iframe src="${escapeHtml(review.url)}" title="SciPlot review"></iframe>` : '<div class="placeholder">Render a request to preview review.html and generated figures here.</div>'}
-            </div>
+            ${review?.exists ? `
+              <div class="result-stage">
+                <iframe src="${escapeHtml(review.url)}" title="SciPlot review"></iframe>
+              </div>
+            ` : ""}
             <div class="list">
               ${manifest?.exists ? `<a class="row" href="${escapeHtml(manifest.url)}"><span class="row-title">manifest.json</span><span class="chip">open</span></a>` : ""}
-              ${(status?.figures || []).map((figure) => `<a class="row" href="${escapeHtml(figure.url)}"><span class="row-title">${escapeHtml(figure.name)}</span><span class="chip">${formatSize(figure.size_bytes)}</span></a>`).join("")}
+              ${figures.map((figure) => {
+                const label = figure.size_bytes ? formatSize(figure.size_bytes) : "figure";
+                const content = `<span class="row-title">${escapeHtml(figure.name)}</span><span class="chip">${escapeHtml(label)}</span>`;
+                return figure.url
+                  ? `<a class="row" href="${escapeHtml(figure.url)}">${content}</a>`
+                  : `<div class="row">${content}</div>`;
+              }).join("")}
             </div>
           </div>
         </div>
@@ -1204,7 +1262,7 @@
         </section>
         <section class="inspector-section">
           <div class="section-title">Codex Handoff</div>
-          <div class="row-subtitle">${needsCodex ? "Run Codex is available after confirmation." : "No current intervention request."}</div>
+          <div class="row-subtitle">${needsCodex ? "Available" : "Idle"}</div>
           <button class="btn warning" id="inspectorRunCodex" type="button" ${state.lastProject ? "" : "disabled"}>Run Codex</button>
         </section>
       `;
@@ -1348,8 +1406,7 @@
       pageTitle.textContent = state.view;
       const experiment = selectedExperiment();
       const dataType = selectedDataType();
-      const prefix = state.session ? "Prefilled" : "Manual";
-      statusEl.textContent = state.statusText || [prefix, dataType?.label, experiment?.label].filter(Boolean).join(" / ");
+      statusEl.textContent = state.statusText || [dataType?.label, experiment?.label].filter(Boolean).join(" / ");
       backButton.disabled = views.indexOf(state.view) === 0;
       nextButton.textContent = state.view === "Export" ? "Export" : "Next";
       nextButton.disabled = state.view === "Export" ? !canExport() : false;
