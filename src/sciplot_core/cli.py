@@ -79,9 +79,15 @@ def _build_parser() -> argparse.ArgumentParser:
 
     render_parser = subparsers.add_parser("render", help="Render a source through the SciPlot renderer.")
     render_parser.add_argument("input", type=Path)
-    render_parser.add_argument("--template", required=True)
+    render_parser.add_argument("--template", help="Template id. Optional when --auto is given.")
     render_parser.add_argument("--sheet", default="0")
     render_parser.add_argument("--options", help="JSON object or @path JSON file with render options.")
+    render_parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Apply the inspected recommendation's scientific defaults "
+        "(template, axis scales, reversed axes). Explicit --options still win.",
+    )
     render_parser.add_argument("--out", type=Path, required=True)
 
     recipe_parser = subparsers.add_parser("recipe", help="Run an experiment-family recipe.")
@@ -163,12 +169,27 @@ def main(argv: list[str] | None = None) -> int:
                 print(payload.get("recommendation_summary", "No recommendation summary available."))
             return 0
         if args.command == "render":
+            source = _resolve_input(args.input)
+            sheet = _coerce_sheet(args.sheet)
+            template = args.template
+            options = _load_options(args.options)
+            if args.auto:
+                recommendations = inspect_payload(source, sheet=sheet).get("recommendations") or []
+                if not recommendations:
+                    raise ValueError("--auto could not recommend a template; pass --template and --options explicitly.")
+                top = recommendations[0]
+                template = template or str(top.get("template_id"))
+                defaults = top.get("default_render_overrides")
+                if isinstance(defaults, dict):
+                    options = {**defaults, **options}  # explicit --options take precedence
+            if not template:
+                raise ValueError("render needs a template: pass --template NAME, or --auto to choose one.")
             payload = render_to_dir(
-                _resolve_input(args.input),
-                template=args.template,
+                source,
+                template=template,
                 output_dir=args.out.expanduser(),
-                sheet=_coerce_sheet(args.sheet),
-                options=_load_options(args.options),
+                sheet=sheet,
+                options=options,
             )
             _print_json(payload)
             return 0

@@ -260,6 +260,20 @@ The renderer writes PDF outputs and returns JSON with output paths and QA
 reports. Options may be passed inline as JSON or loaded from a file with
 `--options @path/to/options.json`.
 
+For raw experiment data, prefer `--auto`. It inspects the source, picks the
+recommended template, and applies the recommendation's scientific defaults
+(axis scales and reversed axes) before rendering, so a frequency sweep comes out
+log-log and an FTIR spectrum keeps its reversed wavenumber axis. Any explicit
+`--options` still take precedence, and `--template` is optional when `--auto`
+is given:
+
+```bash
+sciplot render data/frequency_sweep.csv --auto --out outputs/sweep
+```
+
+The `recipe` and `run` workflows below already apply these defaults; `--auto`
+brings the same behavior to a one-off `render`.
+
 ### Run a Materials Recipe
 
 Use `recipe` when the input belongs to an experiment family and should produce a
