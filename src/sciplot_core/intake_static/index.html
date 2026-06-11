@@ -7,23 +7,25 @@
   <style>
     :root {
       color-scheme: light;
-      --bg: #f1efe8;
-      --window: rgba(253, 252, 248, 0.9);
-      --chrome: rgba(246, 244, 238, 0.86);
-      --panel: rgba(255, 255, 252, 0.9);
-      --panel-strong: #fffffc;
-      --line: rgba(55, 50, 42, 0.13);
-      --line-strong: rgba(0, 122, 255, 0.48);
-      --text: #1d1d1f;
-      --muted: #6f6b63;
-      --quiet: #9a958c;
-      --accent: #007aff;
-      --accent-soft: rgba(0, 122, 255, 0.12);
-      --warning: #b26a00;
-      --warning-soft: #fff4d8;
-      --success: #188038;
-      --danger: #b3261e;
-      --shadow: 0 28px 90px rgba(24, 32, 46, 0.18);
+      --bg: #eef1f4;
+      --window: #f7f9fb;
+      --chrome: #16202a;
+      --chrome-2: #222c37;
+      --panel: #ffffff;
+      --panel-strong: #f9fbfd;
+      --line: #d8dee6;
+      --line-strong: #0f7a83;
+      --text: #161a1f;
+      --muted: #667085;
+      --quiet: #98a2b3;
+      --accent: #0f7a83;
+      --accent-2: #315fbd;
+      --accent-soft: #e6f4f4;
+      --warning: #9a5b00;
+      --warning-soft: #fff4d6;
+      --success: #167047;
+      --danger: #b42318;
+      --shadow: 0 18px 44px rgba(16, 24, 40, 0.12);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
     }
 
@@ -33,7 +35,12 @@
       margin: 0;
       min-height: 100vh;
       color: var(--text);
-      background: linear-gradient(180deg, #faf9f5 0%, var(--bg) 100%);
+      background:
+        linear-gradient(90deg, rgba(22, 32, 42, 0.035) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(22, 32, 42, 0.035) 1px, transparent 1px),
+        var(--bg);
+      background-size: 28px 28px;
+      letter-spacing: 0;
     }
 
     button, input, textarea { font: inherit; }
@@ -43,30 +50,33 @@
       cursor: pointer;
     }
 
-    a { color: var(--accent); }
+    a {
+      color: var(--accent-2);
+      text-decoration: none;
+    }
 
     .app {
-      width: min(1380px, calc(100vw - 40px));
-      min-height: calc(100vh - 40px);
-      margin: 20px auto;
+      width: min(1500px, calc(100vw - 24px));
+      min-height: calc(100vh - 24px);
+      margin: 12px auto;
       display: grid;
-      grid-template-columns: 232px minmax(0, 1fr) 320px;
-      border: 1px solid rgba(255, 255, 255, 0.82);
-      border-radius: 22px;
+      grid-template-columns: 248px minmax(0, 1fr) 304px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
       overflow: hidden;
       background: var(--window);
       box-shadow: var(--shadow);
-      backdrop-filter: blur(24px) saturate(1.2);
     }
 
     .rail {
       min-width: 0;
-      padding: 18px;
-      border-right: 1px solid var(--line);
+      padding: 16px;
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
       background: var(--chrome);
       display: grid;
-      grid-template-rows: auto auto 1fr;
-      gap: 18px;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 16px;
+      color: #f4f7fb;
     }
 
     .traffic {
@@ -88,58 +98,82 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      font-size: 19px;
-      font-weight: 720;
+      min-height: 42px;
+      font-size: 18px;
+      font-weight: 760;
     }
 
     .brand-mark {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
       color: white;
       display: grid;
       place-items: center;
-      background: linear-gradient(145deg, #1d1d1f, #626772);
+      background: var(--accent);
     }
 
     .nav {
       display: grid;
-      gap: 7px;
+      gap: 6px;
+      align-content: start;
+      grid-auto-rows: min-content;
     }
 
     .nav-button {
-      min-height: 40px;
-      padding: 0 11px;
-      border-radius: 12px;
-      color: var(--muted);
+      min-height: 42px;
+      padding: 0 10px;
+      border-radius: 8px;
+      color: #c5ced8;
       background: transparent;
-      display: grid;
-      grid-template-columns: 24px minmax(0, 1fr);
+      display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       text-align: left;
-      font-weight: 630;
+      font-weight: 660;
+    }
+
+    .nav-index {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      color: #d5dde6;
+      background: rgba(255, 255, 255, 0.08);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .nav-label {
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
 
     .nav-button.active {
-      color: var(--text);
-      background: rgba(255, 255, 252, 0.92);
-      box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.92),
-        0 8px 22px rgba(32, 28, 22, 0.06);
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.11);
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+
+    .nav-button.active .nav-index {
+      color: #ffffff;
+      background: var(--accent);
     }
 
     .workspace {
       min-width: 0;
       display: grid;
-      grid-template-rows: 74px auto minmax(0, 1fr) 68px;
-      background: rgba(249, 248, 244, 0.76);
+      grid-template-rows: 72px minmax(0, 1fr) 60px;
+      background: var(--window);
     }
 
     .banner {
       margin: 14px 22px 0;
       padding: 11px 14px;
-      border-radius: 12px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -152,7 +186,7 @@
 
     .banner.error {
       color: var(--danger);
-      background: #fdecea;
+      background: #fef3f2;
       border: 1px solid rgba(179, 38, 30, 0.28);
     }
 
@@ -184,7 +218,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     .topbar {
-      padding: 0 24px;
+      padding: 0 22px;
       border-bottom: 1px solid var(--line);
       display: flex;
       align-items: center;
@@ -199,28 +233,27 @@
     }
 
     .eyebrow {
-      color: var(--quiet);
+      color: var(--muted);
       font-size: 12px;
       font-weight: 720;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
+      letter-spacing: 0;
     }
 
     h1 {
       margin: 0;
-      font-size: 23px;
+      font-size: 24px;
       line-height: 1.1;
       letter-spacing: 0;
     }
 
     .project-name {
       width: min(340px, 40vw);
-      height: 38px;
+      height: 36px;
       padding: 0 12px;
       border: 1px solid var(--line);
-      border-radius: 11px;
+      border-radius: 8px;
       color: var(--text);
-      background: var(--panel-strong);
+      background: var(--panel);
       outline: none;
     }
 
@@ -229,41 +262,49 @@
     .sample-input:focus,
     textarea:focus {
       border-color: var(--line-strong);
-      box-shadow: 0 0 0 4px var(--accent-soft);
+      box-shadow: 0 0 0 3px var(--accent-soft);
     }
 
     .canvas {
       min-height: 0;
-      padding: 22px;
+      padding: 18px;
       overflow: auto;
       display: grid;
-      gap: 16px;
+      gap: 14px;
       align-content: start;
     }
 
     .canvas-grid {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
-      gap: 16px;
+      gap: 14px;
       align-items: start;
     }
 
     .panel {
       border: 1px solid var(--line);
-      border-radius: 16px;
+      border-radius: 8px;
       background: var(--panel);
       overflow: hidden;
     }
 
+    .panel .panel {
+      border-radius: 0;
+      border: 0;
+      background: transparent;
+      overflow: visible;
+    }
+
     .panel-head {
-      min-height: 50px;
+      min-height: 46px;
       padding: 0 14px;
       border-bottom: 1px solid var(--line);
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      font-weight: 690;
+      font-weight: 720;
+      background: var(--panel-strong);
     }
 
     .panel-body {
@@ -274,7 +315,7 @@
 
     .result-stage {
       min-height: 420px;
-      border-radius: 16px;
+      border-radius: 8px;
       border: 1px solid var(--line);
       background: #fff;
       display: grid;
@@ -301,13 +342,13 @@
     .metric-row {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
+      gap: 8px;
     }
 
     .metric {
-      min-height: 86px;
-      padding: 13px;
-      border-radius: 14px;
+      min-height: 78px;
+      padding: 12px;
+      border-radius: 8px;
       background: var(--panel-strong);
       border: 1px solid var(--line);
       display: grid;
@@ -316,7 +357,7 @@
     }
 
     .metric-value {
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 760;
     }
 
@@ -328,13 +369,13 @@
 
     .list {
       display: grid;
-      gap: 8px;
+      gap: 7px;
     }
 
     .row {
-      min-height: 42px;
+      min-height: 40px;
       padding: 9px 11px;
-      border-radius: 11px;
+      border-radius: 8px;
       background: var(--panel-strong);
       border: 1px solid var(--line);
       display: flex;
@@ -364,11 +405,11 @@
     }
 
     .chip {
-      min-height: 26px;
-      padding: 0 9px;
+      min-height: 24px;
+      padding: 0 8px;
       border-radius: 999px;
       color: var(--muted);
-      background: rgba(118, 118, 128, 0.12);
+      background: #eef2f6;
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -389,22 +430,22 @@
 
     .groups {
       display: grid;
-      grid-template-columns: 300px minmax(0, 1fr);
+      grid-template-columns: 280px minmax(0, 1fr);
       gap: 14px;
       align-items: start;
     }
 
     .sample-list {
       display: grid;
-      gap: 8px;
+      gap: 6px;
       padding: 12px;
     }
 
     .sample-row {
-      min-height: 52px;
+      min-height: 48px;
       padding: 8px;
       border: 1px solid transparent;
-      border-radius: 12px;
+      border-radius: 8px;
       background: transparent;
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
@@ -426,9 +467,9 @@
     .drag-handle {
       width: 28px;
       height: 34px;
-      border-radius: 9px;
+      border-radius: 6px;
       color: var(--muted);
-      background: rgba(118, 118, 128, 0.1);
+      background: #eef2f6;
       display: grid;
       place-items: center;
       font-size: 15px;
@@ -443,9 +484,9 @@
       width: 100%;
       min-width: 0;
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: 8px;
       color: var(--text);
-      background: var(--panel-strong);
+      background: var(--panel);
       outline: none;
     }
 
@@ -473,17 +514,17 @@
       color: var(--muted);
       display: grid;
       place-items: center;
-      background: rgba(118, 118, 128, 0.12);
+      background: #eef2f6;
       font-size: 13px;
       font-weight: 680;
     }
 
     .dropzone {
-      min-height: 280px;
-      margin: 14px;
+      min-height: 260px;
+      margin: 12px;
       border: 1.5px dashed rgba(60, 60, 67, 0.28);
-      border-radius: 16px;
-      background: rgba(255, 255, 255, 0.58);
+      border-radius: 8px;
+      background: #f8fafc;
       display: grid;
       place-items: center;
       text-align: center;
@@ -498,7 +539,7 @@
     .drop-title {
       margin-bottom: 6px;
       color: var(--text);
-      font-size: 20px;
+      font-size: 19px;
       font-weight: 720;
     }
 
@@ -516,7 +557,7 @@
     .field-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 11px;
+      gap: 10px;
     }
 
     .field-label {
@@ -528,16 +569,16 @@
     .option-row {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 7px;
     }
 
     .option-pill {
-      min-height: 36px;
-      padding: 0 11px;
+      min-height: 34px;
+      padding: 0 10px;
       border: 1px solid var(--line);
-      border-radius: 11px;
+      border-radius: 8px;
       color: var(--text);
-      background: rgba(255, 255, 255, 0.72);
+      background: var(--panel);
       display: inline-flex;
       align-items: center;
       gap: 8px;
@@ -555,11 +596,11 @@
 
     .btn {
       min-width: 84px;
-      min-height: 38px;
-      padding: 0 14px;
-      border-radius: 11px;
+      min-height: 36px;
+      padding: 0 13px;
+      border-radius: 8px;
       color: var(--text);
-      background: rgba(118, 118, 128, 0.14);
+      background: #eef2f6;
       font-weight: 680;
     }
 
@@ -579,7 +620,7 @@
     }
 
     .footer {
-      padding: 0 22px;
+      padding: 0 18px;
       border-top: 1px solid var(--line);
       display: flex;
       align-items: center;
@@ -591,9 +632,9 @@
 
     .inspector {
       min-width: 0;
-      padding: 18px;
+      padding: 16px;
       border-left: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.64);
+      background: #ffffff;
       overflow: auto;
       display: grid;
       gap: 14px;
@@ -610,9 +651,9 @@
 
     .inspector-section {
       display: grid;
-      gap: 10px;
+      gap: 9px;
       padding: 12px;
-      border-radius: 15px;
+      border-radius: 8px;
       border: 1px solid var(--line);
       background: var(--panel);
     }
@@ -621,8 +662,7 @@
       color: var(--muted);
       font-size: 12px;
       font-weight: 760;
-      text-transform: uppercase;
-      letter-spacing: 0.02em;
+      letter-spacing: 0;
     }
 
     .mono {
@@ -636,6 +676,68 @@
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
+    }
+
+    .footer-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .inline-fit {
+      width: max-content;
+    }
+
+    .download-button {
+      width: max-content;
+      display: grid;
+      place-items: center;
+    }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
+      gap: 10px;
+    }
+
+    .choice-tile {
+      min-height: 140px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--text);
+      background: #ffffff;
+      text-align: left;
+      display: grid;
+      align-content: space-between;
+      gap: 10px;
+    }
+
+    .choice-tile.selected {
+      border-color: var(--line-strong);
+      background: var(--accent-soft);
+      box-shadow: inset 0 0 0 1px rgba(15, 122, 131, 0.14);
+    }
+
+    .choice-visual {
+      height: 58px;
+      color: #293241;
+    }
+
+    .choice-visual svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .choice-title {
+      font-weight: 740;
+    }
+
+    .choice-subtitle {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
     }
 
     @media (max-width: 1040px) {
@@ -653,6 +755,20 @@
       .canvas-grid,
       .groups,
       .metric-row { grid-template-columns: 1fr; }
+
+      .workspace {
+        grid-template-rows: auto minmax(0, 1fr) 60px;
+      }
+
+      .topbar {
+        padding: 14px;
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .project-name {
+        width: 100%;
+      }
     }
   </style>
 </head>
@@ -687,7 +803,7 @@
       <section class="canvas" id="canvas"></section>
       <footer class="footer">
         <div id="status" class="status-line"></div>
-        <div style="display:flex;gap:8px;">
+        <div class="footer-actions">
           <button id="backButton" class="btn" type="button">Back</button>
           <button id="nextButton" class="btn primary" type="button">Next</button>
         </div>
@@ -833,8 +949,8 @@
     function renderRail() {
       railNav.innerHTML = views.map((view, index) => `
         <button class="nav-button ${state.view === view ? "active" : ""}" type="button" data-view="${view}">
-          <span>${index + 1}</span>
-          <span>${view}</span>
+          <span class="nav-index">${index + 1}</span>
+          <span class="nav-label">${view}</span>
         </button>
       `).join("");
       railNav.querySelectorAll("[data-view]").forEach((button) => {
@@ -856,11 +972,11 @@
 
     function tile(item, selected, iconKind) {
       return `
-        <button class="panel" style="min-height:154px;text-align:left;padding:14px;display:grid;align-content:space-between;gap:10px;${selected ? "border-color:var(--line-strong);background:var(--accent-soft);" : ""}" type="button" data-id="${item.id}">
-          <div style="height:68px;color:#2f3540">${iconSvg(item.chart || iconKind || item.icon)}</div>
+        <button class="choice-tile ${selected ? "selected" : ""}" type="button" data-id="${item.id}">
+          <div class="choice-visual">${iconSvg(item.chart || iconKind || item.icon)}</div>
           <div>
-            <div style="font-weight:720">${escapeHtml(item.label)}</div>
-            ${item.rule_id ? `<div class="row-subtitle">${escapeHtml(item.rule_id)}</div>` : ""}
+            <div class="choice-title">${escapeHtml(item.label)}</div>
+            ${item.rule_id ? `<div class="choice-subtitle">${escapeHtml(item.rule_id)}</div>` : ""}
           </div>
         </button>
       `;
@@ -892,7 +1008,7 @@
             </div>
             <div class="panel">
               <div class="panel-head"><span>Data type</span></div>
-              <div class="panel-body" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
+              <div class="panel-body choice-grid">
                 ${dataTypes.map((item) => tile(item, item.id === state.dataTypeId)).join("")}
               </div>
             </div>
@@ -924,7 +1040,7 @@
             </div>
             <div class="panel">
               <div class="panel-head"><span>Experiment / plot type</span></div>
-              <div class="panel-body" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));">
+              <div class="panel-body choice-grid">
                 ${experiments.map((item) => tile(item, item.id === state.experimentTypeId, dataType?.icon)).join("")}
               </div>
             </div>
@@ -965,7 +1081,7 @@
         <div class="groups">
           <div class="panel">
             <div class="panel-head">
-              <span>Samples / legend order</span>
+              <span>Legend order</span>
               <button class="btn" id="addGroup" type="button">Add</button>
             </div>
             <div class="sample-list" id="sampleList">
@@ -1319,7 +1435,7 @@
               ${renderOptionSelect("refineXScale", "X scale", options.xscale, scaleOptions)}
               ${renderOptionSelect("refineYScale", "Y scale", options.yscale, scaleOptions)}
             </div>
-            <label class="option-pill" style="width:max-content;">
+            <label class="option-pill inline-fit">
               <input id="refineReverseX" type="checkbox" ${options.reverse_x ? "checked" : ""}>
               <span>Reverse X</span>
             </label>
@@ -1402,7 +1518,7 @@
             <div class="mono">${escapeHtml(project.project_dir)}</div>
             ${project.failure ? `<div class="row-subtitle">${escapeHtml(project.failure)}</div>` : ""}
             ${figures.map((figure) => `<div class="mono">${escapeHtml(figure)}</div>`).join("")}
-            <a class="btn primary" style="width:max-content;text-decoration:none;display:grid;place-items:center;" href="/api/download/${encodeURIComponent(project.download_name)}">Download ZIP</a>
+            <a class="btn primary download-button" href="/api/download/${encodeURIComponent(project.download_name)}">Download ZIP</a>
           </div>
         </div>
       `;
