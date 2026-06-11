@@ -50,6 +50,7 @@ def _clear_managed_artifacts(output_dir: Path) -> None:
         "request_snapshot.json",
         "manifest.json",
         "analysis_report.md",
+        "revision_brief.md",
         "review.html",
         "intervention_request.json",
     ):
@@ -145,6 +146,7 @@ def _write_auto_report(
 def _write_review_html(output_dir: Path, *, manifest: dict[str, Any]) -> None:
     figures = [Path(path) for path in manifest.get("figures", [])]
     notes = manifest.get("request", {}).get("review_notes") or []
+    revision_brief = manifest.get("revision_brief")
     figure_items = []
     for figure in figures:
         rel = figure.relative_to(output_dir) if figure.is_relative_to(output_dir) else figure
@@ -177,11 +179,66 @@ def _write_review_html(output_dir: Path, *, manifest: dict[str, Any]) -> None:
             "<ul>",
             *figure_items,
             "</ul>",
+            "<h2>Revision</h2>",
+            "<ul>",
+            (
+                f'<li><a href="{escape(str(revision_brief))}">Revision brief for Codex</a></li>'
+                if isinstance(revision_brief, str) and revision_brief
+                else "<li>No revision brief was generated.</li>"
+            ),
+            "</ul>",
             "</body>",
             "</html>",
         ]
     )
     (output_dir / "review.html").write_text(html + "\n", encoding="utf-8")
+
+
+def _write_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) -> str:
+    figures = [Path(path) for path in manifest.get("figures", []) if isinstance(path, str)]
+    figure_lines = []
+    for figure in figures:
+        rel = figure.relative_to(output_dir) if figure.exists() and figure.is_relative_to(output_dir) else figure
+        figure_lines.append(f"- `{rel}`")
+    semantic = manifest.get("semantic") if isinstance(manifest.get("semantic"), dict) else {}
+    request = manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
+    size = ""
+    render_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
+    if isinstance(render_options.get("size"), str):
+        size = str(render_options["size"])
+    lines = [
+        "# SciPlot Revision Brief",
+        "",
+        "Use this brief when asking Codex to revise the SciPlot rule, recipe, or style and rerun the export.",
+        "",
+        "## Run",
+        "",
+        f"- Output: `{output_dir}`",
+        f"- Request: `{manifest.get('request_path')}`",
+        f"- Route: `{manifest.get('route')}`",
+        f"- Rule: `{semantic.get('rule_id') or ''}`",
+        f"- Template: `{manifest.get('result', {}).get('template') or ''}`",
+        f"- Size: `{size}`" if size else "- Size: not specified in request",
+        f"- QA: `{manifest.get('qa', {}).get('status') or 'unknown'}`",
+        "",
+        "## Figures",
+        "",
+        *(figure_lines or ["- No figures were recorded."]),
+        "",
+        "## Tell Codex",
+        "",
+        "请按这些修改意见调整 SciPlot 规则/样式并重新导出：",
+        "",
+        "- 图类型/数据识别：",
+        "- 坐标轴标题和单位：",
+        "- x/y 轴范围、log、reverse、刻度数量：",
+        "- legend 名称、顺序、位置：",
+        "- 字体、线宽、marker、颜色：",
+        "- 其他：",
+    ]
+    path = output_dir / "revision_brief.md"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return "revision_brief.md"
 
 
 def _update_intake_project_after_run(request_path: Path, manifest: dict[str, Any]) -> None:
@@ -196,6 +253,7 @@ def _update_intake_project_after_run(request_path: Path, manifest: dict[str, Any
         "figures": manifest["figures"],
         "analysis_metrics": manifest.get("result", {}).get("analysis_metrics", []),
         "qa": manifest.get("qa", {}),
+        "revision_brief": manifest.get("revision_brief"),
     }
     intake_manifest_path.write_text(
         json.dumps(json_safe(project_manifest), indent=2, ensure_ascii=False),
@@ -333,6 +391,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
         "result": json_safe(result),
         "qa": qa,
     }
+    manifest["revision_brief"] = _write_revision_brief(output_dir, manifest=manifest)
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     _write_review_html(output_dir, manifest=manifest)
     _update_intake_project_after_run(request_path, manifest)

@@ -513,6 +513,12 @@
       gap: 7px;
     }
 
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 11px;
+    }
+
     .field-label {
       color: var(--muted);
       font-size: 12px;
@@ -709,6 +715,8 @@
       plotOutput: "runs/run_001",
       exports: ["pdf", "tiff_300"],
       figureSize: "120x55",
+      refineOptions: {},
+      refineDirty: false,
       codexGoal: "",
       statusText: "",
       error: ""
@@ -729,6 +737,20 @@
       { value: "pdf", label: "PDF" },
       { value: "tiff_300", label: "TIFF 300 DPI" },
       { value: "png_300", label: "PNG 300 DPI" }
+    ];
+
+    const scaleOptions = [
+      { value: "", label: "Auto" },
+      { value: "linear", label: "Linear" },
+      { value: "log", label: "Log" }
+    ];
+
+    const legendPositionOptions = [
+      { value: "", label: "Auto" },
+      { value: "upper_right", label: "Upper right" },
+      { value: "upper_left", label: "Upper left" },
+      { value: "lower_right", label: "Lower right" },
+      { value: "lower_left", label: "Lower left" }
     ];
 
     const canvas = document.querySelector("#canvas");
@@ -1183,10 +1205,161 @@
       }));
     }
 
+    function currentProjectRenderOptions() {
+      return state.projectStatus?.manifest?.plot_options?.render_options
+        || state.lastProject?.plot_options?.render_options
+        || {};
+    }
+
+    function currentProjectExports() {
+      return state.projectStatus?.manifest?.plot_options?.exports
+        || state.lastProject?.plot_options?.exports
+        || state.exports;
+    }
+
+    function resetRefineOptionsFromProject() {
+      const options = currentProjectRenderOptions();
+      state.refineOptions = {
+        size: options.size || selectedFigureSize(),
+        xscale: options.xscale || "",
+        yscale: options.yscale || "",
+        reverse_x: Boolean(options.reverse_x),
+        legend_position: options.legend_position || "",
+        x_label_override: options.x_label_override || "",
+        y_label_override: options.y_label_override || "",
+        x_min: options.x_min ?? "",
+        x_max: options.x_max ?? "",
+        y_min: options.y_min ?? "",
+        y_max: options.y_max ?? "",
+        review_note: ""
+      };
+      const projectExports = currentProjectExports();
+      if (Array.isArray(projectExports) && projectExports.length) {
+        state.exports = projectExports;
+      }
+      state.refineDirty = false;
+    }
+
+    function refineOptionValue(name) {
+      if (!state.refineDirty && Object.keys(state.refineOptions).length === 0) {
+        resetRefineOptionsFromProject();
+      }
+      return state.refineOptions[name] ?? "";
+    }
+
+    function setRefineOption(name, value) {
+      state.refineOptions = { ...state.refineOptions, [name]: value };
+      state.refineDirty = true;
+    }
+
+    function compactRenderOptions(options) {
+      const compact = {};
+      for (const [key, value] of Object.entries(options)) {
+        if (key === "review_note") continue;
+        if (value === "" || value === null || value === undefined) continue;
+        if (["x_min", "x_max", "y_min", "y_max"].includes(key)) {
+          const numeric = Number(value);
+          if (!Number.isFinite(numeric)) continue;
+          compact[key] = numeric;
+        } else {
+          compact[key] = value;
+        }
+      }
+      return compact;
+    }
+
+    function renderOptionSelect(id, label, value, options) {
+      return `
+        <label class="field">
+          <span class="field-label">${escapeHtml(label)}</span>
+          <select id="${escapeHtml(id)}" class="field-input">
+            ${options.map((item) => `
+              <option value="${escapeHtml(item.value)}" ${String(value || "") === item.value ? "selected" : ""}>
+                ${escapeHtml(item.label)}
+              </option>
+            `).join("")}
+          </select>
+        </label>
+      `;
+    }
+
+    function renderRefinePanel() {
+      const options = {
+        size: refineOptionValue("size") || selectedFigureSize(),
+        xscale: refineOptionValue("xscale"),
+        yscale: refineOptionValue("yscale"),
+        reverse_x: Boolean(refineOptionValue("reverse_x")),
+        legend_position: refineOptionValue("legend_position"),
+        x_label_override: refineOptionValue("x_label_override"),
+        y_label_override: refineOptionValue("y_label_override"),
+        x_min: refineOptionValue("x_min"),
+        x_max: refineOptionValue("x_max"),
+        y_min: refineOptionValue("y_min"),
+        y_max: refineOptionValue("y_max"),
+        review_note: refineOptionValue("review_note")
+      };
+      return `
+        <div class="panel">
+          <div class="panel-head">
+            <span>SciPlot Refine</span>
+            <span class="chip">rerun</span>
+          </div>
+          <div class="panel-body">
+            <div class="field">
+              <span class="field-label">Figure size</span>
+              <div class="option-row">
+                ${figureSizeOptions.map((item) => `
+                  <button class="option-pill ${options.size === item.value ? "selected" : ""}" type="button" data-refine-size="${item.value}">
+                    ${escapeHtml(item.label)}
+                  </button>
+                `).join("")}
+              </div>
+            </div>
+            <div class="field-grid">
+              ${renderOptionSelect("refineXScale", "X scale", options.xscale, scaleOptions)}
+              ${renderOptionSelect("refineYScale", "Y scale", options.yscale, scaleOptions)}
+            </div>
+            <label class="option-pill" style="width:max-content;">
+              <input id="refineReverseX" type="checkbox" ${options.reverse_x ? "checked" : ""}>
+              <span>Reverse X</span>
+            </label>
+            <div class="field-grid">
+              ${renderOptionSelect("refineLegendPosition", "Legend", options.legend_position, legendPositionOptions)}
+              <label class="field">
+                <span class="field-label">Revision note</span>
+                <input id="refineReviewNote" class="field-input" value="${escapeHtml(options.review_note)}" placeholder="e.g. move legend / log y">
+              </label>
+            </div>
+            <div class="field-grid">
+              <label class="field">
+                <span class="field-label">X label override</span>
+                <input id="refineXLabel" class="field-input" value="${escapeHtml(options.x_label_override)}">
+              </label>
+              <label class="field">
+                <span class="field-label">Y label override</span>
+                <input id="refineYLabel" class="field-input" value="${escapeHtml(options.y_label_override)}">
+              </label>
+            </div>
+            <div class="field-grid">
+              <label class="field"><span class="field-label">X min</span><input id="refineXMin" class="field-input" inputmode="decimal" value="${escapeHtml(options.x_min)}"></label>
+              <label class="field"><span class="field-label">X max</span><input id="refineXMax" class="field-input" inputmode="decimal" value="${escapeHtml(options.x_max)}"></label>
+              <label class="field"><span class="field-label">Y min</span><input id="refineYMin" class="field-input" inputmode="decimal" value="${escapeHtml(options.y_min)}"></label>
+              <label class="field"><span class="field-label">Y max</span><input id="refineYMax" class="field-input" inputmode="decimal" value="${escapeHtml(options.y_max)}"></label>
+            </div>
+            <div class="option-row">
+              <button class="btn primary" id="rerunButton" type="button">Apply & Rerun</button>
+              <button class="btn" id="resetRefineButton" type="button">Reset</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     function renderResultReview() {
       const status = state.projectStatus;
       const review = status?.artifacts?.review_html;
       const manifest = status?.artifacts?.manifest;
+      const revisionBrief = status?.artifacts?.revision_brief;
       const figures = resultFigures();
       return `
         <div class="panel">
@@ -1202,6 +1375,7 @@
             ` : ""}
             <div class="list">
               ${manifest?.exists ? `<a class="row" href="${escapeHtml(manifest.url)}"><span class="row-title">manifest.json</span><span class="chip">open</span></a>` : ""}
+              ${revisionBrief?.exists ? `<a class="row" href="${escapeHtml(revisionBrief.url)}"><span class="row-title">Revision brief</span><span class="chip">Codex</span></a>` : ""}
               ${figures.map((figure) => {
                 const label = figure.size_bytes ? formatSize(figure.size_bytes) : "figure";
                 const content = `<span class="row-title">${escapeHtml(figure.name)}</span><span class="chip">${escapeHtml(label)}</span>`;
@@ -1210,6 +1384,7 @@
                   : `<div class="row">${content}</div>`;
               }).join("")}
             </div>
+            ${renderRefinePanel()}
           </div>
         </div>
       `;
@@ -1296,6 +1471,47 @@
       if (exportButton) exportButton.addEventListener("click", exportProject);
     }
 
+    function attachRefineHandlers() {
+      canvas.querySelectorAll("[data-refine-size]").forEach((button) => {
+        button.addEventListener("click", () => {
+          setRefineOption("size", button.dataset.refineSize);
+          state.figureSize = button.dataset.refineSize;
+          render();
+        });
+      });
+      const bindings = [
+        ["refineXScale", "xscale"],
+        ["refineYScale", "yscale"],
+        ["refineLegendPosition", "legend_position"],
+        ["refineReviewNote", "review_note"],
+        ["refineXLabel", "x_label_override"],
+        ["refineYLabel", "y_label_override"],
+        ["refineXMin", "x_min"],
+        ["refineXMax", "x_max"],
+        ["refineYMin", "y_min"],
+        ["refineYMax", "y_max"]
+      ];
+      bindings.forEach(([id, key]) => {
+        const element = canvas.querySelector(`#${id}`);
+        if (!element) return;
+        element.addEventListener("input", (event) => setRefineOption(key, event.target.value));
+        element.addEventListener("change", (event) => setRefineOption(key, event.target.value));
+      });
+      const reverseX = canvas.querySelector("#refineReverseX");
+      if (reverseX) {
+        reverseX.addEventListener("change", (event) => setRefineOption("reverse_x", event.target.checked));
+      }
+      const rerunButton = canvas.querySelector("#rerunButton");
+      if (rerunButton) rerunButton.addEventListener("click", rerunProject);
+      const resetButton = canvas.querySelector("#resetRefineButton");
+      if (resetButton) {
+        resetButton.addEventListener("click", () => {
+          resetRefineOptionsFromProject();
+          render();
+        });
+      }
+    }
+
     function toggleExport(value) {
       if (state.exports.includes(value)) {
         state.exports = state.exports.filter((item) => item !== value);
@@ -1363,8 +1579,40 @@
       state.lastProject = payload;
       state.statusText = payload.run_failed ? "Rendered project needs Codex" : "Figures generated";
       await refreshProjectStatus();
+      resetRefineOptionsFromProject();
       state.view = payload.run_failed ? "Codex Runs" : "Export";
       render();
+    }
+
+    async function rerunProject() {
+      if (!state.lastProject?.project_slug) return;
+      try {
+        state.statusText = "Applying SciPlot refinements";
+        state.error = "";
+        updateChrome();
+        const response = await fetch(`/api/projects/${encodeURIComponent(state.lastProject.project_slug)}/rerun`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            exports: state.exports,
+            render_options: compactRenderOptions(state.refineOptions),
+            review_note: state.refineOptions.review_note || ""
+          })
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || "Rerun failed");
+        }
+        state.lastProject = payload;
+        state.statusText = payload.run_failed ? "Refined run needs Codex" : "Refined figures generated";
+        await refreshProjectStatus();
+        resetRefineOptionsFromProject();
+        render();
+      } catch (error) {
+        state.error = error.message;
+        state.statusText = error.message;
+        render();
+      }
     }
 
     async function refreshProjectStatus() {
@@ -1372,6 +1620,7 @@
       const response = await fetch(`/api/projects/${encodeURIComponent(state.lastProject.project_slug)}/status`);
       if (!response.ok) return;
       state.projectStatus = await response.json();
+      if (!state.refineDirty) resetRefineOptionsFromProject();
     }
 
     async function startCodexJob() {
@@ -1421,6 +1670,7 @@
       if (state.view === "Export") renderExportView();
       if (state.view === "Codex Runs") renderCodexView();
       renderInspector();
+      attachRefineHandlers();
       updateChrome();
     }
 

@@ -821,12 +821,19 @@ def semantic_payload_from_rule(
     vendor_error: str | None = None,
 ) -> dict[str, Any]:
     payload = rule.to_payload()
+    render_options = dict(rule.render_options)
+    if rule.x_axis.scale != "linear":
+        render_options.setdefault("xscale", rule.x_axis.scale)
+    if rule.y_axis.scale != "linear":
+        render_options.setdefault("yscale", rule.y_axis.scale)
+    if rule.x_axis.reverse:
+        render_options.setdefault("reverse_x", True)
     return {
         "rule_id": rule.rule_id,
         "semantic_family": rule.semantic_family,
         "recommended_recipe": rule.recipe,
         "template": rule.template,
-        "render_options": dict(rule.render_options),
+        "render_options": render_options,
         "confidence": confidence,
         "reason": reason or rule.reason or f"Matched material rule `{rule.rule_id}`.",
         "needs_ai_intervention": False,

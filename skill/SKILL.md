@@ -23,7 +23,7 @@ Do not hand-copy SciPlot style constants, Matplotlib rcParams, legend-placement 
    /Users/dongxutian/.codex/skills/sciplot-materials-analysis/scripts/sciplot rules show RULE_ID --json
    ```
 3. Choose the route:
-   - User-supplied raw data path or folder: the Web UI confirmation flow is mandatory unless the user explicitly asks to bypass it. Use `sciplot prepare PATH --out outputs/intake_projects --json`, then `sciplot intake PATH --out outputs/intake_projects` to open a prefilled UI; `sciplot workbench` is an alias for the same GUI. Let the user operate the page to confirm sample groups, sample/legend names, legend order, output directory, figure size, and export formats. The UI export action writes the request and renders figures. Source, Inspect, and Samples are data-confirmation stages, not plot-preview stages. Result Review appears only after Export or Codex produces rendered artifacts.
+   - User-supplied raw data path or folder: the Web UI confirmation flow is mandatory unless the user explicitly asks to bypass it. Prefer `sciplot quick PATH` for the shortest prefilled UI path. The equivalent explicit route is `sciplot prepare PATH --out outputs/intake_projects --json`, then `sciplot intake PATH --out outputs/intake_projects`; `sciplot app` is the preferred blank manual entrypoint, and `sciplot workbench` is an alias for the same GUI. Let the user operate the page to confirm sample groups, sample/legend names, legend order, output directory, figure size, and export formats. The UI export action writes the request, renders figures, and creates `revision_brief.md` for Codex-driven rule/style revisions. Source, Inspect, and Samples are data-confirmation stages, not plot-preview stages. Result Review appears only after Export or Codex produces rendered artifacts.
    - Repeatable figure request from an already-confirmed request file: use `sciplot run REQUEST.json`.
    - Unknown mixed experiment request: use `sciplot run` with `"recipe": "auto"`.
    - Torque-rheometer curation: use `sciplot curate torque PATH --name PROJECT_NAME --out outputs/curation_projects --json`, review `curation/torque_review.html`, then open the Web UI when the user wants to choose output directory, figure size, or export formats.
@@ -75,6 +75,7 @@ sciplot batch INPUT_DIR --out OUTDIR --mode smoke
 sciplot batch INPUT_DIR --out OUTDIR --mode all --tensile-root PATH
 
 # Open the local file-grouping and export-options Web UI
+sciplot app --out outputs/intake_projects
 sciplot intake INPUT_PATH --out outputs/intake_projects
 sciplot workbench INPUT_PATH --out outputs/intake_projects
 

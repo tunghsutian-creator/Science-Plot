@@ -99,6 +99,13 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Run a plot_request.json workflow.")
     run_parser.add_argument("request", type=Path)
 
+    quick_parser = subparsers.add_parser("quick", help="Open the shortest confirmation flow for a raw data path.")
+    quick_parser.add_argument("input", type=Path)
+    quick_parser.add_argument("--host", default="127.0.0.1")
+    quick_parser.add_argument("--port", type=int, default=0, help="Use 0 to choose a free local port.")
+    quick_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
+    quick_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
+
     curate_parser = subparsers.add_parser("curate", help="Create a reviewable curation project.")
     curate_subparsers = curate_parser.add_subparsers(dest="curate_command", required=True)
     curate_torque_parser = curate_subparsers.add_parser("torque", help="Curate torque event segments.")
@@ -131,6 +138,15 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Allow-list tensile data root. Repeat to allow multiple tensile folders.",
     )
+
+    app_parser = subparsers.add_parser("app", help="Open the local SciPlot Web app for manual plotting.")
+    app_parser.add_argument("input", nargs="?", type=Path)
+    app_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
+    app_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    app_parser.add_argument("--host", default="127.0.0.1")
+    app_parser.add_argument("--port", type=int, default=8765)
+    app_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
+    app_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
 
     intake_parser = subparsers.add_parser("intake", help="Open the SciPlot intake project builder.")
     intake_parser.add_argument("input", nargs="?", type=Path)
@@ -210,6 +226,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "run":
             _print_json(run_request(_resolve_input(args.request, kind="Request file")))
             return 0
+        if args.command == "quick":
+            serve_intake(
+                input_path=_resolve_input(args.input),
+                host=args.host,
+                port=args.port,
+                output_root=args.out.expanduser(),
+                open_browser=not args.no_open,
+            )
+            return 0
         if args.command == "curate":
             if args.curate_command == "torque":
                 payload = curate_torque_project(
@@ -258,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             return 0
-        if args.command in {"intake", "workbench"}:
+        if args.command in {"app", "intake", "workbench"}:
             if args.catalog:
                 payload = intake_catalog_payload()
                 if args.json:

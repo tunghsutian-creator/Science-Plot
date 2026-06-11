@@ -17,10 +17,10 @@ valid.
 
 The project provides:
 
-- A Python CLI named `sciplot` with `inspect`, `rules`, `render`, `recipe`,
-  `run`, `curate`, `batch`, `intake`, and `qa` commands.
-- A lightweight local Web intake UI for building repeatable plotting project
-  packages from dragged files and named sample groups.
+- A Python CLI named `sciplot` with `app`, `inspect`, `rules`, `render`,
+  `recipe`, `run`, `curate`, `batch`, `intake`, and `qa` commands.
+- A lightweight local Web app for importing data, confirming sample groups,
+  choosing figure options, rendering, reviewing, and rerunning figures.
 - A thin public wrapper around the migrated SciPlot renderer under
   `src/sciplot_core`.
 - Generic v1 materials recipes under `src/sciplot_recipes` for tensile,
@@ -86,9 +86,11 @@ Example `plot_request.json`:
 
 `sciplot run` writes a reviewable export package containing a vector PDF, a 300
 DPI TIFF bitmap, `request_snapshot.json`, `manifest.json`, `analysis_report.md`,
-`tables/analysis_metrics.csv`, `raw/`, and `review.html`. Write revised outputs
-to a new directory, for example `outputs/run_001` and `outputs/run_002`, and use
-those artifacts to compare what changed.
+`tables/analysis_metrics.csv`, `raw/`, and `review.html`. Requests can opt into
+extra handoff packages, but the local Web app path keeps SciPlot's PDF/TIFF as
+the review source of truth. Write revised outputs to a new directory, for example
+`outputs/run_001` and `outputs/run_002`, and use those artifacts to compare what
+changed.
 
 If auto-recognition cannot map a file to a supported semantic family, SciPlot
 writes `intervention_request.json`. Codex should treat that file as the handoff:
@@ -103,11 +105,11 @@ The fastest path uses the bundled `Makefile`:
 ```bash
 make setup     # create .venv and install the package + dev tools
 make demo      # render the bundled example and run QA on it
-make workbench # open the drag-and-drop workbench in a browser
+make app       # open the local SciPlot Web App in a browser
 ```
 
 Run `make` on its own to list every target (`setup`, `demo`, `test`, `lint`,
-`fix`, `workbench`, `clean`).
+`fix`, `app`, `workbench`, `clean`).
 
 The equivalent manual steps:
 
@@ -129,12 +131,22 @@ Installing the package also exposes the console script:
 .venv/bin/sciplot inspect examples/curve_table.csv --json
 ```
 
-## Intake UI
+## SciPlot Web App
 
-Use `intake` when a human wants to sort files into named sample groups before
-Codex renders figures. `workbench` is an alias for the same local GUI:
+The shortest daily path is the local Web app. It is intentionally independent of
+Codex: Codex can prepare/recognize data first, but the human can then import,
+name, order, render, review, and rerun figures in the browser.
 
 ```bash
+./Launch_SciPlot_App.command
+sciplot app --out outputs/intake_projects
+```
+
+Use `intake` when a human wants to sort files into named sample groups before
+rendering figures. `app`, `intake`, and `workbench` open the same local GUI:
+
+```bash
+sciplot app --out outputs/intake_projects
 sciplot intake --out outputs/intake_projects
 sciplot workbench --out outputs/intake_projects
 ```
@@ -144,14 +156,15 @@ session, pre-fills the recommended data type, plot type, and sample groups, then
 opens the same local UI:
 
 ```bash
+sciplot quick PATH
 sciplot prepare PATH --out outputs/intake_projects --json
 sciplot intake PATH --out outputs/intake_projects
 ```
 
-The local page is a Codex-aware Plot Canvas workbench:
+The local page is a SciPlot plotting workbench:
 
 ```text
-Source -> Inspect -> Samples -> Export -> Codex Runs
+Source -> Inspect -> Samples -> Export -> Result Review
 ```
 
 Workbench stage rules:
@@ -177,6 +190,7 @@ Result review rules:
 
 - Result Review appears only after Export or Codex produces rendered artifacts.
 - Read Result Review artifacts (`review.html`, figures, manifest, metrics, and QA) before reporting output.
+- Use `revision_brief.md` as the short handoff for Codex-driven rule/style revisions.
 
 Known experiment types are backed by the local materials rule registry. Unknown
 entries are allowed as intentional handoff points for Codex intervention and

@@ -310,6 +310,7 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         "manifest": _artifact_info(run_output / "manifest.json", project_slug=project_slug),
         "analysis_report": _artifact_info(run_output / "analysis_report.md", project_slug=project_slug),
         "analysis_metrics": _artifact_info(run_output / "tables" / "analysis_metrics.csv", project_slug=project_slug),
+        "revision_brief": _artifact_info(run_output / "revision_brief.md", project_slug=project_slug),
         "review_html": _artifact_info(run_output / "review.html", project_slug=project_slug),
         "intervention_request": _artifact_info(intervention_path, project_slug=project_slug),
     }
@@ -728,6 +729,115 @@ def create_and_run_intake_project(
     }
 
 
+def _write_intake_manifest(project_dir: Path, manifest: dict[str, Any]) -> None:
+    (project_dir / "intake_manifest.json").write_text(
+        json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    for path in sorted(project_dir.glob("*.sciplot.json")):
+        path.write_text(json.dumps(json_safe(manifest), indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _resolve_project_plot_request(project_dir: Path, manifest: dict[str, Any]) -> Path:
+    request_value = str(manifest.get("plot_request") or "plot_request.json")
+    request_path = Path(request_value).expanduser()
+    if not request_path.is_absolute():
+        request_path = project_dir / request_path
+    request_path = request_path.resolve()
+    if not _path_within(request_path, project_dir):
+        raise PermissionError("Plot request must belong to the intake project.")
+    return request_path
+
+
+def rerun_intake_project(
+    project_dir: str | Path,
+    *,
+    exports: list[str] | tuple[str, ...] | None = None,
+    render_options: dict[str, Any] | None = None,
+    review_note: str | None = None,
+) -> dict[str, Any]:
+    from sciplot_core.workflow import run_request
+
+    project_path = Path(project_dir).expanduser().resolve()
+    manifest_path = project_path / "intake_manifest.json"
+    intake_manifest = _read_json_if_exists(manifest_path)
+    if intake_manifest is None:
+        raise FileNotFoundError(f"No intake project manifest found at {manifest_path}.")
+    request_path = _resolve_project_plot_request(project_path, intake_manifest)
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    if not isinstance(request, dict):
+        raise ValueError("Plot request must be a JSON object.")
+
+    selected_exports = _selected_exports(exports if exports is not None else request.get("exports"))
+    current_render_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
+    selected_render_options = _selected_render_options(render_options)
+    merged_render_options = {**current_render_options, **selected_render_options}
+
+    request["exports"] = selected_exports
+    if merged_render_options:
+        request["render_options"] = merged_render_options
+    else:
+        request.pop("render_options", None)
+    note = (review_note or "").strip()
+    if note:
+        notes = request.get("review_notes") if isinstance(request.get("review_notes"), list) else []
+        request["review_notes"] = [*notes, f"GUI refine: {note}"]
+
+    request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
+
+    plot_options = intake_manifest.get("plot_options") if isinstance(intake_manifest.get("plot_options"), dict) else {}
+    intake_manifest["plot_options"] = {
+        **plot_options,
+        "exports": selected_exports,
+        "render_options": merged_render_options,
+    }
+    _write_intake_manifest(project_path, intake_manifest)
+
+    try:
+        run_manifest = run_request(request_path)
+    except Exception as exc:
+        run_output = Path(
+            str(request.get("output") or intake_manifest.get("outputs_dir") or project_path / "runs" / "run_001")
+        )
+        intervention = run_output / "intervention_request.json"
+        failed_run = {
+            "failed_at": datetime.now(UTC).isoformat(),
+            "output": str(run_output),
+            "figures": [],
+            "analysis_metrics": [],
+            "qa": {},
+            "failure": str(exc),
+            "needs_codex": True,
+            "intervention_request": str(intervention) if intervention.exists() else None,
+        }
+        intake_manifest = _read_json_if_exists(manifest_path) or intake_manifest
+        intake_manifest["last_run"] = failed_run
+        intake_manifest["run_failed"] = True
+        intake_manifest["failure"] = str(exc)
+        _write_intake_manifest(project_path, intake_manifest)
+        refreshed_zip = refresh_intake_project_zip(project_path)
+        return {
+            **intake_manifest,
+            "project_dir": str(project_path),
+            "zip_path": str(refreshed_zip),
+            "download_name": refreshed_zip.name,
+            "last_run": failed_run,
+        }
+
+    intake_manifest = _read_json_if_exists(manifest_path) or intake_manifest
+    intake_manifest.pop("run_failed", None)
+    intake_manifest.pop("failure", None)
+    _write_intake_manifest(project_path, intake_manifest)
+    refreshed_zip = refresh_intake_project_zip(project_path)
+    return {
+        **intake_manifest,
+        "project_dir": str(project_path),
+        "zip_path": str(refreshed_zip),
+        "download_name": refreshed_zip.name,
+        "last_run": intake_manifest.get("last_run", run_manifest),
+    }
+
+
 def _decode_group_payload(payload: dict[str, Any]) -> list[IntakeGroupInput]:
     groups: list[IntakeGroupInput] = []
     for group in payload.get("groups", []):
@@ -884,6 +994,27 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(job)
             return
+        if parsed.path.startswith("/api/projects/"):
+            parts = parsed.path.strip("/").split("/")
+            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "rerun":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                    project_dir = self._project_dir_from_request(parts[2])
+                    project = rerun_intake_project(
+                        project_dir,
+                        exports=payload.get("exports"),
+                        render_options=payload.get("render_options"),
+                        review_note=payload.get("review_note"),
+                    )
+                except PermissionError as exc:
+                    self.send_error(HTTPStatus.FORBIDDEN, str(exc))
+                    return
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                    return
+                self._send_json(project)
+                return
         if parsed.path != "/api/projects":
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -955,5 +1086,6 @@ __all__ = [
     "intake_project_status",
     "prepare_intake_session",
     "refresh_intake_project_zip",
+    "rerun_intake_project",
     "serve_intake",
 ]

@@ -593,6 +593,16 @@ def _sweep_source_files(source: Path) -> list[Path]:
     )
 
 
+def _source_display_sample(source: Path) -> str:
+    stem = source.stem.strip()
+    if "__" in stem:
+        group, _rest = stem.split("__", 1)
+        group = group.strip()
+        if group:
+            return group
+    return stem
+
+
 def _read_rheology_sweep_sample(
     source: Path,
     *,
@@ -632,7 +642,7 @@ def _read_rheology_sweep_sample(
     if not rows:
         raise ValueError(f"No numeric rheology sweep points found in {source}.")
     return RheologySweepSample(
-        sample=source.stem,
+        sample=_source_display_sample(source),
         source=source,
         x_label=x_label,
         x_unit=_unit_for(units, x_index, default_x_unit),
@@ -693,6 +703,23 @@ def _sweep_sample_order_key(sample: RheologySweepSample) -> tuple[float, str]:
     reference_x = max(x_value for x_value, _storage in storage_points)
     _x_value, storage = min(storage_points, key=lambda item: abs(item[0] - reference_x))
     return (storage, sample.sample.casefold())
+
+
+def _ordered_sweep_samples(
+    samples: list[RheologySweepSample],
+    series_order: object = None,
+) -> list[RheologySweepSample]:
+    if not isinstance(series_order, list | tuple):
+        return samples
+    order = {
+        _token(sample): index
+        for index, sample in enumerate(series_order)
+        if isinstance(sample, str) and sample.strip()
+    }
+    if not order:
+        return samples
+    fallback = len(order)
+    return sorted(samples, key=lambda sample: (order.get(_token(sample.sample), fallback), sample.sample.casefold()))
 
 
 def is_rheology_frequency_comparison_dir(source: str | Path) -> bool:
@@ -939,6 +966,41 @@ def _read_impact_block_table(source: Path) -> list[list[object]]:
     for row_index in range(max_len):
         rows.append([values[row_index] if row_index < len(values) else "" for values in value_columns])
     return rows
+
+
+def _read_impact_compact_table(source: Path) -> list[list[object]]:
+    raw = read_raw_table(source).dropna(how="all").dropna(axis=1, how="all")
+    if raw.shape[0] < 2:
+        raise ValueError("Impact compact table needs a header and at least one data row.")
+    headers = [_token(value) for value in raw.iloc[0].tolist()]
+    sample_col = next((index for index, token in enumerate(headers) if token in {"sample", "samplename"}), None)
+    metric_col = next((index for index, token in enumerate(headers) if "impact" in token or "冲击" in token), None)
+    if sample_col is None or metric_col is None:
+        raise ValueError("Impact compact table needs sample and impact columns.")
+    unit_col = metric_col + 1 if metric_col + 1 < raw.shape[1] else None
+    samples: list[str] = []
+    values: list[float] = []
+    units: list[str] = []
+    for row_index in range(1, raw.shape[0]):
+        sample = _clean_text(raw.iat[row_index, sample_col])
+        value = _float(raw.iat[row_index, metric_col])
+        if not sample or value is None:
+            continue
+        samples.append(sample)
+        values.append(value)
+        if unit_col is not None:
+            unit = _clean_text(raw.iat[row_index, unit_col])
+            if unit:
+                units.append(unit)
+    if not values:
+        raise ValueError("Impact compact table did not contain numeric impact values.")
+    unit = units[0] if units else "kJ/m2"
+    return [
+        ["Impact strength" for _sample in samples],
+        [unit for _sample in samples],
+        samples,
+        values,
+    ]
 
 
 def _write_curve_table(series_list: list[CurveSeriesPayload], output_path: Path) -> None:
@@ -1360,7 +1422,10 @@ def prepare_semantic_source(
 
     if family == "rheology_frequency" and source.is_dir():
         processed_source = processed_dir / "rheology_frequency_comparison.xlsx"
-        samples = _read_rheology_frequency_comparison_samples(source)
+        samples = _ordered_sweep_samples(
+            _read_rheology_frequency_comparison_samples(source),
+            series_order=series_order,
+        )
         if len(samples) < 2:
             raise ValueError(
                 "Rheology frequency comparison folders need at least two parseable sample exports."
@@ -1374,7 +1439,10 @@ def prepare_semantic_source(
 
     if family == "rheology_temperature_sweep" and source.is_dir():
         processed_source = processed_dir / "rheology_temperature_comparison.xlsx"
-        samples = _read_rheology_temperature_comparison_samples(source)
+        samples = _ordered_sweep_samples(
+            _read_rheology_temperature_comparison_samples(source),
+            series_order=series_order,
+        )
         if len(samples) < 2:
             raise ValueError(
                 "Rheology temperature comparison folders need at least two parseable sample exports."
@@ -1458,11 +1526,10 @@ def prepare_semantic_source(
         try:
             rows = _read_impact_block_table(source)
         except ValueError:
-            pass
-        else:
-            processed_source = processed_dir / f"{source.stem}_impact_replicates.csv"
-            pd.DataFrame(rows).to_csv(processed_source, header=False, index=False)
-            return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
+            rows = _read_impact_compact_table(source)
+        processed_source = processed_dir / f"{source.stem}_impact_replicates.csv"
+        pd.DataFrame(rows).to_csv(processed_source, header=False, index=False)
+        return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
 
     return {"source": str(source), "processed": False, "processed_source": None}
 
