@@ -89,6 +89,25 @@ def _normalize_manual_bound(
     return numeric
 
 
+def _normalize_fraction_option(
+    template: str,
+    option_id: str,
+    value: object,
+    *,
+    resolved_template_id: str | None = None,
+) -> float | None:
+    if value is None or value == "":
+        return None
+    _ensure_template_option_supported(template, option_id, resolved_template_id=resolved_template_id)
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"`{option_id}` must be a finite non-negative number.") from exc
+    if not math.isfinite(numeric) or numeric < 0:
+        raise ValueError(f"`{option_id}` must be a finite non-negative number.")
+    return numeric
+
+
 def _normalize_series_order(
     template: str,
     series_order: list[str] | tuple[str, ...] | None,
@@ -207,6 +226,7 @@ def resolve_render_options(
     x_max: float | None = None,
     y_min: float | None = None,
     y_max: float | None = None,
+    x_padding_fraction: float | None = None,
     x_tick_density: str | None = None,
     y_tick_density: str | None = None,
     x_tick_edge_labels: str | None = None,
@@ -351,6 +371,12 @@ def resolve_render_options(
         x_max=_normalize_manual_bound(template, "x_max", x_max, resolved_template_id=contract_template),
         y_min=_normalize_manual_bound(template, "y_min", y_min, resolved_template_id=contract_template),
         y_max=_normalize_manual_bound(template, "y_max", y_max, resolved_template_id=contract_template),
+        x_padding_fraction=_normalize_fraction_option(
+            template,
+            "x_padding_fraction",
+            x_padding_fraction,
+            resolved_template_id=contract_template,
+        ),
         x_tick_density=_normalize_enumerated_option(
             template,
             "x_tick_density",

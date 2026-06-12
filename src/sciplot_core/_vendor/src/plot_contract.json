@@ -872,6 +872,7 @@
         "reverse_x",
         "x_min",
         "x_max",
+        "x_padding_fraction",
         "y_min",
         "y_max",
         "x_tick_density",
@@ -952,6 +953,7 @@
         "reverse_x",
         "x_min",
         "x_max",
+        "x_padding_fraction",
         "y_min",
         "y_max",
         "x_tick_density",
@@ -1264,8 +1266,12 @@
       "editable_options": [
         "size",
         "reverse_x",
+        "x_padding_fraction",
         "baseline",
+        "x_label_override",
+        "y_label_override",
         "series_order",
+        "series_label_mode",
         "style_preset",
         "palette_preset"
       ],
@@ -1273,6 +1279,7 @@
         "size": "60x55",
         "reverse_x": false,
         "baseline": "none",
+        "series_label_mode": "inline",
         "style_preset": "nature",
         "palette_preset": "colorblind_safe",
         "visual_theme_id": "clean_light"

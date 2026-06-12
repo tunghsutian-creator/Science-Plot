@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import mimetypes
 import re
@@ -16,6 +17,8 @@ from socketserver import TCPServer
 from typing import Any
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
+import pandas as pd
+
 from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex_job, start_codex_job
 from sciplot_core.ingest import smart_decode
 from sciplot_core.render import DEFAULT_EXPORT_FORMATS, json_safe
@@ -26,6 +29,11 @@ _DEFAULT_OUTPUT_ROOT = Path("outputs") / "intake_projects"
 APPROVED_INTAKE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
 _TEXT_EXTENSIONS = {".csv", ".tsv", ".txt"}
 _TABLE_EXTENSIONS = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
+_PREVIEW_SCAN_ROWS = 80
+_PREVIEW_DISPLAY_ROWS = 24
+_PREVIEW_DISPLAY_COLUMNS = 24
+_COLUMN_ROLES = {"auto", "x", "y", "series", "sample", "unit", "metadata", "ignore"}
+_COLUMN_TYPES = {"auto", "numeric", "text", "categorical", "datetime", "unit", "metadata", "ignore"}
 
 
 @dataclass(frozen=True)
@@ -73,7 +81,19 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
             {"id": "youngs_modulus", "label": "杨氏模量", "rule_id": "tensile_curve", "chart": "box_with_points"},
             {"id": "compression_curve", "label": "压缩", "rule_id": "compression_curve"},
             {"id": "flexural_curve", "label": "弯曲", "rule_id": "flexural_curve"},
-            {"id": "torque_curve", "label": "转矩曲线", "rule_id": "torque_curve"},
+            {"id": "torque_curve", "label": "转矩曲线", "rule_id": "torque_curve", "chart": "curve"},
+            {
+                "id": "torque_offset_stack",
+                "label": "转矩偏移堆积",
+                "rule_id": "torque_curve",
+                "chart": "stacked_curve",
+                "template": "stacked_curve",
+                "render_options": {
+                    "size": "120x55",
+                    "x_label_override": "Time",
+                    "y_label_override": "Screw torque",
+                },
+            },
             {"id": "impact_metric", "label": "冲击", "rule_id": "impact_metric", "chart": "box_with_points"},
             {"id": "fracture_metric", "label": "断裂", "rule_id": "fracture_metric", "chart": "box_with_points"},
             {"id": "fatigue_cycle_metric", "label": "疲劳", "rule_id": "fatigue_cycle_metric"},
@@ -394,6 +414,166 @@ def _file_payload(path: Path) -> dict[str, Any]:
     }
 
 
+def _preview_cell(value: object) -> str:
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _preview_is_number(value: object) -> bool:
+    text = _preview_cell(value).replace(",", "").strip()
+    if not text:
+        return False
+    try:
+        float(text)
+    except ValueError:
+        return False
+    return True
+
+
+def _preview_read_frame(name: str, content: bytes) -> tuple[pd.DataFrame, str | None, str | None]:
+    suffix = Path(name).suffix.lower()
+    encoding: str | None = None
+    sheet: str | None = None
+    if suffix in {".xlsx", ".xls"}:
+        workbook = pd.ExcelFile(io.BytesIO(content))
+        sheet = str(workbook.sheet_names[0])
+        frame = pd.read_excel(workbook, sheet_name=sheet, header=None, nrows=_PREVIEW_SCAN_ROWS)
+    else:
+        text, encoding = smart_decode(content)
+        buffer = io.StringIO(text)
+        try:
+            frame = pd.read_csv(buffer, sep=None, engine="python", header=None, nrows=_PREVIEW_SCAN_ROWS)
+        except Exception:
+            buffer = io.StringIO(text)
+            delimiter = "\t" if suffix in {".tsv", ".txt"} or "\t" in text[:4096] else ","
+            frame = pd.read_csv(buffer, sep=delimiter, header=None, nrows=_PREVIEW_SCAN_ROWS)
+    frame = frame.dropna(axis=1, how="all")
+    if frame.shape[1] > _PREVIEW_DISPLAY_COLUMNS:
+        frame = frame.iloc[:, :_PREVIEW_DISPLAY_COLUMNS]
+    return frame, sheet, encoding
+
+
+def _preview_header_score(frame: pd.DataFrame, row_index: int) -> int:
+    row = [_preview_cell(value).strip() for value in frame.iloc[row_index].tolist()]
+    non_empty = [value for value in row if value]
+    if len(non_empty) < 2:
+        return 0
+    text_cells = sum(1 for value in non_empty if not _preview_is_number(value))
+    numeric_after = 0
+    for column_index, header in enumerate(row):
+        if not header:
+            continue
+        for lookahead in range(row_index + 1, min(frame.shape[0], row_index + 8)):
+            if _preview_is_number(frame.iat[lookahead, column_index]):
+                numeric_after += 1
+                break
+    return text_cells * 2 + min(len(non_empty), 12) + numeric_after
+
+
+def _preview_header_row(frame: pd.DataFrame) -> int | None:
+    if frame.empty:
+        return None
+    candidates = [(row_index, _preview_header_score(frame, row_index)) for row_index in range(min(frame.shape[0], 14))]
+    row_index, score = max(candidates, key=lambda item: item[1])
+    return row_index if score >= 6 else None
+
+
+def _infer_preview_type(values: list[object]) -> str:
+    non_empty = [value for value in values if _preview_cell(value).strip()]
+    if not non_empty:
+        return "ignore"
+    numeric_count = sum(1 for value in non_empty if _preview_is_number(value))
+    if numeric_count / len(non_empty) >= 0.75:
+        return "numeric"
+    unique_count = len({_preview_cell(value).strip() for value in non_empty})
+    if len(non_empty) >= 4 and unique_count <= max(2, len(non_empty) // 3):
+        return "categorical"
+    unit_like = sum(1 for value in non_empty if re.fullmatch(r"\[?[%A-Za-zµμ°./^·\-0-9]+\]?", _preview_cell(value)))
+    if unit_like == len(non_empty) and len(non_empty) <= 4:
+        return "unit"
+    return "text"
+
+
+def _suggest_preview_role(column_name: str, column_index: int, inferred_type: str) -> str:
+    token = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", column_name.casefold())
+    if inferred_type == "ignore":
+        return "ignore"
+    if any(item in token for item in ("sample", "specimen", "legend", "group", "样品", "组别")):
+        return "sample"
+    if any(item in token for item in ("unit", "单位")):
+        return "unit"
+    x_tokens = ("time", "temperature", "frequency", "strain", "wavenumber", "2theta", "时间", "温度")
+    if any(item in token for item in x_tokens):
+        return "x"
+    if inferred_type == "numeric" and column_index == 0:
+        return "x"
+    if inferred_type == "numeric":
+        return "y"
+    if inferred_type == "categorical":
+        return "series"
+    return "metadata"
+
+
+def preview_table_payload(
+    *,
+    name: str,
+    content: bytes | None = None,
+    source_path: str | Path | None = None,
+) -> dict[str, Any]:
+    if content is None:
+        if source_path is None:
+            raise ValueError("Preview requires `source_path` or `content_base64`.")
+        path = Path(source_path).expanduser()
+        content = path.read_bytes()
+        name = name or path.name
+    frame, sheet, encoding = _preview_read_frame(name, content)
+    header_row = _preview_header_row(frame)
+    columns: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
+    start_row = (header_row + 1) if header_row is not None else 0
+    for column_index in range(frame.shape[1]):
+        header = _preview_cell(frame.iat[header_row, column_index]).strip() if header_row is not None else ""
+        values = frame.iloc[start_row:, column_index].tolist()
+        inferred_type = _infer_preview_type(values)
+        name_value = header or f"Column {column_index + 1}"
+        columns.append(
+            {
+                "index": column_index,
+                "name": name_value,
+                "inferred_type": inferred_type,
+                "suggested_role": _suggest_preview_role(name_value, column_index, inferred_type),
+                "non_empty": sum(1 for value in values if _preview_cell(value).strip()),
+                "numeric": sum(1 for value in values if _preview_is_number(value)),
+            }
+        )
+    for row_index, row in frame.head(_PREVIEW_DISPLAY_ROWS).iterrows():
+        rows.append(
+            {
+                "index": int(row_index) + 1,
+                "values": [_preview_cell(value) for value in row.tolist()],
+            }
+        )
+    return {
+        "kind": "sciplot_table_preview",
+        "name": name,
+        "sheet": sheet,
+        "encoding": encoding,
+        "header_row": (header_row + 1) if header_row is not None else None,
+        "preview_rows": len(rows),
+        "preview_columns": len(columns),
+        "columns": columns,
+        "rows": rows,
+    }
+
+
 def _group_payload(sample: str, files: list[Path]) -> dict[str, Any]:
     return {"sample": sample, "files": [_file_payload(path) for path in files]}
 
@@ -506,6 +686,7 @@ def create_intake_project_from_session(session: str | Path | dict[str, Any]) -> 
         plot_output=payload.get("plot_output"),
         exports=payload.get("exports"),
         render_options=payload.get("render_options"),
+        column_confirmations=payload.get("column_confirmations"),
     )
 
 
@@ -538,6 +719,56 @@ def _selected_render_options(render_options: object) -> dict[str, Any]:
     return selected
 
 
+def _experiment_template(experiment: dict[str, Any]) -> str | None:
+    template = experiment.get("template")
+    return str(template).strip() if isinstance(template, str) and template.strip() else None
+
+
+def _experiment_render_options(experiment: dict[str, Any]) -> dict[str, Any]:
+    options = experiment.get("render_options")
+    return dict(options) if isinstance(options, dict) else {}
+
+
+def _selected_column_confirmations(column_confirmations: object) -> list[dict[str, Any]]:
+    if not isinstance(column_confirmations, list | tuple):
+        return []
+    selected: list[dict[str, Any]] = []
+    for item in column_confirmations:
+        if not isinstance(item, dict):
+            continue
+        columns: list[dict[str, Any]] = []
+        for column in item.get("columns", []):
+            if not isinstance(column, dict):
+                continue
+            try:
+                column_index = int(column.get("index"))
+            except (TypeError, ValueError):
+                continue
+            confirmed_type = str(column.get("confirmed_type") or column.get("type") or "auto").strip()
+            role = str(column.get("role") or "auto").strip()
+            columns.append(
+                {
+                    "index": column_index,
+                    "name": str(column.get("name") or f"Column {column_index + 1}"),
+                    "inferred_type": str(column.get("inferred_type") or "auto"),
+                    "confirmed_type": confirmed_type if confirmed_type in _COLUMN_TYPES else "auto",
+                    "role": role if role in _COLUMN_ROLES else "auto",
+                }
+            )
+        if not columns:
+            continue
+        selected.append(
+            {
+                "sample": str(item.get("sample") or ""),
+                "file_name": str(item.get("file_name") or item.get("name") or ""),
+                "source_path": str(item.get("source_path") or ""),
+                "sheet": str(item.get("sheet") or "") or None,
+                "columns": columns,
+            }
+        )
+    return selected
+
+
 def create_intake_project(
     *,
     project_name: str,
@@ -548,6 +779,7 @@ def create_intake_project(
     plot_output: str | Path | None = None,
     exports: list[str] | tuple[str, ...] | None = None,
     render_options: dict[str, Any] | None = None,
+    column_confirmations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     data_type, experiment = _catalog_item(data_type_id, experiment_type_id)
     cleaned_groups = [group for group in groups if group.sample.strip() and group.files]
@@ -596,7 +828,12 @@ def create_intake_project(
         default_output=runs_dir / "run_001",
     )
     selected_exports = _selected_exports(exports)
-    selected_render_options = _selected_render_options(render_options)
+    selected_render_options = {
+        **_experiment_render_options(experiment),
+        **_selected_render_options(render_options),
+    }
+    selected_render_options.setdefault("series_order", series_order)
+    selected_column_confirmations = _selected_column_confirmations(column_confirmations)
     plot_request = {
         "recipe": "auto",
         "input": str(source_dir),
@@ -607,8 +844,13 @@ def create_intake_project(
     }
     if selected_render_options:
         plot_request["render_options"] = selected_render_options
+    template = _experiment_template(experiment)
+    if template:
+        plot_request["template"] = template
     if rule_id:
         plot_request["rule_id"] = rule_id
+    if selected_column_confirmations:
+        plot_request["column_confirmations"] = selected_column_confirmations
 
     created_at = datetime.now(UTC).isoformat()
     manifest = {
@@ -623,11 +865,13 @@ def create_intake_project(
             "label": experiment["label"],
             "rule_id": rule_id,
             "chart": experiment.get("chart"),
+            "template": template,
         },
         "groups": manifest_groups,
         "source_dir": str(source_dir),
         "plot_request": str(project_dir / "plot_request.json"),
         "outputs_dir": str(selected_output),
+        "column_confirmations": selected_column_confirmations,
         "plot_options": {
             "output": str(selected_output),
             "exports": selected_exports,
@@ -667,6 +911,7 @@ def create_and_run_intake_project(
     plot_output: str | Path | None = None,
     exports: list[str] | tuple[str, ...] | None = None,
     render_options: dict[str, Any] | None = None,
+    column_confirmations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     from sciplot_core.workflow import run_request
 
@@ -679,6 +924,7 @@ def create_and_run_intake_project(
         plot_output=plot_output,
         exports=exports,
         render_options=render_options,
+        column_confirmations=column_confirmations,
     )
     project_dir = Path(str(project["project_dir"]))
     plot_request_path = Path(str(project["plot_request"]))
@@ -963,6 +1209,27 @@ class _IntakeHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/api/table-preview":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                source_path = str(payload.get("source_path") or "").strip()
+                content_base64 = str(payload.get("content_base64") or "")
+                content: bytes | None = None
+                if content_base64:
+                    if "," in content_base64:
+                        content_base64 = content_base64.split(",", 1)[1]
+                    content = base64.b64decode(content_base64)
+                preview = preview_table_payload(
+                    name=str(payload.get("name") or Path(source_path).name or "table"),
+                    content=content,
+                    source_path=source_path or None,
+                )
+            except Exception as exc:
+                self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                return
+            self._send_json(preview)
+            return
         if parsed.path == "/api/codex/jobs":
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -1031,6 +1298,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                 plot_output=payload.get("plot_output"),
                 exports=payload.get("exports"),
                 render_options=payload.get("render_options"),
+                column_confirmations=payload.get("column_confirmations"),
             )
         except Exception as exc:
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
@@ -1085,6 +1353,7 @@ __all__ = [
     "intake_catalog_payload",
     "intake_project_status",
     "prepare_intake_session",
+    "preview_table_payload",
     "refresh_intake_project_zip",
     "rerun_intake_project",
     "serve_intake",

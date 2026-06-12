@@ -539,8 +539,8 @@ def _compute_x_limits(
         policy = _solve_linear_axis_policy(
             x_min,
             x_max,
-            lower_display_padding_fraction=_LINEAR_OUTER_PADDING_FRACTION,
-            upper_display_padding_fraction=_LINEAR_OUTER_PADDING_FRACTION,
+            lower_display_padding_fraction=max(x_padding, _LINEAR_OUTER_PADDING_FRACTION),
+            upper_display_padding_fraction=max(x_padding, _LINEAR_OUTER_PADDING_FRACTION),
         )
     return policy, (x_min, x_max)
 
@@ -567,10 +567,12 @@ def _compute_stacked_axis_limits(
     *,
     xscale: str,
     y_padding_top: float,
+    x_padding: float = 0.02,
 ) -> AxisLimits:
     x_policy, raw_xlim = _compute_x_limits(
         [series.data["x"].to_numpy(dtype=float) for series in layout.series_list],
         xscale=xscale,
+        x_padding=x_padding,
     )
     xlim = x_policy.display_bounds if _STACKED_X_USE_STANDARD_ENDPOINT_POLICY else x_policy.labeled_bounds
     y_arrays = _validate_scale_values(

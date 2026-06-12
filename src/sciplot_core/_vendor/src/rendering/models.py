@@ -30,6 +30,7 @@ class RenderOptions:
     x_max: float | None = None
     y_min: float | None = None
     y_max: float | None = None
+    x_padding_fraction: float | None = None
     x_tick_density: str | None = None
     y_tick_density: str | None = None
     x_tick_edge_labels: str | None = None

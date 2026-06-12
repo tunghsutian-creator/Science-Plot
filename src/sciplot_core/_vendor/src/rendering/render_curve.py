@@ -579,6 +579,7 @@ def _render_curve_candidate(
             y_tick_density=options.y_tick_density,
             x_tick_edge_labels=options.x_tick_edge_labels,
             y_tick_edge_labels=options.y_tick_edge_labels,
+            x_padding_fraction=options.x_padding_fraction,
             xlim=base_kwargs.get("xlim"),
             ylim=base_kwargs.get("ylim"),
             preserve_stress_label=bool(base_kwargs.get("preserve_stress_label", False)),
@@ -649,6 +650,7 @@ def _render_curve_candidate(
             y_tick_density=options.y_tick_density,
             x_tick_edge_labels=options.x_tick_edge_labels,
             y_tick_edge_labels=options.y_tick_edge_labels,
+            x_padding_fraction=options.x_padding_fraction,
             xlim=base_kwargs.get("xlim"),
             ylim=base_kwargs.get("ylim"),
             line_drawstyle=str(base_kwargs.get("line_drawstyle", "default")),
@@ -1082,6 +1084,7 @@ def _render_stacked_curve(input_path: Path, sheet: str | int, options: RenderOpt
         width_mm=options.width_mm,
         height_mm=options.height_mm,
         reverse_x=options.reverse_x,
+        x_padding_fraction=options.x_padding_fraction,
         stack_mode="auto_vertical",
         series_label_mode="edge",
         baseline_mode=options.baseline,
@@ -1089,14 +1092,20 @@ def _render_stacked_curve(input_path: Path, sheet: str | int, options: RenderOpt
         y_padding_top=0.08,
         y_padding_bottom=0.04,
     )
-    return [
-        _rendered_plot_with_qa(
-            filename=f"{input_path.stem}_stacked_curve.pdf",
-            figure=fig,
-            template="stacked_curve",
-            options=options,
+    rendered = _rendered_plot_with_qa(
+        filename=f"{input_path.stem}_stacked_curve.pdf",
+        figure=fig,
+        template="stacked_curve",
+        options=options,
+    )
+    if rendered.figure.axes:
+        _apply_curve_axis_labels(
+            rendered.figure.axes[0],
+            series_list[0],
+            options,
+            preserve_stress_label=False,
         )
-    ]
+    return [rendered]
 
 
 def _render_stacked_area(input_path: Path, sheet: str | int, options: RenderOptions) -> list[RenderedPlot]:
@@ -1113,6 +1122,7 @@ def _render_stacked_area(input_path: Path, sheet: str | int, options: RenderOpti
         width_mm=options.width_mm,
         height_mm=options.height_mm,
         reverse_x=options.reverse_x,
+        x_padding_fraction=options.x_padding_fraction,
         stack_mode="auto_vertical",
         series_label_mode="edge",
         baseline_mode=options.baseline,

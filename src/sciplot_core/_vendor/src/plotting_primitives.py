@@ -430,8 +430,8 @@ def compute_axis_limits(
         x_policy = _solve_linear_axis_policy(
             x_min,
             x_max,
-            lower_display_padding_fraction=_LINEAR_OUTER_PADDING_FRACTION,
-            upper_display_padding_fraction=_LINEAR_OUTER_PADDING_FRACTION,
+            lower_display_padding_fraction=max(x_padding, _LINEAR_OUTER_PADDING_FRACTION),
+            upper_display_padding_fraction=max(x_padding, _LINEAR_OUTER_PADDING_FRACTION),
         )
     return AxisLimits(
         xlim=x_policy.display_bounds,

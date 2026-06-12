@@ -15,7 +15,6 @@ from src.layout_policy import LayoutCandidate, LayoutScore, choose_layout_candid
 from src.layout_scoring import score_points_against_bbox
 from src.plotting_curve_support import (
     CURVE_TEMPLATES,
-    HIDDEN_Y_LABEL_X,
     INSIDE_LEGEND_INSET_FRACTION,
     MARKER_STYLE_CYCLE,
     _baseline_correct_series,
@@ -213,6 +212,7 @@ def plot_curves(
     y_tick_density: str | None = None,
     x_tick_edge_labels: str | None = None,
     y_tick_edge_labels: str | None = None,
+    x_padding_fraction: float | None = None,
     reverse_x: bool = False,
     stack_mode: str = "none",
     stack_floor_fraction: float = 0.22,
@@ -312,6 +312,7 @@ def plot_curves(
                 stacked_layout,
                 xscale=xscale,
                 y_padding_top=y_padding_top,
+                x_padding=0.02 if x_padding_fraction is None else x_padding_fraction,
             )
         else:
             limits = compute_axis_limits(
@@ -322,6 +323,7 @@ def plot_curves(
                 x_values=[series.data["x"].to_numpy() for series in plotted_series],
                 xscale=xscale,
                 yscale=yscale,
+                x_padding=0.02 if x_padding_fraction is None else x_padding_fraction,
                 headroom_factor=headroom_factor,
                 y_padding_top=y_padding_top,
                 y_padding_bottom=y_padding_bottom,
@@ -371,7 +373,6 @@ def plot_curves(
         if not show_y_ticks:
             ax.tick_params(axis="y", left=False, labelleft=False, which="both")
             ax.spines["left"].set_visible(True)
-            ax.yaxis.set_label_coords(HIDDEN_Y_LABEL_X, 0.5)
         if series_label_mode == "edge" and len(plotted_series) > 1:
             label_success = _place_series_edge_labels(
                 ax,
@@ -465,6 +466,7 @@ def plot_scatter(
     y_tick_density: str | None = None,
     x_tick_edge_labels: str | None = None,
     y_tick_edge_labels: str | None = None,
+    x_padding_fraction: float | None = None,
     reverse_x: bool = False,
     legend_expand_axes: str = "xy",
     legend_inset_fraction: float | None = None,
@@ -526,6 +528,7 @@ def plot_scatter(
         x_values=[series.data["x"].to_numpy() for series in series_list],
         xscale=xscale,
         yscale=yscale,
+        x_padding=0.02 if x_padding_fraction is None else x_padding_fraction,
         headroom_factor=headroom_factor,
         y_padding_top=y_padding_top,
         y_padding_bottom=y_padding_bottom,
