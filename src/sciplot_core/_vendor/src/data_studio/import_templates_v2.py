@@ -5,7 +5,6 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pandas as pd
-
 from src.data_studio.builtin import tensile as tensile_builtin
 from src.data_studio.io_utils import list_sheet_names
 from src.data_studio.models import (
@@ -35,6 +34,7 @@ RHEOLOGY_FREQUENCY_METRIC_SHEETS: dict[str, str] = {
     "loss_modulus": "Loss_Modulus",
     "loss_factor": "Loss_Factor",
     "complex_viscosity": "Complex_Viscosity",
+    "complex_modulus": "Complex_Modulus",
 }
 
 
@@ -715,6 +715,8 @@ def _rheology_frequency_metric_key(curve: ParsedCurve) -> str | None:
         return "loss_factor"
     if label in {"complex viscosity", "|η.|", "eta", "eta*"}:
         return "complex_viscosity"
+    if label in {"complex modulus", "complex shear modulus", "|g*|", "g*"}:
+        return "complex_modulus"
     return None
 
 

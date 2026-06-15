@@ -8,11 +8,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import transforms
 from matplotlib.ticker import FixedFormatter, FixedLocator, NullLocator
-
-from src import mpl_backend, plot_style  # noqa: F401
 from src.data_loader import ReplicateGroup
 from src.plot_contract import load_plot_contract
 from src.text_normalization import _clean_text, canonicalize_token, normalize_label, normalize_unit
+
+from src import mpl_backend, plot_style  # noqa: F401
 
 LegendMode = str
 
@@ -21,6 +21,9 @@ AxisMode = str
 MAX_VISIBLE_Y_MAJOR_TICKS = 7
 _SPARSE_MAJOR_TICK_TARGET = 5
 _DENSE_MAJOR_TICK_TARGET = 11
+_MIN_DENSE_LOG_MAJOR_TICKS = 3
+_DENSE_LOG_MANTISSAS = (1.0, 2.0, 5.0)
+_DENSE_LOG_FINE_MANTISSAS = (1.0, 1.1, 1.2, 1.3, 1.5, 1.7, 2.0, 2.5, 3.0, 4.0, 5.0, 7.5)
 
 _PLOT_CONTRACT = load_plot_contract()
 
@@ -195,6 +198,112 @@ def _solve_linear_axis_policy(
         display_bounds=(display_min, display_max),
         labeled_bounds=(float(labeled_min), float(labeled_max)),
         major_ticks=_build_linear_ticks(float(labeled_min), float(labeled_max), float(step)),
+    )
+
+def _decimal_complexity(value: float) -> int:
+    if not np.isfinite(value):
+        return 12
+    for decimals in range(0, 7):
+        if np.isclose(value, round(value, decimals), rtol=0.0, atol=1e-9):
+            return decimals
+    return 12
+
+def _nice_step_near(value: float) -> float:
+    if not np.isfinite(value) or value <= 0:
+        return 1.0
+    exponent = float(np.floor(np.log10(value)))
+    base = 10**exponent
+    mantissas = (1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.5, 10.0)
+    candidates = [mantissa * base for mantissa in mantissas]
+    candidates.extend(mantissa * base * 10.0 for mantissa in mantissas)
+    candidates.extend(mantissa * base / 10.0 for mantissa in mantissas)
+    return float(min(candidates, key=lambda candidate: abs(np.log(candidate / value))))
+
+def _ticks_for_step(display_min: float, display_max: float, step: float) -> tuple[float, ...]:
+    start = np.ceil(display_min / step) * step
+    stop = np.floor(display_max / step) * step
+    if stop < start:
+        return ()
+    count = int(np.floor((stop - start) / step)) + 1
+    ticks = start + np.arange(max(count, 1), dtype=float) * step
+    return tuple(float(np.round(value, decimals=12)) for value in ticks if display_min <= value <= display_max)
+
+def _balanced_linear_ticks(
+    data_min: float,
+    data_max: float,
+    *,
+    display_min: float,
+    display_max: float,
+) -> tuple[float, ...]:
+    display_span = float(display_max - display_min)
+    candidates: list[tuple[float, tuple[float, ...]]] = []
+    for tick_count in (4, 5, 6):
+        target_step = display_span / max(tick_count - 1, 1)
+        step = _nice_step_near(target_step)
+        ticks = _ticks_for_step(display_min, display_max, step)
+        if not ticks:
+            continue
+        visible_count = len(ticks)
+        label_complexity = max(_decimal_complexity(value) for value in (*ticks, step))
+        tick_count_penalty = 0.0 if 4 <= visible_count <= 6 else abs(visible_count - 5) * 20.0
+        preferred_count_penalty = abs(visible_count - 5)
+        step_penalty = abs(float(np.log(step / target_step))) if target_step > 0 else 0.0
+        score = label_complexity * 10.0 + tick_count_penalty + preferred_count_penalty + step_penalty
+        candidates.append((score, ticks))
+    if candidates:
+        return min(candidates, key=lambda item: item[0])[1]
+    return (float(data_min), float(data_max))
+
+def _balanced_linear_display_bounds(
+    data_min: float,
+    data_max: float,
+    *,
+    lower_display_padding_fraction: float | None,
+    upper_display_padding_fraction: float | None,
+) -> tuple[float, float]:
+    span = float(data_max - data_min)
+    lower_padding = span * float(lower_display_padding_fraction or 0.0)
+    upper_padding = span * float(upper_display_padding_fraction or 0.0)
+    if data_min > 0:
+        zero_anchor_limit = max(span * 0.1, 50.0)
+        if data_min <= zero_anchor_limit:
+            return 0.0, float(data_max + data_min)
+    return float(data_min - lower_padding), float(data_max + upper_padding)
+
+def _solve_linear_balanced_axis_policy(
+    data_min: float,
+    data_max: float,
+    *,
+    lower_display_padding_fraction: float | None = _LINEAR_OUTER_PADDING_FRACTION,
+    upper_display_padding_fraction: float | None = _LINEAR_OUTER_PADDING_FRACTION,
+) -> AxisTickPolicy:
+    effective_min = float(data_min)
+    effective_max = float(data_max)
+    if effective_max < effective_min:
+        effective_min, effective_max = effective_max, effective_min
+    if np.isclose(effective_min, effective_max):
+        return _solve_linear_axis_policy(
+            effective_min,
+            effective_max,
+            lower_display_padding_fraction=lower_display_padding_fraction,
+            upper_display_padding_fraction=upper_display_padding_fraction,
+        )
+    display_bounds = _balanced_linear_display_bounds(
+        effective_min,
+        effective_max,
+        lower_display_padding_fraction=lower_display_padding_fraction,
+        upper_display_padding_fraction=upper_display_padding_fraction,
+    )
+    ticks = _balanced_linear_ticks(
+        effective_min,
+        effective_max,
+        display_min=display_bounds[0],
+        display_max=display_bounds[1],
+    )
+    return AxisTickPolicy(
+        display_bounds=display_bounds,
+        labeled_bounds=(float(ticks[0]), float(ticks[-1])),
+        major_ticks=ticks,
     )
 
 def _snap_log_display_bound(value: float, *, direction: str) -> float:
@@ -794,12 +903,50 @@ def _densify_linear_major_ticks(
     return _normalized_tick_values(dense_values)
 
 
+def _densify_log_major_ticks(
+    ticks: np.ndarray,
+    *,
+    view_bounds: tuple[float, float] | None,
+    max_major_ticks: int | None,
+) -> np.ndarray:
+    values = _normalized_tick_values(ticks)
+    if view_bounds is None:
+        return values
+
+    low, high = view_bounds
+    if not np.isfinite(low) or not np.isfinite(high) or low <= 0 or high <= 0 or np.isclose(low, high):
+        return values
+
+    low, high = sorted((float(low), float(high)))
+    low_log = float(np.log10(low))
+    high_log = float(np.log10(high))
+    mantissas = _DENSE_LOG_FINE_MANTISSAS if (high_log - low_log) < 0.45 else _DENSE_LOG_MANTISSAS
+    candidates: list[float] = []
+    start_exp = int(np.floor(low_log)) - 1
+    stop_exp = int(np.ceil(high_log)) + 1
+    for exponent in range(start_exp, stop_exp + 1):
+        base = 10.0 ** exponent
+        for mantissa in mantissas:
+            candidate = float(mantissa * base)
+            if low * (1 - 1e-9) <= candidate <= high * (1 + 1e-9):
+                candidates.append(candidate)
+
+    dense_values = _normalized_tick_values(candidates)
+    if dense_values.size < _MIN_DENSE_LOG_MAJOR_TICKS:
+        fallback = np.geomspace(low, high, num=_MIN_DENSE_LOG_MAJOR_TICKS)
+        dense_values = _normalized_tick_values(np.concatenate((dense_values, fallback)))
+    if max_major_ticks is not None and dense_values.size > max_major_ticks:
+        dense_values = _cap_visible_major_ticks(dense_values, scale="log", max_major_ticks=max_major_ticks)
+    return dense_values if dense_values.size else values
+
+
 def _resolved_major_ticks_for_density(
     ticks: Sequence[float] | np.ndarray,
     *,
     scale: str,
     density: str | None,
     max_major_ticks: int | None = None,
+    view_bounds: tuple[float, float] | None = None,
 ) -> np.ndarray:
     values = _normalized_tick_values(ticks)
     density_mode = _normalized_tick_density(density)
@@ -814,6 +961,12 @@ def _resolved_major_ticks_for_density(
             ),
         )
         return _sparsify_major_ticks(values, target_count=target_count)
+    if scale == "log":
+        return _densify_log_major_ticks(
+            values,
+            view_bounds=view_bounds,
+            max_major_ticks=max_major_ticks,
+        )
     if scale != "linear":
         return values
     return _densify_linear_major_ticks(
@@ -884,6 +1037,27 @@ def _apply_tick_edge_label_visibility(
     axis.set_major_formatter(FixedFormatter(labels))
 
 
+def _format_dense_log_tick_label(value: float) -> str:
+    if not np.isfinite(value) or value <= 0:
+        return ""
+    if 0.1 <= abs(value) < 1000:
+        return f"{value:g}"
+
+    exponent = int(np.floor(np.log10(value)))
+    base = 10.0 ** exponent
+    mantissa = float(value / base)
+    for candidate in (*_DENSE_LOG_FINE_MANTISSAS, 10.0):
+        if np.isclose(mantissa, candidate, rtol=1e-7, atol=1e-9):
+            mantissa = candidate
+            break
+    if np.isclose(mantissa, 10.0, rtol=1e-7, atol=1e-9):
+        mantissa = 1.0
+        exponent += 1
+    if np.isclose(mantissa, 1.0, rtol=1e-7, atol=1e-9):
+        return rf"$10^{{{exponent}}}$"
+    return rf"${mantissa:g}\times10^{{{exponent}}}$"
+
+
 def _apply_numeric_axis_tick_preferences(
     axis,
     *,
@@ -897,9 +1071,12 @@ def _apply_numeric_axis_tick_preferences(
         scale=scale,
         density=tick_density,
         max_major_ticks=max_major_ticks,
+        view_bounds=_axis_view_bounds(axis),
     )
     if major_ticks.size:
         axis.set_major_locator(FixedLocator(major_ticks.tolist()))
+        if scale == "log" and _normalized_tick_density(tick_density) == "dense":
+            axis.set_major_formatter(FixedFormatter([_format_dense_log_tick_label(tick) for tick in major_ticks]))
     _apply_minor_tick_locator(axis, scale=scale, major_ticks=major_ticks)
     _apply_tick_edge_label_visibility(
         axis,

@@ -884,6 +884,7 @@
         "x_axis_breaks",
         "y_axis_breaks",
         "series_order",
+        "series_include",
         "series_styles",
         "series_offsets",
         "legend_position",
@@ -930,7 +931,9 @@
         "single_panel_axis_frame",
         "non_blank_pdf"
       ],
-      "soft_rules": [],
+      "soft_rules": [
+        "legend_order_top_to_bottom"
+      ],
       "presentation_kind": "curve"
     },
     "function_curve": {
@@ -963,6 +966,7 @@
         "extra_x_axis",
         "extra_y_axis",
         "series_order",
+        "series_include",
         "series_styles",
         "series_offsets",
         "analytical_layers",
@@ -1041,6 +1045,7 @@
         "x_axis_breaks",
         "y_axis_breaks",
         "series_order",
+        "series_include",
         "series_styles",
         "series_offsets",
         "legend_position",
@@ -1121,6 +1126,7 @@
         "extra_x_axis",
         "extra_y_axis",
         "series_order",
+        "series_include",
         "series_styles",
         "series_offsets",
         "legend_position",
@@ -1201,6 +1207,7 @@
         "x_axis_breaks",
         "y_axis_breaks",
         "series_order",
+        "series_include",
         "series_styles",
         "series_offsets",
         "legend_position",
@@ -1267,11 +1274,15 @@
         "size",
         "reverse_x",
         "x_padding_fraction",
+        "y_min",
+        "y_max",
         "baseline",
         "x_label_override",
         "y_label_override",
         "series_order",
+        "series_include",
         "series_label_mode",
+        "stack_spacing_scale",
         "style_preset",
         "palette_preset"
       ],
@@ -1312,7 +1323,9 @@
       "hard_rules": [
         "non_blank_pdf"
       ],
-      "soft_rules": [],
+      "soft_rules": [
+        "legend_order_top_to_bottom"
+      ],
       "presentation_kind": "stacked_curve"
     },
     "stacked_area": {
@@ -1333,6 +1346,8 @@
         "reverse_x",
         "baseline",
         "series_order",
+        "series_include",
+        "stack_spacing_scale",
         "style_preset",
         "palette_preset"
       ],
@@ -1372,7 +1387,9 @@
       "hard_rules": [
         "non_blank_pdf"
       ],
-      "soft_rules": [],
+      "soft_rules": [
+        "legend_order_top_to_bottom"
+      ],
       "presentation_kind": "stacked_area"
     },
     "segmented_stacked_curve": {
@@ -1393,6 +1410,7 @@
         "reverse_x",
         "baseline",
         "series_order",
+        "series_include",
         "style_preset",
         "palette_preset",
         "use_sidecar"
@@ -1460,6 +1478,7 @@
         "y_tick_density",
         "y_tick_edge_labels",
         "series_order",
+        "series_include",
         "style_preset",
         "palette_preset"
       ],
@@ -1523,6 +1542,7 @@
         "y_tick_density",
         "y_tick_edge_labels",
         "series_order",
+        "series_include",
         "style_preset",
         "palette_preset"
       ],
@@ -1586,6 +1606,7 @@
         "y_tick_density",
         "y_tick_edge_labels",
         "series_order",
+        "series_include",
         "style_preset",
         "palette_preset"
       ],
@@ -1649,6 +1670,7 @@
         "y_tick_density",
         "y_tick_edge_labels",
         "series_order",
+        "series_include",
         "style_preset",
         "palette_preset"
       ],
@@ -1712,6 +1734,7 @@
         "y_tick_density",
         "y_tick_edge_labels",
         "series_order",
+        "series_include",
         "style_preset",
         "palette_preset"
       ],
@@ -1775,6 +1798,7 @@
         "y_tick_density",
         "y_tick_edge_labels",
         "series_order",
+        "series_include",
         "style_preset",
         "palette_preset"
       ],
@@ -1838,6 +1862,7 @@
         "y_tick_density",
         "y_tick_edge_labels",
         "series_order",
+        "series_include",
         "style_preset",
         "palette_preset"
       ],
@@ -1907,6 +1932,7 @@
         "extra_x_axis",
         "extra_y_axis",
         "series_order",
+        "series_include",
         "style_preset",
         "palette_preset"
       ],
@@ -1976,6 +2002,7 @@
         "extra_x_axis",
         "extra_y_axis",
         "series_order",
+        "series_include",
         "style_preset",
         "palette_preset"
       ],
@@ -2050,6 +2077,7 @@
         "x_axis_breaks",
         "y_axis_breaks",
         "series_order",
+        "series_include",
         "series_styles",
         "series_offsets",
         "legend_position",
@@ -2130,6 +2158,7 @@
         "x_axis_breaks",
         "y_axis_breaks",
         "series_order",
+        "series_include",
         "legend_position",
         "series_label_mode",
         "style_preset",
@@ -2208,6 +2237,7 @@
         "x_axis_breaks",
         "y_axis_breaks",
         "series_order",
+        "series_include",
         "legend_position",
         "series_label_mode",
         "style_preset",
@@ -2284,6 +2314,7 @@
         "extra_x_axis",
         "extra_y_axis",
         "series_order",
+        "series_include",
         "legend_position",
         "style_preset",
         "palette_preset"
@@ -2470,6 +2501,7 @@
         "y_min",
         "y_max",
         "series_order",
+        "series_include",
         "style_preset",
         "palette_preset"
       ],

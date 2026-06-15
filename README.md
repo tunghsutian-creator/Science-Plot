@@ -117,6 +117,8 @@ The UI lets the user confirm source binding, detected rules/templates, sample
 groups, sample/legend names, legend order, output directory, figure size, and
 export formats. Figure-size choices must stay aligned with the SciPlot contract
 presets: `60x55`, `120x55`, `180x55`, `60x110`, `120x110`, and `180x110`.
+The Origin-style interactive plotting roadmap lives in
+`docs/INTERACTIVE_PLOT_WORKBENCH_PLAN.md`.
 
 ## Commands
 

@@ -4,8 +4,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-
-from src import plot_style
 from src.plotting_families.stats_family import plot_bar, plot_box, plot_point_error, plot_violin
 from src.plotting_primitives import _apply_numeric_axis_tick_preferences, _format_axis_label
 from src.rendering.cache import load_replicate_table_for_options
@@ -17,18 +15,23 @@ from src.rendering.common import (
 )
 from src.rendering.models import RenderedPlot, RenderOptions
 from src.rendering.render_support import _rendered_plot_with_qa, _stats_profile
-from src.rendering.series_order import reorder_replicate_groups, unknown_series_order_labels
+from src.rendering.series_order import filter_replicate_groups, reorder_replicate_groups, unknown_series_order_labels
+
+from src import plot_style
 
 
 def _ordered_groups(input_path: Path, sheet: str | int, options: RenderOptions):
-    groups = reorder_replicate_groups(
-        load_replicate_table_for_options(input_path, sheet, options),
-        options.series_order,
-    )
+    groups = load_replicate_table_for_options(input_path, sheet, options)
+    unknown_include = unknown_series_order_labels([group.group for group in groups], options.series_include)
+    if unknown_include:
+        raise ValueError("series_include contains unknown group labels: " + ", ".join(unknown_include))
+    groups = filter_replicate_groups(groups, options.series_include)
+    if not groups and options.series_include:
+        raise ValueError("series_include did not match any groups.")
     unknown_groups = unknown_series_order_labels([group.group for group in groups], options.series_order)
     if unknown_groups:
         raise ValueError("series_order contains unknown group labels: " + ", ".join(unknown_groups))
-    return groups
+    return reorder_replicate_groups(groups, options.series_order)
 
 
 def _manual_y_override(options: RenderOptions) -> tuple[float | None, float | None] | None:

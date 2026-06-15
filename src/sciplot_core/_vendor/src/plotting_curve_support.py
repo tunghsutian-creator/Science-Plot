@@ -7,8 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib import transforms
-
-from src import mpl_backend, plot_style  # noqa: F401
 from src.data_loader import CurveSeries
 from src.layout_policy import (
     LayoutCandidate,
@@ -27,10 +25,12 @@ from src.plotting_primitives import (
     AxisTickPolicy,
     LegendMode,
     SharedAxisLayout,
-    _solve_linear_axis_policy,
+    _solve_linear_balanced_axis_policy,
     _solve_log_axis_policy,
     _validate_scale_values,
 )
+
+from src import mpl_backend, plot_style  # noqa: F401
 
 MARKER_STYLE_CYCLE = ("o", "s", "^", "D", "v", "P", "X")
 
@@ -465,6 +465,7 @@ def _prepare_stacked_layout(
     *,
     stack_floor_fraction: float,
     stack_gap_fraction: float,
+    stack_spacing_scale: float = 1.0,
     step_scale: float = 1.0,
 ) -> StackedLayout:
     if len(series_list) <= 1:
@@ -506,6 +507,9 @@ def _prepare_stacked_layout(
     )
     minimum_step = (max_peak_height + peak_clearance) * scale
     step = max(step, minimum_step)
+    spacing_scale = max(float(stack_spacing_scale), 0.05)
+    floor *= spacing_scale
+    step *= spacing_scale
 
     stacked: list[CurveSeries] = []
     for idx, (series, shifted, _, _) in enumerate(prepared):
@@ -536,7 +540,7 @@ def _compute_x_limits(
             upper_padding=max(x_padding, _LINEAR_OUTER_PADDING_FRACTION),
         )
     else:
-        policy = _solve_linear_axis_policy(
+        policy = _solve_linear_balanced_axis_policy(
             x_min,
             x_max,
             lower_display_padding_fraction=max(x_padding, _LINEAR_OUTER_PADDING_FRACTION),

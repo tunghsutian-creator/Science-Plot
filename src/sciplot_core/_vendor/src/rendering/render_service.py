@@ -4,8 +4,6 @@ from dataclasses import replace
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-
-from src import plot_style
 from src.plot_style import save_pdf
 from src.rendering.analytical_layers import apply_analytical_layers
 from src.rendering.axis_breaks import apply_axis_breaks
@@ -20,6 +18,8 @@ from src.rendering.shape_annotations import apply_shape_annotations
 from src.rendering.style_composer import DEFAULT_STYLE_COMPOSER
 from src.rendering.template_lifecycle import resolve_template_id
 from src.rendering.text_annotations import apply_text_annotations
+
+from src import plot_style
 
 
 def close_rendered_plots(rendered_plots: list[RenderedPlot]) -> None:
@@ -117,8 +117,10 @@ def build_rendered_plots(
     x_tick_edge_labels: str | None = None,
     y_tick_edge_labels: str | None = None,
     series_order: list[str] | tuple[str, ...] | None = None,
+    series_include: list[str] | tuple[str, ...] | None = None,
     series_styles: list[dict[str, object]] | tuple[dict[str, object], ...] | None = None,
     series_offsets: list[dict[str, object]] | tuple[dict[str, object], ...] | None = None,
+    stack_spacing_scale: float | None = None,
     legend_position: str | None = None,
     series_label_mode: str | None = None,
     x_label_override: str | None = None,
@@ -161,8 +163,10 @@ def build_rendered_plots(
         x_tick_edge_labels=x_tick_edge_labels,
         y_tick_edge_labels=y_tick_edge_labels,
         series_order=series_order,
+        series_include=series_include,
         series_styles=series_styles,
         series_offsets=series_offsets,
+        stack_spacing_scale=stack_spacing_scale,
         legend_position=legend_position,
         series_label_mode=series_label_mode,
         x_label_override=x_label_override,
@@ -220,6 +224,7 @@ def render_template(
     x_tick_edge_labels: str | None = None,
     y_tick_edge_labels: str | None = None,
     series_order: list[str] | tuple[str, ...] | None = None,
+    series_include: list[str] | tuple[str, ...] | None = None,
     series_styles: list[dict[str, object]] | tuple[dict[str, object], ...] | None = None,
     series_offsets: list[dict[str, object]] | tuple[dict[str, object], ...] | None = None,
     legend_position: str | None = None,
@@ -264,6 +269,7 @@ def render_template(
         x_tick_edge_labels=x_tick_edge_labels,
         y_tick_edge_labels=y_tick_edge_labels,
         series_order=series_order,
+        series_include=series_include,
         series_styles=series_styles,
         series_offsets=series_offsets,
         legend_position=legend_position,

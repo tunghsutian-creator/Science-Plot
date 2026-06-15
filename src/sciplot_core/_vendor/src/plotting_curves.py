@@ -8,8 +8,6 @@ from matplotlib.colors import to_rgba
 from matplotlib.legend import Legend
 from matplotlib.lines import Line2D
 from matplotlib.ticker import FixedLocator
-
-from src import plot_style
 from src.data_loader import CurveSeries
 from src.layout_policy import LayoutCandidate, LayoutScore, choose_layout_candidate, record_layout_decision
 from src.layout_scoring import score_points_against_bbox
@@ -40,6 +38,8 @@ from src.plotting_primitives import (
     _resolved_panel_geometry,
     compute_axis_limits,
 )
+
+from src import plot_style
 
 
 def _legend_candidates(
@@ -131,6 +131,26 @@ def _legend_kwargs_from_candidate(
     }
 
 
+def _apply_curve_legend(
+    ax: plt.Axes,
+    legend_kwargs: dict[str, object],
+    *,
+    reverse_order: bool = False,
+) -> Legend:
+    if not reverse_order:
+        return ax.legend(**legend_kwargs)
+    handles, labels = ax.get_legend_handles_labels()
+    visible_items = [
+        (handle, label)
+        for handle, label in zip(handles, labels, strict=True)
+        if not str(label).startswith("_")
+    ]
+    if not visible_items:
+        return ax.legend(**legend_kwargs)
+    reversed_handles, reversed_labels = zip(*reversed(visible_items), strict=True)
+    return ax.legend(list(reversed_handles), list(reversed_labels), **legend_kwargs)
+
+
 def choose_legend_corner_with_policy(
     ax: plt.Axes,
     series_list: Sequence[CurveSeries],
@@ -217,6 +237,7 @@ def plot_curves(
     stack_mode: str = "none",
     stack_floor_fraction: float = 0.22,
     stack_gap_fraction: float = 0.22,
+    stack_spacing_scale: float = 1.0,
     series_label_mode: str = "legend",
     series_label_side: str = "auto",
     label_track_inset_fraction: float = 0.06,
@@ -281,6 +302,7 @@ def plot_curves(
                 normalized_series,
                 stack_floor_fraction=stack_floor_fraction,
                 stack_gap_fraction=stack_gap_fraction,
+                stack_spacing_scale=stack_spacing_scale,
                 step_scale=step_scale,
             )
             if stacked_mode_enabled
@@ -402,12 +424,12 @@ def plot_curves(
             legend_corner_decision,
             context={"path": "plot_curves", "phase": "legend_corner_initial"},
         )
-        ax.legend(**legend_kwargs)
+        _apply_curve_legend(ax, legend_kwargs, reverse_order=stacked_mode_enabled)
     elif series_label_mode != "edge" and legend_mode != "none":
         legend_kwargs = _legend_kwargs(legend_mode, inset_fraction=legend_inset)
         if "bbox_to_anchor" in legend_kwargs:
             legend_kwargs["bbox_transform"] = ax.transAxes
-        ax.legend(**legend_kwargs)
+        _apply_curve_legend(ax, legend_kwargs, reverse_order=stacked_mode_enabled)
 
     if visible_xticks is not None:
         ax.xaxis.set_major_locator(FixedLocator(np.asarray(visible_xticks, dtype=float)))

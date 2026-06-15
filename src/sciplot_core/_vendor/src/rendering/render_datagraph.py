@@ -5,8 +5,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-
-from src import plot_style
 from src.plotting_families.curve_family import plot_curves
 from src.plotting_primitives import _format_axis_label
 from src.rendering.cache import (
@@ -18,6 +16,9 @@ from src.rendering.common import validate_manual_axis_overrides, validate_series
 from src.rendering.datagraph_inputs import series_looks_polar, table_figure_size_error, theta_values_for_plot
 from src.rendering.models import RenderedPlot, RenderOptions
 from src.rendering.render_support import _rendered_plot_with_qa
+from src.rendering.series_order import filter_curve_series, reorder_curve_series, unknown_series_order_labels
+
+from src import plot_style
 
 
 def _display_cell(value: object) -> str:
@@ -65,8 +66,31 @@ def _polar_figure(*, options: RenderOptions) -> tuple[plt.Figure, plt.Axes]:
     return fig, ax
 
 
+def _filter_and_order_curve_series(series_list, options: RenderOptions):
+    unknown_include = unknown_series_order_labels(
+        [series.sample for series in series_list],
+        options.series_include,
+    )
+    if unknown_include:
+        raise ValueError("series_include contains unknown series labels: " + ", ".join(unknown_include))
+    selected = filter_curve_series(series_list, options.series_include)
+    if not selected and options.series_include:
+        raise ValueError("series_include did not match any series.")
+    unknown_order = unknown_series_order_labels(
+        [series.sample for series in selected],
+        options.series_order,
+    )
+    if unknown_order:
+        raise ValueError("series_order contains unknown series labels: " + ", ".join(unknown_order))
+    return reorder_curve_series(selected, options.series_order)
+
+
+def _load_filter_and_order_curve_series(input_path: Path, sheet: str | int, options: RenderOptions):
+    return _filter_and_order_curve_series(load_curve_table_for_options(input_path, sheet, options), options)
+
+
 def _render_function_curve(input_path: Path, sheet: str | int, options: RenderOptions) -> list[RenderedPlot]:
-    series_list = load_curve_table_for_options(input_path, sheet, options)
+    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
     validate_series_scales(series_list, xscale=options.xscale, yscale=options.yscale)
     validate_manual_axis_overrides(options, template="function_curve")
     fig, ax = plot_curves(
@@ -157,7 +181,7 @@ def _render_contour_field(input_path: Path, sheet: str | int, options: RenderOpt
 
 
 def _render_polar_curve(input_path: Path, sheet: str | int, options: RenderOptions) -> list[RenderedPlot]:
-    series_list = load_curve_table_for_options(input_path, sheet, options)
+    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
     validate_manual_axis_overrides(options, template="polar_curve")
     if not series_looks_polar(series_list):
         raise ValueError("Polar curve requires theta/radius columns with radian or degree theta units.")

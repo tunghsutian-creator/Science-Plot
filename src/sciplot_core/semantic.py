@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import re
 from dataclasses import dataclass
 from os.path import commonprefix
@@ -18,6 +19,7 @@ ensure_legacy_core()
 
 from src.data_loader import read_raw_table  # noqa: E402
 from src.rendering.recommendation import inspect_input_file  # noqa: E402
+from src.text_normalization import normalize_unit  # noqa: E402
 
 _DEFAULT_RENDER_OPTIONS = {
     "legend_position": "auto",
@@ -54,6 +56,18 @@ _RHEOLOGY_SWEEP_METRICS = (
     ("loss_modulus", "Loss Modulus", ("lossmodulus", 'g"', "g″"), "Pa"),
     ("loss_factor", "Loss Factor", ("lossfactor", "tandelta", "tanδ"), "1"),
     ("complex_viscosity", "Complex Viscosity", ("complexviscosity", "viscosity"), "Pa·s"),
+)
+_RHEOLOGY_COMPLEX_MODULUS_METRIC = (
+    "complex_modulus",
+    "Complex Modulus",
+    ("complexmodulus", "complexshearmodulus", "|g*|", "g*"),
+    "Pa",
+)
+_RHEOLOGY_FREQUENCY_OUTPUT_METRICS = (
+    _RHEOLOGY_SWEEP_METRICS[0],
+    _RHEOLOGY_SWEEP_METRICS[1],
+    _RHEOLOGY_SWEEP_METRICS[2],
+    _RHEOLOGY_COMPLEX_MODULUS_METRIC,
 )
 
 
@@ -626,6 +640,15 @@ def _read_rheology_sweep_sample(
         metric_units[key] = _unit_for(units, metric_index, default_unit)
     if "storage_modulus" not in metric_indexes:
         raise ValueError(f"Could not find storage modulus in rheology sweep source {source}.")
+    should_derive_complex_modulus = (
+        "complex_modulus" not in metric_indexes
+        and "storage_modulus" in metric_indexes
+        and "loss_modulus" in metric_indexes
+    )
+    if should_derive_complex_modulus:
+        metric_units["complex_modulus"] = (
+            metric_units.get("storage_modulus") or metric_units.get("loss_modulus") or "Pa"
+        )
 
     rows: list[dict[str, float]] = []
     for row_index in range(header_index + 1, raw.shape[0]):
@@ -637,6 +660,11 @@ def _read_rheology_sweep_sample(
             y_value = _float(raw.iat[row_index, metric_index])
             if y_value is not None:
                 row[key] = y_value
+        if should_derive_complex_modulus:
+            storage = row.get("storage_modulus")
+            loss = row.get("loss_modulus")
+            if storage is not None and loss is not None:
+                row["complex_modulus"] = math.hypot(storage, loss)
         if any(key in row for key in metric_indexes):
             rows.append(row)
     if not rows:
@@ -726,9 +754,6 @@ def is_rheology_frequency_comparison_dir(source: str | Path) -> bool:
     path = Path(source).expanduser()
     if not path.is_dir():
         return False
-    text = path.as_posix().casefold()
-    if "/freq/" not in text and "pinlv" not in text and "frequency" not in text:
-        return False
     return len(_read_rheology_frequency_comparison_samples(path)) >= 2
 
 
@@ -755,8 +780,12 @@ def _sheet_name(value: str, used: set[str]) -> str:
     return candidate
 
 
-def _sweep_comparison_frame(samples: list[RheologySweepSample]) -> pd.DataFrame:
-    metric_keys = tuple(key for key, _label, _aliases, _unit in _RHEOLOGY_SWEEP_METRICS)
+def _sweep_comparison_frame_for_metrics(
+    samples: list[RheologySweepSample],
+    *,
+    metrics: tuple[tuple[str, str, tuple[str, ...], str], ...],
+) -> pd.DataFrame:
+    metric_keys = tuple(key for key, _label, _aliases, _unit in metrics)
     headers: list[object] = []
     sample_row: list[object] = []
     unit_row: list[object] = []
@@ -765,7 +794,7 @@ def _sweep_comparison_frame(samples: list[RheologySweepSample]) -> pd.DataFrame:
         headers.append(sample.x_label)
         sample_row.append(sample.sample)
         unit_row.append(sample.x_unit)
-        for key, label, _aliases, default_unit in _RHEOLOGY_SWEEP_METRICS:
+        for key, label, _aliases, default_unit in metrics:
             headers.append(label)
             sample_row.append(sample.sample)
             unit_row.append(sample.metric_units.get(key, default_unit))
@@ -783,13 +812,21 @@ def _sweep_comparison_frame(samples: list[RheologySweepSample]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _sample_sweep_frame(sample: RheologySweepSample) -> pd.DataFrame:
-    headers = [sample.x_label, *[label for _key, label, _aliases, _unit in _RHEOLOGY_SWEEP_METRICS]]
+def _sweep_comparison_frame(samples: list[RheologySweepSample]) -> pd.DataFrame:
+    return _sweep_comparison_frame_for_metrics(samples, metrics=_RHEOLOGY_SWEEP_METRICS)
+
+
+def _sample_sweep_frame(
+    sample: RheologySweepSample,
+    *,
+    metrics: tuple[tuple[str, str, tuple[str, ...], str], ...] = _RHEOLOGY_SWEEP_METRICS,
+) -> pd.DataFrame:
+    headers = [sample.x_label, *[label for _key, label, _aliases, _unit in metrics]]
     units = [
         sample.x_unit,
         *[
             sample.metric_units.get(key, default_unit)
-            for key, _label, _aliases, default_unit in _RHEOLOGY_SWEEP_METRICS
+            for key, _label, _aliases, default_unit in metrics
         ],
     ]
     rows: list[list[object]] = [headers, units]
@@ -797,7 +834,7 @@ def _sample_sweep_frame(sample: RheologySweepSample) -> pd.DataFrame:
         rows.append(
             [
                 point.get("x", ""),
-                *[point.get(key, "") for key, _label, _aliases, _unit in _RHEOLOGY_SWEEP_METRICS],
+                *[point.get(key, "") for key, _label, _aliases, _unit in metrics],
             ]
         )
     return pd.DataFrame(rows)
@@ -808,18 +845,19 @@ def _write_rheology_sweep_comparison_workbook(
     output_path: Path,
     *,
     comparison_sheet: str,
+    metrics: tuple[tuple[str, str, tuple[str, ...], str], ...] = _RHEOLOGY_SWEEP_METRICS,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     used_sheet_names: set[str] = set()
     with pd.ExcelWriter(output_path) as writer:
-        _sweep_comparison_frame(samples).to_excel(
+        _sweep_comparison_frame_for_metrics(samples, metrics=metrics).to_excel(
             writer,
             sheet_name=_sheet_name(comparison_sheet, used_sheet_names),
             header=False,
             index=False,
         )
         for sample in samples:
-            _sample_sweep_frame(sample).to_excel(
+            _sample_sweep_frame(sample, metrics=metrics).to_excel(
                 writer,
                 sheet_name=_sheet_name(sample.sample, used_sheet_names),
                 header=False,
@@ -847,12 +885,57 @@ def _read_wide_stress_relaxation_series(source: Path) -> list[CurveSeriesPayload
     return series_list
 
 
+def _read_stress_relaxation_source_series(source: Path) -> list[CurveSeriesPayload]:
+    sample = _source_display_sample(source)
+    try:
+        series = _read_rheology_interval_series(
+            source,
+            y_candidates=("shearstress", "stress", "应力"),
+            y_label="Shear stress",
+            y_unit="Pa",
+        )
+        normalized = _normalize_series(series, y_label="Normalized stress", y_unit="sigma/sigma0")
+        return [_with_series_sample(normalized, sample)]
+    except ValueError:
+        try:
+            series_list = _read_wide_stress_relaxation_series(source)
+        except ValueError:
+            series = _read_rheology_interval_series(
+                source,
+                y_candidates=("relaxationmodulus", "modulus", "松弛模量"),
+                y_label="Relaxation modulus",
+                y_unit="Pa",
+            )
+            normalized = _normalize_series(series, y_label="Normalized modulus", y_unit="G/G0")
+            return [_with_series_sample(normalized, sample)]
+        if len(series_list) == 1:
+            return [_with_series_sample(series_list[0], sample)]
+        return series_list
+
+
+def _read_stress_relaxation_series_list(source: Path) -> list[CurveSeriesPayload]:
+    if not source.is_dir():
+        return _read_stress_relaxation_source_series(source)
+    series_list: list[CurveSeriesPayload] = []
+    errors: list[str] = []
+    for candidate in _sweep_source_files(source):
+        try:
+            series_list.extend(_read_stress_relaxation_source_series(candidate))
+        except Exception as exc:
+            errors.append(f"{candidate.name}: {exc}")
+    if not series_list:
+        detail = "; ".join(errors[:3])
+        raise ValueError(f"No stress-relaxation exports found under {source}. {detail}".strip())
+    return series_list
+
+
 def _normalize_series(series: CurveSeriesPayload, *, y_label: str, y_unit: str) -> CurveSeriesPayload:
     if not series.points:
         return series
-    baseline = series.points[0][1]
-    if baseline == 0:
-        raise ValueError("Cannot normalize a stress-relaxation curve whose first y value is zero.")
+    finite_y_values = [y_value for _x_value, y_value in series.points if y_value and math.isfinite(y_value)]
+    if not finite_y_values:
+        raise ValueError("Cannot normalize a stress-relaxation curve without a non-zero finite y value.")
+    baseline = max(finite_y_values, key=abs)
     return CurveSeriesPayload(
         sample=series.sample,
         x_label=series.x_label,
@@ -1051,6 +1134,52 @@ def _order_curve_series(
     return [series for _index, series in sorted(enumerate(series_list), key=key)]
 
 
+def _finite_series_points(series: CurveSeriesPayload) -> list[tuple[float, float]]:
+    return sorted(
+        ((x_value, y_value) for x_value, y_value in series.points if math.isfinite(x_value) and math.isfinite(y_value)),
+        key=lambda item: item[0],
+    )
+
+
+def _interpolated_y_at(points: list[tuple[float, float]], target_x: float) -> float | None:
+    if not points:
+        return None
+    if target_x <= points[0][0]:
+        return points[0][1]
+    for index in range(1, len(points)):
+        x0, y0 = points[index - 1]
+        x1, y1 = points[index]
+        if target_x > x1:
+            continue
+        if math.isclose(x0, x1):
+            return y1
+        fraction = (target_x - x0) / (x1 - x0)
+        return y0 + (y1 - y0) * fraction
+    return points[-1][1]
+
+
+def _order_curve_series_by_shared_right_height(series_list: list[CurveSeriesPayload]) -> list[CurveSeriesPayload]:
+    if len(series_list) < 2:
+        return series_list
+    point_sets = [_finite_series_points(series) for series in series_list]
+    usable_ranges = [(points[0][0], points[-1][0]) for points in point_sets if points]
+    if len(usable_ranges) != len(series_list):
+        return series_list
+    shared_min = max(start for start, _end in usable_ranges)
+    shared_max = min(end for _start, end in usable_ranges)
+    target_x = shared_max if shared_min <= shared_max else None
+
+    scored: list[tuple[float, int, CurveSeriesPayload]] = []
+    for index, (series, points) in enumerate(zip(series_list, point_sets, strict=True)):
+        if target_x is None:
+            score = points[-1][1]
+        else:
+            interpolated = _interpolated_y_at(points, target_x)
+            score = interpolated if interpolated is not None else points[-1][1]
+        scored.append((score, index, series))
+    return [series for _score, _index, series in sorted(scored, key=lambda item: (-item[0], item[1]))]
+
+
 def _compact_torque_sample_labels(labels: list[str]) -> list[str]:
     if len(labels) < 2:
         return labels
@@ -1144,7 +1273,7 @@ def _read_torque_full_series(source: Path) -> CurveSeriesPayload:
             points.append((x_value, y_value))
     if not points:
         raise ValueError(f"No numeric torque points found in {source}.")
-    y_unit = _unit_for(units, y_index, "N m").replace("Nm", "N m")
+    y_unit = _normalize_torque_unit(_unit_for(units, y_index, "N·m"))
     sample = source.stem
     intake_group = _intake_group_name(sample)
     if intake_group is not None:
@@ -1157,6 +1286,13 @@ def _read_torque_full_series(source: Path) -> CurveSeriesPayload:
         y_unit=y_unit,
         points=tuple(points),
     )
+
+
+def _normalize_torque_unit(unit: str) -> str:
+    cleaned = _clean_text(unit).strip("[]()")
+    if cleaned in {"Nm", "N m", "N.m", "N·m"}:
+        return "N·m"
+    return normalize_unit(cleaned)
 
 
 def _smooth_torque(values: list[float]) -> list[float]:
@@ -1326,11 +1462,22 @@ def _torque_selection_for_source(
             item_sample = str(item.get("sample") or "")
             if item_source == resolved or Path(item_source).name == source_name or item_sample == series.sample:
                 return item
-    return _auto_torque_event_selection(series)
+    return {
+        "sample": series.sample,
+        "start_s": series.points[0][0],
+        "end_s": series.points[-1][0],
+        "time_zero": "absolute",
+        "source": "full_curve",
+        "confidence": 100.0,
+        "needs_human_review": False,
+        "reason": "Using the full torque curve; event trimming requires an explicit curation file.",
+    }
 
 
 def _read_torque_series(source: Path, *, curation: dict[str, Any] | None = None) -> CurveSeriesPayload:
     full_series = _read_torque_full_series(source)
+    if curation is None:
+        return full_series
     selection = _torque_selection_for_source(source=source, series=full_series, curation=curation)
     return _apply_torque_selection(full_series, selection)
 
@@ -1434,6 +1581,7 @@ def prepare_semantic_source(
             samples,
             processed_source,
             comparison_sheet="Frequency_Comparison",
+            metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
         )
         return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
 
@@ -1467,28 +1615,11 @@ def prepare_semantic_source(
 
     if family == "rheology_stress_relaxation":
         processed_source = processed_dir / f"{source.stem}_stress_relaxation_curve.csv"
-        try:
-            series = _read_rheology_interval_series(
-                source,
-                y_candidates=("shearstress", "stress", "应力"),
-                y_label="Shear stress",
-                y_unit="Pa",
-            )
-            series = _normalize_series(series, y_label="Normalized stress", y_unit="sigma/sigma0")
-        except ValueError:
-            try:
-                series_list = _read_wide_stress_relaxation_series(source)
-            except ValueError:
-                series = _read_rheology_interval_series(
-                    source,
-                    y_candidates=("relaxationmodulus", "modulus", "松弛模量"),
-                    y_label="Relaxation modulus",
-                    y_unit="Pa",
-                )
-                series_list = [_normalize_series(series, y_label="Normalized modulus", y_unit="G/G0")]
+        series_list = _read_stress_relaxation_series_list(source)
+        if _series_order_map(series_order):
+            series_list = _order_curve_series(series_list, series_order)
         else:
-            series_list = [series]
-        series_list = _order_curve_series(series_list, series_order)
+            series_list = _order_curve_series_by_shared_right_height(series_list)
         _write_curve_table(series_list, processed_source)
         return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
 

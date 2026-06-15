@@ -36,8 +36,10 @@ class RenderOptions:
     x_tick_edge_labels: str | None = None
     y_tick_edge_labels: str | None = None
     series_order: tuple[str, ...] | None = None
+    series_include: tuple[str, ...] | None = None
     series_styles: tuple[Mapping[str, Any], ...] | None = None
     series_offsets: tuple[Mapping[str, Any], ...] | None = None
+    stack_spacing_scale: float | None = None
     legend_position: str = "auto"
     series_label_mode: str = "legend"
     x_label_override: str | None = None

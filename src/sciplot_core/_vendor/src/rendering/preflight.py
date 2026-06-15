@@ -25,7 +25,7 @@ from src.rendering.common import (
 from src.rendering.datagraph_inputs import series_looks_polar, table_figure_size_error
 from src.rendering.dataset_models import build_normalized_dataset
 from src.rendering.models import PreflightResult, RenderOptions, TemplateName
-from src.rendering.series_order import unknown_series_order_labels
+from src.rendering.series_order import filter_curve_series, filter_replicate_groups, unknown_series_order_labels
 from src.rendering.template_lifecycle import resolve_template_id, template_family_ids, template_identity
 from src.submission import build_render_submission_report
 
@@ -33,6 +33,44 @@ _FIT_SCATTER_TEMPLATES = set(template_family_ids("scatter_fit"))
 _BUBBLE_SCATTER_TEMPLATES = set(template_family_ids("bubble_scatter"))
 _MEAN_BAND_TEMPLATES = set(template_family_ids("mean_band"))
 _STANDARD_CURVE_TEMPLATES = {"point_line", "curve", "area_curve", "step_line", "function_curve"}
+
+
+def _filtered_curve_series_for_options(curve_series, options: RenderOptions):
+    unknown_include = unknown_series_order_labels(
+        [series.sample for series in curve_series],
+        options.series_include,
+    )
+    if unknown_include:
+        raise ValueError("series_include contains unknown series labels: " + ", ".join(unknown_include))
+    selected = filter_curve_series(curve_series, options.series_include)
+    if not selected and options.series_include:
+        raise ValueError("series_include did not match any series.")
+    unknown_order = unknown_series_order_labels(
+        [series.sample for series in selected],
+        options.series_order,
+    )
+    if unknown_order:
+        raise ValueError("series_order contains unknown series labels: " + ", ".join(unknown_order))
+    return selected
+
+
+def _filtered_replicate_groups_for_options(groups, options: RenderOptions):
+    unknown_include = unknown_series_order_labels(
+        [group.group for group in groups],
+        options.series_include,
+    )
+    if unknown_include:
+        raise ValueError("series_include contains unknown group labels: " + ", ".join(unknown_include))
+    selected = filter_replicate_groups(groups, options.series_include)
+    if not selected and options.series_include:
+        raise ValueError("series_include did not match any groups.")
+    unknown_order = unknown_series_order_labels(
+        [group.group for group in selected],
+        options.series_order,
+    )
+    if unknown_order:
+        raise ValueError("series_order contains unknown group labels: " + ", ".join(unknown_order))
+    return selected
 
 
 def preflight_render_request(
@@ -72,6 +110,20 @@ def preflight_render_request(
                     xscale=options.xscale,
                     yscale=options.yscale,
                 )
+                available_series = [
+                    series.sample for series_list in metric_series.values() for series in series_list
+                ]
+                unknown_include = unknown_series_order_labels(available_series, options.series_include)
+                if unknown_include:
+                    raise ValueError(
+                        "series_include contains unknown series labels: " + ", ".join(unknown_include)
+                    )
+                metric_series = {
+                    metric_name: filter_curve_series(series_list, options.series_include)
+                    for metric_name, series_list in metric_series.items()
+                }
+                if not any(metric_series.values()):
+                    raise ValueError("series_include did not match any series.")
                 unknown_series = unknown_series_order_labels(
                     [series.sample for series_list in metric_series.values() for series in series_list],
                     options.series_order,
@@ -82,40 +134,23 @@ def preflight_render_request(
                     )
             else:
                 curve_series = load_curve_table_for_options(input_path, sheet, options)
+                curve_series = _filtered_curve_series_for_options(curve_series, options)
                 validate_series_scales(curve_series, xscale=options.xscale, yscale=options.yscale)
                 validate_manual_axis_overrides(
                     options,
                     template=resolved_template,
                     is_tensile_curve=looks_like_tensile_curve(curve_series),
                 )
-                unknown_series = unknown_series_order_labels(
-                    [series.sample for series in curve_series],
-                    options.series_order,
-                )
-                if unknown_series:
-                    raise ValueError(
-                        "series_order contains unknown series labels: " + ", ".join(unknown_series)
-                    )
                 if resolved_template in _MEAN_BAND_TEMPLATES:
                     aligned_replicate_band(curve_series)
         elif resolved_template in {"stacked_curve", "stacked_area"}:
             curve_series = load_curve_table_for_options(input_path, sheet, options)
+            curve_series = _filtered_curve_series_for_options(curve_series, options)
             validate_manual_axis_overrides(options, template=resolved_template)
-            unknown_series = unknown_series_order_labels(
-                [series.sample for series in curve_series],
-                options.series_order,
-            )
-            if unknown_series:
-                raise ValueError("series_order contains unknown series labels: " + ", ".join(unknown_series))
         elif resolved_template == "segmented_stacked_curve":
             curve_series = load_curve_table_for_options(input_path, sheet, options)
+            curve_series = _filtered_curve_series_for_options(curve_series, options)
             validate_manual_axis_overrides(options, template=resolved_template)
-            unknown_series = unknown_series_order_labels(
-                [series.sample for series in curve_series],
-                options.series_order,
-            )
-            if unknown_series:
-                raise ValueError("series_order contains unknown series labels: " + ", ".join(unknown_series))
             load_segmented_config(
                 input_path,
                 curve_series,
@@ -123,32 +158,22 @@ def preflight_render_request(
             )
         elif resolved_template in {"scatter"} | _BUBBLE_SCATTER_TEMPLATES:
             curve_series = load_curve_table_for_options(input_path, sheet, options)
+            curve_series = _filtered_curve_series_for_options(curve_series, options)
             validate_series_scales(curve_series, xscale=options.xscale, yscale=options.yscale)
             validate_manual_axis_overrides(
                 options,
                 template=resolved_template,
                 is_tensile_curve=looks_like_tensile_curve(curve_series),
             )
-            unknown_series = unknown_series_order_labels(
-                [series.sample for series in curve_series],
-                options.series_order,
-            )
-            if unknown_series:
-                raise ValueError("series_order contains unknown series labels: " + ", ".join(unknown_series))
         elif resolved_template in _FIT_SCATTER_TEMPLATES:
             curve_series = load_curve_table_for_options(input_path, sheet, options)
+            curve_series = _filtered_curve_series_for_options(curve_series, options)
             validate_series_scales(curve_series, xscale=options.xscale, yscale=options.yscale)
             validate_manual_axis_overrides(
                 options,
                 template=resolved_template,
                 is_tensile_curve=looks_like_tensile_curve(curve_series),
             )
-            unknown_series = unknown_series_order_labels(
-                [series.sample for series in curve_series],
-                options.series_order,
-            )
-            if unknown_series:
-                raise ValueError("series_order contains unknown series labels: " + ", ".join(unknown_series))
             if not curve_series:
                 raise ValueError("No valid X/Y series found.")
             for series in curve_series:
@@ -173,15 +198,10 @@ def preflight_render_request(
             "density_area",
         }:
             groups = load_replicate_table_for_options(input_path, sheet, options)
+            groups = _filtered_replicate_groups_for_options(groups, options)
             if not groups:
                 raise ValueError("No valid groups were found in the replicate table.")
             validate_manual_axis_overrides(options, template=resolved_template)
-            unknown_groups = unknown_series_order_labels(
-                [group.group for group in groups],
-                options.series_order,
-            )
-            if unknown_groups:
-                raise ValueError("series_order contains unknown group labels: " + ", ".join(unknown_groups))
             summary = summarize_replicate_distribution(groups)
             if resolved_template in {"histogram_density", "density_area"}:
                 if summary.total_points < 12 or summary.min_group_points < 4:

@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 import pandas as pd
-
 from src.data_loader import (
     CurveSeries,
     HeatmapTable,
@@ -254,8 +253,12 @@ def _is_frequency_metric_y_label(label: str) -> bool:
         "loss modulus",
         "loss factor",
         "complex viscosity",
+        "complex modulus",
+        "complex shear modulus",
         "g'",
         'g"',
+        "g*",
+        "|g*|",
         "tanδ",
         "tand",
         "tan delta",
@@ -280,12 +283,12 @@ def detect_point_line_bundle(input_path: Path, sheet: str | int) -> str | None:
     normalized_labels = [normalize_label(_clean_text(value)) for value in raw.iloc[0].tolist()]
     first_label = labels[0]
 
-    if raw.shape[1] % 5 == 0 and {
-        "storage modulus",
-        "loss modulus",
-        "loss factor",
-        "complex viscosity",
-    }.issubset(set(labels)):
+    metric_labels = set(labels)
+    if (
+        raw.shape[1] % 5 == 0
+        and {"storage modulus", "loss modulus", "loss factor"}.issubset(metric_labels)
+        and ({"complex viscosity", "complex modulus"} & metric_labels)
+    ):
         if first_label == "temperature":
             return "temperature_sweep"
         if first_label in {"angular frequency", "frequency", "ω"}:
@@ -573,7 +576,9 @@ def _build_normalized_dataset_cached(
     elif resolved_model == "frequency_metric_sheet":
         series_list = load_curve_table_cached(input_path, sheet)
         candidate_roles = _candidate_roles_for_curve(series_list)
-        semantic_signals = raw_intent.semantic_signals if raw_intent is not None else frequency_metric_sheet_signals(series_list)
+        semantic_signals = (
+            raw_intent.semantic_signals if raw_intent is not None else frequency_metric_sheet_signals(series_list)
+        )
     elif resolved_model == "replicate_table":
         groups = load_replicate_table_cached(input_path, sheet)
         replicate_summary = summarize_replicate_distribution(groups)

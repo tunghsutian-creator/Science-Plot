@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
-
 from src.text_normalization import normalize_label, normalize_unit
 
 
@@ -50,43 +49,83 @@ def _ensure_rheology_layout(raw: pd.DataFrame, *, table_name: str, block_width: 
         raise ValueError(f"{table_name} is missing the unit row.")
 
 
+def _is_complex_modulus_label(value: object) -> bool:
+    label = _clean_text(value).casefold()
+    compact = "".join(ch for ch in label if ch.isalnum())
+    return ("complex" in compact and "modulus" in compact) or "g*" in label or "|g*|" in label
+
+
+def _frequency_block_width(raw: pd.DataFrame) -> int:
+    if raw.shape[1] % 6 == 0 and all(
+        _is_complex_modulus_label(raw.iloc[0, start + 5]) for start in range(0, raw.shape[1], 6)
+    ):
+        return 6
+    if raw.shape[1] % 5 == 0:
+        return 5
+    raise ValueError("Frequency sweep table must contain 5 or 6 columns per sample.")
+
+
 def load_frequency_sweep_metrics(path: str | Path, sheet_name: str | int = 0) -> dict[str, list[RheologySeries]]:
     raw = _read_excel(path, sheet_name=sheet_name)
-    _ensure_rheology_layout(raw, table_name="Frequency sweep table", block_width=5)
+    block_width = _frequency_block_width(raw)
+    _ensure_rheology_layout(raw, table_name="Frequency sweep table", block_width=block_width)
 
     metric_series: dict[str, list[RheologySeries]] = {
         "storage_modulus": [],
         "loss_modulus": [],
         "loss_factor": [],
         "complex_viscosity": [],
+        "complex_modulus": [],
     }
-    metric_map = [
-        ("storage_modulus", 1),
-        ("loss_modulus", 2),
-        ("loss_factor", 3),
-        ("complex_viscosity", 4),
-    ]
-
-    for start in range(0, raw.shape[1], 5):
-        labels = [_clean_text(raw.iloc[0, start + idx]) for idx in range(5)]
+    for start in range(0, raw.shape[1], block_width):
+        labels = [_clean_text(raw.iloc[0, start + idx]) for idx in range(block_width)]
         sample = _clean_text(raw.iloc[1, start])
-        units = [_clean_text(raw.iloc[2, start + idx]) for idx in range(5)]
-        block = raw.iloc[3:, start : start + 5].copy().reset_index(drop=True)
-        block.columns = ["x", "storage_modulus", "loss_modulus", "loss_factor", "complex_viscosity"]
+        units = [_clean_text(raw.iloc[2, start + idx]) for idx in range(block_width)]
+        block = raw.iloc[3:, start : start + block_width].copy().reset_index(drop=True)
+        columns = ["x", "storage_modulus", "loss_modulus", "loss_factor"]
+        metric_offsets = {
+            "storage_modulus": 1,
+            "loss_modulus": 2,
+            "loss_factor": 3,
+        }
+        if block_width == 6:
+            columns.extend(["complex_viscosity", "complex_modulus"])
+            metric_offsets["complex_viscosity"] = 4
+            metric_offsets["complex_modulus"] = 5
+        elif _is_complex_modulus_label(labels[4]):
+            columns.append("complex_modulus")
+            metric_offsets["complex_modulus"] = 4
+        else:
+            columns.append("complex_viscosity")
+            metric_offsets["complex_viscosity"] = 4
+        block.columns = columns
         block = block.apply(pd.to_numeric, errors="coerce").dropna(how="all")
+        if "complex_modulus" not in block.columns:
+            block["complex_modulus"] = (
+                block["storage_modulus"].pow(2).add(block["loss_modulus"].pow(2)).pow(0.5)
+            )
 
         x_label = normalize_label(labels[0] or "ω")
         x_unit = normalize_unit(units[0])
+        labels_by_metric = {key: labels[offset] for key, offset in metric_offsets.items()}
+        units_by_metric = {key: units[offset] for key, offset in metric_offsets.items()}
+        labels_by_metric.setdefault("complex_modulus", "Complex Modulus")
+        units_by_metric.setdefault(
+            "complex_modulus",
+            units_by_metric.get("storage_modulus") or units_by_metric.get("loss_modulus") or "Pa",
+        )
 
-        for key, offset in metric_map:
-            y_label = normalize_label(labels[offset] or key)
-            y_unit = normalize_unit(units[offset])
+        for key in ("storage_modulus", "loss_modulus", "loss_factor", "complex_viscosity", "complex_modulus"):
+            if key not in block.columns:
+                continue
+            y_label = normalize_label(labels_by_metric.get(key) or key)
+            y_unit = normalize_unit(units_by_metric.get(key) or "")
             pair = block[["x", key]].dropna().rename(columns={key: "y"}).reset_index(drop=True)
             if pair.empty:
                 continue
             metric_series[key].append(
                 RheologySeries(
-                    sample=sample or f"Sample_{start // 5 + 1}",
+                    sample=sample or f"Sample_{start // block_width + 1}",
                     x_label=x_label,
                     y_label=y_label,
                     x_unit=x_unit,
@@ -95,7 +134,7 @@ def load_frequency_sweep_metrics(path: str | Path, sheet_name: str | int = 0) ->
                 )
             )
 
-    return metric_series
+    return {key: series_list for key, series_list in metric_series.items() if series_list}
 
 
 def load_temperature_sweep_metrics(path: str | Path, sheet_name: str | int = 0) -> dict[str, list[RheologySeries]]:

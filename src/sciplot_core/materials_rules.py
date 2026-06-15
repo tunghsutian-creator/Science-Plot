@@ -155,6 +155,7 @@ _UNIT_LABELS = {
     "C": "°C",
     "um": "µm",
     "mPa.s": "mPa·s",
+    "N·m": "N·m",
     "Pa.s": "Pa·s",
     "cm^-1": "cm$^{-1}$",
     "nm^-1": "nm$^{-1}$",
@@ -241,7 +242,7 @@ RHEOLOGY_X_TEMPERATURE = AxisSpec(
 TIME_AXIS = AxisSpec("Time", "s", "Time (s)", aliases=("time", "时间"))
 STRAIN_AXIS = AxisSpec("Strain", "%", "Strain (%)", aliases=("strain", "拉伸应变", "shear strain", "γ"))
 STRESS_AXIS = AxisSpec("Stress", "MPa", "Stress (MPa)", aliases=("stress", "拉伸应力", "σ"))
-TORQUE_AXIS = AxisSpec("Screw torque", "N m", "Screw torque (N m)", aliases=("screw torque", "torque", "转矩"))
+TORQUE_AXIS = AxisSpec("Screw torque", "N·m", "Screw torque (N·m)", aliases=("screw torque", "torque", "转矩"))
 
 
 RULES: tuple[SemanticRule, ...] = (
@@ -261,6 +262,13 @@ RULES: tuple[SemanticRule, ...] = (
         ),
         keywords=("frequencysweep", "angularfrequency", "pinlv"),
         path_keywords=("/freq/", "pinlv"),
+        column_aliases=(
+            "angular frequency",
+            "storage modulus",
+            "loss modulus",
+            "loss factor",
+            "complex modulus",
+        ),
         vendor_models=("frequency_metric_sheet",),
         experiment_families=("rheology",),
         render_options=_POINT_LINE_LOG,
@@ -396,15 +404,15 @@ RULES: tuple[SemanticRule, ...] = (
         "curve",
         TIME_AXIS,
         TORQUE_AXIS,
-        keywords=("screwtorque", "torque", "转矩"),
+        keywords=("screwtorque", "screw torque", "转矩"),
         path_keywords=("torque", "转矩"),
-        column_aliases=("screw torque", "torque"),
+        column_aliases=("screw torque", "转矩"),
         analysis=(
             AnalysisSpec(
                 "final_segment_mean_torque_Nm",
                 "mean torque in the processed final segment",
                 ("Screw Torque",),
-                "N m",
+                "N·m",
             ),
         ),
         render_options={**_DEFAULT_RENDER_OPTIONS, "series_label_mode": "inline", "size": "120x55"},
@@ -972,8 +980,8 @@ def _torque_metrics(processed_source: Path) -> list[dict[str, Any]]:
     for frame in frames:
         values.extend(frame["y"].dropna().astype(float).tolist())
     if not values:
-        return [_metric("final_segment_mean_torque_Nm", None, "N m", "skipped", "No torque segment found.")]
-    return [_metric("final_segment_mean_torque_Nm", float(np.mean(values)), "N m")]
+        return [_metric("final_segment_mean_torque_Nm", None, "N·m", "skipped", "No torque segment found.")]
+    return [_metric("final_segment_mean_torque_Nm", float(np.mean(values)), "N·m")]
 
 
 def _raw_table(path: Path) -> pd.DataFrame:

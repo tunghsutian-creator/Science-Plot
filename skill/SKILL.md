@@ -47,7 +47,8 @@ Do not hand-copy SciPlot style constants, Matplotlib rcParams, legend-placement 
    /Users/dongxutian/.codex/skills/sciplot-materials-analysis/scripts/sciplot qa OUTDIR \
      --goldens /Users/dongxutian/Documents/research-plots/tests/goldens
    ```
-6. Return the output folder, generated figures/tables, `tables/analysis_metrics.csv`, QA status, and scientific assumptions/caveats.
+6. Before returning any Web UI, workbench, curation, or multi-project output package, leave a clickable launcher inside the delivered folder. On macOS, prefer an executable `Open_in_SciPlot.command` or `Open_<PROJECT>_in_SciPlot.command` that starts the correct `sciplot app`/`sciplot workbench` command with the right `--out` and `--project`; for multiple related projects, also include an HTML or Markdown index of the available project links. Do not rely on a transient localhost URL in the chat as the only way back into the project.
+7. Return the output folder, generated figures/tables, launcher path, `tables/analysis_metrics.csv`, QA status, and scientific assumptions/caveats.
 
 ## Commands
 
@@ -94,6 +95,7 @@ sciplot qa OUTDIR --goldens /Users/dongxutian/Documents/research-plots/tests/gol
 - Read Result Review artifacts (`review.html`, figures, manifest, metrics, and QA) before reporting output.
 - Keep Web UI figure-size choices aligned with the full SciPlot contract size presets: `60x55`, `120x55`, `180x55`, `60x110`, `120x110`, and `180x110`.
 - If the Web UI starts a Codex job, inspect `codex_jobs/*/sciplot_codex_handoff.json`, `status.json`, stdout/stderr logs, generated figures, and QA output before reporting the result.
+- Every delivered SciPlot Web UI/workbench output package must be reopenable from the filesystem before the final reply. Create and verify a clickable launcher in the output folder, and mention it in the handoff. This applies even when the browser is already open during the current turn.
 - For rheology sweep folders with multiple sample exports, do not plot all metrics for one sample as the main comparison. Aggregate same metrics across samples first, then render separate cross-sample figures for the supported metrics.
 - Use existing recipe modules before writing new analysis code.
 - If a dataset produces `intervention_request.json`, `needs_ai_intervention`, or batch `interventions`, patch the semantic recognizer or corresponding recipe in `/Users/dongxutian/Documents/research-plots`, add/extend a simulated fixture, add/update a golden or QA assertion, and rerun tests.

@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 
-from src import plot_style
 from src.plot_contract import (
     default_options_for_template,
     size_preset_contract,
@@ -23,6 +22,8 @@ from src.rendering.shape_annotations import normalize_shape_annotations_payload
 from src.rendering.template_lifecycle import is_supported_template_id, resolve_template_id
 from src.rendering.text_annotations import normalize_text_annotations_payload
 from src.rendering.themes import visual_theme_ids
+
+from src import plot_style
 
 _VALID_TICK_DENSITIES = frozenset({"auto", "sparse", "dense"})
 _VALID_TICK_EDGE_LABELS = frozenset({"auto", "hide_min", "hide_max", "hide_both"})
@@ -108,18 +109,19 @@ def _normalize_fraction_option(
     return numeric
 
 
-def _normalize_series_order(
+def _normalize_series_labels(
     template: str,
-    series_order: list[str] | tuple[str, ...] | None,
+    option_id: str,
+    series_labels: list[str] | tuple[str, ...] | None,
     *,
     resolved_template_id: str | None = None,
 ) -> tuple[str, ...] | None:
-    if series_order is None:
+    if series_labels is None:
         return None
-    _ensure_template_option_supported(template, "series_order", resolved_template_id=resolved_template_id)
+    _ensure_template_option_supported(template, option_id, resolved_template_id=resolved_template_id)
     cleaned: list[str] = []
     seen: set[str] = set()
-    for item in series_order:
+    for item in series_labels:
         label = str(item).strip()
         if not label:
             continue
@@ -129,6 +131,34 @@ def _normalize_series_order(
         seen.add(key)
         cleaned.append(label)
     return tuple(cleaned) if cleaned else None
+
+
+def _normalize_series_order(
+    template: str,
+    series_order: list[str] | tuple[str, ...] | None,
+    *,
+    resolved_template_id: str | None = None,
+) -> tuple[str, ...] | None:
+    return _normalize_series_labels(
+        template,
+        "series_order",
+        series_order,
+        resolved_template_id=resolved_template_id,
+    )
+
+
+def _normalize_series_include(
+    template: str,
+    series_include: list[str] | tuple[str, ...] | None,
+    *,
+    resolved_template_id: str | None = None,
+) -> tuple[str, ...] | None:
+    return _normalize_series_labels(
+        template,
+        "series_include",
+        series_include,
+        resolved_template_id=resolved_template_id,
+    )
 
 
 def _normalize_legend_position(
@@ -232,8 +262,10 @@ def resolve_render_options(
     x_tick_edge_labels: str | None = None,
     y_tick_edge_labels: str | None = None,
     series_order: list[str] | tuple[str, ...] | None = None,
+    series_include: list[str] | tuple[str, ...] | None = None,
     series_styles: object | None = None,
     series_offsets: object | None = None,
+    stack_spacing_scale: float | None = None,
     legend_position: str | None = None,
     series_label_mode: str | None = None,
     x_label_override: str | None = None,
@@ -410,8 +442,19 @@ def resolve_render_options(
             series_order,
             resolved_template_id=contract_template,
         ),
+        series_include=_normalize_series_include(
+            template,
+            series_include,
+            resolved_template_id=contract_template,
+        ),
         series_styles=resolved_series_styles,
         series_offsets=resolved_series_offsets,
+        stack_spacing_scale=_normalize_fraction_option(
+            template,
+            "stack_spacing_scale",
+            stack_spacing_scale,
+            resolved_template_id=contract_template,
+        ),
         legend_position=_normalize_legend_position(
             template,
             legend_position,

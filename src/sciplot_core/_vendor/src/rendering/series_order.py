@@ -40,6 +40,19 @@ def unknown_series_order_labels(
     return tuple(label for label in requested if _normalized_label(label) not in known)
 
 
+def _filter_named_items(  # noqa: UP047
+    items: Sequence[_T],
+    series_include: Sequence[str] | None,
+    *,
+    label_getter: Callable[[_T], str],
+) -> list[_T]:
+    requested = normalized_series_order(series_include)
+    if not requested:
+        return list(items)
+    wanted = {_normalized_label(label) for label in requested}
+    return [item for item in items if _normalized_label(label_getter(item)) in wanted]
+
+
 def _reorder_named_items(  # noqa: UP047
     items: Sequence[_T],
     series_order: Sequence[str] | None,
@@ -80,6 +93,13 @@ def reorder_curve_series(
     return _reorder_named_items(series_list, series_order, label_getter=lambda series: series.sample)
 
 
+def filter_curve_series(
+    series_list: Sequence[CurveSeries],
+    series_include: Sequence[str] | None,
+) -> list[CurveSeries]:
+    return _filter_named_items(series_list, series_include, label_getter=lambda series: series.sample)
+
+
 def reorder_replicate_groups(
     groups: Sequence[ReplicateGroup],
     series_order: Sequence[str] | None,
@@ -87,7 +107,16 @@ def reorder_replicate_groups(
     return _reorder_named_items(groups, series_order, label_getter=lambda group: group.group)
 
 
+def filter_replicate_groups(
+    groups: Sequence[ReplicateGroup],
+    series_include: Sequence[str] | None,
+) -> list[ReplicateGroup]:
+    return _filter_named_items(groups, series_include, label_getter=lambda group: group.group)
+
+
 __all__ = [
+    "filter_curve_series",
+    "filter_replicate_groups",
     "normalized_series_order",
     "reorder_curve_series",
     "reorder_replicate_groups",

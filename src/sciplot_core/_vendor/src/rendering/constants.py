@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src import plot_style
 from src.plot_contract import (
     default_size_for_template,
     palette_names,
     size_names,
     template_names,
 )
+
+from src import plot_style
 
 WORKSPACE_OUTPUT_DIR = Path("figures") / "debug_outputs"
 
@@ -39,25 +40,25 @@ FREQUENCY_OUTPUTS = {
     "storage_modulus": "freq_storage_modulus.pdf",
     "loss_modulus": "freq_loss_modulus.pdf",
     "loss_factor": "freq_loss_factor.pdf",
-    "complex_viscosity": "freq_complex_viscosity.pdf",
+    "complex_modulus": "freq_complex_modulus.pdf",
 }
 FREQUENCY_CURVE_OUTPUTS = {
     "storage_modulus": "freq_storage_modulus_curve.pdf",
     "loss_modulus": "freq_loss_modulus_curve.pdf",
     "loss_factor": "freq_loss_factor_curve.pdf",
-    "complex_viscosity": "freq_complex_viscosity_curve.pdf",
+    "complex_modulus": "freq_complex_modulus_curve.pdf",
 }
 FREQUENCY_AREA_CURVE_OUTPUTS = {
     "storage_modulus": "freq_storage_modulus_area_curve.pdf",
     "loss_modulus": "freq_loss_modulus_area_curve.pdf",
     "loss_factor": "freq_loss_factor_area_curve.pdf",
-    "complex_viscosity": "freq_complex_viscosity_area_curve.pdf",
+    "complex_modulus": "freq_complex_modulus_area_curve.pdf",
 }
 FREQUENCY_STEP_LINE_OUTPUTS = {
     "storage_modulus": "freq_storage_modulus_step_line.pdf",
     "loss_modulus": "freq_loss_modulus_step_line.pdf",
     "loss_factor": "freq_loss_factor_step_line.pdf",
-    "complex_viscosity": "freq_complex_viscosity_step_line.pdf",
+    "complex_modulus": "freq_complex_modulus_step_line.pdf",
 }
 TEMPERATURE_OUTPUTS = {
     "storage_modulus": "temp_storage_modulus.pdf",

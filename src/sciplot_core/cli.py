@@ -146,6 +146,7 @@ def _build_parser() -> argparse.ArgumentParser:
     app_parser.add_argument("--host", default="127.0.0.1")
     app_parser.add_argument("--port", type=int, default=8765)
     app_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
+    app_parser.add_argument("--project", help="Open an existing intake project under --out.")
     app_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
 
     intake_parser = subparsers.add_parser("intake", help="Open the SciPlot intake project builder.")
@@ -155,6 +156,7 @@ def _build_parser() -> argparse.ArgumentParser:
     intake_parser.add_argument("--host", default="127.0.0.1")
     intake_parser.add_argument("--port", type=int, default=8765)
     intake_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
+    intake_parser.add_argument("--project", help="Open an existing intake project under --out.")
     intake_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
 
     workbench_parser = subparsers.add_parser("workbench", help="Open the SciPlot Codex-aware Web workbench.")
@@ -164,6 +166,7 @@ def _build_parser() -> argparse.ArgumentParser:
     workbench_parser.add_argument("--host", default="127.0.0.1")
     workbench_parser.add_argument("--port", type=int, default=8765)
     workbench_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
+    workbench_parser.add_argument("--project", help="Open an existing intake project under --out.")
     workbench_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
 
     qa_parser = subparsers.add_parser("qa", help="Validate rendered SciPlot outputs.")
@@ -294,13 +297,16 @@ def main(argv: list[str] | None = None) -> int:
                         for experiment in data_type["experiments"]:
                             print(f"  {experiment['id']}: {experiment['label']}")
                 return 0
-            serve_intake(
-                input_path=args.input.expanduser() if args.input else None,
-                host=args.host,
-                port=args.port,
-                output_root=args.out.expanduser(),
-                open_browser=not args.no_open,
-            )
+            serve_kwargs: dict[str, Any] = {
+                "input_path": args.input.expanduser() if args.input else None,
+                "host": args.host,
+                "port": args.port,
+                "output_root": args.out.expanduser(),
+                "open_browser": not args.no_open,
+            }
+            if args.project:
+                serve_kwargs["project_slug"] = args.project
+            serve_intake(**serve_kwargs)
             return 0
         if args.command == "qa":
             _print_json(

@@ -8,8 +8,6 @@ from typing import Any, cast
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
-
-from src import plot_style
 from src.plotting_curve_support import compute_shared_curve_x_layout
 from src.plotting_families.curve_family import plot_curves, plot_scatter
 from src.plotting_families.spectral_family import plot_wide_nmr
@@ -57,8 +55,10 @@ from src.rendering.render_curve_support import (
 )
 from src.rendering.render_support import _rendered_plot_with_qa
 from src.rendering.series_offsets import series_offset_by_id
-from src.rendering.series_order import reorder_curve_series, unknown_series_order_labels
+from src.rendering.series_order import filter_curve_series, reorder_curve_series, unknown_series_order_labels
 from src.rendering.series_styles import matplotlib_marker_symbol, series_style_by_id
+
+from src import plot_style
 
 
 @dataclass(frozen=True)
@@ -555,14 +555,20 @@ def _render_curve_candidate(
         autofixes.append("direct_series_labels")
     if compact_legend:
         autofixes.append("compact_inside_legend")
-    forced_legend_mode = _legend_mode_for_position(options.legend_position)
+    forced_legend_mode = _legend_mode_for_position(
+        cast(str | None, base_kwargs.get("legend_position", options.legend_position))
+    )
+    resolved_xscale = str(base_kwargs.get("xscale", options.xscale))
+    resolved_yscale = str(base_kwargs.get("yscale", options.yscale))
+    resolved_x_tick_density = cast(str | None, base_kwargs.get("x_tick_density", options.x_tick_density))
+    resolved_y_tick_density = cast(str | None, base_kwargs.get("y_tick_density", options.y_tick_density))
 
     if scatter:
         fig, ax = plot_scatter(
             series_list,
             axis_mode=str(base_kwargs.get("axis_mode", "auto")),
-            xscale=options.xscale,
-            yscale=options.yscale,
+            xscale=resolved_xscale,
+            yscale=resolved_yscale,
             width_mm=options.width_mm,
             height_mm=options.height_mm,
             reverse_x=options.reverse_x,
@@ -575,8 +581,8 @@ def _render_curve_candidate(
             marker_size=14.0
             * (combined_fix.collection_size_scale if combined_fix.collection_size_scale != 1.0 else 1.0),
             visible_xticks=base_kwargs.get("visible_xticks"),
-            x_tick_density=options.x_tick_density,
-            y_tick_density=options.y_tick_density,
+            x_tick_density=resolved_x_tick_density,
+            y_tick_density=resolved_y_tick_density,
             x_tick_edge_labels=options.x_tick_edge_labels,
             y_tick_edge_labels=options.y_tick_edge_labels,
             x_padding_fraction=options.x_padding_fraction,
@@ -625,8 +631,8 @@ def _render_curve_candidate(
             series_list,
             show_markers=show_markers,
             axis_mode=str(base_kwargs.get("axis_mode", "auto")),
-            xscale=options.xscale,
-            yscale=options.yscale,
+            xscale=resolved_xscale,
+            yscale=resolved_yscale,
             width_mm=options.width_mm,
             height_mm=options.height_mm,
             reverse_x=options.reverse_x,
@@ -646,8 +652,8 @@ def _render_curve_candidate(
             ),
             series_label_side=direct_label_side or str(base_kwargs.get("series_label_side", "auto")),
             visible_xticks=base_kwargs.get("visible_xticks"),
-            x_tick_density=options.x_tick_density,
-            y_tick_density=options.y_tick_density,
+            x_tick_density=resolved_x_tick_density,
+            y_tick_density=resolved_y_tick_density,
             x_tick_edge_labels=options.x_tick_edge_labels,
             y_tick_edge_labels=options.y_tick_edge_labels,
             x_padding_fraction=options.x_padding_fraction,
@@ -739,6 +745,99 @@ def _ensure_known_series_order(series_list, series_order) -> None:
     unknown = unknown_series_order_labels([series.sample for series in series_list], series_order)
     if unknown:
         raise ValueError("series_order contains unknown series labels: " + ", ".join(unknown))
+
+
+def _ensure_known_series_include(series_list, series_include) -> None:
+    unknown = unknown_series_order_labels([series.sample for series in series_list], series_include)
+    if unknown:
+        raise ValueError("series_include contains unknown series labels: " + ", ".join(unknown))
+
+
+def _filter_and_order_curve_series(series_list, options: RenderOptions):
+    _ensure_known_series_include(series_list, options.series_include)
+    selected = filter_curve_series(series_list, options.series_include)
+    if not selected and options.series_include:
+        raise ValueError("series_include did not match any series.")
+    _ensure_known_series_order(selected, options.series_order)
+    return reorder_curve_series(selected, options.series_order)
+
+
+def _right_edge_curve_height(series, *, reverse_x: bool) -> float:
+    x_values = np.asarray(series.data["x"].to_numpy(dtype=float), dtype=float)
+    y_values = np.asarray(series.data["y"].to_numpy(dtype=float), dtype=float)
+    finite = np.isfinite(x_values) & np.isfinite(y_values)
+    if not bool(finite.any()):
+        return float("nan")
+
+    finite_x = x_values[finite]
+    finite_y = y_values[finite]
+    edge_x = np.min(finite_x) if reverse_x else np.max(finite_x)
+    edge_indices = np.flatnonzero(finite_x == edge_x)
+    if edge_indices.size:
+        return float(finite_y[int(edge_indices[-1])])
+    index = int(np.argmin(finite_x) if reverse_x else np.argmax(finite_x))
+    return float(finite_y[index])
+
+
+def _sort_curve_series_by_right_edge_height(series_list, *, reverse_x: bool):
+    def sort_key(series) -> tuple[float, str]:
+        height = _right_edge_curve_height(series, reverse_x=reverse_x)
+        return (-height if np.isfinite(height) else float("inf"), series.sample.casefold())
+
+    return sorted(series_list, key=sort_key)
+
+
+def _series_y_bounds(series_list) -> tuple[float, float] | None:
+    values = [
+        series.data["y"].to_numpy(dtype=float)
+        for series in series_list
+        if "y" in series.data
+    ]
+    if not values:
+        return None
+    combined = np.concatenate(values)
+    combined = combined[np.isfinite(combined)]
+    if combined.size == 0:
+        return None
+    return float(np.min(combined)), float(np.max(combined))
+
+
+def _decade_ylim_for_series(series_list) -> tuple[float, float] | None:
+    bounds = _series_y_bounds(series_list)
+    if bounds is None:
+        return None
+    low, high = bounds
+    if low <= 0 or high <= 0:
+        return None
+    lower = 10.0 ** np.floor(np.log10(low))
+    upper = 10.0 ** np.ceil(np.log10(high))
+    if np.isclose(lower, upper):
+        upper *= 10.0
+    return float(lower), float(upper)
+
+
+def _frequency_metric_axis_overrides(metric_name: str, series_list) -> dict[str, object]:
+    if metric_name in {"storage_modulus", "loss_modulus", "complex_modulus"}:
+        overrides: dict[str, object] = {
+            "yscale": "log",
+            "y_tick_density": "auto",
+        }
+        ylim = _decade_ylim_for_series(series_list)
+        if ylim is not None:
+            overrides["ylim"] = ylim
+        return overrides
+    if metric_name == "loss_factor":
+        return {
+            "yscale": "linear",
+            "y_tick_density": "auto",
+            "ylim": (1.0, 4.0),
+            "legend_position": "upper_right",
+        }
+    return {}
+
+
+def _load_filter_and_order_curve_series(input_path: Path, sheet: str | int, options: RenderOptions):
+    return _filter_and_order_curve_series(load_curve_table_for_options(input_path, sheet, options), options)
 
 
 def _fit_overlay_color(ax, *, series_index: int, scatter: bool) -> str:
@@ -919,11 +1018,14 @@ def _render_rheology_bundle(
     metric_series = load_rheology_bundle_series(bundle, input_path, sheet)
     validate_manual_axis_overrides(options, template=template)
     metric_series = {
-        metric_name: reorder_curve_series(series_list, options.series_order)
+        metric_name: _filter_and_order_curve_series(series_list, options)
         for metric_name, series_list in metric_series.items()
     }
-    for series_list in metric_series.values():
-        _ensure_known_series_order(series_list, options.series_order)
+    if bundle == "frequency_sweep" and not options.series_order:
+        metric_series = {
+            metric_name: _sort_curve_series_by_right_edge_height(series_list, reverse_x=options.reverse_x)
+            for metric_name, series_list in metric_series.items()
+        }
     output_filenames = rheology_output_filenames(bundle, template)
     shared_x_layout = None
     if bundle in {"frequency_sweep", "temperature_sweep"}:
@@ -952,6 +1054,8 @@ def _render_rheology_bundle(
             plot_kwargs["xlim"] = shared_x_layout.display_bounds
             plot_kwargs["visible_xticks"] = shared_x_layout.visible_ticks
             plot_kwargs["legend_expand_axes"] = "y"
+        if bundle == "frequency_sweep":
+            plot_kwargs.update(_frequency_metric_axis_overrides(metric_name, series_list))
         if bundle == "stress_relaxation":
             plot_kwargs["y_padding_top"] = 0.12
             plot_kwargs["y_padding_bottom"] = 0.04
@@ -990,8 +1094,7 @@ def _render_standard_curve_template(
             show_markers=show_markers,
             extra_curve_kwargs=extra_curve_kwargs,
         )
-    series_list = reorder_curve_series(load_curve_table_for_options(input_path, sheet, options), options.series_order)
-    _ensure_known_series_order(series_list, options.series_order)
+    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
     validate_series_scales(series_list, xscale=options.xscale, yscale=options.yscale)
     is_tensile_curve = looks_like_tensile_curve(series_list)
     validate_manual_axis_overrides(options, template=template, is_tensile_curve=is_tensile_curve)
@@ -1070,28 +1173,88 @@ def _render_step_line(input_path: Path, sheet: str | int, options: RenderOptions
         extra_curve_kwargs={"line_drawstyle": "steps-mid"},
     )
 
+
+def _right_margin_for_inline_stack_labels(options: RenderOptions) -> float | None:
+    if options.series_label_mode != "inline":
+        return None
+    spacing = plot_style.current_spacing()
+    return max(spacing.right_margin_mm, 15.0)
+
+
+def _apply_stacked_inline_labels(ax: Axes, series_list) -> None:
+    if len(series_list) <= 1:
+        return
+    for text in tuple(ax.texts):
+        text.remove()
+    lines = [
+        line
+        for line in ax.lines
+        if str(line.get_label()).strip() and not str(line.get_label()).startswith("_")
+    ]
+    if not lines:
+        return
+    axes_transform = ax.transAxes.inverted()
+    for series, line in zip(series_list, lines, strict=False):
+        x_values = np.asarray(line.get_xdata(), dtype=float)
+        y_values = np.asarray(line.get_ydata(), dtype=float)
+        valid = np.isfinite(x_values) & np.isfinite(y_values)
+        if not np.any(valid):
+            continue
+        data_points = np.column_stack([x_values[valid], y_values[valid]])
+        axes_points = axes_transform.transform(ax.transData.transform(data_points))
+        visible = (
+            np.isfinite(axes_points[:, 0])
+            & np.isfinite(axes_points[:, 1])
+            & (axes_points[:, 0] >= 0.0)
+            & (axes_points[:, 0] <= 1.0)
+        )
+        if not np.any(visible):
+            visible = np.isfinite(axes_points[:, 0]) & np.isfinite(axes_points[:, 1])
+        if not np.any(visible):
+            continue
+        visible_points = axes_points[visible]
+        y_axes = float(np.clip(visible_points[np.argmax(visible_points[:, 0]), 1], 0.02, 0.98))
+        ax.text(
+            1.012,
+            y_axes,
+            series.sample,
+            transform=ax.transAxes,
+            ha="left",
+            va="center",
+            color=line.get_color(),
+            fontsize=6.2,
+            clip_on=False,
+            zorder=5.0,
+        )
+
+
 def _render_stacked_curve(input_path: Path, sheet: str | int, options: RenderOptions) -> list[RenderedPlot]:
-    series_list = reorder_curve_series(load_curve_table_for_options(input_path, sheet, options), options.series_order)
-    _ensure_known_series_order(series_list, options.series_order)
+    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
     validate_series_scales(series_list, xscale=options.xscale, yscale=options.yscale)
     validate_manual_axis_overrides(options, template="stacked_curve")
-    fig, _ = plot_curves(
+    label_mode = "edge" if options.series_label_mode == "inline" else "legend"
+    fig, ax = plot_curves(
         series_list,
         show_markers=False,
-        legend_mode="none",
+        legend_mode="none" if label_mode == "edge" else _legend_mode_for_position(options.legend_position),
         xscale=options.xscale,
         yscale=options.yscale,
         width_mm=options.width_mm,
         height_mm=options.height_mm,
+        right_margin_mm=_right_margin_for_inline_stack_labels(options),
         reverse_x=options.reverse_x,
         x_padding_fraction=options.x_padding_fraction,
         stack_mode="auto_vertical",
-        series_label_mode="edge",
+        stack_spacing_scale=options.stack_spacing_scale if options.stack_spacing_scale is not None else 1.0,
+        series_label_mode=label_mode,
+        series_label_side="right",
         baseline_mode=options.baseline,
         show_y_ticks=False,
         y_padding_top=0.08,
         y_padding_bottom=0.04,
     )
+    if label_mode == "edge":
+        _apply_stacked_inline_labels(ax, series_list)
     rendered = _rendered_plot_with_qa(
         filename=f"{input_path.stem}_stacked_curve.pdf",
         figure=fig,
@@ -1109,22 +1272,25 @@ def _render_stacked_curve(input_path: Path, sheet: str | int, options: RenderOpt
 
 
 def _render_stacked_area(input_path: Path, sheet: str | int, options: RenderOptions) -> list[RenderedPlot]:
-    series_list = reorder_curve_series(load_curve_table_for_options(input_path, sheet, options), options.series_order)
-    _ensure_known_series_order(series_list, options.series_order)
+    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
     validate_series_scales(series_list, xscale=options.xscale, yscale=options.yscale)
     validate_manual_axis_overrides(options, template="stacked_area")
-    fig, _ = plot_curves(
+    label_mode = "edge" if options.series_label_mode == "inline" else "legend"
+    fig, ax = plot_curves(
         series_list,
         show_markers=False,
-        legend_mode="none",
+        legend_mode="none" if label_mode == "edge" else _legend_mode_for_position(options.legend_position),
         xscale=options.xscale,
         yscale=options.yscale,
         width_mm=options.width_mm,
         height_mm=options.height_mm,
+        right_margin_mm=_right_margin_for_inline_stack_labels(options),
         reverse_x=options.reverse_x,
         x_padding_fraction=options.x_padding_fraction,
         stack_mode="auto_vertical",
-        series_label_mode="edge",
+        stack_spacing_scale=options.stack_spacing_scale if options.stack_spacing_scale is not None else 1.0,
+        series_label_mode=label_mode,
+        series_label_side="right",
         baseline_mode=options.baseline,
         show_y_ticks=False,
         line_drawstyle="default",
@@ -1132,6 +1298,8 @@ def _render_stacked_area(input_path: Path, sheet: str | int, options: RenderOpti
         y_padding_top=0.08,
         y_padding_bottom=0.04,
     )
+    if label_mode == "edge":
+        _apply_stacked_inline_labels(ax, series_list)
     return [
         _rendered_plot_with_qa(
             filename=f"{input_path.stem}_stacked_area.pdf",
@@ -1147,8 +1315,7 @@ def _render_segmented_stacked_curve(
     sheet: str | int,
     options: RenderOptions,
 ) -> list[RenderedPlot]:
-    series_list = reorder_curve_series(load_curve_table_for_options(input_path, sheet, options), options.series_order)
-    _ensure_known_series_order(series_list, options.series_order)
+    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
     validate_manual_axis_overrides(options, template="segmented_stacked_curve")
     config = load_segmented_config(input_path, series_list, use_sidecar=options.use_sidecar)
     if options.series_order:
@@ -1171,8 +1338,7 @@ def _render_segmented_stacked_curve(
     ]
 
 def _render_scatter(input_path: Path, sheet: str | int, options: RenderOptions) -> list[RenderedPlot]:
-    series_list = reorder_curve_series(load_curve_table_for_options(input_path, sheet, options), options.series_order)
-    _ensure_known_series_order(series_list, options.series_order)
+    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
     validate_series_scales(series_list, xscale=options.xscale, yscale=options.yscale)
     is_tensile_curve = looks_like_tensile_curve(series_list)
     validate_manual_axis_overrides(options, template="scatter", is_tensile_curve=is_tensile_curve)
@@ -1233,8 +1399,7 @@ def _bubble_size_profile(values: np.ndarray) -> np.ndarray:
     return sizes
 
 def _render_bubble_scatter(input_path: Path, sheet: str | int, options: RenderOptions) -> list[RenderedPlot]:
-    series_list = reorder_curve_series(load_curve_table_for_options(input_path, sheet, options), options.series_order)
-    _ensure_known_series_order(series_list, options.series_order)
+    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
     validate_series_scales(series_list, xscale=options.xscale, yscale=options.yscale)
     is_tensile_curve = looks_like_tensile_curve(series_list)
     validate_manual_axis_overrides(options, template="bubble_scatter", is_tensile_curve=is_tensile_curve)
@@ -1282,8 +1447,7 @@ def _render_scatter_fit_like(
     template: str,
     filename_suffix: str,
 ) -> list[RenderedPlot]:
-    series_list = reorder_curve_series(load_curve_table_for_options(input_path, sheet, options), options.series_order)
-    _ensure_known_series_order(series_list, options.series_order)
+    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
     validate_series_scales(series_list, xscale=options.xscale, yscale=options.yscale)
     is_tensile_curve = looks_like_tensile_curve(series_list)
     validate_manual_axis_overrides(options, template=template, is_tensile_curve=is_tensile_curve)
@@ -1348,8 +1512,7 @@ def _render_replicate_band_like(
     if normalized_dataset.model in {"frequency_sweep", "temperature_sweep", "stress_relaxation"}:
         raise ValueError(f"{template} is not supported for rheology export bundles.")
 
-    series_list = reorder_curve_series(load_curve_table_for_options(input_path, sheet, options), options.series_order)
-    _ensure_known_series_order(series_list, options.series_order)
+    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
     validate_series_scales(series_list, xscale=options.xscale, yscale=options.yscale)
     is_tensile_curve = looks_like_tensile_curve(series_list)
     validate_manual_axis_overrides(options, template=template, is_tensile_curve=is_tensile_curve)

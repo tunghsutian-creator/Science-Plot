@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 import mimetypes
@@ -22,7 +23,7 @@ import pandas as pd
 from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex_job, start_codex_job
 from sciplot_core.ingest import smart_decode
 from sciplot_core.render import DEFAULT_EXPORT_FORMATS, json_safe
-from sciplot_core.semantic import classify_source
+from sciplot_core.semantic import classify_source, is_rheology_frequency_comparison_dir
 
 _STATIC_DIR = Path(__file__).with_name("intake_static")
 _DEFAULT_OUTPUT_ROOT = Path("outputs") / "intake_projects"
@@ -92,6 +93,8 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
                     "size": "120x55",
                     "x_label_override": "Time",
                     "y_label_override": "Screw torque",
+                    "stack_spacing_scale": 0.05,
+                    "series_label_mode": "legend",
                 },
             },
             {"id": "impact_metric", "label": "冲击", "rule_id": "impact_metric", "chart": "box_with_points"},
@@ -278,12 +281,123 @@ def _project_dir_from_slug(output_root: Path, project_slug: str) -> Path:
 
 def _artifact_info(path: Path, *, project_slug: str) -> dict[str, Any]:
     exists = path.exists() and path.is_file()
+    stat = path.stat() if exists else None
     return {
         "exists": exists,
         "path": str(path),
         "name": path.name,
-        "size_bytes": path.stat().st_size if exists else 0,
+        "size_bytes": stat.st_size if stat is not None else 0,
+        "mtime_ns": stat.st_mtime_ns if stat is not None else 0,
+        "content_type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
         "url": f"/api/projects/{quote(project_slug)}/artifact?path={quote(str(path), safe='')}" if exists else None,
+    }
+
+
+def _preview_path_for_figure(path: Path) -> Path:
+    stem = path.stem
+    if stem.endswith("_300dpi"):
+        stem = stem[: -len("_300dpi")]
+    return path.with_name(f"{stem}_preview.png")
+
+
+def _preview_is_fresh(preview_path: Path, source_path: Path, *, min_width_px: int = 0) -> bool:
+    if not preview_path.exists() or not preview_path.is_file():
+        return False
+    try:
+        if preview_path.stat().st_mtime_ns < source_path.stat().st_mtime_ns:
+            return False
+        if min_width_px:
+            from PIL import Image
+
+            with Image.open(preview_path) as image:
+                return int(image.width) >= min_width_px
+        return True
+    except OSError:
+        return False
+
+
+def _write_image_preview(source_path: Path, preview_path: Path) -> None:
+    from PIL import Image
+
+    with Image.open(source_path) as image:
+        try:
+            image.seek(0)
+        except EOFError:
+            pass
+        preview_path.parent.mkdir(parents=True, exist_ok=True)
+        image.convert("RGB").save(preview_path)
+
+
+def _write_pdf_preview(source_path: Path, preview_path: Path) -> None:
+    import fitz
+
+    with fitz.open(source_path) as document:
+        if document.page_count < 1:
+            raise ValueError("PDF has no pages.")
+        page = document.load_page(0)
+        pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+        preview_path.parent.mkdir(parents=True, exist_ok=True)
+        pixmap.save(str(preview_path))
+
+
+def _figure_preview_info(figures: list[Path], *, project_slug: str) -> dict[str, Any]:
+    existing_images = [
+        figure
+        for figure in figures
+        if figure.exists() and figure.is_file() and figure.suffix.casefold() in {".png", ".jpg", ".jpeg"}
+    ]
+    for image_path in existing_images:
+        info = _artifact_info(image_path, project_slug=project_slug)
+        return {**info, "display_kind": "image", "source_path": str(image_path)}
+
+    source_figures = [figure for figure in figures if figure.exists() and figure.is_file()]
+    image_sources = [figure for figure in source_figures if figure.suffix.casefold() in {".tif", ".tiff"}]
+    pdf_sources = [figure for figure in source_figures if figure.suffix.casefold() == ".pdf"]
+
+    for source_path in image_sources:
+        preview_path = _preview_path_for_figure(source_path)
+        if _preview_is_fresh(preview_path, source_path, min_width_px=600):
+            info = _artifact_info(preview_path, project_slug=project_slug)
+            return {**info, "display_kind": "image", "source_path": str(source_path)}
+
+    for source_path in image_sources:
+        preview_path = _preview_path_for_figure(source_path)
+        try:
+            _write_image_preview(source_path, preview_path)
+        except Exception:
+            continue
+        info = _artifact_info(preview_path, project_slug=project_slug)
+        return {**info, "display_kind": "image", "source_path": str(source_path)}
+
+    for source_path in pdf_sources:
+        preview_path = _preview_path_for_figure(source_path)
+        if _preview_is_fresh(preview_path, source_path):
+            info = _artifact_info(preview_path, project_slug=project_slug)
+            return {**info, "display_kind": "image", "source_path": str(source_path)}
+
+    for source_path in pdf_sources:
+        preview_path = _preview_path_for_figure(source_path)
+        try:
+            _write_pdf_preview(source_path, preview_path)
+        except Exception:
+            continue
+        info = _artifact_info(preview_path, project_slug=project_slug)
+        return {**info, "display_kind": "image", "source_path": str(source_path)}
+
+    for source_path in pdf_sources:
+        info = _artifact_info(source_path, project_slug=project_slug)
+        return {**info, "display_kind": "pdf", "source_path": str(source_path)}
+
+    return {
+        "exists": False,
+        "path": "",
+        "name": "",
+        "size_bytes": 0,
+        "mtime_ns": 0,
+        "content_type": "",
+        "url": None,
+        "display_kind": "none",
+        "source_path": "",
     }
 
 
@@ -334,11 +448,9 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         "review_html": _artifact_info(run_output / "review.html", project_slug=project_slug),
         "intervention_request": _artifact_info(intervention_path, project_slug=project_slug),
     }
-    figures = [
-        _artifact_info(Path(str(path)), project_slug=project_slug)
-        for path in last_run.get("figures", [])
-        if isinstance(path, str)
-    ]
+    figure_paths = [Path(str(path)) for path in last_run.get("figures", []) if isinstance(path, str)]
+    figures = [_artifact_info(path, project_slug=project_slug) for path in figure_paths]
+    preview_figure = _figure_preview_info(figure_paths, project_slug=project_slug)
     needs_codex = bool(last_run.get("failure") or artifacts["intervention_request"]["exists"])
     return {
         "kind": "sciplot_project_status",
@@ -350,6 +462,7 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         "last_run": json_safe(last_run),
         "artifacts": artifacts,
         "figures": figures,
+        "preview_figure": preview_figure,
         "needs_codex": needs_codex,
         "codex": {
             "available": codex_available(),
@@ -384,7 +497,7 @@ def _is_torque_file(path: Path) -> bool:
     if not path.is_file() or path.suffix.lower() not in _TEXT_EXTENSIONS:
         return False
     text = _decode_text_preview(path).casefold()
-    return "screw torque" in text or "torque" in text or "转矩" in text
+    return "screw torque" in text or "转矩" in text
 
 
 def _torque_files(source: Path) -> list[Path]:
@@ -407,11 +520,50 @@ def _table_files(source: Path) -> list[Path]:
 
 
 def _file_payload(path: Path) -> dict[str, Any]:
+    content = path.read_bytes()
     return {
         "name": path.name,
         "source_path": str(path.expanduser().resolve()),
         "size_bytes": path.stat().st_size,
+        "sha256": hashlib.sha256(content).hexdigest(),
     }
+
+
+def _duplicate_source_warnings(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_hash: dict[str, list[dict[str, str]]] = {}
+    for group in groups:
+        sample = str(group.get("sample") or "")
+        for item in group.get("files", []):
+            if not isinstance(item, dict):
+                continue
+            digest = str(item.get("sha256") or "")
+            if not digest:
+                continue
+            by_hash.setdefault(digest, []).append(
+                {
+                    "sample": sample,
+                    "name": str(item.get("original_name") or item.get("name") or ""),
+                    "source_path": str(item.get("source_path") or ""),
+                }
+            )
+    warnings: list[dict[str, Any]] = []
+    for digest, records in sorted(by_hash.items()):
+        samples = sorted({record["sample"] for record in records if record["sample"]})
+        if len(records) < 2 or len(samples) < 2:
+            continue
+        warnings.append(
+            {
+                "id": "duplicate_source_files",
+                "severity": "warning",
+                "message": (
+                    "Multiple sample files have identical byte content; rendered curves may overlap exactly."
+                ),
+                "sha256": digest,
+                "samples": samples,
+                "files": records,
+            }
+        )
+    return warnings
 
 
 def _preview_cell(value: object) -> str:
@@ -600,6 +752,7 @@ def prepare_intake_session(
     output_root.mkdir(parents=True, exist_ok=True)
 
     tensile_dirs = _tensile_export_dirs(source)
+    frequency_files = _table_files(source) if is_rheology_frequency_comparison_dir(source) else []
     torque_files = _torque_files(source)
     semantic: dict[str, Any] | None = None
 
@@ -613,6 +766,14 @@ def prepare_intake_session(
             _group_payload(path.name.removesuffix(".is_tens_Exports"), sorted(path.glob("*.csv")))
             for path in tensile_dirs
         ]
+    elif frequency_files:
+        semantic = classify_source(source, requested_rule_id="rheology_frequency_sweep")
+        data_type_id = "rheology_dma"
+        experiment_type_id = "rheology_frequency_sweep"
+        rule_id = "rheology_frequency_sweep"
+        reason = "Detected frequency-sweep exports and mapped each file to one sample group."
+        confidence = 98.0
+        groups = [_group_payload(path.stem, [path]) for path in frequency_files]
     elif torque_files:
         data_type_id = "mechanical"
         experiment_type_id = "torque_curve"
@@ -637,6 +798,7 @@ def prepare_intake_session(
         files = _table_files(source)
         groups = [_group_payload(path.stem, [path]) for path in files] if files else []
 
+    warnings = _duplicate_source_warnings(groups)
     data_type, experiment = _catalog_item(data_type_id, experiment_type_id)
     project_name = _session_project_name(source, str(experiment["label"]))
     path = _session_path(output_root, project_name)
@@ -657,6 +819,7 @@ def prepare_intake_session(
         "confidence": confidence,
         "reason": reason,
         "groups": groups,
+        "warnings": warnings,
         "semantic": semantic,
     }
     path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
@@ -717,6 +880,40 @@ def _selected_render_options(render_options: object) -> dict[str, Any]:
             f"`{size}`. Allowed sizes: {', '.join(APPROVED_INTAKE_SIZE_PRESETS)}."
         )
     return selected
+
+
+def _selected_series_order(series_order: object) -> list[str] | None:
+    if not isinstance(series_order, list | tuple):
+        return None
+    selected: list[str] = []
+    seen: set[str] = set()
+    for item in series_order:
+        label = str(item).strip()
+        if not label:
+            continue
+        key = label.casefold()
+        if key in seen:
+            continue
+        selected.append(label)
+        seen.add(key)
+    return selected or None
+
+
+def _filter_manifest_groups(groups: object, series_order: list[str] | None) -> list[dict[str, Any]] | None:
+    if not series_order or not isinstance(groups, list | tuple):
+        return None
+    ordered: list[dict[str, Any]] = []
+    used: set[int] = set()
+    for label in series_order:
+        for index, group in enumerate(groups):
+            if index in used or not isinstance(group, dict):
+                continue
+            if str(group.get("sample") or "").strip() != label:
+                continue
+            ordered.append(dict(group))
+            used.add(index)
+            break
+    return ordered or None
 
 
 def _experiment_template(experiment: dict[str, Any]) -> str | None:
@@ -817,6 +1014,7 @@ def create_intake_project(
                     "raw_path": str(raw_path),
                     "source_path": str(source_path),
                     "size_bytes": len(incoming.content),
+                    "sha256": hashlib.sha256(incoming.content).hexdigest(),
                 }
             )
         manifest_groups.append({"sample": sample, "files": group_files})
@@ -853,6 +1051,9 @@ def create_intake_project(
         plot_request["column_confirmations"] = selected_column_confirmations
 
     created_at = datetime.now(UTC).isoformat()
+    warnings = _duplicate_source_warnings(manifest_groups)
+    if warnings:
+        plot_request["review_notes"].extend(str(item["message"]) for item in warnings)
     manifest = {
         "kind": "sciplot_intake_project",
         "version": 1,
@@ -868,6 +1069,7 @@ def create_intake_project(
             "template": template,
         },
         "groups": manifest_groups,
+        "warnings": warnings,
         "source_dir": str(source_dir),
         "plot_request": str(project_dir / "plot_request.json"),
         "outputs_dir": str(selected_output),
@@ -1000,6 +1202,7 @@ def rerun_intake_project(
     *,
     exports: list[str] | tuple[str, ...] | None = None,
     render_options: dict[str, Any] | None = None,
+    series_order: list[str] | tuple[str, ...] | None = None,
     review_note: str | None = None,
 ) -> dict[str, Any]:
     from sciplot_core.workflow import run_request
@@ -1017,9 +1220,19 @@ def rerun_intake_project(
     selected_exports = _selected_exports(exports if exports is not None else request.get("exports"))
     current_render_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
     selected_render_options = _selected_render_options(render_options)
+    selected_series_order = _selected_series_order(series_order)
+    if selected_series_order is None:
+        selected_series_order = _selected_series_order(selected_render_options.get("series_order"))
+    if selected_series_order is None:
+        selected_series_order = _selected_series_order(selected_render_options.get("series_include"))
+    if selected_series_order is not None:
+        selected_render_options["series_order"] = selected_series_order
+        selected_render_options["series_include"] = selected_series_order
     merged_render_options = {**current_render_options, **selected_render_options}
 
     request["exports"] = selected_exports
+    if selected_series_order is not None:
+        request["series_order"] = selected_series_order
     if merged_render_options:
         request["render_options"] = merged_render_options
     else:
@@ -1036,7 +1249,11 @@ def rerun_intake_project(
         **plot_options,
         "exports": selected_exports,
         "render_options": merged_render_options,
+        **({"series_order": selected_series_order} if selected_series_order is not None else {}),
     }
+    filtered_groups = _filter_manifest_groups(intake_manifest.get("groups"), selected_series_order)
+    if filtered_groups is not None:
+        intake_manifest["groups"] = filtered_groups
     _write_intake_manifest(project_path, intake_manifest)
 
     try:
@@ -1126,6 +1343,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
         content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -1272,6 +1490,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                         project_dir,
                         exports=payload.get("exports"),
                         render_options=payload.get("render_options"),
+                        series_order=payload.get("series_order"),
                         review_note=payload.get("review_note"),
                     )
                 except PermissionError as exc:
@@ -1321,6 +1540,7 @@ class _IntakeServer(ThreadingHTTPServer):
 def serve_intake(
     *,
     input_path: str | Path | None = None,
+    project_slug: str | None = None,
     host: str = "127.0.0.1",
     port: int = 0,
     output_root: Path = _DEFAULT_OUTPUT_ROOT,
@@ -1334,6 +1554,13 @@ def serve_intake(
         session = prepare_intake_session(input_path, output_root=server.output_root)
         url = f"{url}?session={quote(str(session['session_id']))}"
         payload.update({"url": url, "session_path": session["session_path"], "session_id": session["session_id"]})
+    elif project_slug:
+        safe_project = _safe_filename(project_slug)
+        project_dir = _project_dir_from_slug(server.output_root, safe_project)
+        if not (project_dir / "intake_manifest.json").exists():
+            raise FileNotFoundError(f"No intake project manifest found for project: {project_slug}")
+        url = f"{url}?project={quote(safe_project)}"
+        payload.update({"url": url, "project_slug": safe_project, "project_dir": str(project_dir)})
     print(json.dumps(payload, ensure_ascii=False), flush=True)
     if open_browser:
         webbrowser.open(url)
