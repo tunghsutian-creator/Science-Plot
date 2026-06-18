@@ -31,6 +31,7 @@ class SeriesStylePayloadDict(TypedDict):
     enabled: bool
     color: str | None
     line_width: float | None
+    marker_size: float | None
     marker: str | None
     y_axis_target: str | None
 
@@ -61,6 +62,18 @@ def _optional_line_width(value: object) -> float | None:
     if not math.isfinite(line_width) or line_width <= 0:
         raise ValueError("`series_styles.line_width` must be a positive number.")
     return line_width
+
+
+def _optional_marker_size(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        marker_size = float(cast(Any, value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("`series_styles.marker_size` must be a non-negative number.") from exc
+    if not math.isfinite(marker_size) or marker_size < 0:
+        raise ValueError("`series_styles.marker_size` must be a non-negative number.")
+    return marker_size
 
 
 def _optional_marker(value: object) -> str | None:
@@ -104,6 +117,7 @@ def normalize_series_styles_payload(value: object) -> tuple[SeriesStylePayloadDi
             enabled=bool(item.get("enabled", True)),
             color=_optional_color(item.get("color")),
             line_width=_optional_line_width(item.get("line_width")),
+            marker_size=_optional_marker_size(item.get("marker_size")),
             marker=_optional_marker(item.get("marker")),
             y_axis_target=_optional_y_axis_target(item.get("y_axis_target")),
         )

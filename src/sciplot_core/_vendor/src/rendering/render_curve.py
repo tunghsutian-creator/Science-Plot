@@ -196,6 +196,13 @@ def _apply_series_style_overrides(
                 artist.set_linewidths([float(line_width)])
             else:
                 artist.set_linewidth(float(line_width))
+        marker_size = style.get("marker_size")
+        if marker_size is not None:
+            if scatter and hasattr(artist, "set_sizes"):
+                size = float(marker_size)
+                artist.set_sizes([size * size])
+            elif not scatter and hasattr(artist, "set_markersize"):
+                artist.set_markersize(float(marker_size))
         marker = matplotlib_marker_symbol(style.get("marker"))
         if marker is not None and not scatter and hasattr(artist, "set_marker"):
             artist.set_marker(marker)

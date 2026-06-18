@@ -3,45 +3,43 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SciPlot Workbench</title>
+  <title>SciPlot Studio</title>
   <style>
-    :root {
-      color-scheme: light;
-      --bg: #eef1f4;
-      --window: #f7f9fb;
-      --chrome: #16202a;
-      --chrome-2: #222c37;
-      --panel: #ffffff;
-      --panel-strong: #f9fbfd;
-      --line: #d8dee6;
-      --line-strong: #0f7a83;
-      --text: #161a1f;
-      --muted: #667085;
-      --quiet: #98a2b3;
-      --accent: #0f7a83;
-      --accent-2: #315fbd;
-      --accent-soft: #e6f4f4;
-      --warning: #9a5b00;
-      --warning-soft: #fff4d6;
-      --success: #167047;
-      --danger: #b42318;
-      --shadow: 0 18px 44px rgba(16, 24, 40, 0.12);
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    }
+	    :root {
+	      color-scheme: light;
+	      --bg: #f4f6f8;
+	      --window: #f4f6f8;
+	      --chrome: rgba(255, 255, 255, 0.78);
+	      --chrome-2: #eef1f4;
+	      --panel: #ffffff;
+	      --panel-strong: #f8fafc;
+	      --line: #e3e7ee;
+	      --line-strong: #9cc6ff;
+	      --text: #111827;
+	      --muted: #6b7280;
+	      --quiet: #a2aab5;
+	      --accent: #2563eb;
+	      --accent-2: #2563eb;
+	      --accent-soft: #edf4ff;
+	      --warning: #a16207;
+	      --warning-soft: #fef3c7;
+	      --success: #15803d;
+	      --danger: #dc2626;
+	      --shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+	      --shadow-soft: 0 6px 18px rgba(15, 23, 42, 0.05);
+	      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+	    }
 
     * { box-sizing: border-box; }
 
-    body {
-      margin: 0;
-      min-height: 100vh;
-      color: var(--text);
-      background:
-        linear-gradient(90deg, rgba(22, 32, 42, 0.035) 1px, transparent 1px),
-        linear-gradient(180deg, rgba(22, 32, 42, 0.035) 1px, transparent 1px),
-        var(--bg);
-      background-size: 28px 28px;
-      letter-spacing: 0;
-    }
+	    body {
+	      margin: 0;
+	      min-height: 100vh;
+	      color: var(--text);
+	      background: var(--bg);
+	      letter-spacing: 0;
+	      overflow: hidden;
+	    }
 
     button, input, textarea { font: inherit; }
 
@@ -55,52 +53,63 @@
       text-decoration: none;
     }
 
-    .app {
-      width: min(1500px, calc(100vw - 24px));
-      min-height: calc(100vh - 24px);
-      margin: 12px auto;
-      display: grid;
-      grid-template-columns: 248px minmax(0, 1fr) 304px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      overflow: hidden;
-      background: var(--window);
-      box-shadow: var(--shadow);
+	    .app {
+	      width: 100vw;
+	      height: 100vh;
+	      min-height: 100vh;
+	      margin: 0;
+	      display: grid;
+	      grid-template-columns: 72px minmax(0, 1fr);
+	      border: 0;
+	      border-radius: 0;
+	      overflow: hidden;
+	      background: var(--window);
+	      box-shadow: none;
+	    }
+
+    .app.studio-result-mode {
+      grid-template-columns: 72px minmax(0, 1fr);
     }
 
-    .app.workbench-mode {
-      grid-template-columns: 204px minmax(0, 1fr);
-    }
-
-    .app.workbench-mode .inspector {
+    .inspector,
+    .app.studio-result-mode .inspector {
       display: none;
     }
 
-    .app.workbench-mode .workspace {
-      grid-template-rows: 62px minmax(0, 1fr) 46px;
-    }
+	    .app.studio-result-mode .workspace {
+	      grid-template-rows: 52px minmax(0, 1fr);
+	    }
 
-    .app.workbench-mode .canvas {
-      padding: 14px;
-    }
+	    .app.studio-result-mode .canvas {
+	      padding: 0;
+	      overflow: hidden;
+	      display: block;
+	    }
 
-    .app.workbench-mode .footer-actions {
-      display: none;
-    }
+	    .app.studio-result-mode .footer {
+	      display: none;
+	    }
 
-    .rail {
-      min-width: 0;
-      padding: 16px;
-      border-right: 1px solid rgba(255, 255, 255, 0.08);
-      background: var(--chrome);
-      display: grid;
-      grid-template-rows: auto auto 1fr auto;
-      gap: 16px;
-      color: #f4f7fb;
-    }
+	    .app.studio-result-mode .footer-actions {
+	      display: none;
+	    }
+
+	    .rail {
+	      min-width: 0;
+	      min-height: 0;
+	      padding: 14px 10px;
+	      border-right: 1px solid var(--line);
+	      background: rgba(255, 255, 255, 0.72);
+	      backdrop-filter: blur(18px);
+	      display: grid;
+	      grid-template-rows: auto auto 1fr auto;
+	      gap: 18px;
+	      color: var(--text);
+	    }
 
     .traffic {
       display: flex;
+      justify-content: center;
       gap: 8px;
     }
 
@@ -117,78 +126,95 @@
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      justify-content: center;
+      gap: 0;
       min-height: 42px;
-      font-size: 18px;
+      font-size: 0;
       font-weight: 760;
     }
 
-    .brand-mark {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      color: white;
-      display: grid;
-      place-items: center;
-      background: var(--accent);
-    }
+    .brand span { display: none; }
+
+	    .brand-mark {
+	      width: 38px;
+	      height: 38px;
+	      border-radius: 10px;
+	      color: white;
+	      display: grid;
+	      place-items: center;
+		      background: var(--text);
+		      box-shadow: none;
+	    }
 
     .nav {
       display: grid;
-      gap: 6px;
+      gap: 8px;
       align-content: start;
       grid-auto-rows: min-content;
+      justify-items: center;
     }
 
-    .nav-button {
-      min-height: 42px;
-      padding: 0 10px;
-      border-radius: 8px;
-      color: #c5ced8;
-      background: transparent;
+	    .nav-button {
+	      width: 44px;
+	      min-height: 44px;
+	      padding: 0;
+	      border-radius: 12px;
+	      color: var(--muted);
+	      background: transparent;
       display: flex;
       align-items: center;
-      gap: 10px;
-      text-align: left;
+      justify-content: center;
+      gap: 0;
+      text-align: center;
       font-weight: 660;
     }
 
-    .nav-index {
-      width: 24px;
-      height: 24px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      color: #d5dde6;
-      background: rgba(255, 255, 255, 0.08);
-      font-size: 12px;
-      font-weight: 760;
-    }
+	    .nav-index,
+	    .nav-icon {
+	      width: 28px;
+	      height: 28px;
+	      border-radius: 10px;
+	      display: grid;
+	      place-items: center;
+	      color: var(--muted);
+	      background: transparent;
+	      font-size: 12px;
+	      font-weight: 760;
+	    }
+
+	    .nav-icon svg {
+	      width: 17px;
+	      height: 17px;
+	      display: block;
+	    }
 
     .nav-label {
       min-width: 0;
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
+      display: none;
     }
 
-    .nav-button.active {
-      color: #ffffff;
-      background: rgba(255, 255, 255, 0.11);
-      box-shadow: inset 3px 0 0 var(--accent);
-    }
+	    .nav-button.active {
+	      color: var(--text);
+	      background: #ffffff;
+		      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.14);
+	    }
 
-    .nav-button.active .nav-index {
-      color: #ffffff;
-      background: var(--accent);
-    }
+	    .nav-button.active .nav-index,
+	    .nav-button.active .nav-icon {
+	      color: #ffffff;
+	      background: var(--accent);
+	    }
 
-    .workspace {
-      min-width: 0;
-      display: grid;
-      grid-template-rows: 72px minmax(0, 1fr) 60px;
-      background: var(--window);
-    }
+	    .workspace {
+	      min-width: 0;
+	      min-height: 0;
+	      display: grid;
+	      grid-template-rows: 52px minmax(0, 1fr) 44px;
+	      background: var(--window);
+	    }
 
     .banner {
       margin: 14px 22px 0;
@@ -237,11 +263,11 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .topbar {
-      padding: 0 22px;
-      border-bottom: 1px solid var(--line);
-      display: flex;
-      align-items: center;
+	    .topbar {
+	      padding: 0 18px 0 20px;
+	      border-bottom: 1px solid var(--line);
+	      display: flex;
+	      align-items: center;
       gap: 14px;
       justify-content: space-between;
     }
@@ -249,7 +275,7 @@
     .title-wrap {
       min-width: 0;
       display: grid;
-      gap: 3px;
+      gap: 0;
     }
 
     .eyebrow {
@@ -259,23 +285,27 @@
       letter-spacing: 0;
     }
 
-    h1 {
-      margin: 0;
-      font-size: 24px;
-      line-height: 1.1;
-      letter-spacing: 0;
-    }
+    .title-wrap .eyebrow { display: none; }
 
-    .project-name {
-      width: min(340px, 40vw);
-      height: 36px;
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      color: var(--text);
-      background: var(--panel);
-      outline: none;
-    }
+	    h1 {
+	      margin: 0;
+	      font-size: 15px;
+	      line-height: 1.1;
+	      letter-spacing: 0;
+	      font-weight: 760;
+	    }
+
+	    .project-name {
+	      width: min(360px, 44vw);
+	      height: 34px;
+	      padding: 0 12px;
+	      border: 1px solid var(--line);
+	      border-radius: 10px;
+	      color: var(--text);
+	      background: rgba(255, 255, 255, 0.84);
+	      outline: none;
+	      box-shadow: 0 8px 20px rgba(26, 34, 47, 0.04);
+	    }
 
     .project-name:focus,
     .field-input:focus,
@@ -285,28 +315,133 @@
       box-shadow: 0 0 0 3px var(--accent-soft);
     }
 
-    .canvas {
-      min-height: 0;
-      padding: 18px;
-      overflow: auto;
-      display: grid;
-      gap: 14px;
-      align-content: start;
+	    .canvas {
+	      min-height: 0;
+	      padding: 18px 20px;
+	      overflow: auto;
+	      display: grid;
+	      gap: 16px;
+	      align-content: start;
+	    }
+
+	    .canvas-grid {
+	      display: grid;
+	      grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+	      gap: 14px;
+	      align-items: start;
+	    }
+
+	    .source-stage {
+	      display: grid;
+	      grid-template-columns: minmax(260px, 0.34fr) minmax(0, 1fr);
+	      gap: 16px;
+	      align-items: start;
+	    }
+
+	    .source-summary {
+	      display: grid;
+	      gap: 12px;
+	      position: sticky;
+	      top: 0;
+	    }
+
+	    .source-summary .metric-row {
+	      grid-template-columns: 1fr;
+	    }
+
+	    .inspect-stage {
+	      min-height: min(720px, calc(100vh - 120px));
+	      display: grid;
+	      grid-template-columns: minmax(260px, 0.38fr) minmax(0, 1fr);
+	      gap: 16px;
+	      align-items: stretch;
+	    }
+
+	    .inspect-current {
+	      min-height: 100%;
+	      padding: 22px;
+	      border: 1px solid rgba(255, 255, 255, 0.44);
+	      border-radius: 18px;
+	      color: #ffffff;
+		      background: #1f2937;
+	      display: grid;
+	      grid-template-columns: 1fr;
+	      grid-template-rows: minmax(180px, 1fr) auto auto;
+	      gap: 16px;
+	      align-items: end;
+	      overflow: hidden;
+	      position: relative;
+	      box-shadow: var(--shadow-soft);
+	    }
+
+	    .inspect-symbol {
+	      align-self: stretch;
+		      min-height: 220px;
+		      color: rgba(255, 255, 255, 0.82);
+		      transform: translateX(-4%);
+		      filter: none;
+		    }
+
+    .inspect-symbol svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
 
-    .canvas-grid {
+    .inspect-current-main {
+      min-width: 0;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
-      gap: 14px;
-      align-items: start;
+      gap: 8px;
     }
 
-    .panel {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
+	    .inspect-kicker {
+	      width: max-content;
+	      max-width: 100%;
+	      padding: 4px 8px;
+	      border-radius: 999px;
+	      color: #dffaf5;
+	      background: rgba(255, 255, 255, 0.16);
+	      font-size: 12px;
+	      font-weight: 760;
       overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
+
+	    .inspect-current-title {
+	      overflow: hidden;
+	      overflow-wrap: anywhere;
+	      white-space: normal;
+	      text-overflow: ellipsis;
+	      font-size: clamp(28px, 3vw, 44px);
+	      line-height: 1.05;
+	      font-weight: 800;
+	    }
+
+	    .status-dot {
+	      position: absolute;
+	      right: 18px;
+	      top: 18px;
+	      width: 12px;
+	      height: 12px;
+	      border-radius: 50%;
+	      background: #44d483;
+	      box-shadow: 0 0 0 7px rgba(68, 212, 131, 0.18);
+	      animation: statusPulse 2.4s ease-in-out infinite;
+	    }
+
+	    .inspect-grid {
+	      grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
+	      align-content: start;
+	    }
+
+	    .panel {
+	      border: 1px solid var(--line);
+	      border-radius: 14px;
+	      background: rgba(255, 255, 255, 0.84);
+	      overflow: hidden;
+	      box-shadow: 0 10px 26px rgba(26, 34, 47, 0.04);
+	    }
 
     .panel .panel {
       border-radius: 0;
@@ -315,17 +450,17 @@
       overflow: visible;
     }
 
-    .panel-head {
-      min-height: 46px;
-      padding: 0 14px;
-      border-bottom: 1px solid var(--line);
+	    .panel-head {
+	      min-height: 42px;
+	      padding: 0 14px;
+	      border-bottom: 1px solid var(--line);
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
       font-weight: 720;
-      background: var(--panel-strong);
-    }
+	      background: rgba(245, 247, 250, 0.76);
+	    }
 
     .panel-body {
       padding: 14px;
@@ -333,11 +468,11 @@
       gap: 12px;
     }
 
-    .result-stage {
-      min-height: 420px;
-      border-radius: 8px;
-      border: 1px solid var(--line);
-      background: #fff;
+	    .result-stage {
+	      min-height: 420px;
+	      border-radius: 16px;
+	      border: 1px solid var(--line);
+	      background: #fff;
       display: grid;
       place-items: center;
       overflow: hidden;
@@ -352,36 +487,72 @@
       background: #fff;
     }
 
-    .figure-stage {
-      min-height: 520px;
-      padding: 16px;
-      position: relative;
-    }
+	    .webagg-frame {
+	      width: 100%;
+	      height: 100%;
+	      min-height: 100%;
+	      border: 0;
+	      background: #fff;
+	    }
 
-    .figure-stage.rendering::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: rgba(255, 255, 255, 0.62);
-      pointer-events: none;
-    }
+	    .figure-stage {
+	      min-height: 520px;
+	      padding: 18px;
+	      position: relative;
+	      display: flex;
+	      align-items: center;
+	      justify-content: center;
+	      transition: box-shadow 0.22s ease, transform 0.22s ease;
+	    }
 
-    .figure-preview-img {
-      display: block;
-      width: 100%;
-      height: 100%;
-      max-height: min(74vh, 720px);
-      object-fit: contain;
-    }
+	    .figure-stage.rendering::after {
+	      content: "";
+	      position: absolute;
+	      inset: 0;
+	      background: rgba(255, 255, 255, 0.62);
+	      pointer-events: none;
+	      animation: renderWash 1.4s ease-in-out infinite alternate;
+	    }
+
+	    .figure-preview-img {
+	      display: block;
+	      width: auto;
+	      height: auto;
+	      max-width: 100%;
+	      max-height: 100%;
+	      min-width: 0;
+	      min-height: 0;
+	      transition: transform 0.28s ease, filter 0.28s ease;
+	    }
+
+	    .figure-stage:hover .figure-preview-img {
+	      transform: scale(1.005);
+	      filter: contrast(1.02);
+	    }
+
+	    .figure-stage.zoomed .figure-preview-img {
+	      transform: scale(1.07);
+	    }
+
+	    .figure-stage.axes-focus {
+		      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.22);
+	    }
+
+	    .figure-stage.legend-focus .figure-preview-img {
+	      filter: saturate(1.12) contrast(1.04);
+	    }
 
     .figure-stage object {
       min-height: 520px;
     }
 
-    .app.workbench-mode .figure-stage {
-      height: clamp(420px, calc(100vh - 240px), 700px);
-      min-height: 420px;
-    }
+	    .app.studio-result-mode .figure-stage {
+	      height: 100%;
+	      min-height: 0;
+	      padding: 0;
+	      border-color: transparent;
+	      box-shadow: none;
+	    }
 
     .artifact-row-grid {
       display: grid;
@@ -393,78 +564,436 @@
       grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
     }
 
-    .result-review-grid {
-      grid-template-columns: 1fr;
-    }
+	    .tool-button {
+	      width: 34px;
+	      height: 34px;
+	      min-width: 0;
+	      min-height: 0;
+	      padding: 0;
+	      border-radius: 10px;
+	      color: var(--muted);
+	      background: transparent;
+	      display: grid;
+	      place-items: center;
+	      font-size: 13px;
+	      font-weight: 800;
+	    }
 
-    .workbench-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 14px;
-      align-items: start;
-    }
+	    .tool-button svg {
+	      width: 17px;
+	      height: 17px;
+	      display: block;
+	    }
 
-    .workbench-preview,
-    .workbench-controls {
-      min-width: 0;
-      display: grid;
-      gap: 12px;
-      align-content: start;
-    }
+	    .tool-button.active,
+	    .tool-button:hover {
+	      color: var(--text);
+	      background: #ffffff;
+		      box-shadow: inset 0 0 0 1px var(--line);
+	    }
 
-    .workbench-controls {
-      position: static;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #ffffff;
-      overflow: hidden;
-    }
+	    .figure-tabs {
+	      min-width: 0;
+	      display: flex;
+	      align-items: center;
+	      gap: 8px;
+	      overflow: auto;
+	    }
 
-    .workbench-toolbar {
-      min-width: 0;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #ffffff;
-    }
+	    .figure-tab {
+	      width: 28px;
+	      height: 28px;
+	      min-width: 28px;
+	      min-height: 28px;
+	      padding: 0;
+	      border-radius: 999px;
+	      color: var(--muted);
+	      background: #ffffff;
+	      border: 1px solid rgba(132, 146, 166, 0.24);
+	      display: inline-flex;
+	      justify-content: center;
+	      align-items: center;
+	      gap: 6px;
+	      font-size: 12px;
+	      font-weight: 760;
+	      white-space: nowrap;
+	    }
 
-    .workbench-title {
-      min-width: 0;
-      display: grid;
-      gap: 2px;
-    }
+	    .figure-tab svg {
+	      display: none;
+	    }
 
-    .workbench-title .row-title,
-    .workbench-title .row-subtitle {
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
+	    .figure-tab.active {
+	      color: var(--text);
+		      border-color: rgba(37, 99, 235, 0.22);
+	      background: var(--accent-soft);
+	    }
 
-    .workbench-actions {
-      min-width: 0;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-      gap: 8px;
-    }
+	    .studio-shell {
+	      height: 100%;
+	      min-height: 0;
+	      padding: 12px;
+	      display: grid;
+	      grid-template-columns: minmax(560px, 1fr) 320px;
+	      grid-template-rows: minmax(0, 1fr) auto;
+	      grid-template-areas:
+	        "canvas sidecar"
+	        "tabs sidecar";
+	      gap: 10px;
+	      background: var(--bg);
+	      overflow: hidden;
+	    }
 
-    .workbench-actions .btn {
-      min-width: 0;
-      min-height: 32px;
-      padding: 0 11px;
-    }
+	    .studio-canvas {
+	      grid-area: canvas;
+	      min-width: 0;
+	      min-height: 0;
+	      position: relative;
+	      display: grid;
+	      place-items: center;
+	      overflow: hidden;
+	    }
 
-    .artifact-drawer {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #ffffff;
-      overflow: hidden;
-    }
+	    .studio-canvas .figure-stage {
+	      width: min(100%, 780px);
+	      height: min(100%, 650px);
+	    }
+
+	    .studio-main {
+	      min-width: 0;
+	      min-height: 0;
+	      display: grid;
+	      grid-template-rows: auto minmax(0, 1fr) auto;
+	      gap: 12px;
+	    }
+
+	    .studio-titlebar,
+	    .studio-filmstrip,
+	    .studio-sidecar {
+	      animation: studioFloatIn 0.32s ease both;
+	    }
+
+	    .studio-titlebar {
+	      min-width: 0;
+	      min-height: 38px;
+	      padding: 0 4px;
+	      border: 0;
+	      border-radius: 0;
+	      background: transparent;
+	      box-shadow: none;
+	      backdrop-filter: none;
+	      display: flex;
+	      align-items: center;
+	      justify-content: space-between;
+	      gap: 12px;
+	    }
+
+	    .studio-title {
+	      min-width: 0;
+	      display: grid;
+	      gap: 2px;
+	    }
+
+	    .app.atelier-app.studio-result-mode .studio-titlebar {
+	      display: none;
+	    }
+
+	    .app.atelier-app.studio-result-mode .studio-title {
+	      display: none;
+	    }
+
+	    .studio-title strong,
+	    .studio-title span {
+	      min-width: 0;
+	      overflow: hidden;
+	      white-space: nowrap;
+	      text-overflow: ellipsis;
+	    }
+
+	    .studio-title strong {
+	      font-size: 15px;
+	      font-weight: 800;
+	    }
+
+	    .studio-title span {
+	      color: var(--muted);
+	      font-size: 12px;
+	      font-weight: 650;
+	    }
+
+	    .studio-actions {
+	      display: flex;
+	      align-items: center;
+	      justify-content: flex-end;
+	      gap: 8px;
+	      flex-wrap: wrap;
+	    }
+
+	    .studio-board {
+	      min-width: 0;
+	      min-height: 0;
+	      position: relative;
+	      display: grid;
+		      border: 1px solid rgba(148, 163, 184, 0.12);
+		      border-radius: 16px;
+		      background: #f8fafc;
+		      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+	      overflow: hidden;
+	      animation: studioFloatIn 0.42s ease both;
+	    }
+
+	    .studio-board .figure-stage {
+	      width: 100%;
+	      height: 100%;
+	      border: 0;
+	      border-radius: 0;
+	      background: transparent;
+	      box-shadow: none;
+	    }
+
+	    .app.atelier-app.studio-result-mode .result-stage {
+	      border: 0;
+	      border-radius: 0;
+	      background: transparent;
+	    }
+
+	    .studio-tool-dock {
+	      position: absolute;
+	      z-index: 3;
+	      left: 14px;
+	      top: 14px;
+	      display: grid;
+	      gap: 7px;
+	      padding: 7px;
+		      border: 1px solid rgba(148, 163, 184, 0.16);
+		      border-radius: 14px;
+		      background: rgba(255, 255, 255, 0.88);
+		      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+		      backdrop-filter: blur(12px);
+	      animation: studioFloatIn 0.34s ease both;
+	    }
+
+	    .studio-state-chip {
+	      position: absolute;
+	      z-index: 3;
+	      right: 16px;
+	      top: 16px;
+	      width: 18px;
+	      height: 18px;
+	      padding: 0;
+	      border-radius: 999px;
+	      color: transparent;
+	      background: rgba(255, 255, 255, 0.78);
+	      border: 1px solid rgba(148, 163, 184, 0.16);
+	      box-shadow: none;
+	      display: inline-flex;
+	      align-items: center;
+	      justify-content: center;
+	      gap: 7px;
+	      font-size: 0;
+	      font-weight: 760;
+	      backdrop-filter: blur(8px);
+	      animation: studioFloatIn 0.34s ease both;
+	    }
+
+	    .studio-state-chip::before {
+	      content: "";
+	      width: 6px;
+	      height: 6px;
+	      border-radius: 50%;
+	      background: var(--success);
+	      box-shadow: none;
+	    }
+
+	    .studio-filmstrip {
+	      grid-area: tabs;
+	      min-width: 0;
+	      min-height: 40px;
+	      padding: 4px 2px;
+	      border: 0;
+	      border-radius: 0;
+	      background: transparent;
+	      box-shadow: none;
+	      backdrop-filter: none;
+	      display: flex;
+	      align-items: center;
+	      justify-content: space-between;
+	      gap: 10px;
+	    }
+
+	    .studio-filmstrip .figure-tabs {
+	      flex: 1 1 auto;
+	    }
+
+	    .studio-sidecar {
+	      grid-area: sidecar;
+	      min-width: 0;
+	      min-height: 0;
+	      padding: 0 0 0 10px;
+	      border: 0;
+	      border-radius: 0;
+	      background: transparent;
+	      box-shadow: none;
+	      backdrop-filter: none;
+	      display: grid;
+	      grid-template-rows: auto minmax(0, 1fr);
+	      gap: 10px;
+	      overflow: hidden;
+	      animation-name: studioSlideIn;
+	      animation-duration: 0.38s;
+	    }
+
+	    .studio-side-tabs {
+	      display: grid;
+	      grid-template-columns: repeat(4, minmax(0, 1fr));
+	      gap: 4px;
+	      padding: 3px;
+	      border-radius: 12px;
+	      background: rgba(241, 245, 249, 0.72);
+	    }
+
+	    .studio-side-tab {
+	      min-height: 34px;
+	      border-radius: 12px;
+	      color: var(--muted);
+	      background: transparent;
+	      font-size: 0;
+	      font-weight: 780;
+	    }
+
+	    .studio-side-tab svg {
+	      width: 16px;
+	      height: 16px;
+	      display: block;
+	      margin: auto;
+	    }
+
+	    .studio-side-tab.active {
+	      color: var(--text);
+	      background: #ffffff;
+	      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
+	    }
+
+	    .studio-side-body {
+	      min-height: 0;
+	      overflow: auto;
+	      display: grid;
+	      gap: 8px;
+	      align-content: start;
+	      padding-right: 2px;
+	    }
+
+	    .studio-section {
+	      display: grid;
+	      gap: 10px;
+	      padding: 0 4px 12px;
+	      border: 0;
+	      border-bottom: 1px solid rgba(135, 148, 166, 0.18);
+	      border-radius: 0;
+	      background: transparent;
+	    }
+
+	    .studio-controls {
+	      min-width: 0;
+	      display: grid;
+	      gap: 12px;
+	      align-content: start;
+	    }
+
+	    .studio-controls .panel-head {
+	      padding: 0 2px 4px;
+	      min-height: 30px;
+	      border-bottom: 0;
+	      background: transparent;
+	    }
+
+	    .studio-controls .panel-body {
+	      padding: 0;
+	      gap: 12px;
+	    }
+
+	    .studio-sidecar .panel,
+	    .studio-sidecar .artifact-drawer {
+	      border: 0;
+	      border-bottom: 1px solid rgba(135, 148, 166, 0.18);
+	      border-radius: 0;
+	      background: transparent;
+	      box-shadow: none;
+	    }
+
+	    .studio-sidecar .panel:last-child,
+	    .studio-sidecar .artifact-drawer:last-child {
+	      border-bottom: 0;
+	    }
+
+	    .studio-sidecar .panel-body {
+	      padding: 6px 0 12px;
+	    }
+
+	    .studio-sidecar .panel-head {
+	      min-height: 30px;
+	      padding: 0;
+	      border-bottom: 0;
+	      background: transparent;
+	    }
+
+	    .studio-sample-list {
+	      display: grid;
+	      gap: 7px;
+	    }
+
+	    .studio-sample-item {
+	      min-height: 34px;
+	      padding: 0 10px;
+	      border-radius: 999px;
+	      background: rgba(255, 255, 255, 0.72);
+	      border: 1px solid rgba(135, 148, 166, 0.18);
+	      display: flex;
+	      align-items: center;
+	      justify-content: space-between;
+	      gap: 8px;
+	      font-size: 12px;
+	      font-weight: 700;
+	    }
+
+	    .studio-sample-item::before {
+	      content: "";
+	      width: 8px;
+	      height: 8px;
+	      border-radius: 50%;
+	      background: var(--accent);
+	    }
+
+	    .studio-mode {
+	      min-height: min(720px, calc(100vh - 130px));
+	      display: grid;
+	      grid-template-columns: minmax(0, 1fr) minmax(300px, 390px);
+	      gap: 16px;
+	      align-items: start;
+	    }
+
+	    .studio-mode-canvas {
+	      min-width: 0;
+	      min-height: 540px;
+	      padding: 18px;
+		      border: 1px solid rgba(148, 163, 184, 0.12);
+		      border-radius: 16px;
+		      background: #f8fafc;
+		      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+	    }
+
+	    .studio-mode-side {
+	      min-width: 0;
+	      display: grid;
+	      gap: 12px;
+	    }
+
+	    .artifact-drawer {
+	      border: 1px solid rgba(135, 148, 166, 0.18);
+	      border-radius: 12px;
+	      background: rgba(255, 255, 255, 0.58);
+	      overflow: hidden;
+	    }
 
     .artifact-drawer summary {
       min-height: 38px;
@@ -486,17 +1015,39 @@
       padding: 0 10px;
     }
 
-    .control-section {
-      display: grid;
-      gap: 10px;
-      padding-top: 12px;
+    .chart-spec-table {
+      max-height: 220px;
+      overflow: auto;
       border-top: 1px solid var(--line);
     }
 
-    .control-section:first-child {
-      padding-top: 0;
-      border-top: 0;
+    .chart-spec-table table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
     }
+
+    .chart-spec-table th,
+    .chart-spec-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      white-space: nowrap;
+    }
+
+	    .control-section {
+	      display: grid;
+	      gap: 10px;
+	      padding: 10px 0;
+	      border-top: 1px solid var(--line);
+	      border-radius: 0;
+	      background: transparent;
+	    }
+
+	    .control-section:first-child {
+	      padding-top: 12px;
+	      border-top: 0;
+	    }
 
     .control-head {
       display: flex;
@@ -549,13 +1100,13 @@
       gap: 8px;
     }
 
-    .metric {
-      min-height: 78px;
-      padding: 12px;
-      border-radius: 8px;
-      background: var(--panel-strong);
-      border: 1px solid var(--line);
-      display: grid;
+	    .metric {
+	      min-height: 78px;
+	      padding: 12px;
+	      border-radius: 14px;
+	      background: var(--panel-strong);
+	      border: 1px solid var(--line);
+	      display: grid;
       align-content: center;
       gap: 5px;
     }
@@ -583,13 +1134,13 @@
       align-items: end;
     }
 
-    .table-wrap {
-      max-height: 340px;
-      overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-    }
+	    .table-wrap {
+	      max-height: 340px;
+	      overflow: auto;
+	      border: 1px solid var(--line);
+	      border-radius: 14px;
+	      background: #fff;
+	    }
 
     .data-table {
       width: 100%;
@@ -644,12 +1195,12 @@
       padding: 0 9px;
     }
 
-    .column-confirm-row {
-      min-height: 52px;
-      padding: 9px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-strong);
+	    .column-confirm-row {
+	      min-height: 52px;
+	      padding: 9px;
+	      border: 1px solid var(--line);
+	      border-radius: 12px;
+	      background: var(--panel-strong);
       display: grid;
       grid-template-columns: minmax(130px, 1.3fr) minmax(110px, 0.8fr) minmax(110px, 0.8fr);
       gap: 8px;
@@ -662,21 +1213,21 @@
       gap: 3px;
     }
 
-    .column-select {
-      min-width: 0;
-      height: 34px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
+	    .column-select {
+	      min-width: 0;
+	      height: 34px;
+	      border: 1px solid var(--line);
+	      border-radius: 10px;
       color: var(--text);
       background: #fff;
       outline: none;
     }
 
-    .row {
-      min-height: 40px;
-      padding: 9px 11px;
-      border-radius: 8px;
-      background: var(--panel-strong);
+	    .row {
+	      min-height: 40px;
+	      padding: 9px 11px;
+	      border-radius: 12px;
+	      background: var(--panel-strong);
       border: 1px solid var(--line);
       display: flex;
       align-items: center;
@@ -728,12 +1279,12 @@
       background: rgba(24, 128, 56, 0.1);
     }
 
-    .groups {
-      display: grid;
-      grid-template-columns: 280px minmax(0, 1fr);
-      gap: 14px;
-      align-items: start;
-    }
+	    .groups {
+	      display: grid;
+	      grid-template-columns: 280px minmax(0, 1fr);
+	      gap: 16px;
+	      align-items: start;
+	    }
 
     .sample-list {
       display: grid;
@@ -741,12 +1292,12 @@
       padding: 12px;
     }
 
-    .sample-row {
-      min-height: 48px;
-      padding: 8px;
-      border: 1px solid transparent;
-      border-radius: 8px;
-      background: transparent;
+	    .sample-row {
+	      min-height: 48px;
+	      padding: 8px;
+	      border: 1px solid transparent;
+	      border-radius: 12px;
+	      background: transparent;
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto auto;
       gap: 8px;
@@ -764,10 +1315,10 @@
       background: rgba(0, 122, 255, 0.08);
     }
 
-    .drag-handle {
-      width: 28px;
-      height: 34px;
-      border-radius: 6px;
+	    .drag-handle {
+	      width: 28px;
+	      height: 34px;
+	      border-radius: 10px;
       color: var(--muted);
       background: #eef2f6;
       display: grid;
@@ -778,10 +1329,10 @@
       user-select: none;
     }
 
-    .sample-remove {
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
+	    .sample-remove {
+	      width: 28px;
+	      height: 28px;
+	      border-radius: 10px;
       color: var(--muted);
       background: #eef2f6;
       display: grid;
@@ -796,13 +1347,13 @@
       opacity: 0.35;
     }
 
-    .sample-input,
-    .field-input,
-    textarea {
+	    .sample-input,
+	    .field-input,
+	    textarea {
       width: 100%;
       min-width: 0;
       border: 1px solid var(--line);
-      border-radius: 8px;
+	      border-radius: 10px;
       color: var(--text);
       background: var(--panel);
       outline: none;
@@ -837,12 +1388,12 @@
       font-weight: 680;
     }
 
-    .dropzone {
-      min-height: 260px;
-      margin: 12px;
-      border: 1.5px dashed rgba(60, 60, 67, 0.28);
-      border-radius: 8px;
-      background: #f8fafc;
+	    .dropzone {
+	      min-height: 260px;
+	      margin: 12px;
+	      border: 1.5px dashed rgba(60, 60, 67, 0.28);
+	      border-radius: 16px;
+	      background: #f8fafc;
       display: grid;
       place-items: center;
       text-align: center;
@@ -890,42 +1441,49 @@
       gap: 7px;
     }
 
-    .option-pill {
-      min-height: 34px;
-      padding: 0 10px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      color: var(--text);
-      background: var(--panel);
-      display: inline-flex;
+	    .option-pill {
+	      min-height: 34px;
+	      padding: 0 10px;
+	      border: 1px solid var(--line);
+	      border-radius: 999px;
+	      color: var(--text);
+	      background: rgba(255, 255, 255, 0.78);
+	      display: inline-flex;
       align-items: center;
       gap: 8px;
       font-size: 14px;
       font-weight: 650;
     }
 
-    .option-pill.selected {
-      border-color: var(--line-strong);
-      color: var(--accent);
-      background: var(--accent-soft);
-    }
+	    .option-pill.selected {
+		      border-color: var(--line-strong);
+		      color: var(--accent);
+		      background: var(--accent-soft);
+		      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+		    }
 
     .option-pill input { accent-color: var(--accent); }
 
-    .btn {
-      min-width: 84px;
-      min-height: 36px;
-      padding: 0 13px;
-      border-radius: 8px;
-      color: var(--text);
-      background: #eef2f6;
-      font-weight: 680;
-    }
+	    .btn {
+	      min-width: 84px;
+	      min-height: 36px;
+	      padding: 0 13px;
+	      border-radius: 10px;
+	      color: var(--text);
+	      background: #edf2f6;
+	      font-weight: 680;
+	      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+	    }
 
-    .btn.primary {
-      color: white;
-      background: var(--accent);
-    }
+		    .btn:hover:not(:disabled) {
+		      transform: translateY(-1px);
+		      box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+		    }
+
+		    .btn.primary {
+		      color: white;
+		      background: var(--accent);
+		    }
 
     .btn.warning {
       color: #3a2600;
@@ -937,16 +1495,17 @@
       opacity: 0.42;
     }
 
-    .footer {
-      padding: 0 18px;
-      border-top: 1px solid var(--line);
+	    .footer {
+	      padding: 0 18px;
+	      border-top: 1px solid var(--line);
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 14px;
       color: var(--muted);
-      font-size: 14px;
-    }
+	      font-size: 13px;
+	      background: rgba(255, 255, 255, 0.42);
+	    }
 
     .inspector {
       min-width: 0;
@@ -954,7 +1513,7 @@
       border-left: 1px solid var(--line);
       background: #ffffff;
       overflow: auto;
-      display: grid;
+      display: none;
       gap: 14px;
       align-content: start;
     }
@@ -1011,35 +1570,49 @@
       place-items: center;
     }
 
-    .choice-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
-      gap: 10px;
-    }
+	    .choice-grid {
+	      display: grid;
+	      grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
+	      gap: 12px;
+	    }
 
-    .choice-tile {
-      min-height: 140px;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      color: var(--text);
-      background: #ffffff;
-      text-align: left;
-      display: grid;
-      align-content: space-between;
-      gap: 10px;
-    }
+	    .choice-tile {
+	      min-height: 154px;
+	      padding: 14px;
+	      border: 1px solid var(--line);
+	      border-radius: 16px;
+	      color: var(--text);
+	      background: rgba(255, 255, 255, 0.84);
+	      text-align: left;
+	      display: grid;
+	      align-content: space-between;
+	      gap: 10px;
+	      transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
+	    }
 
-    .choice-tile.selected {
-      border-color: var(--line-strong);
-      background: var(--accent-soft);
-      box-shadow: inset 0 0 0 1px rgba(15, 122, 131, 0.14);
-    }
+	    .choice-tile.selected {
+		      border-color: var(--line-strong);
+		      background: #ffffff;
+		      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.12);
+		    }
 
-    .choice-visual {
-      height: 58px;
-      color: #293241;
-    }
+    .choice-tile:hover {
+	      border-color: rgba(37, 99, 235, 0.34);
+	      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+	      transform: translateY(-1px);
+	    }
+
+	    .choice-visual {
+	      height: 70px;
+	      color: #2b3544;
+	      transition: color 0.18s ease, transform 0.18s ease;
+	    }
+
+	    .choice-tile:hover .choice-visual,
+	    .choice-tile.selected .choice-visual {
+	      color: var(--accent-2);
+	      transform: translateY(-2px);
+	    }
 
     .choice-visual svg {
       width: 100%;
@@ -1047,36 +1620,276 @@
       display: block;
     }
 
-    .choice-title {
-      font-weight: 740;
-    }
+	    .choice-title {
+	      font-weight: 740;
+	    }
 
-    .choice-subtitle {
-      margin-top: 3px;
-      color: var(--muted);
-      font-size: 12px;
-      overflow-wrap: anywhere;
-    }
+	    @keyframes statusPulse {
+	      0%, 100% { transform: scale(1); opacity: 0.78; }
+	      50% { transform: scale(1.18); opacity: 1; }
+	    }
 
-    @media (max-width: 1040px) {
-      .app {
-        width: 100vw;
-        min-height: 100vh;
-        margin: 0;
-        border-radius: 0;
-        grid-template-columns: 1fr;
-      }
+	    @keyframes renderWash {
+	      from { opacity: 0.44; }
+	      to { opacity: 0.78; }
+	    }
+
+	    @keyframes studioFloatIn {
+	      from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.985); }
+	      to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+	    }
+
+	    @keyframes studioSlideIn {
+	      from { opacity: 0; transform: translate3d(18px, 0, 0); }
+	      to { opacity: 1; transform: translate3d(0, 0, 0); }
+	    }
+
+	    @keyframes commandDropIn {
+	      from { opacity: 0; transform: translate3d(-50%, -10px, 0) scale(0.985); }
+	      to { opacity: 1; transform: translate3d(-50%, 0, 0) scale(1); }
+	    }
+
+	    .choice-subtitle {
+	      margin-top: 3px;
+	      color: var(--muted);
+	      font-size: 12px;
+	      overflow-wrap: anywhere;
+	      display: none;
+	    }
+
+	    .app.atelier-app {
+	      position: relative;
+	      display: grid;
+	      grid-template-columns: 1fr;
+	      grid-template-rows: 1fr;
+	      background: var(--bg);
+	    }
+
+	    .command-bar {
+	      position: fixed;
+	      z-index: 20;
+	      top: 14px;
+	      left: 50%;
+	      width: min(1120px, calc(100vw - 28px));
+	      min-height: 48px;
+	      padding: 6px;
+	      border: 1px solid rgba(148, 163, 184, 0.16);
+	      border-radius: 16px;
+	      background: rgba(255, 255, 255, 0.78);
+	      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+	      backdrop-filter: blur(14px);
+	      display: grid;
+	      grid-template-columns: auto minmax(220px, 1fr) minmax(180px, 320px) minmax(0, 180px);
+	      gap: 8px;
+	      align-items: center;
+	      transform: translateX(-50%);
+	      animation: commandDropIn 0.34s ease both;
+	    }
+
+	    .app.atelier-app.studio-result-mode .command-bar {
+	      grid-template-columns: auto minmax(180px, 1fr) minmax(180px, 320px);
+	    }
+
+	    .command-bar .brand {
+	      min-height: 36px;
+	      padding: 0 10px 0 3px;
+	      gap: 8px;
+	      justify-content: start;
+	      font-size: 13px;
+	    }
+
+	    .command-bar .brand span {
+	      display: none;
+	    }
+
+	    .command-bar .brand-mark {
+	      width: 32px;
+	      height: 32px;
+	      border-radius: 12px;
+	    }
+
+	    .mode-strip {
+	      min-width: 0;
+	      display: flex;
+	      align-items: center;
+	      justify-content: center;
+	      gap: 5px;
+	      padding: 4px;
+	      border-radius: 14px;
+	      background: rgba(241, 245, 249, 0.84);
+	      overflow: auto;
+	    }
+
+	    .mode-strip .nav-button {
+	      width: auto;
+	      min-width: 38px;
+	      min-height: 34px;
+	      padding: 0 10px;
+	      border-radius: 11px;
+	      gap: 7px;
+	      flex: 0 0 auto;
+	    }
+
+	      .mode-strip .nav-index,
+	      .mode-strip .nav-icon {
+	        width: 22px;
+	        height: 22px;
+	        border-radius: 8px;
+	        font-size: 11px;
+	        background: rgba(255, 255, 255, 0.70);
+	      }
+
+	      .mode-strip .nav-label {
+	      display: none;
+	      font-size: 12px;
+	    }
+
+	    .command-bar .project-name {
+	      width: 100%;
+	      box-shadow: none;
+	    }
+
+	      .command-status {
+	      min-width: 0;
+	      min-height: 34px;
+	      padding: 0 10px;
+	      border-radius: 12px;
+	      background: rgba(241, 245, 249, 0.72);
+	      display: flex;
+	      align-items: center;
+	      gap: 7px;
+	      color: var(--muted);
+	      font-size: 12px;
+	      font-weight: 700;
+	    }
+
+	    .command-status strong {
+	      color: var(--text);
+	      flex: 0 0 auto;
+	    }
+
+	    .app.atelier-app.studio-result-mode .command-status {
+	      display: none;
+	    }
+
+	    .command-status .status-line:not(:empty)::before {
+	      content: "/";
+	      margin-right: 7px;
+	      color: #9aa6b4;
+	    }
+
+	    .app.atelier-app .canvas {
+	      grid-area: 1 / 1;
+	      width: 100vw;
+	      height: 100vh;
+	      min-height: 0;
+	      padding: 82px 18px 72px;
+	      overflow: auto;
+	      align-content: stretch;
+	      background: transparent;
+	    }
+
+	    .app.atelier-app.studio-result-mode .canvas {
+	      padding: 0;
+	      overflow: hidden;
+	      display: block;
+	    }
+
+	    .app.atelier-app.studio-result-mode .studio-shell {
+	      width: 100vw;
+	      height: 100vh;
+	      padding: 82px 16px 72px;
+	    }
+
+	    .action-dock {
+	      position: fixed;
+	      z-index: 20;
+	      right: 18px;
+	      bottom: 16px;
+	      min-height: 48px;
+	      padding: 6px;
+	      border: 1px solid rgba(148, 163, 184, 0.16);
+	      border-radius: 16px;
+	      background: rgba(255, 255, 255, 0.82);
+	      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+	      backdrop-filter: blur(14px);
+	      display: flex;
+	      align-items: center;
+	      gap: 7px;
+	      animation: studioFloatIn 0.36s ease both;
+	    }
+
+	    .action-dock .btn {
+	      min-width: 72px;
+	    }
+
+	    .app.atelier-app .studio-mode {
+	      min-height: calc(100vh - 154px);
+	    }
+
+	    .app.atelier-app .studio-mode-canvas {
+	      min-height: calc(100vh - 154px);
+	    }
+
+	    @media (max-width: 1040px) {
+	      .app {
+	        width: 100vw;
+	        min-height: 100vh;
+	        margin: 0;
+	        border-radius: 0;
+	        grid-template-columns: 1fr;
+	      }
+
+	      .app.studio-result-mode {
+	        grid-template-columns: 1fr;
+	      }
+
+	      .app.studio-result-mode .workspace {
+	        grid-column: 1;
+	      }
 
       .rail,
       .inspector { display: none; }
 
-      .canvas-grid,
-      .groups,
-      .metric-row,
-      .workbench-grid,
-      .preview-toolbar,
-      .column-confirm-head,
-      .column-confirm-row { grid-template-columns: 1fr; }
+	      .canvas-grid,
+	      .source-stage,
+	      .inspect-current,
+	      .inspect-stage,
+	      .groups,
+	      .metric-row,
+	      .studio-shell,
+	      .studio-mode,
+	      .preview-toolbar,
+	      .column-confirm-head,
+	      .column-confirm-row { grid-template-columns: 1fr; }
+
+	      .studio-shell {
+	        height: auto;
+	        min-height: 100%;
+	        grid-template-columns: 1fr;
+	        grid-template-areas:
+	          "canvas"
+	          "sidecar"
+	          "tabs";
+	        overflow: auto;
+	      }
+
+	      .studio-canvas {
+	        min-height: 620px;
+	      }
+
+	      .studio-sidecar {
+	        min-height: 320px;
+	        padding: 0;
+	      }
+
+	      .studio-mode-canvas {
+	        min-height: 420px;
+	      }
+
+	      .app.studio-result-mode .canvas {
+	        overflow: auto;
+	      }
 
       .workspace {
         grid-template-rows: auto minmax(0, 1fr) 60px;
@@ -1088,42 +1901,85 @@
         flex-direction: column;
       }
 
-      .project-name {
-        width: 100%;
-      }
-    }
+	      .project-name {
+	        width: 100%;
+	      }
 
-    @media (min-width: 1120px) {
-      .app.workbench-mode .workbench-grid {
-        grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-      }
+	      .command-bar {
+	        top: 10px;
+	        width: calc(100vw - 20px);
+	        grid-template-columns: auto minmax(0, 1fr);
+	      }
 
-      .app.workbench-mode .workbench-controls {
-        position: sticky;
-        top: 0;
-      }
-    }
+	      .command-bar .brand span,
+	      .command-status {
+	        display: none;
+	      }
 
-    @media (min-width: 1500px) {
-      .workbench-grid {
-        grid-template-columns: minmax(520px, 1fr) minmax(360px, 420px);
-      }
+	      .command-bar .project-name {
+	        grid-column: 1 / -1;
+	      }
 
-      .workbench-controls {
-        position: sticky;
-        top: 0;
-      }
-    }
+	      .mode-strip {
+	        justify-content: flex-start;
+	      }
+
+	      .mode-strip .nav-label {
+	        display: none;
+	      }
+
+	      .app.atelier-app .canvas {
+	        padding: 112px 10px 74px;
+	      }
+
+	      .app.atelier-app.studio-result-mode .studio-shell {
+	        padding: 112px 10px 74px;
+	      }
+
+	      .app.atelier-app.studio-result-mode .studio-shell {
+	        height: 100vh;
+	        grid-template-rows: minmax(0, 1fr) auto;
+	        grid-template-areas:
+	          "canvas"
+	          "tabs";
+	        overflow: hidden;
+	      }
+
+	      .app.atelier-app.studio-result-mode .studio-canvas {
+	        min-height: 0;
+	      }
+
+	      .app.atelier-app.studio-result-mode .studio-canvas .figure-stage {
+	        width: min(100%, 370px);
+	        height: min(100%, 480px);
+	      }
+
+	      .app.atelier-app.studio-result-mode .studio-sidecar {
+	        display: none;
+	      }
+	    }
+
+	    @media (min-width: 1500px) {
+	      .studio-shell {
+	        grid-template-columns: minmax(640px, 1fr) minmax(360px, 420px);
+	      }
+	    }
+
+	    @media (prefers-reduced-motion: reduce) {
+	      *,
+	      *::before,
+	      *::after {
+	        animation-duration: 0.01ms !important;
+	        animation-iteration-count: 1 !important;
+	        scroll-behavior: auto !important;
+	        transition-duration: 0.01ms !important;
+	      }
+	    }
   </style>
 </head>
 <body>
-  <main class="app">
-    <aside class="rail">
-      <div class="traffic" aria-hidden="true">
-        <span class="dot"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
-      </div>
+  <main class="app atelier-app">
+    <header class="command-bar">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="19" height="19" fill="none">
@@ -1133,28 +1989,22 @@
         </div>
         <span>SciPlot</span>
       </div>
-      <nav class="nav" id="railNav" aria-label="Workbench sections"></nav>
-    </aside>
+      <nav class="nav mode-strip" id="railNav" aria-label="Studio modes"></nav>
+      <input id="projectName" class="project-name" type="text" autocomplete="off" placeholder="Project name">
+      <div class="command-status">
+        <strong id="pageTitle">Source</strong>
+        <span id="status" class="status-line"></span>
+      </div>
+    </header>
 
-    <section class="workspace">
-      <header class="topbar">
-        <div class="title-wrap">
-          <div class="eyebrow">Plot Canvas</div>
-          <h1 id="pageTitle">Source</h1>
-        </div>
-        <input id="projectName" class="project-name" type="text" autocomplete="off" placeholder="Project name">
-      </header>
-      <section class="canvas" id="canvas"></section>
-      <footer class="footer">
-        <div id="status" class="status-line"></div>
-        <div class="footer-actions">
-          <button id="backButton" class="btn" type="button">Back</button>
-          <button id="nextButton" class="btn primary" type="button">Next</button>
-        </div>
-      </footer>
-    </section>
+    <section class="canvas atelier-canvas" id="canvas"></section>
 
-    <aside class="inspector" id="inspector"></aside>
+    <footer class="action-dock">
+      <button id="backButton" class="btn" type="button">Back</button>
+      <button id="nextButton" class="btn primary" type="button">Next</button>
+    </footer>
+
+    <aside class="inspector support-pane" id="inspector" hidden></aside>
   </main>
 
   <script>
@@ -1180,9 +2030,14 @@
       livePreview: false,
       livePreviewTimer: null,
       livePreviewBusy: false,
-      livePreviewQueued: false,
-      rerunInFlight: false,
-      tablePreviews: {},
+	      livePreviewQueued: false,
+	      previewInFlight: false,
+	      rerunInFlight: false,
+	      workbenchPreview: null,
+	      workbenchChartSpec: null,
+	      studioPanel: "style",
+	      activeFigure: 0,
+	      tablePreviews: {},
       columnConfirmations: {},
       previewLoading: {},
       previewErrors: {},
@@ -1228,6 +2083,12 @@
       { value: "", label: "Auto" },
       { value: "legend", label: "Legend" },
       { value: "inline", label: "Inline" }
+    ];
+
+    const tickDensityOptions = [
+      { value: "", label: "Auto" },
+      { value: "sparse", label: "Sparse" },
+      { value: "dense", label: "Dense" }
     ];
 
     const columnTypeOptions = [
@@ -1473,10 +2334,22 @@
       render();
     }
 
+    function modeIcon(view) {
+      const base = 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"';
+      const icons = {
+        Source: `<svg viewBox="0 0 24 24"><path ${base} d="M5 5h14M5 12h14M5 19h8"/></svg>`,
+        Inspect: `<svg viewBox="0 0 24 24"><path ${base} d="m15 15 4 4"/><circle ${base} cx="11" cy="11" r="5"/></svg>`,
+        Samples: `<svg viewBox="0 0 24 24"><path ${base} d="M5 6h14M5 12h14M5 18h14"/><path ${base} d="M8 4v4M16 10v4M11 16v4"/></svg>`,
+        Export: `<svg viewBox="0 0 24 24"><path ${base} d="M12 4v10"/><path ${base} d="m8 10 4 4 4-4"/><path ${base} d="M5 20h14"/></svg>`,
+        "Codex Runs": `<svg viewBox="0 0 24 24"><path ${base} d="M8 8h8M8 12h5M6 18h12"/><path ${base} d="M7 4h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 4V6a2 2 0 0 1 2-2Z"/></svg>`
+      };
+      return icons[view] || icons.Source;
+    }
+
     function renderRail() {
-      railNav.innerHTML = views.map((view, index) => `
-        <button class="nav-button ${state.view === view ? "active" : ""}" type="button" data-view="${view}">
-          <span class="nav-index">${index + 1}</span>
+      railNav.innerHTML = views.map((view) => `
+        <button class="nav-button ${state.view === view ? "active" : ""}" type="button" data-view="${view}" aria-label="${view}" title="${view}">
+          <span class="nav-icon" aria-hidden="true">${modeIcon(view)}</span>
           <span class="nav-label">${view}</span>
         </button>
       `).join("");
@@ -1503,46 +2376,38 @@
           <div class="choice-visual">${iconSvg(item.chart || iconKind || item.icon)}</div>
           <div>
             <div class="choice-title">${escapeHtml(item.label)}</div>
-            ${item.rule_id ? `<div class="choice-subtitle">${escapeHtml(item.rule_id)}</div>` : ""}
           </div>
         </button>
       `;
     }
 
-    function renderSourceView() {
-      const dataTypes = state.catalog;
-      canvas.innerHTML = `
-        <div class="panel">
-          <div class="panel-head">
-            <span>Source Binding</span>
-            ${state.session ? '<span class="chip success">Prefilled</span>' : '<span class="chip">Manual</span>'}
-          </div>
-          <div class="panel-body">
-            <div class="metric-row">
-              <div class="metric"><div class="metric-value">${escapeHtml(state.session?.confidence ?? "0")}</div><div class="metric-label">Detection confidence</div></div>
-              <div class="metric"><div class="metric-value">${state.groups.length}</div><div class="metric-label">Sample groups</div></div>
-              <div class="metric"><div class="metric-value">${groupFileCount()}</div><div class="metric-label">Files</div></div>
-            </div>
-            ${renderSourceWarnings()}
-            <div class="panel">
-              <div class="panel-head"><span>Prepared source</span></div>
-              <div class="panel-body">
-                <div class="row">
-                  <div class="row-main">
-                    <span class="row-title">${escapeHtml(state.session?.input_path || "No source")}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="panel">
-              <div class="panel-head"><span>Data type</span></div>
-              <div class="panel-body choice-grid">
-                ${dataTypes.map((item) => tile(item, item.id === state.dataTypeId)).join("")}
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
+	    function renderSourceView() {
+	      const dataTypes = state.catalog;
+	      canvas.innerHTML = `
+	        <div class="studio-mode source-studio">
+	          <section class="studio-mode-canvas">
+	            <div class="choice-grid">
+	              ${dataTypes.map((item) => tile(item, item.id === state.dataTypeId)).join("")}
+	            </div>
+	          </section>
+	          <aside class="studio-mode-side">
+	            <div class="metric-row">
+	              <div class="metric"><div class="metric-value">${escapeHtml(state.session?.confidence ?? "0")}</div><div class="metric-label">Confidence</div></div>
+	              <div class="metric"><div class="metric-value">${state.groups.length}</div><div class="metric-label">Groups</div></div>
+	              <div class="metric"><div class="metric-value">${groupFileCount()}</div><div class="metric-label">Files</div></div>
+	            </div>
+	            ${state.session?.input_path ? `
+	              <div class="row">
+	                <div class="row-main">
+	                  <span class="row-title">${escapeHtml(state.session.input_path)}</span>
+	                </div>
+	                ${state.session ? '<span class="chip success">Prefilled</span>' : '<span class="chip">Manual</span>'}
+	              </div>
+	            ` : ""}
+	            ${renderSourceWarnings()}
+	          </aside>
+	        </div>
+	      `;
       canvas.querySelectorAll("[data-id]").forEach((button) => {
         button.addEventListener("click", () => {
           state.dataTypeId = button.dataset.id;
@@ -1556,28 +2421,23 @@
     function renderInspectView() {
       const dataType = selectedDataType();
       const experiments = dataType?.experiments || [];
+      const experiment = selectedExperiment();
+      const selectedLabel = state.session?.experiment_label || experiment?.label || "Unknown";
       canvas.innerHTML = `
-        <div class="canvas-grid">
-          <div class="panel">
-            <div class="panel-head"><span>Inspect Recommendation</span><span class="chip">${escapeHtml(dataType?.label || "No data type")}</span></div>
-            <div class="panel-body">
-              <div class="row">
-                <div class="row-main">
-                  <span class="row-title">${escapeHtml(state.session?.experiment_label || selectedExperiment()?.label || "No experiment")}</span>
-                </div>
-                <span class="chip">${escapeHtml(state.session?.rule_id || selectedExperiment()?.rule_id || "unknown")}</span>
-              </div>
-              <div class="panel">
-                <div class="panel-head"><span>Experiment / plot type</span></div>
-                <div class="panel-body choice-grid">
-                  ${experiments.map((item) => tile(item, item.id === state.experimentTypeId, dataType?.icon)).join("")}
-                </div>
-              </div>
-            </div>
-          </div>
-          ${renderTablePreviewPanel()}
-        </div>
-      `;
+	        <div class="studio-mode inspect-studio">
+	          <section class="inspect-current studio-mode-canvas">
+	            <div class="inspect-symbol">${iconSvg(experiment?.chart || dataType?.icon)}</div>
+	            <div class="inspect-current-main">
+	              <span class="inspect-kicker">${escapeHtml(dataType?.label || "SciPlot")}</span>
+	              <div class="inspect-current-title">${escapeHtml(selectedLabel)}</div>
+	            </div>
+	            <span class="status-dot" title="Detected"></span>
+	          </section>
+	          <aside class="choice-grid inspect-grid studio-mode-side">
+	            ${experiments.map((item) => tile(item, item.id === state.experimentTypeId, dataType?.icon)).join("")}
+	          </aside>
+	        </div>
+	      `;
       canvas.querySelectorAll("[data-id]").forEach((button) => {
         button.addEventListener("click", () => {
           state.experimentTypeId = button.dataset.id;
@@ -1628,7 +2488,7 @@
       const columns = preview?.columns || [];
       const rows = preview?.rows || [];
       if (!columns.length || !rows.length) {
-        return '<div class="placeholder">Table data pending</div>';
+        return "";
       }
       return `
         <div class="table-wrap">
@@ -1656,21 +2516,16 @@
       const items = allDataFiles();
       const item = activePreviewItem();
       if (!item) {
-        return `
-          <div class="panel">
-            <div class="panel-head"><span>Data table preview</span><span class="chip">waiting</span></div>
-            <div class="panel-body"><div class="placeholder">Select a data file</div></div>
-          </div>
-        `;
+        return "";
       }
       const key = item.key;
       const preview = state.tablePreviews[key];
       const loading = Boolean(state.previewLoading[key]);
       const error = state.previewErrors[key];
-      const status = error ? "error" : loading ? "loading" : preview ? `${preview.preview_columns} columns` : "queued";
+      const status = error ? "unavailable" : loading ? "loading" : preview ? `${preview.preview_columns} columns` : "queued";
       return `
         <div class="panel">
-          <div class="panel-head"><span>Data table preview</span><span class="chip ${error ? "warning" : preview ? "success" : ""}">${escapeHtml(status)}</span></div>
+          <div class="panel-head"><span>Columns</span><span class="chip ${error ? "warning" : preview ? "success" : ""}">${escapeHtml(status)}</span></div>
           <div class="panel-body">
             <div class="preview-toolbar">
               <label class="field">
@@ -1686,8 +2541,7 @@
               ${preview?.encoding ? `<span class="chip">${escapeHtml(preview.encoding)}</span>` : ""}
               ${preview?.sheet ? `<span class="chip">${escapeHtml(preview.sheet)}</span>` : ""}
             </div>
-            ${error ? `<div class="row-subtitle">${escapeHtml(error)}</div>` : ""}
-            ${preview ? renderDataTable(preview) : '<div class="placeholder">Loading table</div>'}
+            ${preview ? renderDataTable(preview) : '<div class="placeholder"><span class="spinner"></span></div>'}
             ${preview ? renderColumnConfirmations(preview, key) : ""}
           </div>
         </div>
@@ -1734,14 +2588,15 @@
     }
 
     function renderSamplesView() {
-      const active = state.groups[state.activeGroup] || state.groups[0];
-      const files = active?.files || [];
-      canvas.innerHTML = `
-        <div class="groups">
-          <div class="panel">
-            <div class="panel-head">
-              <span>Legend order</span>
-              <button class="btn" id="addGroup" type="button">Add</button>
+	      const active = state.groups[state.activeGroup] || state.groups[0];
+	      const files = active?.files || [];
+	      canvas.innerHTML = `
+	        <div class="studio-mode samples-studio">
+	          <section class="studio-mode-canvas groups">
+	            <div class="panel">
+	            <div class="panel-head">
+	              <span>Legend order</span>
+	              <button class="btn" id="addGroup" type="button">Add</button>
             </div>
             <div class="sample-list" id="sampleList">
               ${state.groups.map((group, index) => `
@@ -1752,12 +2607,12 @@
                   <button class="sample-remove" data-remove-group="${index}" type="button" aria-label="Remove sample ${escapeHtml(group.sample || `Sample ${index + 1}`)}" title="Remove sample" ${state.groups.length <= 1 ? "disabled" : ""}>&times;</button>
                 </div>
               `).join("")}
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-head">
-              <span>${escapeHtml(active?.sample || "Sample")}</span>
-              <input id="fileInput" type="file" multiple hidden>
+	            </div>
+	            </div>
+	            <div class="panel">
+	            <div class="panel-head">
+	              <span>${escapeHtml(active?.sample || "Sample")}</span>
+	              <input id="fileInput" type="file" multiple hidden>
               <button class="btn" id="chooseFiles" type="button">Choose files</button>
             </div>
             <div class="dropzone" id="dropzone">
@@ -1775,12 +2630,15 @@
                   </div>
                   <button class="btn remove-file" data-index="${index}" type="button">Remove</button>
                 </div>
-              `).join("")}
-            </div>
-          </div>
-        </div>
-        ${renderTablePreviewPanel()}
-      `;
+	              `).join("")}
+	            </div>
+	            </div>
+	          </section>
+	          <aside class="studio-mode-side">
+	            ${renderTablePreviewPanel()}
+	          </aside>
+	        </div>
+	      `;
       attachSampleHandlers();
     }
 
@@ -1894,27 +2752,31 @@
 
         function renderExportView() {
           const status = state.projectStatus;
-          if (hasResultReview()) {
-            canvas.innerHTML = renderResultReview();
-            return;
-          }
-          canvas.innerHTML = `
-            <div>
-              <div class="panel">
-                <div class="panel-head"><span>Export request</span><span class="chip">${escapeHtml(selectedFigureSize())}</span></div>
-                <div class="panel-body">
-                  <div class="metric-row">
+	          if (hasResultReview()) {
+	            canvas.innerHTML = renderResultReview();
+	            return;
+	          }
+	          canvas.innerHTML = `
+	            <div class="studio-mode export-studio">
+	              <section class="studio-mode-canvas">
+	                <div class="panel">
+	                <div class="panel-head"><span>Export request</span><span class="chip">${escapeHtml(selectedFigureSize())}</span></div>
+	                <div class="panel-body">
+	                  <div class="metric-row">
 	                <div class="metric"><div class="metric-value">${visibleGroupCount()}</div><div class="metric-label">Sample groups</div></div>
 	                <div class="metric"><div class="metric-value">${visibleFileCount()}</div><div class="metric-label">Data files</div></div>
                 <div class="metric"><div class="metric-value">${state.exports.length}</div><div class="metric-label">${escapeHtml(state.exports.map(formatExportLabel).join(" / ") || "No format")}</div></div>
               </div>
-              ${renderExportControls()}
-                  <button class="btn primary" id="exportButton" type="button" ${canExport() ? "" : "disabled"}>Export and Render</button>
-                  ${state.lastProject ? resultHtml(state.lastProject, status) : ""}
-                </div>
-              </div>
-            </div>
-          `;
+	                  <button class="btn primary" id="exportButton" type="button" ${canExport() ? "" : "disabled"}>Export and Render</button>
+	                  ${state.lastProject ? resultHtml(state.lastProject, status) : ""}
+	                </div>
+	                </div>
+	              </section>
+	              <aside class="studio-mode-side">
+	                ${renderExportControls()}
+	              </aside>
+	            </div>
+	          `;
           attachExportHandlers();
         }
 
@@ -1953,16 +2815,22 @@
       `;
     }
 
-    function renderCodexView() {
-      const status = state.projectStatus;
-      const jobs = status?.codex?.jobs || [];
-      const needsCodex = Boolean(status?.needs_codex || state.lastProject?.run_failed);
-      canvas.innerHTML = `
-        <div class="${hasResultReview() ? "canvas-grid result-review-grid" : ""}">
-          <div class="panel">
-            <div class="panel-head">
-              <span>Codex Handoff</span>
-              ${needsCodex ? '<span class="chip warning">Needs Codex</span>' : '<span class="chip success">Idle</span>'}
+	    function renderCodexView() {
+	      const status = state.projectStatus;
+	      const jobs = status?.codex?.jobs || [];
+	      const needsCodex = Boolean(status?.needs_codex || state.lastProject?.run_failed);
+	      if (hasResultReview()) {
+	        state.studioPanel = "codex";
+	        canvas.innerHTML = renderResultReview();
+	        return;
+	      }
+	      canvas.innerHTML = `
+	        <div class="studio-mode codex-studio">
+	          <section class="studio-mode-canvas">
+	            <div class="panel">
+	            <div class="panel-head">
+	              <span>Codex Handoff</span>
+	              ${needsCodex ? '<span class="chip warning">Needs Codex</span>' : '<span class="chip success">Idle</span>'}
             </div>
             <div class="panel-body">
               <div class="row">
@@ -1976,17 +2844,19 @@
                 <textarea id="codexGoal">${escapeHtml(state.codexGoal)}</textarea>
               </label>
               <button class="btn warning" id="runCodexButton" type="button" ${state.lastProject ? "" : "disabled"}>Run Codex</button>
-              <div class="panel">
-                <div class="panel-head"><span>Codex Runs</span></div>
-                <div class="panel-body">
-                  ${jobs.length ? jobs.map(jobHtml).join("") : '<div class="placeholder">No jobs</div>'}
-                </div>
-              </div>
-            </div>
-          </div>
-          ${hasResultReview() ? renderResultReview() : ""}
-        </div>
-      `;
+		            </div>
+		            </div>
+	          </section>
+	          <aside class="studio-mode-side">
+	            <div class="panel">
+	              <div class="panel-head"><span>Codex Runs</span><span class="chip">${jobs.length}</span></div>
+	              <div class="panel-body">
+	                ${jobs.length ? jobs.map(jobHtml).join("") : '<div class="placeholder">Idle</div>'}
+	              </div>
+	            </div>
+	          </aside>
+	        </div>
+	      `;
       const goal = canvas.querySelector("#codexGoal");
       goal.addEventListener("input", (event) => {
         state.codexGoal = event.target.value;
@@ -2012,9 +2882,9 @@
           return Boolean(status?.artifacts?.review_html?.exists || figures.length);
         }
 
-        function isWorkbenchMode() {
-          return state.view === "Export" && hasResultReview();
-        }
+	        function isStudioResultMode() {
+	          return state.view === "Export" && hasResultReview();
+	        }
 
     function resultFigures() {
       const statusFigures = state.projectStatus?.figures || [];
@@ -2034,27 +2904,220 @@
       return `${artifact.url}${joiner}v=${encodeURIComponent(token)}`;
     }
 
-        function renderFigureViewport(previewFigure, figures) {
-      const previewUrl = artifactUrlWithVersion(previewFigure);
-      const fallbackPdf = figures.find((figure) => figure.content_type === "application/pdf" && figure.url);
-      const fallbackUrl = artifactUrlWithVersion(fallbackPdf);
-      const busyClass = state.rerunInFlight || state.livePreviewBusy ? " rendering" : "";
-      let visual = "";
-      if (previewFigure?.exists && previewFigure.display_kind === "image" && previewUrl) {
-        visual = `<img class="figure-preview-img" src="${escapeHtml(previewUrl)}" alt="${escapeHtml(previewFigure.name || "SciPlot figure")}">`;
-      } else if (previewFigure?.exists && previewUrl) {
-        visual = `<object data="${escapeHtml(previewUrl)}" type="${escapeHtml(previewFigure.content_type || "application/pdf")}"></object>`;
-      } else if (fallbackUrl) {
-        visual = `<object data="${escapeHtml(fallbackUrl)}" type="application/pdf"></object>`;
-      } else {
-        visual = '<div class="placeholder">Waiting for figure</div>';
-      }
+	        function displayableFigures(figures) {
+	          return figures.filter((figure) => figure.url && (
+	            figure.content_type === "application/pdf"
+	            || figure.display_kind === "image"
+	            || String(figure.name || "").toLowerCase().endsWith(".png")
+	          ));
+	        }
+
+	        function renderFigureViewport(previewFigure, figures) {
+	          const previewWebAgg = state.workbenchPreview?.webagg;
+	          const statusWebAgg = state.projectStatus?.workbench?.webagg;
+	          const webagg = previewWebAgg?.url ? previewWebAgg : statusWebAgg;
+	          const previewUrl = artifactUrlWithVersion(previewFigure);
+	          const displayables = displayableFigures(figures);
+	          const active = displayables[state.activeFigure] || displayables[0];
+	          const activeUrl = artifactUrlWithVersion(active);
+	          const busyClass = state.rerunInFlight || state.livePreviewBusy || state.previewInFlight ? " rendering" : "";
+	          let visual = "";
+	          if (state.activeFigure === 0 && previewFigure?.exists && previewFigure.display_kind === "image" && previewUrl) {
+	            visual = `<img class="figure-preview-img" src="${escapeHtml(previewUrl)}" alt="${escapeHtml(previewFigure.name || "SciPlot figure")}">`;
+	          } else if (active?.display_kind === "image" && activeUrl) {
+	            visual = `<img class="figure-preview-img" src="${escapeHtml(activeUrl)}" alt="${escapeHtml(active.name || "SciPlot figure")}">`;
+	          } else if (activeUrl) {
+	            visual = `<object data="${escapeHtml(activeUrl)}" type="${escapeHtml(active.content_type || "application/pdf")}"></object>`;
+	          } else if (previewFigure?.exists && previewUrl) {
+	            visual = `<object data="${escapeHtml(previewUrl)}" type="${escapeHtml(previewFigure.content_type || "application/pdf")}"></object>`;
+	          } else if (webagg?.running && webagg.url) {
+	            visual = `<iframe class="webagg-frame" src="${escapeHtml(webagg.url)}" title="Matplotlib WebAgg figure"></iframe>`;
+	          } else {
+	            visual = '<div class="placeholder">Waiting for figure</div>';
+	          }
+	          return `
+	            <div class="result-stage figure-stage studio-figure-stage${busyClass}">
+	              ${visual}
+	            </div>
+	          `;
+	        }
+
+	    function renderChartSpecDrawer() {
+      const spec = state.workbenchChartSpec || state.workbenchPreview?.chart_spec;
+      if (!spec) return "";
+      const series = Array.isArray(spec.series) ? spec.series : [];
+      const rows = Array.isArray(spec.data) ? spec.data.slice(0, 80) : [];
       return `
-        <div class="result-stage figure-stage${busyClass}">
-          ${visual}
-        </div>
-          `;
-        }
+        <details class="artifact-drawer">
+          <summary>Chart data</summary>
+          <div class="artifact-row-grid compact">
+            <div class="row"><span class="row-title">${escapeHtml(spec.template || spec.chartType || "chart")}</span><span class="chip">${series.length} series</span></div>
+            <div class="row"><span class="row-title">${escapeHtml(spec.xAxisLabel || "x")}</span><span class="chip">${escapeHtml(spec.yAxisLabel || "y")}</span></div>
+          </div>
+          <div class="chart-spec-table">
+            <table>
+              <thead><tr><th>Series</th><th>X</th><th>Y</th></tr></thead>
+              <tbody>
+                ${rows.map((row) => `
+                  <tr>
+                    <td>${escapeHtml(row.series || "")}</td>
+                    <td>${escapeHtml(row.x ?? "")}</td>
+                    <td>${escapeHtml(row.y ?? "")}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </details>
+	      `;
+	    }
+
+	    function renderStudioToolDock() {
+	      const tools = [
+	        ["pointer", "Pointer"],
+	        ["zoom", "Zoom"],
+	        ["axes", "Axes"],
+	        ["legend", "Legend"],
+	        ["series", "Series"]
+	      ];
+	      return `
+	        <div class="studio-tool-dock" aria-label="Figure tools">
+	          ${tools.map(([tool, title], index) => `
+	            <button class="tool-button ${index === 0 ? "active" : ""}" type="button" data-studio-tool="${escapeHtml(tool)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">
+	              ${toolGlyph(tool)}
+	            </button>
+	          `).join("")}
+	        </div>
+	      `;
+	    }
+
+	    function toolGlyph(tool) {
+	      const base = 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"';
+	      const icons = {
+	        pointer: `<svg viewBox="0 0 24 24"><path ${base} d="M6 4l10 15 1-7 5-3L6 4Z"/></svg>`,
+	        zoom: `<svg viewBox="0 0 24 24"><circle ${base} cx="10.5" cy="10.5" r="5.5"/><path ${base} d="m15 15 5 5"/></svg>`,
+	        axes: `<svg viewBox="0 0 24 24"><path ${base} d="M5 19V5M5 19h14"/><path ${base} d="M9 15c3-7 6-7 10-2"/></svg>`,
+	        legend: `<svg viewBox="0 0 24 24"><path ${base} d="M8 7h11M8 12h11M8 17h11"/><path ${base} d="M4 7h.1M4 12h.1M4 17h.1"/></svg>`,
+	        series: `<svg viewBox="0 0 24 24"><path ${base} d="M5 17c4-10 7-10 10-2 1 3 3 3 4-1"/><circle ${base} cx="5" cy="17" r="1.5"/><circle ${base} cx="15" cy="15" r="1.5"/></svg>`
+	      };
+	      return icons[tool] || icons.pointer;
+	    }
+
+	    function renderFigureTabs(figures) {
+	      const visible = displayableFigures(figures);
+	      const tabs = visible.length ? visible : [{ name: "Figure", content_type: "" }];
+	      return `
+	        <div class="figure-tabs" aria-label="Figures">
+	          ${tabs.slice(0, 8).map((figure, index) => `
+	            <button class="figure-tab ${index === state.activeFigure ? "active" : ""}" type="button" data-figure-index="${index}" title="${escapeHtml(figure.name || figureActionLabel(figure))}" aria-label="${escapeHtml(figure.name || figureActionLabel(figure))}">
+	              ${index + 1}
+	            </button>
+	          `).join("")}
+	        </div>
+	      `;
+	    }
+
+	    function renderProjectFilesDrawer(manifest, review, revisionBrief, figures) {
+	      return `
+	        <details class="artifact-drawer">
+	          <summary>Project files</summary>
+	          <div class="artifact-row-grid compact">
+	            ${manifest?.exists ? `<a class="row" href="${escapeHtml(manifest.url)}"><span class="row-title">manifest.json</span><span class="chip">open</span></a>` : ""}
+	            ${review?.exists ? `<a class="row" href="${escapeHtml(review.url)}"><span class="row-title">review.html</span><span class="chip">open</span></a>` : ""}
+	            ${revisionBrief?.exists ? `<a class="row" href="${escapeHtml(revisionBrief.url)}"><span class="row-title">Revision brief</span><span class="chip">Codex</span></a>` : ""}
+	            ${figures.map((figure) => {
+	              const label = figure.size_bytes ? formatSize(figure.size_bytes) : "figure";
+	              const content = `<span class="row-title">${escapeHtml(figure.name)}</span><span class="chip">${escapeHtml(label)}</span>`;
+	              return figure.url
+	                ? `<a class="row" href="${escapeHtml(figure.url)}">${content}</a>`
+	                : `<div class="row">${content}</div>`;
+	            }).join("")}
+	          </div>
+	        </details>
+	      `;
+	    }
+
+	    function renderStudioSamplesPanel() {
+	      const groups = projectGroups().length ? projectGroups() : state.groups;
+	      const visible = groups.filter((group) => group.sample || (group.files || []).length);
+	      if (!visible.length) return "";
+	      return `
+	        <section class="studio-section">
+	          <div class="control-head"><span>Series</span><span class="chip">${visible.length}</span></div>
+	          <div class="studio-sample-list">
+	            ${visible.map((group) => `
+	              <div class="studio-sample-item">
+	                <span>${escapeHtml(group.sample || "Sample")}</span>
+	                <span class="chip">${escapeHtml(String((group.files || []).length || 1))}</span>
+	              </div>
+	            `).join("")}
+	          </div>
+	        </section>
+	      `;
+	    }
+
+	    function renderStudioCodexPanel(status) {
+	      const jobs = status?.codex?.jobs || [];
+	      const needsCodex = Boolean(status?.needs_codex || state.lastProject?.run_failed);
+	      return `
+	        <section class="studio-section">
+	          <div class="control-head">
+	            <span>Codex</span>
+	            ${needsCodex ? '<span class="chip warning">needed</span>' : '<span class="chip success">idle</span>'}
+	          </div>
+	          <label class="field">
+	            <span class="field-label">Goal</span>
+	            <textarea id="codexGoal">${escapeHtml(state.codexGoal)}</textarea>
+	          </label>
+	          <button class="btn warning" id="runCodexButton" type="button" ${state.lastProject ? "" : "disabled"}>Run Codex</button>
+	        </section>
+	        <section class="studio-section">
+	          <div class="control-head"><span>Runs</span><span class="chip">${jobs.length}</span></div>
+	          ${jobs.length ? jobs.map(jobHtml).join("") : '<div class="placeholder">Idle</div>'}
+	        </section>
+	      `;
+	    }
+
+	    function renderStudioSidecar(status, manifest, review, revisionBrief, figures) {
+	      const panels = [
+	        ["style", "Style"],
+	        ["data", "Data"],
+	        ["files", "Files"],
+	        ["codex", "Codex"]
+	      ];
+	      const chartSpec = renderChartSpecDrawer();
+	      const body = {
+	        style: renderRefinePanel(),
+	        data: `${renderStudioSamplesPanel()}${chartSpec || '<section class="studio-section"><div class="placeholder">Chart data</div></section>'}`,
+	        files: renderProjectFilesDrawer(manifest, review, revisionBrief, figures),
+	        codex: renderStudioCodexPanel(status)
+	      }[state.studioPanel] || renderRefinePanel();
+	      return `
+	        <aside class="studio-sidecar">
+	          <div class="studio-side-tabs" aria-label="Studio panels">
+	            ${panels.map(([id, label]) => `
+	              <button class="studio-side-tab ${state.studioPanel === id ? "active" : ""}" type="button" data-studio-panel="${id}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
+	                ${panelGlyph(id)}
+	              </button>
+	            `).join("")}
+	          </div>
+	          <div class="studio-side-body">
+	            ${body}
+	          </div>
+	        </aside>
+	      `;
+	    }
+
+	    function panelGlyph(panel) {
+	      const base = 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"';
+	      const icons = {
+	        style: `<svg viewBox="0 0 24 24"><path ${base} d="M4 16.5V20h3.5L18 9.5 14.5 6 4 16.5Z"/><path ${base} d="m13 7 4 4"/></svg>`,
+	        data: `<svg viewBox="0 0 24 24"><path ${base} d="M5 6h14M5 12h14M5 18h14"/><path ${base} d="M9 4v16M15 4v16"/></svg>`,
+	        files: `<svg viewBox="0 0 24 24"><path ${base} d="M5 4h6l2 3h6v13H5z"/></svg>`,
+	        codex: `<svg viewBox="0 0 24 24"><path ${base} d="M8 8h8M8 12h5M6 18h12"/><path ${base} d="M7 4h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-4 4V6a2 2 0 0 1 2-2Z"/></svg>`
+	      };
+	      return icons[panel] || icons.style;
+	    }
 
         function figureActionLabel(figure) {
           const name = String(figure?.name || "Figure");
@@ -2098,9 +3161,8 @@
         series_label_mode: options.series_label_mode || "",
         style_preset: options.style_preset || "",
         palette_preset: options.palette_preset || "",
-        line_width: options.line_width ?? "",
-        marker_size: options.marker_size ?? "",
-        tick_count: options.tick_count ?? "",
+        x_tick_density: options.x_tick_density || "",
+        y_tick_density: options.y_tick_density || "",
         stack_spacing_scale: options.stack_spacing_scale ?? "",
         x_label_override: options.x_label_override || "",
         y_label_override: options.y_label_override || "",
@@ -2137,7 +3199,7 @@
       for (const [key, value] of Object.entries(options)) {
         if (key === "review_note") continue;
         if (value === "" || value === null || value === undefined) continue;
-        if (["x_min", "x_max", "y_min", "y_max", "line_width", "marker_size", "tick_count", "stack_spacing_scale"].includes(key)) {
+        if (["x_min", "x_max", "y_min", "y_max", "stack_spacing_scale"].includes(key)) {
           const numeric = Number(value);
           if (!Number.isFinite(numeric)) continue;
           compact[key] = numeric;
@@ -2205,9 +3267,8 @@
         series_label_mode: refineOptionValue("series_label_mode"),
         style_preset: refineOptionValue("style_preset"),
         palette_preset: refineOptionValue("palette_preset"),
-        line_width: refineOptionValue("line_width"),
-        marker_size: refineOptionValue("marker_size"),
-        tick_count: refineOptionValue("tick_count"),
+        x_tick_density: refineOptionValue("x_tick_density"),
+        y_tick_density: refineOptionValue("y_tick_density"),
         stack_spacing_scale: refineOptionValue("stack_spacing_scale"),
         x_label_override: refineOptionValue("x_label_override"),
         y_label_override: refineOptionValue("y_label_override"),
@@ -2217,18 +3278,11 @@
         y_max: refineOptionValue("y_max"),
         review_note: refineOptionValue("review_note")
       };
-      const liveLabel = state.livePreviewBusy ? "rendering" : state.livePreview ? "live" : "manual";
       return `
-        <div class="workbench-controls">
-          <div class="panel-head">
-            <span>Plot Workbench</span>
-            <span class="chip ${state.livePreview ? "success" : ""}">${escapeHtml(liveLabel)}</span>
-          </div>
+	        <div class="studio-controls">
           <div class="panel-body">
             <div class="control-section">
-              <div class="control-head"><span>Page</span><span class="chip">${escapeHtml(options.size)}</span></div>
               <div class="field">
-                <span class="field-label">Figure size</span>
                 <div class="option-row">
                   ${figureSizeOptions.map((item) => `
                     <button class="option-pill ${options.size === item.value ? "selected" : ""}" type="button" data-refine-size="${item.value}">
@@ -2244,10 +3298,11 @@
             </div>
 
             <div class="control-section">
-              <div class="control-head"><span>Axes</span><span class="chip">scale</span></div>
               <div class="field-grid">
                 ${renderOptionSelect("refineXScale", "X scale", options.xscale, scaleOptions)}
                 ${renderOptionSelect("refineYScale", "Y scale", options.yscale, scaleOptions)}
+                ${renderOptionSelect("refineXTickDensity", "X ticks", options.x_tick_density, tickDensityOptions)}
+                ${renderOptionSelect("refineYTickDensity", "Y ticks", options.y_tick_density, tickDensityOptions)}
               </div>
               <label class="option-pill inline-fit">
                 <input id="refineReverseX" type="checkbox" ${options.reverse_x ? "checked" : ""}>
@@ -2272,10 +3327,6 @@
             </div>
 
             <div class="control-section">
-              <div class="control-head"><span>Plot</span><span class="chip">style</span></div>
-              ${renderRangeControl("refineLineWidth", "Line width", options.line_width, 0.4, 3.0, 0.1, 1.2)}
-              ${renderRangeControl("refineMarkerSize", "Marker size", options.marker_size, 0, 8, 0.5, 0)}
-              ${renderRangeControl("refineTickCount", "Tick count", options.tick_count, 3, 8, 1, 5)}
               <div class="field-grid">
                 ${renderOptionSelect("refineStylePreset", "Style", options.style_preset, stylePresetOptions)}
                 ${renderOptionSelect("refinePalettePreset", "Palette", options.palette_preset, palettePresetOptions)}
@@ -2283,7 +3334,6 @@
             </div>
 
             <div class="control-section">
-              <div class="control-head"><span>Legend</span><span class="chip">labels</span></div>
               <div class="field-grid">
                 ${renderOptionSelect("refineLegendPosition", "Legend", options.legend_position, legendPositionOptions)}
                 ${renderOptionSelect("refineSeriesLabelMode", "Series labels", options.series_label_mode, seriesLabelModeOptions)}
@@ -2292,20 +3342,19 @@
 
             ${isStacked ? `
               <div class="control-section">
-                <div class="control-head"><span>Stack</span><span class="chip">offset</span></div>
                 ${renderRangeControl("refineStackSpacing", "Stack spacing", options.stack_spacing_scale, 0.05, 0.35, 0.01, 0.10)}
               </div>
             ` : ""}
 
             <div class="control-section">
-              <div class="control-head"><span>Revision</span><span class="chip">export</span></div>
               <label class="field">
                 <span class="field-label">Revision note</span>
                 <input id="refineReviewNote" class="field-input" value="${escapeHtml(options.review_note)}" placeholder="e.g. move legend / log y">
               </label>
               <div class="option-row">
-                <button class="btn" id="previewNowButton" type="button" ${state.rerunInFlight ? "disabled" : ""}>Preview</button>
-                <button class="btn primary" id="rerunButton" type="button" ${state.rerunInFlight ? "disabled" : ""}>Apply & Rerun</button>
+                <button class="btn" id="previewNowButton" type="button" ${state.previewInFlight ? "disabled" : ""}>Preview</button>
+                <button class="btn" id="applyButton" type="button" ${state.rerunInFlight ? "disabled" : ""}>Apply</button>
+                <button class="btn primary" id="rerunButton" type="button" ${state.rerunInFlight ? "disabled" : ""}>Export</button>
                 <button class="btn" id="resetRefineButton" type="button">Reset</button>
               </div>
             </div>
@@ -2314,61 +3363,31 @@
       `;
     }
 
-        function renderResultReview() {
-          const status = state.projectStatus;
-          const review = status?.artifacts?.review_html;
-          const manifest = status?.artifacts?.manifest;
-          const revisionBrief = status?.artifacts?.revision_brief;
-          const figures = resultFigures();
-          const previewFigure = status?.preview_figure;
-          const downloadName = state.lastProject?.download_name || `${state.lastProject?.project_slug || status?.project_slug || "sciplot-project"}.zip`;
-          const qaStatus = status?.last_run?.qa?.status || "pending";
-          const projectLabel = state.lastProject?.project_slug || status?.project_slug || "Current project";
-          const figureActions = figures.filter((figure) => figure.url).map((figure) => `
-            <a class="btn" href="${escapeHtml(figure.url)}">${escapeHtml(figureActionLabel(figure))}</a>
-          `).join("");
-          return `
-            <div class="panel workbench-panel">
-              <div class="panel-head">
-                <span>Plot Workbench</span>
-                <span class="chip ${qaStatus === "passed" ? "success" : ""}">QA ${escapeHtml(qaStatus)}</span>
-              </div>
-              <div class="panel-body">
-                <div class="workbench-grid">
-                  <div class="workbench-preview">
-                    <div class="workbench-toolbar">
-                      <div class="workbench-title">
-                        <span class="row-title">${escapeHtml(projectLabel)}</span>
-                        <span class="row-subtitle">${escapeHtml(selectedFigureSize())} / ${escapeHtml(state.exports.map(formatExportLabel).join(" + ") || "No export")}</span>
-                      </div>
-                      <div class="workbench-actions">
-                        ${figureActions}
-                        <a class="btn primary" href="/api/download/${encodeURIComponent(downloadName)}">ZIP</a>
-                      </div>
-                    </div>
-                    ${renderFigureViewport(previewFigure, figures)}
-                    <details class="artifact-drawer">
-                      <summary>Project files</summary>
-                      <div class="artifact-row-grid compact">
-                        ${manifest?.exists ? `<a class="row" href="${escapeHtml(manifest.url)}"><span class="row-title">manifest.json</span><span class="chip">open</span></a>` : ""}
-                        ${review?.exists ? `<a class="row" href="${escapeHtml(review.url)}"><span class="row-title">review.html</span><span class="chip">open</span></a>` : ""}
-                        ${revisionBrief?.exists ? `<a class="row" href="${escapeHtml(revisionBrief.url)}"><span class="row-title">Revision brief</span><span class="chip">Codex</span></a>` : ""}
-                        ${figures.map((figure) => {
-                          const label = figure.size_bytes ? formatSize(figure.size_bytes) : "figure";
-                          const content = `<span class="row-title">${escapeHtml(figure.name)}</span><span class="chip">${escapeHtml(label)}</span>`;
-                          return figure.url
-                            ? `<a class="row" href="${escapeHtml(figure.url)}">${content}</a>`
-                            : `<div class="row">${content}</div>`;
-                        }).join("")}
-                      </div>
-                    </details>
-                  </div>
-                  ${renderRefinePanel()}
-                </div>
-              </div>
-        </div>
-      `;
-    }
+	        function renderResultReview() {
+	          const status = state.projectStatus;
+	          const review = status?.artifacts?.review_html;
+	          const manifest = status?.artifacts?.manifest;
+	          const revisionBrief = status?.artifacts?.revision_brief;
+	          const figures = resultFigures();
+	          const previewFigure = status?.preview_figure;
+	          const displayables = displayableFigures(figures);
+	          if (state.activeFigure >= Math.max(displayables.length, 1)) state.activeFigure = 0;
+	          const qaStatus = status?.last_run?.qa?.status || "pending";
+	          return `
+	            <div class="studio-shell">
+	              <section class="studio-canvas">
+	                ${renderStudioToolDock()}
+	                <span class="studio-state-chip" title="QA ${escapeHtml(qaStatus)}" aria-label="QA ${escapeHtml(qaStatus)}"></span>
+	                ${renderFigureViewport(previewFigure, figures)}
+	              </section>
+	              ${renderStudioSidecar(status, manifest, review, revisionBrief, figures)}
+	              <footer class="studio-filmstrip">
+	                ${renderFigureTabs(figures)}
+	                <span class="chip">${escapeHtml(selectedFigureSize())}</span>
+	              </footer>
+	            </div>
+	          `;
+	        }
 
     function resultHtml(project, status) {
       const figures = project.last_run?.figures || [];
@@ -2478,11 +3497,11 @@
       state.livePreviewTimer = window.setTimeout(() => {
         state.livePreviewTimer = null;
         state.livePreviewQueued = false;
-        rerunProject({ live: true });
+        previewProject({ live: true });
       }, 700);
     }
 
-    function attachRefineHandlers() {
+	    function attachRefineHandlers() {
       canvas.querySelectorAll("[data-refine-size]").forEach((button) => {
         button.addEventListener("click", () => {
           setRefineOption("size", button.dataset.refineSize);
@@ -2493,14 +3512,13 @@
       const bindings = [
         ["refineXScale", "xscale"],
         ["refineYScale", "yscale"],
+        ["refineXTickDensity", "x_tick_density"],
+        ["refineYTickDensity", "y_tick_density"],
         ["refineLegendPosition", "legend_position"],
         ["refineSeriesLabelMode", "series_label_mode"],
         ["refineStylePreset", "style_preset"],
         ["refinePalettePreset", "palette_preset"],
         ["refineReviewNote", "review_note"],
-        ["refineLineWidth", "line_width"],
-        ["refineMarkerSize", "marker_size"],
-        ["refineTickCount", "tick_count"],
         ["refineStackSpacing", "stack_spacing_scale"],
         ["refineXLabel", "x_label_override"],
         ["refineYLabel", "y_label_override"],
@@ -2540,7 +3558,9 @@
         reverseX.addEventListener("change", (event) => setRefineOption("reverse_x", event.target.checked));
       }
       const previewButton = canvas.querySelector("#previewNowButton");
-      if (previewButton) previewButton.addEventListener("click", () => rerunProject({ live: true }));
+      if (previewButton) previewButton.addEventListener("click", () => previewProject({ live: true }));
+      const applyButton = canvas.querySelector("#applyButton");
+      if (applyButton) applyButton.addEventListener("click", applyProject);
       const rerunButton = canvas.querySelector("#rerunButton");
       if (rerunButton) rerunButton.addEventListener("click", rerunProject);
       const resetButton = canvas.querySelector("#resetRefineButton");
@@ -2549,10 +3569,49 @@
           resetRefineOptionsFromProject();
           render();
         });
-      }
-    }
+	      }
+	    }
 
-    function toggleExport(value) {
+	    function attachStudioHandlers() {
+	      const stage = canvas.querySelector(".figure-stage");
+	      const buttons = canvas.querySelectorAll("[data-studio-tool]");
+	      if (stage && buttons.length) {
+	      buttons.forEach((button) => {
+	        button.addEventListener("click", () => {
+	          const tool = button.dataset.studioTool || "pointer";
+	          buttons.forEach((item) => item.classList.toggle("active", item === button));
+	          stage.classList.toggle("zoomed", tool === "zoom");
+	          stage.classList.toggle("axes-focus", tool === "axes");
+	          stage.classList.toggle("legend-focus", tool === "legend" || tool === "series");
+	          if (tool === "pointer") {
+	            stage.classList.remove("zoomed", "axes-focus", "legend-focus");
+	          }
+	        });
+	      });
+	      }
+	      canvas.querySelectorAll("[data-studio-panel]").forEach((button) => {
+	        button.addEventListener("click", () => {
+	          state.studioPanel = button.dataset.studioPanel || "style";
+	          render();
+	        });
+	      });
+	      canvas.querySelectorAll("[data-figure-index]").forEach((button) => {
+	        button.addEventListener("click", () => {
+	          state.activeFigure = Number(button.dataset.figureIndex || 0);
+	          render();
+	        });
+	      });
+	      const goal = canvas.querySelector("#codexGoal");
+	      if (goal) {
+	        goal.addEventListener("input", (event) => {
+	          state.codexGoal = event.target.value;
+	        });
+	      }
+	      const runCodex = canvas.querySelector("#runCodexButton");
+	      if (runCodex) runCodex.addEventListener("click", startCodexJob);
+	    }
+
+	    function toggleExport(value) {
       if (state.exports.includes(value)) {
         state.exports = state.exports.filter((item) => item !== value);
       } else {
@@ -2672,42 +3731,43 @@
       await exportProject();
     }
 
-    async function rerunProject(options = {}) {
+    function workbenchRequestPayload(includeReviewNote = false) {
+      return {
+        exports: state.exports,
+        render_options: renderOptionsForProjectRerun(),
+        series_order: selectedSeriesOrder(),
+        review_note: includeReviewNote ? state.refineOptions.review_note || "" : ""
+      };
+    }
+
+    async function previewProject(options = {}) {
       if (!state.lastProject?.project_slug) return;
       const live = Boolean(options.live);
-      if (state.rerunInFlight) {
+      if (state.previewInFlight) {
         if (live) state.livePreviewQueued = true;
         return;
       }
       try {
-        state.rerunInFlight = true;
+        state.previewInFlight = true;
         state.livePreviewBusy = live;
-        state.statusText = live ? "Rendering live preview" : "Applying SciPlot refinements";
+        state.statusText = live ? "Rendering live preview" : "Rendering preview";
         state.error = "";
         updateChrome();
-        const response = await fetch(`/api/projects/${encodeURIComponent(state.lastProject.project_slug)}/rerun`, {
+        const response = await fetch(`/api/projects/${encodeURIComponent(state.lastProject.project_slug)}/workbench/preview`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            exports: state.exports,
-            render_options: renderOptionsForProjectRerun(),
-            series_order: selectedSeriesOrder(),
-            review_note: live ? "" : state.refineOptions.review_note || ""
-          })
+          body: JSON.stringify(workbenchRequestPayload(false))
         });
         const payload = await response.json();
         if (!response.ok) {
-          throw new Error(payload.error || "Rerun failed");
+          throw new Error(payload.error || "Preview failed");
         }
-        state.lastProject = payload;
-        state.statusText = payload.run_failed
-          ? "Refined run needs Codex"
-          : live ? "Live preview updated" : "Refined figures generated";
-        await refreshProjectStatus();
+        state.workbenchPreview = payload;
+        state.workbenchChartSpec = payload.chart_spec || null;
+        state.statusText = "Preview updated";
         const runQueued = live && state.livePreviewQueued;
-        state.rerunInFlight = false;
+        state.previewInFlight = false;
         state.livePreviewBusy = false;
-        if (!runQueued) resetRefineOptionsFromProject();
         render();
         if (runQueued) {
           state.livePreviewQueued = false;
@@ -2716,12 +3776,88 @@
       } catch (error) {
         state.error = error.message;
         state.statusText = error.message;
-        state.rerunInFlight = false;
+        state.previewInFlight = false;
         state.livePreviewBusy = false;
         render();
       } finally {
-        state.rerunInFlight = false;
+        state.previewInFlight = false;
         state.livePreviewBusy = false;
+        updateChrome();
+      }
+    }
+
+    async function applyProject() {
+      if (!state.lastProject?.project_slug) return;
+      try {
+        state.rerunInFlight = true;
+        state.statusText = "Applying SciPlot refinements";
+        state.error = "";
+        updateChrome();
+        const response = await fetch(`/api/projects/${encodeURIComponent(state.lastProject.project_slug)}/workbench/apply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(workbenchRequestPayload(true))
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || "Apply failed");
+        }
+        state.lastProject = payload;
+        state.statusText = "Refinements applied";
+        state.workbenchPreview = null;
+        await refreshProjectStatus();
+        resetRefineOptionsFromProject();
+        render();
+      } catch (error) {
+        state.error = error.message;
+        state.statusText = error.message;
+        render();
+      } finally {
+        state.rerunInFlight = false;
+        updateChrome();
+      }
+    }
+
+    async function rerunProject(options = {}) {
+      if (!state.lastProject?.project_slug) return;
+      const live = Boolean(options.live);
+      if (live) {
+        await previewProject(options);
+        return;
+      }
+      if (state.rerunInFlight) {
+        return;
+      }
+      try {
+        state.rerunInFlight = true;
+        state.statusText = "Exporting SciPlot figures";
+        state.error = "";
+        updateChrome();
+        const response = await fetch(`/api/projects/${encodeURIComponent(state.lastProject.project_slug)}/rerun`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(workbenchRequestPayload(true))
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || "Rerun failed");
+        }
+        state.lastProject = payload;
+        state.statusText = payload.run_failed
+          ? "Refined run needs Codex"
+          : "Refined figures generated";
+        state.workbenchPreview = null;
+        await refreshProjectStatus();
+        state.rerunInFlight = false;
+        resetRefineOptionsFromProject();
+        render();
+      } catch (error) {
+        state.error = error.message;
+        state.statusText = error.message;
+        state.rerunInFlight = false;
+        render();
+      } finally {
+        state.rerunInFlight = false;
         updateChrome();
       }
     }
@@ -2731,7 +3867,51 @@
       const response = await fetch(`/api/projects/${encodeURIComponent(state.lastProject.project_slug)}/status`);
       if (!response.ok) return;
       state.projectStatus = await response.json();
+      await refreshWorkbenchSpec();
+      await refreshWorkbenchWebAgg();
       if (!state.refineDirty) resetRefineOptionsFromProject();
+    }
+
+    async function refreshWorkbenchSpec() {
+      const url = state.projectStatus?.workbench?.chart_spec_url;
+      if (!url) return;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) return;
+        state.workbenchChartSpec = await response.json();
+      } catch (_error) {
+        state.workbenchChartSpec = null;
+      }
+    }
+
+    async function refreshWorkbenchWebAgg() {
+      const url = state.projectStatus?.workbench?.webagg_url;
+      if (!url) return;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) return;
+        const webagg = await response.json();
+        state.projectStatus = {
+          ...state.projectStatus,
+          workbench: {
+            ...state.projectStatus.workbench,
+            webagg
+          }
+        };
+      } catch (_error) {
+        state.projectStatus = {
+          ...state.projectStatus,
+          workbench: {
+            ...state.projectStatus?.workbench,
+            webagg: {
+              kind: "sciplot_webagg_sidecar",
+              available: false,
+              running: false,
+              url: null
+            }
+          }
+        };
+      }
     }
 
     async function loadProjectFromQuery() {
@@ -2777,6 +3957,8 @@
       const exports = manifest.plot_options?.exports;
       if (Array.isArray(exports) && exports.length) state.exports = exports;
       state.view = status.needs_codex ? "Codex Runs" : "Export";
+      await refreshWorkbenchSpec();
+      await refreshWorkbenchWebAgg();
       resetRefineOptionsFromProject();
       return true;
     }
@@ -2809,17 +3991,15 @@
       render();
     }
 
-        function updateChrome() {
-          const workbenchMode = isWorkbenchMode();
-          appShell.classList.toggle("workbench-mode", workbenchMode);
-          pageTitle.textContent = workbenchMode ? "Plot Workbench" : state.view;
-          const experiment = selectedExperiment();
-          const dataType = selectedDataType();
-          statusEl.textContent = state.statusText || [dataType?.label, experiment?.label].filter(Boolean).join(" / ");
-          backButton.disabled = views.indexOf(state.view) === 0;
-          nextButton.textContent = state.view === "Export" ? "Export" : "Next";
-      nextButton.disabled = state.view === "Export" ? !canExport() : false;
-    }
+	    function updateChrome() {
+	      const studioResultMode = isStudioResultMode();
+	      appShell.classList.toggle("studio-result-mode", studioResultMode);
+	      pageTitle.textContent = studioResultMode ? "" : state.view;
+	      statusEl.textContent = state.error || state.statusText || "";
+	      backButton.disabled = views.indexOf(state.view) === 0;
+	      nextButton.textContent = state.view === "Export" ? "Export" : "Next";
+	      nextButton.disabled = state.view === "Export" ? !canExport() : false;
+	    }
 
     function render() {
       renderRail();
@@ -2829,10 +4009,11 @@
       if (state.view === "Samples") renderSamplesView();
       if (state.view === "Export") renderExportView();
       if (state.view === "Codex Runs") renderCodexView();
-      renderInspector();
-      attachPreviewHandlers();
-      attachRefineHandlers();
-      if (state.view === "Inspect" || state.view === "Samples") queueActivePreviewLoad();
+	      renderInspector();
+	      attachPreviewHandlers();
+	      attachRefineHandlers();
+		      attachStudioHandlers();
+	      if (state.view === "Samples") queueActivePreviewLoad();
       updateChrome();
     }
 

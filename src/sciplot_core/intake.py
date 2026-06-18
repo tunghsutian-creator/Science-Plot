@@ -24,6 +24,9 @@ from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex
 from sciplot_core.ingest import smart_decode
 from sciplot_core.render import DEFAULT_EXPORT_FORMATS, json_safe
 from sciplot_core.semantic import classify_source, is_rheology_frequency_comparison_dir
+from sciplot_core.workbench_contract import apply_request_patch, normalize_exports, normalize_render_options
+from sciplot_core.workbench_preview import build_chart_spec
+from sciplot_core.workbench_webagg import ensure_webagg_sidecar, webagg_available
 
 _STATIC_DIR = Path(__file__).with_name("intake_static")
 _DEFAULT_OUTPUT_ROOT = Path("outputs") / "intake_projects"
@@ -47,6 +50,14 @@ class IncomingFile:
 class IntakeGroupInput:
     sample: str
     files: tuple[IncomingFile, ...]
+
+
+@dataclass(frozen=True)
+class IntakeProjectRequest:
+    project_dir: Path
+    manifest: dict[str, Any]
+    request_path: Path
+    request: dict[str, Any]
 
 
 INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
@@ -452,6 +463,7 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
     figures = [_artifact_info(path, project_slug=project_slug) for path in figure_paths]
     preview_figure = _figure_preview_info(figure_paths, project_slug=project_slug)
     needs_codex = bool(last_run.get("failure") or artifacts["intervention_request"]["exists"])
+    webagg = _workbench_webagg_status(project_slug=project_slug)
     return {
         "kind": "sciplot_project_status",
         "project_slug": project_slug,
@@ -463,11 +475,30 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         "artifacts": artifacts,
         "figures": figures,
         "preview_figure": preview_figure,
+        "workbench": {
+            "chart_spec_url": f"/api/projects/{quote(project_slug)}/workbench/spec",
+            "webagg_url": f"/api/projects/{quote(project_slug)}/workbench/webagg",
+            "preview_url": f"/api/projects/{quote(project_slug)}/workbench/preview",
+            "apply_url": f"/api/projects/{quote(project_slug)}/workbench/apply",
+            "webagg": webagg,
+        },
         "needs_codex": needs_codex,
         "codex": {
             "available": codex_available(),
             "jobs": list_codex_jobs(project_path),
         },
+    }
+
+
+def _workbench_webagg_status(*, project_slug: str) -> dict[str, Any]:
+    available, reason = webagg_available()
+    return {
+        "kind": "sciplot_webagg_sidecar",
+        "available": available,
+        "running": False,
+        "reason": reason,
+        "url": None,
+        "project_slug": project_slug,
     }
 
 
@@ -863,23 +894,15 @@ def _resolve_plot_output(plot_output: object, *, project_dir: Path, default_outp
 
 
 def _selected_exports(exports: object) -> list[str]:
-    if not isinstance(exports, list | tuple):
-        return list(DEFAULT_EXPORT_FORMATS)
-    selected = [str(item).strip().lower() for item in exports if str(item).strip()]
-    return selected or list(DEFAULT_EXPORT_FORMATS)
+    return normalize_exports(exports)
 
 
-def _selected_render_options(render_options: object) -> dict[str, Any]:
-    if not isinstance(render_options, dict):
-        return {}
-    selected = {str(key): value for key, value in render_options.items() if value not in (None, "")}
-    size = selected.get("size")
-    if size is not None and str(size) not in APPROVED_INTAKE_SIZE_PRESETS:
-        raise ValueError(
-            "Unsupported figure size "
-            f"`{size}`. Allowed sizes: {', '.join(APPROVED_INTAKE_SIZE_PRESETS)}."
-        )
-    return selected
+def _selected_render_options(
+    render_options: object,
+    *,
+    template: str | None = None,
+) -> dict[str, Any]:
+    return normalize_render_options(render_options, template=template)
 
 
 def _selected_series_order(series_order: object) -> list[str] | None:
@@ -1026,10 +1049,17 @@ def create_intake_project(
         default_output=runs_dir / "run_001",
     )
     selected_exports = _selected_exports(exports)
-    selected_render_options = {
-        **_experiment_render_options(experiment),
-        **_selected_render_options(render_options),
-    }
+    template = _experiment_template(experiment)
+    contract_template = template
+    if contract_template is None and isinstance(experiment.get("chart"), str):
+        contract_template = str(experiment.get("chart") or "").strip() or None
+    selected_render_options = _selected_render_options(
+        {
+            **_experiment_render_options(experiment),
+            **(render_options if isinstance(render_options, dict) else {}),
+        },
+        template=contract_template,
+    )
     selected_render_options.setdefault("series_order", series_order)
     selected_column_confirmations = _selected_column_confirmations(column_confirmations)
     plot_request = {
@@ -1042,7 +1072,6 @@ def create_intake_project(
     }
     if selected_render_options:
         plot_request["render_options"] = selected_render_options
-    template = _experiment_template(experiment)
     if template:
         plot_request["template"] = template
     if rule_id:
@@ -1197,6 +1226,161 @@ def _resolve_project_plot_request(project_dir: Path, manifest: dict[str, Any]) -
     return request_path
 
 
+def _load_intake_project_request(project_dir: str | Path) -> IntakeProjectRequest:
+    project_path = Path(project_dir).expanduser().resolve()
+    manifest_path = project_path / "intake_manifest.json"
+    manifest = _read_json_if_exists(manifest_path)
+    if manifest is None:
+        raise FileNotFoundError(f"No intake project manifest found at {manifest_path}.")
+    request_path = _resolve_project_plot_request(project_path, manifest)
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    if not isinstance(request, dict):
+        raise ValueError("Plot request must be a JSON object.")
+    return IntakeProjectRequest(
+        project_dir=project_path,
+        manifest=manifest,
+        request_path=request_path,
+        request=request,
+    )
+
+
+def _project_template_for_contract(
+    project_dir: Path,
+    intake_manifest: dict[str, Any],
+    request: dict[str, Any],
+) -> str | None:
+    template = request.get("template")
+    if isinstance(template, str) and template.strip():
+        return template.strip()
+    last_run = intake_manifest.get("last_run") if isinstance(intake_manifest.get("last_run"), dict) else {}
+    output = last_run.get("output") or intake_manifest.get("outputs_dir")
+    if isinstance(output, str) and output.strip():
+        manifest_path = Path(output).expanduser()
+        if not manifest_path.is_absolute():
+            manifest_path = project_dir / manifest_path
+        run_manifest = _read_json_if_exists(manifest_path / "manifest.json") or {}
+        result = run_manifest.get("result") if isinstance(run_manifest.get("result"), dict) else {}
+        result_template = result.get("template")
+        if isinstance(result_template, str) and result_template.strip():
+            return result_template.strip()
+    experiment = intake_manifest.get("experiment") if isinstance(intake_manifest.get("experiment"), dict) else {}
+    for key in ("template", "chart"):
+        value = experiment.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _absolute_request_paths(request: dict[str, Any], *, base_dir: Path) -> dict[str, Any]:
+    patched = dict(request)
+    for key in ("input", "output", "curation"):
+        value = patched.get(key)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        path = Path(value).expanduser()
+        if not path.is_absolute():
+            path = base_dir / path
+        patched[key] = str(path.resolve())
+    return patched
+
+
+def _workbench_cache_request_path(project_dir: Path) -> Path:
+    cache_dir = project_dir / "workbench_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / "preview_request.json"
+
+
+def workbench_chart_spec(project_dir: str | Path) -> dict[str, Any]:
+    project = _load_intake_project_request(project_dir)
+    return build_chart_spec(project.request_path)
+
+
+def workbench_webagg(project_dir: str | Path) -> dict[str, Any]:
+    project = _load_intake_project_request(project_dir)
+    return ensure_webagg_sidecar(project_dir=project.project_dir, request_path=project.request_path)
+
+
+def preview_intake_project(
+    project_dir: str | Path,
+    *,
+    exports: list[str] | tuple[str, ...] | None = None,
+    render_options: dict[str, Any] | None = None,
+    series_order: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    project = _load_intake_project_request(project_dir)
+    template = _project_template_for_contract(project.project_dir, project.manifest, project.request)
+    patched_request = apply_request_patch(
+        project.request,
+        exports=exports,
+        render_options=render_options,
+        series_order=series_order,
+        template=template,
+    )
+    preview_request = _absolute_request_paths(patched_request, base_dir=project.request_path.parent)
+    preview_path = _workbench_cache_request_path(project.project_dir)
+    preview_path.write_text(json.dumps(json_safe(preview_request), indent=2, ensure_ascii=False), encoding="utf-8")
+    chart_spec = build_chart_spec(project.request_path, request_override=patched_request)
+    webagg = ensure_webagg_sidecar(project_dir=project.project_dir, request_path=preview_path)
+    return {
+        "kind": "sciplot_workbench_preview",
+        "mutates_request": False,
+        "request_path": str(preview_path),
+        "chart_spec": chart_spec,
+        "webagg": webagg,
+    }
+
+
+def apply_intake_project(
+    project_dir: str | Path,
+    *,
+    exports: list[str] | tuple[str, ...] | None = None,
+    render_options: dict[str, Any] | None = None,
+    series_order: list[str] | tuple[str, ...] | None = None,
+    review_note: str | None = None,
+) -> dict[str, Any]:
+    project = _load_intake_project_request(project_dir)
+    intake_manifest = project.manifest
+    template = _project_template_for_contract(project.project_dir, intake_manifest, project.request)
+    patched_request = apply_request_patch(
+        project.request,
+        exports=exports,
+        render_options=render_options,
+        series_order=series_order,
+        template=template,
+        review_note=review_note,
+    )
+    project.request_path.write_text(
+        json.dumps(json_safe(patched_request), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    render_patch = (
+        patched_request.get("render_options")
+        if isinstance(patched_request.get("render_options"), dict)
+        else {}
+    )
+    selected_series = _selected_series_order(patched_request.get("series_order"))
+    plot_options = intake_manifest.get("plot_options") if isinstance(intake_manifest.get("plot_options"), dict) else {}
+    intake_manifest["plot_options"] = {
+        **plot_options,
+        "exports": patched_request.get("exports", list(DEFAULT_EXPORT_FORMATS)),
+        "render_options": render_patch,
+        **({"series_order": selected_series} if selected_series is not None else {}),
+    }
+    filtered_groups = _filter_manifest_groups(intake_manifest.get("groups"), selected_series)
+    if filtered_groups is not None:
+        intake_manifest["groups"] = filtered_groups
+    _write_intake_manifest(project.project_dir, intake_manifest)
+    refreshed_zip = refresh_intake_project_zip(project.project_dir)
+    return {
+        **intake_manifest,
+        "project_dir": str(project.project_dir),
+        "zip_path": str(refreshed_zip),
+        "download_name": refreshed_zip.name,
+        "last_run": intake_manifest.get("last_run", {}),
+    }
+
+
 def rerun_intake_project(
     project_dir: str | Path,
     *,
@@ -1208,60 +1392,25 @@ def rerun_intake_project(
     from sciplot_core.workflow import run_request
 
     project_path = Path(project_dir).expanduser().resolve()
-    manifest_path = project_path / "intake_manifest.json"
-    intake_manifest = _read_json_if_exists(manifest_path)
-    if intake_manifest is None:
-        raise FileNotFoundError(f"No intake project manifest found at {manifest_path}.")
-    request_path = _resolve_project_plot_request(project_path, intake_manifest)
-    request = json.loads(request_path.read_text(encoding="utf-8"))
-    if not isinstance(request, dict):
-        raise ValueError("Plot request must be a JSON object.")
-
-    selected_exports = _selected_exports(exports if exports is not None else request.get("exports"))
-    current_render_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
-    selected_render_options = _selected_render_options(render_options)
-    selected_series_order = _selected_series_order(series_order)
-    if selected_series_order is None:
-        selected_series_order = _selected_series_order(selected_render_options.get("series_order"))
-    if selected_series_order is None:
-        selected_series_order = _selected_series_order(selected_render_options.get("series_include"))
-    if selected_series_order is not None:
-        selected_render_options["series_order"] = selected_series_order
-        selected_render_options["series_include"] = selected_series_order
-    merged_render_options = {**current_render_options, **selected_render_options}
-
-    request["exports"] = selected_exports
-    if selected_series_order is not None:
-        request["series_order"] = selected_series_order
-    if merged_render_options:
-        request["render_options"] = merged_render_options
-    else:
-        request.pop("render_options", None)
-    note = (review_note or "").strip()
-    if note:
-        notes = request.get("review_notes") if isinstance(request.get("review_notes"), list) else []
-        request["review_notes"] = [*notes, f"GUI refine: {note}"]
-
-    request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
-
-    plot_options = intake_manifest.get("plot_options") if isinstance(intake_manifest.get("plot_options"), dict) else {}
-    intake_manifest["plot_options"] = {
-        **plot_options,
-        "exports": selected_exports,
-        "render_options": merged_render_options,
-        **({"series_order": selected_series_order} if selected_series_order is not None else {}),
-    }
-    filtered_groups = _filter_manifest_groups(intake_manifest.get("groups"), selected_series_order)
-    if filtered_groups is not None:
-        intake_manifest["groups"] = filtered_groups
-    _write_intake_manifest(project_path, intake_manifest)
+    applied = apply_intake_project(
+        project_path,
+        exports=exports,
+        render_options=render_options,
+        series_order=series_order,
+        review_note=review_note,
+    )
+    project = _load_intake_project_request(project_path)
+    intake_manifest = project.manifest
 
     try:
-        run_manifest = run_request(request_path)
+        run_manifest = run_request(project.request_path)
     except Exception as exc:
-        run_output = Path(
-            str(request.get("output") or intake_manifest.get("outputs_dir") or project_path / "runs" / "run_001")
+        run_output_value = (
+            project.request.get("output")
+            or intake_manifest.get("outputs_dir")
+            or project_path / "runs" / "run_001"
         )
+        run_output = Path(str(run_output_value))
         intervention = run_output / "intervention_request.json"
         failed_run = {
             "failed_at": datetime.now(UTC).isoformat(),
@@ -1273,7 +1422,7 @@ def rerun_intake_project(
             "needs_codex": True,
             "intervention_request": str(intervention) if intervention.exists() else None,
         }
-        intake_manifest = _read_json_if_exists(manifest_path) or intake_manifest
+        intake_manifest = _read_json_if_exists(project_path / "intake_manifest.json") or intake_manifest
         intake_manifest["last_run"] = failed_run
         intake_manifest["run_failed"] = True
         intake_manifest["failure"] = str(exc)
@@ -1287,12 +1436,13 @@ def rerun_intake_project(
             "last_run": failed_run,
         }
 
-    intake_manifest = _read_json_if_exists(manifest_path) or intake_manifest
+    intake_manifest = _read_json_if_exists(project_path / "intake_manifest.json") or intake_manifest
     intake_manifest.pop("run_failed", None)
     intake_manifest.pop("failure", None)
     _write_intake_manifest(project_path, intake_manifest)
     refreshed_zip = refresh_intake_project_zip(project_path)
     return {
+        **applied,
         **intake_manifest,
         "project_dir": str(project_path),
         "zip_path": str(refreshed_zip),
@@ -1388,6 +1538,12 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                     if parts[3] == "status":
                         self._send_json(intake_project_status(project_dir))
                         return
+                    if len(parts) == 5 and parts[3] == "workbench" and parts[4] == "spec":
+                        self._send_json(workbench_chart_spec(project_dir))
+                        return
+                    if len(parts) == 5 and parts[3] == "workbench" and parts[4] == "webagg":
+                        self._send_json(workbench_webagg(project_dir))
+                        return
                     if parts[3] == "artifact":
                         query = parse_qs(parsed.query)
                         artifact_path = query.get("path", [""])[0]
@@ -1481,6 +1637,37 @@ class _IntakeHandler(BaseHTTPRequestHandler):
             return
         if parsed.path.startswith("/api/projects/"):
             parts = parsed.path.strip("/").split("/")
+            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "workbench":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    payload = json.loads(self.rfile.read(length).decode("utf-8"))
+                    project_dir = self._project_dir_from_request(parts[2])
+                    if parts[4] == "preview":
+                        project = preview_intake_project(
+                            project_dir,
+                            exports=payload.get("exports"),
+                            render_options=payload.get("render_options"),
+                            series_order=payload.get("series_order"),
+                        )
+                    elif parts[4] == "apply":
+                        project = apply_intake_project(
+                            project_dir,
+                            exports=payload.get("exports"),
+                            render_options=payload.get("render_options"),
+                            series_order=payload.get("series_order"),
+                            review_note=payload.get("review_note"),
+                        )
+                    else:
+                        self.send_error(HTTPStatus.NOT_FOUND)
+                        return
+                except PermissionError as exc:
+                    self.send_error(HTTPStatus.FORBIDDEN, str(exc))
+                    return
+                except Exception as exc:
+                    self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                    return
+                self._send_json(project)
+                return
             if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "rerun":
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
@@ -1575,13 +1762,17 @@ __all__ = [
     "IntakeGroupInput",
     "APPROVED_INTAKE_SIZE_PRESETS",
     "create_and_run_intake_project",
+    "apply_intake_project",
     "create_intake_project_from_session",
     "create_intake_project",
     "intake_catalog_payload",
     "intake_project_status",
     "prepare_intake_session",
+    "preview_intake_project",
     "preview_table_payload",
     "refresh_intake_project_zip",
     "rerun_intake_project",
     "serve_intake",
+    "workbench_chart_spec",
+    "workbench_webagg",
 ]

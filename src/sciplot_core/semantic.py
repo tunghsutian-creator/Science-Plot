@@ -1618,7 +1618,7 @@ def prepare_semantic_source(
         series_list = _read_stress_relaxation_series_list(source)
         if _series_order_map(series_order):
             series_list = _order_curve_series(series_list, series_order)
-        else:
+        elif source.is_dir():
             series_list = _order_curve_series_by_shared_right_height(series_list)
         _write_curve_table(series_list, processed_source)
         return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}

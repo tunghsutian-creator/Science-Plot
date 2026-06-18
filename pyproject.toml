@@ -21,6 +21,7 @@ dependencies = [
   "PyMuPDF",
   "Pillow",
   "platformdirs",
+  "tornado",
 ]
 
 [project.optional-dependencies]

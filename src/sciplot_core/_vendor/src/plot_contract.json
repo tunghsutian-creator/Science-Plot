@@ -889,6 +889,8 @@
         "series_offsets",
         "legend_position",
         "series_label_mode",
+        "x_label_override",
+        "y_label_override",
         "style_preset",
         "palette_preset"
       ],
@@ -1050,6 +1052,8 @@
         "series_offsets",
         "legend_position",
         "series_label_mode",
+        "x_label_override",
+        "y_label_override",
         "style_preset",
         "palette_preset"
       ],
@@ -1131,6 +1135,8 @@
         "series_offsets",
         "legend_position",
         "series_label_mode",
+        "x_label_override",
+        "y_label_override",
         "style_preset",
         "palette_preset"
       ],
@@ -1212,6 +1218,8 @@
         "series_offsets",
         "legend_position",
         "series_label_mode",
+        "x_label_override",
+        "y_label_override",
         "style_preset",
         "palette_preset"
       ],
@@ -2082,6 +2090,8 @@
         "series_offsets",
         "legend_position",
         "series_label_mode",
+        "x_label_override",
+        "y_label_override",
         "style_preset",
         "palette_preset"
       ],
