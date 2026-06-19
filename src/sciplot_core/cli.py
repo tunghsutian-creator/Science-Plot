@@ -10,7 +10,6 @@ from sciplot_core.batch import run_batch
 from sciplot_core.curate import curate_torque_project
 from sciplot_core.intake import intake_catalog_payload, prepare_intake_session, serve_intake
 from sciplot_core.materials_rules import list_rules_payload, show_rule_payload
-from sciplot_core.origin_handoff import export_origin_handoff
 from sciplot_core.qa import run_qa
 from sciplot_core.render import inspect_payload, render_to_dir
 from sciplot_core.workflow import run_request
@@ -99,13 +98,6 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser("run", help="Run a plot_request.json workflow.")
     run_parser.add_argument("request", type=Path)
-
-    origin_parser = subparsers.add_parser(
-        "origin-handoff",
-        help="Export a completed SciPlot run as an OriginPro LabTalk script/data handoff.",
-    )
-    origin_parser.add_argument("input", type=Path, help="SciPlot run output directory or manifest.json.")
-    origin_parser.add_argument("--out", type=Path, help="Output directory. Defaults to RUN_OUTPUT/origin_handoff.")
 
     quick_parser = subparsers.add_parser("quick", help="Open the shortest confirmation flow for a raw data path.")
     quick_parser.add_argument("input", type=Path)
@@ -236,14 +228,6 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "run":
             _print_json(run_request(_resolve_input(args.request, kind="Request file")))
-            return 0
-        if args.command == "origin-handoff":
-            _print_json(
-                export_origin_handoff(
-                    _resolve_input(args.input, kind="SciPlot run output or manifest"),
-                    output_dir=args.out.expanduser() if args.out else None,
-                )
-            )
             return 0
         if args.command == "quick":
             serve_intake(

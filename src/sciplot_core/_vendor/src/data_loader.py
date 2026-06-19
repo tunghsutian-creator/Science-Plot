@@ -194,7 +194,7 @@ def load_curve_table_from_frame(
     start_row: int = 3,
 ) -> list[CurveSeries]:
     """
-    Load an Origin-style curve table.
+    Load a paired X/Y curve table.
 
     Row 1: axis labels in X/Y pairs
     Row 2: units

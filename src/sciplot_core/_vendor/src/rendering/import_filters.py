@@ -104,7 +104,6 @@ FILTERS: dict[str, dict[str, Any]] = {
     "import.ods": {"label": "ODS", "status": "disabled", "extensions": [".ods"], "mime_types": ["application/vnd.oasis.opendocument.spreadsheet"], "dependency": "odf", "output_container_kinds": ["table"], "help": "ODS preview needs odf plus workbook fixtures before it can be enabled."},
     "import.readstat": {"label": "SAS/Stata/SPSS", "status": "disabled", "extensions": [".sav", ".dta", ".sas7bdat"], "mime_types": ["application/octet-stream"], "dependency": "pyreadstat", "output_container_kinds": ["table"], "help": "ReadStat import needs pyreadstat plus privacy-safe fixtures before it can be enabled."},
     "import.sql": {"label": "SQL", "status": "disabled", "extensions": [".sqlite", ".db"], "mime_types": ["application/vnd.sqlite3"], "output_container_kinds": ["table"], "help": "SQL import is disabled until credential, sandbox, and preview-only policies are implemented."},
-    "import.origin_scidavis_eval": {"label": "Origin/SciDAVis Evaluation", "status": "disabled", "extensions": [".opju", ".opj"], "mime_types": ["application/octet-stream"], "output_container_kinds": ["project"], "help": "Origin/SciDAVis project import remains disabled until clean-room parser policy and fixtures exist."},
     "import.image_digitizer": {"label": "Image Digitizer", "status": "disabled", "extensions": [".png", ".jpg", ".jpeg", ".tif", ".tiff"], "mime_types": ["image/png", "image/jpeg", "image/tiff"], "output_container_kinds": ["table"], "help": "Image digitizer belongs in a dedicated future workflow, not the generic import preview path."},
 }
 
@@ -162,7 +161,7 @@ def import_filter_capabilities() -> list[dict[str, Any]]:
                 "label": profile["label"],
                 "status": profile["status"],
                 "owner": "sidecar",
-                "surface": "project" if filter_id == "import.origin_scidavis_eval" else "plot,data_studio",
+                "surface": "plot,data_studio",
                 "extensions": profile["extensions"],
                 "mime_types": profile["mime_types"],
                 "dependency": profile["dependency"],

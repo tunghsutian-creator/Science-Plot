@@ -882,7 +882,7 @@ def _metric(
     }
 
 
-def _read_origin_curve(path: Path) -> list[pd.DataFrame]:
+def _read_paired_curve_table(path: Path) -> list[pd.DataFrame]:
     raw = pd.read_csv(path, header=None)
     if raw.shape[0] < 4:
         return []
@@ -910,7 +910,7 @@ def _interpolated_threshold_time(data: pd.DataFrame, threshold: float = 0.5) -> 
 
 
 def _stress_relaxation_metrics(processed_source: Path) -> list[dict[str, Any]]:
-    frames = _read_origin_curve(processed_source)
+    frames = _read_paired_curve_table(processed_source)
     if not frames:
         return [_metric("final_normalized_value", None, "sigma/sigma0", "skipped", "No normalized curve found.")]
     data = frames[0]
@@ -929,7 +929,7 @@ def _stress_relaxation_metrics(processed_source: Path) -> list[dict[str, Any]]:
 
 
 def _creep_metrics(processed_source: Path) -> list[dict[str, Any]]:
-    frames = _read_origin_curve(processed_source)
+    frames = _read_paired_curve_table(processed_source)
     if not frames:
         return [_metric("final_compliance", None, "1/Pa", "skipped", "No creep curve found.")]
     return [
@@ -939,7 +939,7 @@ def _creep_metrics(processed_source: Path) -> list[dict[str, Any]]:
 
 
 def _tensile_metrics(processed_source: Path) -> list[dict[str, Any]]:
-    frames = _read_origin_curve(processed_source)
+    frames = _read_paired_curve_table(processed_source)
     rows: list[dict[str, Any]] = []
     if not frames:
         return [_metric("strength_MPa", None, "MPa", "skipped", "No tensile curve found.")]
@@ -975,7 +975,7 @@ def _tensile_metrics(processed_source: Path) -> list[dict[str, Any]]:
 
 
 def _torque_metrics(processed_source: Path) -> list[dict[str, Any]]:
-    frames = _read_origin_curve(processed_source)
+    frames = _read_paired_curve_table(processed_source)
     values: list[float] = []
     for frame in frames:
         values.extend(frame["y"].dropna().astype(float).tolist())

@@ -5,8 +5,8 @@ science. It turns raw experiment tables into processed data, reviewable
 publication-style figures, QA artifacts, and repeatable request files.
 
 This repository is the source of truth for the SciPlot workflow. The goal is to
-make plotting faster than manual Origin/Prism-style work while staying
-auditable, repeatable, and easy to revise with Codex.
+make plotting faster than manual figure preparation while staying auditable,
+repeatable, and easy to revise with Codex.
 
 ## Ultimate Goal
 
@@ -94,17 +94,6 @@ Example request:
 rendering needs Codex, SciPlot writes `intervention_request.json` or marks
 `needs_ai_intervention`.
 
-Optional OriginPro handoff:
-
-```bash
-skill/scripts/sciplot origin-handoff outputs/run_001/manifest.json
-```
-
-This writes a per-run `origin_handoff/` folder with SciPlot-processed CSV data,
-an OriginPro LabTalk `.ogs` script, copied source artifacts, and a Windows
-runner that asks OriginPro to build and save an `.opju` project. See
-`docs/ORIGINPRO_HANDOFF.md`.
-
 ## Web App Contract
 
 The Web app is the local SciPlot plotting app. `sciplot app`, `sciplot
@@ -128,7 +117,7 @@ The UI lets the user confirm source binding, detected rules/templates, sample
 groups, sample/legend names, legend order, output directory, figure size, and
 export formats. Figure-size choices must stay aligned with the SciPlot contract
 presets: `60x55`, `120x55`, `180x55`, `60x110`, `120x110`, and `180x110`.
-The Origin-style interactive plotting roadmap lives in
+The interactive plotting roadmap lives in
 `docs/INTERACTIVE_PLOT_WORKBENCH_PLAN.md`.
 
 ## Commands
@@ -285,10 +274,10 @@ Phase 5: Support manuscript workflows.
    marker size, then write them back into `plot_request.json`.
 4. Add screenshot-based UI regression tests for desktop and mobile layouts.
 5. Add real rheology and impact fixtures from the current polymer dataset.
-6. Add a prepared-data export/import route for users who still need optional
-   downstream tools such as Origin.
-7. Keep Origin or other GUI software as optional downstream polish, not the core
-   dependency.
+6. Add a prepared-data export/import route for users who need external
+   downstream analysis tools.
+7. Keep the SciPlot renderer and request files as the reproducible source of
+   truth.
 
 ## Cleanup Policy
 
