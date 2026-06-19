@@ -772,6 +772,59 @@
       object-fit: contain;
     }
 
+    .live-chart-frame {
+      width: min(82%, 900px);
+      height: min(78%, 640px);
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #ffffff;
+      box-shadow: var(--shadow);
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    .live-chart {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .chart-grid {
+      stroke: #e5e9e5;
+      stroke-width: 1;
+    }
+
+    .chart-axis {
+      stroke: #1b211d;
+      stroke-width: 1.5;
+    }
+
+    .chart-tick,
+    .chart-label {
+      fill: var(--muted);
+      font-size: 14px;
+      font-weight: 620;
+    }
+
+    .chart-label {
+      fill: var(--ink);
+      font-size: 15px;
+    }
+
+    .live-series {
+      fill: none;
+      stroke-width: 3.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .live-point {
+      stroke: #ffffff;
+      stroke-width: 1.6;
+    }
+
     .empty-figure {
       width: min(560px, 84%);
       min-height: 300px;
@@ -1386,6 +1439,7 @@
       livePreviewBusy: false,
       previewInFlight: false,
       rerunInFlight: false,
+      livePreviewQueued: false,
       statusText: "Ready",
       error: "",
       canvasTool: "select",
@@ -1395,6 +1449,8 @@
       panY: 0,
       fileSequence: 0
     };
+
+    let livePreviewTimer = null;
 
     const appShell = document.querySelector("#appShell");
     const stageNav = document.querySelector("#stageNav");
@@ -1718,10 +1774,155 @@
       `;
     }
 
+    function renderLiveChartFrame(spec) {
+      const chart = buildLiveChart(spec);
+      if (!chart.series.length) return renderFigureFrame(null, state.projectStatus?.preview_figure);
+      return `
+        <div class="live-chart-frame">
+          <svg class="live-chart" viewBox="0 0 ${chart.width} ${chart.height}" role="img" aria-label="Live SciPlot chart">
+            <rect x="0" y="0" width="${chart.width}" height="${chart.height}" fill="#ffffff"></rect>
+            ${chart.xTicks.map((tick) => `
+              <line class="chart-grid" x1="${tick.x}" y1="${chart.top}" x2="${tick.x}" y2="${chart.bottom}"></line>
+              <text class="chart-tick" x="${tick.x}" y="${chart.bottom + 34}" text-anchor="middle">${escapeHtml(tick.label)}</text>
+            `).join("")}
+            ${chart.yTicks.map((tick) => `
+              <line class="chart-grid" x1="${chart.left}" y1="${tick.y}" x2="${chart.right}" y2="${tick.y}"></line>
+              <text class="chart-tick" x="${chart.left - 18}" y="${tick.y + 5}" text-anchor="end">${escapeHtml(tick.label)}</text>
+            `).join("")}
+            <line class="chart-axis" x1="${chart.left}" y1="${chart.bottom}" x2="${chart.right}" y2="${chart.bottom}"></line>
+            <line class="chart-axis" x1="${chart.left}" y1="${chart.top}" x2="${chart.left}" y2="${chart.bottom}"></line>
+            ${chart.series.map((series) => `
+              <path class="live-series" d="${series.path}" stroke="${escapeHtml(series.color)}"></path>
+              ${series.points.map((point) => `<circle class="live-point" cx="${point.x}" cy="${point.y}" r="4" fill="${escapeHtml(series.color)}"><title>${escapeHtml(series.label)}: ${escapeHtml(point.rawLabel)}</title></circle>`).join("")}
+            `).join("")}
+            <text class="chart-label" x="${(chart.left + chart.right) / 2}" y="${chart.height - 18}" text-anchor="middle">${escapeHtml(chart.xLabel)}</text>
+            <text class="chart-label" transform="translate(24 ${(chart.top + chart.bottom) / 2}) rotate(-90)" text-anchor="middle">${escapeHtml(chart.yLabel)}</text>
+          </svg>
+        </div>
+      `;
+    }
+
+    function buildLiveChart(spec) {
+      const width = 900;
+      const height = 560;
+      const left = 92;
+      const right = 842;
+      const top = 48;
+      const bottom = 470;
+      const options = spec?.contract?.render_options || {};
+      const xMode = options.xscale === "log" ? "log" : "linear";
+      const yMode = options.yscale === "log" ? "log" : "linear";
+      const xLabel = refineOptionValue("x_label_override") || spec?.xAxisLabel || "X";
+      const yLabel = refineOptionValue("y_label_override") || spec?.yAxisLabel || "Y";
+      const seriesMeta = new Map((spec?.series || []).map((item) => [String(item.label || ""), item]));
+      const rowsBySeries = new Map();
+      (spec?.data || []).forEach((row) => {
+        const x = Number(row.x);
+        const y = Number(row.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        if (xMode === "log" && x <= 0) return;
+        if (yMode === "log" && y <= 0) return;
+        const label = String(row.series || "Series");
+        if (!rowsBySeries.has(label)) rowsBySeries.set(label, []);
+        rowsBySeries.get(label).push({ x, y });
+      });
+      const allPoints = Array.from(rowsBySeries.values()).flat();
+      const xDomain = transformedDomain(allPoints.map((point) => point.x), xMode);
+      const yDomain = transformedDomain(allPoints.map((point) => point.y), yMode);
+      const scaleX = (value) => left + ((transformValue(value, xMode) - xDomain.min) / (xDomain.max - xDomain.min)) * (right - left);
+      const scaleY = (value) => bottom - ((transformValue(value, yMode) - yDomain.min) / (yDomain.max - yDomain.min)) * (bottom - top);
+      const palette = ["#176f5d", "#2f6fe4", "#c76b16", "#7c5bc7", "#bd3f5f", "#4f7b2d"];
+      const series = Array.from(rowsBySeries.entries()).map(([label, points], index) => {
+        const color = safeSeriesColor(seriesMeta.get(label)?.color, palette[index % palette.length]);
+        const plotted = points.map((point) => ({
+          x: roundCoord(scaleX(point.x)),
+          y: roundCoord(scaleY(point.y)),
+          rawLabel: `${formatTickValue(point.x)} / ${formatTickValue(point.y)}`
+        }));
+        return {
+          label,
+          color,
+          points: plotted,
+          path: plotted.map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point.x},${point.y}`).join(" ")
+        };
+      }).filter((seriesItem) => seriesItem.points.length);
+      return {
+        width,
+        height,
+        left,
+        right,
+        top,
+        bottom,
+        xLabel,
+        yLabel,
+        xTicks: axisTicks(xDomain, xMode).map((tick) => ({ x: roundCoord(scaleX(tick.value)), label: tick.label })),
+        yTicks: axisTicks(yDomain, yMode).map((tick) => ({ y: roundCoord(scaleY(tick.value)), label: tick.label })),
+        series
+      };
+    }
+
+    function transformedDomain(values, mode) {
+      const transformed = values.map((value) => transformValue(value, mode)).filter(Number.isFinite);
+      if (!transformed.length) return { min: 0, max: 1 };
+      let min = Math.min(...transformed);
+      let max = Math.max(...transformed);
+      if (min === max) {
+        const pad = Math.abs(min || 1) * 0.08;
+        min -= pad;
+        max += pad;
+      }
+      const pad = (max - min) * 0.04;
+      return { min: min - pad, max: max + pad };
+    }
+
+    function transformValue(value, mode) {
+      return mode === "log" ? Math.log10(value) : value;
+    }
+
+    function inverseTransformValue(value, mode) {
+      return mode === "log" ? 10 ** value : value;
+    }
+
+    function axisTicks(domain, mode) {
+      if (mode === "log") {
+        const start = Math.ceil(domain.min);
+        const end = Math.floor(domain.max);
+        const ticks = [];
+        for (let power = start; power <= end; power += 1) {
+          ticks.push({ value: 10 ** power, label: formatTickValue(10 ** power) });
+        }
+        if (ticks.length >= 2) return ticks.slice(0, 6);
+      }
+      return Array.from({ length: 5 }, (_, index) => {
+        const value = inverseTransformValue(domain.min + ((domain.max - domain.min) * index) / 4, mode);
+        return { value, label: formatTickValue(value) };
+      });
+    }
+
+    function formatTickValue(value) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return "";
+      const abs = Math.abs(number);
+      if ((abs >= 10000 || (abs > 0 && abs < 0.01))) return number.toExponential(1);
+      if (abs >= 100) return number.toFixed(0);
+      if (abs >= 10) return number.toFixed(1).replace(/\.0$/, "");
+      return number.toFixed(2).replace(/\.?0+$/, "");
+    }
+
+    function safeSeriesColor(value, fallback) {
+      const color = String(value || "");
+      return /^#[0-9a-fA-F]{6}$/.test(color) ? color : fallback;
+    }
+
+    function roundCoord(value) {
+      return Number(value).toFixed(2);
+    }
+
     function renderReviewCanvas() {
       const figures = resultFigures();
       const figure = figures[state.activeFigure] || figures[0] || null;
-      const preview = state.workbenchPreview?.preview_figure || state.projectStatus?.preview_figure;
+      const chartSpec = state.workbenchPreview?.chart_spec;
+      const preview = state.projectStatus?.preview_figure;
       const qa = state.projectStatus?.last_run?.qa?.status || "pending";
       return `
         <div class="canvas-tooltip">
@@ -1730,7 +1931,7 @@
         </div>
         <div class="review-map">
           <div class="review-stage">
-            ${renderFigureFrame(figure, preview)}
+            ${chartSpec ? renderLiveChartFrame(chartSpec) : renderFigureFrame(figure, preview)}
           </div>
           <div class="figure-bar" aria-label="Figures">
             ${figures.length ? figures.map((item, index) => `
@@ -1976,7 +2177,7 @@
         <section class="section">
           <h2 class="section-title">Export</h2>
           <div class="action-row">
-            <button class="btn" type="button" id="previewNowButton" ${state.previewInFlight ? "disabled" : ""}>Preview</button>
+            <button class="btn" type="button" id="previewNowButton" ${state.previewInFlight ? "disabled" : ""}>Update</button>
             <button class="btn" type="button" id="applyButton" ${state.rerunInFlight ? "disabled" : ""}>Apply</button>
             <button class="btn primary" type="button" id="rerunButton" ${state.rerunInFlight ? "disabled" : ""}>Export</button>
             <button class="btn" type="button" id="resetRefineButton">${icon("reset")}Reset</button>
@@ -2185,6 +2386,7 @@
       const resetRefineButton = document.querySelector("#resetRefineButton");
       if (resetRefineButton) resetRefineButton.onclick = () => {
         resetRefineOptionsFromProject();
+        state.workbenchPreview = null;
         render();
       };
       const runCodexButton = document.querySelector("#runCodexButton");
@@ -2511,6 +2713,7 @@
         state.rerunInFlight = false;
         await refreshProjectStatus();
         resetRefineOptionsFromProject();
+        setStatus(payload.run_failed ? "Check" : "Ready");
         setStage(payload.run_failed ? "generate" : "review");
       } catch (error) {
         state.rerunInFlight = false;
@@ -2553,6 +2756,7 @@
     function setRefineOption(name, value) {
       state.refineOptions = { ...state.refineOptions, [name]: value };
       state.refineDirty = true;
+      scheduleLivePreview();
     }
 
     function bindRefine(id, key) {
@@ -2560,6 +2764,12 @@
       if (!element) return;
       element.oninput = (event) => setRefineOption(key, event.target.value);
       element.onchange = (event) => setRefineOption(key, event.target.value);
+    }
+
+    function scheduleLivePreview(delay = 360) {
+      if (state.stage !== "review" || !state.lastProject?.project_slug) return;
+      window.clearTimeout(livePreviewTimer);
+      livePreviewTimer = window.setTimeout(() => previewProject({ silent: true }), delay);
     }
 
     function compactRenderOptions(options) {
@@ -2591,10 +2801,15 @@
       };
     }
 
-    async function previewProject() {
-      if (!state.lastProject?.project_slug || state.previewInFlight) return;
+    async function previewProject(options = {}) {
+      if (!state.lastProject?.project_slug) return;
+      if (state.previewInFlight) {
+        state.livePreviewQueued = true;
+        return;
+      }
+      const silent = Boolean(options.silent);
       state.previewInFlight = true;
-      setStatus("Preview");
+      setStatus(silent ? "Updating" : "Update");
       render();
       try {
         const response = await fetch(`/api/projects/${encodeURIComponent(state.lastProject.project_slug)}/workbench/preview`, {
@@ -2603,15 +2818,20 @@
           body: JSON.stringify(workbenchRequestPayload(false))
         });
         const payload = await response.json();
-        if (!response.ok) throw new Error(payload.error || "Preview failed");
+        if (!response.ok) throw new Error(payload.error || "Update failed");
         state.previewInFlight = false;
         state.workbenchPreview = payload;
-        setStatus("Preview ready");
+        setStatus("Live ready");
         render();
       } catch (error) {
         state.previewInFlight = false;
         setStatus(error.message, error.message);
         render();
+      } finally {
+        if (state.livePreviewQueued) {
+          state.livePreviewQueued = false;
+          scheduleLivePreview(80);
+        }
       }
     }
 
@@ -2656,8 +2876,10 @@
         if (!response.ok) throw new Error(payload.error || "Export failed");
         state.lastProject = payload;
         state.rerunInFlight = false;
+        state.workbenchPreview = null;
         await refreshProjectStatus();
         resetRefineOptionsFromProject();
+        setStatus(payload.run_failed ? "Check" : "Ready");
         setStage(payload.run_failed ? "generate" : "review");
       } catch (error) {
         state.rerunInFlight = false;
@@ -2681,6 +2903,7 @@
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || "Open failed");
         state.projectStatus = payload;
+        state.workbenchPreview = null;
         state.lastProject = {
           project_slug: payload.project_slug,
           project_dir: payload.project_dir,
