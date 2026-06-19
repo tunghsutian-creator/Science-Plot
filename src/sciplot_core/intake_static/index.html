@@ -7,26 +7,44 @@
   <style>
     :root {
       color-scheme: light;
-      --bg: #f4f6f7;
-      --surface: #f8faf9;
+      --bg: #eae8e4;
+      --surface: #f5f3ef;
+      --canvas-bg: #fefefd;
+      --panel-bg: #faf9f6;
+      --rail-bg: #e6e4df;
       --panel: #ffffff;
-      --ink: #111411;
-      --muted: #67706c;
-      --quiet: #9aa39e;
-      --line: #dce4e4;
-      --line-strong: #aebcbd;
-      --green: #0f8f7c;
-      --green-soft: #e0f4f0;
-      --blue: #2d68d8;
-      --blue-soft: #e8eefc;
-      --orange: #d87918;
-      --orange-soft: #fff0db;
-      --violet: #7c55c7;
-      --danger: #c24135;
-      --shadow: 0 14px 34px rgba(24, 33, 36, 0.09);
-      --shadow-soft: 0 8px 18px rgba(24, 33, 36, 0.055);
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-      letter-spacing: 0;
+      --ink: #1a1a18;
+      --muted: #6e6d69;
+      --quiet: #a8a6a0;
+      --line: #e4e1da;
+      --line-strong: #c5c1b7;
+      --green: #0b8a7a;
+      --green-soft: #e3f4f0;
+      --green-hover: #097065;
+      --blue: #3366e0;
+      --blue-soft: #e9effc;
+      --orange: #c7780a;
+      --orange-soft: #fdf0db;
+      --rose: #d9394a;
+      --rose-soft: #fde8eb;
+      --shadow-xs: 0 1px 2px rgba(0,0,0,0.03);
+      --shadow-sm: 0 2px 8px rgba(0,0,0,0.05);
+      --shadow: 0 6px 20px rgba(0,0,0,0.07);
+      --shadow-md: 0 12px 36px rgba(0,0,0,0.08);
+      --shadow-lg: 0 20px 56px rgba(0,0,0,0.09);
+      --radius-sm: 10px;
+      --radius: 14px;
+      --radius-lg: 20px;
+      --radius-xl: 28px;
+      --ease-spring-slow: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+      --ease-spring-bounce: cubic-bezier(0.68, -0.6, 0.32, 1.6);
+      --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+      --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+      letter-spacing: -0.01em;
+      -webkit-font-smoothing: antialiased;
     }
 
     * { box-sizing: border-box; }
@@ -71,24 +89,25 @@
     .stage-rail {
       min-width: 0;
       min-height: 0;
-      padding: 14px 10px;
+      padding: 16px 8px;
       border-right: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.64);
+      background: var(--rail-bg);
       display: grid;
       grid-template-rows: auto 1fr auto;
-      gap: 16px;
+      gap: 18px;
+      position: relative;
     }
 
     .mark {
-      width: 44px;
-      height: 44px;
+      width: 40px;
+      height: 40px;
       margin: 0 auto;
-      border-radius: 14px;
+      border-radius: 13px;
       display: grid;
       place-items: center;
       color: #ffffff;
-      background: #111411;
-      box-shadow: var(--shadow-soft);
+      background: #141413;
+      box-shadow: var(--shadow-sm);
     }
 
     .mark svg,
@@ -96,50 +115,91 @@
     .stage-button svg,
     .primary-action svg,
     .micro-button svg {
-      width: 19px;
-      height: 19px;
+      width: 18px;
+      height: 18px;
       display: block;
     }
 
     .stage-stack {
       display: grid;
       align-content: start;
-      gap: 10px;
+      gap: 0;
+      position: relative;
+    }
+
+    .stage-item {
+      display: grid;
+      grid-template-rows: auto auto;
+      justify-items: center;
+      gap: 3px;
+      position: relative;
+    }
+
+    .stage-connector {
+      width: 2px;
+      height: 14px;
+      margin: 0 auto;
+      background: var(--line);
+      border-radius: 999px;
+      transition: background 280ms var(--ease-out);
+    }
+
+    .stage-connector.done {
+      background: var(--green);
     }
 
     .stage-button {
-      width: 52px;
-      height: 52px;
-      border-radius: 16px;
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
       display: grid;
       place-items: center;
-      color: var(--muted);
+      color: var(--quiet);
       background: transparent;
-      transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+      transition: background 200ms var(--ease-out), color 200ms var(--ease-out), transform 200ms var(--ease-spring), box-shadow 200ms var(--ease-out);
+      position: relative;
+      z-index: 1;
     }
 
     .stage-button.active {
       color: var(--ink);
       background: #ffffff;
-      box-shadow: var(--shadow-soft);
+      box-shadow: var(--shadow);
     }
 
     .stage-button:hover {
-      transform: translateY(-1px);
-      background: rgba(255, 255, 255, 0.72);
+      transform: translateY(-2px);
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .stage-button:active {
+      transform: scale(0.94);
     }
 
     .stage-dot {
-      width: 8px;
-      height: 8px;
-      margin: 0 auto 6px;
+      width: 6px;
+      height: 6px;
       border-radius: 999px;
       background: var(--quiet);
+      transition: background 200ms ease, box-shadow 200ms ease;
     }
 
-    .stage-dot.ready { background: var(--green); }
-    .stage-dot.busy { background: var(--orange); }
-    .stage-dot.warn { background: var(--danger); }
+    .stage-dot.ready { background: var(--green); box-shadow: 0 0 0 5px var(--green-soft); }
+    .stage-dot.busy { background: var(--orange); animation: pulse-dot 1.2s var(--ease-in-out) infinite; }
+    .stage-dot.warn { background: var(--rose); }
+
+    .stage-label {
+      color: var(--quiet);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      transition: color 200ms ease;
+    }
+
+    .stage-item.active .stage-label {
+      color: var(--ink);
+    }
 
     .status-strip {
       display: grid;
@@ -148,75 +208,92 @@
     }
 
     .status-light {
-      width: 12px;
-      height: 12px;
+      width: 10px;
+      height: 10px;
       border-radius: 999px;
       background: var(--green);
-      box-shadow: 0 0 0 5px var(--green-soft);
+      box-shadow: 0 0 0 6px var(--green-soft);
+      transition: box-shadow 400ms ease;
     }
 
     .status-light.warn {
       background: var(--orange);
-      box-shadow: 0 0 0 5px var(--orange-soft);
+      box-shadow: 0 0 0 6px var(--orange-soft);
     }
 
     .main-space {
       min-width: 0;
       min-height: 0;
       display: grid;
-      grid-template-rows: 72px minmax(0, 1fr);
+      grid-template-rows: 56px minmax(0, 1fr);
       overflow: hidden;
     }
 
     .topbar {
       min-width: 0;
-      padding: 14px 18px 10px;
+      padding: 10px 18px 8px;
       display: grid;
-      grid-template-columns: minmax(160px, 340px) 1fr auto;
+      grid-template-columns: minmax(140px, 300px) 1fr auto;
       align-items: center;
       gap: 12px;
     }
 
     .project-input {
       width: 100%;
-      height: 42px;
-      padding: 0 14px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid transparent;
+      border-radius: 10px;
       outline: none;
-      background: rgba(255, 255, 255, 0.76);
+      background: transparent;
       color: var(--ink);
-      box-shadow: var(--shadow-soft);
+      font-size: 14px;
+      font-weight: 700;
+      transition: border-color 160ms ease, background 160ms ease;
+      box-shadow: none;
+    }
+
+    .project-input:hover {
+      background: rgba(255, 255, 255, 0.54);
     }
 
     .project-input:focus {
-      border-color: var(--line-strong);
+      border-color: var(--line);
       background: #ffffff;
+      box-shadow: var(--shadow-sm);
     }
 
     .tool-strip {
       min-width: 0;
       justify-self: center;
-      height: 42px;
-      padding: 4px;
+      height: 36px;
+      padding: 2px 4px;
       border: 1px solid var(--line);
-      border-radius: 15px;
-      background: rgba(255, 255, 255, 0.72);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.6);
       display: flex;
       align-items: center;
-      gap: 4px;
-      box-shadow: var(--shadow-soft);
+      gap: 2px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 240ms ease;
+    }
+
+    .tool-strip.visible {
+      opacity: 1;
+      pointer-events: auto;
     }
 
     .icon-button,
     .micro-button {
-      width: 34px;
-      height: 32px;
-      border-radius: 11px;
+      width: 30px;
+      height: 28px;
+      border-radius: 9px;
       display: grid;
       place-items: center;
       color: var(--muted);
       background: transparent;
+      transition: color 160ms ease, background 160ms ease;
     }
 
     .icon-button.active,
@@ -224,31 +301,47 @@
     .micro-button:hover {
       color: var(--ink);
       background: #ffffff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .icon-button:active {
+      transform: scale(0.93);
     }
 
     .zoom-range {
-      width: 112px;
+      width: 96px;
       accent-color: var(--green);
     }
 
     .primary-action {
-      height: 42px;
-      min-width: 116px;
-      padding: 0 14px;
-      border-radius: 14px;
+      height: 38px;
+      min-width: 104px;
+      padding: 0 16px;
+      border-radius: 19px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 6px;
       color: #ffffff;
-      background: #111411;
-      box-shadow: var(--shadow-soft);
-      font-weight: 720;
+      background: #141413;
+      box-shadow: var(--shadow-sm);
+      font-weight: 640;
+      font-size: 14px;
+      transition: transform 150ms var(--ease-spring), box-shadow 200ms ease, opacity 200ms ease;
+    }
+
+    .primary-action:hover:not(:disabled) {
+      box-shadow: var(--shadow);
+      transform: translateY(-1px);
+    }
+
+    .primary-action:active:not(:disabled) {
+      transform: scale(0.96);
     }
 
     .primary-action:disabled {
       color: var(--quiet);
-      background: #e6ebe6;
+      background: #e8e9e6;
       cursor: not-allowed;
       box-shadow: none;
     }
@@ -265,8 +358,8 @@
       width: 100%;
       height: 100%;
       border: 1px solid var(--line);
-      border-radius: 22px;
-      background: var(--surface);
+      border-radius: var(--radius-xl);
+      background: var(--canvas-bg);
       box-shadow: var(--shadow);
       overflow: hidden;
       user-select: none;
@@ -278,41 +371,132 @@
       min-width: 0;
       min-height: 0;
       transform-origin: center;
-      transition: transform 160ms ease;
+      transition: transform 200ms var(--ease-out);
     }
 
     .canvas-watermark {
       position: absolute;
-      right: 16px;
-      top: 14px;
+      right: 14px;
+      top: 12px;
       display: flex;
       align-items: center;
       gap: 8px;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
       z-index: 5;
+      opacity: 0.7;
     }
 
     .phase-chip {
-      min-height: 26px;
+      min-height: 24px;
       padding: 0 9px;
       border: 1px solid var(--line);
       border-radius: 999px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: rgba(255, 255, 255, 0.78);
+      background: rgba(255, 255, 255, 0.72);
       color: var(--muted);
-      font-size: 12px;
-      font-weight: 680;
+      font-size: 11px;
+      font-weight: 640;
       white-space: nowrap;
     }
 
     .pulse {
-      width: 7px;
-      height: 7px;
+      width: 6px;
+      height: 6px;
       border-radius: 999px;
       background: var(--green);
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(2); }
+    }
+
+    @keyframes fade-in-up {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+
+    @keyframes scale-in {
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .anim-enter {
+      animation: fade-in-up 340ms var(--ease-spring-slow) both;
+    }
+
+    .anim-enter-fast {
+      animation: fade-in 200ms var(--ease-smooth) both;
+    }
+
+    /* ── Skeleton Loading ── */
+    .skeleton {
+      background: linear-gradient(90deg, var(--surface) 25%, #eae7e3 50%, var(--surface) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.6s var(--ease-in-out) infinite;
+      border-radius: var(--radius-sm);
+      color: transparent !important;
+      pointer-events: none;
+    }
+
+    .skeleton-text {
+      height: 14px;
+      border-radius: 7px;
+    }
+
+    .skeleton-card {
+      min-height: 120px;
+    }
+
+    /* ── Hover Micro-interactions ── */
+    .btn,
+    .option,
+    .canvas-command {
+      transition: transform 200ms var(--ease-spring-bounce), box-shadow 200ms var(--ease-out), background 160ms ease, border-color 160ms ease, color 160ms ease;
+    }
+
+    .btn:hover:not(:disabled),
+    .option:hover:not(:disabled) {
+      transform: scale(1.03);
+    }
+
+    .btn:active:not(:disabled),
+    .option:active:not(:disabled) {
+      transform: scale(0.95);
+      transition: transform 100ms var(--ease-smooth);
+    }
+
+    .primary-action,
+    .icon-button,
+    .micro-button {
+      transition: transform 200ms var(--ease-spring-bounce), box-shadow 200ms var(--ease-out), background 160ms ease, color 160ms ease;
+    }
+
+    .primary-action:hover:not(:disabled) {
+      transform: scale(1.04);
+    }
+
+    .primary-action:active:not(:disabled) {
+      transform: scale(0.94);
+      transition: transform 100ms var(--ease-smooth);
+    }
+
+    .icon-button:active,
+    .micro-button:active {
+      transform: scale(0.88);
     }
 
     .flow-map,
@@ -325,94 +509,226 @@
       place-items: center;
     }
 
-    .source-landing {
-      width: min(920px, 88%);
-      min-height: 430px;
+    /* ── Start Stage: Cards Grid + Drop Strip ── */
+
+    .start-stage {
+      width: min(1060px, 94%);
+      min-height: 440px;
       display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      align-items: center;
-      gap: 28px;
+      grid-template-rows: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: start;
+      padding: 18px 0;
     }
 
-    .source-drop {
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      align-content: start;
+    }
+
+    .template-card {
       min-width: 0;
-      min-height: 430px;
-      padding: 34px;
-      border: 1px dashed var(--line-strong);
-      border-radius: 28px;
-      background: rgba(255, 255, 255, 0.72);
-      box-shadow: var(--shadow-soft);
+      padding: 20px 16px 16px;
+      border: 1.5px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow-xs);
       display: grid;
-      grid-template-rows: 1fr auto;
-      gap: 22px;
-      transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      cursor: pointer;
+      transition: transform 240ms var(--ease-spring), box-shadow 240ms var(--ease-out), border-color 200ms ease, opacity 200ms ease, background 200ms ease;
+      position: relative;
+      overflow: hidden;
     }
 
-    .source-drop.dragover,
-    .source-drop:hover {
-      border-color: var(--green);
+    .template-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--line-strong);
       background: #ffffff;
-      transform: translateY(-2px);
     }
 
-    .source-main {
+    .template-card:active {
+      transform: scale(0.97);
+      transition: transform 120ms var(--ease-smooth);
+    }
+
+    .template-card.selected {
+      border-color: var(--green);
+      background: var(--green-soft);
+      box-shadow: 0 0 0 4px var(--green-soft), var(--shadow-md);
+    }
+
+    .template-card.selected:hover {
+      background: #daf2ed;
+    }
+
+    .template-card.selected::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      border: 2px solid var(--green);
+      pointer-events: none;
+    }
+
+    .template-card.dimmed {
+      opacity: 0.5;
+    }
+
+    .template-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
       display: grid;
-      align-content: center;
-      justify-items: start;
-      gap: 16px;
+      place-items: center;
+      color: #ffffff;
+      background: var(--green);
+      transition: transform 200ms var(--ease-spring);
     }
 
-    .source-symbol {
-      width: 76px;
-      height: 76px;
-      border-radius: 24px;
+    .template-card:hover .template-icon {
+      transform: scale(1.06);
+    }
+
+    .template-icon svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    .template-icon.blue { background: var(--blue); }
+    .template-icon.orange { background: var(--orange); }
+    .template-icon.rose { background: var(--rose); }
+    .template-icon.violet { background: #7c3aed; }
+
+    .template-name {
+      color: var(--ink);
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.15;
+    }
+
+    .template-sub {
+      color: var(--quiet);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .template-badge {
+      min-height: 24px;
+      padding: 0 9px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--green);
+      background: var(--green-soft);
+      font-size: 11px;
+      font-weight: 680;
+      white-space: nowrap;
+      width: fit-content;
+    }
+
+    .template-badge svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    .more-card {
+      display: grid;
+      place-items: center;
+      color: var(--quiet);
+      background: rgba(255, 255, 255, 0.5);
+      border-style: dashed;
+    }
+
+    .more-card:hover {
+      color: var(--muted);
+      border-color: var(--line-strong);
+    }
+
+    .more-label {
+      font-size: 15px;
+      font-weight: 680;
+    }
+
+    /* ── Drop Strip ── */
+
+    .drop-strip {
+      min-height: 68px;
+      padding: 14px 20px;
+      border: 1.5px dashed var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.44);
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 12px;
+      transition: border-color 200ms ease, background 200ms ease, transform 200ms var(--ease-spring), min-height 240ms var(--ease-out);
+      cursor: pointer;
+    }
+
+    .drop-strip:hover,
+    .drop-strip.dragover {
+      border-color: var(--green);
+      background: var(--green-soft);
+      transform: translateY(-2px);
+      min-height: 82px;
+    }
+
+    .drop-strip.dragover {
+      border-style: solid;
+      box-shadow: 0 0 0 4px var(--green-soft);
+    }
+
+    .drop-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
       display: grid;
       place-items: center;
       color: var(--green);
       background: var(--green-soft);
     }
 
-    .source-symbol svg {
-      width: 32px;
-      height: 32px;
+    .drop-icon svg {
+      width: 18px;
+      height: 18px;
     }
 
-    .source-title {
-      margin: 0;
-      max-width: 420px;
-      color: var(--ink);
-      font-size: 46px;
-      font-weight: 820;
-      line-height: 0.98;
-    }
-
-    .source-subline {
+    .drop-hint {
       color: var(--muted);
       font-size: 14px;
-      line-height: 1.5;
+      font-weight: 640;
     }
 
-    .canvas-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .canvas-command {
-      min-height: 38px;
-      padding: 0 14px;
-      border-radius: 13px;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
+    .drop-hint strong {
       color: var(--ink);
-      background: #ffffff;
-      box-shadow: var(--shadow-soft);
-      font-weight: 760;
+      font-weight: 720;
     }
 
-    .canvas-command:hover {
-      color: var(--green);
+    .drop-menu-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      background: #ffffff;
+      transition: color 160ms ease, background 160ms ease;
+    }
+
+    .drop-menu-btn:hover {
+      color: var(--ink);
+      background: #f5f5f2;
+    }
+
+    .drop-strip.dragover .drop-menu-btn {
+      display: none;
     }
 
     .file-strip,
@@ -429,23 +745,23 @@
     .sample-pill,
     .role-pill,
     .figure-pill {
-      min-height: 28px;
+      min-height: 26px;
       padding: 0 10px;
       border: 1px solid var(--line);
       border-radius: 999px;
       display: inline-flex;
       align-items: center;
-      gap: 7px;
+      gap: 6px;
       background: #ffffff;
       color: var(--ink);
-      font-size: 12px;
-      font-weight: 680;
+      font-size: 11px;
+      font-weight: 640;
       white-space: nowrap;
     }
 
     .pill.muted {
-      color: var(--muted);
-      background: #f7f9f6;
+      color: var(--quiet);
+      background: #f4f5f2;
     }
 
     .pill.ok {
@@ -464,9 +780,113 @@
       width: min(1080px, 92%);
       min-height: 440px;
       display: grid;
-      grid-template-rows: minmax(0, 1fr) auto;
-      gap: 12px;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 14px;
       align-items: start;
+      align-content: start;
+    }
+
+    /* ── Map: Empty State (Path A) ── */
+    .map-empty-state {
+      display: grid;
+      gap: 20px;
+      align-content: center;
+      min-height: 380px;
+    }
+
+    .map-figure-queue {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow-xs);
+      display: grid;
+      gap: 14px;
+    }
+
+    .map-queue-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .map-experiment-label {
+      color: var(--ink);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .map-queue-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px;
+    }
+
+    .map-queue-card {
+      min-height: 56px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: #ffffff;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      grid-template-rows: auto auto;
+      gap: 2px 10px;
+      align-items: center;
+    }
+
+    .map-queue-card .queue-index {
+      grid-row: span 2;
+    }
+
+    .map-import-zone {
+      min-height: 80px;
+      padding: 16px 20px;
+      border: 1.5px dashed var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color 200ms ease, background 200ms ease, transform 200ms var(--ease-spring), min-height 240ms var(--ease-out);
+    }
+
+    .map-import-zone:hover,
+    .map-import-zone.dragover {
+      border-color: var(--green);
+      background: var(--green-soft);
+      transform: translateY(-2px);
+      min-height: 94px;
+    }
+
+    .map-import-zone.dragover {
+      border-style: solid;
+      box-shadow: 0 0 0 4px var(--green-soft);
+    }
+
+    /* ── Map: Figure Bar (Path B) ── */
+    .map-figure-bar {
+      min-height: 36px;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: var(--shadow-xs);
+    }
+
+    .map-queue-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 640;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .mapping-table {
@@ -475,7 +895,7 @@
       border: 1px solid var(--line);
       border-radius: 16px;
       background: #ffffff;
-      box-shadow: var(--shadow-soft);
+      box-shadow: var(--shadow-sm);
       overflow: hidden;
     }
 
@@ -493,7 +913,7 @@
       padding: 0 14px;
       border-bottom: 1px solid var(--line);
       color: var(--muted);
-      background: #f8faf9;
+      background: var(--surface);
       font-size: 11px;
       font-weight: 820;
       text-transform: uppercase;
@@ -625,7 +1045,7 @@
       border: 1px solid var(--line);
       border-radius: 16px;
       background: #ffffff;
-      box-shadow: var(--shadow-soft);
+      box-shadow: var(--shadow-sm);
       display: grid;
       gap: 12px;
     }
@@ -661,7 +1081,7 @@
       grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
       gap: 12px;
-      background: #f8faf9;
+      background: var(--surface);
     }
 
     .render-head {
@@ -769,54 +1189,120 @@
     .live-chart-frame {
       width: min(82%, 900px);
       height: min(78%, 640px);
-      padding: 18px;
+      padding: 0;
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: var(--radius-lg);
       background: #ffffff;
       box-shadow: var(--shadow);
       display: grid;
-      place-items: center;
+      grid-template-rows: minmax(0, 1fr) auto;
       overflow: hidden;
     }
 
     .live-chart {
       width: 100%;
       height: 100%;
-      overflow: visible;
+      display: block;
+      cursor: crosshair;
+      min-height: 300px;
     }
 
     .chart-grid {
-      stroke: #e5e9e5;
+      stroke: #e8e5de;
       stroke-width: 1;
     }
 
     .chart-axis {
-      stroke: #1b211d;
+      stroke: var(--ink);
       stroke-width: 1.5;
     }
 
-    .chart-tick,
-    .chart-label {
+    .chart-tick {
       fill: var(--muted);
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 620;
     }
 
     .chart-label {
       fill: var(--ink);
-      font-size: 15px;
+      font-size: 14px;
     }
 
     .live-series {
       fill: none;
-      stroke-width: 3.2;
+      stroke-width: 3;
       stroke-linecap: round;
       stroke-linejoin: round;
+      transition: opacity 200ms ease;
+    }
+
+    .live-series.hidden {
+      opacity: 0.1;
     }
 
     .live-point {
       stroke: #ffffff;
       stroke-width: 1.6;
+      transition: r 150ms var(--ease-spring);
+      cursor: pointer;
+    }
+
+    .live-point:hover {
+      r: 7;
+    }
+
+    .live-series-group.hidden .live-series,
+    .live-series-group.hidden .live-point {
+      opacity: 0.12;
+      pointer-events: none;
+    }
+
+    /* ── Chart Tooltip ── */
+    .chart-tooltip {
+      pointer-events: none;
+      transition: visibility 80ms ease;
+    }
+
+    /* ── Chart Legend ── */
+    .live-chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 8px 12px;
+      border-top: 1px solid var(--line);
+      background: var(--surface);
+    }
+
+    .live-legend-item {
+      min-height: 28px;
+      padding: 0 9px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--ink);
+      background: transparent;
+      font-size: 11px;
+      font-weight: 640;
+      transition: background 160ms ease, border-color 160ms ease, opacity 160ms ease;
+      cursor: pointer;
+    }
+
+    .live-legend-item:hover {
+      background: #ffffff;
+      border-color: var(--line);
+    }
+
+    .live-legend-item.toggled-off {
+      opacity: 0.45;
+    }
+
+    .live-legend-color {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      flex-shrink: 0;
     }
 
     .empty-figure {
@@ -828,7 +1314,7 @@
       display: grid;
       place-items: center;
       color: var(--muted);
-      box-shadow: var(--shadow-soft);
+      box-shadow: var(--shadow-sm);
     }
 
     .figure-bar {
@@ -875,7 +1361,7 @@
     .figure-tab:hover {
       color: var(--ink);
       background: #ffffff;
-      box-shadow: var(--shadow-soft);
+      box-shadow: var(--shadow-sm);
     }
 
     .figure-list .figure-tab {
@@ -887,32 +1373,33 @@
     .side-panel {
       min-width: 0;
       min-height: 0;
-      padding: 14px 16px 18px 0;
+      padding: 12px 14px 16px 0;
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
-      gap: 8px;
+      gap: 6px;
       overflow: hidden;
+      background: var(--panel-bg);
     }
 
     .panel-head {
-      min-height: 50px;
+      min-height: 44px;
       border-bottom: 1px solid var(--line);
       display: grid;
       align-content: center;
-      gap: 3px;
-      padding: 6px 2px 12px;
+      gap: 2px;
+      padding: 4px 2px 10px;
     }
 
     .stage-name {
       color: var(--ink);
-      font-size: 17px;
-      font-weight: 800;
+      font-size: 15px;
+      font-weight: 700;
       line-height: 1.15;
     }
 
     .stage-status {
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
       line-height: 1.2;
     }
 
@@ -924,28 +1411,30 @@
       align-content: start;
       gap: 0;
       padding-right: 2px;
+      scroll-behavior: smooth;
     }
 
     .section {
       min-width: 0;
       border-top: 1px solid var(--line);
       background: transparent;
-      padding: 16px 2px;
+      padding: 14px 2px;
       display: grid;
-      gap: 12px;
+      gap: 10px;
     }
 
     .panel-body .section:first-child {
       border-top: 0;
-      padding-top: 10px;
+      padding-top: 8px;
     }
 
     .section-title {
       margin: 0;
       color: var(--muted);
-      font-size: 12px;
-      font-weight: 800;
+      font-size: 11px;
+      font-weight: 700;
       text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
 
     .panel-row {
@@ -953,29 +1442,32 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 10px;
       color: var(--muted);
-      font-size: 12px;
-      font-weight: 760;
+      font-size: 11px;
+      font-weight: 680;
       text-transform: uppercase;
+      letter-spacing: 0.02em;
     }
 
     .panel-value {
       color: var(--ink);
-      font-size: 20px;
-      font-weight: 820;
+      font-size: 42px;
+      font-weight: 700;
       text-transform: none;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
     }
 
     .field {
       display: grid;
-      gap: 7px;
+      gap: 6px;
     }
 
     .field-label {
       color: var(--muted);
-      font-size: 12px;
-      font-weight: 760;
+      font-size: 11px;
+      font-weight: 680;
     }
 
     .field input,
@@ -984,17 +1476,19 @@
     .input,
     .select {
       width: 100%;
-      min-height: 36px;
+      min-height: 34px;
       padding: 0 10px;
       border: 1px solid var(--line);
-      border-radius: 12px;
+      border-radius: var(--radius-sm);
       outline: none;
-      background: #fbfcf8;
+      background: var(--surface);
       color: var(--ink);
+      font-size: 13px;
+      transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
     }
 
     .field textarea {
-      min-height: 88px;
+      min-height: 80px;
       padding: 10px;
       resize: vertical;
     }
@@ -1006,6 +1500,7 @@
     .select:focus {
       border-color: var(--green);
       background: #ffffff;
+      box-shadow: 0 0 0 3px var(--green-soft);
     }
 
     .action-row,
@@ -1121,7 +1616,7 @@
     .inspector-tab:hover {
       color: var(--ink);
       border-color: var(--line-strong);
-      background: #f8faf9;
+      background: var(--surface);
     }
 
     .review-command-bar {
@@ -1415,7 +1910,7 @@
 
     <aside class="side-panel" id="sidePanel">
       <div class="panel-head">
-        <div class="stage-name" id="panelTitle">Import</div>
+        <div class="stage-name" id="panelTitle">Start</div>
         <div class="stage-status" id="panelStatus">Ready</div>
       </div>
       <div class="panel-body" id="panelBody"></div>
@@ -1425,7 +1920,7 @@
   <script>
     const stageOrder = ["import", "mapping", "generate", "review"];
     const stageMeta = {
-      import: { label: "Import", title: "Import", icon: "folder" },
+      import: { label: "Start", title: "Start", icon: "folder" },
       mapping: { label: "Map", title: "Map", icon: "map" },
       generate: { label: "Render", title: "Render", icon: "play" },
       review: { label: "Review", title: "Review", icon: "figure" }
@@ -1663,6 +2158,8 @@
       primaryAction.disabled = primaryDisabled();
       primaryAction.querySelector("span").textContent = primaryLabel();
       renderStageNav();
+      const toolStrip = document.querySelector(".tool-strip");
+      if (toolStrip) toolStrip.classList.toggle("visible", state.stage === "review" && hasRenderedArtifacts());
     }
 
     function primaryDisabled() {
@@ -1682,17 +2179,27 @@
     }
 
     function renderStageNav() {
-      stageNav.innerHTML = stageOrder.map((stage) => `
-        <button class="stage-button ${state.stage === stage ? "active" : ""}" type="button" data-stage="${stage}" title="${stageMeta[stage].title}" aria-label="${stageMeta[stage].title}">
-          ${icon(stageMeta[stage].icon)}
-        </button>
-      `).join("");
+      const items = stageOrder.map((stage, index) => {
+        const isActive = state.stage === stage;
+        const isPast = stageOrder.indexOf(state.stage) > index;
+        const readiness = stageReadiness(stage);
+        const connector = index < stageOrder.length - 1
+          ? `<span class="stage-connector ${isPast ? "done" : ""}"></span>`
+          : "";
+        return `
+          <div class="stage-item ${isActive ? "active" : ""}">
+            <button class="stage-button ${isActive ? "active" : ""}" type="button" data-stage="${stage}" title="${stageMeta[stage].title}" aria-label="${stageMeta[stage].title}">
+              ${icon(stageMeta[stage].icon)}
+            </button>
+            <span class="stage-dot ${readiness}"></span>
+            <span class="stage-label">${stageMeta[stage].label}</span>
+            ${connector}
+          </div>
+        `;
+      });
+      stageNav.innerHTML = items.join("");
       stageNav.querySelectorAll("[data-stage]").forEach((button) => {
-        const stage = button.dataset.stage;
-        button.addEventListener("click", () => setStage(stage));
-        const dot = document.createElement("span");
-        dot.className = `stage-dot ${stageReadiness(stage)}`;
-        button.appendChild(dot);
+        button.addEventListener("click", () => setStage(button.dataset.stage));
       });
     }
 
@@ -1703,10 +2210,28 @@
       attachPanelHandlers();
       attachCanvasHandlers();
       updateCanvasTransform();
+      animateStageEnter();
+    }
+
+    function animateStageEnter() {
+      const board = document.querySelector("#visualBoard");
+      if (!board) return;
+      const staggerMap = {
+        import: { selector: ".template-card", delay: 50, cls: "anim-enter" },
+        mapping: { selector: ".mapping-row, .map-queue-card", delay: 45, cls: "anim-enter" },
+        generate: { selector: ".figure-queue-row, .render-sheet", delay: 60, cls: "anim-enter" },
+        review: { selector: ".figure-tab", delay: 40, cls: "anim-enter-fast" }
+      };
+      const cfg = staggerMap[state.stage];
+      if (!cfg) return;
+      board.querySelectorAll(cfg.selector).forEach((el, index) => {
+        el.classList.add(cfg.cls);
+        el.style.animationDelay = `${index * cfg.delay}ms`;
+      });
     }
 
     function renderPanel() {
-      if (state.stage === "import") return renderImportPanel();
+      if (state.stage === "import") return renderStartPanel();
       if (state.stage === "mapping") return renderMappingPanel();
       if (state.stage === "generate") return renderGeneratePanel();
       if (state.stage === "review") return renderReviewPanel();
@@ -1723,43 +2248,139 @@
     }
 
     function renderCanvasBoard() {
-      if (state.stage === "import") return renderImportCanvas();
+      if (state.stage === "import") return renderStartCanvas();
       if (state.stage === "mapping") return renderMappingCanvas();
       if (state.stage === "generate") return renderGenerateCanvas();
       if (state.stage === "review") return renderReviewCanvas();
       return "";
     }
 
-    function renderImportCanvas() {
+    function renderStartCanvas() {
       const files = allDataFiles();
       const fileCount = files.length;
+      const detectedFamilyId = state.dataTypeId;
       return `
         <div class="flow-map">
-          <div class="source-landing">
-            <div class="source-drop ${fileCount ? "ready" : ""}" id="dropzone">
-              <div class="source-main">
-                <span class="source-symbol">${icon(fileCount ? "figure" : "upload")}</span>
-                <h2 class="source-title">${fileCount ? `${fileCount} file${fileCount === 1 ? "" : "s"} ready` : "Drop files"}</h2>
-                <span class="source-subline">${fileCount ? escapeHtml(files.slice(0, 4).map((item) => item.file.name).join(" / ")) : "Files, folder, or saved project"}</span>
-              </div>
-              <div class="canvas-actions">
-                <button class="canvas-command" type="button" data-canvas-command="files">${icon("upload")}Add files</button>
-                <button class="canvas-command" type="button" data-canvas-command="folder">${icon("folder")}Add folder</button>
-                <button class="canvas-command" type="button" data-canvas-command="open">${icon("folder")}Open project</button>
-              </div>
+          <div class="start-stage">
+            <div class="template-grid" id="templateGrid">
+              ${renderStartCards()}
+            </div>
+            <div class="drop-strip ${fileCount ? "ready" : ""}" id="dropzone">
+              <span class="drop-icon">${icon("upload")}</span>
+              <span class="drop-hint">
+                ${fileCount
+                  ? `<strong>${fileCount} file${fileCount === 1 ? "" : "s"}</strong> — ${escapeHtml(files.slice(0, 3).map((item) => item.file.name).join(", "))}`
+                  : "拖放文件到此处，或点击导入"}
+              </span>
+              <button class="drop-menu-btn" type="button" id="openProjectBtn" title="Open project" aria-label="Open project">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+              </button>
             </div>
           </div>
         </div>
       `;
     }
 
+    function renderStartCards() {
+      const catalog = state.catalog || [];
+      const detectedId = state.dataTypeId;
+      const files = allDataFiles();
+      const hasFiles = files.length > 0;
+
+      const familyColors = ["", "blue", "orange", "rose", "violet", "blue", "orange"];
+      const familyIcons = {
+        rheology: `<path d="M3 20h18M5 17c3-7 5-7 7-3 2 4 4 3 7-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+        mechanical: `<path d="M6 4v16M12 4v16M18 4v16M4 8h16M4 16h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+        thermal: `<path d="M12 3v16M9 7c1-2 2-3 3-3s2 1 3 3-1 4-1 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+        spectroscopy: `<path d="M3 17c3-6 5-8 7-5 2 3 4 2 7-5 3-6 4-2 4 2" fill="none" stroke="currentColor" stroke-width="2"/>`,
+        chromatography: `<path d="M4 19h16M6 15c2-4 4-5 5-3 1 2 3 2 5-3 2-5 3-2 4 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+        scattering: `<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="currentColor"/>`
+      };
+
+      const cards = (catalog.length ? catalog : [
+        { id: "rheology_dma", label: "Rheology / DMA", experiments: [] },
+        { id: "mechanical", label: "Mechanical", experiments: [] },
+        { id: "thermal", label: "Thermal", experiments: [] },
+        { id: "spectroscopy", label: "Spectroscopy", experiments: [] },
+        { id: "chromatography", label: "Chromatography", experiments: [] },
+        { id: "scattering", label: "Scattering", experiments: [] }
+      ]).filter((item) => item && item.id).slice(0, 8);
+
+      const cardHtml = cards.map((item, index) => {
+        const isSelected = hasFiles && item.id === detectedId;
+        const hasMatch = hasFiles && item.id === detectedId;
+        const experiments = (item.experiments || []);
+        const colorClass = familyColors[index % familyColors.length];
+        const expNames = experiments.slice(0, 3).map((exp) => exp.label || exp.id).join(", ");
+        const fallbackIcons = [
+          `<path d="M3 20h18M5 17c3-7 5-7 7-3 2 4 4 3 7-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+          `<path d="M6 4v16M12 4v16M18 4v16M4 8h16M4 16h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+          `<path d="M12 3v16M9 7c1-2 2-3 3-3s2 1 3 3-1 4-1 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+          `<path d="M3 17c3-6 5-8 7-5 2 3 4 2 7-5 3-6 4-2 4 2" fill="none" stroke="currentColor" stroke-width="2"/>`,
+          `<path d="M4 19h16M6 15c2-4 4-5 5-3 1 2 3 2 5-3 2-5 3-2 4 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+          `<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="2" fill="currentColor"/>`
+        ];
+        const iconPath = familyIcons[item.id] || fallbackIcons[index % fallbackIcons.length];
+        return `
+          <div class="template-card ${isSelected ? "selected" : (hasFiles && !hasMatch ? "dimmed" : "")}"
+               data-experiment-family="${escapeHtml(item.id)}"
+               style="animation-delay: ${index * 50}ms">
+            <span class="template-icon ${colorClass}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconPath}</svg>
+            </span>
+            <div class="template-name">${escapeHtml(item.label)}</div>
+            <div class="template-sub">${expNames || "Auto-detect"}</div>
+            ${hasMatch ? `<span class="template-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>
+              ${fileCount} file${fileCount === 1 ? "" : "s"}
+            </span>` : ""}
+          </div>
+        `;
+      }).join("");
+
+      return cardHtml;
+    }
+
     function renderMappingCanvas() {
       const item = activePreviewItem();
       const activeGroup = state.groups[state.activeGroup] || state.groups[0] || { sample: "Sample", files: [] };
       const experiment = currentExperiment()?.label || "Auto";
+      const hasImportedFiles = allDataFiles().length > 0;
+      const queue = figureQueueItems();
+      const autoMatched = state.experimentTouched ? "" : "auto";
       return `
         <div class="mapping-map">
           <div class="mapping-stage">
+            ${!hasImportedFiles ? `
+            <div class="map-empty-state">
+              <div class="map-figure-queue">
+                <div class="map-queue-header">
+                  <span class="map-experiment-label">${escapeHtml(experiment || "Experiment")}</span>
+                  <span class="pill ok">Figure queue</span>
+                </div>
+                <div class="map-queue-grid">
+                  ${queue.map((name, index) => `
+                    <div class="map-queue-card">
+                      <span class="queue-index">${index + 1}</span>
+                      <span class="row-title">${escapeHtml(name)}</span>
+                      <span class="row-sub">${escapeHtml(replicateModeLabel())}</span>
+                    </div>
+                  `).join("")}
+                </div>
+              </div>
+              <div class="map-import-zone" id="dropzone">
+                <span class="drop-icon">${icon("upload")}</span>
+                <span class="drop-hint">拖放数据文件到此处开始绘图</span>
+                <button class="drop-menu-btn" type="button" id="openProjectBtn" title="Open project" aria-label="Open project">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                </button>
+              </div>
+            </div>
+            ` : `
+            <div class="map-figure-bar">
+              <span class="pill ok">${queue.length} figure${queue.length === 1 ? "" : "s"}</span>
+              <span class="map-queue-label">${queue.slice(0, 3).map((n) => escapeHtml(n)).join(" · ")}</span>
+            </div>
             <div class="mapping-table" aria-label="Sample mapping table">
               <div class="mapping-header">
                 <span>Sample</span>
@@ -1778,7 +2399,7 @@
                     </span>
                     <span class="mapping-count">${group.files.length}</span>
                     <span class="mapping-mode">${escapeHtml(replicateModeLabel())}</span>
-                    <span class="mapping-experiment">${escapeHtml(experiment)}</span>
+                    <span class="mapping-experiment">${escapeHtml(experiment)}${autoMatched ? " ✓" : ""}</span>
                     <span class="status-pill ${ready ? "ok" : "warn"}">${ready ? "Ready" : "Need check"}</span>
                   </div>
                 `;
@@ -1792,7 +2413,6 @@
                 </span>
                 <div class="action-row">
                   <button class="btn" type="button" id="addGroupButton">${icon("plus")}Sample</button>
-                  <button class="btn" type="button" id="chooseFilesForSampleButton">${icon("upload")}Files</button>
                   <button class="btn" type="button" data-remove-group="${state.activeGroup}" ${state.groups.length <= 1 ? "disabled" : ""}>${icon("trash")}Remove</button>
                 </div>
               </div>
@@ -1815,6 +2435,7 @@
               </div>
               ${state.showAdvancedMapping ? renderAutoModelPanel(item) : ""}
             </div>
+            `}
           </div>
         </div>
       `;
@@ -1873,9 +2494,17 @@
       const chart = buildLiveChart(spec);
       if (!chart.series.length) return renderFigureFrame(null, state.projectStatus?.preview_figure);
       return `
-        <div class="live-chart-frame">
-          <svg class="live-chart" viewBox="0 0 ${chart.width} ${chart.height}" role="img" aria-label="Live SciPlot chart">
-            <rect x="0" y="0" width="${chart.width}" height="${chart.height}" fill="#ffffff"></rect>
+        <div class="live-chart-frame" id="liveChartFrame">
+          <svg class="live-chart" id="liveChartSvg"
+               viewBox="0 0 ${chart.width} ${chart.height}"
+               data-original-viewbox="0 0 ${chart.width} ${chart.height}"
+               role="img" aria-label="Live SciPlot chart">
+            <defs>
+              <filter id="tooltip-shadow">
+                <feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.12"/>
+              </filter>
+            </defs>
+            <rect x="0" y="0" width="${chart.width}" height="${chart.height}" fill="#fefefd" rx="6"></rect>
             ${chart.xTicks.map((tick) => `
               <line class="chart-grid" x1="${tick.x}" y1="${chart.top}" x2="${tick.x}" y2="${chart.bottom}"></line>
               <text class="chart-tick" x="${tick.x}" y="${chart.bottom + 34}" text-anchor="middle">${escapeHtml(tick.label)}</text>
@@ -1887,12 +2516,36 @@
             <line class="chart-axis" x1="${chart.left}" y1="${chart.bottom}" x2="${chart.right}" y2="${chart.bottom}"></line>
             <line class="chart-axis" x1="${chart.left}" y1="${chart.top}" x2="${chart.left}" y2="${chart.bottom}"></line>
             ${chart.series.map((series) => `
-              <path class="live-series" d="${series.path}" stroke="${escapeHtml(series.color)}"></path>
-              ${series.points.map((point) => `<circle class="live-point" cx="${point.x}" cy="${point.y}" r="4" fill="${escapeHtml(series.color)}"><title>${escapeHtml(series.label)}: ${escapeHtml(point.rawLabel)}</title></circle>`).join("")}
+              <g class="live-series-group" data-series-label="${escapeHtml(series.label)}">
+                <path class="live-series" d="${series.path}" stroke="${escapeHtml(series.color)}" data-series-color="${escapeHtml(series.color)}"></path>
+                ${series.points.map((point) => `
+                  <circle class="live-point"
+                    cx="${point.x}" cy="${point.y}" r="4.5"
+                    fill="${escapeHtml(series.color)}"
+                    data-x="${escapeHtml(point.rawLabel.split(' / ')[0] || '')}"
+                    data-y="${escapeHtml(point.rawLabel.split(' / ')[1] || '')}"
+                    data-series="${escapeHtml(series.label)}">
+                  </circle>
+                `).join("")}
+              </g>
             `).join("")}
             <text class="chart-label" x="${(chart.left + chart.right) / 2}" y="${chart.height - 18}" text-anchor="middle">${escapeHtml(chart.xLabel)}</text>
             <text class="chart-label" transform="translate(24 ${(chart.top + chart.bottom) / 2}) rotate(-90)" text-anchor="middle">${escapeHtml(chart.yLabel)}</text>
+            <!-- Tooltip overlay -->
+            <g class="chart-tooltip" id="chartTooltip" visibility="hidden">
+              <rect x="0" y="0" width="170" height="52" rx="8" fill="#1a1a18" filter="url(#tooltip-shadow)"/>
+              <text id="chartTooltipText1" x="12" y="20" fill="#ffffff" font-size="11" font-weight="640"></text>
+              <text id="chartTooltipText2" x="12" y="38" fill="#a8a6a0" font-size="11"></text>
+            </g>
           </svg>
+          <div class="live-chart-legend" id="liveChartLegend">
+            ${chart.series.map((series, index) => `
+              <button class="live-legend-item" type="button" data-legend-series="${escapeHtml(series.label)}" data-legend-index="${index}">
+                <span class="live-legend-color" style="background:${escapeHtml(series.color)}"></span>
+                <span class="live-legend-label">${escapeHtml(series.label)}</span>
+              </button>
+            `).join("")}
+          </div>
         </div>
       `;
     }
@@ -1926,7 +2579,7 @@
       const yDomain = transformedDomain(allPoints.map((point) => point.y), yMode);
       const scaleX = (value) => left + ((transformValue(value, xMode) - xDomain.min) / (xDomain.max - xDomain.min)) * (right - left);
       const scaleY = (value) => bottom - ((transformValue(value, yMode) - yDomain.min) / (yDomain.max - yDomain.min)) * (bottom - top);
-      const palette = ["#176f5d", "#2f6fe4", "#c76b16", "#7c5bc7", "#bd3f5f", "#4f7b2d"];
+      const palette = ["#0b8a7a", "#3366e0", "#c7780a", "#7c3aed", "#d9394a", "#4a8c2a"];
       const series = Array.from(rowsBySeries.entries()).map(([label, points], index) => {
         const color = safeSeriesColor(seriesMeta.get(label)?.color, palette[index % palette.length]);
         const plotted = points.map((point) => ({
@@ -2061,9 +2714,13 @@
       return "";
     }
 
-    function renderImportPanel() {
+    function renderStartPanel() {
       const files = allDataFiles();
       const warnings = state.projectStatus?.manifest?.warnings || state.lastProject?.warnings || [];
+      const dataType = currentDataType();
+      const experiment = currentExperiment();
+      const detectedName = dataType?.label || "";
+      const detectedType = experiment?.label || "";
       return `
         <section class="section">
           <input id="fileInput" class="hidden-input" type="file" multiple>
@@ -2072,14 +2729,27 @@
             <span>Files</span>
             <strong class="panel-value">${files.length}</strong>
           </div>
+          ${files.length && detectedName ? `
           <div class="panel-row">
-            <span>Recognition</span>
-            <span>${files.length ? "Ready" : "Ready"}</span>
+            <span>Detected</span>
+            <span class="pill ok">${escapeHtml(detectedName)}</span>
           </div>
+          ${detectedType ? `
+          <div class="panel-row">
+            <span>Type</span>
+            <span class="pill ok">${escapeHtml(detectedType)}</span>
+          </div>
+          ` : ""}
+          ` : `<div class="panel-row">
+            <span>Status</span>
+            <span>${files.length ? "Ready" : "Waiting"}</span>
+          </div>`}
+          ${warnings.length ? `
           <div class="panel-row">
             <span>Warnings</span>
-            <span>${warnings.length ? "Need check" : "Ready"}</span>
+            <span class="pill warn">${warnings.length}</span>
           </div>
+          ` : ""}
         </section>
         <section class="section">
           <div class="file-list">
@@ -2394,8 +3064,6 @@
         };
       }
 
-      const chooseFilesForSampleButton = document.querySelector("#chooseFilesForSampleButton");
-      if (chooseFilesForSampleButton) chooseFilesForSampleButton.onclick = () => fileInput?.click();
       const addGroupButton = document.querySelector("#addGroupButton");
       if (addGroupButton) addGroupButton.onclick = addGroup;
 
@@ -2576,6 +3244,26 @@
         };
       });
 
+      visualCanvas.querySelectorAll("[data-experiment-family]").forEach((card) => {
+        card.onclick = () => {
+          const familyId = card.dataset.experimentFamily;
+          if (!familyId) return;
+          state.dataTypeId = familyId;
+          const experiments = currentDataType()?.experiments || [];
+          state.experimentTypeId = experiments[0]?.id || "";
+          state.experimentTouched = true;
+          render();
+        };
+      });
+
+      const openProjectBtn = visualCanvas.querySelector("#openProjectBtn");
+      if (openProjectBtn) {
+        openProjectBtn.onclick = (event) => {
+          event.stopPropagation();
+          openProjectPrompt();
+        };
+      }
+
       const dropzone = document.querySelector("#dropzone");
       if (dropzone) {
         ["dragenter", "dragover"].forEach((eventName) => {
@@ -2591,6 +3279,10 @@
           });
         });
         dropzone.addEventListener("drop", (event) => addFiles(Array.from(event.dataTransfer.files || [])));
+        dropzone.addEventListener("click", (event) => {
+          if (event.target.closest("button")) return;
+          document.querySelector("#fileInput")?.click();
+        });
       }
 
       let dragging = false;
@@ -2624,6 +3316,100 @@
         zoomRange.value = Math.round(next * 100);
         updateCanvasTransform();
       };
+
+      initLiveChartInteraction();
+    }
+
+    function initLiveChartInteraction() {
+      const svg = document.querySelector("#liveChartSvg");
+      if (!svg) return;
+
+      const tooltip = svg.querySelector("#chartTooltip");
+      const tooltipText1 = svg.querySelector("#chartTooltipText1");
+      const tooltipText2 = svg.querySelector("#chartTooltipText2");
+
+      svg.querySelectorAll(".live-point").forEach((point) => {
+        point.addEventListener("pointerenter", (event) => {
+          if (!tooltip || !tooltipText1 || !tooltipText2) return;
+          const series = point.dataset.series || "";
+          const xVal = point.dataset.x || "";
+          const yVal = point.dataset.y || "";
+          tooltipText1.textContent = series;
+          tooltipText2.textContent = `${xVal} / ${yVal}`;
+          const cx = parseFloat(point.getAttribute("cx") || "0");
+          const cy = parseFloat(point.getAttribute("cy") || "0");
+          const tx = Math.min(cx + 14, 730);
+          const ty = Math.max(cy - 66, 12);
+          tooltip.querySelector("rect")?.setAttribute("x", String(tx));
+          tooltip.querySelector("rect")?.setAttribute("y", String(ty));
+          tooltipText1.setAttribute("x", String(tx + 12));
+          tooltipText1.setAttribute("y", String(ty + 20));
+          tooltipText2.setAttribute("x", String(tx + 12));
+          tooltipText2.setAttribute("y", String(ty + 38));
+          tooltip.setAttribute("visibility", "visible");
+        });
+        point.addEventListener("pointerleave", () => {
+          if (tooltip) tooltip.setAttribute("visibility", "hidden");
+        });
+      });
+
+      const legend = document.querySelector("#liveChartLegend");
+      if (legend) {
+        legend.querySelectorAll(".live-legend-item").forEach((item) => {
+          item.addEventListener("click", () => {
+            const label = item.dataset.legendSeries;
+            const isOff = item.classList.toggle("toggled-off");
+            const group = svg.querySelector(`.live-series-group[data-series-label="${CSS.escape(label)}"]`);
+            if (group) group.classList.toggle("hidden", isOff);
+          });
+        });
+      }
+
+      let svgViewBox = svg.getAttribute("data-original-viewbox") || "0 0 900 560";
+      svg.addEventListener("dblclick", () => {
+        svgViewBox = svg.getAttribute("data-original-viewbox") || "0 0 900 560";
+        svg.setAttribute("viewBox", svgViewBox);
+      });
+
+      svg.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const parts = svgViewBox.split(" ").map(Number);
+        if (parts.length < 4) return;
+        let [vx, vy, vw, vh] = parts;
+        const factor = event.deltaY < 0 ? 0.88 : 1.12;
+        const cx = vx + vw / 2;
+        const cy = vy + vh / 2;
+        vw *= factor;
+        vh *= factor;
+        vx = cx - vw / 2;
+        vy = cy - vh / 2;
+        svgViewBox = `${vx} ${vy} ${vw} ${vh}`;
+        svg.setAttribute("viewBox", svgViewBox);
+      });
+
+      let panning = false;
+      let panStart = { x: 0, y: 0 };
+      let panOrigin = { x: 0, y: 0 };
+      svg.addEventListener("pointerdown", (event) => {
+        if (event.target.closest(".live-point")) return;
+        panning = true;
+        panStart = { x: event.clientX, y: event.clientY };
+        const parts = svgViewBox.split(" ").map(Number);
+        panOrigin = { x: parts[0] || 0, y: parts[1] || 0 };
+        svg.setPointerCapture(event.pointerId);
+      });
+      svg.addEventListener("pointermove", (event) => {
+        if (!panning) return;
+        const parts = svgViewBox.split(" ").map(Number);
+        if (parts.length < 4) return;
+        const dx = (event.clientX - panStart.x) * (parts[2] / svg.clientWidth);
+        const dy = (event.clientY - panStart.y) * (parts[3] / svg.clientHeight);
+        parts[0] = panOrigin.x - dx;
+        parts[1] = panOrigin.y - dy;
+        svgViewBox = parts.join(" ");
+        svg.setAttribute("viewBox", svgViewBox);
+      });
+      svg.addEventListener("pointerup", () => { panning = false; });
     }
 
     function updateCanvasOnly() {
