@@ -6,6 +6,7 @@ from typing import Any
 
 from sciplot_core._bootstrap import ensure_legacy_core
 from sciplot_core.render import DEFAULT_EXPORT_FORMATS
+from sciplot_core.study_model import sync_study_model_samples
 
 ensure_legacy_core()
 
@@ -131,6 +132,12 @@ def apply_request_patch(
     patched["exports"] = selected_exports
     if selected_series:
         patched["series_order"] = selected_series
+        synced_study_model = sync_study_model_samples(
+            patched.get("study_model") if isinstance(patched.get("study_model"), dict) else None,
+            sample_order=selected_series,
+        )
+        if isinstance(synced_study_model, dict):
+            patched["study_model"] = synced_study_model
     if merged_render_options:
         patched["render_options"] = merged_render_options
     else:

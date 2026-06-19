@@ -11,6 +11,11 @@ from sciplot_core.materials_rules import compute_analysis_metrics
 from sciplot_core.qa import run_qa
 from sciplot_core.render import json_safe, render_to_dir
 from sciplot_core.semantic import build_intervention_request, classify_source, prepare_semantic_source
+from sciplot_core.study_model import (
+    attach_run_artifacts_to_study_model,
+    build_output_package_contract,
+    study_model_from_request,
+)
 from sciplot_recipes import run_recipe
 
 
@@ -254,7 +259,13 @@ def _update_intake_project_after_run(request_path: Path, manifest: dict[str, Any
         "analysis_metrics": manifest.get("result", {}).get("analysis_metrics", []),
         "qa": manifest.get("qa", {}),
         "revision_brief": manifest.get("revision_brief"),
+        "package_contract": manifest.get("package_contract", {}),
     }
+    if isinstance(manifest.get("study_model"), dict):
+        project_manifest["study_model"] = manifest["study_model"]
+        project_manifest["last_run"]["study_model"] = manifest["study_model"]
+    if isinstance(manifest.get("package_contract"), dict):
+        project_manifest["package_contract"] = manifest["package_contract"]
     intake_manifest_path.write_text(
         json.dumps(json_safe(project_manifest), indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -286,6 +297,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
 
     requested_rule_id = request.get("rule_id") if isinstance(request.get("rule_id"), str) else None
     semantic = classify_source(input_path, requested_rule_id=requested_rule_id)
+    study_model = study_model_from_request(request=request, semantic=semantic, input_path=input_path)
     final_recipe: str | None = None
 
     use_auto = request.get("recipe") == "auto" or (
@@ -378,6 +390,15 @@ def run_request(request_path: Path) -> dict[str, Any]:
         _write_render_report(output_dir, request=request, result=result)
 
     qa = run_qa(output_dir)
+    figures = _figures_from_result(result)
+    analysis_metrics = result.get("analysis_metrics") if isinstance(result.get("analysis_metrics"), list) else []
+    study_model = attach_run_artifacts_to_study_model(
+        study_model,
+        output_dir=output_dir,
+        figures=figures,
+        analysis_metrics=analysis_metrics,
+        qa=qa,
+    )
     manifest = {
         "kind": "sciplot_run",
         "created_at": datetime.now(UTC).isoformat(),
@@ -389,13 +410,16 @@ def run_request(request_path: Path) -> dict[str, Any]:
         "input": str(input_path),
         "raw_archive": json_safe(raw_archive),
         "output": str(output_dir),
-        "figures": _figures_from_result(result),
+        "figures": figures,
         "result": json_safe(result),
+        "study_model": json_safe(study_model),
         "qa": qa,
     }
     manifest["revision_brief"] = _write_revision_brief(output_dir, manifest=manifest)
-    (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     _write_review_html(output_dir, manifest=manifest)
+    (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    manifest["package_contract"] = build_output_package_contract(output_dir, manifest=manifest)
+    (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     _update_intake_project_after_run(request_path, manifest)
     return manifest
 

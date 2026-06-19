@@ -7,24 +7,24 @@
   <style>
     :root {
       color-scheme: light;
-      --bg: #f4f5f1;
-      --surface: #fbfcf8;
+      --bg: #f4f6f7;
+      --surface: #f8faf9;
       --panel: #ffffff;
       --ink: #111411;
       --muted: #67706c;
       --quiet: #9aa39e;
-      --line: #dde3dd;
-      --line-strong: #b6c2ba;
-      --green: #15936b;
-      --green-soft: #e4f5ee;
-      --blue: #2864d9;
-      --blue-soft: #e7eefc;
+      --line: #dce4e4;
+      --line-strong: #aebcbd;
+      --green: #0f8f7c;
+      --green-soft: #e0f4f0;
+      --blue: #2d68d8;
+      --blue-soft: #e8eefc;
       --orange: #d87918;
       --orange-soft: #fff0db;
       --violet: #7c55c7;
       --danger: #c24135;
-      --shadow: 0 18px 48px rgba(20, 28, 24, 0.10);
-      --shadow-soft: 0 10px 24px rgba(20, 28, 24, 0.06);
+      --shadow: 0 14px 34px rgba(24, 33, 36, 0.09);
+      --shadow-soft: 0 8px 18px rgba(24, 33, 36, 0.055);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
       letter-spacing: 0;
     }
@@ -329,7 +329,7 @@
       width: min(920px, 88%);
       min-height: 430px;
       display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(230px, 0.65fr);
+      grid-template-columns: minmax(0, 1fr);
       align-items: center;
       gap: 28px;
     }
@@ -381,7 +381,7 @@
       margin: 0;
       max-width: 420px;
       color: var(--ink);
-      font-size: clamp(30px, 4.2vw, 54px);
+      font-size: 46px;
       font-weight: 820;
       line-height: 0.98;
     }
@@ -413,73 +413,6 @@
 
     .canvas-command:hover {
       color: var(--green);
-    }
-
-    .source-path {
-      display: grid;
-      gap: 14px;
-    }
-
-    .flow-node {
-      min-width: 0;
-      min-height: 122px;
-      padding: 18px;
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.74);
-      box-shadow: var(--shadow-soft);
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      align-items: center;
-      gap: 14px;
-      transition: border-color 160ms ease, transform 160ms ease;
-    }
-
-    .flow-node.active,
-    .flow-node:hover {
-      border-color: var(--green);
-      transform: translateY(-2px);
-    }
-
-    .flow-node:disabled {
-      color: var(--quiet);
-      border-color: var(--line);
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .node-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 13px;
-      display: grid;
-      place-items: center;
-      background: var(--green-soft);
-      color: var(--green);
-    }
-
-    .node-icon.blue {
-      color: var(--blue);
-      background: var(--blue-soft);
-    }
-
-    .node-icon.orange {
-      color: var(--orange);
-      background: var(--orange-soft);
-    }
-
-    .node-title {
-      margin: 0;
-      color: var(--ink);
-      font-size: 16px;
-      font-weight: 760;
-      line-height: 1.15;
-    }
-
-    .node-meta {
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.45;
     }
 
     .file-strip,
@@ -528,41 +461,68 @@
     }
 
     .mapping-stage {
-      width: min(980px, 90%);
-      min-height: 420px;
+      width: min(1080px, 92%);
+      min-height: 440px;
       display: grid;
-      grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1fr) minmax(220px, 0.9fr);
-      gap: 18px;
-      align-items: stretch;
+      grid-template-rows: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
     }
 
-    .map-column {
+    .mapping-table {
       min-width: 0;
       min-height: 0;
-      padding: 16px;
       border: 1px solid var(--line);
-      border-radius: 20px;
+      border-radius: 16px;
       background: #ffffff;
       box-shadow: var(--shadow-soft);
-      display: grid;
-      grid-template-rows: auto minmax(0, 1fr);
-      gap: 12px;
+      overflow: hidden;
     }
 
-    .map-title {
-      margin: 0;
+    .mapping-header,
+    .mapping-row {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(180px, 1.4fr) 84px 148px minmax(150px, 1fr) 110px;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mapping-header {
+      min-height: 38px;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--line);
       color: var(--muted);
-      font-size: 12px;
-      font-weight: 760;
+      background: #f8faf9;
+      font-size: 11px;
+      font-weight: 820;
       text-transform: uppercase;
     }
 
-    .sample-list {
-      min-height: 0;
-      overflow: auto;
+    .mapping-row {
+      min-height: 58px;
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+      background: #ffffff;
+      cursor: pointer;
+    }
+
+    .mapping-row:last-child {
+      border-bottom: 0;
+    }
+
+    .mapping-row.active {
+      background: #f3fbf8;
+      box-shadow: inset 3px 0 0 var(--green);
+    }
+
+    .sample-cell {
+      min-width: 0;
       display: grid;
-      align-content: start;
-      gap: 9px;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
     }
 
     .sample-lane {
@@ -623,103 +583,127 @@
       font-weight: 760;
     }
 
-    .column-stack {
+    .mapping-count,
+    .mapping-mode,
+    .mapping-experiment {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 720;
+    }
+
+    .status-pill {
+      min-height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      background: #edf1f1;
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .status-pill.ok {
+      color: var(--green);
+      background: var(--green-soft);
+    }
+
+    .status-pill.warn {
+      color: var(--orange);
+      background: var(--orange-soft);
+    }
+
+    .mapping-detail {
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #ffffff;
+      box-shadow: var(--shadow-soft);
       display: grid;
-      align-content: center;
+      gap: 12px;
+    }
+
+    .mapping-detail-head {
+      min-width: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
       gap: 10px;
     }
 
-    .role-row {
-      min-height: 46px;
-      padding: 8px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: #f8faf7;
-      display: grid;
-      grid-template-columns: 42px 1fr;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .role-key {
-      width: 34px;
-      height: 30px;
-      border-radius: 10px;
-      display: grid;
-      place-items: center;
-      color: #ffffff;
-      background: #111411;
-      font-size: 12px;
-      font-weight: 800;
-    }
-
-    .role-row select {
-      width: 100%;
-      height: 32px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #ffffff;
-      color: var(--ink);
-      padding: 0 8px;
-      outline: none;
-    }
-
     .render-sheet {
-      width: min(720px, 86%);
-      aspect-ratio: 1.55;
+      width: min(840px, 90%);
+      min-height: 420px;
       border: 1px solid var(--line);
-      border-radius: 24px;
+      border-radius: 18px;
       background: #ffffff;
       box-shadow: var(--shadow);
       display: grid;
-      grid-template-columns: 1fr 190px;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      gap: 0;
       overflow: hidden;
     }
 
-    .render-preview {
+    .render-head,
+    .render-foot {
+      min-width: 0;
+      min-height: 54px;
+      padding: 14px 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      background: #f8faf9;
+    }
+
+    .render-head {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .render-foot {
+      border-top: 1px solid var(--line);
+    }
+
+    .figure-queue {
       min-width: 0;
       min-height: 0;
-      padding: 34px;
+      padding: 16px;
       display: grid;
-      place-items: center;
+      align-content: start;
+      gap: 10px;
     }
 
-    .paper {
-      width: 78%;
-      max-width: 410px;
-      aspect-ratio: 1.1;
+    .figure-queue-row {
+      min-width: 0;
+      min-height: 54px;
+      padding: 10px 12px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: #fbfcf8;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .paper.wide { aspect-ratio: 2.18; }
-    .paper.tall { aspect-ratio: 0.55; }
-
-    .chart-lines {
-      position: absolute;
-      inset: 19% 14% 17% 13%;
-      border-left: 2px solid #1d2520;
-      border-bottom: 2px solid #1d2520;
-    }
-
-    .chart-lines svg {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      overflow: visible;
-    }
-
-    .render-side {
-      padding: 20px;
-      border-left: 1px solid var(--line);
       display: grid;
-      align-content: center;
-      gap: 12px;
-      background: #f8faf7;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      background: #ffffff;
+    }
+
+    .queue-index {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      color: var(--green);
+      background: var(--green-soft);
+      font-size: 12px;
+      font-weight: 820;
     }
 
     .progress {
@@ -737,10 +721,20 @@
       background: var(--green);
     }
 
+    .review-map {
+      padding: 42px 46px;
+      grid-template-columns: 64px minmax(0, 1fr);
+      place-items: stretch;
+      align-items: stretch;
+      gap: 16px;
+    }
+
     .review-stage {
       width: 100%;
       height: 100%;
-      padding: 48px;
+      min-width: 0;
+      min-height: 0;
+      padding: 0;
       display: grid;
       place-items: center;
     }
@@ -854,6 +848,19 @@
       z-index: 10;
     }
 
+    .figure-list {
+      min-width: 0;
+      min-height: 0;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.84);
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      overflow: auto;
+    }
+
     .figure-tab {
       min-width: 34px;
       height: 32px;
@@ -869,6 +876,12 @@
       color: var(--ink);
       background: #ffffff;
       box-shadow: var(--shadow-soft);
+    }
+
+    .figure-list .figure-tab {
+      width: 100%;
+      min-width: 0;
+      height: 38px;
     }
 
     .side-panel {
@@ -1003,7 +1016,7 @@
       align-items: center;
     }
 
-    .template-current {
+    .experiment-current {
       min-width: 0;
       padding: 12px;
       border: 1px solid var(--line);
@@ -1014,7 +1027,7 @@
       text-align: left;
     }
 
-    .template-name {
+    .experiment-name {
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1024,19 +1037,19 @@
       font-weight: 820;
     }
 
-    .template-meta {
+    .experiment-meta {
       color: var(--muted);
       font-size: 12px;
       font-weight: 680;
     }
 
-    .template-family-list {
+    .experiment-family-list {
       display: flex;
       flex-wrap: wrap;
       gap: 7px;
     }
 
-    .template-family {
+    .experiment-family {
       min-height: 30px;
       padding: 0 10px;
       border: 1px solid var(--line);
@@ -1047,19 +1060,19 @@
       font-weight: 760;
     }
 
-    .template-family.active,
-    .template-family:hover {
+    .experiment-family.active,
+    .experiment-family:hover {
       border-color: transparent;
       color: var(--green);
       background: var(--green-soft);
     }
 
-    .template-type-list {
+    .experiment-type-list {
       display: grid;
       gap: 7px;
     }
 
-    .template-type {
+    .experiment-type {
       min-width: 0;
       min-height: 42px;
       padding: 8px 10px;
@@ -1075,16 +1088,46 @@
       font-weight: 760;
     }
 
-    .template-type.active,
-    .template-type:hover {
+    .experiment-type.active,
+    .experiment-type:hover {
       border-color: var(--green);
       background: #fbfffc;
     }
 
-    .template-type-code {
+    .experiment-type-code {
       color: var(--quiet);
       font-size: 11px;
       font-weight: 760;
+    }
+
+    .inspector-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .inspector-tab {
+      min-width: 0;
+      min-height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: var(--muted);
+      background: #ffffff;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .inspector-tab.active,
+    .inspector-tab:hover {
+      color: var(--ink);
+      border-color: var(--line-strong);
+      background: #f8faf9;
+    }
+
+    .review-command-bar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
     }
 
     .btn,
@@ -1306,9 +1349,25 @@
         aspect-ratio: auto;
       }
 
-      .render-side {
-        border-left: 0;
-        border-top: 1px solid var(--line);
+      .source-title {
+        font-size: 34px;
+      }
+
+      .mapping-header,
+      .mapping-row {
+        grid-template-columns: minmax(150px, 1.4fr) 64px 96px;
+      }
+
+      .mapping-header span:nth-child(4),
+      .mapping-header span:nth-child(5),
+      .mapping-row > span:nth-child(4),
+      .mapping-row > span:nth-child(5) {
+        display: none;
+      }
+
+      .review-map {
+        grid-template-columns: 1fr;
+        padding: 24px;
       }
     }
   </style>
@@ -1356,7 +1415,7 @@
 
     <aside class="side-panel" id="sidePanel">
       <div class="panel-head">
-        <div class="stage-name" id="panelTitle">Data</div>
+        <div class="stage-name" id="panelTitle">Import</div>
         <div class="stage-status" id="panelStatus">Ready</div>
       </div>
       <div class="panel-body" id="panelBody"></div>
@@ -1366,7 +1425,7 @@
   <script>
     const stageOrder = ["import", "mapping", "generate", "review"];
     const stageMeta = {
-      import: { label: "Data", title: "Data", icon: "folder" },
+      import: { label: "Import", title: "Import", icon: "folder" },
       mapping: { label: "Map", title: "Map", icon: "map" },
       generate: { label: "Render", title: "Render", icon: "play" },
       review: { label: "Review", title: "Review", icon: "figure" }
@@ -1413,13 +1472,21 @@
       { value: "inline", label: "Inline" }
     ];
 
+    const reviewInspectorTabs = [
+      { value: "page", label: "Page" },
+      { value: "axes", label: "Axes" },
+      { value: "series", label: "Series" },
+      { value: "legend", label: "Legend" },
+      { value: "export", label: "Export" }
+    ];
+
     const state = {
       stage: "import",
       projectName: "SciPlot project",
       catalog: [],
       dataTypeId: "",
       experimentTypeId: "",
-      groups: [{ sample: "Series 1", files: [] }],
+      groups: [{ sample: "Sample 1", files: [] }],
       activeGroup: 0,
       activePreviewKey: "",
       tablePreviews: {},
@@ -1430,7 +1497,9 @@
       exports: ["pdf", "tiff_300"],
       figureSize: "60x55",
       replicateMode: "mean",
-      templateTouched: false,
+      experimentTouched: false,
+      showAdvancedMapping: false,
+      activeInspectorTab: "page",
       lastProject: null,
       projectStatus: null,
       activeFigure: 0,
@@ -1485,7 +1554,8 @@
         arrow: `<svg viewBox="0 0 24 24"><path ${base} d="M5 12h14M13 6l6 6-6 6"/></svg>`,
         download: `<svg viewBox="0 0 24 24"><path ${base} d="M12 4v10M8 10l4 4 4-4M5 20h14"/></svg>`,
         reset: `<svg viewBox="0 0 24 24"><path ${base} d="M4 12a8 8 0 1 0 3-6.2M4 5v6h6"/></svg>`,
-        codex: `<svg viewBox="0 0 24 24"><path ${base} d="M7 8h10M7 12h7M7 16h5"/><path ${base} d="M5 4h14v16H5z"/></svg>`
+        codex: `<svg viewBox="0 0 24 24"><path ${base} d="M7 8h10M7 12h7M7 16h5"/><path ${base} d="M5 4h14v16H5z"/></svg>`,
+        grip: `<svg viewBox="0 0 24 24"><path ${base} d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg>`
       };
       return paths[name] || paths.figure;
     }
@@ -1515,7 +1585,7 @@
     function sampleSummary() {
       const samples = visibleGroups().length;
       const files = allDataFiles().length;
-      if (!files) return "Name groups";
+      if (!files) return "Name samples";
       return `${samples} sample${samples === 1 ? "" : "s"} / ${files} file${files === 1 ? "" : "s"}`;
     }
 
@@ -1599,7 +1669,7 @@
       if (state.stage === "import") return allDataFiles().length === 0;
       if (state.stage === "mapping") return visibleGroups().length === 0;
       if (state.stage === "generate") return !canRender() || state.rerunInFlight;
-      if (state.stage === "review") return state.rerunInFlight;
+      if (state.stage === "review") return !state.lastProject?.project_slug || state.rerunInFlight;
       return false;
     }
 
@@ -1662,8 +1732,6 @@
 
     function renderImportCanvas() {
       const files = allDataFiles();
-      const family = currentDataType()?.label || "Auto";
-      const experiment = currentExperiment()?.label || "Auto";
       const fileCount = files.length;
       return `
         <div class="flow-map">
@@ -1671,30 +1739,14 @@
             <div class="source-drop ${fileCount ? "ready" : ""}" id="dropzone">
               <div class="source-main">
                 <span class="source-symbol">${icon(fileCount ? "figure" : "upload")}</span>
-                <h2 class="source-title">${fileCount ? `${fileCount} file${fileCount === 1 ? "" : "s"}` : "Drop data"}</h2>
-                <span class="source-subline">${fileCount ? escapeHtml(files.slice(0, 3).map((item) => item.file.name).join(" / ")) : "Files, folder, or saved project"}</span>
+                <h2 class="source-title">${fileCount ? `${fileCount} file${fileCount === 1 ? "" : "s"} ready` : "Drop files"}</h2>
+                <span class="source-subline">${fileCount ? escapeHtml(files.slice(0, 4).map((item) => item.file.name).join(" / ")) : "Files, folder, or saved project"}</span>
               </div>
               <div class="canvas-actions">
-                <button class="canvas-command" type="button" data-canvas-command="files">${icon("upload")}Files</button>
-                <button class="canvas-command" type="button" data-canvas-command="folder">${icon("folder")}Folder</button>
-                <button class="canvas-command" type="button" data-canvas-command="open">${icon("folder")}Open</button>
+                <button class="canvas-command" type="button" data-canvas-command="files">${icon("upload")}Add files</button>
+                <button class="canvas-command" type="button" data-canvas-command="folder">${icon("folder")}Add folder</button>
+                <button class="canvas-command" type="button" data-canvas-command="open">${icon("folder")}Open project</button>
               </div>
-            </div>
-            <div class="source-path">
-            <button class="flow-node ${state.selectedNode === "intent" ? "active" : ""}" type="button" data-node="intent">
-              <span class="node-icon blue">${icon("map")}</span>
-              <span>
-                <h2 class="node-title">Intent</h2>
-                <span class="node-meta">${escapeHtml(family)} / ${escapeHtml(experiment)}</span>
-              </span>
-            </button>
-            <button class="flow-node ${state.selectedNode === "samples" ? "active" : ""}" type="button" data-node="samples">
-              <span class="node-icon green">${icon("figure")}</span>
-              <span>
-                <h2 class="node-title">Samples</h2>
-                <span class="node-meta">${escapeHtml(sampleSummary())}</span>
-              </span>
-            </button>
             </div>
           </div>
         </div>
@@ -1703,75 +1755,118 @@
 
     function renderMappingCanvas() {
       const item = activePreviewItem();
-      const preview = item ? state.tablePreviews[item.key] : null;
-      const columns = preview?.columns || [];
-      const xColumn = columns.find((column) => column.suggested_role === "x");
-      const yColumns = columns.filter((column) => column.suggested_role === "y");
+      const activeGroup = state.groups[state.activeGroup] || state.groups[0] || { sample: "Sample", files: [] };
+      const experiment = currentExperiment()?.label || "Auto";
       return `
         <div class="mapping-map">
           <div class="mapping-stage">
-            <section class="map-column">
-              <h2 class="map-title">Series</h2>
-              <div class="sample-list">
-                ${state.groups.map((group, index) => `
-                  <button class="sample-lane ${index === state.activeGroup ? "active" : ""}" type="button" data-active-group="${index}">
-                    <span class="drag-handle" aria-hidden="true">::</span>
-                    <span class="row-title">${escapeHtml(group.sample || `Sample ${index + 1}`)}</span>
-                    <span class="file-count">${group.files.length}</span>
-                  </button>
+            <div class="mapping-table" aria-label="Sample mapping table">
+              <div class="mapping-header">
+                <span>Sample</span>
+                <span>Files</span>
+                <span>Replicates</span>
+                <span>Experiment</span>
+                <span>Status</span>
+              </div>
+              ${state.groups.map((group, index) => {
+                const ready = group.files.length > 0;
+                return `
+                  <div class="mapping-row ${index === state.activeGroup ? "active" : ""}" data-active-group="${index}" data-drag-index="${index}" draggable="true">
+                    <span class="sample-cell">
+                      <button class="drag-handle" type="button" title="Reorder" aria-label="Reorder">${icon("grip")}</button>
+                      <input class="sample-input" value="${escapeHtml(group.sample)}" data-sample-index="${index}" aria-label="Sample name">
+                    </span>
+                    <span class="mapping-count">${group.files.length}</span>
+                    <span class="mapping-mode">${escapeHtml(replicateModeLabel())}</span>
+                    <span class="mapping-experiment">${escapeHtml(experiment)}</span>
+                    <span class="status-pill ${ready ? "ok" : "warn"}">${ready ? "Ready" : "Need check"}</span>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+            <div class="mapping-detail">
+              <div class="mapping-detail-head">
+                <span>
+                  <span class="row-title">${escapeHtml(activeGroup.sample || "Sample")}</span>
+                  <span class="row-sub">${activeGroup.files.length} file${activeGroup.files.length === 1 ? "" : "s"}</span>
+                </span>
+                <div class="action-row">
+                  <button class="btn" type="button" id="addGroupButton">${icon("plus")}Sample</button>
+                  <button class="btn" type="button" id="chooseFilesForSampleButton">${icon("upload")}Files</button>
+                  <button class="btn" type="button" data-remove-group="${state.activeGroup}" ${state.groups.length <= 1 ? "disabled" : ""}>${icon("trash")}Remove</button>
+                </div>
+              </div>
+              <div class="file-list">
+                ${activeGroup.files.map((file, fileIndex) => `
+                  <div class="file-row">
+                    <span>
+                      <span class="row-title">${escapeHtml(file.name)}</span>
+                      <span class="row-sub">${formatSize(file.size || file.size_bytes)}</span>
+                    </span>
+                    <button class="micro-button" type="button" data-remove-file="${state.activeGroup}:${fileIndex}" title="Remove" aria-label="Remove">${icon("trash")}</button>
+                  </div>
+                `).join("") || '<div class="quiet-line">Need check</div>'}
+              </div>
+              <div class="option-row">
+                ${replicateModeOptions.map((mode) => `
+                  <button class="option ${state.replicateMode === mode.value ? "selected" : ""}" type="button" data-replicate-mode="${escapeHtml(mode.value)}">${escapeHtml(mode.label)}</button>
                 `).join("")}
+                <button class="option" type="button" data-toggle-advanced-mapping="${state.showAdvancedMapping ? "off" : "on"}">${state.showAdvancedMapping ? "Hide mapping" : "Advanced mapping"}</button>
               </div>
-            </section>
-            <section class="map-column">
-              <h2 class="map-title">Replicates</h2>
-              <div class="column-stack">
-                <div class="role-row">
-                  <span class="role-key">R</span>
-                  <span class="row-title">${escapeHtml(replicateModeLabel())}</span>
-                </div>
-                <div class="role-row">
-                  <span class="role-key">N</span>
-                  <span class="row-title">${allDataFiles().length}</span>
-                </div>
-              </div>
-            </section>
-            <section class="map-column">
-              <h2 class="map-title">Auto</h2>
-              <div class="column-track">
-                ${xColumn ? `<span class="role-pill">X · ${escapeHtml(xColumn.name)}</span>` : ""}
-                ${yColumns.slice(0, 4).map((column) => `<span class="role-pill">Y · ${escapeHtml(column.name)}</span>`).join("")}
-                ${columns.length ? "" : '<span class="pill muted">Reading</span>'}
-              </div>
-            </section>
+              ${state.showAdvancedMapping ? renderAutoModelPanel(item) : ""}
+            </div>
           </div>
         </div>
       `;
     }
 
     function renderGenerateCanvas() {
+      const queue = figureQueueItems();
       return `
         <div class="render-map">
           <div class="render-sheet">
-            <div class="render-preview">
-              <div class="paper">
-                <div class="chart-lines">
-                  <svg viewBox="0 0 100 70" preserveAspectRatio="none" aria-hidden="true">
-                    <path d="M5 58 C25 44 34 37 47 32 C62 25 75 17 95 8" fill="none" stroke="#15936b" stroke-width="4" stroke-linecap="round"/>
-                    <path d="M5 50 C25 43 40 35 52 28 C68 19 82 15 95 12" fill="none" stroke="#2864d9" stroke-width="3" stroke-linecap="round" opacity=".75"/>
-                    <path d="M5 62 C20 54 40 48 58 37 C75 26 85 22 95 18" fill="none" stroke="#d87918" stroke-width="3" stroke-linecap="round" opacity=".75"/>
-                  </svg>
-                </div>
-              </div>
+            <div class="render-head">
+              <span>
+                <span class="row-title">${escapeHtml(currentExperiment()?.label || "Figure")}</span>
+                <span class="row-sub">${visibleGroups().length} sample${visibleGroups().length === 1 ? "" : "s"} / ${allDataFiles().length} file${allDataFiles().length === 1 ? "" : "s"}</span>
+              </span>
+              <span class="pill">${escapeHtml(selectedFigureSize())}</span>
             </div>
-            <div class="render-side">
-              <span class="pill">${visibleGroups().length} series</span>
-              <span class="pill">${escapeHtml(replicateModeLabel())}</span>
+            <div class="figure-queue">
+              ${queue.map((name, index) => `
+                <div class="figure-queue-row">
+                  <span class="queue-index">${index + 1}</span>
+                  <span>
+                    <span class="row-title">${escapeHtml(name)}</span>
+                    <span class="row-sub">${escapeHtml(replicateModeLabel())}</span>
+                  </span>
+                  <span class="status-pill ${state.rerunInFlight ? "" : "ok"}">${state.rerunInFlight ? "Rendering" : "Ready"}</span>
+                </div>
+              `).join("")}
+            </div>
+            <div class="render-foot">
+              <span class="row-sub">${escapeHtml(state.plotOutput || "runs/run_001")}</span>
               <span class="pill">${escapeHtml(state.exports.join(" + "))}</span>
-              <div class="progress"><span style="width:${state.rerunInFlight ? 64 : 24}%"></span></div>
             </div>
           </div>
         </div>
       `;
+    }
+
+    function figureQueueItems() {
+      const confirmations = Object.values(state.columnConfirmations || {});
+      const xColumn = confirmations.flatMap((item) => item.columns || []).find((column) => column.role === "x");
+      const yNames = [];
+      confirmations.forEach((item) => {
+        (item.columns || []).forEach((column) => {
+          if (column.role !== "y" || yNames.includes(column.name)) return;
+          yNames.push(column.name);
+        });
+      });
+      if (yNames.length) {
+        return yNames.slice(0, 6).map((name) => `${name} vs ${xColumn?.name || "X"}`);
+      }
+      return [`${currentExperiment()?.label || "SciPlot"} figure`];
     }
 
     function renderLiveChartFrame(spec) {
@@ -1929,14 +2024,14 @@
           <span class="phase-chip"><span class="pulse"></span>QA ${escapeHtml(qa)}</span>
           <span class="phase-chip">${escapeHtml(selectedFigureSize())}</span>
         </div>
-        <div class="review-map">
-          <div class="review-stage">
-            ${chartSpec ? renderLiveChartFrame(chartSpec) : renderFigureFrame(figure, preview)}
-          </div>
-          <div class="figure-bar" aria-label="Figures">
+          <div class="review-map">
+          <div class="figure-list" aria-label="Figures">
             ${figures.length ? figures.map((item, index) => `
               <button class="figure-tab ${index === state.activeFigure ? "active" : ""}" type="button" data-figure-index="${index}" title="${escapeHtml(item.name || `Figure ${index + 1}`)}">${index + 1}</button>
             `).join("") : '<span class="pill muted">No figures</span>'}
+          </div>
+          <div class="review-stage">
+            ${chartSpec ? renderLiveChartFrame(chartSpec) : renderFigureFrame(figure, preview)}
           </div>
         </div>
       `;
@@ -1968,6 +2063,7 @@
 
     function renderImportPanel() {
       const files = allDataFiles();
+      const warnings = state.projectStatus?.manifest?.warnings || state.lastProject?.warnings || [];
       return `
         <section class="section">
           <input id="fileInput" class="hidden-input" type="file" multiple>
@@ -1976,13 +2072,16 @@
             <span>Files</span>
             <strong class="panel-value">${files.length}</strong>
           </div>
-        </section>
-        ${renderTemplateInspector()}
-        <section class="section">
           <div class="panel-row">
-            <span>Imported</span>
-            <span>${files.length ? `${files.length}` : "0"}</span>
+            <span>Recognition</span>
+            <span>${files.length ? "Ready" : "Ready"}</span>
           </div>
+          <div class="panel-row">
+            <span>Warnings</span>
+            <span>${warnings.length ? "Need check" : "Ready"}</span>
+          </div>
+        </section>
+        <section class="section">
           <div class="file-list">
             ${files.slice(0, 8).map((item) => `
               <div class="file-row">
@@ -1999,32 +2098,32 @@
       `;
     }
 
-    function renderTemplateInspector() {
+    function renderExperimentInspector() {
       const dataType = currentDataType();
       const experiments = dataType?.experiments || [];
       const experiment = currentExperiment();
       return `
         <section class="section">
           <div class="panel-row">
-            <span>Template</span>
+            <span>Family</span>
             <span>${escapeHtml(dataType?.label || "Auto")}</span>
           </div>
-          <div class="template-current" aria-live="polite">
-            <span class="template-name">${escapeHtml(experiment?.label || "Auto")}</span>
-            <span class="template-meta">${state.templateTouched ? "Manual" : "Recommended"}</span>
+          <div class="experiment-current" aria-live="polite">
+            <span class="experiment-name">${escapeHtml(experiment?.label || "Auto")}</span>
+            <span class="experiment-meta">${state.experimentTouched ? "Manual" : "Recommended"}</span>
           </div>
-          <div class="template-family-list" aria-label="Template families">
+          <div class="experiment-family-list" aria-label="Experiment families">
             ${state.catalog.map((item) => `
-              <button class="template-family ${item.id === state.dataTypeId ? "active" : ""}" type="button" data-template-family="${escapeHtml(item.id)}">${escapeHtml(item.label)}</button>
+              <button class="experiment-family ${item.id === state.dataTypeId ? "active" : ""}" type="button" data-experiment-family="${escapeHtml(item.id)}">${escapeHtml(item.label)}</button>
             `).join("")}
           </div>
-          <div class="template-type-list" aria-label="Chart types">
+          <div class="experiment-type-list" aria-label="Experiment types">
             ${experiments.map((item) => `
-              <button class="template-type ${item.id === state.experimentTypeId ? "active" : ""}" type="button" data-template-experiment="${escapeHtml(item.id)}">
+              <button class="experiment-type ${item.id === state.experimentTypeId ? "active" : ""}" type="button" data-experiment-type="${escapeHtml(item.id)}">
                 <span class="row-title">${escapeHtml(item.label)}</span>
-                <span class="template-type-code">${item.id === state.experimentTypeId ? "Selected" : ""}</span>
+                <span class="experiment-type-code">${item.id === state.experimentTypeId ? "Selected" : ""}</span>
               </button>
-            `).join("") || '<div class="quiet-line">No templates</div>'}
+            `).join("") || '<div class="quiet-line">Need check</div>'}
           </div>
         </section>
       `;
@@ -2042,42 +2141,9 @@
     }
 
     function renderMappingPanel() {
-      const item = activePreviewItem();
       return `
-        <section class="section">
-          <h2 class="section-title">Series</h2>
-          <input id="fileInput" class="hidden-input" type="file" multiple>
-          <div class="sample-list">
-            ${state.groups.map((group, index) => `
-              <div class="sample-lane ${index === state.activeGroup ? "active" : ""}" data-drag-index="${index}" draggable="true">
-                <button class="drag-handle" type="button" title="Reorder" aria-label="Reorder">::</button>
-                <input class="sample-input" value="${escapeHtml(group.sample)}" data-sample-index="${index}" aria-label="Series name">
-                <span class="file-count">${group.files.length}</span>
-                <button class="micro-button" type="button" data-remove-group="${index}" title="Remove" aria-label="Remove" ${state.groups.length <= 1 ? "disabled" : ""}>${icon("trash")}</button>
-              </div>
-            `).join("")}
-          </div>
-          <div class="action-row">
-            <button class="btn" type="button" id="addGroupButton">${icon("plus")}Series</button>
-            <button class="btn" type="button" id="chooseFilesForSampleButton">${icon("upload")}Files</button>
-          </div>
-        </section>
-        <section class="section">
-          <h2 class="section-title">Replicates</h2>
-          <div class="option-row">
-            ${replicateModeOptions.map((item) => `
-              <button class="option ${state.replicateMode === item.value ? "selected" : ""}" type="button" data-replicate-mode="${escapeHtml(item.value)}">${escapeHtml(item.label)}</button>
-            `).join("")}
-          </div>
-          <div class="panel-row">
-            <span>Files</span>
-            <span>${allDataFiles().length}</span>
-          </div>
-        </section>
-        <section class="section">
-          <h2 class="section-title">Auto</h2>
-          ${renderAutoModelPanel(item)}
-        </section>
+        <input id="fileInput" class="hidden-input" type="file" multiple>
+        ${renderExperimentInspector()}
       `;
     }
 
@@ -2138,19 +2204,67 @@
               </label>
             `).join("")}
           </div>
+          <div class="panel-row">
+            <span>Size</span>
+            <span>${escapeHtml(selectedFigureSize())}</span>
+          </div>
+          <div class="panel-row">
+            <span>Status</span>
+            <span>${state.rerunInFlight ? "Rendering" : "Ready"}</span>
+          </div>
+          <div class="progress"><span style="width:${state.rerunInFlight ? 64 : 24}%"></span></div>
         </section>
         ${renderCodexConditionalPanel()}
       `;
     }
 
     function renderReviewPanel() {
+      if (!hasRenderedArtifacts()) {
+        return `
+          <section class="section">
+            <div class="panel-row">
+              <span>Status</span>
+              <span>Need check</span>
+            </div>
+          </section>
+          ${renderCodexConditionalPanel()}
+        `;
+      }
+      const tab = reviewInspectorTabs.some((item) => item.value === state.activeInspectorTab) ? state.activeInspectorTab : "page";
       return `
+        <section class="section">
+          <div class="review-command-bar">
+            <button class="btn" type="button" id="previewNowButton" ${state.previewInFlight ? "disabled" : ""}>Preview</button>
+            <button class="btn" type="button" id="applyButton" ${state.rerunInFlight ? "disabled" : ""}>Apply</button>
+            <button class="btn primary" type="button" id="rerunButton" ${state.rerunInFlight ? "disabled" : ""}>Export</button>
+            <button class="btn" type="button" id="resetRefineButton">${icon("reset")}</button>
+          </div>
+        </section>
+        <section class="section">
+          <div class="inspector-tabs" role="tablist" aria-label="Inspector">
+            ${reviewInspectorTabs.map((item) => `
+              <button class="inspector-tab ${item.value === tab ? "active" : ""}" type="button" data-inspector-tab="${item.value}">${escapeHtml(item.label)}</button>
+            `).join("")}
+          </div>
+        </section>
+        ${renderReviewInspectorTab(tab)}
+        ${renderCodexConditionalPanel()}
+      `;
+    }
+
+    function renderReviewInspectorTab(tab) {
+      if (tab === "page") {
+        return `
         <section class="section">
           <h2 class="section-title">Page</h2>
           <div class="option-row">
             ${figureSizeOptions.map((item) => `<button class="option ${selectedFigureSize() === item.value ? "selected" : ""}" type="button" data-refine-size="${item.value}">${escapeHtml(item.label)}</button>`).join("")}
           </div>
         </section>
+        `;
+      }
+      if (tab === "axes") {
+        return `
         <section class="section">
           <h2 class="section-title">Axes</h2>
           <div class="field">
@@ -2169,22 +2283,50 @@
             <input id="refineYLabel" value="${escapeHtml(refineOptionValue("y_label_override"))}">
           </label>
         </section>
+        `;
+      }
+      if (tab === "series") {
+        return `
+        <section class="section">
+          <h2 class="section-title">Series</h2>
+          <div class="sample-list">
+            ${state.groups.map((group, index) => `
+              <div class="sample-lane ${index === state.activeGroup ? "active" : ""}" data-drag-index="${index}" draggable="true" data-active-group="${index}">
+                <button class="drag-handle" type="button" title="Reorder" aria-label="Reorder">${icon("grip")}</button>
+                <input class="sample-input" value="${escapeHtml(group.sample)}" data-sample-index="${index}" aria-label="Sample name">
+                <span class="file-count">${group.files.length}</span>
+              </div>
+            `).join("")}
+          </div>
+        </section>
+        `;
+      }
+      if (tab === "legend") {
+        return `
         <section class="section">
           <h2 class="section-title">Legend</h2>
           ${renderSelect("refineLegendPosition", refineOptionValue("legend_position"), legendPositionOptions)}
           ${renderSelect("refineSeriesLabelMode", refineOptionValue("series_label_mode"), labelModeOptions)}
         </section>
+        `;
+      }
+      return `
         <section class="section">
           <h2 class="section-title">Export</h2>
-          <div class="action-row">
-            <button class="btn" type="button" id="previewNowButton" ${state.previewInFlight ? "disabled" : ""}>Update</button>
-            <button class="btn" type="button" id="applyButton" ${state.rerunInFlight ? "disabled" : ""}>Apply</button>
-            <button class="btn primary" type="button" id="rerunButton" ${state.rerunInFlight ? "disabled" : ""}>Export</button>
-            <button class="btn" type="button" id="resetRefineButton">${icon("reset")}Reset</button>
+          <label class="field">
+            <span class="field-label">Folder</span>
+            <input id="plotOutput" value="${escapeHtml(state.plotOutput)}">
+          </label>
+          <div class="option-row">
+            ${exportOptions.map((item) => `
+              <label class="option ${state.exports.includes(item.value) ? "selected" : ""}">
+                <input type="checkbox" data-export="${item.value}" ${state.exports.includes(item.value) ? "checked" : ""}>
+                <span>${escapeHtml(item.label)}</span>
+              </label>
+            `).join("")}
           </div>
           ${state.lastProject?.download_name ? `<a class="btn" href="/api/download/${encodeURIComponent(state.lastProject.download_name)}">${icon("download")}ZIP</a>` : ""}
         </section>
-        ${renderCodexConditionalPanel()}
       `;
     }
 
@@ -2269,7 +2411,8 @@
       });
 
       document.querySelectorAll("[data-active-group]").forEach((button) => {
-        button.onclick = () => {
+        button.onclick = (event) => {
+          if (event.target.closest("input, button, select, textarea")) return;
           state.activeGroup = Number(button.dataset.activeGroup);
           render();
         };
@@ -2280,6 +2423,7 @@
           state.groups[Number(input.dataset.sampleIndex)].sample = event.target.value;
           updateChrome();
           updateCanvasOnly();
+          if (state.stage === "review") scheduleLivePreview();
         };
       });
 
@@ -2301,7 +2445,7 @@
           state.dataTypeId = event.target.value;
           const experiments = currentDataType()?.experiments || [];
           state.experimentTypeId = experiments[0]?.id || "";
-          state.templateTouched = true;
+          state.experimentTouched = true;
           render();
         };
       }
@@ -2309,29 +2453,42 @@
       if (experimentSelect) {
         experimentSelect.onchange = (event) => {
           state.experimentTypeId = event.target.value;
-          state.templateTouched = true;
+          state.experimentTouched = true;
           render();
         };
       }
-      document.querySelectorAll("[data-template-family]").forEach((button) => {
+      document.querySelectorAll("[data-experiment-family]").forEach((button) => {
         button.onclick = () => {
-          state.dataTypeId = button.dataset.templateFamily;
+          state.dataTypeId = button.dataset.experimentFamily;
           const experiments = currentDataType()?.experiments || [];
           state.experimentTypeId = experiments[0]?.id || "";
-          state.templateTouched = true;
+          state.experimentTouched = true;
           render();
         };
       });
-      document.querySelectorAll("[data-template-experiment]").forEach((button) => {
+      document.querySelectorAll("[data-experiment-type]").forEach((button) => {
         button.onclick = () => {
-          const experimentId = button.dataset.templateExperiment;
+          const experimentId = button.dataset.experimentType;
           if (!experimentId) return;
           const owningFamily = state.catalog.find((family) => (
             family.experiments || []
           ).some((experiment) => experiment.id === experimentId));
           if (owningFamily) state.dataTypeId = owningFamily.id;
           state.experimentTypeId = experimentId;
-          state.templateTouched = true;
+          state.experimentTouched = true;
+          render();
+        };
+      });
+      document.querySelectorAll("[data-toggle-advanced-mapping]").forEach((button) => {
+        button.onclick = () => {
+          state.showAdvancedMapping = button.dataset.toggleAdvancedMapping === "on";
+          render();
+          if (state.showAdvancedMapping) queueActivePreviewLoad();
+        };
+      });
+      document.querySelectorAll("[data-inspector-tab]").forEach((button) => {
+        button.onclick = () => {
+          state.activeInspectorTab = button.dataset.inspectorTab;
           render();
         };
       });
@@ -2513,7 +2670,7 @@
     }
 
     function replaceSource() {
-      state.groups = [{ sample: "Series 1", files: [] }];
+      state.groups = [{ sample: "Sample 1", files: [] }];
       state.activeGroup = 0;
       state.activePreviewKey = "";
       state.tablePreviews = {};
@@ -2540,7 +2697,7 @@
     }
 
     function addGroup() {
-      state.groups.push({ sample: `Series ${state.groups.length + 1}`, files: [] });
+      state.groups.push({ sample: `Sample ${state.groups.length + 1}`, files: [] });
       state.activeGroup = state.groups.length - 1;
       render();
     }
@@ -2578,6 +2735,7 @@
       state.groups.splice(toIndex, 0, group);
       state.activeGroup = toIndex;
       render();
+      if (state.stage === "review") scheduleLivePreview();
     }
 
     function toggleExport(value) {
@@ -2925,7 +3083,7 @@
       state.projectName = manifest.project_name || manifest.project_slug || state.projectName;
       if (manifest.data_type?.id) state.dataTypeId = manifest.data_type.id;
       if (manifest.experiment?.id) state.experimentTypeId = manifest.experiment.id;
-      if (manifest.data_type?.id || manifest.experiment?.id) state.templateTouched = false;
+      if (manifest.data_type?.id || manifest.experiment?.id) state.experimentTouched = false;
       if (Array.isArray(manifest.groups) && manifest.groups.length) {
         state.groups = manifest.groups.map((group) => ({
           sample: group.sample || "Sample",

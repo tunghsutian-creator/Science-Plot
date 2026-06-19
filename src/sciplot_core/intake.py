@@ -24,6 +24,7 @@ from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex
 from sciplot_core.ingest import smart_decode
 from sciplot_core.render import DEFAULT_EXPORT_FORMATS, json_safe
 from sciplot_core.semantic import classify_source, is_rheology_frequency_comparison_dir
+from sciplot_core.study_model import build_study_model, sync_study_model_samples
 from sciplot_core.workbench_contract import apply_request_patch, normalize_exports, normalize_render_options
 from sciplot_core.workbench_preview import build_chart_spec
 from sciplot_core.workbench_webagg import ensure_webagg_sidecar, webagg_available
@@ -250,6 +251,31 @@ def _write_zip(project_dir: Path, zip_path: Path) -> None:
         for path in sorted(project_dir.rglob("*")):
             if path.is_file():
                 archive.write(path, path.relative_to(project_dir.parent))
+
+
+def _write_project_launcher(project_dir: Path, *, project_slug: str) -> str:
+    repo_root = Path(__file__).resolve().parents[2]
+    launcher = project_dir / "Open_SciPlot_Project.command"
+    launcher.write_text(
+        "\n".join(
+            [
+                "#!/bin/zsh",
+                "set -euo pipefail",
+                'PROJECT_DIR="${0:A:h}"',
+                'PROJECT_ROOT="${PROJECT_DIR:h}"',
+                f'cd "{repo_root}"',
+                (
+                    'skill/scripts/sciplot workbench '
+                    '--out "${PROJECT_ROOT}" '
+                    f'--project "{project_slug}"'
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    launcher.chmod(0o755)
+    return str(launcher)
 
 
 def refresh_intake_project_zip(project_dir: str | Path) -> Path:
@@ -1099,6 +1125,16 @@ def create_intake_project(
     warnings = _duplicate_source_warnings(manifest_groups)
     if warnings:
         plot_request["review_notes"].extend(str(item["message"]) for item in warnings)
+    study_model = build_study_model(
+        data_type=data_type,
+        experiment=experiment,
+        groups=manifest_groups,
+        replicate_mode=selected_replicate_mode,
+        render_options=selected_render_options,
+        column_confirmations=selected_column_confirmations,
+    )
+    plot_request["study_model"] = study_model
+    launcher_path = _write_project_launcher(project_dir, project_slug=project_slug)
     manifest = {
         "kind": "sciplot_intake_project",
         "version": 1,
@@ -1118,6 +1154,8 @@ def create_intake_project(
         "source_dir": str(source_dir),
         "plot_request": str(project_dir / "plot_request.json"),
         "outputs_dir": str(selected_output),
+        "launcher": launcher_path,
+        "study_model": study_model,
         "column_confirmations": selected_column_confirmations,
         "plot_options": {
             "output": str(selected_output),
@@ -1389,6 +1427,12 @@ def apply_intake_project(
     filtered_groups = _filter_manifest_groups(intake_manifest.get("groups"), selected_series)
     if filtered_groups is not None:
         intake_manifest["groups"] = filtered_groups
+    patched_study_model = patched_request.get("study_model")
+    if isinstance(patched_study_model, dict):
+        intake_manifest["study_model"] = sync_study_model_samples(
+            patched_study_model,
+            sample_order=selected_series,
+        )
     _write_intake_manifest(project.project_dir, intake_manifest)
     refreshed_zip = refresh_intake_project_zip(project.project_dir)
     return {

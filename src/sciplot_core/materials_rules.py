@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from sciplot_core._bootstrap import ensure_legacy_core
+from sciplot_core.study_model import experiment_recommendation_payload
 
 ensure_legacy_core()
 
@@ -103,6 +104,11 @@ class SemanticRule:
             },
             "analysis_plan": [item.to_payload() for item in self.analysis],
             "available_metrics": list(self.available_metrics or tuple(item.metric for item in self.analysis)),
+            "experiment_recommendation": experiment_recommendation_payload(
+                rule_id=self.rule_id,
+                semantic_family=self.semantic_family,
+                experiment_type_id=self.rule_id,
+            ),
             "keywords": list(self.keywords),
             "path_keywords": list(self.path_keywords),
             "column_aliases": list(self.column_aliases),
@@ -851,6 +857,11 @@ def semantic_payload_from_rule(
         "unit_plan": payload["unit_plan"],
         "analysis_plan": payload["analysis_plan"],
         "available_metrics": payload["available_metrics"],
+        "experiment_recommendation": experiment_recommendation_payload(
+            rule_id=rule.rule_id,
+            semantic_family=rule.semantic_family,
+            experiment_type_id=rule.rule_id,
+        ),
         "missing_requirements": [],
         "rule_priority": rule.priority,
     }
