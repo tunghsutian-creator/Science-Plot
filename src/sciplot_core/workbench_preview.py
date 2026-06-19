@@ -114,6 +114,8 @@ def resolve_workbench_render_job(
                 semantic=semantic,
                 curation_path=None,
                 series_order=request.get("series_order"),
+                column_confirmations=request.get("column_confirmations"),
+                replicate_mode=request.get("replicate_mode"),
             )
             source = Path(str(prepared["source"])).expanduser().resolve()
         return WorkbenchRenderJob(

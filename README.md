@@ -94,6 +94,17 @@ Example request:
 rendering needs Codex, SciPlot writes `intervention_request.json` or marks
 `needs_ai_intervention`.
 
+Optional OriginPro handoff:
+
+```bash
+skill/scripts/sciplot origin-handoff outputs/run_001/manifest.json
+```
+
+This writes a per-run `origin_handoff/` folder with SciPlot-processed CSV data,
+an OriginPro LabTalk `.ogs` script, copied source artifacts, and a Windows
+runner that asks OriginPro to build and save an `.opju` project. See
+`docs/ORIGINPRO_HANDOFF.md`.
+
 ## Web App Contract
 
 The Web app is the local SciPlot plotting app. `sciplot app`, `sciplot

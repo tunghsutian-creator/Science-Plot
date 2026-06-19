@@ -720,6 +720,189 @@ def _read_rheology_temperature_comparison_samples(source: Path) -> list[Rheology
     )
 
 
+def _confirmed_column_items(column_confirmations: object) -> list[dict[str, Any]]:
+    if not isinstance(column_confirmations, list | tuple):
+        return []
+    return [item for item in column_confirmations if isinstance(item, dict)]
+
+
+def _confirmation_names(confirmation: dict[str, Any]) -> set[str]:
+    names: set[str] = set()
+    file_name = _clean_text(confirmation.get("file_name"))
+    if file_name:
+        names.add(file_name)
+    source_path = _clean_text(confirmation.get("source_path"))
+    if source_path:
+        names.add(Path(source_path).name)
+    return names
+
+
+def _candidate_names(candidate: Path) -> set[str]:
+    names = {candidate.name}
+    if "__" in candidate.name:
+        _sample, original = candidate.name.split("__", 1)
+        if original:
+            names.add(original)
+    return names
+
+
+def _matching_column_confirmation(
+    candidate: Path,
+    column_confirmations: object,
+) -> dict[str, Any] | None:
+    candidate_names = _candidate_names(candidate)
+    for confirmation in _confirmed_column_items(column_confirmations):
+        if candidate_names & _confirmation_names(confirmation):
+            return confirmation
+    return None
+
+
+def _metric_key_from_label(
+    label: object,
+    metrics: tuple[tuple[str, str, tuple[str, ...], str], ...],
+) -> str | None:
+    token = _token(label)
+    if not token:
+        return None
+    for key, metric_label, aliases, _default_unit in metrics:
+        metric_tokens = {_token(metric_label), *(_token(alias) for alias in aliases)}
+        if any(metric_token and metric_token in token for metric_token in metric_tokens):
+            return key
+    return None
+
+
+def _metric_default_units(
+    metrics: tuple[tuple[str, str, tuple[str, ...], str], ...],
+) -> dict[str, str]:
+    units = {key: default_unit for key, _label, _aliases, default_unit in metrics}
+    units.setdefault("complex_modulus", _RHEOLOGY_COMPLEX_MODULUS_METRIC[3])
+    return units
+
+
+def _confirmed_rheology_sweep_sample(
+    source: Path,
+    confirmation: dict[str, Any],
+    *,
+    x_label: str,
+    default_x_unit: str,
+    metrics: tuple[tuple[str, str, tuple[str, ...], str], ...],
+) -> RheologySweepSample:
+    raw = read_raw_table(source).dropna(axis=1, how="all").dropna(how="all")
+    columns = confirmation.get("columns")
+    if not isinstance(columns, list | tuple):
+        raise ValueError("Column confirmation does not contain columns.")
+
+    x_index: int | None = None
+    metric_indexes: dict[str, int] = {}
+    match_metrics = (*metrics, _RHEOLOGY_COMPLEX_MODULUS_METRIC)
+    for column in columns:
+        if not isinstance(column, dict):
+            continue
+        try:
+            index = int(column.get("index"))
+        except (TypeError, ValueError):
+            continue
+        if index < 0 or index >= raw.shape[1]:
+            continue
+        confirmed_type = _clean_text(column.get("confirmed_type")).casefold()
+        if confirmed_type == "ignore":
+            continue
+        role = _clean_text(column.get("role")).casefold()
+        if role == "x" and x_index is None:
+            x_index = index
+            continue
+        if role != "y":
+            continue
+        metric_key = _metric_key_from_label(column.get("name"), match_metrics)
+        if metric_key and metric_key not in metric_indexes:
+            metric_indexes[metric_key] = index
+
+    if x_index is None:
+        raise ValueError(f"No confirmed X column found in {source}.")
+    if "storage_modulus" not in metric_indexes:
+        raise ValueError(f"No confirmed storage modulus column found in {source}.")
+
+    default_units = _metric_default_units(match_metrics)
+    numeric_rows = [
+        row_index
+        for row_index in range(raw.shape[0])
+        if _float(raw.iat[row_index, x_index]) is not None
+        and any(_float(raw.iat[row_index, metric_index]) is not None for metric_index in metric_indexes.values())
+    ]
+    if not numeric_rows:
+        raise ValueError(f"No numeric rheology sweep points found in {source}.")
+
+    unit_index = numeric_rows[0] - 1
+    units = [_clean_text(value) for value in raw.iloc[unit_index].tolist()] if unit_index >= 0 else []
+    metric_units = {
+        key: _unit_for(units, metric_index, default_units.get(key, ""))
+        for key, metric_index in metric_indexes.items()
+    }
+    should_derive_complex_modulus = (
+        "complex_modulus" not in metric_indexes
+        and "storage_modulus" in metric_indexes
+        and "loss_modulus" in metric_indexes
+    )
+    if should_derive_complex_modulus:
+        metric_units["complex_modulus"] = (
+            metric_units.get("storage_modulus") or metric_units.get("loss_modulus") or "Pa"
+        )
+
+    rows: list[dict[str, float]] = []
+    for row_index in numeric_rows:
+        x_value = _float(raw.iat[row_index, x_index])
+        if x_value is None:
+            continue
+        row: dict[str, float] = {"x": x_value}
+        for key, metric_index in metric_indexes.items():
+            y_value = _float(raw.iat[row_index, metric_index])
+            if y_value is not None:
+                row[key] = y_value
+        if should_derive_complex_modulus:
+            storage = row.get("storage_modulus")
+            loss = row.get("loss_modulus")
+            if storage is not None and loss is not None:
+                row["complex_modulus"] = math.hypot(storage, loss)
+        rows.append(row)
+
+    return RheologySweepSample(
+        sample=_source_display_sample(source),
+        source=source,
+        x_label=x_label,
+        x_unit=_unit_for(units, x_index, default_x_unit),
+        metric_units=metric_units,
+        rows=tuple(rows),
+    )
+
+
+def _read_confirmed_rheology_sweep_samples(
+    source: Path,
+    column_confirmations: object,
+    *,
+    x_label: str,
+    default_x_unit: str,
+    metrics: tuple[tuple[str, str, tuple[str, ...], str], ...],
+) -> list[RheologySweepSample]:
+    samples: list[RheologySweepSample] = []
+    for candidate in _sweep_source_files(source):
+        confirmation = _matching_column_confirmation(candidate, column_confirmations)
+        if confirmation is None:
+            continue
+        try:
+            samples.append(
+                _confirmed_rheology_sweep_sample(
+                    candidate,
+                    confirmation,
+                    x_label=x_label,
+                    default_x_unit=default_x_unit,
+                    metrics=metrics,
+                )
+            )
+        except Exception:
+            continue
+    return sorted(samples, key=_sweep_sample_order_key)
+
+
 def _sweep_sample_order_key(sample: RheologySweepSample) -> tuple[float, str]:
     storage_points = [
         (row["x"], row["storage_modulus"])
@@ -748,6 +931,107 @@ def _ordered_sweep_samples(
         return samples
     fallback = len(order)
     return sorted(samples, key=lambda sample: (order.get(_token(sample.sample), fallback), sample.sample.casefold()))
+
+
+def _normalized_replicate_mode(value: object) -> str:
+    token = _clean_text(value).casefold()
+    aliases = {
+        "": "mean",
+        "average": "mean",
+        "avg": "mean",
+        "best": "representative",
+        "all": "individual",
+    }
+    token = aliases.get(token, token)
+    return token if token in {"mean", "representative", "individual"} else "mean"
+
+
+def _terminal_storage(sample: RheologySweepSample) -> float | None:
+    points = [
+        (row["x"], row["storage_modulus"])
+        for row in sample.rows
+        if "x" in row and "storage_modulus" in row
+    ]
+    if not points:
+        return None
+    return max(points, key=lambda item: item[0])[1]
+
+
+def _mean_replicate_sample(samples: list[RheologySweepSample]) -> RheologySweepSample:
+    representative = samples[0]
+    metric_keys = sorted({key for sample in samples for row in sample.rows for key in row if key != "x"})
+    x_values = sorted({row["x"] for sample in samples for row in sample.rows if "x" in row})
+    metric_units: dict[str, str] = {}
+    for sample in samples:
+        for key, unit in sample.metric_units.items():
+            metric_units.setdefault(key, unit)
+    rows: list[dict[str, float]] = []
+    for x_value in x_values:
+        row: dict[str, float] = {"x": x_value}
+        for key in metric_keys:
+            values = [
+                metric_value
+                for sample in samples
+                for point in sample.rows
+                if point.get("x") == x_value
+                for metric_value in [point.get(key)]
+                if metric_value is not None and math.isfinite(metric_value)
+            ]
+            if values:
+                row[key] = sum(values) / len(values)
+        if len(row) > 1:
+            rows.append(row)
+    return RheologySweepSample(
+        sample=representative.sample,
+        source=representative.source,
+        x_label=representative.x_label,
+        x_unit=representative.x_unit,
+        metric_units=metric_units,
+        rows=tuple(rows),
+    )
+
+
+def _representative_replicate_sample(samples: list[RheologySweepSample]) -> RheologySweepSample:
+    terminal_values = [value for sample in samples if (value := _terminal_storage(sample)) is not None]
+    if not terminal_values:
+        return max(samples, key=lambda sample: (len(sample.rows), sample.source.name))
+    ordered = sorted(terminal_values)
+    median = ordered[len(ordered) // 2]
+
+    def score(sample: RheologySweepSample) -> tuple[int, float, str]:
+        terminal = _terminal_storage(sample)
+        distance = abs((terminal if terminal is not None else median) - median)
+        return (-len(sample.rows), distance, sample.source.name)
+
+    return min(samples, key=score)
+
+
+def _coalesce_replicate_sweep_samples(
+    samples: list[RheologySweepSample],
+    *,
+    replicate_mode: object = None,
+) -> list[RheologySweepSample]:
+    mode = _normalized_replicate_mode(replicate_mode)
+    if mode == "individual":
+        return samples
+    grouped: dict[str, list[RheologySweepSample]] = {}
+    order: list[str] = []
+    for sample in samples:
+        key = _clean_text(sample.sample) or sample.source.stem
+        if key not in grouped:
+            grouped[key] = []
+            order.append(key)
+        grouped[key].append(sample)
+    coalesced: list[RheologySweepSample] = []
+    for key in order:
+        group = grouped[key]
+        if len(group) == 1:
+            coalesced.append(group[0])
+        elif mode == "representative":
+            coalesced.append(_representative_replicate_sample(group))
+        else:
+            coalesced.append(_mean_replicate_sample(group))
+    return coalesced
 
 
 def is_rheology_frequency_comparison_dir(source: str | Path) -> bool:
@@ -1561,6 +1845,8 @@ def prepare_semantic_source(
     semantic: dict[str, Any],
     curation_path: str | Path | None = None,
     series_order: object = None,
+    column_confirmations: object = None,
+    replicate_mode: object = None,
 ) -> dict[str, Any]:
     source = Path(input_path).expanduser()
     processed_dir = output_dir / "processed"
@@ -1569,13 +1855,20 @@ def prepare_semantic_source(
 
     if family == "rheology_frequency" and source.is_dir():
         processed_source = processed_dir / "rheology_frequency_comparison.xlsx"
-        samples = _ordered_sweep_samples(
-            _read_rheology_frequency_comparison_samples(source),
-            series_order=series_order,
-        )
-        if len(samples) < 2:
+        samples = _read_rheology_frequency_comparison_samples(source)
+        if not samples:
+            samples = _read_confirmed_rheology_sweep_samples(
+                source,
+                column_confirmations,
+                x_label="Angular Frequency",
+                default_x_unit="rad/s",
+                metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
+            )
+        samples = _coalesce_replicate_sweep_samples(samples, replicate_mode=replicate_mode)
+        samples = _ordered_sweep_samples(samples, series_order=series_order)
+        if not samples:
             raise ValueError(
-                "Rheology frequency comparison folders need at least two parseable sample exports."
+                "Rheology frequency folders need at least one parseable sample export."
             )
         _write_rheology_sweep_comparison_workbook(
             samples,
@@ -1587,13 +1880,20 @@ def prepare_semantic_source(
 
     if family == "rheology_temperature_sweep" and source.is_dir():
         processed_source = processed_dir / "rheology_temperature_comparison.xlsx"
-        samples = _ordered_sweep_samples(
-            _read_rheology_temperature_comparison_samples(source),
-            series_order=series_order,
-        )
-        if len(samples) < 2:
+        samples = _read_rheology_temperature_comparison_samples(source)
+        if not samples:
+            samples = _read_confirmed_rheology_sweep_samples(
+                source,
+                column_confirmations,
+                x_label="Temperature",
+                default_x_unit="°C",
+                metrics=_RHEOLOGY_SWEEP_METRICS,
+            )
+        samples = _coalesce_replicate_sweep_samples(samples, replicate_mode=replicate_mode)
+        samples = _ordered_sweep_samples(samples, series_order=series_order)
+        if not samples:
             raise ValueError(
-                "Rheology temperature comparison folders need at least two parseable sample exports."
+                "Rheology temperature folders need at least one parseable sample export."
             )
         _write_rheology_sweep_comparison_workbook(
             samples,
