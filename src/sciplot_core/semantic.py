@@ -1508,14 +1508,15 @@ def _torque_source_files(source: Path) -> list[Path]:
 
 
 def _read_torque_table(source: Path) -> pd.DataFrame:
+    first_error: Exception | None = None
     try:
         raw = read_raw_table(source).dropna(axis=1, how="all")
         evidence = " ".join(str(value) for value in [*raw.columns.tolist(), *raw.iloc[:4].to_numpy().ravel().tolist()])
         if "torque" in evidence.casefold() or "转矩" in evidence:
             return raw
-    except Exception:
-        pass
-    last_error: Exception | None = None
+    except Exception as exc:
+        first_error = exc
+    last_error: Exception | None = first_error
     for encoding in ("utf-8", "utf-8-sig", "gb18030", "gbk", "utf-16", "latin-1"):
         try:
             raw = pd.read_csv(source, sep="\t", header=None, encoding=encoding).dropna(axis=1, how="all")

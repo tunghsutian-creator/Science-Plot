@@ -257,7 +257,13 @@ def run_batch(
             inspection = inspect_payload(source)
         except Exception as exc:
             inspection = {"error": str(exc), "sciplot_semantics": semantic}
-        recommendation = _top_recommendation(inspection)
+        if "error" in inspection and not semantic.get("template"):
+            skipped.append({"path": str(source), "reason": "inspection_failed", "error": inspection["error"]})
+            continue
+        if "error" in inspection:
+            recommendation = None
+        else:
+            recommendation = _top_recommendation(inspection)
         if recommendation is None and not semantic.get("template"):
             skipped.append({"path": str(source), "reason": "no_plot_recommendation"})
             continue

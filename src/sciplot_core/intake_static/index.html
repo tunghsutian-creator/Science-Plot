@@ -1370,6 +1370,191 @@
         padding: 24px;
       }
     }
+
+    /* ── Project Browser Modal ── */
+    .project-browser-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      background: rgba(26, 26, 24, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.12s var(--ease-out);
+    }
+
+    .project-browser-overlay.hidden {
+      display: none;
+    }
+
+    .project-browser {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      width: min(560px, calc(100vw - 48px));
+      max-height: min(520px, calc(100vh - 120px));
+      display: flex;
+      flex-direction: column;
+      animation: scaleIn 0.18s var(--ease-spring);
+    }
+
+    .project-browser-header {
+      padding: 18px 22px 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .project-browser-header input {
+      flex: 1;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      font-size: 14px;
+      background: var(--canvas-bg);
+      color: var(--ink);
+      outline: none;
+    }
+
+    .project-browser-header input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px var(--blue-soft);
+    }
+
+    .project-browser-header button {
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      background: var(--line);
+      color: var(--muted);
+    }
+
+    .project-browser-header button:hover {
+      background: var(--line-strong);
+      color: var(--ink);
+    }
+
+    .project-browser-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 16px 16px;
+    }
+
+    .project-browser-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    .project-browser-row:hover {
+      background: var(--canvas-bg);
+    }
+
+    .project-browser-row-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .project-browser-row-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .project-browser-row-info {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .project-browser-row-chip {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: var(--canvas-bg);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .project-browser-row-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .project-browser-row-arrow {
+      color: var(--quiet);
+      flex-shrink: 0;
+    }
+
+    .project-browser-empty {
+      text-align: center;
+      padding: 40px 16px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* ── Data Table Preview ── */
+    .data-table-preview {
+      margin-top: 8px;
+      overflow-x: auto;
+      max-height: 160px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--canvas-bg);
+    }
+
+    .data-table-preview table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    .data-table-preview th {
+      padding: 4px 8px;
+      text-align: left;
+      font-weight: 500;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      background: var(--canvas-bg);
+    }
+
+    .data-table-preview td {
+      padding: 2px 8px;
+      color: var(--ink);
+      white-space: nowrap;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   </style>
 </head>
 <body>
@@ -1420,6 +1605,17 @@
       </div>
       <div class="panel-body" id="panelBody"></div>
     </aside>
+  </div>
+
+  <!-- Project Browser Modal -->
+  <div class="project-browser-overlay hidden" id="projectBrowserOverlay">
+    <div class="project-browser">
+      <div class="project-browser-header">
+        <input id="projectBrowserSearch" type="text" placeholder="搜索项目..." autocomplete="off">
+        <button id="projectBrowserClose" type="button">取消</button>
+      </div>
+      <div class="project-browser-list" id="projectBrowserList"></div>
+    </div>
   </div>
 
   <script>
@@ -2154,12 +2350,21 @@
       const loading = state.previewLoading[key];
       const error = state.previewErrors[key];
       if (loading) return `<span class="pill muted">Reading</span>`;
-      if (error) return `<div class="warning-box">${escapeHtml(error)}</div>`;
+      if (error) {
+        return `
+          <div class="warning-box">
+            <span>${escapeHtml(error)}</span>
+            <button class="btn" type="button" onclick="retryTablePreview('${escapeHtml(key)}')">Retry</button>
+          </div>
+          <div class="quiet-line">Check that the file contains numeric columns in a recognized format (CSV, TSV, TXT, XLSX).</div>
+        `;
+      }
       if (!preview) return `<span class="pill muted">Reading</span>`;
       ensureColumnConfirmation(key, preview, item);
       const confirmation = state.columnConfirmations[key];
       const xColumn = (confirmation?.columns || []).find((column) => column.role === "x");
       const yColumns = (confirmation?.columns || []).filter((column) => column.role === "y");
+      const showAdvanced = state.showAdvancedMapping;
       return `
         <label class="field">
           <span class="field-label">File</span>
@@ -2172,30 +2377,62 @@
             <div class="compact-row">
               <span>
                 <span class="row-title">${escapeHtml(xColumn.name)}</span>
-                <span class="row-sub">X</span>
+                <span class="row-sub">X${xColumn.type && xColumn.type !== "auto" ? ` · ${escapeHtml(xColumn.type)}` : ""}</span>
               </span>
+              ${showAdvanced ? renderColumnRoleSelect(key, xColumn) : ""}
             </div>
           ` : ""}
           ${yColumns.slice(0, 5).map((column) => `
             <div class="compact-row">
               <span>
                 <span class="row-title">${escapeHtml(column.name)}</span>
-                <span class="row-sub">Y</span>
+                <span class="row-sub">Y${column.type && column.type !== "auto" ? ` · ${escapeHtml(column.type)}` : ""}</span>
               </span>
+              ${showAdvanced ? renderColumnRoleSelect(key, column) : ""}
             </div>
           `).join("") || '<div class="quiet-line">Auto</div>'}
+          ${showAdvanced ? renderDataTablePreview(preview) : ""}
+        </div>
+      `;
+    }
+
+    function renderColumnRoleSelect(key, column) {
+      const roles = ["auto", "x", "y", "series", "sample", "unit", "metadata", "ignore"];
+      return `
+        <select class="pill" onchange="updateColumnRole('${escapeHtml(key)}', '${escapeHtml(column.name)}', this.value)" style="font-size:11px;padding:2px 4px">
+          ${roles.map((role) => `<option value="${role}" ${(column.role || "auto") === role ? "selected" : ""}>${role}</option>`).join("")}
+        </select>
+      `;
+    }
+
+    function renderDataTablePreview(preview) {
+      if (!preview?.columns?.length) return "";
+      const rows = (preview.rows || []).slice(0, 5);
+      const columns = preview.columns.slice(0, 8);
+      return `
+        <div class="data-table-preview">
+          <table>
+            <thead><tr>${columns.map((col) => `<th title="${escapeHtml(col.type || "")}">${escapeHtml(col.name || "")}</th>`).join("")}</tr></thead>
+            <tbody>${rows.map((row) => `<tr>${columns.map((col) => `<td>${escapeHtml(String((row || [])[preview.columns.indexOf(col)] ?? ""))}</td>`).join("")}</tr>`).join("")}</tbody>
+          </table>
         </div>
       `;
     }
 
     function renderGeneratePanel() {
+      const fullOutput = state.lastProject
+        ? [state.lastProject.project_dir, state.plotOutput || "runs/run_001"].join("/")
+        : state.plotOutput || "runs/run_001";
       return `
         <section class="section">
           <h2 class="section-title">Output</h2>
           <label class="field">
-            <span class="field-label">Folder</span>
-            <input id="plotOutput" value="${escapeHtml(state.plotOutput)}">
+            <span class="field-label">Output path</span>
+            <input id="plotOutput" value="${escapeHtml(state.plotOutput)}" title="${escapeHtml(fullOutput)}">
           </label>
+          <div class="panel-row" style="font-size:11px;color:var(--quiet);word-break:break-all">
+            <span>${escapeHtml(fullOutput)}</span>
+          </div>
           <div class="option-row">
             ${exportOptions.map((item) => `
               <label class="option ${state.exports.includes(item.value) ? "selected" : ""}">
@@ -2314,9 +2551,12 @@
         <section class="section">
           <h2 class="section-title">Export</h2>
           <label class="field">
-            <span class="field-label">Folder</span>
+            <span class="field-label">Output path</span>
             <input id="plotOutput" value="${escapeHtml(state.plotOutput)}">
           </label>
+          ${state.lastProject ? `<div class="panel-row" style="font-size:11px;color:var(--quiet);word-break:break-all;margin-bottom:8px">
+            <span>${escapeHtml(state.lastProject.project_dir + "/" + (state.plotOutput || "runs/run_001"))}</span>
+          </div>` : ""}
           <div class="option-row">
             ${exportOptions.map((item) => `
               <label class="option ${state.exports.includes(item.value) ? "selected" : ""}">
@@ -2326,6 +2566,7 @@
             `).join("")}
           </div>
           ${state.lastProject?.download_name ? `<a class="btn" href="/api/download/${encodeURIComponent(state.lastProject.download_name)}">${icon("download")}ZIP</a>` : ""}
+          <button class="btn" type="button" id="revealOutputButton" title="Reveal output folder in Finder">${icon("folder")}Reveal</button>
         </section>
       `;
     }
@@ -2540,6 +2781,8 @@
       if (applyButton) applyButton.onclick = applyProject;
       const rerunButton = document.querySelector("#rerunButton");
       if (rerunButton) rerunButton.onclick = rerunProject;
+      const revealOutputButton = document.querySelector("#revealOutputButton");
+      if (revealOutputButton) revealOutputButton.onclick = revealOutput;
       const resetRefineButton = document.querySelector("#resetRefineButton");
       if (resetRefineButton) resetRefineButton.onclick = () => {
         resetRefineOptionsFromProject();
@@ -2664,9 +2907,82 @@
     }
 
     function openProjectPrompt() {
-      const slug = window.prompt("Project slug");
-      if (!slug) return;
-      loadProject(slug.trim());
+      const overlay = document.getElementById("projectBrowserOverlay");
+      const list = document.getElementById("projectBrowserList");
+      const search = document.getElementById("projectBrowserSearch");
+      if (!overlay || !list || !search) return;
+
+      overlay.classList.remove("hidden");
+      search.value = "";
+      search.focus();
+      fetchProjectList("");
+
+      search.oninput = function () {
+        fetchProjectList(search.value.trim());
+      };
+
+      document.getElementById("projectBrowserClose").onclick = function () {
+        overlay.classList.add("hidden");
+      };
+
+      overlay.onclick = function (event) {
+        if (event.target === overlay) overlay.classList.add("hidden");
+      };
+    }
+
+    async function fetchProjectList(searchTerm) {
+      const list = document.getElementById("projectBrowserList");
+      if (!list) return;
+      list.innerHTML = '<div class="project-browser-empty">Loading...</div>';
+      try {
+        const url = searchTerm
+          ? `/api/projects?search=${encodeURIComponent(searchTerm)}`
+          : "/api/projects";
+        const response = await fetch(url);
+        const payload = await response.json();
+        const projects = payload.projects || [];
+        if (!projects.length) {
+          list.innerHTML = '<div class="project-browser-empty">没有找到项目</div>';
+          return;
+        }
+        list.innerHTML = projects.map((project) => {
+          const typeLabel = (project.data_type?.label || project.data_type?.id || "");
+          const expLabel = (project.experiment?.label || project.experiment?.id || "");
+          const kind = [typeLabel, expLabel].filter(Boolean).join(" · ") || "未知类型";
+          const mtime = project.mtime_ns
+            ? new Date(project.mtime_ns / 1000000).toLocaleDateString("zh-CN", {
+                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+              })
+            : "";
+          return `
+            <div class="project-browser-row" data-slug="${escapeHtml(project.slug)}">
+              <div class="project-browser-row-meta">
+                <div class="project-browser-row-name">${escapeHtml(project.project_name || project.slug)}</div>
+                <div class="project-browser-row-info">
+                  <span class="project-browser-row-chip">${escapeHtml(kind)}</span>
+                  ${project.figure_count ? `<span class="project-browser-row-chip">${project.figure_count} figures</span>` : ""}
+                  ${project.group_count ? `<span class="project-browser-row-chip">${project.group_count} groups</span>` : ""}
+                  ${mtime ? `<span class="project-browser-row-chip">${mtime}</span>` : ""}
+                  ${project.has_failure ? '<span class="project-browser-row-chip" style="background:var(--rose-soft);color:var(--rose)">needs fix</span>' : ""}
+                </div>
+              </div>
+              <div class="project-browser-row-right">
+                <svg class="project-browser-row-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        list.querySelectorAll(".project-browser-row").forEach((row) => {
+          row.onclick = function () {
+            const slug = row.dataset.slug;
+            document.getElementById("projectBrowserOverlay").classList.add("hidden");
+            if (slug) loadProject(slug);
+          };
+        });
+      } catch (error) {
+        list.innerHTML = `<div class="project-browser-empty">加载失败: ${escapeHtml(error.message)}</div>`;
+      }
     }
 
     function replaceSource() {
@@ -2799,6 +3115,25 @@
         delete state.previewLoading[key];
         render();
       }
+    }
+
+    function retryTablePreview(key) {
+      delete state.previewErrors[key];
+      delete state.tablePreviews[key];
+      const item = allDataFiles().find((candidate) => candidate.key === key);
+      if (item) loadTablePreview(item, key);
+      else render();
+    }
+
+    function updateColumnRole(key, columnName, role) {
+      const confirmation = state.columnConfirmations[key];
+      if (!confirmation) return;
+      const column = (confirmation.columns || []).find((col) => col.name === columnName);
+      if (column) {
+        column.role = role;
+        state.experimentTouched = true;
+      }
+      render();
     }
 
     function ensureColumnConfirmation(key, preview, item) {
@@ -3043,6 +3378,16 @@
         state.rerunInFlight = false;
         setStatus(error.message, error.message);
         render();
+      }
+    }
+
+    async function revealOutput() {
+      if (!state.lastProject?.project_dir) return;
+      const target = state.projectStatus?.outputs_dir || state.lastProject.outputs_dir || state.lastProject.project_dir;
+      try {
+        await fetch(`/api/reveal?path=${encodeURIComponent(target)}`);
+      } catch (error) {
+        setStatus(`Reveal failed: ${error.message}`, error.message);
       }
     }
 

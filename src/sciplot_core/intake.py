@@ -76,6 +76,10 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
             {"id": "rheology_strain_sweep", "label": "应变扫描", "rule_id": "rheology_strain_sweep"},
             {"id": "rheology_stress_sweep", "label": "应力扫描", "rule_id": "rheology_stress_sweep"},
             {"id": "dma_temperature_sweep", "label": "DMA 温扫", "rule_id": "dma_temperature_sweep"},
+            {"id": "dma_frequency_sweep", "label": "DMA 频扫", "rule_id": "dma_frequency_sweep"},
+            {"id": "capillary_rheometry", "label": "毛细管流变", "rule_id": "capillary_rheometry"},
+            {"id": "creep_recovery_curve", "label": "蠕变回复", "rule_id": "creep_recovery_curve"},
+            {"id": "dielectric_spectroscopy", "label": "介电谱", "rule_id": "dielectric_spectroscopy"},
             {"id": "unknown_rheology", "label": "未知流变", "rule_id": None},
         ),
     },
@@ -113,6 +117,12 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
             {"id": "impact_metric", "label": "冲击", "rule_id": "impact_metric", "chart": "box_with_points"},
             {"id": "fracture_metric", "label": "断裂", "rule_id": "fracture_metric", "chart": "box_with_points"},
             {"id": "fatigue_cycle_metric", "label": "疲劳", "rule_id": "fatigue_cycle_metric"},
+            {"id": "hardness_metric", "label": "硬度", "rule_id": "hardness_metric", "chart": "box_with_points"},
+            {"id": "mfi_metric", "label": "熔融指数", "rule_id": "mfi_metric"},
+            {"id": "tear_strength_metric", "label": "撕裂强度", "rule_id": "tear_strength_metric",
+             "chart": "box_with_points"},
+            {"id": "hysteresis_curve", "label": "滞后环", "rule_id": "hysteresis_curve"},
+            {"id": "abrasion_wear_metric", "label": "磨损", "rule_id": "abrasion_wear_metric"},
             {"id": "unknown_mechanical", "label": "未知力学", "rule_id": None},
         ),
     },
@@ -124,6 +134,10 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
             {"id": "dsc_curve", "label": "DSC", "rule_id": "dsc_curve", "chart": "stacked_curve"},
             {"id": "tga_curve", "label": "TGA", "rule_id": "tga_curve"},
             {"id": "dtg_curve", "label": "DTG", "rule_id": "dtg_curve"},
+            {"id": "dsc_kinetics", "label": "DSC 动力学", "rule_id": "dsc_kinetics"},
+            {"id": "tma_curve", "label": "TMA", "rule_id": "tma_curve"},
+            {"id": "thermal_conductivity_metric", "label": "导热系数", "rule_id": "thermal_conductivity_metric"},
+            {"id": "loi_metric", "label": "氧指数", "rule_id": "loi_metric"},
             {"id": "unknown_thermal", "label": "未知热分析", "rule_id": None},
         ),
     },
@@ -137,6 +151,7 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
             {"id": "uvvis_spectrum", "label": "UV-vis", "rule_id": "uvvis_spectrum"},
             {"id": "nmr_spectrum", "label": "NMR", "rule_id": "nmr_spectrum"},
             {"id": "xps_spectrum", "label": "XPS", "rule_id": "xps_spectrum"},
+            {"id": "edx_spectrum", "label": "EDX/EDS", "rule_id": "edx_spectrum"},
             {"id": "unknown_spectroscopy", "label": "未知光谱", "rule_id": None},
         ),
     },
@@ -164,6 +179,7 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
                 "rule_id": "molecular_weight_distribution",
             },
             {"id": "unknown_chromatography", "label": "未知色谱", "rule_id": None},
+            {"id": "intrinsic_viscosity_metric", "label": "特性粘度", "rule_id": "intrinsic_viscosity_metric"},
         ),
     },
     {
@@ -178,6 +194,10 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
             {"id": "arrhenius_conductivity", "label": "Arrhenius", "rule_id": "arrhenius_conductivity"},
             {"id": "dls_size_distribution", "label": "DLS", "rule_id": "dls_size_distribution"},
             {"id": "bet_isotherm", "label": "BET", "rule_id": "bet_isotherm"},
+            {"id": "gas_permeability_metric", "label": "透气性", "rule_id": "gas_permeability_metric"},
+            {"id": "contact_angle_metric", "label": "接触角", "rule_id": "contact_angle_metric"},
+            {"id": "zeta_potential_metric", "label": "Zeta 电位", "rule_id": "zeta_potential_metric"},
+            {"id": "crosslink_density_metric", "label": "交联密度", "rule_id": "crosslink_density_metric"},
             {"id": "unknown_metrics", "label": "未知指标", "rule_id": None},
         ),
     },
@@ -437,6 +457,40 @@ def _figure_preview_info(figures: list[Path], *, project_slug: str) -> dict[str,
         "display_kind": "none",
         "source_path": "",
     }
+
+
+def list_intake_projects(output_root: Path) -> list[dict[str, Any]]:
+    output_root = output_root.expanduser().resolve()
+    if not output_root.is_dir():
+        return []
+    projects: list[dict[str, Any]] = []
+    for entry in sorted(output_root.iterdir()):
+        if not entry.is_dir():
+            continue
+        manifest_path = entry / "intake_manifest.json"
+        manifest = _read_json_if_exists(manifest_path)
+        if manifest is None:
+            continue
+        sciplot_path = next(entry.glob("*.sciplot.json"), None)
+        sciplot_meta = _read_json_if_exists(sciplot_path) if sciplot_path else {}
+        stat = entry.stat()
+        last_run = manifest.get("last_run") if isinstance(manifest.get("last_run"), dict) else {}
+        figure_count = len(last_run.get("figures", []))
+        projects.append({
+            "slug": entry.name,
+            "project_name": manifest.get("project_name") or entry.name,
+            "data_type": manifest.get("data_type"),
+            "experiment": manifest.get("experiment"),
+            "created": sciplot_meta.get("created", ""),
+            "figure_count": figure_count,
+            "has_failure": bool(last_run.get("failure")),
+            "last_run_output": last_run.get("output", ""),
+            "mtime_ns": stat.st_mtime_ns,
+            "group_count": len(manifest.get("groups", [])),
+            "file_count": sum(len(group.get("files", [])) for group in manifest.get("groups", [])),
+        })
+    projects.sort(key=lambda p: p["mtime_ns"], reverse=True)
+    return projects
 
 
 def _allowed_artifact_roots(project_dir: Path) -> list[Path]:
@@ -1572,6 +1626,22 @@ class _IntakeHandler(BaseHTTPRequestHandler):
     def _project_dir_from_request(self, project_slug: str) -> Path:
         return _project_dir_from_slug(self.server.output_root, unquote(project_slug))
 
+    def _respond_error(self, exc: Exception) -> None:
+        detail = str(exc) or type(exc).__name__
+        if isinstance(exc, FileNotFoundError):
+            self._send_json(
+                {"error": detail, "code": "not_found", "hint": "The requested resource was not found."},
+                status=HTTPStatus.NOT_FOUND,
+            )
+        elif isinstance(exc, PermissionError):
+            self._send_json({"error": detail, "code": "forbidden"}, status=HTTPStatus.FORBIDDEN)
+        elif isinstance(exc, (ValueError, TypeError)):
+            self._send_json({"error": detail, "code": "invalid_input"}, status=HTTPStatus.BAD_REQUEST)
+        elif isinstance(exc, OSError):
+            self._send_json({"error": detail, "code": "io_error"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+        else:
+            self._send_json({"error": detail, "code": "internal_error"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         if parsed.path in {"/", "/index.html"}:
@@ -1588,6 +1658,17 @@ class _IntakeHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             session_id = _safe_filename(query.get("id", [""])[0])
             self._send_file(self.server.output_root / "sessions" / f"{session_id}.json")
+            return
+        if parsed.path == "/api/projects":
+            query = parse_qs(parsed.query)
+            search = str(query.get("search", [""])[0]).strip().lower()
+            all_projects = list_intake_projects(self.server.output_root)
+            if search:
+                all_projects = [
+                    p for p in all_projects
+                    if search in p["slug"].lower() or search in str(p.get("project_name", "")).lower()
+                ]
+            self._send_json({"kind": "sciplot_project_list", "projects": all_projects})
             return
         if parsed.path.startswith("/api/download/"):
             filename = _safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
@@ -1620,7 +1701,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                     self.send_error(HTTPStatus.NOT_FOUND)
                     return
                 except ValueError as exc:
-                    self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                    self._respond_error(exc)
                     return
         if parsed.path.startswith("/api/codex/jobs/"):
             parts = parsed.path.strip("/").split("/")
@@ -1642,6 +1723,23 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                 except PermissionError as exc:
                     self.send_error(HTTPStatus.FORBIDDEN, str(exc))
                     return
+        if parsed.path == "/api/reveal":
+            query = parse_qs(parsed.query)
+            target = str(query.get("path", [""])[0])
+            if not target:
+                self._send_json({"error": "Path required"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            target_path = Path(target).expanduser().resolve()
+            if not target_path.exists():
+                self._send_json({"error": f"Path not found: {target_path}"}, status=HTTPStatus.NOT_FOUND)
+                return
+            if not _path_within(target_path, self.server.output_root.expanduser().resolve()):
+                raise PermissionError("Reveal path is outside the configured output root.")
+            import subprocess
+
+            subprocess.Popen(["open", str(target_path)])
+            self._send_json({"revealed": str(target_path)})
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
@@ -1663,7 +1761,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                     source_path=source_path or None,
                 )
             except Exception as exc:
-                self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                self._respond_error(exc)
                 return
             self._send_json(preview)
             return
@@ -1694,7 +1792,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                 self.send_error(HTTPStatus.FORBIDDEN, str(exc))
                 return
             except Exception as exc:
-                self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                self._respond_error(exc)
                 return
             self._send_json(job)
             return
@@ -1727,7 +1825,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                     self.send_error(HTTPStatus.FORBIDDEN, str(exc))
                     return
                 except Exception as exc:
-                    self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                    self._respond_error(exc)
                     return
                 self._send_json(project)
                 return
@@ -1747,7 +1845,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                     self.send_error(HTTPStatus.FORBIDDEN, str(exc))
                     return
                 except Exception as exc:
-                    self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                    self._respond_error(exc)
                     return
                 self._send_json(project)
                 return
@@ -1771,7 +1869,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                 replicate_mode=payload.get("replicate_mode"),
             )
         except Exception as exc:
-            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            self._respond_error(exc)
             return
         self._send_json(project)
 
@@ -1831,6 +1929,7 @@ __all__ = [
     "create_intake_project",
     "intake_catalog_payload",
     "intake_project_status",
+    "list_intake_projects",
     "prepare_intake_session",
     "preview_intake_project",
     "preview_table_payload",
