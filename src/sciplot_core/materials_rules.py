@@ -1453,6 +1453,94 @@ def compute_analysis_metrics(
     return rows
 
 
+JOURNAL_PRESETS: dict[str, dict[str, Any]] = {
+    "nature": {
+        "label": "Nature",
+        "sizes": ("60x55", "120x55", "180x55"),
+        "style_preset": "nature",
+        "palette_preset": "colorblind_safe",
+        "exports": ("pdf", "tiff_300"),
+        "max_width_mm": 180,
+        "description": "Nature journal: 1-col (60 mm), 1.5-col (120 mm), 2-col (180 mm).",
+    },
+    "acs": {
+        "label": "ACS",
+        "sizes": ("60x55", "120x55"),
+        "style_preset": "acs",
+        "palette_preset": "colorblind_safe",
+        "exports": ("pdf", "tiff_300"),
+        "max_width_mm": 120,
+        "description": "ACS journals: single-column figures up to 120 mm wide.",
+    },
+    "science": {
+        "label": "Science",
+        "sizes": ("60x55", "120x55"),
+        "style_preset": "science",
+        "palette_preset": "colorblind_safe",
+        "exports": ("pdf", "tiff_300"),
+        "max_width_mm": 120,
+        "description": "Science journal: single-column or 2/3-page width.",
+    },
+    "elsevier": {
+        "label": "Elsevier",
+        "sizes": ("60x55", "120x55", "180x55"),
+        "style_preset": "elsevier",
+        "palette_preset": "colorblind_safe",
+        "exports": ("pdf", "tiff_300"),
+        "max_width_mm": 180,
+        "description": "Elsevier journals: 1-col (60 mm), 1.5-col (120 mm), 2-col (180 mm).",
+    },
+    "wiley": {
+        "label": "Wiley",
+        "sizes": ("60x55", "120x55", "180x55"),
+        "style_preset": "wiley",
+        "palette_preset": "colorblind_safe",
+        "exports": ("pdf", "tiff_300"),
+        "max_width_mm": 180,
+        "description": "Wiley journals: full range of figure sizes.",
+    },
+    "acs_macromolecules": {
+        "label": "Macromolecules (ACS)",
+        "sizes": ("60x55", "120x55"),
+        "style_preset": "acs",
+        "palette_preset": "colorblind_safe",
+        "exports": ("pdf", "tiff_300"),
+        "max_width_mm": 120,
+        "description": "ACS Macromolecules: figures fit within single column (60 mm) or page width (120 mm).",
+    },
+    "polymer": {
+        "label": "Polymer (Elsevier)",
+        "sizes": ("60x55", "120x55", "180x55"),
+        "style_preset": "elsevier",
+        "palette_preset": "colorblind_safe",
+        "exports": ("pdf", "tiff_300"),
+        "max_width_mm": 180,
+        "description": "Polymer journal (Elsevier): standard Elsevier figure sizes.",
+    },
+}
+
+
+def list_journal_presets() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": preset_id,
+            "label": preset["label"],
+            "description": preset["description"],
+            "sizes": list(preset["sizes"]),
+            "style_preset": preset["style_preset"],
+            "palette_preset": preset["palette_preset"],
+        }
+        for preset_id, preset in JOURNAL_PRESETS.items()
+    ]
+
+
+def get_journal_preset(preset_id: str) -> dict[str, Any]:
+    if preset_id not in JOURNAL_PRESETS:
+        known = ", ".join(sorted(JOURNAL_PRESETS))
+        raise ValueError(f"Unknown journal preset `{preset_id}`. Available: {known}.")
+    return dict(JOURNAL_PRESETS[preset_id])
+
+
 __all__ = [
     "AnalysisSpec",
     "AxisSpec",

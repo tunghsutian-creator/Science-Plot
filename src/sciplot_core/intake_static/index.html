@@ -1668,6 +1668,30 @@
       { value: "inline", label: "Inline" }
     ];
 
+    const tickDensityOptions = [
+      { value: "", label: "Auto" },
+      { value: "dense", label: "Dense" },
+      { value: "sparse", label: "Sparse" }
+    ];
+
+    const stylePresetOptions = [
+      { value: "", label: "Auto" },
+      { value: "nature", label: "Nature" },
+      { value: "acs", label: "ACS" },
+      { value: "science", label: "Science" },
+      { value: "wiley", label: "Wiley" },
+      { value: "elsevier", label: "Elsevier" }
+    ];
+
+    const palettePresetOptions = [
+      { value: "", label: "Auto" },
+      { value: "colorblind_safe", label: "Colorblind safe" },
+      { value: "vibrant", label: "Vibrant" },
+      { value: "muted", label: "Muted" },
+      { value: "pastel", label: "Pastel" },
+      { value: "dark", label: "Dark" }
+    ];
+
     const reviewInspectorTabs = [
       { value: "page", label: "Page" },
       { value: "axes", label: "Axes" },
@@ -2494,9 +2518,20 @@
         return `
         <section class="section">
           <h2 class="section-title">Page</h2>
+          <label class="field">
+            <span class="field-label">Size</span>
+          </label>
           <div class="option-row">
             ${figureSizeOptions.map((item) => `<button class="option ${selectedFigureSize() === item.value ? "selected" : ""}" type="button" data-refine-size="${item.value}">${escapeHtml(item.label)}</button>`).join("")}
           </div>
+          <label class="field">
+            <span class="field-label">Style</span>
+            ${renderSelect("refineStylePreset", refineOptionValue("style_preset"), stylePresetOptions)}
+          </label>
+          <label class="field">
+            <span class="field-label">Palette</span>
+            ${renderSelect("refinePalettePreset", refineOptionValue("palette_preset"), palettePresetOptions)}
+          </label>
         </section>
         `;
       }
@@ -2504,13 +2539,45 @@
         return `
         <section class="section">
           <h2 class="section-title">Axes</h2>
-          <div class="field">
-            <span class="field-label">Scale</span>
-            <div class="action-row">
-              ${renderSelect("refineXScale", refineOptionValue("xscale"), scaleOptions)}
-              ${renderSelect("refineYScale", refineOptionValue("yscale"), scaleOptions)}
-            </div>
+          <label class="field">
+            <span class="field-label">X Scale</span>
+            ${renderSelect("refineXScale", refineOptionValue("xscale"), scaleOptions)}
+          </label>
+          <label class="field">
+            <span class="field-label">Y Scale</span>
+            ${renderSelect("refineYScale", refineOptionValue("yscale"), scaleOptions)}
+          </label>
+          <div class="action-row">
+            <label class="field" style="flex:1">
+              <span class="field-label">X min</span>
+              <input id="refineXMin" value="${escapeHtml(refineOptionValue("x_min"))}" placeholder="auto">
+            </label>
+            <label class="field" style="flex:1">
+              <span class="field-label">X max</span>
+              <input id="refineXMax" value="${escapeHtml(refineOptionValue("x_max"))}" placeholder="auto">
+            </label>
           </div>
+          <div class="action-row">
+            <label class="field" style="flex:1">
+              <span class="field-label">Y min</span>
+              <input id="refineYMin" value="${escapeHtml(refineOptionValue("y_min"))}" placeholder="auto">
+            </label>
+            <label class="field" style="flex:1">
+              <span class="field-label">Y max</span>
+              <input id="refineYMax" value="${escapeHtml(refineOptionValue("y_max"))}" placeholder="auto">
+            </label>
+          </div>
+          <label class="field">
+            <span class="field-label">Tick density</span>
+            <div class="action-row">
+              ${renderSelect("refineXTickDensity", refineOptionValue("x_tick_density"), tickDensityOptions)}
+              ${renderSelect("refineYTickDensity", refineOptionValue("y_tick_density"), tickDensityOptions)}
+            </div>
+          </label>
+          <label class="option ${refineOptionValue("reverse_x") ? "selected" : ""}" style="margin-top:4px">
+            <input type="checkbox" id="refineReverseX" ${refineOptionValue("reverse_x") ? "checked" : ""}>
+            <span>Reverse X</span>
+          </label>
           <label class="field">
             <span class="field-label">X label</span>
             <input id="refineXLabel" value="${escapeHtml(refineOptionValue("x_label_override"))}">
@@ -2523,17 +2590,26 @@
         `;
       }
       if (tab === "series") {
+        const spec = state.workbenchPreview?.chart_spec;
+        const seriesColors = {};
+        if (spec?.series) {
+          spec.series.forEach((s, i) => { seriesColors[s.label || `s${i}`] = s.color || ""; });
+        }
         return `
         <section class="section">
           <h2 class="section-title">Series</h2>
           <div class="sample-list">
-            ${state.groups.map((group, index) => `
+            ${state.groups.map((group, index) => {
+              const color = seriesColors[group.sample] || "";
+              return `
               <div class="sample-lane ${index === state.activeGroup ? "active" : ""}" data-drag-index="${index}" draggable="true" data-active-group="${index}">
                 <button class="drag-handle" type="button" title="Reorder" aria-label="Reorder">${icon("grip")}</button>
+                ${color ? `<span class="swatch" style="background:${escapeHtml(color)};width:12px;height:12px;border-radius:3px;flex-shrink:0;margin:0 4px" title="${escapeHtml(color)}"></span>` : ""}
                 <input class="sample-input" value="${escapeHtml(group.sample)}" data-sample-index="${index}" aria-label="Sample name">
                 <span class="file-count">${group.files.length}</span>
               </div>
-            `).join("")}
+              `;
+            }).join("")}
           </div>
         </section>
         `;
@@ -2770,10 +2846,18 @@
 
       bindRefine("refineXScale", "xscale");
       bindRefine("refineYScale", "yscale");
+      bindRefine("refineXMin", "x_min");
+      bindRefine("refineXMax", "x_max");
+      bindRefine("refineYMin", "y_min");
+      bindRefine("refineYMax", "y_max");
+      bindRefine("refineXTickDensity", "x_tick_density");
+      bindRefine("refineYTickDensity", "y_tick_density");
       bindRefine("refineLegendPosition", "legend_position");
       bindRefine("refineSeriesLabelMode", "series_label_mode");
       bindRefine("refineXLabel", "x_label_override");
       bindRefine("refineYLabel", "y_label_override");
+      bindRefine("refineStylePreset", "style_preset");
+      bindRefine("refinePalettePreset", "palette_preset");
 
       const previewNowButton = document.querySelector("#previewNowButton");
       if (previewNowButton) previewNowButton.onclick = () => previewProject();
@@ -3233,10 +3317,19 @@
         size: options.size || selectedFigureSize(),
         xscale: options.xscale || "",
         yscale: options.yscale || "",
+        x_min: options.x_min ?? "",
+        x_max: options.x_max ?? "",
+        y_min: options.y_min ?? "",
+        y_max: options.y_max ?? "",
+        reverse_x: options.reverse_x || false,
+        x_tick_density: options.x_tick_density || "",
+        y_tick_density: options.y_tick_density || "",
         legend_position: options.legend_position || "",
         series_label_mode: options.series_label_mode || "",
         x_label_override: options.x_label_override || "",
-        y_label_override: options.y_label_override || ""
+        y_label_override: options.y_label_override || "",
+        style_preset: options.style_preset || "",
+        palette_preset: options.palette_preset || ""
       };
       state.refineDirty = false;
     }
@@ -3259,7 +3352,12 @@
       element.onchange = (event) => setRefineOption(key, event.target.value);
     }
 
-    function scheduleLivePreview(delay = 360) {
+      const reverseXCheck = document.querySelector("#refineReverseX");
+      if (reverseXCheck) {
+        reverseXCheck.onchange = (event) => setRefineOption("reverse_x", event.target.checked);
+      }
+
+      function scheduleLivePreview(delay = 360) {
       if (state.stage !== "review" || !state.lastProject?.project_slug) return;
       window.clearTimeout(livePreviewTimer);
       livePreviewTimer = window.setTimeout(() => previewProject({ silent: true }), delay);
