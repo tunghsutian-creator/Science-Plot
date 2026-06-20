@@ -5,6 +5,11 @@ from typing import Any
 
 from sciplot_recipes.registry import get_recipe_module, iter_recipe_specs, list_recipe_names
 
+for _recipe_name in list_recipe_names():
+    get_recipe_module(_recipe_name)
+
+del _recipe_name
+
 
 def run_recipe(
     name: str,
@@ -21,4 +26,4 @@ def run_recipe(
     )
 
 
-__all__ = ["iter_recipe_specs", "list_recipe_names", "run_recipe"]
+__all__ = ["get_recipe_module", "iter_recipe_specs", "list_recipe_names", "run_recipe"]

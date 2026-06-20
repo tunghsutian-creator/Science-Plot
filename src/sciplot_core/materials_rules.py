@@ -316,8 +316,11 @@ RULES: tuple[SemanticRule, ...] = (
         TIME_AXIS,
         AxisSpec("Modulus", "Pa", "Modulus (Pa)", aliases=("modulus", "G'", "G\"")),
         keywords=("timesweep", "time sweep"),
-        fixture_status="pending",
-        priority=70,
+        path_keywords=("rheology_time_sweep", "time_sweep"),
+        column_aliases=("time", "storage modulus", "modulus"),
+        analysis=(AnalysisSpec("peak_modulus_time_s", "time at maximum modulus", ("time", "modulus"), "s"),),
+        fixture_path="tests/fixtures/materials_rules/rheology_time_sweep.csv",
+        priority=28,
     ),
     _rule(
         "rheology_strain_sweep",
@@ -327,8 +330,13 @@ RULES: tuple[SemanticRule, ...] = (
         STRAIN_AXIS,
         AxisSpec("Modulus", "Pa", "Modulus (Pa)", aliases=("modulus", "G'", "G\"")),
         keywords=("strainsweep", "amplitude sweep"),
-        fixture_status="pending",
-        priority=70,
+        path_keywords=("rheology_strain_sweep", "strain_sweep"),
+        column_aliases=("strain", "storage modulus", "modulus"),
+        analysis=(
+            AnalysisSpec("peak_modulus_strain_percent", "strain at maximum modulus", ("strain", "modulus"), "%"),
+        ),
+        fixture_path="tests/fixtures/materials_rules/rheology_strain_sweep.csv",
+        priority=28,
     ),
     _rule(
         "rheology_stress_sweep",
@@ -338,8 +346,11 @@ RULES: tuple[SemanticRule, ...] = (
         AxisSpec("Stress", "Pa", "Stress (Pa)", aliases=("stress", "shear stress")),
         AxisSpec("Modulus", "Pa", "Modulus (Pa)", aliases=("modulus", "G'", "G\"")),
         keywords=("stresssweep", "stress sweep"),
-        fixture_status="pending",
-        priority=70,
+        path_keywords=("rheology_stress_sweep", "stress_sweep"),
+        column_aliases=("stress", "storage modulus", "modulus"),
+        analysis=(AnalysisSpec("peak_modulus_stress_Pa", "stress at maximum modulus", ("stress", "modulus"), "Pa"),),
+        fixture_path="tests/fixtures/materials_rules/rheology_stress_sweep.csv",
+        priority=28,
     ),
     _rule(
         "rheology_creep",
@@ -428,8 +439,13 @@ RULES: tuple[SemanticRule, ...] = (
         STRAIN_AXIS,
         STRESS_AXIS,
         keywords=("compression", "compressive", "压缩"),
-        fixture_status="pending",
-        priority=80,
+        path_keywords=("compression_curve", "compressive"),
+        column_aliases=("strain", "stress"),
+        analysis=(
+            AnalysisSpec("peak_compressive_stress_MPa", "maximum compressive stress", ("strain", "stress"), "MPa"),
+        ),
+        fixture_path="tests/fixtures/materials_rules/compression_curve.csv",
+        priority=34,
     ),
     _rule(
         "flexural_curve",
@@ -439,8 +455,11 @@ RULES: tuple[SemanticRule, ...] = (
         STRAIN_AXIS,
         STRESS_AXIS,
         keywords=("flexural", "bending", "弯曲"),
-        fixture_status="pending",
-        priority=80,
+        path_keywords=("flexural_curve", "bending"),
+        column_aliases=("strain", "stress"),
+        analysis=(AnalysisSpec("peak_flexural_stress_MPa", "maximum flexural stress", ("strain", "stress"), "MPa"),),
+        fixture_path="tests/fixtures/materials_rules/flexural_curve.csv",
+        priority=34,
     ),
     _rule(
         "impact_metric",
@@ -517,9 +536,11 @@ RULES: tuple[SemanticRule, ...] = (
         RHEOLOGY_X_TEMPERATURE,
         AxisSpec("Derivative mass", "%/C", "DTG (%/°C)", aliases=("dtg", "derivative")),
         keywords=("dtg", "derivativeweight"),
+        path_keywords=("dtg_curve", "dtg"),
+        column_aliases=("temperature", "dtg", "derivative"),
         analysis=(AnalysisSpec("dtg_peak_temperature_C", "maximum derivative loss", ("temperature", "dtg"), "C"),),
-        fixture_status="pending",
-        priority=44,
+        fixture_path="tests/fixtures/materials_rules/dtg_curve.csv",
+        priority=32,
     ),
     _rule(
         "dma_temperature_sweep",
@@ -529,8 +550,18 @@ RULES: tuple[SemanticRule, ...] = (
         RHEOLOGY_X_TEMPERATURE,
         AxisSpec("Storage modulus", "Pa", "Storage modulus, E′ (Pa)", aliases=("E'", "storage modulus", "tan delta")),
         keywords=("dma", "tanδ", "tandelta"),
-        fixture_status="pending",
-        priority=43,
+        path_keywords=("dma_temperature_sweep", "dma_temperature"),
+        column_aliases=("temperature", "storage modulus", "loss factor", "tan delta"),
+        analysis=(
+            AnalysisSpec(
+                "storage_modulus_drop_temperature_C",
+                "largest E′ drop candidate",
+                ("temperature", "storage modulus"),
+                "C",
+            ),
+        ),
+        fixture_path="tests/fixtures/materials_rules/dma_temperature_sweep.csv",
+        priority=30,
     ),
     _rule(
         "ftir_spectrum",
@@ -571,8 +602,18 @@ RULES: tuple[SemanticRule, ...] = (
         AxisSpec("Wavelength", "nm", "Wavelength (nm)"),
         AxisSpec("Absorbance", "a.u.", "Absorbance (a.u.)"),
         keywords=("uvvis", "uv-vis", "absorbance"),
-        fixture_status="pending",
-        priority=80,
+        path_keywords=("uvvis_spectrum", "uv-vis"),
+        column_aliases=("wavelength", "absorbance"),
+        analysis=(
+            AnalysisSpec(
+                "strongest_absorbance_wavelength_nm",
+                "maximum absorbance position",
+                ("wavelength", "absorbance"),
+                "nm",
+            ),
+        ),
+        fixture_path="tests/fixtures/materials_rules/uvvis_spectrum.csv",
+        priority=36,
     ),
     _rule(
         "nmr_spectrum",
@@ -769,12 +810,20 @@ RULES: tuple[SemanticRule, ...] = (
             scale="log",
         ),
         keywords=("dmafreq", "dma frequency sweep", "E' frequency", "dmafrequencysweep"),
-        path_keywords=("/dma_freq/", "dma frequency"),
+        path_keywords=("/dma_freq/", "dma frequency", "dma_frequency_sweep", "dma_frequency"),
         column_aliases=("angular frequency", "frequency", "storage modulus", "loss modulus", "tan delta"),
         experiment_families=("dma",),
         render_options=_POINT_LINE_LOG,
-        fixture_status="pending",
-        priority=45,
+        analysis=(
+            AnalysisSpec(
+                "terminal_storage_modulus_frequency",
+                "highest-frequency E′ value",
+                ("frequency", "storage modulus"),
+                "Pa",
+            ),
+        ),
+        fixture_path="tests/fixtures/materials_rules/dma_frequency_sweep.csv",
+        priority=30,
         reason="DMA frequency sweep (isothermal) with E′, E″, tanδ vs angular frequency.",
     ),
     _rule(
@@ -1396,6 +1445,15 @@ def _swelling_metrics(source_path: Path) -> list[dict[str, Any]]:
     return [_metric("equilibrium_swelling_ratio", float(values.iloc[-1]), "1")]
 
 
+def _analysis_metric_name(semantic: dict[str, Any], fallback: str) -> str:
+    analysis_plan = semantic.get("analysis_plan") or []
+    if analysis_plan and isinstance(analysis_plan[0], dict):
+        metric = str(analysis_plan[0].get("metric") or "").strip()
+        if metric:
+            return metric
+    return fallback
+
+
 def compute_analysis_metrics(
     *,
     source_path: Path,
@@ -1415,18 +1473,33 @@ def compute_analysis_metrics(
         rows = _torque_metrics(processed)
     elif rule_id == "tga_curve":
         rows = _tga_metrics(source_path)
+    elif rule_id in {
+        "rheology_time_sweep",
+        "rheology_strain_sweep",
+        "rheology_stress_sweep",
+        "dma_temperature_sweep",
+        "dma_frequency_sweep",
+        "compression_curve",
+        "flexural_curve",
+        "dtg_curve",
+    }:
+        rows = _generic_peak_metrics(
+            source_path,
+            metric_name=_analysis_metric_name(semantic, "peak_response_position"),
+            x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
+        )
     elif rule_id == "swelling_curve":
         rows = _swelling_metrics(source_path)
     elif rule_id in {"ftir_spectrum", "raman_spectrum", "uvvis_spectrum", "nmr_spectrum", "xps_spectrum"}:
         rows = _generic_peak_metrics(
             source_path,
-            metric_name="strongest_peak_position",
+            metric_name=_analysis_metric_name(semantic, "strongest_peak_position"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
         )
     elif rule_id in {"xrd_pattern", "waxs_pattern", "saxs_profile", "sans_profile"}:
         rows = _generic_peak_metrics(
             source_path,
-            metric_name="main_scattering_peak_q",
+            metric_name=_analysis_metric_name(semantic, "main_scattering_peak_q"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
         )
     elif rule_id == "gpc_sec_chromatogram":

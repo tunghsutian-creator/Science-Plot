@@ -114,14 +114,16 @@ def apply_request_patch(
     current_render_options = patched.get("render_options") if isinstance(patched.get("render_options"), dict) else {}
     normalized_patch = normalize_render_options(render_options, template=template)
     selected_series = _selected_series_labels(series_order)
+    explicit_order = _selected_series_labels(normalized_patch.get("series_order"))
+    explicit_include = _selected_series_labels(normalized_patch.get("series_include"))
     if not selected_series:
-        selected_series = _selected_series_labels(
-            normalized_patch.get("series_order"),
-            normalized_patch.get("series_include"),
-        )
+        selected_series = explicit_order or explicit_include
     if selected_series:
         normalized_patch["series_order"] = selected_series
-        normalized_patch["series_include"] = selected_series
+        if explicit_include:
+            normalized_patch["series_include"] = explicit_include
+        else:
+            normalized_patch["series_include"] = selected_series
 
     merged_render_options = {**current_render_options, **normalized_patch}
     merged_render_options = normalize_render_options(

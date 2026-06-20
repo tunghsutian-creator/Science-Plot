@@ -963,6 +963,38 @@
       background: #ffffff;
     }
 
+    .series-lane {
+      grid-template-columns: auto minmax(110px, 1fr);
+      align-items: stretch;
+    }
+
+    .series-lane-main {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .series-tools {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .series-tools .field {
+      min-width: 0;
+    }
+
+    .series-tools input[type="color"] {
+      padding: 3px;
+    }
+
+    .series-tools input[type="range"] {
+      padding: 0;
+    }
+
     .drag-handle {
       width: 28px;
       height: 28px;
@@ -2163,6 +2195,17 @@
       { value: "inline", label: "Inline" }
     ];
 
+    const markerOptions = [
+      { value: "", label: "Auto" },
+      { value: "circle", label: "Circle" },
+      { value: "square", label: "Square" },
+      { value: "triangle", label: "Triangle" },
+      { value: "diamond", label: "Diamond" },
+      { value: "x", label: "X" },
+      { value: "plus", label: "Plus" },
+      { value: "none", label: "None" }
+    ];
+
     const tickDensityOptions = [
       { value: "", label: "Auto" },
       { value: "dense", label: "Dense" },
@@ -3271,12 +3314,40 @@
           <div class="sample-list">
             ${state.groups.map((group, index) => {
               const color = seriesColors[group.sample] || "";
+              const seriesId = group.sample || `Series ${index + 1}`;
+              const styleColor = seriesStyleValue(seriesId, "color", color || "#0b8a7a");
+              const lineWidth = seriesStyleValue(seriesId, "line_width", 1.2);
+              const markerSize = seriesStyleValue(seriesId, "marker_size", 3.4);
+              const marker = seriesStyleValue(seriesId, "marker", "");
+              const enabled = seriesStyleValue(seriesId, "enabled", true) !== false;
               return `
-              <div class="sample-lane ${index === state.activeGroup ? "active" : ""}" data-drag-index="${index}" draggable="true" data-active-group="${index}">
+              <div class="sample-lane series-lane ${index === state.activeGroup ? "active" : ""}" data-drag-index="${index}" draggable="true" data-active-group="${index}">
                 <button class="drag-handle" type="button" title="Reorder" aria-label="Reorder">${icon("grip")}</button>
-                ${color ? `<span class="swatch" style="background:${escapeHtml(color)};width:12px;height:12px;border-radius:3px;flex-shrink:0;margin:0 4px" title="${escapeHtml(color)}"></span>` : ""}
-                <input class="sample-input" value="${escapeHtml(group.sample)}" data-sample-index="${index}" aria-label="Sample name">
-                <span class="file-count">${group.files.length}</span>
+                <div class="series-lane-main">
+                  <input class="sample-input" value="${escapeHtml(group.sample)}" data-sample-index="${index}" aria-label="Sample name">
+                  <label class="option ${enabled ? "selected" : ""}" title="Visible">
+                    <input type="checkbox" data-series-style="${escapeHtml(seriesId)}" data-series-style-key="enabled" ${enabled ? "checked" : ""}>
+                    Visible
+                  </label>
+                </div>
+                <div class="series-tools">
+                  <label class="field">
+                    <span class="field-label">Color</span>
+                    <input type="color" value="${escapeHtml(styleColor)}" data-series-style="${escapeHtml(seriesId)}" data-series-style-key="color">
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Marker</span>
+                    ${renderSelect(`seriesMarker${index}`, marker, markerOptions, `data-series-style="${escapeHtml(seriesId)}" data-series-style-key="marker"`)}
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Line ${escapeHtml(String(lineWidth))}</span>
+                    <input type="range" min="0.5" max="3" step="0.1" value="${escapeHtml(String(lineWidth))}" data-series-style="${escapeHtml(seriesId)}" data-series-style-key="line_width">
+                  </label>
+                  <label class="field">
+                    <span class="field-label">Marker ${escapeHtml(String(markerSize))}</span>
+                    <input type="range" min="0" max="8" step="0.5" value="${escapeHtml(String(markerSize))}" data-series-style="${escapeHtml(seriesId)}" data-series-style-key="marker_size">
+                  </label>
+                </div>
               </div>
               `;
             }).join("")}
@@ -3317,9 +3388,9 @@
       `;
     }
 
-    function renderSelect(id, value, options) {
+    function renderSelect(id, value, options, extraAttrs = "") {
       return `
-        <select id="${escapeHtml(id)}" class="select">
+        <select id="${escapeHtml(id)}" class="select" ${extraAttrs}>
           ${options.map((item) => `<option value="${escapeHtml(item.value)}" ${String(value || "") === item.value ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}
         </select>
       `;
@@ -3526,6 +3597,16 @@
       bindRefine("refineYLabel", "y_label_override");
       bindRefine("refineStylePreset", "style_preset");
       bindRefine("refinePalettePreset", "palette_preset");
+      document.querySelectorAll("[data-series-style][data-series-style-key]").forEach((input) => {
+        const seriesId = input.dataset.seriesStyle;
+        const key = input.dataset.seriesStyleKey;
+        const readValue = (event) => {
+          const value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+          return value;
+        };
+        input.oninput = (event) => setSeriesStyle(seriesId, key, readValue(event), { rerender: false });
+        input.onchange = (event) => setSeriesStyle(seriesId, key, readValue(event));
+      });
 
       const previewNowButton = document.querySelector("#previewNowButton");
       if (previewNowButton) previewNowButton.onclick = () => previewProject();
@@ -4112,6 +4193,9 @@
         y_tick_density: options.y_tick_density || "",
         legend_position: options.legend_position || "",
         series_label_mode: options.series_label_mode || "",
+        series_order: Array.isArray(options.series_order) ? options.series_order : [],
+        series_include: Array.isArray(options.series_include) ? options.series_include : [],
+        series_styles: Array.isArray(options.series_styles) ? options.series_styles : [],
         x_label_override: options.x_label_override || "",
         y_label_override: options.y_label_override || "",
         style_preset: options.style_preset || "",
@@ -4129,6 +4213,40 @@
       state.refineOptions = { ...state.refineOptions, [name]: value };
       state.refineDirty = true;
       scheduleLivePreview();
+    }
+
+    function seriesStyleItems() {
+      const styles = refineOptionValue("series_styles");
+      return Array.isArray(styles) ? styles : [];
+    }
+
+    function seriesStyleFor(label) {
+      return seriesStyleItems().find((item) => String(item.series_id || "") === label) || {};
+    }
+
+    function seriesStyleValue(label, key, fallback = "") {
+      const value = seriesStyleFor(label)[key];
+      return value === undefined || value === null ? fallback : value;
+    }
+
+    function setSeriesStyle(label, key, value, options = {}) {
+      const styles = seriesStyleItems().filter((item) => String(item.series_id || "") !== label);
+      const current = { ...seriesStyleFor(label), series_id: label };
+      if (value === "" || value === null || value === undefined) {
+        delete current[key];
+      } else if (key === "enabled") {
+        current[key] = Boolean(value);
+      } else if (key === "line_width" || key === "marker_size") {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) current[key] = numeric;
+      } else {
+        current[key] = value;
+      }
+      const hasStyle = ["enabled", "color", "line_width", "marker_size", "marker"].some((styleKey) => (
+        current[styleKey] !== undefined && current[styleKey] !== "" && current[styleKey] !== null
+      ));
+      setRefineOption("series_styles", hasStyle ? [...styles, current] : styles);
+      if (options.rerender !== false) render();
     }
 
     function bindRefine(id, key) {
@@ -4153,6 +4271,15 @@
       const compact = {};
       Object.entries(options).forEach(([key, value]) => {
         if (value === "" || value === null || value === undefined) return;
+        if (key === "series_styles" && Array.isArray(value)) {
+          const styles = value.filter((item) => item?.series_id);
+          if (styles.length) compact[key] = styles;
+          return;
+        }
+        if (Array.isArray(value)) {
+          if (value.length) compact[key] = value;
+          return;
+        }
         compact[key] = value;
       });
       return compact;

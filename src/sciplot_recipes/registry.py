@@ -29,6 +29,7 @@ _RECIPE_SPECS: dict[str, tuple[str, str, str]] = {
 }
 
 _RECIPE_MODULES = tuple(_RECIPE_SPECS.keys())
+_MODULE_CACHE: dict[str, ModuleType] = {}
 
 
 def normalize_recipe_name(name: str) -> str:
@@ -69,8 +70,12 @@ def get_recipe_module(name: str) -> ModuleType:
     if normalized not in _RECIPE_MODULES:
         known = ", ".join(sorted(_RECIPE_MODULES))
         raise ValueError(f"Unknown recipe `{name}`. Available recipes: {known}.")
+    if normalized in _MODULE_CACHE:
+        return _MODULE_CACHE[normalized]
     name, label, template = _RECIPE_SPECS[normalized]
-    return _build_recipe_module(name, label, template)
+    module = _build_recipe_module(name, label, template)
+    _MODULE_CACHE[normalized] = module
+    return module
 
 
 def get_recipe_spec(name: str) -> RecipeSpec:
