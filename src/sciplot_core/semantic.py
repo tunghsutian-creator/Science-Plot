@@ -12,7 +12,22 @@ from typing import Any
 import pandas as pd
 
 from sciplot_core._bootstrap import ensure_legacy_core
-from sciplot_core.ingest import decode_text_file
+from sciplot_core._constants import _DEFAULT_RENDER_OPTIONS
+from sciplot_core._utils import (
+    clean_text as _clean_text,
+)
+from sciplot_core._utils import (
+    decode_text as _decode_text,
+)
+from sciplot_core._utils import (
+    json_safe as _json_safe,
+)
+from sciplot_core._utils import (
+    text_preview as _text_preview,
+)
+from sciplot_core._utils import (
+    token as _token,
+)
 from sciplot_core.materials_rules import match_rule, semantic_payload_from_rule
 
 ensure_legacy_core()
@@ -20,15 +35,6 @@ ensure_legacy_core()
 from src.data_loader import read_raw_table  # noqa: E402
 from src.rendering.recommendation import inspect_input_file  # noqa: E402
 from src.text_normalization import normalize_unit  # noqa: E402
-
-_DEFAULT_RENDER_OPTIONS = {
-    "legend_position": "auto",
-    "series_label_mode": "legend",
-    "visual_theme_id": "clean_light",
-    "style_preset": "nature",
-    "size": "60x55",
-    "palette_preset": "colorblind_safe",
-}
 
 
 @dataclass(frozen=True)
@@ -71,52 +77,6 @@ _RHEOLOGY_FREQUENCY_OUTPUT_METRICS = (
 )
 
 
-def _clean_text(value: object) -> str:
-    if value is None:
-        return ""
-    try:
-        if pd.isna(value):
-            return ""
-    except TypeError:
-        pass
-    return str(value).strip()
-
-
-def _token(value: object) -> str:
-    return re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", _clean_text(value).casefold())
-
-
-def _decode_text(path: Path) -> str:
-    return decode_text_file(path)
-
-
-def _text_preview(path: Path, *, lines: int = 40) -> str:
-    if path.is_dir():
-        parts = [path.as_posix()]
-        preview_files = [
-            child
-            for child in sorted(path.rglob("*"))
-            if child.is_file() and child.suffix.lower() in {".csv", ".tsv", ".txt"}
-        ]
-        for child in preview_files[:3]:
-            with contextlib_suppress_decode():
-                parts.append("\n".join(_decode_text(child).splitlines()[:lines]))
-        return "\n".join(parts)
-    if not path.is_file():
-        return path.as_posix()
-    with contextlib_suppress_decode():
-        return "\n".join(_decode_text(path).splitlines()[:lines])
-    return path.as_posix()
-
-
-class contextlib_suppress_decode:
-    def __enter__(self) -> None:
-        return None
-
-    def __exit__(self, exc_type: object, _exc: object, _traceback: object) -> bool:
-        return exc_type in {UnicodeError, OSError, ValueError}
-
-
 def _vendor_inspection(input_path: Path, sheet: str | int) -> tuple[dict[str, Any] | None, str | None]:
     if input_path.is_dir():
         return None, "Vendor inspect expects a file, not a directory."
@@ -125,18 +85,6 @@ def _vendor_inspection(input_path: Path, sheet: str | int) -> tuple[dict[str, An
     except Exception as exc:
         return None, str(exc)
     return _json_safe(payload), None
-
-
-def _json_safe(value: Any) -> Any:
-    if hasattr(value, "__dataclass_fields__"):
-        return _json_safe(value.__dict__)
-    if isinstance(value, dict):
-        return {str(key): _json_safe(item) for key, item in value.items()}
-    if isinstance(value, tuple | list):
-        return [_json_safe(item) for item in value]
-    if isinstance(value, Path):
-        return str(value)
-    return value
 
 
 def _top_recommendation(vendor_inspection: dict[str, Any] | None) -> dict[str, Any] | None:

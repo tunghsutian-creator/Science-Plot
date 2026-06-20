@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
-import re
 import shutil
 from datetime import UTC, datetime
 from html import escape
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.render import DEFAULT_EXPORT_FORMATS, inspect_payload, json_safe
+from sciplot_core._utils import json_safe, slug
+from sciplot_core.render import DEFAULT_EXPORT_FORMATS, inspect_payload
 from sciplot_core.semantic import (
     build_intervention_request,
     classify_source,
@@ -32,11 +32,6 @@ _SMOKE_SEMANTIC_PRIORITY = {
     "generic_replicate": 6,
     "generic_curve": 7,
 }
-
-
-def _slug(value: str) -> str:
-    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("._-")
-    return cleaned[:70] or "source"
 
 
 def _top_recommendation(inspection: dict[str, Any]) -> dict[str, Any] | None:
@@ -279,7 +274,7 @@ def run_batch(
             continue
 
         run_index = len(runs) + 1
-        run_dir = runs_dir / f"{run_index:04d}_{_slug(rel_source.with_suffix('').as_posix())}"
+        run_dir = runs_dir / f"{run_index:04d}_{slug(rel_source.with_suffix('').as_posix())}"
         request = {
             "recipe": "auto",
             "input": str(source),

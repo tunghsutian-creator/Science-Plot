@@ -20,9 +20,10 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import pandas as pd
 
+from sciplot_core._utils import json_safe, safe_filename, slug, unique_path
 from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex_job, start_codex_job
 from sciplot_core.ingest import smart_decode
-from sciplot_core.render import DEFAULT_EXPORT_FORMATS, json_safe
+from sciplot_core.render import DEFAULT_EXPORT_FORMATS
 from sciplot_core.semantic import classify_source, is_rheology_frequency_comparison_dir
 from sciplot_core.study_model import build_study_model, sync_study_model_samples
 from sciplot_core.workbench_contract import apply_request_patch, normalize_exports, normalize_render_options
@@ -239,31 +240,6 @@ def _catalog_item_for_rule(rule_id: str | None) -> tuple[dict[str, Any], dict[st
     return None
 
 
-def _slug(value: str) -> str:
-    cleaned = re.sub(r"[^0-9A-Za-z._\-\u4e00-\u9fff]+", "_", value).strip("._-")
-    return cleaned[:80] or "sciplot_project"
-
-
-def _safe_filename(value: str) -> str:
-    name = Path(value).name
-    cleaned = re.sub(r"[/:\\]+", "_", name).strip() or "file"
-    return cleaned[:120]
-
-
-def _unique_path(directory: Path, filename: str) -> Path:
-    path = directory / filename
-    if not path.exists():
-        return path
-    stem = path.stem
-    suffix = path.suffix
-    index = 2
-    while True:
-        candidate = directory / f"{stem}_{index}{suffix}"
-        if not candidate.exists():
-            return candidate
-        index += 1
-
-
 def _write_zip(project_dir: Path, zip_path: Path) -> None:
     if zip_path.exists():
         zip_path.unlink()
@@ -306,7 +282,7 @@ def refresh_intake_project_zip(project_dir: str | Path) -> Path:
         zip_name = f"{manifest.get('project_slug') or project_dir.name}.zip"
     else:
         zip_name = f"{project_dir.name}.zip"
-    zip_path = project_dir.parent / _safe_filename(zip_name)
+    zip_path = project_dir.parent / safe_filename(zip_name)
     _write_zip(project_dir, zip_path)
     return zip_path
 
@@ -329,8 +305,8 @@ def _read_json_if_exists(path: Path) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def _project_dir_from_slug(output_root: Path, project_slug: str) -> Path:
-    safe_slug = _safe_filename(project_slug)
+def _project_dir_fromslug(output_root: Path, project_slug: str) -> Path:
+    safe_slug = safe_filename(project_slug)
     project_dir = (output_root.expanduser().resolve() / safe_slug).resolve()
     if not _path_within(project_dir, output_root.expanduser().resolve()):
         raise PermissionError("Project path is outside the configured output root.")
@@ -845,11 +821,11 @@ def _group_payload(sample: str, files: list[Path]) -> dict[str, Any]:
 def _session_path(output_root: Path, project_name: str) -> Path:
     sessions_dir = output_root / "sessions"
     sessions_dir.mkdir(parents=True, exist_ok=True)
-    return _unique_path(sessions_dir, f"{_slug(project_name)}.json")
+    return unique_path(sessions_dir, f"{slug(project_name)}.json")
 
 
 def _session_project_name(source: Path, experiment_label: str) -> str:
-    return _slug(f"{source.name}_{experiment_label}")
+    return slug(f"{source.name}_{experiment_label}")
 
 
 def prepare_intake_session(
@@ -1101,7 +1077,7 @@ def create_intake_project(
         raise ValueError("At least one named sample group with files is required.")
 
     series_order = [group.sample.strip() for group in cleaned_groups]
-    project_slug = _slug(project_name or f"{experiment['label']}_{'_'.join(group.sample for group in cleaned_groups)}")
+    project_slug = slug(project_name or f"{experiment['label']}_{'_'.join(group.sample for group in cleaned_groups)}")
     output_root = output_root.expanduser().resolve()
     project_dir = output_root / project_slug
     if project_dir.exists():
@@ -1116,14 +1092,14 @@ def create_intake_project(
     manifest_groups: list[dict[str, Any]] = []
     for group in cleaned_groups:
         sample = group.sample.strip()
-        sample_dir = raw_dir / _slug(sample)
+        sample_dir = raw_dir / slug(sample)
         sample_dir.mkdir(parents=True, exist_ok=True)
         group_files: list[dict[str, Any]] = []
         for incoming in group.files:
-            raw_path = _unique_path(sample_dir, _safe_filename(incoming.name))
+            raw_path = unique_path(sample_dir, safe_filename(incoming.name))
             raw_path.write_bytes(incoming.content)
-            source_name = _safe_filename(f"{sample}__{raw_path.name}")
-            source_path = _unique_path(source_dir, source_name)
+            source_name = safe_filename(f"{sample}__{raw_path.name}")
+            source_path = unique_path(source_dir, source_name)
             source_path.write_bytes(incoming.content)
             group_files.append(
                 {
@@ -1624,7 +1600,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _project_dir_from_request(self, project_slug: str) -> Path:
-        return _project_dir_from_slug(self.server.output_root, unquote(project_slug))
+        return _project_dir_fromslug(self.server.output_root, unquote(project_slug))
 
     def _respond_error(self, exc: Exception) -> None:
         detail = str(exc) or type(exc).__name__
@@ -1651,12 +1627,12 @@ class _IntakeHandler(BaseHTTPRequestHandler):
             self._send_json(intake_catalog_payload())
             return
         if parsed.path.startswith("/api/session/"):
-            session_id = _safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
+            session_id = safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
             self._send_file(self.server.output_root / "sessions" / f"{session_id}.json")
             return
         if parsed.path == "/api/session":
             query = parse_qs(parsed.query)
-            session_id = _safe_filename(query.get("id", [""])[0])
+            session_id = safe_filename(query.get("id", [""])[0])
             self._send_file(self.server.output_root / "sessions" / f"{session_id}.json")
             return
         if parsed.path == "/api/projects":
@@ -1671,7 +1647,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
             self._send_json({"kind": "sciplot_project_list", "projects": all_projects})
             return
         if parsed.path.startswith("/api/download/"):
-            filename = _safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
+            filename = safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
             self._send_file(self.server.output_root / filename)
             return
         if parsed.path.startswith("/api/projects/"):
@@ -1710,7 +1686,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
             if len(parts) >= 4 and project_slug:
                 try:
                     project_dir = self._project_dir_from_request(project_slug)
-                    job_dir = project_dir / "codex_jobs" / _safe_filename(unquote(parts[3]))
+                    job_dir = project_dir / "codex_jobs" / safe_filename(unquote(parts[3]))
                     if len(parts) == 5 and parts[4] == "logs":
                         stdout_path = job_dir / "stdout.jsonl"
                         self._send_text(stdout_path.read_text(encoding="utf-8") if stdout_path.exists() else "")
@@ -1904,8 +1880,8 @@ def serve_intake(
         url = f"{url}?session={quote(str(session['session_id']))}"
         payload.update({"url": url, "session_path": session["session_path"], "session_id": session["session_id"]})
     elif project_slug:
-        safe_project = _safe_filename(project_slug)
-        project_dir = _project_dir_from_slug(server.output_root, safe_project)
+        safe_project = safe_filename(project_slug)
+        project_dir = _project_dir_fromslug(server.output_root, safe_project)
         if not (project_dir / "intake_manifest.json").exists():
             raise FileNotFoundError(f"No intake project manifest found for project: {project_slug}")
         url = f"{url}?project={quote(safe_project)}"

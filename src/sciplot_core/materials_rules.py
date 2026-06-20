@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 
 from sciplot_core._bootstrap import ensure_legacy_core
+from sciplot_core._constants import _DEFAULT_RENDER_OPTIONS
+from sciplot_core._utils import token as _utils_token
 from sciplot_core.study_model import experiment_recommendation_payload
 
 ensure_legacy_core()
@@ -18,8 +20,8 @@ from src.data_loader import read_raw_table  # noqa: E402
 
 
 def normalize_token(value: object) -> str:
-    token = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", str(value or "").casefold())
-    return token or "\ufffd"
+    result = _utils_token(value)
+    return result or "\ufffd"
 
 
 @dataclass(frozen=True)
@@ -120,15 +122,6 @@ class SemanticRule:
             "reason": self.reason,
         }
 
-
-_DEFAULT_RENDER_OPTIONS = {
-    "legend_position": "auto",
-    "series_label_mode": "legend",
-    "visual_theme_id": "clean_light",
-    "style_preset": "nature",
-    "size": "60x55",
-    "palette_preset": "colorblind_safe",
-}
 
 _POINT_LINE_LOG = {**_DEFAULT_RENDER_OPTIONS, "xscale": "log", "yscale": "log", "reverse_x": False}
 
