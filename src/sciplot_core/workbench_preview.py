@@ -222,8 +222,14 @@ def chart_spec_from_rendered(job: WorkbenchRenderJob, rendered: list[Any]) -> di
     primary_ax = axes[0] if axes else None
     rows: list[dict[str, Any]] = []
     series: list[dict[str, Any]] = []
+    x_limits: tuple[float | None, float | None] = (None, None)
+    y_limits: tuple[float | None, float | None] = (None, None)
 
     if primary_ax is not None:
+        raw_x_limits = primary_ax.get_xlim()
+        raw_y_limits = primary_ax.get_ylim()
+        x_limits = (_clean_float(raw_x_limits[0]), _clean_float(raw_x_limits[1]))
+        y_limits = (_clean_float(raw_y_limits[0]), _clean_float(raw_y_limits[1]))
         for index, line in enumerate(primary_ax.lines):
             label = str(line.get_label() or f"series_{index + 1}")
             if not label or label.startswith("_"):
@@ -276,6 +282,30 @@ def chart_spec_from_rendered(job: WorkbenchRenderJob, rendered: list[Any]) -> di
         "seriesKey": "series",
         "xAxisLabel": primary_ax.get_xlabel() if primary_ax is not None else "",
         "yAxisLabel": primary_ax.get_ylabel() if primary_ax is not None else "",
+        "axes": {
+            "x": {
+                "label": primary_ax.get_xlabel() if primary_ax is not None else "",
+                "scale": primary_ax.get_xscale() if primary_ax is not None else "linear",
+                "limits": list(x_limits),
+                "reversed": bool(
+                    x_limits[0] is not None and x_limits[1] is not None and x_limits[0] > x_limits[1]
+                ),
+            },
+            "y": {
+                "label": primary_ax.get_ylabel() if primary_ax is not None else "",
+                "scale": primary_ax.get_yscale() if primary_ax is not None else "linear",
+                "limits": list(y_limits),
+                "reversed": bool(
+                    y_limits[0] is not None and y_limits[1] is not None and y_limits[0] > y_limits[1]
+                ),
+            },
+        },
+        "summary": {
+            "series_count": len(series),
+            "point_count": len(rows),
+            "x_limits": list(x_limits),
+            "y_limits": list(y_limits),
+        },
         "series": series,
         "data": rows,
         "contract": {

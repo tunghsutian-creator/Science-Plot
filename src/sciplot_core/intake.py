@@ -327,6 +327,45 @@ def _artifact_info(path: Path, *, project_slug: str) -> dict[str, Any]:
     }
 
 
+def _download_info(path: Path) -> dict[str, Any]:
+    exists = path.exists() and path.is_file()
+    stat = path.stat() if exists else None
+    return {
+        "exists": exists,
+        "path": str(path),
+        "name": path.name,
+        "size_bytes": stat.st_size if stat is not None else 0,
+        "mtime_ns": stat.st_mtime_ns if stat is not None else 0,
+        "content_type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+        "url": f"/api/download/{quote(path.name)}" if exists else None,
+    }
+
+
+def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, Any]:
+    launcher = project_dir / "Open_SciPlot_Project.command"
+    launcher_info = _artifact_info(launcher, project_slug=project_slug)
+    launcher_info["executable"] = bool(launcher_info["exists"] and (launcher.stat().st_mode & 0o111))
+    sciplot_manifests = [
+        _artifact_info(path, project_slug=project_slug)
+        for path in sorted(project_dir.glob("*.sciplot.json"))
+    ]
+    zip_path = project_dir.parent / safe_filename(f"{project_slug}.zip")
+    zip_info = _download_info(zip_path)
+    return {
+        "kind": "sciplot_project_package_status",
+        "complete": bool(
+            launcher_info["exists"]
+            and launcher_info["executable"]
+            and sciplot_manifests
+            and all(item["exists"] for item in sciplot_manifests)
+            and zip_info["exists"]
+        ),
+        "launcher": launcher_info,
+        "sciplot_manifests": sciplot_manifests,
+        "zip": zip_info,
+    }
+
+
 def _preview_path_for_figure(path: Path) -> Path:
     stem = path.stem
     if stem.endswith("_300dpi"):
@@ -530,6 +569,7 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         "outputs_dir": str(run_output),
         "last_run": json_safe(last_run),
         "artifacts": artifacts,
+        "project_package": _project_package_info(project_path, project_slug=project_slug),
         "figures": figures,
         "preview_figure": preview_figure,
         "workbench": {

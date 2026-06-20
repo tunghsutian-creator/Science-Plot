@@ -1188,12 +1188,12 @@
       min-height: 0;
       padding: 0;
       display: grid;
-      place-items: center;
+      place-items: stretch;
     }
 
     .figure-frame {
-      width: min(78%, 820px);
-      height: min(76%, 620px);
+      width: 100%;
+      height: 100%;
       padding: 18px;
       border: 1px solid var(--line);
       border-radius: 10px;
@@ -1219,8 +1219,10 @@
     }
 
     .live-chart-frame {
-      width: min(82%, 900px);
-      height: min(78%, 640px);
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
       padding: 0;
       border: 1px solid var(--line);
       border-radius: var(--radius-lg);
@@ -1231,12 +1233,17 @@
       overflow: hidden;
     }
 
+    .live-chart-frame.updating {
+      box-shadow: 0 0 0 4px var(--blue-soft), var(--shadow);
+    }
+
     .live-chart {
       width: 100%;
       height: 100%;
       display: block;
       cursor: crosshair;
       min-height: 300px;
+      touch-action: none;
     }
 
     .chart-grid {
@@ -1247,6 +1254,12 @@
     .chart-axis {
       stroke: var(--ink);
       stroke-width: 1.5;
+    }
+
+    .chart-zero-line {
+      stroke: var(--line-strong);
+      stroke-width: 1.2;
+      stroke-dasharray: 4 5;
     }
 
     .chart-tick {
@@ -1268,6 +1281,10 @@
       transition: opacity 200ms ease;
     }
 
+    .live-series-group.active .live-series {
+      stroke-width: 4;
+    }
+
     .live-series.hidden {
       opacity: 0.1;
     }
@@ -1283,10 +1300,48 @@
       r: 7;
     }
 
+    .live-direct-label {
+      paint-order: stroke;
+      stroke: #ffffff;
+      stroke-width: 4px;
+      fill: var(--ink);
+      font-size: 11px;
+      font-weight: 760;
+      pointer-events: none;
+    }
+
     .live-series-group.hidden .live-series,
-    .live-series-group.hidden .live-point {
+    .live-series-group.hidden .live-point,
+    .live-series-group.hidden .live-direct-label {
       opacity: 0.12;
       pointer-events: none;
+    }
+
+    .chart-hit-area {
+      fill: transparent;
+      cursor: crosshair;
+    }
+
+    .chart-crosshair {
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 100ms ease;
+    }
+
+    .chart-crosshair.visible {
+      opacity: 1;
+    }
+
+    .chart-crosshair-line {
+      stroke: var(--muted);
+      stroke-width: 1;
+      stroke-dasharray: 3 4;
+    }
+
+    .chart-focus-dot {
+      fill: #ffffff;
+      stroke: var(--green);
+      stroke-width: 2.4;
     }
 
     /* ── Chart Tooltip ── */
@@ -1299,7 +1354,7 @@
     .live-chart-legend {
       display: flex;
       flex-wrap: wrap;
-      gap: 4px;
+      gap: 6px;
       padding: 8px 12px;
       border-top: 1px solid var(--line);
       background: var(--surface);
@@ -1328,6 +1383,12 @@
 
     .live-legend-item.toggled-off {
       opacity: 0.45;
+    }
+
+    .live-legend-item.active {
+      border-color: var(--line-strong);
+      background: #ffffff;
+      box-shadow: var(--shadow-xs);
     }
 
     .live-legend-color {
@@ -1653,7 +1714,7 @@
 
     .review-command-bar {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 7px;
     }
 
@@ -2195,6 +2256,8 @@
       { value: "inline", label: "Inline" }
     ];
 
+    const numericRenderOptionKeys = new Set(["x_min", "x_max", "y_min", "y_max"]);
+
     const markerOptions = [
       { value: "", label: "Auto" },
       { value: "circle", label: "Circle" },
@@ -2267,6 +2330,7 @@
       previewInFlight: false,
       rerunInFlight: false,
       livePreviewQueued: false,
+      activeSeries: "",
       statusText: "Ready",
       error: "",
       canvasTool: "select",
@@ -2278,6 +2342,7 @@
     };
 
     let livePreviewTimer = null;
+    let liveChartModel = null;
 
     const appShell = document.querySelector("#appShell");
     const stageNav = document.querySelector("#stageNav");
@@ -2420,9 +2485,10 @@
       statusLight.classList.toggle("warn", Boolean(state.error || state.projectStatus?.needs_codex || state.lastProject?.run_failed));
       primaryAction.disabled = primaryDisabled();
       primaryAction.querySelector("span").textContent = primaryLabel();
+      primaryAction.style.visibility = state.stage === "review" ? "hidden" : "visible";
       renderStageNav();
       const toolStrip = document.querySelector(".tool-strip");
-      if (toolStrip) toolStrip.classList.toggle("visible", state.stage === "review" && hasRenderedArtifacts());
+      if (toolStrip) toolStrip.classList.toggle("visible", false);
     }
 
     function primaryDisabled() {
@@ -2502,12 +2568,7 @@
     }
 
     function renderCanvas() {
-      const tooltip = `
-        <div class="canvas-watermark">
-          <span class="phase-chip"><span class="pulse"></span>${escapeHtml(stageMeta[state.stage].title)}</span>
-        </div>
-      `;
-      return `${tooltip}<div class="visual-board" id="visualBoard">${renderCanvasBoard()}</div>`;
+      return `<div class="visual-board" id="visualBoard">${renderCanvasBoard()}</div>`;
     }
 
     function renderCanvasBoard() {
@@ -2755,14 +2816,24 @@
 
     function renderLiveChartFrame(spec) {
       const chart = buildLiveChart(spec);
-      if (!chart.series.length) return renderFigureFrame(null, state.projectStatus?.preview_figure);
+      if (!chart.series.length) {
+        liveChartModel = null;
+        return renderFigureFrame(null, state.projectStatus?.preview_figure);
+      }
+      if (!chart.series.some((series) => series.label === state.activeSeries)) {
+        state.activeSeries = chart.series[0]?.label || "";
+      }
+      liveChartModel = chart;
       return `
-        <div class="live-chart-frame" id="liveChartFrame">
+        <div class="live-chart-frame ${state.previewInFlight ? "updating" : ""}" id="liveChartFrame">
           <svg class="live-chart" id="liveChartSvg"
                viewBox="0 0 ${chart.width} ${chart.height}"
                data-original-viewbox="0 0 ${chart.width} ${chart.height}"
                role="img" aria-label="Live SciPlot chart">
             <defs>
+              <clipPath id="${chart.clipId}">
+                <rect x="${chart.left}" y="${chart.top}" width="${chart.plotWidth}" height="${chart.plotHeight}" rx="4"></rect>
+              </clipPath>
               <filter id="tooltip-shadow">
                 <feDropShadow dx="0" dy="2" stdDeviation="4" flood-opacity="0.12"/>
               </filter>
@@ -2776,34 +2847,43 @@
               <line class="chart-grid" x1="${chart.left}" y1="${tick.y}" x2="${chart.right}" y2="${tick.y}"></line>
               <text class="chart-tick" x="${chart.left - 18}" y="${tick.y + 5}" text-anchor="end">${escapeHtml(tick.label)}</text>
             `).join("")}
+            ${chart.zeroX ? `<line class="chart-zero-line" x1="${chart.zeroX}" y1="${chart.top}" x2="${chart.zeroX}" y2="${chart.bottom}"></line>` : ""}
+            ${chart.zeroY ? `<line class="chart-zero-line" x1="${chart.left}" y1="${chart.zeroY}" x2="${chart.right}" y2="${chart.zeroY}"></line>` : ""}
             <line class="chart-axis" x1="${chart.left}" y1="${chart.bottom}" x2="${chart.right}" y2="${chart.bottom}"></line>
             <line class="chart-axis" x1="${chart.left}" y1="${chart.top}" x2="${chart.left}" y2="${chart.bottom}"></line>
-            ${chart.series.map((series) => `
-              <g class="live-series-group" data-series-label="${escapeHtml(series.label)}">
-                <path class="live-series" d="${series.path}" stroke="${escapeHtml(series.color)}" data-series-color="${escapeHtml(series.color)}"></path>
-                ${series.points.map((point) => `
-                  <circle class="live-point"
-                    cx="${point.x}" cy="${point.y}" r="4.5"
-                    fill="${escapeHtml(series.color)}"
-                    data-x="${escapeHtml(point.rawLabel.split(' / ')[0] || '')}"
-                    data-y="${escapeHtml(point.rawLabel.split(' / ')[1] || '')}"
-                    data-series="${escapeHtml(series.label)}">
-                  </circle>
-                `).join("")}
-              </g>
-            `).join("")}
+            <g clip-path="url(#${chart.clipId})">
+              ${chart.series.map((series) => `
+                <g class="live-series-group ${series.enabled ? "" : "hidden"} ${series.label === state.activeSeries ? "active" : ""}"
+                   data-series-label="${escapeHtml(series.label)}">
+                  <path class="live-series" d="${series.path}" stroke="${escapeHtml(series.color)}" style="stroke-width:${series.lineWidth}"></path>
+                  ${series.markerPoints.map((point) => renderLiveMarker(point, series)).join("")}
+                  ${series.directLabel ? `
+                    <text class="live-direct-label" x="${series.directLabel.x}" y="${series.directLabel.y}" text-anchor="${series.directLabel.anchor}">${escapeHtml(series.label)}</text>
+                  ` : ""}
+                </g>
+              `).join("")}
+            </g>
             <text class="chart-label" x="${(chart.left + chart.right) / 2}" y="${chart.height - 18}" text-anchor="middle">${escapeHtml(chart.xLabel)}</text>
             <text class="chart-label" transform="translate(24 ${(chart.top + chart.bottom) / 2}) rotate(-90)" text-anchor="middle">${escapeHtml(chart.yLabel)}</text>
-            <!-- Tooltip overlay -->
-            <g class="chart-tooltip" id="chartTooltip" visibility="hidden">
-              <rect x="0" y="0" width="170" height="52" rx="8" fill="#1a1a18" filter="url(#tooltip-shadow)"/>
-              <text id="chartTooltipText1" x="12" y="20" fill="#ffffff" font-size="11" font-weight="640"></text>
-              <text id="chartTooltipText2" x="12" y="38" fill="#a8a6a0" font-size="11"></text>
+            <rect class="chart-hit-area" id="chartHitArea" x="${chart.left}" y="${chart.top}" width="${chart.plotWidth}" height="${chart.plotHeight}"></rect>
+            <g class="chart-crosshair" id="chartCrosshair">
+              <line class="chart-crosshair-line" id="chartCrosshairX" x1="${chart.left}" y1="${chart.top}" x2="${chart.left}" y2="${chart.bottom}"></line>
+              <line class="chart-crosshair-line" id="chartCrosshairY" x1="${chart.left}" y1="${chart.bottom}" x2="${chart.right}" y2="${chart.bottom}"></line>
+              <circle class="chart-focus-dot" id="chartFocusDot" cx="${chart.left}" cy="${chart.bottom}" r="5"></circle>
+              <g class="chart-tooltip" id="chartTooltip">
+                <rect x="0" y="0" width="190" height="54" rx="8" fill="#1a1a18" filter="url(#tooltip-shadow)"/>
+                <text id="chartTooltipText1" x="12" y="20" fill="#ffffff" font-size="11" font-weight="640"></text>
+                <text id="chartTooltipText2" x="12" y="39" fill="#a8a6a0" font-size="11"></text>
+              </g>
             </g>
           </svg>
           <div class="live-chart-legend" id="liveChartLegend">
             ${chart.series.map((series, index) => `
-              <button class="live-legend-item" type="button" data-legend-series="${escapeHtml(series.label)}" data-legend-index="${index}">
+              <button class="live-legend-item ${series.enabled ? "" : "toggled-off"} ${series.label === state.activeSeries ? "active" : ""}"
+                      type="button"
+                      data-legend-series="${escapeHtml(series.label)}"
+                      data-legend-index="${index}"
+                      title="${series.enabled ? "Hide" : "Show"} ${escapeHtml(series.label)}">
                 <span class="live-legend-color" style="background:${escapeHtml(series.color)}"></span>
                 <span class="live-legend-label">${escapeHtml(series.label)}</span>
               </button>
@@ -2813,18 +2893,60 @@
       `;
     }
 
+    function renderLiveMarker(point, series) {
+      if (!series.enabled || series.marker === "none" || series.markerSize <= 0) return "";
+      const r = roundCoord(series.markerSize + 1.4);
+      const x = point.x;
+      const y = point.y;
+      const color = escapeHtml(series.color);
+      const common = `class="live-point" data-series="${escapeHtml(series.label)}" data-x="${escapeHtml(point.rawXLabel)}" data-y="${escapeHtml(point.rawYLabel)}"`;
+      if (series.marker === "square") {
+        const side = roundCoord(Number(r) * 1.7);
+        return `<rect ${common} x="${roundCoord(Number(x) - Number(side) / 2)}" y="${roundCoord(Number(y) - Number(side) / 2)}" width="${side}" height="${side}" rx="1.5" fill="${color}"></rect>`;
+      }
+      if (series.marker === "triangle") {
+        const size = Number(r) * 1.9;
+        const points = `${x},${roundCoord(Number(y) - size / 1.25)} ${roundCoord(Number(x) - size / 1.05)},${roundCoord(Number(y) + size / 1.35)} ${roundCoord(Number(x) + size / 1.05)},${roundCoord(Number(y) + size / 1.35)}`;
+        return `<polygon ${common} points="${points}" fill="${color}"></polygon>`;
+      }
+      if (series.marker === "diamond") {
+        const size = Number(r) * 1.45;
+        const points = `${x},${roundCoord(Number(y) - size)} ${roundCoord(Number(x) + size)},${y} ${x},${roundCoord(Number(y) + size)} ${roundCoord(Number(x) - size)},${y}`;
+        return `<polygon ${common} points="${points}" fill="${color}"></polygon>`;
+      }
+      if (series.marker === "x" || series.marker === "plus") {
+        const size = Number(r) * 1.25;
+        const lines = series.marker === "x"
+          ? [
+              [Number(x) - size, Number(y) - size, Number(x) + size, Number(y) + size],
+              [Number(x) - size, Number(y) + size, Number(x) + size, Number(y) - size],
+            ]
+          : [
+              [Number(x) - size, Number(y), Number(x) + size, Number(y)],
+              [Number(x), Number(y) - size, Number(x), Number(y) + size],
+            ];
+        return `<g ${common}>${lines.map((line) => `<line x1="${roundCoord(line[0])}" y1="${roundCoord(line[1])}" x2="${roundCoord(line[2])}" y2="${roundCoord(line[3])}" stroke="${color}" stroke-width="2" stroke-linecap="round"></line>`).join("")}</g>`;
+      }
+      return `<circle ${common} cx="${x}" cy="${y}" r="${r}" fill="${color}"></circle>`;
+    }
+
     function buildLiveChart(spec) {
-      const width = 900;
+      const width = 920;
       const height = 560;
-      const left = 92;
-      const right = 842;
-      const top = 48;
-      const bottom = 470;
+      const left = 96;
+      const right = 858;
+      const top = 44;
+      const bottom = 462;
+      const plotWidth = right - left;
+      const plotHeight = bottom - top;
       const options = spec?.contract?.render_options || {};
-      const xMode = options.xscale === "log" ? "log" : "linear";
-      const yMode = options.yscale === "log" ? "log" : "linear";
-      const xLabel = refineOptionValue("x_label_override") || spec?.xAxisLabel || "X";
-      const yLabel = refineOptionValue("y_label_override") || spec?.yAxisLabel || "Y";
+      const xMode = chartScaleMode("x", options, spec);
+      const yMode = chartScaleMode("y", options, spec);
+      const reverseX = chartBooleanOption("reverse_x", options, Boolean(spec?.axes?.x?.reversed));
+      const xLabel = formatAxisLabel(refineOptionValue("x_label_override") || spec?.axes?.x?.label || spec?.xAxisLabel || "X");
+      const yLabel = formatAxisLabel(refineOptionValue("y_label_override") || spec?.axes?.y?.label || spec?.yAxisLabel || "Y");
+      const labelMode = String(refineOptionValue("series_label_mode") || options.series_label_mode || "");
+      const palette = ["#0b8a7a", "#3366e0", "#c7780a", "#7c3aed", "#d9394a", "#4a8c2a"];
       const seriesMeta = new Map((spec?.series || []).map((item) => [String(item.label || ""), item]));
       const rowsBySeries = new Map();
       (spec?.data || []).forEach((row) => {
@@ -2837,26 +2959,72 @@
         if (!rowsBySeries.has(label)) rowsBySeries.set(label, []);
         rowsBySeries.get(label).push({ x, y });
       });
-      const allPoints = Array.from(rowsBySeries.values()).flat();
-      const xDomain = transformedDomain(allPoints.map((point) => point.x), xMode);
-      const yDomain = transformedDomain(allPoints.map((point) => point.y), yMode);
-      const scaleX = (value) => left + ((transformValue(value, xMode) - xDomain.min) / (xDomain.max - xDomain.min)) * (right - left);
-      const scaleY = (value) => bottom - ((transformValue(value, yMode) - yDomain.min) / (yDomain.max - yDomain.min)) * (bottom - top);
-      const palette = ["#0b8a7a", "#3366e0", "#c7780a", "#7c3aed", "#d9394a", "#4a8c2a"];
-      const series = Array.from(rowsBySeries.entries()).map(([label, points], index) => {
-        const color = safeSeriesColor(seriesMeta.get(label)?.color, palette[index % palette.length]);
-        const plotted = points.map((point) => ({
+
+      const rawSeries = Array.from(rowsBySeries.entries()).map(([label, points], index) => {
+        const meta = seriesMeta.get(label) || {};
+        const color = safeSeriesColor(seriesStyleValue(label, "color", meta.color || palette[index % palette.length]), palette[index % palette.length]);
+        const lineWidth = cleanNumber(seriesStyleValue(label, "line_width", 2.2), 2.2);
+        const markerSize = cleanNumber(seriesStyleValue(label, "marker_size", 3.2), 3.2);
+        const marker = String(seriesStyleValue(label, "marker", "") || defaultMarkerForKind(meta.kind));
+        const enabled = seriesStyleValue(label, "enabled", meta.visible !== false) !== false;
+        return { label, points, color, lineWidth, markerSize, marker, enabled };
+      }).filter((seriesItem) => seriesItem.points.length);
+
+      const domainPoints = rawSeries.filter((seriesItem) => seriesItem.enabled).flatMap((seriesItem) => seriesItem.points);
+      const allPoints = domainPoints.length ? domainPoints : rawSeries.flatMap((seriesItem) => seriesItem.points);
+      const xDomain = transformedDomain(
+        allPoints.map((point) => point.x),
+        xMode,
+        chartNumberOption("x_min", options),
+        chartNumberOption("x_max", options),
+        spec?.axes?.x?.limits,
+      );
+      const yDomain = transformedDomain(
+        allPoints.map((point) => point.y),
+        yMode,
+        chartNumberOption("y_min", options),
+        chartNumberOption("y_max", options),
+        spec?.axes?.y?.limits,
+      );
+      const scaleX = (value) => {
+        const ratio = (transformValue(value, xMode) - xDomain.min) / (xDomain.max - xDomain.min);
+        return left + (reverseX ? 1 - ratio : ratio) * plotWidth;
+      };
+      const scaleY = (value) => bottom - ((transformValue(value, yMode) - yDomain.min) / (yDomain.max - yDomain.min)) * plotHeight;
+      const showInlineLabels = labelMode === "inline";
+      const series = rawSeries.map((seriesItem) => {
+        const plotted = seriesItem.points.map((point) => ({
           x: roundCoord(scaleX(point.x)),
           y: roundCoord(scaleY(point.y)),
-          rawLabel: `${formatTickValue(point.x)} / ${formatTickValue(point.y)}`
+          rawX: point.x,
+          rawY: point.y,
+          rawXLabel: formatTickValue(point.x),
+          rawYLabel: formatTickValue(point.y),
         }));
+        const pathPoints = decimatePoints(plotted, 1800);
+        const markerPoints = decimatePoints(plotted, 90).filter((point) => insidePlot(point, { left, right, top, bottom }));
+        const labelPoint = [...plotted].reverse().find((point) => insidePlot(point, { left, right, top, bottom }));
+        const directLabel = showInlineLabels && labelPoint ? {
+          x: roundCoord(Math.min(right - 12, Math.max(left + 12, Number(labelPoint.x) + (reverseX ? -10 : 10)))),
+          y: roundCoord(Math.min(bottom - 10, Math.max(top + 16, Number(labelPoint.y) - 8))),
+          anchor: reverseX ? "end" : "start",
+        } : null;
         return {
-          label,
-          color,
+          ...seriesItem,
           points: plotted,
-          path: plotted.map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point.x},${point.y}`).join(" ")
+          markerPoints,
+          directLabel,
+          path: pathPoints.map((point, pointIndex) => `${pointIndex ? "L" : "M"}${point.x},${point.y}`).join(" "),
         };
-      }).filter((seriesItem) => seriesItem.points.length);
+      });
+      const flatPoints = series
+        .filter((seriesItem) => seriesItem.enabled)
+        .flatMap((seriesItem) => seriesItem.points.map((point) => ({ ...point, series: seriesItem.label, color: seriesItem.color })))
+        .filter((point) => insidePlot(point, { left, right, top, bottom }));
+      const xTicks = axisTicks(xDomain, xMode).map((tick) => ({ x: roundCoord(scaleX(tick.value)), label: tick.label }));
+      const yTicks = axisTicks(yDomain, yMode).map((tick) => ({ y: roundCoord(scaleY(tick.value)), label: tick.label }));
+      const zeroX = xMode === "linear" && xDomain.rawMin <= 0 && xDomain.rawMax >= 0 ? roundCoord(scaleX(0)) : "";
+      const zeroY = yMode === "linear" && yDomain.rawMin <= 0 && yDomain.rawMax >= 0 ? roundCoord(scaleY(0)) : "";
       return {
         width,
         height,
@@ -2864,26 +3032,61 @@
         right,
         top,
         bottom,
+        plotWidth,
+        plotHeight,
+        clipId: "live-chart-clip",
         xLabel,
         yLabel,
-        xTicks: axisTicks(xDomain, xMode).map((tick) => ({ x: roundCoord(scaleX(tick.value)), label: tick.label })),
-        yTicks: axisTicks(yDomain, yMode).map((tick) => ({ y: roundCoord(scaleY(tick.value)), label: tick.label })),
-        series
+        xTicks,
+        yTicks,
+        zeroX,
+        zeroY,
+        series,
+        flatPoints,
       };
     }
 
-    function transformedDomain(values, mode) {
+    function chartScaleMode(axis, options, spec) {
+      const key = axis === "x" ? "xscale" : "yscale";
+      const value = String(refineOptionValue(key) || options[key] || spec?.axes?.[axis]?.scale || "");
+      return value === "log" ? "log" : "linear";
+    }
+
+    function chartBooleanOption(key, options, fallback = false) {
+      const value = refineOptionValue(key);
+      if (value === "") return Boolean(options[key] ?? fallback);
+      return Boolean(value);
+    }
+
+    function chartNumberOption(key, options) {
+      const value = refineOptionValue(key);
+      const candidate = value === "" ? options[key] : value;
+      const number = Number(candidate);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function transformedDomain(values, mode, minOverride = null, maxOverride = null, rendererLimits = null) {
+      const rendererMin = Array.isArray(rendererLimits) ? Number(rendererLimits[0]) : NaN;
+      const rendererMax = Array.isArray(rendererLimits) ? Number(rendererLimits[1]) : NaN;
+      const hasRendererMin = minOverride === null && Number.isFinite(rendererMin) && (mode !== "log" || rendererMin > 0);
+      const hasRendererMax = maxOverride === null && Number.isFinite(rendererMax) && (mode !== "log" || rendererMax > 0);
       const transformed = values.map((value) => transformValue(value, mode)).filter(Number.isFinite);
-      if (!transformed.length) return { min: 0, max: 1 };
-      let min = Math.min(...transformed);
-      let max = Math.max(...transformed);
+      if (!transformed.length && !hasRendererMin && !hasRendererMax) return { min: 0, max: 1, rawMin: 0, rawMax: 1 };
+      let min = minOverride !== null ? transformValue(minOverride, mode) : (hasRendererMin ? transformValue(rendererMin, mode) : Math.min(...transformed));
+      let max = maxOverride !== null ? transformValue(maxOverride, mode) : (hasRendererMax ? transformValue(rendererMax, mode) : Math.max(...transformed));
+      if (!Number.isFinite(min)) min = Math.min(...transformed);
+      if (!Number.isFinite(max)) max = Math.max(...transformed);
+      if (min > max) [min, max] = [max, min];
       if (min === max) {
         const pad = Math.abs(min || 1) * 0.08;
         min -= pad;
         max += pad;
+      } else {
+        const pad = (max - min) * 0.04;
+        if (minOverride === null && !hasRendererMin) min -= pad;
+        if (maxOverride === null && !hasRendererMax) max += pad;
       }
-      const pad = (max - min) * 0.04;
-      return { min: min - pad, max: max + pad };
+      return { min, max, rawMin: inverseTransformValue(min, mode), rawMax: inverseTransformValue(max, mode) };
     }
 
     function transformValue(value, mode) {
@@ -2910,6 +3113,40 @@
       });
     }
 
+    function defaultMarkerForKind(kind) {
+      return kind === "scatter" ? "circle" : "none";
+    }
+
+    function formatAxisLabel(value) {
+      return String(value || "")
+        .replaceAll("$", "")
+        .replaceAll("\\\\cdot", "·")
+        .replaceAll("\\cdot", "·")
+        .replaceAll("^{-1}", "⁻¹")
+        .replaceAll("^{-2}", "⁻²")
+        .replaceAll("^{-3}", "⁻³")
+        .replaceAll("^2", "²")
+        .replaceAll("^3", "³")
+        .replaceAll("\\omega", "ω");
+    }
+
+    function cleanNumber(value, fallback) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : fallback;
+    }
+
+    function decimatePoints(points, maxPoints) {
+      if (points.length <= maxPoints) return points;
+      const step = Math.ceil(points.length / maxPoints);
+      return points.filter((_, index) => index % step === 0 || index === points.length - 1);
+    }
+
+    function insidePlot(point, plot) {
+      const x = Number(point.x);
+      const y = Number(point.y);
+      return x >= plot.left && x <= plot.right && y >= plot.top && y <= plot.bottom;
+    }
+
     function formatTickValue(value) {
       const number = Number(value);
       if (!Number.isFinite(number)) return "";
@@ -2934,13 +3171,8 @@
       const figure = figures[state.activeFigure] || figures[0] || null;
       const chartSpec = state.workbenchPreview?.chart_spec;
       const preview = state.projectStatus?.preview_figure;
-      const qa = state.projectStatus?.last_run?.qa?.status || "pending";
       return `
-        <div class="canvas-tooltip">
-          <span class="phase-chip"><span class="pulse"></span>QA ${escapeHtml(qa)}</span>
-          <span class="phase-chip">${escapeHtml(selectedFigureSize())}</span>
-        </div>
-          <div class="review-map">
+        <div class="review-map">
           <div class="figure-list" aria-label="Figures">
             ${figures.length ? figures.map((item, index) => `
               <button class="figure-tab ${index === state.activeFigure ? "active" : ""}" type="button" data-figure-index="${index}" title="${escapeHtml(item.name || `Figure ${index + 1}`)}">${index + 1}</button>
@@ -3205,13 +3437,17 @@
         `;
       }
       const tab = reviewInspectorTabs.some((item) => item.value === state.activeInspectorTab) ? state.activeInspectorTab : "page";
+      const qa = state.projectStatus?.last_run?.qa?.status || "pending";
       return `
         <section class="section">
+          <div class="panel-row">
+            <span>QA</span>
+            <span class="pill ${qa === "pass" || qa === "passed" || qa === "ready" ? "ok" : "muted"}">${escapeHtml(qa)}</span>
+          </div>
           <div class="review-command-bar">
             <button class="btn" type="button" id="previewNowButton" ${state.previewInFlight ? "disabled" : ""}>Preview</button>
             <button class="btn" type="button" id="applyButton" ${state.rerunInFlight ? "disabled" : ""}>Apply</button>
             <button class="btn primary" type="button" id="rerunButton" ${state.rerunInFlight ? "disabled" : ""}>Export</button>
-            <button class="btn" type="button" id="resetRefineButton">${icon("reset")}</button>
           </div>
         </section>
         <section class="section">
@@ -3304,27 +3540,24 @@
       }
       if (tab === "series") {
         const spec = state.workbenchPreview?.chart_spec;
-        const seriesColors = {};
-        if (spec?.series) {
-          spec.series.forEach((s, i) => { seriesColors[s.label || `s${i}`] = s.color || ""; });
-        }
+        const chartSeries = inspectorSeriesItems(spec);
         return `
         <section class="section">
           <h2 class="section-title">Series</h2>
           <div class="sample-list">
-            ${state.groups.map((group, index) => {
-              const color = seriesColors[group.sample] || "";
-              const seriesId = group.sample || `Series ${index + 1}`;
+            ${chartSeries.map((series, index) => {
+              const seriesId = series.label || `Series ${index + 1}`;
+              const color = series.color || "#0b8a7a";
               const styleColor = seriesStyleValue(seriesId, "color", color || "#0b8a7a");
               const lineWidth = seriesStyleValue(seriesId, "line_width", 1.2);
               const markerSize = seriesStyleValue(seriesId, "marker_size", 3.4);
               const marker = seriesStyleValue(seriesId, "marker", "");
-              const enabled = seriesStyleValue(seriesId, "enabled", true) !== false;
+              const enabled = seriesStyleValue(seriesId, "enabled", series.visible !== false) !== false;
               return `
-              <div class="sample-lane series-lane ${index === state.activeGroup ? "active" : ""}" data-drag-index="${index}" draggable="true" data-active-group="${index}">
-                <button class="drag-handle" type="button" title="Reorder" aria-label="Reorder">${icon("grip")}</button>
+              <div class="sample-lane series-lane ${seriesId === state.activeSeries ? "active" : ""}" data-series-focus="${escapeHtml(seriesId)}">
+                <span class="live-legend-color" style="background:${escapeHtml(styleColor)}"></span>
                 <div class="series-lane-main">
-                  <input class="sample-input" value="${escapeHtml(group.sample)}" data-sample-index="${index}" aria-label="Sample name">
+                  <input class="sample-input" value="${escapeHtml(seriesId)}" data-sample-index="${sampleIndexForSeries(seriesId)}" aria-label="Series name" ${sampleIndexForSeries(seriesId) < 0 ? "disabled" : ""}>
                   <label class="option ${enabled ? "selected" : ""}" title="Visible">
                     <input type="checkbox" data-series-style="${escapeHtml(seriesId)}" data-series-style-key="enabled" ${enabled ? "checked" : ""}>
                     Visible
@@ -3394,6 +3627,26 @@
           ${options.map((item) => `<option value="${escapeHtml(item.value)}" ${String(value || "") === item.value ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}
         </select>
       `;
+    }
+
+    function inspectorSeriesItems(spec) {
+      if (Array.isArray(spec?.series) && spec.series.length) {
+        return spec.series.map((series, index) => ({
+          label: String(series.label || `Series ${index + 1}`),
+          color: series.color || "",
+          visible: series.visible !== false,
+        }));
+      }
+      return state.groups.map((group, index) => ({
+        label: group.sample || `Series ${index + 1}`,
+        color: "",
+        visible: true,
+      }));
+    }
+
+    function sampleIndexForSeries(label) {
+      const key = String(label || "").trim().toLowerCase();
+      return state.groups.findIndex((group) => String(group.sample || "").trim().toLowerCase() === key);
     }
 
     function renderCodexConditionalPanel() {
@@ -3597,6 +3850,10 @@
       bindRefine("refineYLabel", "y_label_override");
       bindRefine("refineStylePreset", "style_preset");
       bindRefine("refinePalettePreset", "palette_preset");
+      const reverseXCheck = document.querySelector("#refineReverseX");
+      if (reverseXCheck) {
+        reverseXCheck.onchange = (event) => setRefineOption("reverse_x", event.target.checked);
+      }
       document.querySelectorAll("[data-series-style][data-series-style-key]").forEach((input) => {
         const seriesId = input.dataset.seriesStyle;
         const key = input.dataset.seriesStyleKey;
@@ -3616,12 +3873,6 @@
       if (rerunButton) rerunButton.onclick = rerunProject;
       const revealOutputButton = document.querySelector("#revealOutputButton");
       if (revealOutputButton) revealOutputButton.onclick = revealOutput;
-      const resetRefineButton = document.querySelector("#resetRefineButton");
-      if (resetRefineButton) resetRefineButton.onclick = () => {
-        resetRefineOptionsFromProject();
-        state.workbenchPreview = null;
-        render();
-      };
       const runCodexButton = document.querySelector("#runCodexButton");
       if (runCodexButton) runCodexButton.onclick = startCodexJob;
       const codexGoal = document.querySelector("#codexGoal");
@@ -3732,43 +3983,66 @@
       const svg = document.querySelector("#liveChartSvg");
       if (!svg) return;
 
+      const chart = liveChartModel;
+      const crosshair = svg.querySelector("#chartCrosshair");
+      const crosshairX = svg.querySelector("#chartCrosshairX");
+      const crosshairY = svg.querySelector("#chartCrosshairY");
+      const focusDot = svg.querySelector("#chartFocusDot");
       const tooltip = svg.querySelector("#chartTooltip");
+      const tooltipRect = tooltip?.querySelector("rect");
       const tooltipText1 = svg.querySelector("#chartTooltipText1");
       const tooltipText2 = svg.querySelector("#chartTooltipText2");
+      const hitArea = svg.querySelector("#chartHitArea");
 
-      svg.querySelectorAll(".live-point").forEach((point) => {
-        point.addEventListener("pointerenter", (event) => {
-          if (!tooltip || !tooltipText1 || !tooltipText2) return;
-          const series = point.dataset.series || "";
-          const xVal = point.dataset.x || "";
-          const yVal = point.dataset.y || "";
-          tooltipText1.textContent = series;
-          tooltipText2.textContent = `${xVal} / ${yVal}`;
-          const cx = parseFloat(point.getAttribute("cx") || "0");
-          const cy = parseFloat(point.getAttribute("cy") || "0");
-          const tx = Math.min(cx + 14, 730);
-          const ty = Math.max(cy - 66, 12);
-          tooltip.querySelector("rect")?.setAttribute("x", String(tx));
-          tooltip.querySelector("rect")?.setAttribute("y", String(ty));
+      svg.querySelectorAll("[data-series-label]").forEach((group) => {
+        group.addEventListener("pointerenter", () => {
+          state.activeSeries = group.dataset.seriesLabel || "";
+          updateLiveSeriesFocus(svg);
+        });
+      });
+
+      if (hitArea && chart?.flatPoints?.length) {
+        const moveFocus = (event) => {
+          const point = svgPointFromEvent(svg, event);
+          const nearest = nearestChartPoint(chart.flatPoints, point.x, point.y);
+          if (!nearest || !crosshair || !crosshairX || !crosshairY || !focusDot || !tooltip || !tooltipRect || !tooltipText1 || !tooltipText2) return;
+          state.activeSeries = nearest.series || "";
+          updateLiveSeriesFocus(svg);
+          crosshairX.setAttribute("x1", nearest.x);
+          crosshairX.setAttribute("x2", nearest.x);
+          crosshairY.setAttribute("y1", nearest.y);
+          crosshairY.setAttribute("y2", nearest.y);
+          focusDot.setAttribute("cx", nearest.x);
+          focusDot.setAttribute("cy", nearest.y);
+          focusDot.setAttribute("stroke", nearest.color || "#0b8a7a");
+          tooltipText1.textContent = nearest.series || "";
+          tooltipText2.textContent = `${nearest.rawXLabel} / ${nearest.rawYLabel}`;
+          const tx = Math.min(Number(nearest.x) + 14, chart.width - 204);
+          const ty = Math.max(Number(nearest.y) - 68, 12);
+          tooltipRect.setAttribute("x", String(tx));
+          tooltipRect.setAttribute("y", String(ty));
           tooltipText1.setAttribute("x", String(tx + 12));
           tooltipText1.setAttribute("y", String(ty + 20));
           tooltipText2.setAttribute("x", String(tx + 12));
-          tooltipText2.setAttribute("y", String(ty + 38));
-          tooltip.setAttribute("visibility", "visible");
+          tooltipText2.setAttribute("y", String(ty + 39));
+          crosshair.classList.add("visible");
+        };
+        hitArea.addEventListener("pointermove", moveFocus);
+        hitArea.addEventListener("pointerenter", moveFocus);
+        hitArea.addEventListener("pointerleave", () => {
+          crosshair?.classList.remove("visible");
         });
-        point.addEventListener("pointerleave", () => {
-          if (tooltip) tooltip.setAttribute("visibility", "hidden");
-        });
-      });
+      }
 
       const legend = document.querySelector("#liveChartLegend");
       if (legend) {
         legend.querySelectorAll(".live-legend-item").forEach((item) => {
           item.addEventListener("click", () => {
-            const label = item.dataset.legendSeries;
-            const isOff = item.classList.toggle("toggled-off");
-            const group = svg.querySelector(`.live-series-group[data-series-label="${CSS.escape(label)}"]`);
-            if (group) group.classList.toggle("hidden", isOff);
+            const label = item.dataset.legendSeries || "";
+            state.activeSeries = label;
+            const currentSeries = chart?.series?.find((series) => series.label === label);
+            const currentlyEnabled = seriesStyleValue(label, "enabled", currentSeries?.enabled !== false) !== false;
+            setSeriesStyle(label, "enabled", !currentlyEnabled);
           });
         });
       }
@@ -3818,6 +4092,40 @@
         svg.setAttribute("viewBox", svgViewBox);
       });
       svg.addEventListener("pointerup", () => { panning = false; });
+    }
+
+    function updateLiveSeriesFocus(svg) {
+      svg.querySelectorAll(".live-series-group").forEach((group) => {
+        group.classList.toggle("active", group.dataset.seriesLabel === state.activeSeries);
+      });
+      document.querySelectorAll(".live-legend-item").forEach((item) => {
+        item.classList.toggle("active", item.dataset.legendSeries === state.activeSeries);
+      });
+    }
+
+    function svgPointFromEvent(svg, event) {
+      const matrix = svg.getScreenCTM();
+      if (!matrix) return { x: 0, y: 0 };
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      const transformed = point.matrixTransform(matrix.inverse());
+      return { x: transformed.x, y: transformed.y };
+    }
+
+    function nearestChartPoint(points, x, y) {
+      let nearest = null;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      points.forEach((point) => {
+        const dx = Number(point.x) - x;
+        const dy = Number(point.y) - y;
+        const distance = dx * dx + dy * dy;
+        if (distance < bestDistance) {
+          nearest = point;
+          bestDistance = distance;
+        }
+      });
+      return nearest;
     }
 
     function updateCanvasOnly() {
@@ -4256,12 +4564,7 @@
       element.onchange = (event) => setRefineOption(key, event.target.value);
     }
 
-      const reverseXCheck = document.querySelector("#refineReverseX");
-      if (reverseXCheck) {
-        reverseXCheck.onchange = (event) => setRefineOption("reverse_x", event.target.checked);
-      }
-
-      function scheduleLivePreview(delay = 360) {
+    function scheduleLivePreview(delay = 360) {
       if (state.stage !== "review" || !state.lastProject?.project_slug) return;
       window.clearTimeout(livePreviewTimer);
       livePreviewTimer = window.setTimeout(() => previewProject({ silent: true }), delay);
@@ -4278,6 +4581,11 @@
         }
         if (Array.isArray(value)) {
           if (value.length) compact[key] = value;
+          return;
+        }
+        if (numericRenderOptionKeys.has(key) && typeof value === "string") {
+          const numeric = Number(value.trim());
+          compact[key] = Number.isFinite(numeric) ? numeric : value;
           return;
         }
         compact[key] = value;
