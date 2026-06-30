@@ -1281,9 +1281,13 @@
       "editable_options": [
         "size",
         "reverse_x",
+        "x_min",
+        "x_max",
         "x_padding_fraction",
         "y_min",
         "y_max",
+        "x_tick_density",
+        "x_tick_edge_labels",
         "baseline",
         "x_label_override",
         "y_label_override",

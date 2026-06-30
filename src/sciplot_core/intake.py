@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import errno
 import hashlib
 import io
 import json
@@ -1419,7 +1420,8 @@ def _workbench_cache_request_path(project_dir: Path) -> Path:
 
 def workbench_chart_spec(project_dir: str | Path) -> dict[str, Any]:
     project = _load_intake_project_request(project_dir)
-    return build_chart_spec(project.request_path)
+    slug = project.manifest.get("project_slug", Path(project_dir).name)
+    return build_chart_spec(project.request_path, project_slug=slug)
 
 
 def workbench_webagg(project_dir: str | Path) -> dict[str, Any]:
@@ -1446,7 +1448,8 @@ def preview_intake_project(
     preview_request = _absolute_request_paths(patched_request, base_dir=project.request_path.parent)
     preview_path = _workbench_cache_request_path(project.project_dir)
     preview_path.write_text(json.dumps(json_safe(preview_request), indent=2, ensure_ascii=False), encoding="utf-8")
-    chart_spec = build_chart_spec(project.request_path, request_override=patched_request)
+    slug = project.manifest.get("project_slug", project.project_dir.name)
+    chart_spec = build_chart_spec(project.request_path, request_override=patched_request, project_slug=slug)
     webagg = ensure_webagg_sidecar(project_dir=project.project_dir, request_path=preview_path)
     return {
         "kind": "sciplot_workbench_preview",
@@ -1911,10 +1914,19 @@ def serve_intake(
     output_root: Path = _DEFAULT_OUTPUT_ROOT,
     open_browser: bool = True,
 ) -> None:
-    server = _IntakeServer((host, port), output_root)
+    requested_port = port
+    try:
+        server = _IntakeServer((host, port), output_root)
+    except OSError as exc:
+        if port and getattr(exc, "errno", None) == errno.EADDRINUSE:
+            server = _IntakeServer((host, 0), output_root)
+        else:
+            raise
     actual_host, actual_port = server.server_address
     url = f"http://{actual_host}:{actual_port}"
     payload: dict[str, Any] = {"url": url, "output_root": str(server.output_root)}
+    if requested_port and actual_port != requested_port:
+        payload.update({"requested_port": requested_port, "port_fallback": True})
     if input_path is not None:
         session = prepare_intake_session(input_path, output_root=server.output_root)
         url = f"{url}?session={quote(str(session['session_id']))}"

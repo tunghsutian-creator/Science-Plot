@@ -5,6 +5,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import numpy as np
 
@@ -320,10 +321,21 @@ def build_chart_spec(
     request_path: str | Path,
     *,
     request_override: dict[str, Any] | None = None,
+    project_slug: str = "",
 ) -> dict[str, Any]:
     job, rendered = build_workbench_rendered_plots(request_path, request_override=request_override)
+    spec = chart_spec_from_rendered(job, rendered)
     try:
-        return chart_spec_from_rendered(job, rendered)
+        if rendered and hasattr(rendered[0], "figure") and project_slug:
+            cache_dir = Path(request_path).parent / "workbench_cache"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            png_path = cache_dir / "render_preview.png"
+            rendered[0].figure.savefig(str(png_path), format="png", dpi=150, bbox_inches="tight")
+            spec["preview_image_url"] = (
+                f"/api/projects/{quote(project_slug, safe='')}"
+                f"/artifact?path={quote(str(png_path), safe='')}"
+            )
+        return spec
     finally:
         close_rendered_plots(rendered)
 

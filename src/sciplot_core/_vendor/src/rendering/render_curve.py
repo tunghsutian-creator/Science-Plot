@@ -1239,6 +1239,7 @@ def _render_stacked_curve(input_path: Path, sheet: str | int, options: RenderOpt
     series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
     validate_series_scales(series_list, xscale=options.xscale, yscale=options.yscale)
     validate_manual_axis_overrides(options, template="stacked_curve")
+    axis_kwargs = _with_manual_axis_overrides({}, options)
     label_mode = "edge" if options.series_label_mode == "inline" else "legend"
     fig, ax = plot_curves(
         series_list,
@@ -1248,9 +1249,13 @@ def _render_stacked_curve(input_path: Path, sheet: str | int, options: RenderOpt
         yscale=options.yscale,
         width_mm=options.width_mm,
         height_mm=options.height_mm,
+        xlim=axis_kwargs.get("xlim"),
+        ylim=axis_kwargs.get("ylim"),
         right_margin_mm=_right_margin_for_inline_stack_labels(options),
         reverse_x=options.reverse_x,
         x_padding_fraction=options.x_padding_fraction,
+        x_tick_density=options.x_tick_density,
+        x_tick_edge_labels=options.x_tick_edge_labels,
         stack_mode="auto_vertical",
         stack_spacing_scale=options.stack_spacing_scale if options.stack_spacing_scale is not None else 1.0,
         series_label_mode=label_mode,
