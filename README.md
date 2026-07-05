@@ -6,7 +6,7 @@ publication-style figures, QA artifacts, and repeatable request files.
 
 This repository is the source of truth for the SciPlot workflow. The goal is to
 make plotting faster than manual figure preparation while staying auditable,
-repeatable, and easy to revise with Codex.
+repeatable, and useful without requiring Codex for the normal plotting path.
 
 ## Ultimate Goal
 
@@ -19,8 +19,8 @@ Build a practical research plotting system where:
   GPL Veusz.
 - The local Web app remains a compatibility surface for browser-based
   confirmation and older project workflows.
-- Codex patches rules, recipes, fixtures, and tests when a dataset does not fit
-  the current system.
+- Optional assisted cleanup can use Codex to patch rules, recipes, fixtures, and
+  tests when messy data does not fit the current system.
 - The human reviewer confirms sample names, legend order, figure size, export
   options, and final scientific meaning.
 
@@ -60,9 +60,9 @@ skill/scripts/sciplot one-step PATH --out outputs/one_step_projects --json
 
 `autoplot` is the stable daily script entrypoint. It uses the same local
 one-step workflow underneath, then writes `autoplot_summary.json` with the
-delivery folder, readiness state, structured QA, and token-saving Codex policy:
-Codex reads structured summaries by default and only reviews images for QA
-failures, low-confidence semantics, or explicit user requests.
+delivery folder, readiness state, structured QA, and optional assistant policy:
+Codex is only a cleanup/repair provider for QA failures, low-confidence
+semantics, messy inputs, or explicit user requests.
 See `docs/STABLE_AUTOPLOT_CONTRACT.md` for the stable script contract.
 
 For development acceptance against the representative 3D PA real-data folder:
@@ -136,8 +136,10 @@ minimal user-facing `delivery/` folder:
 - `figures/{figure}_300dpi.tiff`
 - `_sciplot_internal/` for QA, manifests, raw/archive files, and audit trails
 
-If recognition or rendering needs Codex, SciPlot writes
-`intervention_request.json` or marks `needs_ai_intervention`.
+If recognition or rendering cannot continue deterministically, SciPlot writes
+`intervention_request.json`, marks `needs_ai_intervention`, and records
+`operation_mode=assisted_cleanup`. Codex can be used as the optional assistant
+provider, but manual cleanup is still a valid route.
 One-step runs also write `one_step_status.json`, so every output has an
 explicit state: `ready`, `needs_human_confirmation`, or `needs_rule_repair`.
 
@@ -182,11 +184,11 @@ Source -> Inspect -> Samples -> Export -> Result Review
 Stage rules:
 
 - Source, Inspect, and Samples are data-confirmation stages, not plot-preview stages.
-- Result Review appears only after Export or Codex produces rendered artifacts.
+- Result Review appears only after Export or assisted repair produces rendered artifacts.
 - Do not use an empty plot preview as a placeholder during import, inspection, or grouping.
 - Read Result Review artifacts (`review.html`, figures, manifest, metrics, and QA) before reporting output.
 - Read the `delivery/` package before handing off final files.
-- Use `revision_brief.md` as the short handoff for Codex-driven rule/style revisions.
+- Use `revision_brief.md` as the short handoff for optional assisted rule/style revisions.
 
 The UI lets the user confirm source binding, detected rules/templates, sample
 groups, sample/legend names, legend order, output directory, figure size, and
@@ -254,12 +256,12 @@ Torque text exports with `Screw Torque` columns should map to `torque_curve`.
 - `src/sciplot_core/semantic.py`: source classification and semantic source
   preparation.
 - `src/sciplot_core/workflow.py`: request execution, review artifacts, QA, and
-  intervention handoff.
+  optional intervention handoff.
 - `src/sciplot_core/intake.py`: Web app project/session workflow.
 - `src/sciplot_core/intake_static/index.html`: browser UI.
 - `src/sciplot_recipes/`: public recipe modules for known experiment families.
-- `skill/scripts/sciplot`: preferred wrapper for Codex and local use.
-- `AGENTS.md`: operating rules for Codex in this repository.
+- `skill/scripts/sciplot`: preferred wrapper for local use and assisted repair.
+- `AGENTS.md`: operating rules for assistant-driven repository work.
 - `skill/SKILL.md`: SciPlot Materials Analysis Skill instructions.
 - `DEVELOPMENT_LOG.md`: development log, project board, decisions, and next
   steps.
@@ -304,9 +306,13 @@ separate cross-sample figure.
   outputs/intake_projects`; use the Web UI only when the user explicitly asks
   for browser confirmation or Qt Studio lacks a needed confirmation control.
 - If `intervention_request.json`, `needs_ai_intervention`, or batch
-  `interventions` appears, patch code and tests, then rerun the request.
+  `interventions` appears, treat it as assisted cleanup/repair: preserve raw
+  data, patch code and tests when needed, then rerun the request.
 
 ## Roadmap
+
+Current standalone-operation and cleanup direction:
+`docs/INDEPENDENT_OPERATION_AND_CLEANUP_PLAN.md`.
 
 Phase 1: Make Qt Studio the daily plotting surface.
 
@@ -326,7 +332,7 @@ Phase 2: Strengthen polymer-science rules.
 - Finish rheology and impact as the first reliable real-data tracks.
 - Expand FTIR, XRD, tensile, thermal, and DMA fixtures from real examples.
 - Improve unit normalization, axis naming, legend ordering, and metrics.
-- Add more deterministic failure handoffs for Codex.
+- Add more deterministic assisted-cleanup handoffs.
 
 Phase 3: Add interactive figure refinement.
 
@@ -336,9 +342,9 @@ Phase 3: Add interactive figure refinement.
 - Keep advanced manual edits in the Veusz document unless a setting has a clear
   and safe SciPlot request mapping.
 
-Phase 4: Make Codex intervention routine.
+Phase 4: Make assisted cleanup routine.
 
-- Use structured Codex jobs only after user confirmation.
+- Use structured assistant jobs only after user confirmation.
 - Inspect `codex_jobs/*/sciplot_codex_handoff.json`, logs, status, and outputs
   before reporting.
 - Convert repeated human corrections into tests, rules, recipes, or presets.

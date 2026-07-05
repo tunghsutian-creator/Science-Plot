@@ -72,7 +72,10 @@ def _print_json(payload: object) -> None:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="sciplot", description="Headless SciPlot plotting and recipe CLI.")
+    parser = argparse.ArgumentParser(
+        prog="sciplot",
+        description="Local SciPlot plotting, Studio, recipe, QA, and optional assisted-cleanup CLI.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     inspect_parser = subparsers.add_parser("inspect", help="Inspect a source and return ranked plot recommendations.")
@@ -113,7 +116,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     autoplot_parser = subparsers.add_parser(
         "autoplot",
-        help="One-command local plotting entrypoint with stable delivery and token-saving handoff policy.",
+        help="One-command local plotting entrypoint with stable delivery and optional assistant handoff policy.",
     )
     autoplot_parser.add_argument("input", type=Path)
     autoplot_parser.add_argument("--out", type=Path, default=Path("outputs") / "autoplot_projects")
@@ -149,7 +152,7 @@ def _build_parser() -> argparse.ArgumentParser:
     curate_torque_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     curate_torque_parser.add_argument("--open", action="store_true", help="Open the review HTML after export.")
 
-    prepare_parser = subparsers.add_parser("prepare", help="Prepare a Codex-first intake session from a path.")
+    prepare_parser = subparsers.add_parser("prepare", help="Prepare a SciPlot intake session from a path.")
     prepare_parser.add_argument("input", type=Path)
     prepare_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
     prepare_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
@@ -193,7 +196,7 @@ def _build_parser() -> argparse.ArgumentParser:
     intake_parser.add_argument("--project", help="Open an existing intake project under --out.")
     intake_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
 
-    workbench_parser = subparsers.add_parser("workbench", help="Open the SciPlot Codex-aware Web workbench.")
+    workbench_parser = subparsers.add_parser("workbench", help="Open the SciPlot Web workbench.")
     workbench_parser.add_argument("input", nargs="?", type=Path)
     workbench_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
     workbench_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")

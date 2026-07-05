@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sciplot-codex-core"
+name = "sciplot-core"
 version = "0.1.0"
-description = "Headless SciPlot core and Codex recipes for scientific plotting."
+description = "Local SciPlot core, Studio, recipes, QA, and optional assisted cleanup for scientific plotting."
 requires-python = ">=3.11"
 dependencies = [
   "matplotlib",

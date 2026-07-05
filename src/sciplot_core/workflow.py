@@ -13,6 +13,7 @@ from sciplot_core._utils import slug
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.materials_rules import compute_analysis_metrics
 from sciplot_core.one_step import build_one_step_project, build_quality_actions
+from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import (
     DEFAULT_EXPORT_FORMATS_POLICY,
     DEFAULT_RENDER_OPTIONS,
@@ -204,7 +205,7 @@ def _write_review_html(output_dir: Path, *, manifest: dict[str, Any]) -> None:
             "<h2>Revision</h2>",
             "<ul>",
             (
-                f'<li><a href="{escape(str(revision_brief))}">Revision brief for Codex</a></li>'
+                f'<li><a href="{escape(str(revision_brief))}">Revision brief for assisted repair</a></li>'
                 if isinstance(revision_brief, str) and revision_brief
                 else "<li>No revision brief was generated.</li>"
             ),
@@ -633,7 +634,7 @@ def _write_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) -> str:
     lines = [
         "# SciPlot Revision Brief",
         "",
-        "Use this brief when asking Codex to revise the SciPlot rule, recipe, or style and rerun the export.",
+        "Use this brief for optional assisted repair of the SciPlot rule, recipe, style, or cleanup path.",
         "",
         "## Run",
         "",
@@ -645,7 +646,7 @@ def _write_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) -> str:
         f"- Size: `{size}`" if size else "- Size: not specified in request",
         f"- QA: `{manifest.get('qa', {}).get('status') or 'unknown'}`",
         f"- Layout review mode: `{layout_quality.get('review_mode') or 'structured_qa_only'}`",
-        f"- Layout needs Codex: `{bool(layout_quality.get('needs_ai_intervention', False))}`",
+        f"- Assisted repair suggested: `{bool(layout_quality.get('needs_ai_intervention', False))}`",
         "",
         "## Figures",
         "",
@@ -663,9 +664,9 @@ def _write_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) -> str:
         "",
         *(quality_action_lines or ["- No QA repair actions were suggested."]),
         "",
-        "## Tell Codex",
+        "## Assisted Repair Request",
         "",
-        "请按这些修改意见调整 SciPlot 规则/样式并重新导出：",
+        "请按这些修改意见调整 SciPlot 规则、样式或数据整理路径，然后重新导出：",
         "",
         "- 图类型/数据识别：",
         "- 坐标轴标题和单位：",
@@ -888,6 +889,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
         "veusz_documents": result.get("veusz_documents", []),
         "veusz_specs": result.get("veusz_specs", []),
         "layout_policy": layout_policy_payload(layout_policy),
+        "operation_mode": normal_mode_payload(route=route),
     }
     manifest["layout_quality"] = _layout_quality_from_result(manifest["result"])
     manifest["revision_brief"] = _write_revision_brief(output_dir, manifest=manifest)

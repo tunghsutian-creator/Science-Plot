@@ -27,6 +27,7 @@ import pandas as pd
 from sciplot_core._utils import json_safe, safe_filename, slug, unique_path
 from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex_job, start_codex_job
 from sciplot_core.ingest import smart_decode
+from sciplot_core.operation_modes import assisted_cleanup_mode_payload, normal_mode_payload
 from sciplot_core.policy import (
     FIGURE_SIZE_PRESETS,
     FTIR_SPECTRUM_RENDER_OPTIONS,
@@ -641,7 +642,14 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
     figure_paths = [Path(str(path)) for path in last_run.get("figures", []) if isinstance(path, str)]
     figures = [_artifact_info(path, project_slug=project_slug) for path in figure_paths]
     preview_figure = _figure_preview_info(figure_paths, project_slug=project_slug)
-    needs_codex = bool(last_run.get("failure") or artifacts["intervention_request"]["exists"])
+    needs_assisted_cleanup = bool(last_run.get("failure") or artifacts["intervention_request"]["exists"])
+    operation_mode = (
+        assisted_cleanup_mode_payload(reason="project_failure_or_intervention")
+        if needs_assisted_cleanup
+        else normal_mode_payload(route="web")
+    )
+    assistant_available = codex_available()
+    assistant_jobs = list_codex_jobs(project_path)
     webagg = _workbench_webagg_status(project_slug=project_slug)
     return {
         "kind": "sciplot_project_status",
@@ -662,10 +670,17 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
             "apply_url": f"/api/projects/{quote(project_slug)}/workbench/apply",
             "webagg": webagg,
         },
-        "needs_codex": needs_codex,
+        "operation_mode": operation_mode,
+        "needs_assisted_cleanup": needs_assisted_cleanup,
+        "needs_codex": needs_assisted_cleanup,
+        "assistant": {
+            "provider": "codex",
+            "available": assistant_available,
+            "jobs": assistant_jobs,
+        },
         "codex": {
-            "available": codex_available(),
-            "jobs": list_codex_jobs(project_path),
+            "available": assistant_available,
+            "jobs": assistant_jobs,
         },
     }
 
@@ -1415,6 +1430,8 @@ def create_and_run_intake_project(
             "analysis_metrics": [],
             "qa": {},
             "failure": str(exc),
+            "operation_mode": assisted_cleanup_mode_payload(reason="render_failure"),
+            "needs_assisted_cleanup": True,
             "needs_codex": True,
             "intervention_request": str(intervention) if intervention.exists() else None,
         }
@@ -1686,6 +1703,8 @@ def rerun_intake_project(
             "analysis_metrics": [],
             "qa": {},
             "failure": str(exc),
+            "operation_mode": assisted_cleanup_mode_payload(reason="render_failure"),
+            "needs_assisted_cleanup": True,
             "needs_codex": True,
             "intervention_request": str(intervention) if intervention.exists() else None,
         }
@@ -1927,9 +1946,9 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                 elif project_dir_value:
                     project_dir = Path(project_dir_value).expanduser().resolve()
                     if not _path_within(project_dir, self.server.output_root):
-                        raise PermissionError("Codex jobs must belong to an intake project.")
+                        raise PermissionError("Assistant jobs must belong to an intake project.")
                 else:
-                    raise ValueError("Codex job payload must include `project_slug` or `project_dir`.")
+                    raise ValueError("Assistant job payload must include `project_slug` or `project_dir`.")
                 job = start_codex_job(
                     project_dir=project_dir,
                     plot_request=payload.get("plot_request"),

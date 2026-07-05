@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.operation_modes import assisted_cleanup_mode_payload
 from sciplot_core.render import json_safe
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -85,6 +86,10 @@ def build_codex_handoff(
         "kind": "sciplot_codex_handoff",
         "version": 1,
         "created_at": _now(),
+        "operation_mode": assisted_cleanup_mode_payload(reason="rule_or_data_repair", provider="codex"),
+        "assistant_provider": "codex",
+        "assistant_role": "optional_cleanup_and_rule_repair",
+        "base_pipeline_policy": "normal_mode_must_not_require_codex",
         "project_dir": str(Path(project_dir).expanduser().resolve()),
         "plot_request": str(request_path) if request_path else None,
         "run_output": str(output_path) if output_path else None,
@@ -98,7 +103,10 @@ def build_codex_handoff(
             "image_review_triggers": ["qa_failure", "low_confidence_semantics", "explicit_user_request"],
         },
         "user_goal": user_goal
-        or "Fix the SciPlot semantic/recipe gap, add focused tests or fixtures, rerun the request, and verify QA.",
+        or (
+            "Repair the SciPlot semantic/recipe or cleanup gap, add focused tests or fixtures, "
+            "rerun the request, and verify QA."
+        ),
     }
 
 
@@ -127,6 +135,8 @@ def _status_payload(
         "completed_at": completed_at,
         "returncode": returncode,
         "command": command or [],
+        "operation_mode": handoff.get("operation_mode"),
+        "assistant_provider": handoff.get("assistant_provider"),
         "handoff_path": str(job_dir / HANDOFF_FILENAME),
         "stdout_log": str(job_dir / STDOUT_FILENAME),
         "stderr_log": str(job_dir / STDERR_FILENAME),
@@ -221,7 +231,7 @@ def _read_last_message(stdout_text: str) -> str:
 
 def _prompt_for_handoff(handoff_path: Path) -> str:
     return (
-        "You are working on the SciPlot Codex Core repository. "
+        "You are working on the SciPlot repository as the optional assistant repair provider. "
         f"Read {handoff_path}, follow AGENTS.md, do not edit src/sciplot_core/_vendor, "
         "patch only the public SciPlot wrapper/recipe/test layer needed for this handoff, "
         "then run the required checks and report exact results."

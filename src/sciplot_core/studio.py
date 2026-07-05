@@ -7,6 +7,8 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from html import escape
@@ -19,15 +21,14 @@ import pandas as pd
 from sciplot_core._utils import decode_text, json_safe
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.intake import create_intake_project_from_session, prepare_intake_session
+from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import DEFAULT_PALETTE_PRESET, SPECTRUM_JOURNAL_COLORS
 from sciplot_core.qa import run_qa
 from sciplot_core.study_model import build_output_package_contract
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VEUSZ_ROOT = REPO_ROOT / "third_party" / "veusz"
-LABPLOT_ROOT = REPO_ROOT / "third_party" / "labplot_reference"
 VEUSZ_COMMIT = "264084b06eb306d860c7757c637f37b78bb2333f"
-LABPLOT_COMMIT = "bc8635032d8b0c71e5b8fabc38a84694129bb334"
 
 DEFAULT_PALETTE = SPECTRUM_JOURNAL_COLORS
 STACKED_TEMPLATE_IDS = {"stacked_curve", "segmented_stacked_curve"}
@@ -106,14 +107,6 @@ def upstream_status() -> dict[str, Any]:
             "license": "GPL-2.0-or-later",
             "vendored": VEUSZ_ROOT.exists(),
         },
-        "labplot": {
-            "name": "LabPlot",
-            "path": str(LABPLOT_ROOT),
-            "commit": LABPLOT_COMMIT,
-            "license": "GPL-2.0-or-later",
-            "vendored": LABPLOT_ROOT.exists(),
-            "runtime": False,
-        },
     }
 
 
@@ -176,6 +169,7 @@ def prepare_studio_document(
         _register_studio_block(project_dir, studio_block)
         return {
             "kind": "sciplot_studio_prepare",
+            "operation_mode": normal_mode_payload(route="studio"),
             "project_dir": str(project_dir),
             "request": str(request_path),
             "document": str(existing_document),
@@ -209,6 +203,7 @@ def prepare_studio_document(
     _register_studio_block(project_dir, studio_block)
     return {
         "kind": "sciplot_studio_prepare",
+        "operation_mode": normal_mode_payload(route="studio"),
         "project_dir": str(project_dir),
         "request": str(request_path),
         "document": str(document_path),
@@ -1056,39 +1051,46 @@ def _apply_panel_request_options(
 
 
 def export_studio_document(document_path: Path, *, formats: list[str]) -> dict[str, Any]:
-    _prefer_offscreen_export_platform()
-    _ensure_veusz_on_path()
-    from PyQt6 import QtWidgets
-    from veusz import dataimport, document, widgets
-    from veusz.document import CommandInterface
-
-    _ = dataimport, widgets
-    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-    doc = document.Document()
-    doc.load(str(document_path))
-    interface = CommandInterface(doc)
-    export_dir = document_path.parent / "exports"
-    export_dir.mkdir(parents=True, exist_ok=True)
+    stderr_log = document_path.parent / "logs" / "veusz_export_stderr.log"
     exports: list[dict[str, Any]] = []
-    for fmt in formats:
-        suffix, dpi = _export_suffix(fmt)
-        output_path = export_dir / f"{document_path.stem}{suffix}"
-        kwargs: dict[str, Any] = {"page": [0]}
-        if dpi is not None:
-            kwargs["dpi"] = dpi
-        if fmt == "pdf":
-            kwargs["pdfdpi"] = 72
-        interface.Export(str(output_path), **kwargs)
-        exports.append(
-            {
-                "format": fmt,
-                "path": str(output_path),
-                "exists": output_path.exists(),
-                "size_bytes": output_path.stat().st_size if output_path.exists() else 0,
-            }
-        )
-    app.quit()
-    return {"kind": "sciplot_studio_export", "document": str(document_path), "exports": exports}
+    with _capture_process_stderr(stderr_log):
+        _prefer_offscreen_export_platform()
+        _ensure_veusz_on_path()
+        from PyQt6 import QtWidgets
+        from veusz import dataimport, document, widgets
+        from veusz.document import CommandInterface
+
+        _ = dataimport, widgets
+        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+        try:
+            doc = document.Document()
+            doc.load(str(document_path))
+            interface = CommandInterface(doc)
+            export_dir = document_path.parent / "exports"
+            export_dir.mkdir(parents=True, exist_ok=True)
+            for fmt in formats:
+                suffix, dpi = _export_suffix(fmt)
+                output_path = export_dir / f"{document_path.stem}{suffix}"
+                kwargs: dict[str, Any] = {"page": [0]}
+                if dpi is not None:
+                    kwargs["dpi"] = dpi
+                if fmt == "pdf":
+                    kwargs["pdfdpi"] = 72
+                interface.Export(str(output_path), **kwargs)
+                exports.append(
+                    {
+                        "format": fmt,
+                        "path": str(output_path),
+                        "exists": output_path.exists(),
+                        "size_bytes": output_path.stat().st_size if output_path.exists() else 0,
+                    }
+                )
+        finally:
+            app.quit()
+    payload: dict[str, Any] = {"kind": "sciplot_studio_export", "document": str(document_path), "exports": exports}
+    if stderr_log.exists():
+        payload["stderr_log"] = str(stderr_log)
+    return payload
 
 
 def publish_studio_export_run(
@@ -1148,6 +1150,7 @@ def publish_studio_export_run(
         "processed": processed_source is not None,
         "processed_source": str(processed_source) if processed_source is not None else None,
         "template": request.get("template") or request.get("recipe") or "veusz_document",
+        "operation_mode": normal_mode_payload(route="studio"),
     }
     manifest = {
         "kind": "sciplot_run",
@@ -1179,6 +1182,7 @@ def publish_studio_export_run(
             "review_mode": "native_veusz_editor",
         },
         "layout_quality": layout_quality,
+        "operation_mode": normal_mode_payload(route="studio"),
         "studio": {
             "engine": "veusz",
             "render_engine": "veusz",
@@ -1187,6 +1191,7 @@ def publish_studio_export_run(
             "spec": str(_veusz_spec_path(document_path)),
             "manual_edit_hash": _hash_file(document_path),
             "upstream": upstream_status()["veusz"],
+            "operation_mode": normal_mode_payload(route="studio"),
         },
     }
     manifest["revision_brief"] = _write_studio_revision_brief(output_dir, manifest=manifest)
@@ -1326,6 +1331,7 @@ def _existing_document_payload(document_path: Path) -> dict[str, Any]:
     return {
         "kind": "sciplot_studio_prepare",
         "mode": "vsz",
+        "operation_mode": normal_mode_payload(route="studio"),
         "document": str(document_path),
         "studio": {
             "kind": "sciplot_studio_document",
@@ -1336,6 +1342,7 @@ def _existing_document_payload(document_path: Path) -> dict[str, Any]:
             "spec": str(_veusz_spec_path(document_path)),
             "manual_edit_hash": _hash_file(document_path),
             "upstream": upstream_status()["veusz"],
+            "operation_mode": normal_mode_payload(route="studio"),
         },
     }
 
@@ -1524,7 +1531,7 @@ def _write_studio_review_html(output_dir: Path, *, manifest: dict[str, Any]) -> 
             "<h2>Revision</h2>",
             "<ul>",
             (
-                f'<li><a href="{escape(str(revision_brief))}">Revision brief for Codex</a></li>'
+                f'<li><a href="{escape(str(revision_brief))}">Revision brief for assisted repair</a></li>'
                 if isinstance(revision_brief, str) and revision_brief
                 else "<li>No revision brief was generated.</li>"
             ),
@@ -1547,7 +1554,7 @@ def _write_studio_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) 
     lines = [
         "# SciPlot Studio Revision Brief",
         "",
-        "Use this brief when asking Codex to revise the SciPlot request or regenerate the Veusz document.",
+        "Use this brief for optional assisted repair of the SciPlot request or Veusz document bridge.",
         "",
         "## Run",
         "",
@@ -1561,9 +1568,9 @@ def _write_studio_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) 
         "",
         *(figure_lines or ["- No figures were recorded."]),
         "",
-        "## Tell Codex",
+        "## Assisted Repair Request",
         "",
-        "请按这些修改意见调整 SciPlot 数据识别、请求生成或 Veusz 文档桥接，然后重新导出：",
+        "请按这些修改意见调整 SciPlot 数据识别、请求生成、数据整理或 Veusz 文档桥接，然后重新导出：",
         "",
         "- 数据导入/预处理：",
         "- 自动生成的 Veusz 对象：",
@@ -2397,6 +2404,9 @@ def _write_veusz_document(
         show_direct_labels=show_direct_labels,
     )
     _save_veusz_document_from_spec(path, spec)
+    generate_log = path.parent / "logs" / "veusz_generate_stderr.log"
+    if generate_log.exists():
+        spec["stderr_logs"] = {"generate": str(generate_log)}
     spec_path = _veusz_spec_path(path)
     spec_path.write_text(json.dumps(json_safe(spec), indent=2, ensure_ascii=False), encoding="utf-8")
     return spec_path
@@ -2494,7 +2504,6 @@ def _build_veusz_plot_spec(
         "layout_issues": layout_issues,
         "provenance": {
             "veusz": upstream_status()["veusz"],
-            "labplot_reference": upstream_status()["labplot"],
         },
         "style": {
             "font_family": style.font_family,
@@ -2559,26 +2568,30 @@ def _build_veusz_plot_spec(
 
 
 def _save_veusz_document_from_spec(path: Path, spec: dict[str, Any]) -> None:
-    _prefer_offscreen_export_platform()
-    _ensure_veusz_on_path()
-    from PyQt6 import QtWidgets
-    from veusz import dataimport, document, widgets
-    from veusz.document import CommandInterface
+    stderr_log = path.parent / "logs" / "veusz_generate_stderr.log"
+    with _capture_process_stderr(stderr_log):
+        _prefer_offscreen_export_platform()
+        _ensure_veusz_on_path()
+        from PyQt6 import QtWidgets
+        from veusz import dataimport, document, widgets
+        from veusz.document import CommandInterface
 
-    _ = dataimport, widgets
-    app = QtWidgets.QApplication.instance()
-    created_app = app is None
-    if app is None:
-        app = QtWidgets.QApplication([])
-    doc = document.Document()
-    interface = CommandInterface(doc)
-    _apply_veusz_spec(interface, spec)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    interface.Save(str(path))
-    load_test = document.Document()
-    load_test.load(str(path))
-    if created_app:
-        app.quit()
+        _ = dataimport, widgets
+        app = QtWidgets.QApplication.instance()
+        created_app = app is None
+        if app is None:
+            app = QtWidgets.QApplication([])
+        try:
+            doc = document.Document()
+            interface = CommandInterface(doc)
+            _apply_veusz_spec(interface, spec)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            interface.Save(str(path))
+            load_test = document.Document()
+            load_test.load(str(path))
+        finally:
+            if created_app:
+                app.quit()
 
 
 def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
@@ -3097,7 +3110,7 @@ def _studio_block(
         "generated_hash": generated_hash,
         "manual_edit_hash": _hash_file(document_path),
         "upstream": upstream_status()["veusz"],
-        "labplot_reference": upstream_status()["labplot"],
+        "operation_mode": normal_mode_payload(route="studio"),
     }
 
 
@@ -3169,6 +3182,35 @@ def _register_studio_run(project_dir: Path, manifest: dict[str, Any]) -> None:
 def _ensure_veusz_on_path() -> None:
     if VEUSZ_ROOT.exists():
         sys.path.insert(0, str(VEUSZ_ROOT))
+
+
+@contextmanager
+def _capture_process_stderr(log_path: Path):
+    if os.environ.get("SCIPLOT_STUDIO_SHOW_QT_WARNINGS") == "1":
+        yield None
+        return
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    original_fd: int | None = None
+    try:
+        sys.stderr.flush()
+        original_fd = os.dup(2)
+        with tempfile.TemporaryFile(mode="w+b") as buffer:
+            os.dup2(buffer.fileno(), 2)
+            try:
+                yield log_path
+            finally:
+                sys.stderr.flush()
+                if original_fd is not None:
+                    os.dup2(original_fd, 2)
+                buffer.seek(0)
+                captured = buffer.read()
+        if captured.strip():
+            log_path.write_bytes(captured)
+        elif log_path.exists():
+            log_path.unlink()
+    finally:
+        if original_fd is not None:
+            os.close(original_fd)
 
 
 def _qt_framework_paths() -> list[Path]:

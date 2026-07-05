@@ -17,14 +17,13 @@ SciPlot uses Veusz as the embedded PyQt plotting-editor runtime for
 
 ## LabPlot
 
-LabPlot is copied under `third_party/labplot_reference` from the GitHub mirror
-https://github.com/KDE/labplot at commit
-`bc8635032d8b0c71e5b8fabc38a84694129bb334`. The primary upstream repository is
-https://invent.kde.org/education/labplot.
+LabPlot is not vendored in this repository. It is tracked as an external
+feature-mining reference from the GitHub mirror https://github.com/KDE/labplot
+at reviewed commit `bc8635032d8b0c71e5b8fabc38a84694129bb334`. The primary
+upstream repository is https://invent.kde.org/education/labplot.
 
-LabPlot is kept as a full source reference in the first slice. Its `LICENSES/`,
-`AUTHORS`, source, build files, and documentation are preserved for later
-feature-by-feature absorption.
+Any future LabPlot-derived algorithm or UX pattern must be copied only as a
+small audited change with provenance, tests, and a design note.
 
 ## Local Integration Policy
 

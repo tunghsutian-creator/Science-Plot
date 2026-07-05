@@ -29,6 +29,7 @@ from sciplot_core._utils import (
     token as _token,
 )
 from sciplot_core.materials_rules import match_rule, semantic_payload_from_rule
+from sciplot_core.operation_modes import assisted_cleanup_mode_payload
 
 ensure_legacy_core()
 
@@ -1957,6 +1958,7 @@ def build_intervention_request(
         "request": request or {},
         "error": error,
         "recommended_action": _intervention_action(category),
+        "operation_mode": assisted_cleanup_mode_payload(reason=category),
     }
 
 
@@ -1981,32 +1983,32 @@ def _classify_intervention(semantic: dict[str, Any], error: str | None) -> str:
 def _intervention_action(category: str) -> str:
     actions = {
         "unrecognized_format": (
-            "Codex should inspect this file, update semantic classification rules, "
+            "Use assisted cleanup or manual cleanup to inspect this file, update semantic classification rules, "
             "add a new material rule or recipe preprocessor, create a simulated fixture, "
             "run tests, and rerun the plotting request."
         ),
         "semantic_gap": (
             "The semantic family is identified but no recipe can process it. "
-            "Codex should add a new recipe module or extend an existing one with fixture data."
+            "Use assisted repair to add a new recipe module or extend an existing one with fixture data."
         ),
         "format_mismatch": (
             "The file format is recognized but columns don't match expectations. "
-            "Codex should update column aliases in materials_rules or add a preprocessor."
+            "Use assisted cleanup to update column aliases in materials_rules or add a preprocessor."
         ),
         "column_missing": (
             "Expected columns are missing from the input. "
-            "Codex should add column aliases or update the column detection logic."
+            "Use assisted cleanup to add column aliases or update the column detection logic."
         ),
         "parse_failure": (
-            "The file could not be parsed. Codex should investigate encoding, delimiter, "
+            "The file could not be parsed. Use assisted cleanup to investigate encoding, delimiter, "
             "or file structure issues and add a fixture for this instrument export format."
         ),
         "render_failure": (
-            "Rendering failed after successful preparation. Codex should inspect the "
+            "Rendering failed after successful preparation. Use assisted repair to inspect the "
             "render options, template compatibility, and vendor rendering path."
         ),
         "missing_dependency": (
-            "A required component or file is missing. Codex should check dependencies "
+            "A required component or file is missing. Use assisted repair to check dependencies "
             "and file paths."
         ),
     }
