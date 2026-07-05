@@ -120,7 +120,7 @@ Example request:
   "exports": ["pdf", "tiff_300"],
   "render_options": {
     "style_preset": "nature",
-    "palette_preset": "colorblind_safe"
+    "palette_preset": "spectrum_journal_8"
   }
 }
 ```

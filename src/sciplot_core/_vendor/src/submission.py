@@ -15,6 +15,7 @@ _SAFE_PALETTES = {
     "mono",
     "muted",
     "okabe_ito",
+    "spectrum_journal_8",
     "tol_muted",
 }
 _CURVE_TEMPLATES = {"curve", "point_line", "scatter", "bubble_scatter"}

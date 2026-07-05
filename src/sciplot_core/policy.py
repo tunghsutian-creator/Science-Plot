@@ -8,6 +8,7 @@ DEFAULT_FIGURE_SIZE = "60x55"
 WIDE_FIGURE_SIZE = "120x55"
 SPECTRUM_JOURNAL_FIGURE_SIZE = "120x110"
 SPECTRUM_JOURNAL_PALETTE_ID = "spectrum_journal_8"
+DEFAULT_PALETTE_PRESET = SPECTRUM_JOURNAL_PALETTE_ID
 SPECTRUM_JOURNAL_COLORS = (
     "#D85A2A",
     "#F29A22",
@@ -32,7 +33,7 @@ DEFAULT_RENDER_OPTIONS: dict[str, Any] = {
     "visual_theme_id": "clean_light",
     "style_preset": "nature",
     "size": DEFAULT_FIGURE_SIZE,
-    "palette_preset": "colorblind_safe",
+    "palette_preset": DEFAULT_PALETTE_PRESET,
 }
 
 TORQUE_CURVE_RENDER_OPTIONS: dict[str, Any] = {
@@ -225,6 +226,7 @@ __all__ = [
     "DEFAULT_EXPORT_FORMATS_POLICY",
     "DEFAULT_FIGURE_SIZE",
     "DEFAULT_LAYOUT_POLICY",
+    "DEFAULT_PALETTE_PRESET",
     "DEFAULT_RENDER_OPTIONS",
     "DELIVERY_DIR",
     "DELIVERY_FIGURES_DIR",

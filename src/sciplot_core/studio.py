@@ -19,6 +19,7 @@ import pandas as pd
 from sciplot_core._utils import decode_text, json_safe
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.intake import create_intake_project_from_session, prepare_intake_session
+from sciplot_core.policy import DEFAULT_PALETTE_PRESET, SPECTRUM_JOURNAL_COLORS
 from sciplot_core.qa import run_qa
 from sciplot_core.study_model import build_output_package_contract
 
@@ -28,16 +29,7 @@ LABPLOT_ROOT = REPO_ROOT / "third_party" / "labplot_reference"
 VEUSZ_COMMIT = "264084b06eb306d860c7757c637f37b78bb2333f"
 LABPLOT_COMMIT = "bc8635032d8b0c71e5b8fabc38a84694129bb334"
 
-DEFAULT_PALETTE = (
-    "#D85A2A",
-    "#008C86",
-    "#3F6FB5",
-    "#9A4A8A",
-    "#F29A22",
-    "#6E9F45",
-    "#C24D70",
-    "#7BC4DF",
-)
+DEFAULT_PALETTE = SPECTRUM_JOURNAL_COLORS
 STACKED_TEMPLATE_IDS = {"stacked_curve", "segmented_stacked_curve"}
 STUDIO_TEMPLATE_IDS = ("curve", "stacked_curve", "segmented_stacked_curve")
 FIGURE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
@@ -1992,7 +1984,7 @@ def _effective_render_options(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def _palette_for_render_options(render_options: dict[str, Any]) -> tuple[str, ...]:
-    palette_id = str(render_options.get("palette_preset") or "colorblind_safe")
+    palette_id = str(render_options.get("palette_preset") or DEFAULT_PALETTE_PRESET)
     try:
         from sciplot_core.contract import load_plot_contract
 

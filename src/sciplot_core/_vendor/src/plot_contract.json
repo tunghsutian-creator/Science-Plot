@@ -2,7 +2,7 @@
   "version": 3,
   "defaults": {
     "style_preset": "nature",
-    "palette_preset": "colorblind_safe"
+    "palette_preset": "spectrum_journal_8"
   },
   "aliases": {
     "style_presets": {
@@ -198,6 +198,7 @@
         "macarons",
         "okabe_ito",
         "tol_muted",
+        "spectrum_journal_8",
         "materials_warm",
         "shine",
         "vintage"
@@ -246,7 +247,7 @@
       "description": "Nature: a compact research-figure style that prioritizes official constraints.",
       "hard_constraints": true,
       "preset_note": "Built around the current public Nature image constraints.",
-      "recommended_palette_preset": "colorblind_safe",
+      "recommended_palette_preset": "spectrum_journal_8",
       "recommended_visual_theme_id": "clean_light",
       "axis_frame": {
         "left": true,
@@ -308,7 +309,7 @@
       "description": "ACS-inspired compact publication style with Helvetica/Arial lettering and conservative line weights.",
       "hard_constraints": false,
       "preset_note": "Approximate ACS/JACS graph metrics: legible small lettering, clear symbols, and lines kept above hairline weight.",
-      "recommended_palette_preset": "okabe_ito",
+      "recommended_palette_preset": "spectrum_journal_8",
       "recommended_visual_theme_id": "clean_light",
       "axis_frame": {
         "left": true,
@@ -369,7 +370,7 @@
       "description": "Science/AAAS-inspired compact publication style with restrained strokes and minimal visual decoration.",
       "hard_constraints": false,
       "preset_note": "Conservative Science-style profile: keep figures simple, readable, and lightly colored.",
-      "recommended_palette_preset": "colorblind_safe",
+      "recommended_palette_preset": "spectrum_journal_8",
       "recommended_visual_theme_id": "clean_light",
       "axis_frame": {
         "left": true,
@@ -430,7 +431,7 @@
       "description": "Wiley-inspired publication style with slightly roomier text and balanced muted colors.",
       "hard_constraints": false,
       "preset_note": "Approximate Wiley journal figure profile: prioritize readable words and symbols at final figure size.",
-      "recommended_palette_preset": "tol_muted",
+      "recommended_palette_preset": "spectrum_journal_8",
       "recommended_visual_theme_id": "clean_light",
       "axis_frame": {
         "left": true,
@@ -491,7 +492,7 @@
       "description": "Elsevier-inspired publication style centered on 7 pt lettering and uniform artwork proportions.",
       "hard_constraints": false,
       "preset_note": "Approximate Elsevier graph profile: standard fonts, uniform sizing, and readable line/symbol hierarchy.",
-      "recommended_palette_preset": "muted",
+      "recommended_palette_preset": "spectrum_journal_8",
       "recommended_visual_theme_id": "clean_light",
       "axis_frame": {
         "left": true,
@@ -550,7 +551,7 @@
     "colorblind_safe": {
       "label": "Colorblind Safe",
       "public": true,
-      "description": "Default safe palette: colorblind-friendly categorical colors with cividis for sequential scales.",
+      "description": "Colorblind-friendly categorical colors with cividis for sequential scales.",
       "categorical": [
         "#0173b2",
         "#de8f05",
@@ -854,9 +855,9 @@
       "diverging": "RdBu"
     },
     "spectrum_journal_8": {
-      "label": "Spectrum Journal 8",
+      "label": "SciPlot Default 8",
       "public": true,
-      "description": "Paper-style stacked spectrum palette for FTIR and NMR traces on white backgrounds.",
+      "description": "Default SciPlot categorical palette: red-orange, orange, teal, sky blue, purple, deep blue, rose, and olive green.",
       "categorical": [
         "#D85A2A",
         "#F29A22",
@@ -940,7 +941,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1021,7 +1022,7 @@
         "yscale": "linear",
         "reverse_x": false,
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1105,7 +1106,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1189,7 +1190,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1273,7 +1274,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1353,7 +1354,7 @@
         "baseline": "none",
         "series_label_mode": "inline",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1418,7 +1419,7 @@
         "reverse_x": false,
         "baseline": "none",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1483,7 +1484,7 @@
         "reverse_x": true,
         "baseline": "linear_endpoints",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light",
         "use_sidecar": true
       },
@@ -1549,7 +1550,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1614,7 +1615,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1679,7 +1680,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1744,7 +1745,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1809,7 +1810,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1874,7 +1875,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1939,7 +1940,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2010,7 +2011,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2081,7 +2082,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2167,7 +2168,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2247,7 +2248,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2327,7 +2328,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2403,7 +2404,7 @@
         "yscale": "linear",
         "reverse_x": false,
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2462,7 +2463,7 @@
         "size": "60x55",
         "show_colorbar": true,
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2528,7 +2529,7 @@
         "size": "60x55",
         "show_colorbar": true,
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2589,7 +2590,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2645,7 +2646,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2703,7 +2704,7 @@
         "size": "60x55",
         "show_colorbar": true,
         "style_preset": "nature",
-        "palette_preset": "colorblind_safe",
+        "palette_preset": "spectrum_journal_8",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
