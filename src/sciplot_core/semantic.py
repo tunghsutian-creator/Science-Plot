@@ -1983,7 +1983,7 @@ def _classify_intervention(semantic: dict[str, Any], error: str | None) -> str:
 def _intervention_action(category: str) -> str:
     actions = {
         "unrecognized_format": (
-            "Use assisted cleanup or manual cleanup to inspect this file, update semantic classification rules, "
+            "Use Codex-assisted cleanup to inspect this file, update semantic classification rules, "
             "add a new material rule or recipe preprocessor, create a simulated fixture, "
             "run tests, and rerun the plotting request."
         ),

@@ -175,7 +175,7 @@ def _build_parser() -> argparse.ArgumentParser:
     cleanup_subparsers = cleanup_parser.add_subparsers(dest="cleanup_command", required=True)
     cleanup_result_parser = cleanup_subparsers.add_parser(
         "result",
-        help="Write a cleanup_result.json after human or assistant data cleanup.",
+        help="Write a cleanup_result.json from a Codex/agent assisted cleanup job.",
     )
     cleanup_result_parser.add_argument("output_dir", type=Path)
     cleanup_result_parser.add_argument("--cleaned-data", type=Path, required=True)

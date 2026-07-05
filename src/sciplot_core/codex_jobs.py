@@ -88,7 +88,12 @@ def build_codex_handoff(
         "created_at": _now(),
         "operation_mode": assisted_cleanup_mode_payload(reason="rule_or_data_repair", provider="codex"),
         "assistant_provider": "codex",
-        "assistant_role": "optional_cleanup_and_rule_repair",
+        "assistant_role": "codex_controlled_assisted_plotting_and_repair",
+        "control_policy": {
+            "frontend_default": "independent",
+            "activation": "user_requests_codex_or_pipeline_blocks",
+            "user_switch_required": False,
+        },
         "base_pipeline_policy": "normal_mode_must_not_require_codex",
         "project_dir": str(Path(project_dir).expanduser().resolve()),
         "plot_request": str(request_path) if request_path else None,

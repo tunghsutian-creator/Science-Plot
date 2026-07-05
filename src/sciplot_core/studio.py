@@ -451,6 +451,106 @@ def _ensure_veusz_loader_compat() -> None:
     mime._sciplot_safe_clipboard = True
 
 
+def _set_layout_margins(layout: Any, value: int = 12, spacing: int = 10) -> None:
+    layout.setContentsMargins(value, value, value, value)
+    layout.setSpacing(spacing)
+
+
+def _group_box(title: str) -> Any:
+    from PyQt6 import QtWidgets
+
+    box = QtWidgets.QGroupBox(title)
+    box.setFlat(False)
+    return box
+
+
+def _apply_sciplot_shell_style(shell: Any) -> None:
+    shell.setObjectName("SciPlotStudioWindow")
+    shell.resize(1320, 860)
+    shell.setStyleSheet(
+        """
+        QMainWindow#SciPlotStudioWindow { background: #f4f5f6; }
+        QToolBar#sciplotPrimaryToolbar {
+            spacing: 6px;
+            padding: 4px 8px;
+            border: 0;
+            border-bottom: 1px solid #d6d8dc;
+            background: #f7f8f9;
+        }
+        QWidget#setupWorkspace, QWidget#refineWorkspace { background: #f4f5f6; }
+        QGroupBox {
+            font-weight: 600;
+            border: 1px solid #d9dce0;
+            border-radius: 8px;
+            margin-top: 14px;
+            background: #ffffff;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            left: 10px;
+            padding: 0 4px;
+        }
+        QLabel#workspaceTitle {
+            font-size: 17px;
+            font-weight: 700;
+        }
+        QLabel#workspaceHint { color: #60646c; }
+        QLabel#studioStatus { color: #555b64; }
+        QTableWidget {
+            border: 1px solid #d9dce0;
+            border-radius: 6px;
+            background: #ffffff;
+            gridline-color: #eceef1;
+        }
+        """
+    )
+
+
+def _set_veusz_advanced_panels_visible(window: Any, visible: bool) -> None:
+    for attr in ("console", "datadock", "formatdock"):
+        widget = getattr(window, attr, None)
+        if widget is not None:
+            widget.setVisible(visible)
+    for attr in ("maintoolbar", "datatoolbar"):
+        toolbar = getattr(window, attr, None)
+        if toolbar is not None:
+            toolbar.setVisible(visible)
+    treeedit = getattr(window, "treeedit", None)
+    for attr in ("addtoolbar", "edittoolbar"):
+        toolbar = getattr(treeedit, attr, None)
+        if toolbar is not None:
+            toolbar.setVisible(visible)
+
+
+def _apply_sciplot_veusz_workspace_defaults(window: Any, *, embedded: bool = False) -> None:
+    """Use Veusz as the real editor while keeping low-frequency UI folded away."""
+    _set_veusz_advanced_panels_visible(window, False)
+    if embedded:
+        menu_bar = window.menuBar()
+        if menu_bar is not None:
+            menu_bar.hide()
+        status_bar = window.statusBar()
+        if status_bar is not None:
+            status_bar.hide()
+
+
+def _add_sciplot_view_menu(shell: Any, state: dict[str, Any]) -> None:
+    from PyQt6 import QtGui
+
+    view_menu = shell.menuBar().addMenu("View")
+    advanced_action = QtGui.QAction("Advanced Veusz Panels", shell)
+    advanced_action.setCheckable(True)
+
+    def toggle_advanced(checked: bool) -> None:
+        veusz_window = state.get("veusz_window")
+        if veusz_window is not None:
+            _set_veusz_advanced_panels_visible(veusz_window, checked)
+
+    advanced_action.triggered.connect(toggle_advanced)
+    view_menu.addAction(advanced_action)
+    shell._sciplot_view_actions = getattr(shell, "_sciplot_view_actions", []) + [advanced_action]
+
+
 def _create_sciplot_project_shell(
     *,
     project_dir: Path,
@@ -458,7 +558,7 @@ def _create_sciplot_project_shell(
     template: str | None,
     project_name: str | None,
 ) -> Any:
-    from PyQt6 import QtCore, QtWidgets
+    from PyQt6 import QtCore, QtGui, QtWidgets
 
     project_dir = project_dir.expanduser().resolve()
     request_path = project_dir / "plot_request.json"
@@ -470,13 +570,46 @@ def _create_sciplot_project_shell(
 
     shell = QtWidgets.QMainWindow()
     shell.setWindowTitle("SciPlot Studio")
-    splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
-    shell.setCentralWidget(splitter)
+    _apply_sciplot_shell_style(shell)
 
-    panel = QtWidgets.QWidget()
-    panel.setMinimumWidth(320)
-    panel.setMaximumWidth(430)
-    panel_layout = QtWidgets.QVBoxLayout(panel)
+    stack = QtWidgets.QStackedWidget()
+    stack.setObjectName("studioWorkspaceStack")
+    shell.setCentralWidget(stack)
+
+    state: dict[str, Any] = {"veusz_window": None, "document_path": None}
+    _add_sciplot_view_menu(shell, state)
+
+    toolbar = QtWidgets.QToolBar("SciPlot")
+    toolbar.setObjectName("sciplotPrimaryToolbar")
+    toolbar.setMovable(False)
+    shell.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
+    back_action = QtGui.QAction("Back to Setup", shell)
+    generate_action = QtGui.QAction("Generate", shell)
+    save_action = QtGui.QAction("Save", shell)
+    export_action = QtGui.QAction("Export", shell)
+    back_action.setEnabled(False)
+    save_action.setEnabled(False)
+    export_action.setEnabled(False)
+    toolbar.addAction(back_action)
+    toolbar.addSeparator()
+    toolbar.addAction(generate_action)
+    toolbar.addAction(save_action)
+    toolbar.addAction(export_action)
+
+    setup_workspace = QtWidgets.QWidget()
+    setup_workspace.setObjectName("setupWorkspace")
+    setup_layout = QtWidgets.QVBoxLayout(setup_workspace)
+    _set_layout_margins(setup_layout)
+    title = QtWidgets.QLabel("Setup Workspace")
+    title.setObjectName("workspaceTitle")
+    hint = QtWidgets.QLabel("Confirm the reopened project's template before regenerating the Veusz figure.")
+    hint.setObjectName("workspaceHint")
+    setup_layout.addWidget(title)
+    setup_layout.addWidget(hint)
+
+    setup_box = _group_box("Project Setup")
+    setup_box_layout = QtWidgets.QVBoxLayout(setup_box)
+    _set_layout_margins(setup_box_layout)
     form = QtWidgets.QFormLayout()
     project_edit = QtWidgets.QLineEdit(str(project_dir))
     project_edit.setReadOnly(True)
@@ -489,27 +622,36 @@ def _create_sciplot_project_shell(
     template_index = template_combo.findData(selected_template)
     template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
     form.addRow("Template", template_combo)
-    panel_layout.addLayout(form)
+    setup_box_layout.addLayout(form)
 
     status_label = QtWidgets.QLabel()
+    status_label.setObjectName("studioStatus")
     status_label.setWordWrap(True)
-    panel_layout.addWidget(status_label)
+    setup_box_layout.addWidget(status_label)
     actions = QtWidgets.QHBoxLayout()
     generate_button = QtWidgets.QPushButton("Generate")
     export_button = QtWidgets.QPushButton("Export")
+    export_button.setEnabled(False)
     actions.addWidget(generate_button)
     actions.addWidget(export_button)
-    panel_layout.addLayout(actions)
-    panel_layout.addStretch(1)
+    setup_box_layout.addLayout(actions)
+    setup_layout.addWidget(setup_box)
+    setup_layout.addStretch(1)
 
-    right_host = QtWidgets.QWidget()
-    right_layout = QtWidgets.QVBoxLayout(right_host)
+    refine_workspace = QtWidgets.QWidget()
+    refine_workspace.setObjectName("refineWorkspace")
+    refine_layout = QtWidgets.QVBoxLayout(refine_workspace)
+    refine_layout.setContentsMargins(0, 0, 0, 0)
+    refine_layout.setSpacing(0)
+    right_layout = QtWidgets.QVBoxLayout()
     right_layout.setContentsMargins(0, 0, 0, 0)
-    splitter.addWidget(panel)
-    splitter.addWidget(right_host)
-    splitter.setStretchFactor(1, 1)
-
-    state: dict[str, Any] = {"veusz_window": None, "document_path": None}
+    refine_layout.addLayout(right_layout, 1)
+    refine_status = QtWidgets.QLabel()
+    refine_status.setObjectName("studioStatus")
+    refine_status.setContentsMargins(10, 6, 10, 6)
+    refine_layout.addWidget(refine_status)
+    stack.addWidget(setup_workspace)
+    stack.addWidget(refine_workspace)
 
     def load_document(document_path: Path) -> None:
         previous = state.get("veusz_window")
@@ -517,10 +659,17 @@ def _create_sciplot_project_shell(
             right_layout.removeWidget(previous)
             previous.setParent(None)
         veusz_window = _create_veusz_window(document_path)
+        _apply_sciplot_veusz_workspace_defaults(veusz_window, embedded=True)
         state["veusz_window"] = veusz_window
         state["document_path"] = document_path
         right_layout.addWidget(veusz_window)
         status_label.setText(f"Loaded Veusz document:\n{document_path}")
+        refine_status.setText(f"Refine Workspace · {document_path}")
+        export_button.setEnabled(True)
+        save_action.setEnabled(True)
+        export_action.setEnabled(True)
+        back_action.setEnabled(True)
+        stack.setCurrentWidget(refine_workspace)
 
     def generate() -> None:
         try:
@@ -533,6 +682,13 @@ def _create_sciplot_project_shell(
             load_document(Path(payload["document"]))
         except Exception as exc:
             QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
+
+    def save_current() -> None:
+        document_path = state.get("document_path")
+        veusz_window = state.get("veusz_window")
+        if isinstance(document_path, Path) and veusz_window is not None:
+            veusz_window.document.save(str(document_path))
+            refine_status.setText(f"Saved Veusz document · {document_path}")
 
     def export_current() -> None:
         try:
@@ -551,11 +707,16 @@ def _create_sciplot_project_shell(
             )
             _register_studio_exports(project_dir, exports, studio_run=studio_run)
             status_label.setText(f"Exported through SciPlot QA:\n{studio_run['output']}")
+            refine_status.setText(f"Exported through SciPlot QA · {studio_run['output']}")
         except Exception as exc:
             QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
 
     generate_button.clicked.connect(generate)
     export_button.clicked.connect(export_current)
+    back_action.triggered.connect(lambda: stack.setCurrentWidget(setup_workspace))
+    generate_action.triggered.connect(generate)
+    save_action.triggered.connect(save_current)
+    export_action.triggered.connect(export_current)
     payload = prepare_studio_document(
         project_dir,
         output_root=output_root,
@@ -573,7 +734,7 @@ def _create_sciplot_studio_shell(
     template: str | None,
     project_name: str | None,
 ) -> Any:
-    from PyQt6 import QtCore, QtWidgets
+    from PyQt6 import QtCore, QtGui, QtWidgets
 
     session = prepare_intake_session(source_path, output_root=output_root)
     selected_template = _normalize_optional_string(template) or _template_from_session(session)
@@ -583,99 +744,11 @@ def _create_sciplot_studio_shell(
 
     shell = QtWidgets.QMainWindow()
     shell.setWindowTitle("SciPlot Studio")
-    splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
-    shell.setCentralWidget(splitter)
+    _apply_sciplot_shell_style(shell)
 
-    panel = QtWidgets.QWidget()
-    panel.setMinimumWidth(360)
-    panel.setMaximumWidth(460)
-    panel_layout = QtWidgets.QVBoxLayout(panel)
-    form = QtWidgets.QFormLayout()
-    source_edit = QtWidgets.QLineEdit(str(source_path))
-    source_edit.setReadOnly(True)
-    form.addRow("Data", source_edit)
-    name_edit = QtWidgets.QLineEdit(selected_project_name)
-    form.addRow("Project", name_edit)
-    template_combo = QtWidgets.QComboBox()
-    for template_id, label in _studio_template_choices():
-        template_combo.addItem(label, template_id)
-    template_index = template_combo.findData(selected_template)
-    template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
-    form.addRow("Template", template_combo)
-    size_combo = QtWidgets.QComboBox()
-    for size in FIGURE_SIZE_PRESETS:
-        size_combo.addItem(size, size)
-    size_combo.setCurrentIndex(size_combo.findData("120x110") if selected_template in STACKED_TEMPLATE_IDS else 0)
-    form.addRow("Size", size_combo)
-    x_label_edit = QtWidgets.QLineEdit()
-    x_label_edit.setPlaceholderText("Auto")
-    form.addRow("X label", x_label_edit)
-    y_label_edit = QtWidgets.QLineEdit()
-    y_label_edit.setPlaceholderText("Auto")
-    form.addRow("Y label", y_label_edit)
-    x_min_edit = QtWidgets.QLineEdit()
-    x_min_edit.setPlaceholderText("Auto")
-    x_max_edit = QtWidgets.QLineEdit()
-    x_max_edit.setPlaceholderText("Auto")
-    range_row = QtWidgets.QHBoxLayout()
-    range_row.addWidget(x_min_edit)
-    range_row.addWidget(x_max_edit)
-    form.addRow("X min/max", range_row)
-    reverse_x_check = QtWidgets.QCheckBox("Reverse X")
-    log_x_check = QtWidgets.QCheckBox("Log X")
-    log_y_check = QtWidgets.QCheckBox("Log Y")
-    axes_row = QtWidgets.QHBoxLayout()
-    axes_row.addWidget(reverse_x_check)
-    axes_row.addWidget(log_x_check)
-    axes_row.addWidget(log_y_check)
-    form.addRow("Axes", axes_row)
-    label_mode_combo = QtWidgets.QComboBox()
-    for label, value in (("Legend", "legend"), ("Inline", "inline"), ("Auto", "auto")):
-        label_mode_combo.addItem(label, value)
-    if selected_template in STACKED_TEMPLATE_IDS:
-        label_mode_combo.setCurrentIndex(label_mode_combo.findData("inline"))
-    form.addRow("Labels", label_mode_combo)
-    export_checks: dict[str, Any] = {}
-    export_row = QtWidgets.QHBoxLayout()
-    for fmt in EXPORT_FORMATS:
-        check = QtWidgets.QCheckBox(fmt)
-        check.setChecked(True)
-        export_checks[fmt] = check
-        export_row.addWidget(check)
-    form.addRow("Exports", export_row)
-    panel_layout.addLayout(form)
-
-    status_label = QtWidgets.QLabel(_session_summary(session))
-    status_label.setWordWrap(True)
-    panel_layout.addWidget(status_label)
-
-    groups_table = QtWidgets.QTableWidget()
-    groups_table.setColumnCount(2)
-    groups_table.setHorizontalHeaderLabels(["Legend", "Files"])
-    groups_table.horizontalHeader().setStretchLastSection(True)
-    _populate_groups_table(groups_table, _session_groups(session))
-    panel_layout.addWidget(groups_table, 1)
-    order_actions = QtWidgets.QHBoxLayout()
-    move_up_button = QtWidgets.QPushButton("Up")
-    move_down_button = QtWidgets.QPushButton("Down")
-    order_actions.addWidget(move_up_button)
-    order_actions.addWidget(move_down_button)
-    panel_layout.addLayout(order_actions)
-
-    actions = QtWidgets.QHBoxLayout()
-    generate_button = QtWidgets.QPushButton("Generate")
-    export_button = QtWidgets.QPushButton("Export")
-    export_button.setEnabled(False)
-    actions.addWidget(generate_button)
-    actions.addWidget(export_button)
-    panel_layout.addLayout(actions)
-
-    right_host = QtWidgets.QWidget()
-    right_layout = QtWidgets.QVBoxLayout(right_host)
-    right_layout.setContentsMargins(0, 0, 0, 0)
-    splitter.addWidget(panel)
-    splitter.addWidget(right_host)
-    splitter.setStretchFactor(1, 1)
+    stack = QtWidgets.QStackedWidget()
+    stack.setObjectName("studioWorkspaceStack")
+    shell.setCentralWidget(stack)
 
     state: dict[str, Any] = {
         "project_dir": None,
@@ -684,6 +757,163 @@ def _create_sciplot_studio_shell(
         "veusz_window": None,
         "exports": list(EXPORT_FORMATS),
     }
+    _add_sciplot_view_menu(shell, state)
+
+    toolbar = QtWidgets.QToolBar("SciPlot")
+    toolbar.setObjectName("sciplotPrimaryToolbar")
+    toolbar.setMovable(False)
+    shell.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
+    back_action = QtGui.QAction("Back to Setup", shell)
+    generate_action = QtGui.QAction("Generate", shell)
+    save_action = QtGui.QAction("Save", shell)
+    undo_action = QtGui.QAction("Undo", shell)
+    redo_action = QtGui.QAction("Redo", shell)
+    export_action = QtGui.QAction("Export", shell)
+    back_action.setEnabled(False)
+    save_action.setEnabled(False)
+    undo_action.setEnabled(False)
+    redo_action.setEnabled(False)
+    export_action.setEnabled(False)
+    toolbar.addAction(back_action)
+    toolbar.addSeparator()
+    toolbar.addAction(generate_action)
+    toolbar.addAction(save_action)
+    toolbar.addAction(undo_action)
+    toolbar.addAction(redo_action)
+    toolbar.addSeparator()
+    toolbar.addAction(export_action)
+
+    setup_workspace = QtWidgets.QWidget()
+    setup_workspace.setObjectName("setupWorkspace")
+    setup_layout = QtWidgets.QVBoxLayout(setup_workspace)
+    _set_layout_margins(setup_layout)
+    title = QtWidgets.QLabel("Setup Workspace")
+    title.setObjectName("workspaceTitle")
+    hint = QtWidgets.QLabel("Choose the template, sample names, axes, size, and export formats before generating.")
+    hint.setObjectName("workspaceHint")
+    setup_layout.addWidget(title)
+    setup_layout.addWidget(hint)
+    splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+    setup_layout.addWidget(splitter, 1)
+
+    source_box = _group_box("Sources")
+    source_box.setMinimumWidth(260)
+    source_layout = QtWidgets.QVBoxLayout(source_box)
+    _set_layout_margins(source_layout)
+    form = QtWidgets.QFormLayout()
+    source_edit = QtWidgets.QLineEdit(str(source_path))
+    source_edit.setReadOnly(True)
+    form.addRow("Data", source_edit)
+    name_edit = QtWidgets.QLineEdit(selected_project_name)
+    form.addRow("Project", name_edit)
+    source_layout.addLayout(form)
+    status_label = QtWidgets.QLabel(_session_summary(session))
+    status_label.setObjectName("studioStatus")
+    status_label.setWordWrap(True)
+    source_layout.addWidget(status_label)
+    source_layout.addStretch(1)
+
+    mapping_box = _group_box("Mapping")
+    mapping_box.setMinimumWidth(360)
+    mapping_layout = QtWidgets.QVBoxLayout(mapping_box)
+    _set_layout_margins(mapping_layout)
+    groups_table = QtWidgets.QTableWidget()
+    groups_table.setColumnCount(2)
+    groups_table.setHorizontalHeaderLabels(["Legend", "Files"])
+    groups_table.horizontalHeader().setStretchLastSection(True)
+    _populate_groups_table(groups_table, _session_groups(session))
+    mapping_layout.addWidget(groups_table, 1)
+    order_actions = QtWidgets.QHBoxLayout()
+    move_up_button = QtWidgets.QPushButton("Up")
+    move_down_button = QtWidgets.QPushButton("Down")
+    order_actions.addWidget(move_up_button)
+    order_actions.addWidget(move_down_button)
+    mapping_layout.addLayout(order_actions)
+
+    figure_box = _group_box("Figure Setup")
+    figure_box.setMinimumWidth(300)
+    figure_box.setMaximumWidth(380)
+    figure_layout = QtWidgets.QVBoxLayout(figure_box)
+    _set_layout_margins(figure_layout)
+    figure_form = QtWidgets.QFormLayout()
+    template_combo = QtWidgets.QComboBox()
+    for template_id, label in _studio_template_choices():
+        template_combo.addItem(label, template_id)
+    template_index = template_combo.findData(selected_template)
+    template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
+    figure_form.addRow("Template", template_combo)
+    size_combo = QtWidgets.QComboBox()
+    for size in FIGURE_SIZE_PRESETS:
+        size_combo.addItem(size, size)
+    size_combo.setCurrentIndex(size_combo.findData("120x110") if selected_template in STACKED_TEMPLATE_IDS else 0)
+    figure_form.addRow("Size", size_combo)
+    x_label_edit = QtWidgets.QLineEdit()
+    x_label_edit.setPlaceholderText("Auto")
+    figure_form.addRow("X label", x_label_edit)
+    y_label_edit = QtWidgets.QLineEdit()
+    y_label_edit.setPlaceholderText("Auto")
+    figure_form.addRow("Y label", y_label_edit)
+    x_min_edit = QtWidgets.QLineEdit()
+    x_min_edit.setPlaceholderText("Auto")
+    x_max_edit = QtWidgets.QLineEdit()
+    x_max_edit.setPlaceholderText("Auto")
+    range_row = QtWidgets.QHBoxLayout()
+    range_row.addWidget(x_min_edit)
+    range_row.addWidget(x_max_edit)
+    figure_form.addRow("X min/max", range_row)
+    reverse_x_check = QtWidgets.QCheckBox("Reverse X")
+    log_x_check = QtWidgets.QCheckBox("Log X")
+    log_y_check = QtWidgets.QCheckBox("Log Y")
+    axes_row = QtWidgets.QHBoxLayout()
+    axes_row.addWidget(reverse_x_check)
+    axes_row.addWidget(log_x_check)
+    axes_row.addWidget(log_y_check)
+    figure_form.addRow("Axes", axes_row)
+    label_mode_combo = QtWidgets.QComboBox()
+    for label, value in (("Legend", "legend"), ("Inline", "inline"), ("Auto", "auto")):
+        label_mode_combo.addItem(label, value)
+    if selected_template in STACKED_TEMPLATE_IDS:
+        label_mode_combo.setCurrentIndex(label_mode_combo.findData("inline"))
+    figure_form.addRow("Labels", label_mode_combo)
+    export_checks: dict[str, Any] = {}
+    export_row = QtWidgets.QHBoxLayout()
+    for fmt in EXPORT_FORMATS:
+        check = QtWidgets.QCheckBox(fmt)
+        check.setChecked(True)
+        export_checks[fmt] = check
+        export_row.addWidget(check)
+    figure_form.addRow("Exports", export_row)
+    figure_layout.addLayout(figure_form)
+
+    actions = QtWidgets.QHBoxLayout()
+    generate_button = QtWidgets.QPushButton("Generate")
+    export_button = QtWidgets.QPushButton("Export")
+    export_button.setEnabled(False)
+    actions.addWidget(generate_button)
+    actions.addWidget(export_button)
+    figure_layout.addLayout(actions)
+    figure_layout.addStretch(1)
+
+    splitter.addWidget(source_box)
+    splitter.addWidget(mapping_box)
+    splitter.addWidget(figure_box)
+    splitter.setStretchFactor(1, 1)
+
+    refine_workspace = QtWidgets.QWidget()
+    refine_workspace.setObjectName("refineWorkspace")
+    refine_layout = QtWidgets.QVBoxLayout(refine_workspace)
+    refine_layout.setContentsMargins(0, 0, 0, 0)
+    refine_layout.setSpacing(0)
+    right_layout = QtWidgets.QVBoxLayout()
+    right_layout.setContentsMargins(0, 0, 0, 0)
+    refine_layout.addLayout(right_layout, 1)
+    refine_status = QtWidgets.QLabel("Refine Workspace")
+    refine_status.setObjectName("studioStatus")
+    refine_status.setContentsMargins(10, 6, 10, 6)
+    refine_layout.addWidget(refine_status)
+
+    stack.addWidget(setup_workspace)
+    stack.addWidget(refine_workspace)
 
     def build_current_project() -> dict[str, Any]:
         edited_session = dict(session)
@@ -735,16 +965,41 @@ def _create_sciplot_studio_shell(
             right_layout.removeWidget(previous)
             previous.setParent(None)
         veusz_window = _create_veusz_window(Path(payload["document"]))
+        _apply_sciplot_veusz_workspace_defaults(veusz_window, embedded=True)
         state["veusz_window"] = veusz_window
         right_layout.addWidget(veusz_window)
         export_button.setEnabled(True)
+        back_action.setEnabled(True)
+        save_action.setEnabled(True)
+        undo_action.setEnabled(True)
+        redo_action.setEnabled(True)
+        export_action.setEnabled(True)
         status_label.setText(f"SciPlot generated Veusz document:\n{payload['document']}")
+        refine_status.setText(f"Refine Workspace · {payload['document']}")
+        stack.setCurrentWidget(refine_workspace)
 
     def generate() -> None:
         try:
             load_payload(build_current_project())
         except Exception as exc:
             QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
+
+    def save_current() -> None:
+        document_path = state.get("document_path")
+        veusz_window = state.get("veusz_window")
+        if isinstance(document_path, Path) and veusz_window is not None:
+            veusz_window.document.save(str(document_path))
+            refine_status.setText(f"Saved Veusz document · {document_path}")
+
+    def undo_current() -> None:
+        veusz_window = state.get("veusz_window")
+        if veusz_window is not None and veusz_window.document.canUndo():
+            veusz_window.document.undoOperation()
+
+    def redo_current() -> None:
+        veusz_window = state.get("veusz_window")
+        if veusz_window is not None and veusz_window.document.canRedo():
+            veusz_window.document.redoOperation()
 
     def export_current() -> None:
         try:
@@ -770,6 +1025,7 @@ def _create_sciplot_studio_shell(
             )
             _register_studio_exports(project_dir, exports, studio_run=studio_run)
             status_label.setText(f"Exported through SciPlot QA:\n{studio_run['output']}")
+            refine_status.setText(f"Exported through SciPlot QA · {studio_run['output']}")
         except Exception as exc:
             QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
 
@@ -777,6 +1033,12 @@ def _create_sciplot_studio_shell(
     export_button.clicked.connect(export_current)
     move_up_button.clicked.connect(lambda: _move_table_row(groups_table, -1))
     move_down_button.clicked.connect(lambda: _move_table_row(groups_table, 1))
+    back_action.triggered.connect(lambda: stack.setCurrentWidget(setup_workspace))
+    generate_action.triggered.connect(generate)
+    save_action.triggered.connect(save_current)
+    undo_action.triggered.connect(undo_current)
+    redo_action.triggered.connect(redo_current)
+    export_action.triggered.connect(export_current)
     if template or project_name:
         generate()
     return shell

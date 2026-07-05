@@ -18,9 +18,11 @@ Build a practical research plotting system where:
   project packages, editing figures, and exporting results through embedded
   GPL Veusz.
 - The local Web app remains a compatibility surface for browser-based
-  confirmation and older project workflows.
-- Optional assisted cleanup can use Codex to patch rules, recipes, fixtures, and
-  tests when messy data does not fit the current system.
+  confirmation and older project workflows. Opening the frontend always starts
+  in independent mode; no user-facing mode switch is required.
+- Optional assisted mode starts only when the user asks Codex to draw/repair or
+  when deterministic recognition blocks. Codex then controls the cleanup,
+  plotting repair, fixtures, and tests as the assistant.
 - The human reviewer confirms sample names, legend order, figure size, export
   options, and final scientific meaning.
 
@@ -145,23 +147,12 @@ minimal user-facing `delivery/` folder:
 
 If recognition or rendering cannot continue deterministically, SciPlot writes
 `intervention_request.json` and `assisted_cleanup_request.json`, marks
-`needs_ai_intervention`, and records `operation_mode=assisted_cleanup`. Codex
-can be used as the optional assistant provider, but manual cleanup is still a
-valid route. After a human or assistant reshapes the data, record the
-reviewable result with:
-
-```bash
-skill/scripts/sciplot cleanup result RUN_OUTPUT_DIR \
-  --cleaned-data cleaned.csv \
-  --mapping '{"x":"Time","y":"Signal"}' \
-  --confidence 0.82 \
-  --confirm \
-  --json
-```
-
-This writes `cleanup_result.json`. Only a confirmed result with non-low
-confidence is marked `ready_for_normal_mode`; use the recorded
-`cleaned_data.path` as the next normal SciPlot input.
+`needs_ai_intervention`, and records `operation_mode=assisted_cleanup`. This is
+not a user-facing mode switch: the frontend remains the independent plotting
+surface, and a Codex-controlled assisted job writes `cleanup_result.json` when
+it reshapes data or repairs the plotting path. A confirmed result with non-low
+confidence is marked `ready_for_normal_mode`, and SciPlot can use the recorded
+`cleaned_data.path` as the next normal input.
 One-step runs also write `one_step_status.json`, so every output has an
 explicit state: `ready`, `needs_human_confirmation`, or `needs_rule_repair`.
 
@@ -374,7 +365,8 @@ Phase 3: Add interactive figure refinement.
 
 Phase 4: Make assisted cleanup routine.
 
-- Use structured assistant jobs only after user confirmation.
+- Keep the frontend default as independent mode; no manual mode switch.
+- Start assisted mode by explicit Codex-controlled draw/repair jobs.
 - Inspect `codex_jobs/*/sciplot_codex_handoff.json`, logs, status, and outputs
   before reporting.
 - Convert repeated human corrections into tests, rules, recipes, or presets.

@@ -59,7 +59,9 @@ def doctor_payload() -> dict[str, Any]:
         "repo_root": str(REPO_ROOT),
         "normal_mode": {
             "daily_entrypoint": "sciplot studio PATH --out outputs/intake_projects",
+            "frontend_default": "independent",
             "codex_required": False,
+            "user_switch_required": False,
         },
         "rule_summary": {
             "total": len(rules),
@@ -74,8 +76,8 @@ def doctor_payload() -> dict[str, Any]:
 def _next_actions(required_failures: list[dict[str, Any]]) -> list[str]:
     if not required_failures:
         return [
-            "Run `sciplot studio PATH --out outputs/intake_projects` for normal use.",
-            "Use assisted cleanup only when data recognition or export fails.",
+            "Open the frontend or Studio normally; it starts in independent mode.",
+            "Use Codex assisted mode only by launching a Codex-controlled repair or plotting job.",
         ]
     actions: list[str] = []
     failed_ids = {str(check["id"]) for check in required_failures}

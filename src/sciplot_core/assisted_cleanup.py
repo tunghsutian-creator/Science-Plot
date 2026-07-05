@@ -69,6 +69,8 @@ def build_cleanup_request(
         "request": json_safe(request or {}),
         "required_result": {
             "filename": CLEANUP_RESULT_FILENAME,
+            "mode_transition": "automatic_after_codex_or_assistant_result",
+            "user_switch_required": False,
             "minimum_fields": [
                 "cleaned_data",
                 "mapping_proposal",
@@ -77,6 +79,7 @@ def build_cleanup_request(
             ],
             "raw_data_policy": "preserve_raw_inputs",
             "confirmation_required_before_render": True,
+            "human_review_required_before_final_render": True,
         },
     }
     if intervention_request is not None:
@@ -149,10 +152,15 @@ def build_cleanup_result(
         "raw_inputs": [_path_payload(path) for path in raw_inputs or []],
         "notes": notes or "",
         "ready_for_normal_mode": ready_for_normal_mode,
+        "mode_transition": {
+            "type": "automatic",
+            "user_switch_required": False,
+            "next_input": cleaned_payload["path"] if ready_for_normal_mode else None,
+        },
         "next_step": (
-            "Use cleaned_data.path as normal SciPlot input after reviewing the mapping proposal."
+            "SciPlot can use cleaned_data.path as the next normal input after review."
             if ready_for_normal_mode
-            else "Confirm the cleaned data and mapping before returning to normal rendering."
+            else "Review the cleaned data and mapping before final rendering."
         ),
     }
 
