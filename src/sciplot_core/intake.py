@@ -6,8 +6,11 @@ import hashlib
 import io
 import json
 import mimetypes
+import os
 import re
 import shutil
+import subprocess
+import sys
 import webbrowser
 import zipfile
 from dataclasses import dataclass
@@ -24,8 +27,18 @@ import pandas as pd
 from sciplot_core._utils import json_safe, safe_filename, slug, unique_path
 from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex_job, start_codex_job
 from sciplot_core.ingest import smart_decode
+from sciplot_core.policy import (
+    FIGURE_SIZE_PRESETS,
+    FTIR_SPECTRUM_RENDER_OPTIONS,
+    NMR_SPECTRUM_RENDER_OPTIONS,
+    TORQUE_OFFSET_STACK_RENDER_OPTIONS,
+)
 from sciplot_core.render import DEFAULT_EXPORT_FORMATS
-from sciplot_core.semantic import classify_source, is_rheology_frequency_comparison_dir
+from sciplot_core.semantic import (
+    classify_source,
+    is_rheology_frequency_comparison_dir,
+    is_rheology_temperature_comparison_dir,
+)
 from sciplot_core.study_model import build_study_model, sync_study_model_samples
 from sciplot_core.workbench_contract import apply_request_patch, normalize_exports, normalize_render_options
 from sciplot_core.workbench_preview import build_chart_spec
@@ -33,7 +46,7 @@ from sciplot_core.workbench_webagg import ensure_webagg_sidecar, webagg_availabl
 
 _STATIC_DIR = Path(__file__).with_name("intake_static")
 _DEFAULT_OUTPUT_ROOT = Path("outputs") / "intake_projects"
-APPROVED_INTAKE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
+APPROVED_INTAKE_SIZE_PRESETS = FIGURE_SIZE_PRESETS
 _TEXT_EXTENSIONS = {".csv", ".tsv", ".txt"}
 _TABLE_EXTENSIONS = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
 _PREVIEW_SCAN_ROWS = 80
@@ -108,13 +121,7 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
                 "rule_id": "torque_curve",
                 "chart": "stacked_curve",
                 "template": "stacked_curve",
-                "render_options": {
-                    "size": "120x55",
-                    "x_label_override": "Time",
-                    "y_label_override": "Screw torque",
-                    "stack_spacing_scale": 0.05,
-                    "series_label_mode": "legend",
-                },
+                "render_options": dict(TORQUE_OFFSET_STACK_RENDER_OPTIONS),
             },
             {"id": "impact_metric", "label": "冲击", "rule_id": "impact_metric", "chart": "box_with_points"},
             {"id": "fracture_metric", "label": "断裂", "rule_id": "fracture_metric", "chart": "box_with_points"},
@@ -148,10 +155,24 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
         "label": "光谱",
         "icon": "spectrum",
         "experiments": (
-            {"id": "ftir_spectrum", "label": "FTIR", "rule_id": "ftir_spectrum"},
+            {
+                "id": "ftir_spectrum",
+                "label": "FTIR",
+                "rule_id": "ftir_spectrum",
+                "chart": "stacked_curve",
+                "template": "stacked_curve",
+                "render_options": dict(FTIR_SPECTRUM_RENDER_OPTIONS),
+            },
             {"id": "raman_spectrum", "label": "Raman", "rule_id": "raman_spectrum"},
             {"id": "uvvis_spectrum", "label": "UV-vis", "rule_id": "uvvis_spectrum"},
-            {"id": "nmr_spectrum", "label": "NMR", "rule_id": "nmr_spectrum"},
+            {
+                "id": "nmr_spectrum",
+                "label": "NMR",
+                "rule_id": "nmr_spectrum",
+                "chart": "stacked_curve",
+                "template": "stacked_curve",
+                "render_options": dict(NMR_SPECTRUM_RENDER_OPTIONS),
+            },
             {"id": "xps_spectrum", "label": "XPS", "rule_id": "xps_spectrum"},
             {"id": "edx_spectrum", "label": "EDX/EDS", "rule_id": "edx_spectrum"},
             {"id": "unknown_spectroscopy", "label": "未知光谱", "rule_id": None},
@@ -346,6 +367,15 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
     launcher = project_dir / "Open_SciPlot_Project.command"
     launcher_info = _artifact_info(launcher, project_slug=project_slug)
     launcher_info["executable"] = bool(launcher_info["exists"] and (launcher.stat().st_mode & 0o111))
+    studio_launcher = project_dir / "Open_in_SciPlot_Studio.command"
+    studio_launcher_info = _artifact_info(studio_launcher, project_slug=project_slug)
+    studio_launcher_info["executable"] = bool(
+        studio_launcher_info["exists"] and (studio_launcher.stat().st_mode & 0o111)
+    )
+    studio_documents = [
+        _artifact_info(path, project_slug=project_slug)
+        for path in sorted((project_dir / "studio").glob("*.vsz"))
+    ]
     sciplot_manifests = [
         _artifact_info(path, project_slug=project_slug)
         for path in sorted(project_dir.glob("*.sciplot.json"))
@@ -362,9 +392,54 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
             and zip_info["exists"]
         ),
         "launcher": launcher_info,
+        "studio": {
+            "launcher": studio_launcher_info,
+            "documents": studio_documents,
+            "complete": bool(
+                studio_launcher_info["exists"]
+                and studio_launcher_info["executable"]
+                and studio_documents
+                and all(item["exists"] for item in studio_documents)
+            ),
+        },
         "sciplot_manifests": sciplot_manifests,
         "zip": zip_info,
     }
+
+
+def _studio_prepare_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("QT_QPA_PLATFORM", "offscreen")
+    framework_paths = [Path("/opt/homebrew/opt/qtbase/lib"), Path("/opt/homebrew/opt/qt/lib")]
+    existing = [str(path) for path in framework_paths if path.exists()]
+    if existing:
+        joined = ":".join(existing)
+        for key in ("DYLD_FRAMEWORK_PATH", "DYLD_LIBRARY_PATH"):
+            current = env.get(key)
+            env[key] = f"{joined}:{current}" if current else joined
+        env.setdefault("SCIPLOT_STUDIO_QT_RUNTIME", "1")
+    return env
+
+
+def _prepare_studio_project_package(project_dir: Path) -> None:
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "sciplot_core.cli",
+                "studio",
+                str(project_dir),
+                "--prepare-only",
+                "--json",
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+            env=_studio_prepare_env(),
+        )
+    except Exception:
+        return
 
 
 def _preview_path_for_figure(path: Path) -> Path:
@@ -556,6 +631,13 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         "review_html": _artifact_info(run_output / "review.html", project_slug=project_slug),
         "intervention_request": _artifact_info(intervention_path, project_slug=project_slug),
     }
+    delivery = last_run.get("delivery_package") if isinstance(last_run.get("delivery_package"), dict) else {}
+    project_file = delivery.get("project_file")
+    excel_data = delivery.get("excel_data")
+    if isinstance(project_file, str) and project_file.strip():
+        artifacts["delivery_project"] = _artifact_info(Path(project_file), project_slug=project_slug)
+    if isinstance(excel_data, str) and excel_data.strip():
+        artifacts["delivery_excel"] = _artifact_info(Path(excel_data), project_slug=project_slug)
     figure_paths = [Path(str(path)) for path in last_run.get("figures", []) if isinstance(path, str)]
     figures = [_artifact_info(path, project_slug=project_slug) for path in figure_paths]
     preview_figure = _figure_preview_info(figure_paths, project_slug=project_slug)
@@ -646,6 +728,12 @@ def _table_files(source: Path) -> list[Path]:
         (path for path in source.iterdir() if path.is_file() and path.suffix.lower() in _TABLE_EXTENSIONS),
         key=lambda path: path.name.casefold(),
     )
+
+
+def _rheology_comparison_files(source: Path) -> list[Path]:
+    files = _table_files(source)
+    text_files = [path for path in files if path.suffix.lower() in {".csv", ".tsv", ".txt"}]
+    return text_files or files
 
 
 def _file_payload(path: Path) -> dict[str, Any]:
@@ -881,7 +969,12 @@ def prepare_intake_session(
     output_root.mkdir(parents=True, exist_ok=True)
 
     tensile_dirs = _tensile_export_dirs(source)
-    frequency_files = _table_files(source) if is_rheology_frequency_comparison_dir(source) else []
+    temperature_files = _rheology_comparison_files(source) if is_rheology_temperature_comparison_dir(source) else []
+    frequency_files = (
+        _rheology_comparison_files(source)
+        if not temperature_files and is_rheology_frequency_comparison_dir(source)
+        else []
+    )
     torque_files = _torque_files(source)
     semantic: dict[str, Any] | None = None
 
@@ -903,6 +996,14 @@ def prepare_intake_session(
         reason = "Detected frequency-sweep exports and mapped each file to one sample group."
         confidence = 98.0
         groups = [_group_payload(path.stem, [path]) for path in frequency_files]
+    elif temperature_files:
+        semantic = classify_source(source, requested_rule_id="rheology_temperature_sweep")
+        data_type_id = "rheology_dma"
+        experiment_type_id = "rheology_temperature_sweep"
+        rule_id = "rheology_temperature_sweep"
+        reason = "Detected temperature-sweep exports and mapped each file to one sample group."
+        confidence = 98.0
+        groups = [_group_payload(path.stem, [path]) for path in temperature_files]
     elif torque_files:
         data_type_id = "mechanical"
         experiment_type_id = "torque_curve"
@@ -1236,16 +1337,29 @@ def create_intake_project(
             "replicate_mode": selected_replicate_mode,
         },
     }
+    (project_dir / "plot_request.json").write_text(
+        json.dumps(json_safe(plot_request), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    try:
+        from sciplot_core.studio import prepare_studio_document
+
+        studio_payload = prepare_studio_document(project_dir)
+        if isinstance(studio_payload.get("studio"), dict):
+            manifest["studio"] = studio_payload["studio"]
+    except Exception as exc:
+        manifest["studio"] = {
+            "kind": "sciplot_studio_document",
+            "engine": "veusz",
+            "status": "needs_attention",
+            "error": str(exc),
+        }
     (project_dir / "intake_manifest.json").write_text(
         json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
     (project_dir / f"{project_slug}.sciplot.json").write_text(
         json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    (project_dir / "plot_request.json").write_text(
-        json.dumps(json_safe(plot_request), indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
     zip_path = output_root / f"{project_slug}.zip"
@@ -1434,6 +1548,8 @@ def preview_intake_project(
     *,
     exports: list[str] | tuple[str, ...] | None = None,
     render_options: dict[str, Any] | None = None,
+    clear_render_options: list[str] | tuple[str, ...] | None = None,
+    split_policy: dict[str, Any] | None = None,
     series_order: list[str] | tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     project = _load_intake_project_request(project_dir)
@@ -1442,6 +1558,8 @@ def preview_intake_project(
         project.request,
         exports=exports,
         render_options=render_options,
+        clear_render_options=clear_render_options,
+        split_policy=split_policy,
         series_order=series_order,
         template=template,
     )
@@ -1465,6 +1583,8 @@ def apply_intake_project(
     *,
     exports: list[str] | tuple[str, ...] | None = None,
     render_options: dict[str, Any] | None = None,
+    clear_render_options: list[str] | tuple[str, ...] | None = None,
+    split_policy: dict[str, Any] | None = None,
     series_order: list[str] | tuple[str, ...] | None = None,
     review_note: str | None = None,
 ) -> dict[str, Any]:
@@ -1475,6 +1595,8 @@ def apply_intake_project(
         project.request,
         exports=exports,
         render_options=render_options,
+        clear_render_options=clear_render_options,
+        split_policy=split_policy,
         series_order=series_order,
         template=template,
         review_note=review_note,
@@ -1495,6 +1617,11 @@ def apply_intake_project(
         **plot_options,
         "exports": patched_request.get("exports", list(DEFAULT_EXPORT_FORMATS)),
         "render_options": render_patch,
+        **(
+            {"split_policy": patched_request["split_policy"]}
+            if isinstance(patched_request.get("split_policy"), dict)
+            else {}
+        ),
         **({"series_order": selected_series} if selected_series is not None else {}),
     }
     filtered_groups = _filter_manifest_groups(intake_manifest.get("groups"), selected_series)
@@ -1522,6 +1649,8 @@ def rerun_intake_project(
     *,
     exports: list[str] | tuple[str, ...] | None = None,
     render_options: dict[str, Any] | None = None,
+    clear_render_options: list[str] | tuple[str, ...] | None = None,
+    split_policy: dict[str, Any] | None = None,
     series_order: list[str] | tuple[str, ...] | None = None,
     review_note: str | None = None,
 ) -> dict[str, Any]:
@@ -1532,6 +1661,8 @@ def rerun_intake_project(
         project_path,
         exports=exports,
         render_options=render_options,
+        clear_render_options=clear_render_options,
+        split_policy=split_policy,
         series_order=series_order,
         review_note=review_note,
     )
@@ -1576,6 +1707,7 @@ def rerun_intake_project(
     intake_manifest.pop("run_failed", None)
     intake_manifest.pop("failure", None)
     _write_intake_manifest(project_path, intake_manifest)
+    _prepare_studio_project_package(project_path)
     refreshed_zip = refresh_intake_project_zip(project_path)
     return {
         **applied,
@@ -1827,6 +1959,8 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                             project_dir,
                             exports=payload.get("exports"),
                             render_options=payload.get("render_options"),
+                            clear_render_options=payload.get("clear_render_options"),
+                            split_policy=payload.get("split_policy"),
                             series_order=payload.get("series_order"),
                         )
                     elif parts[4] == "apply":
@@ -1834,6 +1968,8 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                             project_dir,
                             exports=payload.get("exports"),
                             render_options=payload.get("render_options"),
+                            clear_render_options=payload.get("clear_render_options"),
+                            split_policy=payload.get("split_policy"),
                             series_order=payload.get("series_order"),
                             review_note=payload.get("review_note"),
                         )
@@ -1857,6 +1993,8 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                         project_dir,
                         exports=payload.get("exports"),
                         render_options=payload.get("render_options"),
+                        clear_render_options=payload.get("clear_render_options"),
+                        split_policy=payload.get("split_policy"),
                         series_order=payload.get("series_order"),
                         review_note=payload.get("review_note"),
                     )

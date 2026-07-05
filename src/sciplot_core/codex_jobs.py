@@ -56,6 +56,9 @@ def _allowed_paths() -> list[str]:
         "src/sciplot_core/materials_rules.py",
         "src/sciplot_core/semantic.py",
         "src/sciplot_core/workflow.py",
+        "src/sciplot_core/one_step.py",
+        "src/sciplot_core/policy.py",
+        "src/sciplot_core/delivery.py",
         "src/sciplot_core/intake.py",
         "src/sciplot_recipes/",
         "tests/",
@@ -89,6 +92,11 @@ def build_codex_handoff(
         "failure": failure,
         "allowed_paths": _allowed_paths(),
         "required_checks": _default_required_checks(request_path, output_path),
+        "review_policy": {
+            "default": "structured_qa_summary",
+            "image_review_required": False,
+            "image_review_triggers": ["qa_failure", "low_confidence_semantics", "explicit_user_request"],
+        },
         "user_goal": user_goal
         or "Fix the SciPlot semantic/recipe gap, add focused tests or fixtures, rerun the request, and verify QA.",
     }

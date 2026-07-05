@@ -531,8 +531,11 @@ def build_output_package_contract(output_dir: Path, *, manifest: dict[str, Any])
         ("manifest", output_dir / "manifest.json"),
         ("review_html", output_dir / "review.html"),
         ("revision_brief", output_dir / "revision_brief.md"),
-        ("analysis_metrics", output_dir / "tables" / "analysis_metrics.csv"),
     ]
+    result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
+    analysis_metrics = result.get("analysis_metrics") if isinstance(result.get("analysis_metrics"), list) else []
+    if analysis_metrics:
+        required.append(("analysis_metrics", output_dir / "tables" / "analysis_metrics.csv"))
     raw_archive = manifest.get("raw_archive") if isinstance(manifest.get("raw_archive"), dict) else {}
     raw_path = raw_archive.get("path")
     if isinstance(raw_path, str) and raw_path.strip():

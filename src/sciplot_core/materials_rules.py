@@ -12,6 +12,11 @@ import pandas as pd
 from sciplot_core._bootstrap import ensure_legacy_core
 from sciplot_core._constants import _DEFAULT_RENDER_OPTIONS
 from sciplot_core._utils import token as _utils_token
+from sciplot_core.policy import (
+    FTIR_SPECTRUM_RENDER_OPTIONS,
+    NMR_SPECTRUM_RENDER_OPTIONS,
+    TORQUE_CURVE_RENDER_OPTIONS,
+)
 from sciplot_core.study_model import experiment_recommendation_payload
 
 ensure_legacy_core()
@@ -426,7 +431,7 @@ RULES: tuple[SemanticRule, ...] = (
                 "N·m",
             ),
         ),
-        render_options={**_DEFAULT_RENDER_OPTIONS, "series_label_mode": "inline", "size": "120x55"},
+        render_options=dict(TORQUE_CURVE_RENDER_OPTIONS),
         fixture_status="pending",
         priority=42,
         reason="Torque rheometer export with Screw Torque over time.",
@@ -567,11 +572,12 @@ RULES: tuple[SemanticRule, ...] = (
         "ftir_spectrum",
         "ftir_spectrum",
         "spectroscopy",
-        "curve",
+        "stacked_curve",
         AxisSpec("Wavenumber", "cm^-1", "Wavenumber (cm$^{-1}$)", aliases=("wavenumber", "cm-1"), reverse=True),
         AxisSpec("Transmittance", "%", "Transmittance (%)", aliases=("transmittance", "%T", "absorbance")),
         keywords=("ftir", "wavenumber"),
         column_aliases=("wavenumber", "transmittance"),
+        render_options=dict(FTIR_SPECTRUM_RENDER_OPTIONS),
         analysis=(
             AnalysisSpec(
                 "strongest_peak_position",
@@ -619,10 +625,11 @@ RULES: tuple[SemanticRule, ...] = (
         "nmr_spectrum",
         "nmr_spectrum",
         "spectroscopy",
-        "curve",
+        "stacked_curve",
         AxisSpec("Chemical shift", "ppm", "Chemical shift (ppm)", reverse=True),
         AxisSpec("Intensity", "a.u.", "Intensity (a.u.)"),
         keywords=("nmr", "ppm"),
+        render_options=dict(NMR_SPECTRUM_RENDER_OPTIONS),
         fixture_status="pending",
         priority=80,
     ),
@@ -1228,6 +1235,10 @@ def semantic_payload_from_rule(
         render_options.setdefault("yscale", rule.y_axis.scale)
     if rule.x_axis.reverse:
         render_options.setdefault("reverse_x", True)
+    if rule.rule_id == "ftir_spectrum":
+        render_options.setdefault("x_min", 400.0)
+        render_options.setdefault("x_max", 4000.0)
+        render_options.setdefault("x_tick_density", "auto")
     return {
         "rule_id": rule.rule_id,
         "semantic_family": rule.semantic_family,

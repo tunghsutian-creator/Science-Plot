@@ -550,9 +550,12 @@ def _render_curve_candidate(
         _compact_curve_fix(options),
     )
     compact_legend = legend_variant == "compact"
+    outside_legend = legend_variant == "outside"
     strategy = (
         "compact_legend"
         if compact_legend
+        else "outside_legend"
+        if outside_legend
         else "legend"
         if direct_label_side is None
         else f"direct_{direct_label_side}"
@@ -562,9 +565,13 @@ def _render_curve_candidate(
         autofixes.append("direct_series_labels")
     if compact_legend:
         autofixes.append("compact_inside_legend")
+    if outside_legend:
+        autofixes.append("legend_auto_outside_right")
     forced_legend_mode = _legend_mode_for_position(
         cast(str | None, base_kwargs.get("legend_position", options.legend_position))
     )
+    if outside_legend:
+        forced_legend_mode = "outside"
     resolved_xscale = str(base_kwargs.get("xscale", options.xscale))
     resolved_yscale = str(base_kwargs.get("yscale", options.yscale))
     resolved_x_tick_density = cast(str | None, base_kwargs.get("x_tick_density", options.x_tick_density))
@@ -924,6 +931,20 @@ def _apply_curve_fit_overlay(
     )
 
 
+_LEGEND_LAYOUT_ISSUE_IDS = {
+    "legend_overlap",
+    "legend_footprint",
+    "legend_outside_bounds",
+    "legend_axes_too_small",
+}
+
+
+def _has_legend_layout_issue(rendered: RenderedPlot) -> bool:
+    if rendered.qa_report is None:
+        return False
+    return any(issue.id in _LEGEND_LAYOUT_ISSUE_IDS for issue in rendered.qa_report.issues)
+
+
 def _render_curve_like_plot(
     *,
     filename: str,
@@ -971,12 +992,28 @@ def _render_curve_like_plot(
                 base_kwargs=resolved_kwargs,
             )
         )
+    if not forced_legend and secondary_binding is None and len(series_list) > 1:
+        candidates.append(
+            _render_curve_candidate(
+                filename=filename,
+                template=template,
+                series_list=series_list,
+                options=options,
+                show_markers=show_markers,
+                scatter=scatter,
+                direct_label_side=None,
+                legend_variant="outside",
+                base_kwargs=resolved_kwargs,
+            )
+        )
     inline_labels_requested = options.series_label_mode == "inline"
+    best_legend_rendered, _best_legend_strategy = max(candidates, key=_curve_candidate_key)
+    legend_layout_failed = _has_legend_layout_issue(best_legend_rendered)
     if (
         not forced_legend
-        and inline_labels_requested
+        and (inline_labels_requested or legend_layout_failed)
         and supports_direct_labels
-        and _prefer_direct_labels(options, len(series_list))
+        and _prefer_direct_labels(options, len(series_list), fallback=inline_labels_requested or legend_layout_failed)
         and len(series_list) > 1
     ):
         for side in ("left", "right"):
@@ -1235,29 +1272,156 @@ def _apply_stacked_inline_labels(ax: Axes, series_list) -> None:
         )
 
 
-def _render_stacked_curve(input_path: Path, sheet: str | int, options: RenderOptions) -> list[RenderedPlot]:
-    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
-    validate_series_scales(series_list, xscale=options.xscale, yscale=options.yscale)
-    validate_manual_axis_overrides(options, template="stacked_curve")
-    axis_kwargs = _with_manual_axis_overrides({}, options)
-    label_mode = "edge" if options.series_label_mode == "inline" else "legend"
+_FTIR_REQUIRED_TICKS = (4000.0, 3000.0, 2000.0, 1000.0, 400.0)
+_FTIR_OPTIONAL_TICKS = (3500.0, 2500.0, 1500.0, 500.0)
+
+
+def _looks_like_wavenumber_stack(series_list) -> bool:
+    if not series_list:
+        return False
+    first = series_list[0]
+    text = " ".join(
+        str(value)
+        for value in (
+            first.x_label,
+            first.x_unit,
+        )
+        if value
+    ).casefold()
+    return "wavenumber" in text or "cm" in text and ("-1" in text or "−1" in text or "^{-1}" in text)
+
+
+def _ftir_visible_ticks(width_mm: float) -> tuple[float, ...]:
+    if width_mm >= 120.0:
+        return tuple(sorted((*_FTIR_REQUIRED_TICKS, *_FTIR_OPTIONAL_TICKS), reverse=True))
+    return _FTIR_REQUIRED_TICKS
+
+
+def _stacked_curve_options_with_domain_defaults(
+    series_list,
+    options: RenderOptions,
+) -> tuple[RenderOptions, tuple[str, ...], tuple[float, ...] | None]:
+    autofixes: list[str] = []
+    visible_xticks: tuple[float, ...] | None = None
+    effective = options
+    if _looks_like_wavenumber_stack(series_list):
+        updates: dict[str, object] = {}
+        if options.x_min is None and options.x_max is None:
+            updates["x_min"] = 400.0
+            updates["x_max"] = 4000.0
+            autofixes.append("ftir_wavenumber_bounds")
+        if not options.reverse_x:
+            updates["reverse_x"] = True
+            autofixes.append("ftir_wavenumber_reverse_x")
+        if updates:
+            effective = replace(effective, **updates)
+        visible_xticks = _ftir_visible_ticks(effective.width_mm)
+    return effective, tuple(autofixes), visible_xticks
+
+
+def _qa_issue_ids(rendered: RenderedPlot) -> set[str]:
+    if rendered.qa_report is None:
+        return set()
+    return {issue.id for issue in rendered.qa_report.issues}
+
+
+_STACKED_VISUAL_Y_ISSUE_IDS = {
+    "stacked_top_blank_excess",
+    "data_vertical_occupancy_low",
+}
+
+
+def _stacked_auto_compact_ylim(rendered: RenderedPlot) -> tuple[float, float] | None:
+    if rendered.qa_report is None or not (_qa_issue_ids(rendered) & _STACKED_VISUAL_Y_ISSUE_IDS):
+        return None
+    if not rendered.figure.axes:
+        return None
+    ax = rendered.figure.axes[0]
+    if ax.get_yscale() != "linear" or ax.yaxis_inverted():
+        return None
+    y_blocks: list[np.ndarray] = []
+    for line in ax.lines:
+        if not line.get_visible():
+            continue
+        values = np.asarray(line.get_ydata(), dtype=float)
+        finite = values[np.isfinite(values)]
+        if finite.size:
+            y_blocks.append(finite)
+    if not y_blocks:
+        return None
+    values = np.concatenate(y_blocks)
+    data_low = float(np.min(values))
+    data_high = float(np.max(values))
+    if not np.isfinite(data_low) or not np.isfinite(data_high) or data_high <= data_low:
+        return None
+    current_low, current_high = (float(value) for value in ax.get_ylim())
+    if not np.isfinite(current_low) or not np.isfinite(current_high) or current_high <= current_low:
+        return None
+    stack_layout = getattr(rendered.figure, "_sciplot_stack_layout", None)
+    peak = float(stack_layout.get("peak_height") or 0.0) if isinstance(stack_layout, Mapping) else 0.0
+    span = data_high - data_low
+    padding = max(0.10 * peak, 0.04 * span, 1e-9)
+    proposed_high = data_high + padding
+    if proposed_high >= current_high or proposed_high <= current_low:
+        return None
+    return (current_low, proposed_high)
+
+
+def _stacked_curve_candidate_key(rendered: RenderedPlot) -> tuple[float, int, int]:
+    if rendered.qa_report is None:
+        return (0.0, -999, 0)
+    unsafe_issue_ids = {
+        "legend_overlap",
+        "legend_footprint",
+        "legend_outside_bounds",
+        "legend_axes_too_small",
+        "tick_label_overlap",
+        "ftir_wavenumber_bounds_missing",
+        "stack_curve_overlap",
+        "stacked_label_bounds",
+        "stacked_label_collision",
+    }
+    unsafe_count = sum(1 for issue in rendered.qa_report.issues if issue.id in unsafe_issue_ids)
+    critical_count = sum(1 for issue in rendered.qa_report.issues if issue.severity == "critical")
+    return (float(rendered.qa_report.score), -unsafe_count, -critical_count)
+
+
+def _render_stacked_curve_attempt(
+    *,
+    input_path: Path,
+    series_list,
+    options: RenderOptions,
+    axis_kwargs: dict[str, object],
+    label_mode: str,
+    legend_mode_override: str | None,
+    visible_xticks: tuple[float, ...] | None,
+    autofixes: tuple[str, ...],
+) -> RenderedPlot:
+    if visible_xticks is not None:
+        axis_kwargs = {**axis_kwargs, "visible_xticks": visible_xticks}
     fig, ax = plot_curves(
         series_list,
         show_markers=False,
-        legend_mode="none" if label_mode == "edge" else _legend_mode_for_position(options.legend_position),
+        legend_mode=(
+            "none"
+            if label_mode == "edge"
+            else legend_mode_override or _legend_mode_for_position(options.legend_position)
+        ),
         xscale=options.xscale,
         yscale=options.yscale,
         width_mm=options.width_mm,
         height_mm=options.height_mm,
         xlim=axis_kwargs.get("xlim"),
         ylim=axis_kwargs.get("ylim"),
+        visible_xticks=axis_kwargs.get("visible_xticks"),
         right_margin_mm=_right_margin_for_inline_stack_labels(options),
         reverse_x=options.reverse_x,
         x_padding_fraction=options.x_padding_fraction,
         x_tick_density=options.x_tick_density,
         x_tick_edge_labels=options.x_tick_edge_labels,
         stack_mode="auto_vertical",
-        stack_spacing_scale=options.stack_spacing_scale if options.stack_spacing_scale is not None else 1.0,
+        stack_spacing_scale=options.stack_spacing_scale,
+        stack_spacing_mode="manual" if options.stack_spacing_scale is not None else "auto",
         series_label_mode=label_mode,
         series_label_side="right",
         baseline_mode=options.baseline,
@@ -1267,20 +1431,104 @@ def _render_stacked_curve(input_path: Path, sheet: str | int, options: RenderOpt
     )
     if label_mode == "edge":
         _apply_stacked_inline_labels(ax, series_list)
+    if fig.axes:
+        _apply_curve_axis_labels(
+            fig.axes[0],
+            series_list[0],
+            options,
+            preserve_stress_label=False,
+        )
+    applied = _apply_series_style_overrides(
+        ax,
+        series_list=series_list,
+        options=options,
+        scatter=False,
+    )
     rendered = _rendered_plot_with_qa(
         filename=f"{input_path.stem}_stacked_curve.pdf",
         figure=fig,
         template="stacked_curve",
         options=options,
+        autofixes_applied=tuple((*autofixes, *applied)),
     )
-    if rendered.figure.axes:
-        _apply_curve_axis_labels(
-            rendered.figure.axes[0],
-            series_list[0],
-            options,
-            preserve_stress_label=False,
+    return rendered
+
+
+def _render_stacked_curve(input_path: Path, sheet: str | int, options: RenderOptions) -> list[RenderedPlot]:
+    series_list = _load_filter_and_order_curve_series(input_path, sheet, options)
+    effective_options, domain_autofixes, visible_xticks = _stacked_curve_options_with_domain_defaults(
+        series_list,
+        options,
+    )
+    validate_series_scales(series_list, xscale=effective_options.xscale, yscale=effective_options.yscale)
+    validate_manual_axis_overrides(effective_options, template="stacked_curve")
+    autofixes = list(domain_autofixes)
+    attempt_options = effective_options
+    legend_mode_override: str | None = None
+    rendered: RenderedPlot | None = None
+    candidates: list[RenderedPlot] = []
+    forbid_outside_legend = _looks_like_wavenumber_stack(series_list)
+
+    for _attempt in range(3):
+        axis_kwargs = _with_manual_axis_overrides({}, attempt_options)
+        label_mode = "edge" if attempt_options.series_label_mode == "inline" else "legend"
+        rendered = _render_stacked_curve_attempt(
+            input_path=input_path,
+            series_list=series_list,
+            options=attempt_options,
+            axis_kwargs=axis_kwargs,
+            label_mode=label_mode,
+            legend_mode_override=legend_mode_override,
+            visible_xticks=visible_xticks,
+            autofixes=tuple(autofixes),
         )
-    return [rendered]
+        candidates.append(rendered)
+        issue_ids = _qa_issue_ids(rendered)
+        compact_ylim = _stacked_auto_compact_ylim(rendered)
+        if (
+            compact_ylim is not None
+            and attempt_options.y_min is None
+            and attempt_options.y_max is None
+            and attempt_options.stack_spacing_scale is None
+        ):
+            attempt_options = replace(attempt_options, y_min=compact_ylim[0], y_max=compact_ylim[1])
+            autofixes.append("stacked_y_axis_compacted")
+            continue
+        if "tick_label_overlap" in issue_ids and attempt_options.x_tick_density is None:
+            attempt_options = replace(attempt_options, x_tick_density="sparse")
+            autofixes.append("tick_density_sparse")
+            continue
+        legend_issue_ids = _LEGEND_LAYOUT_ISSUE_IDS & issue_ids
+        if (
+            legend_issue_ids
+            and attempt_options.legend_position == "auto"
+            and attempt_options.series_label_mode != "inline"
+        ):
+            if (
+                forbid_outside_legend
+                or {"legend_footprint", "legend_axes_too_small", "legend_outside_bounds"} & legend_issue_ids
+            ):
+                attempt_options = replace(attempt_options, series_label_mode="inline")
+                legend_mode_override = None
+                autofixes.append("legend_auto_inline_labels")
+                continue
+            if legend_mode_override is None:
+                legend_mode_override = "outside"
+                autofixes.append("legend_auto_outside_right")
+                continue
+            attempt_options = replace(attempt_options, series_label_mode="inline")
+            legend_mode_override = None
+            autofixes.append("legend_auto_inline_labels")
+            continue
+        break
+
+    if not candidates:
+        raise RuntimeError("Stacked curve render failed before producing a figure.")
+    best = max(candidates, key=_stacked_curve_candidate_key)
+    for candidate in candidates:
+        if candidate is not best:
+            plt.close(candidate.figure)
+    return [best]
 
 
 def _render_stacked_area(input_path: Path, sheet: str | int, options: RenderOptions) -> list[RenderedPlot]:
@@ -1300,7 +1548,8 @@ def _render_stacked_area(input_path: Path, sheet: str | int, options: RenderOpti
         reverse_x=options.reverse_x,
         x_padding_fraction=options.x_padding_fraction,
         stack_mode="auto_vertical",
-        stack_spacing_scale=options.stack_spacing_scale if options.stack_spacing_scale is not None else 1.0,
+        stack_spacing_scale=options.stack_spacing_scale,
+        stack_spacing_mode="manual" if options.stack_spacing_scale is not None else "auto",
         series_label_mode=label_mode,
         series_label_side="right",
         baseline_mode=options.baseline,

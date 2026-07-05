@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import transforms
-
 from src.plot_contract import qa_profile
 from src.rendering.models import QAIssue, QAReport, RenderOptions
 from src.rendering.template_lifecycle import template_family_ids
@@ -73,14 +73,19 @@ def _finalize_report(
     issues: list[QAIssue],
     *,
     autofixes_applied: Iterable[str] = (),
+    layout_summary: Mapping[str, Any] | None = None,
 ) -> QAReport:
     penalty = sum(_issue_penalty(issue.severity) for issue in issues)
     score = max(0.0, min(100.0, 100.0 - penalty))
+    summary = dict(layout_summary or {})
+    summary.setdefault("issue_ids", tuple(issue.id for issue in issues))
+    summary.setdefault("needs_ai_intervention", any(issue.severity == "critical" for issue in issues))
     return QAReport(
         score=round(score, 1),
         grade=_grade_for_score(score),
         issues=tuple(issues),
         autofixes_applied=tuple(dict.fromkeys(str(item) for item in autofixes_applied if item)),
+        layout_summary=summary,
     )
 
 
@@ -189,6 +194,16 @@ def _bbox_area(bbox: transforms.Bbox) -> float:
     return max(float(bbox.width), 0.0) * max(float(bbox.height), 0.0)
 
 
+def _outside_bbox_px(inner: transforms.Bbox, outer: transforms.Bbox) -> float:
+    return max(
+        outer.x0 - inner.x0,
+        inner.x1 - outer.x1,
+        outer.y0 - inner.y0,
+        inner.y1 - outer.y1,
+        0.0,
+    )
+
+
 def _text_bboxes(
     texts: Sequence[plt.Text],
     renderer,
@@ -223,6 +238,532 @@ def _tick_label_bboxes(axis, renderer) -> list[transforms.Bbox]:
         for tick in axis.get_major_ticks()
         if tick.label1.get_visible() and tick.label1.get_text().strip()
     ]
+
+
+def _visible_tick_values(axis) -> tuple[float, ...]:
+    values: list[float] = []
+    for tick in axis.get_major_ticks():
+        label = tick.label1
+        if label.get_visible() and str(label.get_text()).strip():
+            value = float(tick.get_loc())
+            if np.isfinite(value):
+                values.append(value)
+    return tuple(values)
+
+
+def _line_width_values(ax: plt.Axes) -> tuple[float, ...]:
+    values: list[float] = [
+        float(line.get_linewidth())
+        for line in ax.lines
+        if line.get_visible() and float(line.get_linewidth()) > 0.0
+    ]
+    for collection in ax.collections:
+        if not collection.get_visible():
+            continue
+        with np.errstate(all="ignore"):
+            widths = np.asarray(collection.get_linewidths(), dtype=float)
+        values.extend(float(value) for value in widths if np.isfinite(value) and value > 0.0)
+    return tuple(values)
+
+
+def _stroke_summary(ax: plt.Axes) -> dict[str, Any]:
+    line_widths = _line_width_values(ax)
+    tick_width = max(
+        _axis_actual_tick_width(ax.xaxis, fallback=float(plt.rcParams["xtick.major.width"])),
+        _axis_actual_tick_width(ax.yaxis, fallback=float(plt.rcParams["ytick.major.width"])),
+        1e-6,
+    )
+    if not line_widths:
+        return {
+            "line_count": 0,
+            "line_width_min_pt": None,
+            "line_width_mean_pt": None,
+            "line_width_max_pt": None,
+            "tick_width_pt": round(float(tick_width), 3),
+            "line_to_tick_ratio": None,
+        }
+    return {
+        "line_count": len(line_widths),
+        "line_width_min_pt": round(float(np.min(line_widths)), 3),
+        "line_width_mean_pt": round(float(np.mean(line_widths)), 3),
+        "line_width_max_pt": round(float(np.max(line_widths)), 3),
+        "tick_width_pt": round(float(tick_width), 3),
+        "line_to_tick_ratio": round(float(np.mean(line_widths) / max(tick_width, 1e-6)), 3),
+    }
+
+
+def _display_data_points(ax: plt.Axes) -> np.ndarray:
+    point_blocks: list[np.ndarray] = []
+    for line in ax.lines:
+        if not line.get_visible():
+            continue
+        x_values = np.asarray(line.get_xdata(), dtype=float)
+        y_values = np.asarray(line.get_ydata(), dtype=float)
+        valid = np.isfinite(x_values) & np.isfinite(y_values)
+        if np.any(valid):
+            point_blocks.append(ax.transData.transform(np.column_stack([x_values[valid], y_values[valid]])))
+    for collection in ax.collections:
+        if not collection.get_visible():
+            continue
+        try:
+            offsets = np.asarray(collection.get_offsets(), dtype=float)
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if offsets.ndim == 2 and offsets.shape[1] >= 2:
+            valid = np.isfinite(offsets[:, 0]) & np.isfinite(offsets[:, 1])
+            if np.any(valid):
+                point_blocks.append(ax.transData.transform(offsets[valid, :2]))
+    if not point_blocks:
+        return np.empty((0, 2), dtype=float)
+    return np.vstack(point_blocks)
+
+
+def _data_occupancy_summary(ax: plt.Axes, renderer) -> dict[str, Any]:
+    axes_bbox = ax.get_window_extent(renderer=renderer)
+    points = _display_data_points(ax)
+    if points.size == 0:
+        return {
+            "has_data": False,
+            "vertical_occupancy": None,
+            "horizontal_occupancy": None,
+            "top_blank_fraction": None,
+            "bottom_blank_fraction": None,
+            "left_blank_fraction": None,
+            "right_blank_fraction": None,
+            "data_bbox_px": None,
+        }
+    inside = (
+        (points[:, 0] >= axes_bbox.x0)
+        & (points[:, 0] <= axes_bbox.x1)
+        & (points[:, 1] >= axes_bbox.y0)
+        & (points[:, 1] <= axes_bbox.y1)
+    )
+    clipped = points[inside]
+    if clipped.size == 0:
+        return {
+            "has_data": False,
+            "vertical_occupancy": 0.0,
+            "horizontal_occupancy": 0.0,
+            "top_blank_fraction": 1.0,
+            "bottom_blank_fraction": 1.0,
+            "left_blank_fraction": 1.0,
+            "right_blank_fraction": 1.0,
+            "data_bbox_px": None,
+        }
+    x0 = float(np.min(clipped[:, 0]))
+    x1 = float(np.max(clipped[:, 0]))
+    y0 = float(np.min(clipped[:, 1]))
+    y1 = float(np.max(clipped[:, 1]))
+    width = max(float(axes_bbox.width), 1.0)
+    height = max(float(axes_bbox.height), 1.0)
+    return {
+        "has_data": True,
+        "vertical_occupancy": round(float((y1 - y0) / height), 4),
+        "horizontal_occupancy": round(float((x1 - x0) / width), 4),
+        "top_blank_fraction": round(float((axes_bbox.y1 - y1) / height), 4),
+        "bottom_blank_fraction": round(float((y0 - axes_bbox.y0) / height), 4),
+        "left_blank_fraction": round(float((x0 - axes_bbox.x0) / width), 4),
+        "right_blank_fraction": round(float((axes_bbox.x1 - x1) / width), 4),
+        "data_bbox_px": [
+            round(x0, 3),
+            round(y0, 3),
+            round(x1, 3),
+            round(y1, 3),
+        ],
+    }
+
+
+def _axis_layout_summary(fig: plt.Figure, ax: plt.Axes, renderer) -> dict[str, Any]:
+    legend = ax.get_legend()
+    axes_bbox = ax.get_window_extent(renderer=renderer)
+    figure_bbox = fig.bbox
+    legend_summary: dict[str, Any] = {"present": legend is not None}
+    if legend is not None:
+        legend_bbox = legend.get_window_extent(renderer=renderer)
+        legend_area_ratio = _bbox_area(legend_bbox) / max(_bbox_area(axes_bbox), 1.0)
+        legend_summary.update(
+            {
+                "bbox_px": [
+                    round(float(legend_bbox.x0), 3),
+                    round(float(legend_bbox.y0), 3),
+                    round(float(legend_bbox.x1), 3),
+                    round(float(legend_bbox.y1), 3),
+                ],
+                "labels": tuple(text.get_text() for text in legend.get_texts()),
+                "area_ratio": round(float(legend_area_ratio), 4),
+                "outside_figure": bool(_outside_bbox_px(legend_bbox, figure_bbox) > 1.0),
+                "outside_figure_px": round(float(_outside_bbox_px(legend_bbox, figure_bbox)), 3),
+            }
+        )
+    return {
+        "x_label": ax.get_xlabel(),
+        "y_label": ax.get_ylabel(),
+        "x_bounds": tuple(round(float(value), 9) for value in ax.get_xlim()),
+        "y_bounds": tuple(round(float(value), 9) for value in ax.get_ylim()),
+        "x_scale": ax.get_xscale(),
+        "y_scale": ax.get_yscale(),
+        "x_inverted": bool(ax.xaxis_inverted()),
+        "y_inverted": bool(ax.yaxis_inverted()),
+        "x_ticks": tuple(round(float(value), 9) for value in _visible_tick_values(ax.xaxis)),
+        "y_ticks": tuple(round(float(value), 9) for value in _visible_tick_values(ax.yaxis)),
+        "x_tick_count": len(_visible_tick_values(ax.xaxis)),
+        "y_tick_count": len(_visible_tick_values(ax.yaxis)),
+        "axes_area_ratio": round(float(_bbox_area(axes_bbox) / max(_bbox_area(figure_bbox), 1.0)), 4),
+        "legend": legend_summary,
+        "stroke": _stroke_summary(ax),
+        "data_occupancy": _data_occupancy_summary(ax, renderer),
+    }
+
+
+def _base_layout_summary(
+    fig: plt.Figure,
+    *,
+    template: str,
+    options: RenderOptions,
+    renderer,
+) -> dict[str, Any]:
+    axes = [_axis_layout_summary(fig, axis, renderer) for axis in fig.axes]
+    summary: dict[str, Any] = {
+        "template": template,
+        "figure_size_mm": (
+            round(float(fig.get_size_inches()[0] * 25.4), 3),
+            round(float(fig.get_size_inches()[1] * 25.4), 3),
+        ),
+        "requested_size_mm": (round(float(options.width_mm), 3), round(float(options.height_mm), 3)),
+        "axes": tuple(axes),
+        "export_review_mode": "structured_qa_only",
+    }
+    stack_layout = getattr(fig, "_sciplot_stack_layout", None)
+    if isinstance(stack_layout, Mapping):
+        summary["stack_spacing"] = dict(stack_layout)
+    layout_debug = getattr(fig, "_sciplot_layout_debug", None)
+    if layout_debug:
+        summary["layout_decisions"] = tuple(str(item) for item in layout_debug)
+    return summary
+
+
+def _line_points_inside_bbox(ax: plt.Axes, bbox: transforms.Bbox) -> int:
+    count = 0
+    for line in ax.lines:
+        x_values = np.asarray(line.get_xdata(), dtype=float)
+        y_values = np.asarray(line.get_ydata(), dtype=float)
+        valid = np.isfinite(x_values) & np.isfinite(y_values)
+        if not np.any(valid):
+            continue
+        points = ax.transData.transform(np.column_stack([x_values[valid], y_values[valid]]))
+        inside = (
+            (points[:, 0] >= bbox.x0)
+            & (points[:, 0] <= bbox.x1)
+            & (points[:, 1] >= bbox.y0)
+            & (points[:, 1] <= bbox.y1)
+        )
+        count += int(np.count_nonzero(inside))
+    return count
+
+
+def _legend_overlap_metrics(ax: plt.Axes, renderer) -> dict[str, float | int]:
+    legend = ax.get_legend()
+    if legend is None:
+        return {"line_points": 0, "text_bboxes": 0, "tick_bboxes": 0}
+    legend_bbox = legend.get_window_extent(renderer=renderer)
+    text_bboxes = [
+        bbox
+        for _, bbox in _text_bboxes(
+            [ax.xaxis.label, ax.yaxis.label, *ax.texts],
+            renderer,
+        )
+    ]
+    tick_bboxes = [*_tick_label_bboxes(ax.xaxis, renderer), *_tick_label_bboxes(ax.yaxis, renderer)]
+    return {
+        "line_points": _line_points_inside_bbox(ax, legend_bbox),
+        "text_bboxes": sum(1 for bbox in text_bboxes if legend_bbox.overlaps(bbox)),
+        "tick_bboxes": sum(1 for bbox in tick_bboxes if legend_bbox.overlaps(bbox)),
+    }
+
+
+def _legend_profile_value(profile_name: str, key: str, default: float) -> float:
+    profile = qa_profile(profile_name)
+    curve_profile = qa_profile("curve")
+    return float(profile.get(key, curve_profile.get(key, default)))
+
+
+def _append_legend_geometry_issues(
+    fig: plt.Figure,
+    ax: plt.Axes,
+    renderer,
+    issues: list[QAIssue],
+    *,
+    profile_name: str,
+) -> None:
+    legend = ax.get_legend()
+    if legend is None:
+        return
+    legend_bbox = legend.get_window_extent(renderer=renderer)
+    axes_bbox = ax.get_window_extent(renderer=renderer)
+    figure_bbox = fig.bbox
+    legend_ratio = _bbox_area(legend_bbox) / max(_bbox_area(axes_bbox), 1.0)
+    warn_ratio = _legend_profile_value(profile_name, "legend_area_ratio_warn", 0.055)
+    fail_ratio = _legend_profile_value(profile_name, "legend_area_ratio_fail", 0.07)
+    overlap_metrics = _legend_overlap_metrics(ax, renderer)
+    line_tolerance = int(_legend_profile_value(profile_name, "legend_line_point_overlap_tolerance", 1.0))
+    line_points = int(overlap_metrics["line_points"])
+    has_content_overlap = (
+        line_points > line_tolerance
+        or int(overlap_metrics["text_bboxes"]) > 0
+        or int(overlap_metrics["tick_bboxes"]) > 0
+    )
+    if legend_bbox.overlaps(axes_bbox) and has_content_overlap and legend_ratio >= warn_ratio:
+        issues.append(
+            QAIssue(
+                id="legend_footprint",
+                severity="critical" if legend_ratio >= fail_ratio else "warning",
+                metric_value=round(legend_ratio, 4),
+                target=warn_ratio,
+                message="Legend footprint is too large for the current axis frame.",
+            )
+        )
+
+    outside_px = _outside_bbox_px(legend_bbox, figure_bbox)
+    tolerance_px = _legend_profile_value(profile_name, "legend_outside_tolerance_px", 1.0)
+    if outside_px > tolerance_px:
+        issues.append(
+            QAIssue(
+                id="legend_outside_bounds",
+                severity="critical",
+                metric_value=round(outside_px, 3),
+                target=tolerance_px,
+                message="Legend extends outside the rendered figure canvas.",
+            )
+        )
+
+    axes_ratio = _bbox_area(axes_bbox) / max(_bbox_area(figure_bbox), 1.0)
+    axes_warn = _legend_profile_value(profile_name, "axes_area_ratio_warn", 0.35)
+    axes_fail = _legend_profile_value(profile_name, "axes_area_ratio_fail", 0.28)
+    if axes_ratio < axes_warn:
+        issues.append(
+            QAIssue(
+                id="legend_axes_too_small",
+                severity="critical" if axes_ratio < axes_fail else "warning",
+                metric_value=round(axes_ratio, 4),
+                target=axes_warn,
+                message="Legend layout leaves too little usable axis area for the curves.",
+            )
+        )
+
+
+def _axis_has_wavenumber_label(ax: plt.Axes) -> bool:
+    label = f"{ax.get_xlabel()}".casefold()
+    return "wavenumber" in label or "cm" in label and ("-1" in label or "−1" in label or "^{-1}" in label)
+
+
+def _append_tick_gate_issues(ax: plt.Axes, renderer, issues: list[QAIssue]) -> None:
+    x_overlap = _overlap_count(_tick_label_bboxes(ax.xaxis, renderer), margin_px=1.0)
+    y_overlap = _overlap_count(_tick_label_bboxes(ax.yaxis, renderer), margin_px=1.0)
+    if x_overlap or y_overlap:
+        issues.append(
+            QAIssue(
+                id="tick_label_overlap",
+                severity="critical" if x_overlap + y_overlap > 2 else "warning",
+                metric_value=float(x_overlap + y_overlap),
+                target=0.0,
+                message="Major tick labels overlap; use a sparser tick policy or edge-label mode.",
+            )
+        )
+
+    if ax.get_xscale() == "log" and any(value <= 0.0 for value in ax.get_xticks() if np.isfinite(value)):
+        issues.append(
+            QAIssue(
+                id="log_axis_nonpositive_tick",
+                severity="critical",
+                metric_value="x",
+                target="positive_ticks",
+                message="Log x-axis contains a non-positive major tick.",
+            )
+        )
+    if ax.get_yscale() == "log" and any(value <= 0.0 for value in ax.get_yticks() if np.isfinite(value)):
+        issues.append(
+            QAIssue(
+                id="log_axis_nonpositive_tick",
+                severity="critical",
+                metric_value="y",
+                target="positive_ticks",
+                message="Log y-axis contains a non-positive major tick.",
+            )
+        )
+
+
+def _append_ftir_wavenumber_gate(ax: plt.Axes, issues: list[QAIssue]) -> None:
+    if not _axis_has_wavenumber_label(ax):
+        return
+    x0, x1 = ax.get_xlim()
+    bounds_ok = np.isclose(max(x0, x1), 4000.0, atol=1e-6) and np.isclose(min(x0, x1), 400.0, atol=1e-6)
+    ticks = _visible_tick_values(ax.xaxis)
+    endpoints_ok = any(np.isclose(value, 4000.0, atol=1e-6) for value in ticks) and any(
+        np.isclose(value, 400.0, atol=1e-6) for value in ticks
+    )
+    if not (bounds_ok and endpoints_ok and ax.xaxis_inverted()):
+        metric_value = (
+            f"bounds={tuple(round(float(v), 3) for v in (x0, x1))}; "
+            f"ticks={tuple(round(float(v), 3) for v in ticks)}"
+        )
+        issues.append(
+            QAIssue(
+                id="ftir_wavenumber_bounds_missing",
+                severity="critical",
+                metric_value=metric_value,
+                target="4000->400 with endpoint ticks",
+                message="FTIR/wavenumber axes must display 4000 to 400 cm^-1 with both endpoint ticks visible.",
+            )
+        )
+
+
+def _append_legend_gate_issues(ax: plt.Axes, renderer, issues: list[QAIssue]) -> None:
+    metrics = _legend_overlap_metrics(ax, renderer)
+    line_tolerance = int(qa_profile("curve").get("legend_line_point_overlap_tolerance", 1))
+    line_points = int(metrics["line_points"])
+    total = (
+        max(0, line_points - line_tolerance)
+        + int(metrics["text_bboxes"])
+        + int(metrics["tick_bboxes"])
+    )
+    if total:
+        issues.append(
+            QAIssue(
+                id="legend_overlap",
+                severity="critical",
+                metric_value=float(total),
+                target=0.0,
+                message="Legend overlaps curve data, tick labels, axis labels, or inline labels.",
+            )
+        )
+
+
+def _append_stroke_gate_issues(ax: plt.Axes, issues: list[QAIssue], *, profile_name: str) -> None:
+    profile = qa_profile(profile_name)
+    curve_profile = qa_profile("curve")
+    stroke = _stroke_summary(ax)
+    min_width = stroke.get("line_width_min_pt")
+    max_width = stroke.get("line_width_max_pt")
+    ratio = stroke.get("line_to_tick_ratio")
+    if min_width is None or max_width is None:
+        return
+
+    min_allowed = float(profile.get("stroke_line_width_min_pt", curve_profile.get("stroke_line_width_min_pt", 1.0)))
+    max_allowed = float(profile.get("stroke_line_width_max_pt", curve_profile.get("stroke_line_width_max_pt", 1.8)))
+    if float(min_width) < min_allowed or float(max_width) > max_allowed:
+        issues.append(
+            QAIssue(
+                id="stroke_weight_out_of_band",
+                severity="warning",
+                metric_value=f"min={min_width}; max={max_width}",
+                target=f"{min_allowed}-{max_allowed}",
+                message="Curve stroke weight is outside the publication-style contract.",
+            )
+        )
+
+    if ratio is None:
+        return
+    min_ratio = float(profile.get("stroke_line_tick_ratio_min", curve_profile.get("stroke_line_tick_ratio_min", 0.95)))
+    max_ratio = float(profile.get("stroke_line_tick_ratio_max", curve_profile.get("stroke_line_tick_ratio_max", 2.2)))
+    if float(ratio) < min_ratio or float(ratio) > max_ratio:
+        issues.append(
+            QAIssue(
+                id="line_tick_hierarchy",
+                severity="warning",
+                metric_value=round(float(ratio), 3),
+                target=f"{min_ratio}-{max_ratio}",
+                message="Curve lines and tick strokes do not have a readable visual hierarchy.",
+            )
+        )
+
+
+def _append_stacked_blank_gate(ax: plt.Axes, renderer, issues: list[QAIssue], *, profile_name: str) -> None:
+    profile = qa_profile(profile_name)
+    occupancy = _data_occupancy_summary(ax, renderer)
+    if not occupancy.get("has_data"):
+        return
+    top_blank = occupancy.get("top_blank_fraction")
+    vertical = occupancy.get("vertical_occupancy")
+    if top_blank is not None:
+        warn_top = float(profile.get("top_blank_fraction_warn", 0.22))
+        if float(top_blank) > warn_top:
+            issues.append(
+                QAIssue(
+                    id="stacked_top_blank_excess",
+                    severity="warning",
+                    metric_value=round(float(top_blank), 4),
+                    target=warn_top,
+                    message="Stacked spectra leave too much unused space above the highest curve.",
+                )
+            )
+    if vertical is not None:
+        warn_vertical = float(profile.get("vertical_occupancy_warn", 0.55))
+        if float(vertical) < warn_vertical:
+            issues.append(
+                QAIssue(
+                    id="data_vertical_occupancy_low",
+                    severity="warning",
+                    metric_value=round(float(vertical), 4),
+                    target=warn_vertical,
+                    message="Curve data use too little of the vertical plotting area.",
+                )
+            )
+
+
+def _append_stacked_spacing_gate(
+    fig: plt.Figure,
+    ax: plt.Axes,
+    renderer,
+    issues: list[QAIssue],
+) -> None:
+    stack_layout = getattr(fig, "_sciplot_stack_layout", None)
+    if not isinstance(stack_layout, Mapping):
+        return
+    peak = float(stack_layout.get("peak_height") or 0.0)
+    gap = float(stack_layout.get("gap") or 0.0)
+    min_gap = float(stack_layout.get("min_gap") or 0.0)
+    axes_bbox = ax.get_window_extent(renderer=renderer)
+    peak_px = axes_bbox.height * peak / max(abs(float(np.diff(ax.get_ylim())[0])), np.finfo(float).eps)
+
+    if stack_layout.get("spacing_mode") == "manual" and peak > 0 and gap < min_gap:
+        issues.append(
+            QAIssue(
+                id="stack_curve_overlap",
+                severity="critical",
+                metric_value=round(gap / peak, 3),
+                target=0.25,
+                message="Manual stacked-curve spacing is tighter than the minimum readable gap.",
+            )
+        )
+    if stack_layout.get("spacing_mode") == "manual" and peak > 0 and gap > 2.5 * peak:
+        issues.append(
+            QAIssue(
+                id="stack_spacing_too_loose",
+                severity="warning",
+                metric_value=round(gap / peak, 3),
+                target="<=2.5",
+                message="Manual stacked-curve spacing leaves unusually large gaps.",
+            )
+        )
+    if peak_px < 8.0:
+        issues.append(
+            QAIssue(
+                id="stack_peak_too_small",
+                severity="warning",
+                metric_value=round(float(peak_px), 3),
+                target=8.0,
+                message=(
+                    "Stacked-curve peaks are too short in pixel space; "
+                    "increase physical height or split the figure."
+                ),
+            )
+        )
+
+
+def _stacked_text_clip_bbox(fig: plt.Figure, axis: plt.Axes, text: plt.Text, renderer):
+    if not text.get_clip_on():
+        return fig.bbox
+    return axis.get_window_extent(renderer=renderer)
 
 
 def _axis_actual_tick_width(axis, *, fallback: float) -> float:
@@ -282,12 +823,14 @@ def analyze_rendered_figure(
         return _analyze_stats_figure(
             fig,
             template=template,
+            options=options,
             autofixes_applied=autofixes_applied,
         )
     if template in {"stacked_curve", "segmented_stacked_curve"}:
         return _analyze_stacked_figure(
             fig,
             template=template,
+            options=options,
             autofixes_applied=autofixes_applied,
         )
     return _finalize_report([], autofixes_applied=autofixes_applied)
@@ -302,7 +845,7 @@ def _analyze_curve_figure(
 ) -> QAReport:
     renderer = _draw_renderer(fig)
     ax = fig.axes[0]
-    axes_bbox = ax.get_window_extent(renderer=renderer)
+    layout_summary = _base_layout_summary(fig, template=template, options=options, renderer=renderer)
     curve_profile = qa_profile("curve")
     issues: list[QAIssue] = []
 
@@ -313,20 +856,11 @@ def _analyze_curve_figure(
     label_collision_margin_px = float(curve_profile.get("label_collision_margin_px", 3.0))
 
     if legend is not None:
-        legend_bbox = legend.get_window_extent(renderer=renderer)
-        legend_ratio = _bbox_area(legend_bbox) / max(_bbox_area(axes_bbox), 1.0)
-        warn_ratio = float(curve_profile.get("legend_area_ratio_warn", 0.055))
-        fail_ratio = float(curve_profile.get("legend_area_ratio_fail", 0.07))
-        if legend_ratio >= warn_ratio:
-            issues.append(
-                QAIssue(
-                    id="legend_footprint",
-                    severity="critical" if legend_ratio >= fail_ratio else "warning",
-                    metric_value=round(legend_ratio, 4),
-                    target=warn_ratio,
-                    message="Legend footprint is too large for the current axis frame.",
-                )
-            )
+        _append_legend_geometry_issues(fig, ax, renderer, issues, profile_name="curve")
+        _append_legend_gate_issues(ax, renderer, issues)
+
+    _append_tick_gate_issues(ax, renderer, issues)
+    _append_ftir_wavenumber_gate(ax, issues)
 
     if series_count > 1 and legend is None and len(text_bboxes) < series_count:
         issues.append(
@@ -391,7 +925,9 @@ def _analyze_curve_figure(
                 )
             )
 
-    return _finalize_report(issues, autofixes_applied=autofixes_applied)
+    _append_stroke_gate_issues(ax, issues, profile_name="curve")
+
+    return _finalize_report(issues, autofixes_applied=autofixes_applied, layout_summary=layout_summary)
 
 
 def _analyze_heatmap_figure(
@@ -404,6 +940,7 @@ def _analyze_heatmap_figure(
     renderer = _draw_renderer(fig)
     ax = fig.axes[0]
     axes_bbox = ax.get_window_extent(renderer=renderer)
+    layout_summary = _base_layout_summary(fig, template="heatmap", options=options, renderer=renderer)
     heatmap_profile = qa_profile("heatmap")
     issues: list[QAIssue] = []
 
@@ -472,7 +1009,7 @@ def _analyze_heatmap_figure(
             )
         )
 
-    return _finalize_report(issues, autofixes_applied=autofixes_applied)
+    return _finalize_report(issues, autofixes_applied=autofixes_applied, layout_summary=layout_summary)
 
 
 def _bar_step_ratio(ax: plt.Axes) -> tuple[float | None, float | None]:
@@ -505,10 +1042,12 @@ def _analyze_stats_figure(
     fig: plt.Figure,
     *,
     template: str,
+    options: RenderOptions,
     autofixes_applied: Iterable[str],
 ) -> QAReport:
     renderer = _draw_renderer(fig)
     ax = fig.axes[0]
+    layout_summary = _base_layout_summary(fig, template=template, options=options, renderer=renderer)
     stats_profile = qa_profile("stats")
     issues: list[QAIssue] = []
 
@@ -580,27 +1119,36 @@ def _analyze_stats_figure(
                 )
             )
 
-    return _finalize_report(issues, autofixes_applied=autofixes_applied)
+    return _finalize_report(issues, autofixes_applied=autofixes_applied, layout_summary=layout_summary)
 
 
 def _analyze_stacked_figure(
     fig: plt.Figure,
     *,
     template: str,
+    options: RenderOptions,
     autofixes_applied: Iterable[str],
 ) -> QAReport:
     renderer = _draw_renderer(fig)
     issues: list[QAIssue] = []
+    layout_summary = _base_layout_summary(fig, template=template, options=options, renderer=renderer)
     stacked_profile = qa_profile("stacked")
 
     label_bboxes: list[transforms.Bbox] = []
     for axis in fig.axes:
+        _append_legend_geometry_issues(fig, axis, renderer, issues, profile_name="stacked")
+        _append_tick_gate_issues(axis, renderer, issues)
+        _append_ftir_wavenumber_gate(axis, issues)
+        _append_legend_gate_issues(axis, renderer, issues)
+        _append_stacked_spacing_gate(fig, axis, renderer, issues)
+        _append_stroke_gate_issues(axis, issues, profile_name="stacked")
+        _append_stacked_blank_gate(axis, renderer, issues, profile_name="stacked")
         text_bboxes = _text_bboxes(axis.texts, renderer)
         label_bboxes.extend([bbox for _, bbox in text_bboxes])
         outside = _text_outside_count(
             text_bboxes,
             clip_bbox_provider=(
-                lambda text, axis=axis: axis.get_window_extent(renderer=renderer)
+                lambda text, axis=axis: _stacked_text_clip_bbox(fig, axis, text, renderer)
             ),
         )
         if outside:
@@ -654,4 +1202,4 @@ def _analyze_stacked_figure(
                 )
             )
 
-    return _finalize_report(issues, autofixes_applied=autofixes_applied)
+    return _finalize_report(issues, autofixes_applied=autofixes_applied, layout_summary=layout_summary)

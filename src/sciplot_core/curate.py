@@ -277,6 +277,20 @@ def curate_torque_project(
     )
 
     request = json.loads(plot_request_path.read_text(encoding="utf-8"))
+    request["series_order"] = plot_labels
+    render_options = request.get("render_options")
+    if not isinstance(render_options, dict):
+        render_options = {}
+    render_options["series_order"] = plot_labels
+    request["render_options"] = render_options
+    study_model = request.get("study_model")
+    if isinstance(study_model, dict):
+        study_model["sample_order"] = plot_labels
+        render_defaults = study_model.get("render_defaults")
+        if not isinstance(render_defaults, dict):
+            render_defaults = {}
+        render_defaults["series_order"] = plot_labels
+        study_model["render_defaults"] = render_defaults
     request.update(
         {
             "recipe": "auto",

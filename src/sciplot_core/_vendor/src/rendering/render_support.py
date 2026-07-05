@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt
 
 from src.plot_contract import qa_profile
-from src.rendering.models import RenderedPlot, RenderOptions
+from src.rendering.models import QAReport, RenderedPlot, RenderOptions
 from src.rendering.qa import analyze_rendered_figure
 
 
@@ -37,17 +37,78 @@ def _rendered_plot_with_qa(
     options: RenderOptions,
     autofixes_applied: tuple[str, ...] = (),
 ) -> RenderedPlot:
-    return RenderedPlot(
-        filename=filename,
-        figure=figure,
-        qa_report=analyze_rendered_figure(
+    report = analyze_rendered_figure(
+        figure,
+        template=template,
+        options=options,
+        palette_preset=options.palette_preset,
+        autofixes_applied=autofixes_applied,
+    )
+    if (
+        _needs_stroke_autorepair(report)
+        and not _has_manual_line_width(options)
+        and _apply_stroke_autorepair(figure, template=template)
+    ):
+        autofixes_applied = (*autofixes_applied, "stroke_weight_autorepaired")
+        report = analyze_rendered_figure(
             figure,
             template=template,
             options=options,
             palette_preset=options.palette_preset,
             autofixes_applied=autofixes_applied,
-        ),
+        )
+    return RenderedPlot(
+        filename=filename,
+        figure=figure,
+        qa_report=report,
     )
+
+
+def _needs_stroke_autorepair(report: QAReport) -> bool:
+    return any(issue.id in {"stroke_weight_out_of_band", "line_tick_hierarchy"} for issue in report.issues)
+
+
+def _has_manual_line_width(options: RenderOptions) -> bool:
+    if not options.series_styles:
+        return False
+    return any(item.get("line_width") is not None for item in options.series_styles)
+
+
+def _tick_width(ax: plt.Axes) -> float:
+    widths = [
+        float(line.get_markeredgewidth())
+        for axis in (ax.xaxis, ax.yaxis)
+        for line in axis.get_ticklines()
+        if line.get_visible() and float(line.get_markeredgewidth()) > 0.0
+    ]
+    return max(widths, default=float(plt.rcParams["xtick.major.width"]),)
+
+
+def _apply_stroke_autorepair(fig: plt.Figure, *, template: str) -> bool:
+    profile_name = "stacked" if template in {"stacked_curve", "segmented_stacked_curve"} else "curve"
+    profile = qa_profile(profile_name)
+    curve_profile = qa_profile("curve")
+    min_width = float(profile.get("stroke_line_width_min_pt", curve_profile.get("stroke_line_width_min_pt", 1.0)))
+    max_width = float(profile.get("stroke_line_width_max_pt", curve_profile.get("stroke_line_width_max_pt", 1.8)))
+    min_ratio = float(profile.get("stroke_line_tick_ratio_min", curve_profile.get("stroke_line_tick_ratio_min", 0.95)))
+    changed = False
+    for ax in fig.axes:
+        target = min(max(min_width, _tick_width(ax) * min_ratio), max_width)
+        for line in ax.lines:
+            if not line.get_visible():
+                continue
+            width = float(line.get_linewidth())
+            if 0.0 < width < target:
+                line.set_linewidth(target)
+                changed = True
+        for collection in ax.collections:
+            if not collection.get_visible() or not hasattr(collection, "get_linewidths"):
+                continue
+            widths = [float(value) for value in collection.get_linewidths()]
+            if widths and any(0.0 < width < target for width in widths):
+                collection.set_linewidths([target if 0.0 < width < target else width for width in widths])
+                changed = True
+    return changed
 
 def _stats_profile(groups) -> StatsRenderProfile:
     profile = qa_profile("stats")

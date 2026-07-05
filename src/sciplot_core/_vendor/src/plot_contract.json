@@ -111,6 +111,8 @@
       "small_panel_width_mm": 60.0,
       "small_panel_height_mm": 55.0,
       "direct_label_max_series": 4,
+      "direct_label_fallback_max_series": 8,
+      "direct_label_dense_font_size_pt": 5.2,
       "legend_candidate_order": [
         "upper_right",
         "lower_right",
@@ -157,6 +159,10 @@
       "tensile_compact_legend_candidate_bias_step": 25.0,
       "legend_area_ratio_warn": 0.055,
       "legend_area_ratio_fail": 0.07,
+      "legend_line_point_overlap_tolerance": 1,
+      "legend_outside_tolerance_px": 1.0,
+      "axes_area_ratio_warn": 0.35,
+      "axes_area_ratio_fail": 0.28,
       "dense_marker_point_threshold": 24,
       "dense_markevery_min": 2,
       "dense_markevery_max": 6,
@@ -164,6 +170,10 @@
       "dense_tick_width_scale": 0.85,
       "dense_tick_length_scale": 0.9,
       "dense_line_width_scale": 0.96,
+      "stroke_line_width_min_pt": 1.0,
+      "stroke_line_width_max_pt": 1.8,
+      "stroke_line_tick_ratio_min": 0.95,
+      "stroke_line_tick_ratio_max": 2.2,
       "stroke_hierarchy_target": 0.3,
       "label_collision_margin_px": 3.0
     },
@@ -207,7 +217,19 @@
       "error_cap_ratio_target": 0.22
     },
     "stacked": {
-      "label_density_warn_per_axis": 5.0,
+      "label_density_warn_per_axis": 6.0,
+      "legend_area_ratio_warn": 0.055,
+      "legend_area_ratio_fail": 0.07,
+      "legend_line_point_overlap_tolerance": 1,
+      "legend_outside_tolerance_px": 1.0,
+      "axes_area_ratio_warn": 0.35,
+      "axes_area_ratio_fail": 0.28,
+      "stroke_line_width_min_pt": 1.0,
+      "stroke_line_width_max_pt": 1.8,
+      "stroke_line_tick_ratio_min": 0.95,
+      "stroke_line_tick_ratio_max": 2.2,
+      "top_blank_fraction_warn": 0.22,
+      "vertical_occupancy_warn": 0.55,
       "reserve_tolerance_mm": 1.0
     },
     "composer": {
@@ -831,6 +853,23 @@
       "sequential": "Blues",
       "diverging": "RdBu"
     },
+    "spectrum_journal_8": {
+      "label": "Spectrum Journal 8",
+      "public": true,
+      "description": "Paper-style stacked spectrum palette for FTIR and NMR traces on white backgrounds.",
+      "categorical": [
+        "#D85A2A",
+        "#F29A22",
+        "#008C86",
+        "#7BC4DF",
+        "#9A4A8A",
+        "#3F6FB5",
+        "#C24D70",
+        "#6E9F45"
+      ],
+      "sequential": "cividis",
+      "diverging": "PuOr"
+    },
     "viridis_discrete": {
       "label": "Viridis Discrete",
       "public": true,
@@ -927,6 +966,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1007,6 +1047,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1090,6 +1131,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1173,6 +1215,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1256,6 +1299,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1280,6 +1324,8 @@
       ],
       "editable_options": [
         "size",
+        "xscale",
+        "yscale",
         "reverse_x",
         "x_min",
         "x_max",
@@ -1288,11 +1334,14 @@
         "y_max",
         "x_tick_density",
         "x_tick_edge_labels",
+        "y_tick_density",
         "baseline",
         "x_label_override",
         "y_label_override",
         "series_order",
         "series_include",
+        "series_styles",
+        "legend_position",
         "series_label_mode",
         "stack_spacing_scale",
         "style_preset",
@@ -1330,6 +1379,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1394,6 +1444,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1459,6 +1510,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1523,6 +1575,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1587,6 +1640,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1651,6 +1705,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1715,6 +1770,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1779,6 +1835,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1843,6 +1900,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1907,6 +1965,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -1977,6 +2036,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -2047,6 +2107,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -2132,6 +2193,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -2211,6 +2273,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -2290,6 +2353,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -2365,6 +2429,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -2423,6 +2488,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -2488,6 +2554,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -2548,6 +2615,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -2603,6 +2671,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [
@@ -2660,6 +2729,7 @@
         "seaborn_pastel",
         "seaborn_dark",
         "primer_accessible",
+        "spectrum_journal_8",
         "viridis_discrete"
       ],
       "hard_rules": [

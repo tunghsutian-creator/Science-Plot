@@ -1179,7 +1179,7 @@ def _normalize_series(series: CurveSeriesPayload, *, y_label: str, y_unit: str) 
 
 
 def _read_tensile_export_series(source: Path) -> CurveSeriesPayload:
-    text = _decode_text(source)
+    text = _decode_tensile_export_text(source)
     lines = text.splitlines()
     header_indexes = [
         index
@@ -1220,6 +1220,30 @@ def _read_tensile_export_series(source: Path) -> CurveSeriesPayload:
             points=tuple(points),
         )
     raise ValueError(f"Could not find a multi-point tensile curve table in {source}.")
+
+
+def _decode_tensile_export_text(source: Path) -> str:
+    text = _decode_text(source)
+    if _looks_like_tensile_export_text(text):
+        return text
+    payload = source.read_bytes()
+    for encoding in ("gb18030", "gbk", "utf-8-sig", "utf-8", "latin-1"):
+        try:
+            candidate = payload.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        if _looks_like_tensile_export_text(candidate):
+            return candidate
+    return text
+
+
+def _looks_like_tensile_export_text(text: str) -> bool:
+    lowered = text.casefold()
+    return (
+        ("拉伸应变" in text and "拉伸应力" in text)
+        or ("tensile strain" in lowered and "stress" in lowered)
+        or "结果表格" in text
+    )
 
 
 def _read_tensile_workbook_series(source: Path) -> list[CurveSeriesPayload]:

@@ -14,8 +14,11 @@ Build a practical research plotting system where:
 
 - SciPlot handles data recognition, cleanup, units, axis labels, metrics,
   journal-style defaults, rendering, and QA.
-- The local Web app is the daily plotting surface for importing data, confirming
-  scientific intent, exporting figures, and reviewing results.
+- SciPlot Studio is the daily plotting surface for importing data, creating
+  project packages, editing figures, and exporting results through embedded
+  GPL Veusz.
+- The local Web app remains a compatibility surface for browser-based
+  confirmation and older project workflows.
 - Codex patches rules, recipes, fixtures, and tests when a dataset does not fit
   the current system.
 - The human reviewer confirms sample names, legend order, figure size, export
@@ -31,13 +34,41 @@ become a reusable rule.
 Prefer the project wrapper:
 
 ```bash
-skill/scripts/sciplot app --out outputs/intake_projects
+skill/scripts/sciplot studio PATH --out outputs/intake_projects
 ```
 
-For a raw user-supplied file or folder, use the Web UI confirmation flow:
+For a blank desktop editor:
+
+```bash
+skill/scripts/sciplot studio --new
+```
+
+For the older browser confirmation flow:
 
 ```bash
 skill/scripts/sciplot quick PATH
+skill/scripts/sciplot app --out outputs/intake_projects
+```
+
+For a high-confidence supported experiment path that should generate a complete
+auditable package in one step:
+
+```bash
+skill/scripts/sciplot autoplot PATH --out outputs/autoplot_projects --json
+skill/scripts/sciplot one-step PATH --out outputs/one_step_projects --json
+```
+
+`autoplot` is the stable daily script entrypoint. It uses the same local
+one-step workflow underneath, then writes `autoplot_summary.json` with the
+delivery folder, readiness state, structured QA, and token-saving Codex policy:
+Codex reads structured summaries by default and only reviews images for QA
+failures, low-confidence semantics, or explicit user requests.
+See `docs/STABLE_AUTOPLOT_CONTRACT.md` for the stable script contract.
+
+For development acceptance against the representative 3D PA real-data folder:
+
+```bash
+skill/scripts/sciplot acceptance 3dpa PATH --out outputs/acceptance --json
 ```
 
 The explicit version is:
@@ -73,6 +104,12 @@ Default loop:
 inspect -> recipe/render -> qa -> human review -> revised request/script -> rerun
 ```
 
+One-step loop:
+
+```text
+source -> semantic confidence gate -> render package -> structured QA -> ready / needs human confirmation / needs rule repair
+```
+
 Example request:
 
 ```json
@@ -90,13 +127,50 @@ Example request:
 
 `sciplot run` writes a reviewable export package containing `manifest.json`,
 `analysis_report.md`, `tables/analysis_metrics.csv`, `raw/`, `review.html`,
-`revision_brief.md`, PDF figures, and 300 DPI TIFF figures. If recognition or
-rendering needs Codex, SciPlot writes `intervention_request.json` or marks
-`needs_ai_intervention`.
+`revision_brief.md`, PDF figures, and 300 DPI TIFF figures. It also writes a
+minimal user-facing `delivery/` folder:
 
-## Web App Contract
+- `{project}.sciplot`
+- `{project}.xlsx`
+- `figures/{figure}.pdf`
+- `figures/{figure}_300dpi.tiff`
+- `_sciplot_internal/` for QA, manifests, raw/archive files, and audit trails
 
-The Web app is the local SciPlot plotting app. `sciplot app`, `sciplot
+If recognition or rendering needs Codex, SciPlot writes
+`intervention_request.json` or marks `needs_ai_intervention`.
+One-step runs also write `one_step_status.json`, so every output has an
+explicit state: `ready`, `needs_human_confirmation`, or `needs_rule_repair`.
+
+Cross-cutting defaults live in `src/sciplot_core/policy.py`: default exports
+are PDF plus 300 DPI TIFF, and the default figure size is `60x55`. Wider
+presets such as `120x55` remain available when selected by the user or required
+by a documented rule. The default production renderer is Veusz: SciPlot turns
+its request/options contract into a Veusz document, exports the actual Veusz
+PDF/TIFF output, and runs QA on those exported artifacts. The old Matplotlib
+production fallback has been removed from the public CLI/API; any remaining
+Matplotlib code is retained only inside legacy contract tests and reference
+helpers while the Veusz bridge absorbs those rules. Renderer quality thresholds
+such as legend footprint, legend canvas bounds, axis usable area, tick overlap,
+FTIR bounds, and stacked spacing live in
+`src/sciplot_core/_vendor/src/plot_contract.json`. Export QA also rasterizes
+PDFs to record visible ink fraction and content bounds, so non-empty files are
+not treated as publication-ready unless they contain real visible figure
+content.
+
+## Qt Studio And Web Compatibility
+
+SciPlot Studio is the primary local plotting frontend. `sciplot studio PATH`
+accepts a raw data file/folder, an existing SciPlot project, a
+`plot_request.json`, or a Veusz `.vsz` document. For raw paths it creates a
+project package under `outputs/intake_projects`, writes `studio/document.vsz`,
+and opens the embedded Veusz editor. SciPlot decides how the figure is drawn:
+it uses its data recognition, sample/legend names, template choice, and plotting
+contract to generate the official Veusz object tree and datasets. The matching
+`studio/spec.json` records the SciPlot-to-Veusz drawing instructions. Veusz then
+provides the native object tree, property editor, legend controls, undo/redo,
+and export UI for interactive edits after the SciPlot-generated figure appears.
+
+The Web app remains available for compatibility. `sciplot app`, `sciplot
 workbench`, and `sciplot intake` open the same browser workflow.
 
 Workflow:
@@ -111,6 +185,7 @@ Stage rules:
 - Result Review appears only after Export or Codex produces rendered artifacts.
 - Do not use an empty plot preview as a placeholder during import, inspection, or grouping.
 - Read Result Review artifacts (`review.html`, figures, manifest, metrics, and QA) before reporting output.
+- Read the `delivery/` package before handing off final files.
 - Use `revision_brief.md` as the short handoff for Codex-driven rule/style revisions.
 
 The UI lets the user confirm source binding, detected rules/templates, sample
@@ -152,6 +227,7 @@ Rendering:
 
 ```bash
 skill/scripts/sciplot run plot_request.json
+skill/scripts/sciplot one-step INPUT --out outputs/one_step_projects --json
 skill/scripts/sciplot qa OUTPUT_DIR
 ```
 
@@ -224,19 +300,26 @@ separate cross-sample figure.
   `.tmp_verify/`.
 - Add or update fixtures and tests for every new rule, recipe, or semantic
   behavior.
-- For a user-supplied raw data path, open the Web UI confirmation flow unless
-  the user explicitly asks to bypass it.
+- For a user-supplied raw data path, prefer `sciplot studio PATH --out
+  outputs/intake_projects`; use the Web UI only when the user explicitly asks
+  for browser confirmation or Qt Studio lacks a needed confirmation control.
 - If `intervention_request.json`, `needs_ai_intervention`, or batch
   `interventions` appears, patch code and tests, then rerun the request.
 
 ## Roadmap
 
-Phase 1: Make the Web app the daily plotting surface.
+Phase 1: Make Qt Studio the daily plotting surface.
 
-- Keep the redesigned intake UI polished and fast.
-- Improve project/session browsing under `outputs/intake_projects`.
-- Make output directory selection obvious and visible.
-- Keep Result Review as the quality gate for PDF/TIFF outputs.
+- Route raw files/folders through `sciplot studio PATH`.
+- Use Veusz as the default production renderer for `render`, `run`, `recipe`,
+  `one-step`, `autoplot`, and Studio exports. Do not add a parallel Matplotlib
+  production fallback.
+- Keep editing in Veusz's native GUI instead of rebuilding object/property
+  panels in SciPlot.
+- Keep SciPlot's layer focused on raw-data import, request generation, `.vsz`
+  regeneration, QA, delivery, and manifest/ZIP registration.
+- Keep the Web app as a compatibility fallback.
+- Keep QA and delivery packages as the quality gate for PDF/TIFF outputs.
 
 Phase 2: Strengthen polymer-science rules.
 
@@ -247,10 +330,11 @@ Phase 2: Strengthen polymer-science rules.
 
 Phase 3: Add interactive figure refinement.
 
-- Build a SciPlot-native visual refine panel for axes, ticks, legend, line
-  width, marker size, labels, and export presets.
-- Keep SciPlot's rendered PDF/TIFF as the QA baseline.
-- Save refinements back into request options or reusable style presets.
+- Keep basic SciPlot controls for axes, ticks, legend, line width, marker size,
+  labels, and export presets on the Qt setup side.
+- Treat Veusz-exported PDF/TIFF as the QA baseline for Studio and CLI outputs.
+- Keep advanced manual edits in the Veusz document unless a setting has a clear
+  and safe SciPlot request mapping.
 
 Phase 4: Make Codex intervention routine.
 
@@ -268,16 +352,17 @@ Phase 5: Support manuscript workflows.
 
 ## Next Development Suggestions
 
-1. Add a Web app project browser for previous runs and ZIP packages.
-2. Add a data-table preview with column type controls before export.
-3. Add visual controls for ticks, axis range, legend position, line width, and
-   marker size, then write them back into `plot_request.json`.
-4. Add screenshot-based UI regression tests for desktop and mobile layouts.
-5. Add real rheology and impact fixtures from the current polymer dataset.
-6. Add a prepared-data export/import route for users who need external
+1. Broaden the `.vsz` bridge from generic curve tables to more
+   recipe-processed material outputs.
+2. Preserve Veusz as the native editor and keep SciPlot UI additions to small
+   integration actions.
+3. Roundtrip safe Veusz edits such as axis ranges, series names, colors, line
+   width, and marker size back into project metadata.
+4. Add real rheology and impact fixtures from the current polymer dataset.
+5. Add a prepared-data export/import route for users who need external
    downstream analysis tools.
-7. Keep the SciPlot renderer and request files as the reproducible source of
-   truth.
+7. Keep SciPlot request files plus `studio/spec.json` as the reproducible
+   automatic contract, while Veusz remains both renderer and editor.
 
 ## Cleanup Policy
 
@@ -287,7 +372,7 @@ The project should stay small and legible:
   and `skill/SKILL.md`.
 - Keep generated outputs in ignored directories only.
 - Delete stale mockups, scratch servers, copied app experiments, and old
-  one-off prototypes once their useful ideas are folded into the Web app.
+  one-off prototypes once their useful ideas are folded into Qt Studio.
 - Do not commit local caches such as `.pytest_cache/`, `.ruff_cache/`,
   `__pycache__/`, `.DS_Store`, `.tmp_verify/`, or `outputs/`.
 - Run `make clean` when generated output or cache directories start to clutter

@@ -4,8 +4,6 @@ from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import numpy as np
-
-from src import plot_style
 from src.layout_policy import (
     LayoutCandidate,
     LayoutScore,
@@ -19,6 +17,8 @@ from src.plot_contract import qa_profile
 from src.plotting_curve_support import _place_series_edge_labels, legend_layout_candidates
 from src.rendering.models import RenderedPlot, RenderOptions
 from src.rendering.qa import CurveAutofix, recommend_curve_autofix
+
+from src import plot_style
 
 
 @dataclass(frozen=True)
@@ -36,10 +36,11 @@ class CompactCurveEditorialProfile:
     legend_columnspacing: float
     legend_borderpad: float
 
-def _prefer_direct_labels(options: RenderOptions, series_count: int) -> bool:
+def _prefer_direct_labels(options: RenderOptions, series_count: int, *, fallback: bool = False) -> bool:
     profile = qa_profile("curve")
+    max_series_key = "direct_label_fallback_max_series" if fallback else "direct_label_max_series"
     return bool(
-        series_count <= int(profile.get("direct_label_max_series", 4))
+        series_count <= int(profile.get(max_series_key, 4))
         and np.isclose(options.width_mm, float(profile.get("small_panel_width_mm", options.width_mm)), atol=0.05)
         and np.isclose(options.height_mm, float(profile.get("small_panel_height_mm", options.height_mm)), atol=0.05)
     )
@@ -140,12 +141,21 @@ def _curve_candidate_key(candidate: tuple[RenderedPlot, str]) -> tuple[float, in
     qa = rendered.qa_report
     if qa is None:
         return (0.0, 0, 0)
-    unsafe_issue_ids = {"series_identification", "label_out_of_bounds", "label_collision"}
-    if any(issue.id in unsafe_issue_ids for issue in qa.issues):
-        return (-1.0, -999, 0)
+    unsafe_issue_weights = {
+        "series_identification": 80.0,
+        "label_out_of_bounds": 45.0,
+        "label_collision": 32.0,
+        "legend_overlap": 28.0,
+        "legend_footprint": 28.0,
+        "legend_outside_bounds": 36.0,
+        "legend_axes_too_small": 36.0,
+        "tick_label_overlap": 30.0,
+        "ftir_wavenumber_bounds_missing": 80.0,
+    }
     critical_count = sum(1 for issue in qa.issues if issue.severity == "critical")
     direct_bonus = 2 if strategy.startswith("direct") else 1 if strategy == "compact_legend" else 0
-    return (qa.score, -critical_count, direct_bonus)
+    unsafe_penalty = sum(unsafe_issue_weights.get(issue.id, 0.0) for issue in qa.issues)
+    return (qa.score - unsafe_penalty, -critical_count, direct_bonus)
 
 def _resolve_visual_edge_target(
     x_values: np.ndarray,
@@ -208,19 +218,19 @@ def _spread_label_centers(
     upper_bounds = upper - ordered_heights / 2.0
     centers[0] = np.clip(centers[0], lower_bounds[0], upper_bounds[0])
     for idx in range(1, len(centers)):
-        required_gap = max(gap_px, (ordered_heights[idx - 1] + ordered_heights[idx]) / 2.0 + 1.0)
+        required_gap = (ordered_heights[idx - 1] + ordered_heights[idx]) / 2.0 + gap_px
         centers[idx] = max(np.clip(centers[idx], lower_bounds[idx], upper_bounds[idx]), centers[idx - 1] + required_gap)
     overflow = max(centers[-1] - upper_bounds[-1], 0.0)
     if overflow > 0:
         centers -= overflow
     for idx in range(len(centers) - 2, -1, -1):
-        required_gap = max(gap_px, (ordered_heights[idx] + ordered_heights[idx + 1]) / 2.0 + 1.0)
+        required_gap = (ordered_heights[idx] + ordered_heights[idx + 1]) / 2.0 + gap_px
         centers[idx] = min(centers[idx], centers[idx + 1] - required_gap)
     underflow = max(lower_bounds[0] - centers[0], 0.0)
     if underflow > 0:
         centers += underflow
     for idx in range(1, len(centers)):
-        required_gap = max(gap_px, (ordered_heights[idx - 1] + ordered_heights[idx]) / 2.0 + 1.0)
+        required_gap = (ordered_heights[idx - 1] + ordered_heights[idx]) / 2.0 + gap_px
         centers[idx] = max(centers[idx], centers[idx - 1] + required_gap)
     if np.any(centers < lower_bounds - 1e-6) or np.any(centers > upper_bounds + 1e-6):
         return None
@@ -255,7 +265,7 @@ def _plan_endpoint_direct_labels(
     axes_bbox = ax.get_window_extent(renderer=renderer)
     colors = _series_display_colors(ax, len(series_list))
     offset_px = _display_point_offset(fig, max(label_offset_pt, 3.5))
-    gap_px = _display_point_offset(fig, 2.6)
+    gap_px = _display_point_offset(fig, 3.8)
     margin_px = 1.5
 
     desired_y: list[float] = []
@@ -380,8 +390,11 @@ def _ensure_direct_labels(
     for text in tuple(ax.texts):
         text.remove()
     profile = _compact_curve_editorial_profile()
+    dense_direct_labels = len(series_list) > int(profile.legend_max_series)
+    if dense_direct_labels:
+        fontsize = min(fontsize, float(qa_profile("curve").get("direct_label_dense_font_size_pt", fontsize)))
     colors = _series_display_colors(ax, len(series_list))
-    if _place_series_edge_labels(
+    if not dense_direct_labels and _place_series_edge_labels(
         ax,
         series_list,
         colors,

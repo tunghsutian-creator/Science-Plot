@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -81,6 +81,7 @@ class QAReport:
     grade: str
     issues: tuple[QAIssue, ...] = ()
     autofixes_applied: tuple[str, ...] = ()
+    layout_summary: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

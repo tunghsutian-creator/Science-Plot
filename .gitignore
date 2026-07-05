@@ -7,6 +7,9 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+third_party/veusz/veusz/helpers/*.dylib
+third_party/veusz/veusz/helpers/*.pyd
+third_party/veusz/veusz/helpers/*.so
 figures/
 outputs/
 ftir_output/

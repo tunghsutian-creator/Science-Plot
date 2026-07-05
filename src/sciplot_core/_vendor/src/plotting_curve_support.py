@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -44,6 +45,13 @@ class StackedLayout:
     floor: float
     step: float
     max_span: float
+    peak_height: float = 1.0
+    min_gap: float = 0.0
+    gap: float = 0.0
+    padding: float = 0.0
+    required_span: float | None = None
+    y_span: float | None = None
+    spacing_mode: str = "auto"
 
 @dataclass(frozen=True)
 class BaselineLabelWindow:
@@ -460,39 +468,121 @@ def _robust_span(values: np.ndarray) -> float:
         span = max(abs(float(finite.max())), 1.0) * 0.15
     return span
 
+def _robust_peak_height(values: np.ndarray) -> float:
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        return 1.0
+    q01, q99 = np.quantile(finite, [0.01, 0.99])
+    span = float(q99 - q01)
+    if np.isclose(span, 0.0):
+        span = float(finite.max() - finite.min())
+    if np.isclose(span, 0.0):
+        span = max(abs(float(finite.max())), 1.0) * 0.15
+    return max(span, np.finfo(float).eps)
+
+def _nice_ceiling(value: float) -> float:
+    if not np.isfinite(value) or value <= 0.0:
+        return 1.0
+    exponent = math.floor(math.log10(value))
+    base = 10.0**exponent
+    for multiplier in (1.0, 2.0, 5.0, 10.0):
+        candidate = multiplier * base
+        if candidate >= value - 1e-12:
+            return float(candidate)
+    return float(10.0 * base)
+
 def _prepare_stacked_layout(
     series_list: Sequence[CurveSeries],
     *,
     stack_floor_fraction: float,
     stack_gap_fraction: float,
-    stack_spacing_scale: float = 1.0,
+    stack_spacing_scale: float | None = None,
+    stack_spacing_mode: str = "auto",
     step_scale: float = 1.0,
 ) -> StackedLayout:
     if len(series_list) <= 1:
         single_spans = [
-            _robust_span(series.data["y"].to_numpy(dtype=float))
+            _robust_peak_height(series.data["y"].to_numpy(dtype=float))
             for series in series_list
         ]
         max_span = max(single_spans) if single_spans else 1.0
-        return StackedLayout(list(series_list), 0.0, max_span, max_span)
+        y_span = _nice_ceiling(max_span * 1.2)
+        return StackedLayout(
+            list(series_list),
+            0.0,
+            max_span,
+            max_span,
+            peak_height=max_span,
+            padding=max_span * 0.1,
+            required_span=max_span * 1.2,
+            y_span=y_span,
+            spacing_mode="auto",
+        )
 
     prepared: list[tuple[CurveSeries, pd.DataFrame, float, float]] = []
     spans: list[float] = []
     peak_heights: list[float] = []
+    lower_guards: list[float] = []
     for series in series_list:
         y = series.data["y"].to_numpy(dtype=float)
         finite = y[np.isfinite(y)]
         shifted = series.data.copy()
         if finite.size:
-            shifted["y"] = shifted["y"] - float(finite.min())
-        span = _robust_span(shifted["y"].to_numpy(dtype=float))
-        peak_height = float(np.nanmax(shifted["y"].to_numpy(dtype=float))) if finite.size else 0.0
+            q01 = float(np.quantile(finite, 0.01))
+            shifted["y"] = shifted["y"] - q01
+            shifted_values = shifted["y"].to_numpy(dtype=float)
+            finite_shifted = shifted_values[np.isfinite(shifted_values)]
+            lower_guards.append(max(0.0, -float(finite_shifted.min())) if finite_shifted.size else 0.0)
+        span = _robust_peak_height(y)
+        peak_height = span
         prepared.append((series, shifted, span, peak_height))
         spans.append(span)
         peak_heights.append(peak_height)
 
     max_span = max(spans) if spans else 1.0
     max_peak_height = max(peak_heights) if peak_heights else max_span
+    spacing_mode = str(stack_spacing_mode or "auto").strip().lower()
+    manual_spacing = spacing_mode == "manual" or stack_spacing_scale is not None
+    if not manual_spacing:
+        peak = max(max_peak_height, np.finfo(float).eps)
+        series_count = len(series_list)
+        min_gap = 0.25 * peak
+        padding = 0.10 * peak
+        lower_guard = max(lower_guards) if lower_guards else 0.0
+        required_span = series_count * peak + (series_count - 1) * min_gap + 2.0 * padding + lower_guard
+        y_span = _nice_ceiling(required_span)
+        gap = (y_span - series_count * peak - 2.0 * padding - lower_guard) / max(series_count - 1, 1)
+        step = peak + max(gap, min_gap)
+        floor = padding + lower_guard
+        actual_top = floor + (series_count - 1) * step
+        for _series, shifted, _, _ in prepared:
+            values = shifted["y"].to_numpy(dtype=float)
+            finite_shifted = values[np.isfinite(values)]
+            if finite_shifted.size:
+                actual_top = max(actual_top, floor + (series_count - 1) * step + float(finite_shifted.max()))
+        if actual_top > y_span:
+            y_span = actual_top + padding
+
+        stacked: list[CurveSeries] = []
+        for idx, (series, shifted, _, _) in enumerate(prepared):
+            final = shifted.copy()
+            final["y"] = final["y"] + floor + idx * step
+            stacked.append(_clone_curve_series(series, final))
+
+        return StackedLayout(
+            stacked,
+            floor,
+            step,
+            peak,
+            peak_height=peak,
+            min_gap=min_gap,
+            gap=gap,
+            padding=padding,
+            required_span=required_span,
+            y_span=y_span,
+            spacing_mode="auto",
+        )
+
     scale = max(step_scale, 1.0)
     floor = max(
         max_span * stack_floor_fraction * scale,
@@ -507,7 +597,7 @@ def _prepare_stacked_layout(
     )
     minimum_step = (max_peak_height + peak_clearance) * scale
     step = max(step, minimum_step)
-    spacing_scale = max(float(stack_spacing_scale), 0.05)
+    spacing_scale = max(float(stack_spacing_scale if stack_spacing_scale is not None else 1.0), 0.05)
     floor *= spacing_scale
     step *= spacing_scale
 
@@ -517,7 +607,18 @@ def _prepare_stacked_layout(
         final["y"] = final["y"] + floor + idx * step
         stacked.append(_clone_curve_series(series, final))
 
-    return StackedLayout(stacked, floor, step, max_span)
+    gap = max(step - max_peak_height, 0.0)
+    return StackedLayout(
+        stacked,
+        floor,
+        step,
+        max_span,
+        peak_height=max_peak_height,
+        min_gap=max_peak_height * 0.25,
+        gap=gap,
+        padding=floor,
+        spacing_mode="manual",
+    )
 
 def _stack_retry_scales() -> tuple[float, ...]:
     base = 1.15
@@ -586,6 +687,14 @@ def _compute_stacked_axis_limits(
     )
     y_min = min(float(arr.min()) for arr in y_arrays)
     y_max = max(float(arr.max()) for arr in y_arrays)
+    if layout.y_span is not None:
+        return AxisLimits(
+            xlim=xlim,
+            ylim=(0.0, float(layout.y_span)),
+            raw_xlim=raw_xlim,
+            raw_ylim=(y_min, y_max),
+            x_tick_policy=x_policy if _STACKED_X_USE_STANDARD_ENDPOINT_POLICY else None,
+        )
     # Labels may force a larger stack step during retries. Headroom has to
     # follow the actual stack spacing, otherwise retries only spread the traces
     # apart but still leave no room for text near the top edge.

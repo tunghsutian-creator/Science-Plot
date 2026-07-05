@@ -315,6 +315,10 @@ def run_batch(
                 "template": run_manifest.get("result", {}).get("template")
                 or (recommendation or {}).get("template_id")
                 or semantic.get("template"),
+                "render_engine": run_manifest.get("render_engine"),
+                "qa_target": run_manifest.get("qa_target"),
+                "veusz_documents": run_manifest.get("veusz_documents", []),
+                "veusz_specs": run_manifest.get("veusz_specs", []),
                 "manifest": str(run_dir / "manifest.json"),
                 "raw_archive": run_manifest.get("raw_archive"),
                 "figures": run_manifest.get("figures", []),

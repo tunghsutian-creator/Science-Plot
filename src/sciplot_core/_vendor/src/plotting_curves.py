@@ -237,7 +237,8 @@ def plot_curves(
     stack_mode: str = "none",
     stack_floor_fraction: float = 0.22,
     stack_gap_fraction: float = 0.22,
-    stack_spacing_scale: float = 1.0,
+    stack_spacing_scale: float | None = None,
+    stack_spacing_mode: str = "auto",
     series_label_mode: str = "legend",
     series_label_side: str = "auto",
     label_track_inset_fraction: float = 0.06,
@@ -292,7 +293,12 @@ def plot_curves(
     plotted_series = list(normalized_series)
     limits: AxisLimits
     label_success = True
-    retry_scales = _stack_retry_scales() if stacked_mode_enabled and series_label_mode == "edge" else (1.0,)
+    last_stacked_layout = None
+    retry_scales = (
+        _stack_retry_scales()
+        if stacked_mode_enabled and series_label_mode == "edge" and stack_spacing_mode != "auto"
+        else (1.0,)
+    )
 
     for step_scale in retry_scales:
         ax.cla()
@@ -303,11 +309,13 @@ def plot_curves(
                 stack_floor_fraction=stack_floor_fraction,
                 stack_gap_fraction=stack_gap_fraction,
                 stack_spacing_scale=stack_spacing_scale,
+                stack_spacing_mode=stack_spacing_mode,
                 step_scale=step_scale,
             )
             if stacked_mode_enabled
             else None
         )
+        last_stacked_layout = stacked_layout
         plotted_series = stacked_layout.series_list if stacked_layout is not None else list(normalized_series)
 
         for idx, (color, series) in enumerate(zip(palette, plotted_series, strict=True)):
@@ -411,6 +419,24 @@ def plot_curves(
             label_success = True
         if label_success:
             break
+
+    if last_stacked_layout is not None:
+        fig._sciplot_stack_layout = {  # type: ignore[attr-defined]
+            "spacing_mode": last_stacked_layout.spacing_mode,
+            "series_count": len(last_stacked_layout.series_list),
+            "peak_height": float(last_stacked_layout.peak_height),
+            "min_gap": float(last_stacked_layout.min_gap),
+            "gap": float(last_stacked_layout.gap),
+            "padding": float(last_stacked_layout.padding),
+            "required_span": (
+                float(last_stacked_layout.required_span)
+                if last_stacked_layout.required_span is not None
+                else None
+            ),
+            "y_span": float(last_stacked_layout.y_span) if last_stacked_layout.y_span is not None else None,
+            "offset_step": float(last_stacked_layout.step),
+            "series_order": tuple(series.sample for series in last_stacked_layout.series_list),
+        }
 
     if series_label_mode != "edge" and legend_mode == "inside_best":
         legend_kwargs, _overlap_score, legend_corner_decision = choose_legend_corner_with_policy(

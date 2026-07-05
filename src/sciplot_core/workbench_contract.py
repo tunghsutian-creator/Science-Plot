@@ -6,6 +6,7 @@ from typing import Any
 
 from sciplot_core._bootstrap import ensure_legacy_core
 from sciplot_core.render import DEFAULT_EXPORT_FORMATS
+from sciplot_core.split import normalize_split_policy
 from sciplot_core.study_model import sync_study_model_samples
 
 ensure_legacy_core()
@@ -53,6 +54,30 @@ def _selected_series_labels(*values: object) -> list[str]:
     return labels
 
 
+def _validate_template_render_option_keys(keys: set[str], *, template: str | None) -> None:
+    if not template:
+        return
+    contract = load_plot_contract()
+    resolved_template = validate_template_name(template)
+    spec = (
+        contract.templates[resolved_template]
+        if resolved_template in contract.templates
+        else template_contract(resolved_template)
+    )
+    unsupported = sorted(
+        key
+        for key in keys
+        if key not in spec.editable_options
+        and key not in {"fit_options", "custom_theme_id", "custom_theme_draft", "visual_theme_id"}
+    )
+    if unsupported:
+        allowed = ", ".join(spec.editable_options)
+        raise ValueError(
+            f"Template `{resolved_template}` does not support option(s): {', '.join(unsupported)}. "
+            f"Supported editable options: {allowed}."
+        )
+
+
 def normalize_render_options(
     render_options: object,
     *,
@@ -78,25 +103,33 @@ def normalize_render_options(
         allowed = ", ".join(size_names)
         raise ValueError(f"Unsupported figure size `{size}`. Allowed sizes: {allowed}.")
 
-    if template:
-        resolved_template = validate_template_name(template)
-        spec = (
-            contract.templates[resolved_template]
-            if resolved_template in contract.templates
-            else template_contract(resolved_template)
+    _validate_template_render_option_keys(set(selected), template=template)
+    return selected
+
+
+def normalize_clear_render_options(
+    clear_render_options: object,
+    *,
+    template: str | None = None,
+) -> list[str]:
+    if not isinstance(clear_render_options, list | tuple | set):
+        return []
+    selected: list[str] = []
+    seen: set[str] = set()
+    for item in clear_render_options:
+        key = str(item).strip()
+        if not key or key in seen:
+            continue
+        selected.append(key)
+        seen.add(key)
+
+    unknown = sorted(key for key in selected if key not in _RENDER_PARAMETER_NAMES)
+    if unknown:
+        known = ", ".join(sorted(_RENDER_PARAMETER_NAMES))
+        raise ValueError(
+            f"Unsupported render option clear(s): {', '.join(unknown)}. Supported options: {known}."
         )
-        unsupported = sorted(
-            key
-            for key in selected
-            if key not in spec.editable_options
-            and key not in {"fit_options", "custom_theme_id", "custom_theme_draft", "visual_theme_id"}
-        )
-        if unsupported:
-            allowed = ", ".join(spec.editable_options)
-            raise ValueError(
-                f"Template `{resolved_template}` does not support option(s): {', '.join(unsupported)}. "
-                f"Supported editable options: {allowed}."
-            )
+    _validate_template_render_option_keys(set(selected), template=template)
     return selected
 
 
@@ -105,6 +138,8 @@ def apply_request_patch(
     *,
     exports: object = None,
     render_options: object = None,
+    clear_render_options: object = None,
+    split_policy: object = None,
     series_order: object = None,
     template: str | None = None,
     review_note: str | None = None,
@@ -112,6 +147,10 @@ def apply_request_patch(
     patched = dict(request)
     selected_exports = normalize_exports(exports if exports is not None else patched.get("exports"))
     current_render_options = patched.get("render_options") if isinstance(patched.get("render_options"), dict) else {}
+    clear_keys = set(normalize_clear_render_options(clear_render_options, template=template))
+    current_render_options = {
+        key: value for key, value in current_render_options.items() if key not in clear_keys
+    }
     normalized_patch = normalize_render_options(render_options, template=template)
     selected_series = _selected_series_labels(series_order)
     explicit_order = _selected_series_labels(normalized_patch.get("series_order"))
@@ -144,6 +183,10 @@ def apply_request_patch(
         patched["render_options"] = merged_render_options
     else:
         patched.pop("render_options", None)
+    if split_policy is not None:
+        normalized_split_policy = normalize_split_policy(split_policy)
+        if normalized_split_policy is not None:
+            patched["split_policy"] = normalized_split_policy
 
     note = (review_note or "").strip()
     if note:
@@ -152,4 +195,9 @@ def apply_request_patch(
     return patched
 
 
-__all__ = ["apply_request_patch", "normalize_exports", "normalize_render_options"]
+__all__ = [
+    "apply_request_patch",
+    "normalize_clear_render_options",
+    "normalize_exports",
+    "normalize_render_options",
+]

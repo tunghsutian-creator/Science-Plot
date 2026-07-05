@@ -6,13 +6,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.acceptance import run_3dpa_acceptance
+from sciplot_core.autoplot import run_autoplot
 from sciplot_core.batch import run_batch
 from sciplot_core.curate import curate_torque_project
 from sciplot_core.intake import intake_catalog_payload, prepare_intake_session, serve_intake
 from sciplot_core.materials_rules import list_rules_payload, show_rule_payload
 from sciplot_core.qa import run_qa
 from sciplot_core.render import inspect_payload, render_to_dir
-from sciplot_core.workflow import run_request
+from sciplot_core.studio import run_studio_command
+from sciplot_core.workflow import run_one_step, run_request
 from sciplot_recipes import run_recipe
 
 
@@ -99,6 +102,37 @@ def _build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Run a plot_request.json workflow.")
     run_parser.add_argument("request", type=Path)
 
+    one_step_parser = subparsers.add_parser(
+        "one-step",
+        help="Generate a complete SciPlot figure package from a high-confidence raw data path.",
+    )
+    one_step_parser.add_argument("input", type=Path)
+    one_step_parser.add_argument("--out", type=Path, default=Path("outputs") / "one_step_projects")
+    one_step_parser.add_argument("--name", help="Project name. Defaults to the input file or folder name.")
+    one_step_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+    autoplot_parser = subparsers.add_parser(
+        "autoplot",
+        help="One-command local plotting entrypoint with stable delivery and token-saving handoff policy.",
+    )
+    autoplot_parser.add_argument("input", type=Path)
+    autoplot_parser.add_argument("--out", type=Path, default=Path("outputs") / "autoplot_projects")
+    autoplot_parser.add_argument("--name", help="Project name. Defaults to the input file or folder name.")
+    autoplot_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+    acceptance_parser = subparsers.add_parser("acceptance", help="Run real-data acceptance suites.")
+    acceptance_subparsers = acceptance_parser.add_subparsers(dest="acceptance_command", required=True)
+    acceptance_3dpa_parser = acceptance_subparsers.add_parser(
+        "3dpa",
+        help="Run the representative 3D PA real-data acceptance suite.",
+    )
+    acceptance_3dpa_parser.add_argument("input", type=Path)
+    acceptance_3dpa_parser.add_argument("--out", type=Path, default=Path("outputs") / "acceptance")
+    acceptance_3dpa_parser.add_argument("--name", default="3dpa_acceptance", help="Acceptance project name.")
+    acceptance_3dpa_parser.add_argument("--representative-count", type=int, default=6)
+    acceptance_3dpa_parser.add_argument("--dense-series", type=int, default=44)
+    acceptance_3dpa_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
     quick_parser = subparsers.add_parser("quick", help="Open the shortest confirmation flow for a raw data path.")
     quick_parser.add_argument("input", type=Path)
     quick_parser.add_argument("--host", default="127.0.0.1")
@@ -169,6 +203,34 @@ def _build_parser() -> argparse.ArgumentParser:
     workbench_parser.add_argument("--project", help="Open an existing intake project under --out.")
     workbench_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
 
+    studio_parser = subparsers.add_parser("studio", help="Open the GPL SciPlot Studio desktop editor.")
+    studio_parser.add_argument(
+        "target",
+        nargs="?",
+        type=Path,
+        help="Raw data path, SciPlot project, plot_request.json, or .vsz file.",
+    )
+    studio_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
+    studio_parser.add_argument("--template", help="Preselect the SciPlot plot template, e.g. curve or stacked_curve.")
+    studio_parser.add_argument("--name", help="Preselect the SciPlot project/figure name.")
+    studio_parser.add_argument("--new", action="store_true", help="Open an empty embedded Veusz Studio window.")
+    studio_parser.add_argument("--export", help="Comma-separated export formats, e.g. pdf,tiff_300.")
+    studio_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON and do not open the GUI.",
+    )
+    studio_parser.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="Generate/register the Studio document only.",
+    )
+    studio_parser.add_argument(
+        "--qt-smoke",
+        action="store_true",
+        help="Run a headless PyQt/Veusz embedding smoke test.",
+    )
+
     qa_parser = subparsers.add_parser("qa", help="Validate rendered SciPlot outputs.")
     qa_parser.add_argument("output_dir", type=Path)
     qa_parser.add_argument("--goldens", type=Path)
@@ -229,6 +291,42 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "run":
             _print_json(run_request(_resolve_input(args.request, kind="Request file")))
             return 0
+        if args.command == "one-step":
+            payload = run_one_step(
+                _resolve_input(args.input),
+                output_root=args.out.expanduser(),
+                project_name=args.name,
+            )
+            if args.json:
+                _print_json(payload)
+            else:
+                print(payload["run_output"])
+            return 0
+        if args.command == "autoplot":
+            payload = run_autoplot(
+                _resolve_input(args.input),
+                output_root=args.out.expanduser(),
+                project_name=args.name,
+            )
+            if args.json:
+                _print_json(payload)
+            else:
+                print(payload["delivery"] or payload["run_output"])
+            return 0
+        if args.command == "acceptance":
+            if args.acceptance_command == "3dpa":
+                payload = run_3dpa_acceptance(
+                    _resolve_input(args.input),
+                    output_root=args.out.expanduser(),
+                    project_name=args.name,
+                    representative_count=args.representative_count,
+                    dense_series_count=args.dense_series,
+                )
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(payload["project_dir"])
+                return 0
         if args.command == "quick":
             serve_intake(
                 input_path=_resolve_input(args.input),
@@ -308,6 +406,20 @@ def main(argv: list[str] | None = None) -> int:
                 serve_kwargs["project_slug"] = args.project
             serve_intake(**serve_kwargs)
             return 0
+        if args.command == "studio":
+            original_argv = list(sys.argv[1:] if argv is None else argv)
+            return run_studio_command(
+                target=args.target.expanduser() if args.target else None,
+                output_root=args.out.expanduser(),
+                template=args.template,
+                project_name=args.name,
+                new=args.new,
+                export=args.export,
+                json_output=args.json,
+                prepare_only=args.prepare_only,
+                qt_smoke=args.qt_smoke,
+                original_argv=original_argv,
+            )
         if args.command == "qa":
             _print_json(
                 run_qa(
