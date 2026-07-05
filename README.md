@@ -34,8 +34,15 @@ become a reusable rule.
 Prefer the project wrapper:
 
 ```bash
+skill/scripts/sciplot doctor --json
+```
+
+```bash
 skill/scripts/sciplot studio PATH --out outputs/intake_projects
 ```
+
+`doctor` must report `status=ready` before alpha use. See
+`docs/ALPHA_USER_GUIDE.md` for the current PhD-student daily-use contract.
 
 For a blank desktop editor:
 
@@ -137,9 +144,24 @@ minimal user-facing `delivery/` folder:
 - `_sciplot_internal/` for QA, manifests, raw/archive files, and audit trails
 
 If recognition or rendering cannot continue deterministically, SciPlot writes
-`intervention_request.json`, marks `needs_ai_intervention`, and records
-`operation_mode=assisted_cleanup`. Codex can be used as the optional assistant
-provider, but manual cleanup is still a valid route.
+`intervention_request.json` and `assisted_cleanup_request.json`, marks
+`needs_ai_intervention`, and records `operation_mode=assisted_cleanup`. Codex
+can be used as the optional assistant provider, but manual cleanup is still a
+valid route. After a human or assistant reshapes the data, record the
+reviewable result with:
+
+```bash
+skill/scripts/sciplot cleanup result RUN_OUTPUT_DIR \
+  --cleaned-data cleaned.csv \
+  --mapping '{"x":"Time","y":"Signal"}' \
+  --confidence 0.82 \
+  --confirm \
+  --json
+```
+
+This writes `cleanup_result.json`. Only a confirmed result with non-low
+confidence is marked `ready_for_normal_mode`; use the recorded
+`cleaned_data.path` as the next normal SciPlot input.
 One-step runs also write `one_step_status.json`, so every output has an
 explicit state: `ready`, `needs_human_confirmation`, or `needs_rule_repair`.
 
@@ -225,6 +247,10 @@ skill/scripts/sciplot rules list --json
 skill/scripts/sciplot rules show rheology_temperature_sweep --json
 ```
 
+`rules list` shows only fixture-backed ready rules by default. Use
+`skill/scripts/sciplot rules list --json --all` only for internal rule
+development.
+
 Rendering:
 
 ```bash
@@ -305,14 +331,18 @@ separate cross-sample figure.
 - For a user-supplied raw data path, prefer `sciplot studio PATH --out
   outputs/intake_projects`; use the Web UI only when the user explicitly asks
   for browser confirmation or Qt Studio lacks a needed confirmation control.
-- If `intervention_request.json`, `needs_ai_intervention`, or batch
-  `interventions` appears, treat it as assisted cleanup/repair: preserve raw
-  data, patch code and tests when needed, then rerun the request.
+- If `intervention_request.json`, `assisted_cleanup_request.json`,
+  `needs_ai_intervention`, or batch `interventions` appears, treat it as
+  assisted cleanup/repair: preserve raw data, patch code and tests when needed,
+  write or inspect `cleanup_result.json`, then rerun the request.
 
 ## Roadmap
 
 Current standalone-operation and cleanup direction:
 `docs/INDEPENDENT_OPERATION_AND_CLEANUP_PLAN.md`.
+
+Current alpha user guide:
+`docs/ALPHA_USER_GUIDE.md`.
 
 Phase 1: Make Qt Studio the daily plotting surface.
 

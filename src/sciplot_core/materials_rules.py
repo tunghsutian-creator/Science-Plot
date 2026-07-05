@@ -433,7 +433,8 @@ RULES: tuple[SemanticRule, ...] = (
             ),
         ),
         render_options=dict(TORQUE_CURVE_RENDER_OPTIONS),
-        fixture_status="pending",
+        fixture_path="tests/fixtures/stress_relax/pa1010_zn10_zn15_torque_peak_aligned_1200pts.csv",
+        fixture_status="ready",
         priority=42,
         reason="Torque rheometer export with Screw Torque over time.",
     ),
@@ -1171,9 +1172,25 @@ def get_rule(rule_id: str) -> SemanticRule:
         raise ValueError(f"Unknown material rule `{rule_id}`. Available rules: {known}.") from exc
 
 
-def list_rules_payload() -> dict[str, Any]:
+def _is_ready_rule(rule: SemanticRule) -> bool:
+    return rule.fixture_status == "ready"
+
+
+def iter_public_rules(*, include_pending: bool = False) -> tuple[SemanticRule, ...]:
+    rules = iter_rules()
+    if include_pending:
+        return rules
+    return tuple(rule for rule in rules if _is_ready_rule(rule))
+
+
+def list_rules_payload(*, include_pending: bool = False) -> dict[str, Any]:
+    rules = iter_public_rules(include_pending=include_pending)
+    all_rules = iter_rules()
     return {
         "kind": "sciplot_material_rules",
+        "visibility": "all" if include_pending else "ready",
+        "ready_count": sum(1 for rule in all_rules if _is_ready_rule(rule)),
+        "pending_count": sum(1 for rule in all_rules if not _is_ready_rule(rule)),
         "rules": [
             {
                 "rule_id": rule.rule_id,
@@ -1182,9 +1199,10 @@ def list_rules_payload() -> dict[str, Any]:
                 "template": rule.template,
                 "x": rule.x_axis.display_label,
                 "y": rule.y_axis.display_label,
+                "fixture_status": rule.fixture_status,
                 "priority": rule.priority,
             }
-            for rule in iter_rules()
+            for rule in rules
         ],
     }
 
@@ -1628,6 +1646,7 @@ __all__ = [
     "convert_value",
     "format_unit_label",
     "get_rule",
+    "iter_public_rules",
     "iter_rules",
     "list_rules_payload",
     "match_rule",

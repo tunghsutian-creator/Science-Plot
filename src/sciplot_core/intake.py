@@ -25,8 +25,10 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 import pandas as pd
 
 from sciplot_core._utils import json_safe, safe_filename, slug, unique_path
+from sciplot_core.assisted_cleanup import CLEANUP_REQUEST_FILENAME, CLEANUP_RESULT_FILENAME, write_cleanup_request
 from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex_job, start_codex_job
 from sciplot_core.ingest import smart_decode
+from sciplot_core.materials_rules import get_rule
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload, normal_mode_payload
 from sciplot_core.policy import (
     FIGURE_SIZE_PRESETS,
@@ -234,10 +236,44 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
 )
 
 
-def intake_catalog_payload() -> dict[str, Any]:
+def _rule_is_ready_for_public_catalog(rule_id: str | None) -> bool:
+    if not rule_id:
+        return True
+    try:
+        return get_rule(rule_id).fixture_status == "ready"
+    except ValueError:
+        return False
+
+
+def _public_intake_catalog(*, include_pending: bool = False) -> tuple[dict[str, Any], ...]:
+    if include_pending:
+        return INTAKE_CATALOG
+    data_types: list[dict[str, Any]] = []
+    for data_type in INTAKE_CATALOG:
+        experiments = [
+            experiment
+            for experiment in data_type["experiments"]
+            if _rule_is_ready_for_public_catalog(experiment.get("rule_id"))
+        ]
+        if not experiments:
+            continue
+        data_types.append({**data_type, "experiments": tuple(experiments)})
+    return tuple(data_types)
+
+
+def intake_catalog_payload(*, include_pending: bool = False) -> dict[str, Any]:
+    catalog = _public_intake_catalog(include_pending=include_pending)
+    visible_rules = {
+        str(experiment.get("rule_id"))
+        for data_type in catalog
+        for experiment in data_type["experiments"]
+        if experiment.get("rule_id")
+    }
     return {
         "kind": "sciplot_intake_catalog",
-        "data_types": json_safe(INTAKE_CATALOG),
+        "visibility": "all" if include_pending else "ready",
+        "ready_rule_ids": sorted(visible_rules),
+        "data_types": json_safe(catalog),
         "figure_size_presets": list(APPROVED_INTAKE_SIZE_PRESETS),
     }
 
@@ -326,6 +362,33 @@ def _read_json_if_exists(path: Path) -> dict[str, Any] | None:
     except json.JSONDecodeError:
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _write_render_failure_cleanup_request(
+    *,
+    run_output: Path,
+    request: dict[str, Any],
+    request_path: Path,
+    intervention: Path,
+) -> str | None:
+    cleanup_request = run_output / CLEANUP_REQUEST_FILENAME
+    if cleanup_request.exists():
+        return str(cleanup_request)
+    input_value = request.get("input")
+    if not isinstance(input_value, str) or not input_value.strip():
+        return None
+    input_path = Path(input_value).expanduser()
+    if not input_path.is_absolute():
+        input_path = request_path.parent / input_path
+    write_cleanup_request(
+        run_output,
+        input_path=input_path,
+        reason="render_failure",
+        request=request,
+        intervention_request=intervention if intervention.exists() else None,
+        provider="codex",
+    )
+    return str(cleanup_request)
 
 
 def _project_dir_fromslug(output_root: Path, project_slug: str) -> Path:
@@ -624,6 +687,8 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
     last_run = manifest.get("last_run") if isinstance(manifest.get("last_run"), dict) else {}
     run_output = Path(str(last_run.get("output") or manifest.get("outputs_dir") or project_path / "runs" / "run_001"))
     intervention_path = run_output / "intervention_request.json"
+    cleanup_request_path = run_output / CLEANUP_REQUEST_FILENAME
+    cleanup_result_path = run_output / CLEANUP_RESULT_FILENAME
     artifacts = {
         "manifest": _artifact_info(run_output / "manifest.json", project_slug=project_slug),
         "analysis_report": _artifact_info(run_output / "analysis_report.md", project_slug=project_slug),
@@ -631,6 +696,8 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         "revision_brief": _artifact_info(run_output / "revision_brief.md", project_slug=project_slug),
         "review_html": _artifact_info(run_output / "review.html", project_slug=project_slug),
         "intervention_request": _artifact_info(intervention_path, project_slug=project_slug),
+        "assisted_cleanup_request": _artifact_info(cleanup_request_path, project_slug=project_slug),
+        "cleanup_result": _artifact_info(cleanup_result_path, project_slug=project_slug),
     }
     delivery = last_run.get("delivery_package") if isinstance(last_run.get("delivery_package"), dict) else {}
     project_file = delivery.get("project_file")
@@ -642,7 +709,14 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
     figure_paths = [Path(str(path)) for path in last_run.get("figures", []) if isinstance(path, str)]
     figures = [_artifact_info(path, project_slug=project_slug) for path in figure_paths]
     preview_figure = _figure_preview_info(figure_paths, project_slug=project_slug)
-    needs_assisted_cleanup = bool(last_run.get("failure") or artifacts["intervention_request"]["exists"])
+    cleanup_result = _read_json_if_exists(cleanup_result_path)
+    cleanup_ready = bool(cleanup_result and cleanup_result.get("ready_for_normal_mode") is True)
+    has_cleanup_blocker = bool(
+        last_run.get("failure")
+        or artifacts["intervention_request"]["exists"]
+        or artifacts["assisted_cleanup_request"]["exists"]
+    )
+    needs_assisted_cleanup = bool(has_cleanup_blocker and not cleanup_ready)
     operation_mode = (
         assisted_cleanup_mode_payload(reason="project_failure_or_intervention")
         if needs_assisted_cleanup
@@ -673,6 +747,12 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         "operation_mode": operation_mode,
         "needs_assisted_cleanup": needs_assisted_cleanup,
         "needs_codex": needs_assisted_cleanup,
+        "cleanup": {
+            "request": artifacts["assisted_cleanup_request"],
+            "result": artifacts["cleanup_result"],
+            "ready_for_normal_mode": cleanup_ready,
+            "payload": json_safe(cleanup_result) if cleanup_result is not None else None,
+        },
         "assistant": {
             "provider": "codex",
             "available": assistant_available,
@@ -1423,6 +1503,12 @@ def create_and_run_intake_project(
         request = json.loads(plot_request_path.read_text(encoding="utf-8"))
         run_output = Path(str(request.get("output") or intake_manifest.get("outputs_dir")))
         intervention = run_output / "intervention_request.json"
+        cleanup_request = _write_render_failure_cleanup_request(
+            run_output=run_output,
+            request=request,
+            request_path=plot_request_path,
+            intervention=intervention,
+        )
         failed_run = {
             "failed_at": datetime.now(UTC).isoformat(),
             "output": str(run_output),
@@ -1434,6 +1520,7 @@ def create_and_run_intake_project(
             "needs_assisted_cleanup": True,
             "needs_codex": True,
             "intervention_request": str(intervention) if intervention.exists() else None,
+            "assisted_cleanup_request": cleanup_request,
         }
         intake_manifest["last_run"] = failed_run
         intake_manifest["run_failed"] = True
@@ -1696,6 +1783,12 @@ def rerun_intake_project(
         )
         run_output = Path(str(run_output_value))
         intervention = run_output / "intervention_request.json"
+        cleanup_request = _write_render_failure_cleanup_request(
+            run_output=run_output,
+            request=project.request,
+            request_path=project.request_path,
+            intervention=intervention,
+        )
         failed_run = {
             "failed_at": datetime.now(UTC).isoformat(),
             "output": str(run_output),
@@ -1707,6 +1800,7 @@ def rerun_intake_project(
             "needs_assisted_cleanup": True,
             "needs_codex": True,
             "intervention_request": str(intervention) if intervention.exists() else None,
+            "assisted_cleanup_request": cleanup_request,
         }
         intake_manifest = _read_json_if_exists(project_path / "intake_manifest.json") or intake_manifest
         intake_manifest["last_run"] = failed_run
@@ -1818,7 +1912,9 @@ class _IntakeHandler(BaseHTTPRequestHandler):
             self._send_file(_STATIC_DIR / "index.html")
             return
         if parsed.path == "/api/catalog":
-            self._send_json(intake_catalog_payload())
+            query = parse_qs(parsed.query)
+            include_pending = query.get("all", ["0"])[0] in {"1", "true", "yes"}
+            self._send_json(intake_catalog_payload(include_pending=include_pending))
             return
         if parsed.path.startswith("/api/session/"):
             session_id = safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))

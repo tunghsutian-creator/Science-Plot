@@ -15,6 +15,9 @@ Do not hand-copy SciPlot style constants, legacy Matplotlib rcParams, legend-pla
 
 1. Inspect inputs first:
    ```bash
+   /Users/dongxutian/.codex/skills/sciplot-materials-analysis/scripts/sciplot doctor --json
+   ```
+   ```bash
    /Users/dongxutian/.codex/skills/sciplot-materials-analysis/scripts/sciplot inspect INPUT --json
    ```
 2. Inspect local materials rules before inventing extraction logic:
@@ -22,6 +25,7 @@ Do not hand-copy SciPlot style constants, legacy Matplotlib rcParams, legend-pla
    /Users/dongxutian/.codex/skills/sciplot-materials-analysis/scripts/sciplot rules list --json
    /Users/dongxutian/.codex/skills/sciplot-materials-analysis/scripts/sciplot rules show RULE_ID --json
    ```
+   `rules list` shows only ready rules by default; use `--all` only for internal rule repair.
 3. Choose the route:
    - User-supplied raw data path or folder: prefer the Qt-first route `sciplot studio PATH --out outputs/intake_projects`. It creates a SciPlot project package, writes `studio/document.vsz`, and opens the embedded Veusz editor. SciPlot decides the initial figure using data recognition, sample/legend names, template choice, and plotting policy; Veusz handles interactive edits after that generated figure appears. Use the Web UI confirmation flow only when the user explicitly wants browser confirmation. The shortest prefilled Web path remains `sciplot quick PATH`. The equivalent explicit Web route is `sciplot prepare PATH --out outputs/intake_projects --json`, then `sciplot intake PATH --out outputs/intake_projects`; `sciplot app` is the blank browser entrypoint, and `sciplot workbench` is an alias for the same GUI. For Studio exports, run `sciplot studio PATH --export pdf,tiff_300 --json`, then inspect the generated Studio run `manifest.json`, `review.html`, `revision_brief.md`, `delivery/`, and QA before reporting. Source, Inspect, and Samples are data-confirmation stages, not plot-preview stages. Result Review appears only after Export or assisted repair produces rendered artifacts.
    - Stable script-driven package request: if the user explicitly wants a supported high-confidence experiment path rendered without stopping for UI confirmation, prefer `sciplot autoplot PATH --out outputs/autoplot_projects --json`. It runs the local one-step workflow and writes `autoplot_summary.json` with delivery state, structured QA, and optional assistant handoff policy. Use `sciplot one-step PATH --out outputs/one_step_projects --json` only when you need the lower-level one-step result directly. Inspect `autoplot_summary.json`, `one_step_status.json`, `manifest.json`, `delivery/`, and QA. The state must be `ready`, `needs_human_confirmation`, or `needs_rule_repair`; `needs_rule_repair` means optional assisted repair should patch rules/fixtures/tests and rerun instead of asking the user to edit code.
@@ -59,10 +63,12 @@ Do not hand-copy SciPlot style constants, legacy Matplotlib rcParams, legend-pla
 
 ```bash
 # Inspect and recommendation payload
+sciplot doctor --json
 sciplot inspect INPUT --sheet 0 --json
 
 # Inspect low-token materials plotting rules
 sciplot rules list --json
+sciplot rules list --json --all
 sciplot rules show rheology_temperature_sweep --json
 
 # Render a specific public template
@@ -82,6 +88,8 @@ sciplot curate torque INPUT_PATH --name PROJECT_NAME --out outputs/curation_proj
 sciplot run plot_request.json
 sciplot batch INPUT_DIR --out OUTDIR --mode smoke
 sciplot batch INPUT_DIR --out OUTDIR --mode all --tensile-root PATH
+sciplot cleanup result RUN_OUTPUT_DIR --cleaned-data cleaned.csv --confidence 0.82 --confirm --json
+sciplot cleanup show RUN_OUTPUT_DIR --json
 
 # Open the Qt Studio desktop editor
 sciplot studio INPUT_PATH --out outputs/intake_projects
@@ -111,7 +119,7 @@ sciplot qa OUTDIR --goldens /Users/dongxutian/Documents/research-plots/tests/gol
 - Every delivered SciPlot Web UI/workbench output package must be reopenable from the filesystem before the final reply. Create and verify a clickable launcher in the output folder, and mention it in the handoff. This applies even when the browser is already open during the current turn.
 - For rheology sweep folders with multiple sample exports, do not plot all metrics for one sample as the main comparison. Aggregate same metrics across samples first, then render separate cross-sample figures for the supported metrics.
 - Use existing recipe modules before writing new analysis code.
-- If a dataset produces `intervention_request.json`, `needs_ai_intervention`, or batch `interventions`, patch the semantic recognizer or corresponding recipe in `/Users/dongxutian/Documents/research-plots`, add/extend a simulated fixture, add/update a golden or QA assertion, and rerun tests.
+- If a dataset produces `intervention_request.json`, `assisted_cleanup_request.json`, `needs_ai_intervention`, or batch `interventions`, patch the semantic recognizer or corresponding recipe in `/Users/dongxutian/Documents/research-plots`, add/extend a simulated fixture, add/update a golden or QA assertion, write or inspect `cleanup_result.json` when data was reshaped, and rerun tests.
 - If a one-step run returns `needs_rule_repair`, treat it the same way: inspect the structured status and intervention package first, then improve the rule system rather than making a one-off figure.
 - Recipes must write `processed/`, `figures/`, `tables/`, `manifest.json`, `analysis_report.md`, and request workflows should write `tables/analysis_metrics.csv` plus a `raw/` source archive.
 - Request and batch outputs should use PDF plus 300 DPI TIFF by default, with run outputs also producing the minimal `delivery/` package.

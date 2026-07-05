@@ -7,9 +7,11 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.acceptance import run_3dpa_acceptance
+from sciplot_core.assisted_cleanup import load_cleanup_result, write_cleanup_result
 from sciplot_core.autoplot import run_autoplot
 from sciplot_core.batch import run_batch
 from sciplot_core.curate import curate_torque_project
+from sciplot_core.doctor import doctor_payload
 from sciplot_core.intake import intake_catalog_payload, prepare_intake_session, serve_intake
 from sciplot_core.materials_rules import list_rules_payload, show_rule_payload
 from sciplot_core.qa import run_qa
@@ -82,6 +84,9 @@ def _build_parser() -> argparse.ArgumentParser:
     inspect_parser.add_argument("input", type=Path)
     inspect_parser.add_argument("--sheet", default="0")
     inspect_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+    doctor_parser = subparsers.add_parser("doctor", help="Check whether this SciPlot install is ready for alpha use.")
+    doctor_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
 
     render_parser = subparsers.add_parser("render", help="Render a source through the SciPlot renderer.")
     render_parser.add_argument("input", type=Path)
@@ -161,9 +166,45 @@ def _build_parser() -> argparse.ArgumentParser:
     rules_subparsers = rules_parser.add_subparsers(dest="rules_command", required=True)
     rules_list_parser = rules_subparsers.add_parser("list", help="List material semantic rules.")
     rules_list_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    rules_list_parser.add_argument("--all", action="store_true", help="Include pending internal rules.")
     rules_show_parser = rules_subparsers.add_parser("show", help="Show one material semantic rule.")
     rules_show_parser.add_argument("rule_id")
     rules_show_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+    cleanup_parser = subparsers.add_parser("cleanup", help="Create or inspect assisted-cleanup artifacts.")
+    cleanup_subparsers = cleanup_parser.add_subparsers(dest="cleanup_command", required=True)
+    cleanup_result_parser = cleanup_subparsers.add_parser(
+        "result",
+        help="Write a cleanup_result.json after human or assistant data cleanup.",
+    )
+    cleanup_result_parser.add_argument("output_dir", type=Path)
+    cleanup_result_parser.add_argument("--cleaned-data", type=Path, required=True)
+    cleanup_result_parser.add_argument("--mapping", help="JSON object or @path JSON file with column/sample mapping.")
+    cleanup_result_parser.add_argument("--confidence", type=float, required=True)
+    cleanup_result_parser.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Mark the cleaned result as human-confirmed.",
+    )
+    cleanup_result_parser.add_argument(
+        "--raw-input",
+        type=Path,
+        action="append",
+        help="Raw input path preserved by cleanup.",
+    )
+    cleanup_result_parser.add_argument(
+        "--provider",
+        default="manual",
+        help="Cleanup provider label, e.g. manual or codex.",
+    )
+    cleanup_result_parser.add_argument("--notes", default="", help="Short cleanup note.")
+    cleanup_result_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    cleanup_show_parser = cleanup_subparsers.add_parser(
+        "show",
+        help="Show cleanup_result.json from a directory or file.",
+    )
+    cleanup_show_parser.add_argument("target", type=Path)
+    cleanup_show_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
 
     batch_parser = subparsers.add_parser("batch", help="Run a batch over a data folder.")
     batch_parser.add_argument("input_dir", type=Path)
@@ -179,6 +220,7 @@ def _build_parser() -> argparse.ArgumentParser:
     app_parser = subparsers.add_parser("app", help="Open the local SciPlot Web app for manual plotting.")
     app_parser.add_argument("input", nargs="?", type=Path)
     app_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
+    app_parser.add_argument("--all", action="store_true", help="Include pending internal catalog entries.")
     app_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     app_parser.add_argument("--host", default="127.0.0.1")
     app_parser.add_argument("--port", type=int, default=8765)
@@ -189,6 +231,7 @@ def _build_parser() -> argparse.ArgumentParser:
     intake_parser = subparsers.add_parser("intake", help="Open the SciPlot intake project builder.")
     intake_parser.add_argument("input", nargs="?", type=Path)
     intake_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
+    intake_parser.add_argument("--all", action="store_true", help="Include pending internal catalog entries.")
     intake_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     intake_parser.add_argument("--host", default="127.0.0.1")
     intake_parser.add_argument("--port", type=int, default=8765)
@@ -199,6 +242,7 @@ def _build_parser() -> argparse.ArgumentParser:
     workbench_parser = subparsers.add_parser("workbench", help="Open the SciPlot Web workbench.")
     workbench_parser.add_argument("input", nargs="?", type=Path)
     workbench_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
+    workbench_parser.add_argument("--all", action="store_true", help="Include pending internal catalog entries.")
     workbench_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     workbench_parser.add_argument("--host", default="127.0.0.1")
     workbench_parser.add_argument("--port", type=int, default=8765)
@@ -257,6 +301,21 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 print(payload.get("recommendation_summary", "No recommendation summary available."))
             return 0
+        if args.command == "doctor":
+            payload = doctor_payload()
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot doctor: {payload['status']}")
+                print(
+                    "Rules: "
+                    f"{payload['rule_summary']['ready']} ready, "
+                    f"{payload['rule_summary']['pending']} pending"
+                )
+                for check in payload["checks"]:
+                    marker = "ok" if check["status"] == "passed" else "failed"
+                    print(f"{marker}  {check['label']}: {check.get('detail') or check['status']}")
+            return 0 if payload["status"] == "ready" else 1
         if args.command == "render":
             source = _resolve_input(args.input)
             sheet = _coerce_sheet(args.sheet)
@@ -361,12 +420,13 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "rules":
             if args.rules_command == "list":
-                payload = list_rules_payload()
+                payload = list_rules_payload(include_pending=args.all)
                 if args.json:
                     _print_json(payload)
                 else:
                     for item in payload["rules"]:
-                        print(f"{item['rule_id']}: {item['x']} -> {item['y']}")
+                        status = "" if item.get("fixture_status") == "ready" else f" [{item['fixture_status']}]"
+                        print(f"{item['rule_id']}{status}: {item['x']} -> {item['y']}")
                 return 0
             if args.rules_command == "show":
                 payload = show_rule_payload(args.rule_id)
@@ -376,6 +436,33 @@ def main(argv: list[str] | None = None) -> int:
                     x_label = payload["axis_plan"]["x"]["display_label"]
                     y_label = payload["axis_plan"]["y"]["display_label"]
                     print(f"{payload['rule_id']}: {x_label} -> {y_label}")
+                return 0
+        if args.command == "cleanup":
+            if args.cleanup_command == "result":
+                payload = write_cleanup_result(
+                    args.output_dir.expanduser(),
+                    cleaned_data=_resolve_input(args.cleaned_data, kind="Cleaned data"),
+                    mapping_proposal=_load_options(args.mapping),
+                    confidence=args.confidence,
+                    human_confirmed=args.confirm,
+                    raw_inputs=[path.expanduser() for path in args.raw_input or []],
+                    notes=args.notes,
+                    provider=args.provider,
+                )
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(payload["cleanup_result"])
+                return 0
+            if args.cleanup_command == "show":
+                payload = load_cleanup_result(args.target.expanduser())
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(
+                        f"{payload.get('cleaned_data', {}).get('path', '')} "
+                        f"ready={payload.get('ready_for_normal_mode', False)}"
+                    )
                 return 0
         if args.command == "batch":
             _print_json(
@@ -389,7 +476,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command in {"app", "intake", "workbench"}:
             if args.catalog:
-                payload = intake_catalog_payload()
+                payload = intake_catalog_payload(include_pending=args.all)
                 if args.json:
                     _print_json(payload)
                 else:

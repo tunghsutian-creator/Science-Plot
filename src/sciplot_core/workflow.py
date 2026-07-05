@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 
 from sciplot_core._utils import slug
+from sciplot_core.assisted_cleanup import CLEANUP_REQUEST_FILENAME, CLEANUP_RESULT_FILENAME, write_cleanup_request
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.materials_rules import compute_analysis_metrics
 from sciplot_core.one_step import build_one_step_project, build_quality_actions
@@ -76,6 +77,8 @@ def _clear_managed_artifacts(output_dir: Path) -> None:
         "revision_brief.md",
         "review.html",
         "intervention_request.json",
+        CLEANUP_REQUEST_FILENAME,
+        CLEANUP_RESULT_FILENAME,
     ):
         path = output_dir / filename
         if path.exists():
@@ -759,6 +762,15 @@ def run_request(request_path: Path) -> dict[str, Any]:
             (output_dir / "intervention_request.json").write_text(
                 json.dumps(json_safe(intervention), indent=2, ensure_ascii=False),
                 encoding="utf-8",
+            )
+            write_cleanup_request(
+                output_dir,
+                input_path=input_path,
+                reason=str(intervention.get("category") or "semantic_intervention"),
+                semantic=semantic,
+                request=request,
+                intervention_request=output_dir / "intervention_request.json",
+                provider="codex",
             )
             one_step_status = build_one_step_project(
                 input_path=input_path,
