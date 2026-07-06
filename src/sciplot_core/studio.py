@@ -35,26 +35,42 @@ STACKED_TEMPLATE_IDS = {"stacked_curve", "segmented_stacked_curve"}
 STUDIO_TEMPLATE_IDS = ("curve", "stacked_curve", "segmented_stacked_curve")
 FIGURE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
 EXPORT_FORMATS = ("pdf", "tiff_300")
+SERIES_MARKER_CHOICES = (
+    ("None", "none"),
+    ("Circle", "circle"),
+    ("Square", "square"),
+    ("Triangle", "triangle"),
+    ("Diamond", "diamond"),
+    ("X", "x"),
+    ("Plus", "plus"),
+)
+LEGEND_POSITION_CHOICES = (
+    ("Top R", "upper_right"),
+    ("Top L", "upper_left"),
+    ("Auto", "auto"),
+    ("Bot R", "lower_right"),
+    ("Bot L", "lower_left"),
+)
 STUDIO_COLORS = {
-    "bg_window": "#1e1f23",
-    "bg_topbar": "#1a1c20",
-    "bg_rail": "#16181c",
-    "bg_canvas": "#16181c",
-    "bg_inspector": "#1a1c20",
-    "bg_statusbar": "#16181c",
-    "bg_card": "#21262d",
-    "bg_input": "#1c1e21",
-    "bg_dropdown": "#292b31",
-    "bg_hover": "#30363d",
-    "fg_primary": "#e6edf3",
-    "fg_secondary": "#c9d1d9",
-    "fg_muted": "#8b949e",
-    "fg_disabled": "#484f58",
-    "accent": "#0e8475",
-    "accent_hover": "#0f9d8c",
-    "accent_bg": "#1a2e2b",
-    "border": "#30363d",
-    "border_light": "#282a2f",
+    "bg_window": "#1c1d20",
+    "bg_topbar": "#18191c",
+    "bg_rail": "#151619",
+    "bg_canvas": "#141518",
+    "bg_inspector": "#1c1d20",
+    "bg_statusbar": "#151619",
+    "bg_card": "#24272c",
+    "bg_input": "#191a1d",
+    "bg_dropdown": "#25272d",
+    "bg_hover": "#30343a",
+    "fg_primary": "#f0f3f6",
+    "fg_secondary": "#d2d7de",
+    "fg_muted": "#929aa5",
+    "fg_disabled": "#535963",
+    "accent": "#11a18f",
+    "accent_hover": "#16b8a6",
+    "accent_bg": "#173c37",
+    "border": "#363a42",
+    "border_light": "#2a2d33",
     "border_active": "#0e8475",
     "success": "#0e8475",
     "warning": "#d47f0c",
@@ -744,6 +760,9 @@ def _studio_styles() -> str:
     QTableWidget#samplesTable::item:selected, QTableWidget#mappingGroupsTable::item:selected {{
         background-color: {colors['accent_bg']};
     }}
+    QTableWidget::item {{
+        border: none;
+    }}
     QHeaderView::section {{
         background-color: {colors['bg_topbar']};
         color: {colors['fg_muted']};
@@ -816,14 +835,30 @@ def _studio_styles() -> str:
     QListWidget#seriesList, QListWidget#sourceFileList {{
         background-color: {colors['bg_card']};
         border: 1px solid {colors['border']};
-        border-radius: 4px;
+        border-radius: 6px;
         color: {colors['fg_secondary']};
     }}
     QListWidget#seriesList::item, QListWidget#sourceFileList::item {{
-        padding: 6px 8px;
+        padding: 7px 8px;
     }}
     QListWidget#seriesList::item:selected, QListWidget#sourceFileList::item:selected {{
         background-color: {colors['accent_bg']};
+    }}
+    QLabel#seriesInspectorValue {{
+        color: {colors['fg_muted']};
+        font-size: 11px;
+    }}
+    QPushButton#seriesColorSwatch {{
+        border: 1px solid {colors['border']};
+        border-radius: 7px;
+        min-width: 18px;
+        max-width: 18px;
+        min-height: 18px;
+        max-height: 18px;
+        padding: 0px;
+    }}
+    QPushButton#seriesColorSwatch:checked {{
+        border: 2px solid {colors['fg_primary']};
     }}
     QPushButton#sizeButton, QPushButton#legendPosButton, QPushButton#templateChoiceButton {{
         background-color: {colors['bg_card']};
@@ -865,13 +900,18 @@ def _studio_styles() -> str:
     QPushButton:hover {{
         background-color: {colors['bg_hover']};
     }}
-    QLineEdit, QComboBox {{
+    QLineEdit, QComboBox, QDoubleSpinBox {{
         background-color: {colors['bg_input']};
         color: {colors['fg_secondary']};
         border: 1px solid {colors['border']};
         border-radius: 5px;
         padding: 5px 7px;
         selection-background-color: {colors['accent_bg']};
+    }}
+    QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
+        width: 16px;
+        border: none;
+        background-color: {colors['bg_card']};
     }}
     QCheckBox {{
         color: {colors['fg_secondary']};
@@ -1346,6 +1386,37 @@ def _column_confirmation_from_controls(controls: dict[str, Any], state: dict[str
             }
         )
     return [{"file_name": source_path.name, "source_path": str(source_path), "columns": confirmations}]
+
+
+def _series_entries_from_studio_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    studio = payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
+    spec_value = studio.get("spec") if isinstance(studio, dict) else None
+    spec_path: Path | None = None
+    if isinstance(spec_value, str) and spec_value.strip():
+        spec_path = Path(spec_value).expanduser()
+    elif isinstance(payload.get("document"), str):
+        spec_path = _veusz_spec_path(Path(str(payload["document"])).expanduser())
+    if spec_path is None or not spec_path.exists():
+        return []
+    spec = _read_json(spec_path)
+    series = spec.get("series") if isinstance(spec.get("series"), list) else []
+    entries: list[dict[str, Any]] = []
+    for index, item in enumerate(series):
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or item.get("name") or f"Series {index + 1}")
+        entries.append(
+            {
+                "series_id": label,
+                "label": label,
+                "enabled": True,
+                "color": str(item.get("color") or DEFAULT_PALETTE[index % len(DEFAULT_PALETTE)]),
+                "line_width": item.get("line_width_pt") or 1.2,
+                "marker": str(item.get("marker") or "none"),
+                "marker_size": item.get("marker_size_pt") or 0.0,
+            }
+        )
+    return entries
 
 
 def _template_card_specs() -> list[dict[str, str]]:
@@ -2160,7 +2231,63 @@ def _build_refine_inspector(state: dict[str, Any], controls: dict[str, Any]) -> 
     series_list.setObjectName("seriesList")
     series_list.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
     series_list.setDefaultDropAction(QtCore.Qt.DropAction.MoveAction)
-    series_layout.addWidget(series_list, 1)
+    series_list.setMinimumHeight(96)
+    series_list.setMaximumHeight(150)
+    series_list.setSizePolicy(
+        QtWidgets.QSizePolicy.Policy.Expanding,
+        QtWidgets.QSizePolicy.Policy.Fixed,
+    )
+    series_layout.addWidget(series_list)
+    selected_series_label = QtWidgets.QLabel("No generated series")
+    selected_series_label.setObjectName("seriesInspectorValue")
+    series_layout.addWidget(selected_series_label)
+    series_enabled_check = QtWidgets.QCheckBox("Show selected series")
+    series_enabled_check.setChecked(True)
+    series_layout.addWidget(series_enabled_check)
+
+    color_label = QtWidgets.QLabel("Color")
+    color_label.setObjectName("tabSectionTitle")
+    series_layout.addWidget(color_label)
+    color_row = QtWidgets.QHBoxLayout()
+    color_row.setSpacing(6)
+    series_color_buttons: dict[str, Any] = {}
+    for color in DEFAULT_PALETTE:
+        button = QtWidgets.QPushButton("")
+        button.setObjectName("seriesColorSwatch")
+        button.setCheckable(True)
+        button.setToolTip(color)
+        button.setStyleSheet(f"QPushButton#seriesColorSwatch {{ background-color: {color}; }}")
+        color_row.addWidget(button)
+        series_color_buttons[color] = button
+    color_row.addStretch(1)
+    series_layout.addLayout(color_row)
+
+    line_width_label = QtWidgets.QLabel("Line Width")
+    line_width_label.setObjectName("tabSectionTitle")
+    series_layout.addWidget(line_width_label)
+    series_line_width_spin = QtWidgets.QDoubleSpinBox()
+    series_line_width_spin.setRange(0.6, 2.4)
+    series_line_width_spin.setSingleStep(0.1)
+    series_line_width_spin.setDecimals(1)
+    series_line_width_spin.setSuffix(" pt")
+    series_line_width_spin.setValue(1.2)
+    series_layout.addWidget(series_line_width_spin)
+
+    marker_row = QtWidgets.QHBoxLayout()
+    marker_row.setSpacing(8)
+    series_marker_combo = QtWidgets.QComboBox()
+    for label, value in SERIES_MARKER_CHOICES:
+        series_marker_combo.addItem(label, value)
+    series_marker_size_spin = QtWidgets.QDoubleSpinBox()
+    series_marker_size_spin.setRange(0.0, 8.0)
+    series_marker_size_spin.setSingleStep(0.5)
+    series_marker_size_spin.setDecimals(1)
+    series_marker_size_spin.setSuffix(" pt")
+    series_marker_size_spin.setValue(0.0)
+    marker_row.addWidget(series_marker_combo, 1)
+    marker_row.addWidget(series_marker_size_spin, 1)
+    series_layout.addLayout(marker_row)
+    series_layout.addStretch(1)
     tab_widget.addTab(series_tab, "Series")
 
     legend_tab = QtWidgets.QWidget()
@@ -2169,12 +2296,15 @@ def _build_refine_inspector(state: dict[str, Any], controls: dict[str, Any]) -> 
     legend_layout.setSpacing(10)
     legend_layout.addWidget(QtWidgets.QLabel("Legend Position"))
     pos_grid = QtWidgets.QGridLayout()
-    for index, label in enumerate(["UR", "UL", "Auto", "LR", "LL"]):
+    legend_position_buttons: dict[str, Any] = {}
+    for index, (label, value) in enumerate(LEGEND_POSITION_CHOICES):
         button = QtWidgets.QPushButton(label)
         button.setObjectName("legendPosButton")
         button.setFixedSize(64, 34)
         button.setCheckable(True)
+        button.clicked.connect(lambda _checked=False, pos=value: state["_select_legend_position"](pos))
         pos_grid.addWidget(button, index // 3, index % 3)
+        legend_position_buttons[value] = button
     legend_layout.addLayout(pos_grid)
     legend_layout.addWidget(QtWidgets.QLabel("Label Mode"))
     legend_mode = QtWidgets.QComboBox()
@@ -2226,6 +2356,13 @@ def _build_refine_inspector(state: dict[str, Any], controls: dict[str, Any]) -> 
             "refine_log_y_check": refine_log_y_check,
             "refine_reverse_x_check": refine_reverse_x_check,
             "series_list": series_list,
+            "selected_series_label": selected_series_label,
+            "series_enabled_check": series_enabled_check,
+            "series_color_buttons": series_color_buttons,
+            "series_line_width_spin": series_line_width_spin,
+            "series_marker_combo": series_marker_combo,
+            "series_marker_size_spin": series_marker_size_spin,
+            "legend_position_buttons": legend_position_buttons,
             "refine_label_mode_combo": legend_mode,
             "output_label": output_label,
             "preview_btn": preview_btn,
@@ -2669,9 +2806,13 @@ def _create_sciplot_studio_shell(
         "exports": list(EXPORT_FORMATS),
         "review_path": None,
         "delivery_path": None,
+        "legend_position": "auto",
+        "series_entries": [],
+        "series_style_edits": {},
     }
     state["_select_template_id"] = lambda _value: None
     state["_select_figure_size"] = lambda _value: None
+    state["_select_legend_position"] = lambda _value: None
     _add_sciplot_view_menu(shell, state)
 
     controls: dict[str, Any] = {}
@@ -2726,9 +2867,163 @@ def _create_sciplot_studio_shell(
         state["figure_size"] = value
         sync_size_controls()
 
+    def sync_legend_position_controls() -> None:
+        current = str(state.get("legend_position") or "auto")
+        for value, button in controls.get("legend_position_buttons", {}).items():
+            _set_button_checked(button, value == current)
+
+    def select_legend_position(value: str) -> None:
+        state["legend_position"] = value
+        sync_legend_position_controls()
+
     state["_sync_template_controls"] = sync_template_controls
     state["_select_template_id"] = select_template_id
     state["_select_figure_size"] = select_figure_size
+    state["_select_legend_position"] = select_legend_position
+
+    series_loading = {"active": False}
+
+    def selected_series_label() -> str | None:
+        from PyQt6 import QtCore
+
+        item = controls["series_list"].currentItem()
+        if item is None:
+            return None
+        value = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        return str(value) if value else item.text().strip()
+
+    def default_style_for_series(label: str) -> dict[str, Any]:
+        for entry in state.get("series_entries", []):
+            if isinstance(entry, dict) and entry.get("series_id") == label:
+                return dict(entry)
+        return {
+            "series_id": label,
+            "label": label,
+            "enabled": True,
+            "color": DEFAULT_PALETTE[0],
+            "line_width": 1.2,
+            "marker": "none",
+            "marker_size": 0.0,
+        }
+
+    def set_series_color_swatch(color: str) -> None:
+        for value, button in controls.get("series_color_buttons", {}).items():
+            button.blockSignals(True)
+            _set_button_checked(button, value.casefold() == color.casefold())
+            button.blockSignals(False)
+
+    def current_series_color() -> str:
+        for value, button in controls.get("series_color_buttons", {}).items():
+            if button.isChecked():
+                return str(value)
+        label = selected_series_label()
+        if label:
+            style = state.get("series_style_edits", {}).get(label, {})
+            if isinstance(style, dict) and isinstance(style.get("color"), str):
+                return str(style["color"])
+        return DEFAULT_PALETTE[0]
+
+    def save_selected_series_style(*, color_override: str | None = None) -> None:
+        if series_loading["active"]:
+            return
+        label = selected_series_label()
+        if not label:
+            return
+        style = dict(default_style_for_series(label))
+        style.update(state.get("series_style_edits", {}).get(label, {}))
+        style["series_id"] = label
+        style["label"] = label
+        style["enabled"] = controls["series_enabled_check"].isChecked()
+        style["color"] = color_override or current_series_color()
+        style["line_width"] = float(controls["series_line_width_spin"].value())
+        style["marker"] = str(controls["series_marker_combo"].currentData() or "none")
+        style["marker_size"] = float(controls["series_marker_size_spin"].value())
+        state.setdefault("series_style_edits", {})[label] = style
+        controls["selected_series_label"].setText(label)
+
+    def load_selected_series_style() -> None:
+        label = selected_series_label()
+        series_loading["active"] = True
+        try:
+            enabled = bool(label)
+            for key in (
+                "series_enabled_check",
+                "series_line_width_spin",
+                "series_marker_combo",
+                "series_marker_size_spin",
+            ):
+                controls[key].setEnabled(enabled)
+            for button in controls.get("series_color_buttons", {}).values():
+                button.setEnabled(enabled)
+            if not label:
+                controls["selected_series_label"].setText("No generated series")
+                set_series_color_swatch(DEFAULT_PALETTE[0])
+                return
+            style = dict(default_style_for_series(label))
+            style.update(state.get("series_style_edits", {}).get(label, {}))
+            controls["selected_series_label"].setText(label)
+            controls["series_enabled_check"].blockSignals(True)
+            controls["series_enabled_check"].setChecked(bool(style.get("enabled", True)))
+            controls["series_enabled_check"].blockSignals(False)
+            controls["series_line_width_spin"].blockSignals(True)
+            controls["series_line_width_spin"].setValue(float(style.get("line_width") or 1.2))
+            controls["series_line_width_spin"].blockSignals(False)
+            marker_index = controls["series_marker_combo"].findData(str(style.get("marker") or "none"))
+            controls["series_marker_combo"].blockSignals(True)
+            controls["series_marker_combo"].setCurrentIndex(marker_index if marker_index >= 0 else 0)
+            controls["series_marker_combo"].blockSignals(False)
+            controls["series_marker_size_spin"].blockSignals(True)
+            controls["series_marker_size_spin"].setValue(float(style.get("marker_size") or 0.0))
+            controls["series_marker_size_spin"].blockSignals(False)
+            set_series_color_swatch(str(style.get("color") or DEFAULT_PALETTE[0]))
+        finally:
+            series_loading["active"] = False
+
+    def populate_series_controls(entries: list[dict[str, Any]]) -> None:
+        from PyQt6 import QtCore, QtWidgets
+
+        state["series_entries"] = entries
+        series_list = controls["series_list"]
+        series_list.blockSignals(True)
+        series_list.clear()
+        for index, entry in enumerate(entries):
+            label = str(entry.get("series_id") or entry.get("label") or f"Series {index + 1}")
+            state.setdefault("series_style_edits", {}).setdefault(label, dict(entry))
+            item = QtWidgets.QListWidgetItem(label)
+            item.setData(QtCore.Qt.ItemDataRole.UserRole, label)
+            item.setToolTip(label)
+            series_list.addItem(item)
+        series_list.blockSignals(False)
+        if series_list.count():
+            series_list.setCurrentRow(0)
+        load_selected_series_style()
+
+    def series_styles_from_controls() -> tuple[list[dict[str, Any]], list[str]]:
+        from PyQt6 import QtCore
+
+        save_selected_series_style()
+        series_list = controls["series_list"]
+        styles: list[dict[str, Any]] = []
+        order: list[str] = []
+        for row in range(series_list.count()):
+            item = series_list.item(row)
+            label = str(item.data(QtCore.Qt.ItemDataRole.UserRole) or item.text()).strip()
+            if not label:
+                continue
+            order.append(label)
+            style = dict(default_style_for_series(label))
+            style.update(state.get("series_style_edits", {}).get(label, {}))
+            styles.append(
+                {
+                    "series_id": label,
+                    "enabled": bool(style.get("enabled", True)),
+                    "color": str(style.get("color") or DEFAULT_PALETTE[len(styles) % len(DEFAULT_PALETTE)]),
+                    "marker": str(style.get("marker") or "none"),
+                    "line_width": float(style.get("line_width") or 1.2),
+                    "marker_size": float(style.get("marker_size") or 0.0),
+                }
+            )
+        return styles, order
 
     def show_size_menu() -> None:
         from PyQt6 import QtCore
@@ -2740,6 +3035,19 @@ def _create_sciplot_studio_shell(
             action.setChecked(size == state.get("figure_size"))
             action.triggered.connect(lambda _checked=False, value=size: select_figure_size(value))
         menu.popup(top_widgets["size_badge"].mapToGlobal(QtCore.QPoint(0, top_widgets["size_badge"].height())))
+
+    controls["series_list"].currentItemChanged.connect(lambda _current, _previous: load_selected_series_style())
+    controls["series_enabled_check"].toggled.connect(lambda _checked: save_selected_series_style())
+    controls["series_line_width_spin"].valueChanged.connect(lambda _value: save_selected_series_style())
+    controls["series_marker_combo"].currentIndexChanged.connect(lambda _index: save_selected_series_style())
+    controls["series_marker_size_spin"].valueChanged.connect(lambda _value: save_selected_series_style())
+    for swatch_color, swatch_button in controls.get("series_color_buttons", {}).items():
+        swatch_button.clicked.connect(
+            lambda _checked=False, color=swatch_color: (
+                set_series_color_swatch(str(color)),
+                save_selected_series_style(color_override=str(color)),
+            )
+        )
 
     def set_stage_active(*, setup: bool) -> None:
         rail_widgets["setup_dot"].setProperty("active", setup)
@@ -2826,6 +3134,7 @@ def _create_sciplot_studio_shell(
         log_x = controls["refine_log_x_check"].isChecked() or controls["log_x_check"].isChecked()
         log_y = controls["refine_log_y_check"].isChecked() or controls["log_y_check"].isChecked()
         label_mode_widget = controls.get("refine_label_mode_combo") or controls["label_mode_combo"]
+        series_styles, series_order = series_styles_from_controls()
         _apply_panel_request_options(
             project_dir,
             request_path=request_path,
@@ -2840,6 +3149,9 @@ def _create_sciplot_studio_shell(
                 xscale="log" if log_x else "linear",
                 yscale="log" if log_y else "linear",
                 series_label_mode=str(label_mode_widget.currentData() or "legend"),
+                legend_position=str(state.get("legend_position") or "auto"),
+                series_styles=series_styles,
+                series_order=series_order,
             ),
             column_confirmations=column_confirmations,
         )
@@ -2865,13 +3177,11 @@ def _create_sciplot_studio_shell(
         state["preview_path"] = preview_path
         _show_preview_image(controls["preview_label"], preview_path)
         controls["output_label"].setText(str(document_path))
-        controls["series_list"].clear()
-        for group in _groups_from_samples_table(controls["samples_table"], _session_groups(session)):
-            controls["series_list"].addItem(str(group.get("sample") or "Sample"))
         _add_figure_thumbnail(rail_widgets["thumb_layout"], preview_path, state)
         state["qa_status"] = status
         refresh_refine_actions()
         set_review_targets(None)
+        populate_series_controls(_series_entries_from_studio_payload(payload))
         switch_to_refine()
 
     def generate(*, status: str = "Preview") -> None:
@@ -2895,6 +3205,14 @@ def _create_sciplot_studio_shell(
             controls["x_role_combo"].setCurrentIndex(controls["x_role_combo"].findText(x_suggestion))
         if y_suggestion and controls["y_role_combo"].findText(y_suggestion) >= 0:
             controls["y_role_combo"].setCurrentIndex(controls["y_role_combo"].findText(y_suggestion))
+        state["legend_position"] = "auto"
+        state["series_style_edits"] = {
+            str(entry.get("series_id") or entry.get("label")): dict(entry)
+            for entry in state.get("series_entries", [])
+            if isinstance(entry, dict) and (entry.get("series_id") or entry.get("label"))
+        }
+        sync_legend_position_controls()
+        populate_series_controls([dict(entry) for entry in state.get("series_entries", []) if isinstance(entry, dict)])
         sync_template_controls()
         sync_size_controls()
 
@@ -2954,6 +3272,8 @@ def _create_sciplot_studio_shell(
 
     sync_template_controls()
     sync_size_controls()
+    sync_legend_position_controls()
+    load_selected_series_style()
     switch_to_setup()
     refresh_refine_actions()
     _update_status_bar(status_widgets, state)
@@ -3288,6 +3608,9 @@ def _panel_render_options(
     xscale: str,
     yscale: str,
     series_label_mode: str,
+    legend_position: str = "auto",
+    series_styles: list[dict[str, Any]] | None = None,
+    series_order: list[str] | None = None,
 ) -> dict[str, Any]:
     options: dict[str, Any] = {"size": size, "series_label_mode": series_label_mode}
     x_label_value = _normalize_optional_string(x_label)
@@ -3308,6 +3631,14 @@ def _panel_render_options(
         options["xscale"] = "log"
     if yscale == "log":
         options["yscale"] = "log"
+    legend_value = str(legend_position or "auto").strip()
+    if legend_value:
+        options["legend_position"] = legend_value
+    if series_order:
+        options["series_order"] = series_order
+        options["series_include"] = series_order
+    if series_styles:
+        options["series_styles"] = series_styles
     return options
 
 
