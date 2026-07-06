@@ -643,6 +643,40 @@ def _studio_styles() -> str:
     QWidget#setupContent {{
         background-color: {colors['bg_window']};
     }}
+    QFrame#plotIntentStrip, QFrame#dataPreviewPanel {{
+        background-color: {colors['bg_card']};
+        border: 1px solid {colors['border']};
+        border-radius: 8px;
+    }}
+    QLabel#panelTitle {{
+        color: {colors['fg_secondary']};
+        font-size: 13px;
+        font-weight: 600;
+    }}
+    QLabel#panelMeta {{
+        color: {colors['fg_muted']};
+        font-size: 11px;
+    }}
+    QPushButton#intentChip {{
+        background-color: {colors['bg_card']};
+        border: 1px solid {colors['border']};
+        border-radius: 6px;
+        color: {colors['fg_muted']};
+        padding: 5px 10px;
+    }}
+    QPushButton#intentChip:checked {{
+        background-color: {colors['accent_bg']};
+        border-color: {colors['accent']};
+        color: {colors['fg_primary']};
+    }}
+    QTableWidget#dataPreviewTable {{
+        background-color: {colors['bg_topbar']};
+        border: 1px solid {colors['border']};
+        border-radius: 6px;
+        color: {colors['fg_secondary']};
+        gridline-color: {colors['border']};
+        font-size: 11px;
+    }}
     QLabel#setupTitle {{
         color: {colors['fg_primary']};
         font-size: 18px;
@@ -1186,6 +1220,134 @@ def _session_file_names(session: dict[str, Any], source_path: Path) -> list[str]
     return names or [source_path.name]
 
 
+def _preview_source_path(source_path: Path, session: dict[str, Any]) -> Path | None:
+    candidates: list[Path] = []
+    for group in _session_groups(session):
+        files = group.get("files") if isinstance(group.get("files"), list) else []
+        for item in files:
+            if isinstance(item, dict) and isinstance(item.get("source_path"), str):
+                candidates.append(Path(item["source_path"]).expanduser())
+    if source_path.is_file():
+        candidates.append(source_path)
+    if source_path.is_dir():
+        candidates.extend(sorted(source_path.glob("*.csv"))[:2])
+        candidates.extend(sorted(source_path.glob("*.txt"))[:2])
+        candidates.extend(sorted(source_path.glob("*.tsv"))[:2])
+        candidates.extend(sorted(source_path.glob("*.xlsx"))[:2])
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate.resolve()
+    return None
+
+
+def _read_preview_frame(path: Path | None) -> pd.DataFrame:
+    if path is None:
+        return pd.DataFrame()
+    suffix = path.suffix.lower()
+    try:
+        if suffix in {".xlsx", ".xls"}:
+            return pd.read_excel(path, nrows=8)
+        if suffix == ".tsv":
+            return pd.read_csv(path, sep="\t", nrows=8)
+        return pd.read_csv(path, sep=None, engine="python", nrows=8)
+    except Exception:
+        try:
+            return pd.read_csv(path, nrows=8)
+        except Exception:
+            return pd.DataFrame()
+
+
+def _numeric_preview_columns(frame: pd.DataFrame) -> list[str]:
+    numeric: list[str] = []
+    for column in frame.columns:
+        series = pd.to_numeric(frame[column], errors="coerce")
+        if int(series.notna().sum()) > 0:
+            numeric.append(str(column))
+    return numeric
+
+
+def _suggest_role_columns(frame: pd.DataFrame, session: dict[str, Any]) -> tuple[str | None, str | None]:
+    if frame.empty:
+        return None, None
+    columns = [str(column) for column in frame.columns]
+    numeric_columns = _numeric_preview_columns(frame) or columns
+    axis_plan = session.get("semantic", {}).get("axis_plan") if isinstance(session.get("semantic"), dict) else {}
+    x_aliases = []
+    y_aliases = []
+    if isinstance(axis_plan, dict):
+        x_plan = axis_plan.get("x") if isinstance(axis_plan.get("x"), dict) else {}
+        y_plan = axis_plan.get("y") if isinstance(axis_plan.get("y"), dict) else {}
+        x_aliases = [str(item).casefold() for item in x_plan.get("aliases", []) if isinstance(item, str)]
+        y_aliases = [str(item).casefold() for item in y_plan.get("aliases", []) if isinstance(item, str)]
+        for label in (x_plan.get("display_label"), x_plan.get("canonical_label")):
+            if isinstance(label, str):
+                x_aliases.append(label.casefold())
+        for label in (y_plan.get("display_label"), y_plan.get("canonical_label")):
+            if isinstance(label, str):
+                y_aliases.append(label.casefold())
+
+    def match_column(aliases: list[str], pool: list[str]) -> str | None:
+        for column in pool:
+            text = column.casefold()
+            if any(alias and alias in text for alias in aliases):
+                return column
+        return None
+
+    x_column = match_column(x_aliases, numeric_columns) or numeric_columns[0]
+    remaining = [column for column in numeric_columns if column != x_column]
+    y_column = match_column(y_aliases, remaining) or (remaining[0] if remaining else None)
+    return x_column, y_column
+
+
+def _populate_data_preview_table(table: Any, frame: pd.DataFrame) -> None:
+    from PyQt6 import QtWidgets
+
+    table.setShowGrid(False)
+    table.verticalHeader().setVisible(False)
+    table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+    table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.NoSelection)
+    if frame.empty:
+        table.setRowCount(0)
+        table.setColumnCount(0)
+        return
+    preview = frame.iloc[:8, :8].copy()
+    table.setColumnCount(len(preview.columns))
+    table.setHorizontalHeaderLabels([str(column) for column in preview.columns])
+    table.setRowCount(len(preview.index))
+    for row_index, (_idx, row) in enumerate(preview.iterrows()):
+        for col_index, value in enumerate(row.tolist()):
+            text = "" if pd.isna(value) else str(value)
+            table.setItem(row_index, col_index, QtWidgets.QTableWidgetItem(text))
+    table.horizontalHeader().setStretchLastSection(True)
+    table.resizeRowsToContents()
+
+
+def _column_confirmation_from_controls(controls: dict[str, Any], state: dict[str, Any]) -> list[dict[str, Any]]:
+    frame = state.get("preview_frame")
+    source_path = state.get("preview_source_path")
+    if not isinstance(frame, pd.DataFrame) or frame.empty or not isinstance(source_path, Path):
+        return []
+    x_column = controls["x_role_combo"].currentText()
+    y_column = controls["y_role_combo"].currentText()
+    confirmations = []
+    for index, column in enumerate([str(item) for item in frame.columns]):
+        role = "auto"
+        if column == x_column:
+            role = "x"
+        elif column == y_column:
+            role = "y"
+        confirmed_type = "numeric" if column in _numeric_preview_columns(frame) else "text"
+        confirmations.append(
+            {
+                "index": index,
+                "name": column,
+                "confirmed_type": confirmed_type,
+                "role": role,
+            }
+        )
+    return [{"file_name": source_path.name, "source_path": str(source_path), "columns": confirmations}]
+
+
 def _template_card_specs() -> list[dict[str, str]]:
     return [
         {
@@ -1621,17 +1783,101 @@ def _build_samples_panel(parent: Any, groups: list[dict[str, Any]], controls: di
     _populate_samples_table(table, groups)
     layout.addWidget(table, 1)
 
-    add_btn = QtWidgets.QPushButton("+ Add Sample")
-    add_btn.setObjectName("ghostButton")
-    add_btn.setEnabled(False)
-    layout.addWidget(add_btn)
     controls["samples_table"] = table
-    controls["add_sample_btn"] = add_btn
     return container
 
 
+def _build_plot_intent_strip(parent: Any, state: dict[str, Any], controls: dict[str, Any]) -> Any:
+    from PyQt6 import QtWidgets
+
+    strip = QtWidgets.QFrame(parent)
+    strip.setObjectName("plotIntentStrip")
+    layout = QtWidgets.QHBoxLayout(strip)
+    layout.setContentsMargins(12, 10, 12, 10)
+    layout.setSpacing(8)
+
+    title = QtWidgets.QLabel("Plot intent")
+    title.setObjectName("panelTitle")
+    layout.addWidget(title)
+    meta = QtWidgets.QLabel(str(state.get("experiment_family") or "Auto-detected"))
+    meta.setObjectName("panelMeta")
+    layout.addWidget(meta)
+    layout.addStretch(1)
+
+    intent_buttons: dict[str, Any] = {}
+    for template_id, label in [
+        ("curve", "Curve"),
+        ("stacked_curve", "Stacked"),
+        ("segmented_stacked_curve", "Segmented"),
+    ]:
+        button = QtWidgets.QPushButton(label)
+        button.setObjectName("intentChip")
+        button.setCheckable(True)
+        button.clicked.connect(lambda _checked=False, value=template_id: state["_select_template_id"](value))
+        layout.addWidget(button)
+        intent_buttons[template_id] = button
+    controls["intent_buttons"] = intent_buttons
+    return strip
+
+
+def _build_data_preview_panel(
+    parent: Any,
+    state: dict[str, Any],
+    session: dict[str, Any],
+    controls: dict[str, Any],
+) -> Any:
+    from PyQt6 import QtWidgets
+
+    panel = QtWidgets.QFrame(parent)
+    panel.setObjectName("dataPreviewPanel")
+    layout = QtWidgets.QVBoxLayout(panel)
+    layout.setContentsMargins(12, 12, 12, 12)
+    layout.setSpacing(10)
+
+    header = QtWidgets.QHBoxLayout()
+    title = QtWidgets.QLabel("Data preview")
+    title.setObjectName("panelTitle")
+    source_path = state.get("preview_source_path")
+    source_label = QtWidgets.QLabel(Path(source_path).name if isinstance(source_path, Path) else "No readable table")
+    source_label.setObjectName("panelMeta")
+    header.addWidget(title)
+    header.addWidget(source_label)
+    header.addStretch(1)
+    layout.addLayout(header)
+
+    role_row = QtWidgets.QHBoxLayout()
+    role_row.setSpacing(8)
+    x_combo = QtWidgets.QComboBox()
+    y_combo = QtWidgets.QComboBox()
+    columns = [str(column) for column in state.get("preview_columns", [])]
+    x_combo.addItems(columns)
+    y_combo.addItems(columns)
+    x_suggestion, y_suggestion = _suggest_role_columns(state.get("preview_frame", pd.DataFrame()), session)
+    if x_suggestion and x_combo.findText(x_suggestion) >= 0:
+        x_combo.setCurrentIndex(x_combo.findText(x_suggestion))
+    if y_suggestion and y_combo.findText(y_suggestion) >= 0:
+        y_combo.setCurrentIndex(y_combo.findText(y_suggestion))
+    role_row.addWidget(QtWidgets.QLabel("X"))
+    role_row.addWidget(x_combo, 1)
+    role_row.addWidget(QtWidgets.QLabel("Y"))
+    role_row.addWidget(y_combo, 1)
+    layout.addLayout(role_row)
+
+    preview_table = QtWidgets.QTableWidget()
+    preview_table.setObjectName("dataPreviewTable")
+    preview_table.setMinimumHeight(210)
+    _populate_data_preview_table(preview_table, state.get("preview_frame", pd.DataFrame()))
+    layout.addWidget(preview_table, 1)
+
+    controls["x_role_combo"] = x_combo
+    controls["y_role_combo"] = y_combo
+    controls["data_preview_table"] = preview_table
+    controls["data_preview_source_label"] = source_label
+    return panel
+
+
 def _build_setup_workspace(state: dict[str, Any], session: dict[str, Any], controls: dict[str, Any]) -> Any:
-    from PyQt6 import QtCore, QtWidgets
+    from PyQt6 import QtWidgets
 
     setup_workspace = QtWidgets.QWidget()
     setup_workspace.setObjectName("setupWorkspace")
@@ -1649,22 +1895,18 @@ def _build_setup_workspace(state: dict[str, Any], session: dict[str, Any], contr
     content.setObjectName("setupContent")
     scroll.setWidget(content)
     content_layout = QtWidgets.QVBoxLayout(content)
-    content_layout.setContentsMargins(40, 32, 40, 34)
-    content_layout.setSpacing(24)
+    content_layout.setContentsMargins(32, 24, 32, 28)
+    content_layout.setSpacing(14)
 
-    grid = QtWidgets.QGridLayout()
-    grid.setHorizontalSpacing(14)
-    grid.setVerticalSpacing(14)
-    cards: list[Any] = []
-    for index, spec in enumerate(_template_card_specs()):
-        card = _build_template_card(content, spec, state)
-        card.mousePressEvent = lambda _event, selected=card: _select_template_card(selected, state)
-        cards.append(card)
-        grid.addWidget(card, index // 4, index % 4, QtCore.Qt.AlignmentFlag.AlignLeft)
-    state["template_cards"] = cards
-    content_layout.addLayout(grid)
+    state["template_cards"] = []
+    intent_strip = _build_plot_intent_strip(content, state, controls)
+    content_layout.addWidget(intent_strip)
+
+    data_preview = _build_data_preview_panel(content, state, session, controls)
+    content_layout.addWidget(data_preview, 2)
 
     drop_zone = _build_drop_zone(content, state)
+    drop_zone.setFixedHeight(50)
     content_layout.addWidget(drop_zone)
     controls["drop_zone"] = drop_zone
 
@@ -1737,7 +1979,7 @@ def _build_setup_inspector(state: dict[str, Any], controls: dict[str, Any]) -> A
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)
 
-    data_section = _build_section("DATA", expanded=True)
+    data_section = _build_section("DATA", expanded=False)
     files_list = QtWidgets.QListWidget()
     files_list.setObjectName("sourceFileList")
     for name in state.get("source_file_names", []):
@@ -1753,7 +1995,7 @@ def _build_setup_inspector(state: dict[str, Any], controls: dict[str, Any]) -> A
     layout.addWidget(project_section)
     controls["name_edit"] = name_edit
 
-    template_section = _build_section("TEMPLATE", expanded=True)
+    template_section = _build_section("TEMPLATE", expanded=False)
     template_buttons: dict[str, Any] = {}
     for template_id, label in [
         ("curve", "● Curve"),
@@ -1881,10 +2123,29 @@ def _build_refine_inspector(state: dict[str, Any], controls: dict[str, Any]) -> 
     axes_layout = QtWidgets.QVBoxLayout(axes_tab)
     axes_layout.setContentsMargins(12, 12, 12, 12)
     axes_layout.setSpacing(8)
+    refine_x_label_edit = QtWidgets.QLineEdit()
+    refine_x_label_edit.setPlaceholderText("Use confirmed X column")
+    refine_y_label_edit = QtWidgets.QLineEdit()
+    refine_y_label_edit.setPlaceholderText("Use confirmed Y column")
+    refine_x_min_edit = QtWidgets.QLineEdit()
+    refine_x_min_edit.setPlaceholderText("Min")
+    refine_x_max_edit = QtWidgets.QLineEdit()
+    refine_x_max_edit.setPlaceholderText("Max")
+    refine_log_x_check = QtWidgets.QCheckBox("Log X")
+    refine_log_y_check = QtWidgets.QCheckBox("Log Y")
+    refine_reverse_x_check = QtWidgets.QCheckBox("Reverse X")
     axes_layout.addWidget(QtWidgets.QLabel("X Axis Label"))
-    axes_layout.addWidget(QtWidgets.QLabel("From Setup inspector"))
+    axes_layout.addWidget(refine_x_label_edit)
     axes_layout.addWidget(QtWidgets.QLabel("Y Axis Label"))
-    axes_layout.addWidget(QtWidgets.QLabel("From Setup inspector"))
+    axes_layout.addWidget(refine_y_label_edit)
+    axes_layout.addWidget(QtWidgets.QLabel("X Range"))
+    refine_range_row = QtWidgets.QHBoxLayout()
+    refine_range_row.addWidget(refine_x_min_edit)
+    refine_range_row.addWidget(refine_x_max_edit)
+    axes_layout.addLayout(refine_range_row)
+    axes_layout.addWidget(refine_log_x_check)
+    axes_layout.addWidget(refine_log_y_check)
+    axes_layout.addWidget(refine_reverse_x_check)
     axes_layout.addStretch(1)
     tab_widget.addTab(axes_tab, "Axes")
 
@@ -1917,7 +2178,8 @@ def _build_refine_inspector(state: dict[str, Any], controls: dict[str, Any]) -> 
     legend_layout.addLayout(pos_grid)
     legend_layout.addWidget(QtWidgets.QLabel("Label Mode"))
     legend_mode = QtWidgets.QComboBox()
-    legend_mode.addItems(["Legend", "Inline", "Auto"])
+    for label, value in (("Legend", "legend"), ("Inline", "inline"), ("Auto", "auto")):
+        legend_mode.addItem(label, value)
     legend_layout.addWidget(legend_mode)
     legend_layout.addStretch(1)
     tab_widget.addTab(legend_tab, "Legend")
@@ -1956,7 +2218,15 @@ def _build_refine_inspector(state: dict[str, Any], controls: dict[str, Any]) -> 
     controls.update(
         {
             "refine_size_buttons": refine_size_buttons,
+            "refine_x_label_edit": refine_x_label_edit,
+            "refine_y_label_edit": refine_y_label_edit,
+            "refine_x_min_edit": refine_x_min_edit,
+            "refine_x_max_edit": refine_x_max_edit,
+            "refine_log_x_check": refine_log_x_check,
+            "refine_log_y_check": refine_log_y_check,
+            "refine_reverse_x_check": refine_reverse_x_check,
             "series_list": series_list,
+            "refine_label_mode_combo": legend_mode,
             "output_label": output_label,
             "preview_btn": preview_btn,
             "apply_btn": apply_btn,
@@ -2368,6 +2638,8 @@ def _create_sciplot_studio_shell(
     )
     selected_size = "120x110" if selected_template in STACKED_TEMPLATE_IDS else "60x55"
     selected_family = "spectroscopy" if selected_template in STACKED_TEMPLATE_IDS else "rheology"
+    preview_source_path = _preview_source_path(source_path, session)
+    preview_frame = _read_preview_frame(preview_source_path)
 
     shell = QtWidgets.QMainWindow()
     shell.setWindowTitle("SciPlot Studio")
@@ -2384,6 +2656,9 @@ def _create_sciplot_studio_shell(
         "figure_size": selected_size,
         "experiment_family": _experiment_family_label(session),
         "source_file_names": _session_file_names(session, source_path),
+        "preview_source_path": preview_source_path,
+        "preview_frame": preview_frame,
+        "preview_columns": [str(column) for column in preview_frame.columns],
         "files_loaded": True,
         "file_count": len(_session_file_names(session, source_path)),
         "sample_count": len(_session_groups(session)),
@@ -2413,6 +2688,8 @@ def _create_sciplot_studio_shell(
         template_id = str(state.get("selected_template") or "curve")
         for button_id, button in controls.get("template_buttons", {}).items():
             _set_button_checked(button, button_id == template_id)
+        for button_id, button in controls.get("intent_buttons", {}).items():
+            _set_button_checked(button, button_id == template_id)
         for card in state.get("template_cards", []):
             card.setProperty("selected", str(getattr(card, "family_id", "")) == str(state.get("selected_family")))
             _refresh_qss(card)
@@ -2422,6 +2699,12 @@ def _create_sciplot_studio_shell(
             index = label_mode_combo.findData(desired)
             if index >= 0:
                 label_mode_combo.setCurrentIndex(index)
+        refine_label_mode_combo = controls.get("refine_label_mode_combo")
+        if refine_label_mode_combo is not None:
+            desired = "inline" if template_id in STACKED_TEMPLATE_IDS else "legend"
+            index = refine_label_mode_combo.findData(desired)
+            if index >= 0:
+                refine_label_mode_combo.setCurrentIndex(index)
         top_widgets["experiment_badge"].setText(str(state.get("experiment_family") or "Auto"))
 
     def select_template_id(value: str) -> None:
@@ -2524,21 +2807,41 @@ def _create_sciplot_studio_shell(
             fmt for fmt, check in controls["export_checks"].items() if check.isChecked()
         ] or list(EXPORT_FORMATS)
         state["exports"] = selected_exports
+        column_confirmations = _column_confirmation_from_controls(controls, state)
+        x_role = controls["x_role_combo"].currentText().strip()
+        y_role = controls["y_role_combo"].currentText().strip()
+        x_label_text = (
+            controls["refine_x_label_edit"].text().strip()
+            or controls["x_label_edit"].text().strip()
+            or x_role
+        )
+        y_label_text = (
+            controls["refine_y_label_edit"].text().strip()
+            or controls["y_label_edit"].text().strip()
+            or y_role
+        )
+        x_min_text = controls["refine_x_min_edit"].text().strip() or controls["x_min_edit"].text()
+        x_max_text = controls["refine_x_max_edit"].text().strip() or controls["x_max_edit"].text()
+        reverse_x = controls["refine_reverse_x_check"].isChecked() or controls["reverse_x_check"].isChecked()
+        log_x = controls["refine_log_x_check"].isChecked() or controls["log_x_check"].isChecked()
+        log_y = controls["refine_log_y_check"].isChecked() or controls["log_y_check"].isChecked()
+        label_mode_widget = controls.get("refine_label_mode_combo") or controls["label_mode_combo"]
         _apply_panel_request_options(
             project_dir,
             request_path=request_path,
             exports=selected_exports,
             render_options=_panel_render_options(
                 size=str(state.get("figure_size") or "60x55"),
-                x_label=controls["x_label_edit"].text(),
-                y_label=controls["y_label_edit"].text(),
-                x_min=controls["x_min_edit"].text(),
-                x_max=controls["x_max_edit"].text(),
-                reverse_x=controls["reverse_x_check"].isChecked(),
-                xscale="log" if controls["log_x_check"].isChecked() else "linear",
-                yscale="log" if controls["log_y_check"].isChecked() else "linear",
-                series_label_mode=str(controls["label_mode_combo"].currentData() or "legend"),
+                x_label=x_label_text,
+                y_label=y_label_text,
+                x_min=x_min_text,
+                x_max=x_max_text,
+                reverse_x=reverse_x,
+                xscale="log" if log_x else "linear",
+                yscale="log" if log_y else "linear",
+                series_label_mode=str(label_mode_widget.currentData() or "legend"),
             ),
+            column_confirmations=column_confirmations,
         )
         payload = prepare_studio_document(
             project_dir,
@@ -2555,7 +2858,7 @@ def _create_sciplot_studio_shell(
         )
         return payload
 
-    def load_payload(payload: dict[str, Any]) -> None:
+    def load_payload(payload: dict[str, Any], *, status: str = "Preview") -> None:
         document_path = Path(payload["document"])
         state["document_path"] = document_path
         preview_path = _ensure_preview_export(document_path)
@@ -2566,16 +2869,34 @@ def _create_sciplot_studio_shell(
         for group in _groups_from_samples_table(controls["samples_table"], _session_groups(session)):
             controls["series_list"].addItem(str(group.get("sample") or "Sample"))
         _add_figure_thumbnail(rail_widgets["thumb_layout"], preview_path, state)
-        state["qa_status"] = "Preview"
+        state["qa_status"] = status
         refresh_refine_actions()
         set_review_targets(None)
         switch_to_refine()
 
-    def generate() -> None:
+    def generate(*, status: str = "Preview") -> None:
         try:
-            load_payload(build_current_project())
+            load_payload(build_current_project(), status=status)
         except Exception as exc:
             QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
+
+    def reset_refine_controls() -> None:
+        for key in (
+            "refine_x_label_edit",
+            "refine_y_label_edit",
+            "refine_x_min_edit",
+            "refine_x_max_edit",
+        ):
+            controls[key].clear()
+        for key in ("refine_log_x_check", "refine_log_y_check", "refine_reverse_x_check"):
+            controls[key].setChecked(False)
+        x_suggestion, y_suggestion = _suggest_role_columns(state.get("preview_frame", pd.DataFrame()), session)
+        if x_suggestion and controls["x_role_combo"].findText(x_suggestion) >= 0:
+            controls["x_role_combo"].setCurrentIndex(controls["x_role_combo"].findText(x_suggestion))
+        if y_suggestion and controls["y_role_combo"].findText(y_suggestion) >= 0:
+            controls["y_role_combo"].setCurrentIndex(controls["y_role_combo"].findText(y_suggestion))
+        sync_template_controls()
+        sync_size_controls()
 
     def export_current() -> None:
         try:
@@ -2610,8 +2931,11 @@ def _create_sciplot_studio_shell(
     rail_widgets["setup_dot"].clicked.connect(switch_to_setup)
     rail_widgets["refine_dot"].clicked.connect(switch_to_refine)
     top_widgets["size_badge"].clicked.connect(show_size_menu)
-    top_widgets["generate_btn"].clicked.connect(generate)
+    top_widgets["generate_btn"].clicked.connect(lambda: generate(status="Preview"))
     top_widgets["export_btn"].clicked.connect(export_current)
+    controls["preview_btn"].clicked.connect(lambda: generate(status="Preview"))
+    controls["apply_btn"].clicked.connect(lambda: generate(status="Applied"))
+    controls["reset_btn"].clicked.connect(reset_refine_controls)
     top_widgets["open_data_action"].triggered.connect(lambda: _choose_and_open_data(shell, output_root))
     top_widgets["open_project_action"].triggered.connect(lambda: _choose_and_open_project(shell, output_root))
     top_widgets["setup_action"].triggered.connect(switch_to_setup)
@@ -2993,12 +3317,15 @@ def _apply_panel_request_options(
     request_path: Path,
     exports: list[str],
     render_options: dict[str, Any],
+    column_confirmations: list[dict[str, Any]] | None = None,
 ) -> None:
     if request_path.exists():
         request = _read_json(request_path)
         request["exports"] = exports
         existing_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
         request["render_options"] = {**existing_options, **render_options}
+        if column_confirmations:
+            request["column_confirmations"] = column_confirmations
         request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
     for manifest_path in [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]:
         if not manifest_path.exists():
@@ -3015,6 +3342,8 @@ def _apply_panel_request_options(
             "exports": exports,
             "render_options": {**existing_render, **render_options},
         }
+        if column_confirmations:
+            payload["column_confirmations"] = column_confirmations
         manifest_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
 
 
