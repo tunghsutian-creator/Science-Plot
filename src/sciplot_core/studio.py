@@ -52,32 +52,32 @@ LEGEND_POSITION_CHOICES = (
     ("Bot L", "lower_left"),
 )
 STUDIO_COLORS = {
-    "bg_window": "#1c1d20",
-    "bg_topbar": "#18191c",
-    "bg_rail": "#151619",
-    "bg_canvas": "#141518",
-    "bg_inspector": "#1c1d20",
-    "bg_statusbar": "#151619",
-    "bg_card": "#24272c",
-    "bg_input": "#191a1d",
-    "bg_dropdown": "#25272d",
-    "bg_hover": "#30343a",
-    "fg_primary": "#f0f3f6",
-    "fg_secondary": "#d2d7de",
-    "fg_muted": "#929aa5",
-    "fg_disabled": "#535963",
-    "accent": "#11a18f",
-    "accent_hover": "#16b8a6",
-    "accent_bg": "#173c37",
-    "border": "#363a42",
-    "border_light": "#2a2d33",
-    "border_active": "#0e8475",
-    "success": "#0e8475",
-    "warning": "#d47f0c",
-    "error": "#ce3b4a",
-    "success_bg": "#1a2e2b",
-    "warning_bg": "#3d2e0a",
-    "error_bg": "#3d1a1e",
+    "bg_window": "#fbfaf7",
+    "bg_topbar": "#f8f7f3",
+    "bg_rail": "#f2f0eb",
+    "bg_canvas": "#eeece6",
+    "bg_inspector": "#fbfaf7",
+    "bg_statusbar": "#f2f0eb",
+    "bg_card": "#ffffff",
+    "bg_input": "#f3f2ee",
+    "bg_dropdown": "#ffffff",
+    "bg_hover": "#ece9e2",
+    "fg_primary": "#1f2329",
+    "fg_secondary": "#343941",
+    "fg_muted": "#6f7680",
+    "fg_disabled": "#a3a8af",
+    "accent": "#0a84ff",
+    "accent_hover": "#006edb",
+    "accent_bg": "#dcecff",
+    "border": "#dedbd2",
+    "border_light": "#ebe8df",
+    "border_active": "#0a84ff",
+    "success": "#138a64",
+    "warning": "#b96a00",
+    "error": "#c7364b",
+    "success_bg": "#dff4ec",
+    "warning_bg": "#fff0d6",
+    "error_bg": "#ffe4e9",
 }
 MARKER_MAP = {
     "circle": "circle",
@@ -589,7 +589,7 @@ def _studio_styles() -> str:
         background-color: {colors['accent_hover']};
     }}
     QPushButton#topBarPrimary:disabled {{
-        background-color: #1a3a36;
+        background-color: {colors['accent_bg']};
         color: {colors['fg_disabled']};
     }}
     QPushButton#topBarOverflow {{
@@ -632,7 +632,7 @@ def _studio_styles() -> str:
         background-color: {colors['accent']};
     }}
     QPushButton#stageDot:disabled {{
-        border-color: #2d3036;
+        border-color: {colors['border']};
     }}
     QFrame#stageConnLine, QFrame#railSeparator {{
         color: {colors['border']};
@@ -708,11 +708,11 @@ def _studio_styles() -> str:
         border-radius: 10px;
     }}
     QFrame#templateCard:hover {{
-        background-color: #292e36;
+        background-color: {colors['bg_hover']};
         border-color: {colors['fg_disabled']};
     }}
     QFrame#templateCard[selected="true"] {{
-        background-color: #14211f;
+        background-color: {colors['accent_bg']};
         border: 2px solid {colors['accent']};
     }}
     QLabel#templateCardIcon {{
@@ -738,7 +738,7 @@ def _studio_styles() -> str:
     }}
     QFrame#dropZone[hovering="true"] {{
         border-color: {colors['accent']};
-        background-color: #14211f;
+        background-color: {colors['accent_bg']};
     }}
     QLabel#dropZoneLabel {{
         color: {colors['fg_disabled']};
@@ -759,6 +759,7 @@ def _studio_styles() -> str:
     }}
     QTableWidget#samplesTable::item:selected, QTableWidget#mappingGroupsTable::item:selected {{
         background-color: {colors['accent_bg']};
+        color: {colors['fg_primary']};
     }}
     QTableWidget::item {{
         border: none;
@@ -843,6 +844,7 @@ def _studio_styles() -> str:
     }}
     QListWidget#seriesList::item:selected, QListWidget#sourceFileList::item:selected {{
         background-color: {colors['accent_bg']};
+        color: {colors['fg_primary']};
     }}
     QLabel#seriesInspectorValue {{
         color: {colors['fg_muted']};
@@ -907,11 +909,21 @@ def _studio_styles() -> str:
         border-radius: 5px;
         padding: 5px 7px;
         selection-background-color: {colors['accent_bg']};
+        min-height: 22px;
+    }}
+    QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus {{
+        border-color: {colors['border_active']};
+        background-color: {colors['bg_card']};
+    }}
+    QComboBox::drop-down {{
+        width: 22px;
+        border: none;
+        background: transparent;
     }}
     QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
         width: 16px;
         border: none;
-        background-color: {colors['bg_card']};
+        background-color: transparent;
     }}
     QCheckBox {{
         color: {colors['fg_secondary']};
@@ -1160,14 +1172,16 @@ def _show_preview_image(label: Any, image_path: Path | None) -> None:
         label.setPixmap(QtGui.QPixmap())
         label.setText("Preview could not be loaded.")
         return
+    pixmap.setDevicePixelRatio(1.0)
     available = label.size()
-    if available.width() < 80 or available.height() < 80:
+    if available.width() < 760 or available.height() < 560:
         available = QtCore.QSize(820, 620)
     scaled = pixmap.scaled(
         available,
         QtCore.Qt.AspectRatioMode.KeepAspectRatio,
         QtCore.Qt.TransformationMode.SmoothTransformation,
     )
+    scaled.setDevicePixelRatio(1.0)
     label.setText("")
     label.setPixmap(scaled)
 
@@ -2419,7 +2433,7 @@ def _build_refine_workspace(state: dict[str, Any], controls: dict[str, Any]) -> 
     preview_label = QtWidgets.QLabel("Generate a figure to preview it here.")
     preview_label.setObjectName("figurePreview")
     preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-    preview_label.setMinimumSize(640, 480)
+    preview_label.setMinimumSize(820, 620)
     canvas_layout.addWidget(preview_label, 1)
     layout.addWidget(canvas, 1)
     controls["preview_label"] = preview_label
@@ -2510,7 +2524,7 @@ def _create_refine_surface() -> dict[str, Any]:
     preview_label = QtWidgets.QLabel("Preview will appear here after Generate.")
     preview_label.setObjectName("figurePreview")
     preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-    preview_label.setMinimumSize(640, 480)
+    preview_label.setMinimumSize(820, 620)
     canvas_layout.addWidget(preview_label, 1)
     refine_layout.addWidget(canvas, 1)
 
