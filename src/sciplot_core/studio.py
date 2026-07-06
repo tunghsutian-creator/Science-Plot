@@ -220,6 +220,7 @@ def run_studio_command(
     template: str | None = None,
     project_name: str | None = None,
     new: bool = False,
+    advanced_editor: bool = False,
     export: str | None = None,
     json_output: bool = False,
     prepare_only: bool = False,
@@ -242,6 +243,10 @@ def run_studio_command(
 
     if target is None:
         raise ValueError("studio needs PATH or --new.")
+
+    if advanced_editor:
+        maybe_reexec_with_qt_runtime(original_argv or ["studio", str(target), "--advanced-editor"])
+        return launch_veusz_gui(target.expanduser())
 
     if not (json_output or prepare_only or export):
         maybe_reexec_with_qt_runtime(original_argv or ["studio", str(target)])
@@ -362,7 +367,16 @@ def launch_sciplot_studio(
             template=template,
             project_name=project_name,
         )
-        window = _create_veusz_window(Path(payload["document"]))
+        context = _project_context_for_document(Path(payload["document"]))
+        if context is not None:
+            window = _create_sciplot_project_shell(
+                project_dir=context["project_dir"],
+                output_root=output_root,
+                template=template,
+                project_name=project_name,
+            )
+        else:
+            window = _create_sciplot_document_shell(Path(payload["document"]))
     window.show()
     return int(app.exec())
 
@@ -469,39 +483,101 @@ def _apply_sciplot_shell_style(shell: Any) -> None:
     shell.resize(1320, 860)
     shell.setStyleSheet(
         """
-        QMainWindow#SciPlotStudioWindow { background: #f4f5f6; }
+        QMainWindow#SciPlotStudioWindow { background: #202124; color: #eef0f3; }
         QToolBar#sciplotPrimaryToolbar {
             spacing: 6px;
-            padding: 4px 8px;
+            padding: 5px 10px;
             border: 0;
-            border-bottom: 1px solid #d6d8dc;
-            background: #f7f8f9;
+            border-bottom: 1px solid #33363d;
+            background: #26282d;
         }
-        QWidget#setupWorkspace, QWidget#refineWorkspace { background: #f4f5f6; }
+        QToolBar#sciplotPrimaryToolbar QToolButton {
+            color: #eef0f3;
+            padding: 5px 9px;
+            border-radius: 6px;
+        }
+        QToolBar#sciplotPrimaryToolbar QToolButton:hover { background: #353840; }
+        QToolBar#sciplotPrimaryToolbar QToolButton:disabled { color: #70757f; }
+        QWidget#setupWorkspace, QWidget#refineWorkspace { background: #202124; color: #eef0f3; }
         QGroupBox {
             font-weight: 600;
-            border: 1px solid #d9dce0;
-            border-radius: 8px;
+            border: 1px solid #3c4048;
+            border-radius: 10px;
             margin-top: 14px;
-            background: #ffffff;
+            background: #292b31;
+            color: #eef0f3;
         }
         QGroupBox::title {
             subcontrol-origin: margin;
             left: 10px;
             padding: 0 4px;
+            color: #cdd2da;
         }
         QLabel#workspaceTitle {
-            font-size: 17px;
+            font-size: 18px;
+            font-weight: 700;
+            color: #f5f6f8;
+        }
+        QLabel#workspaceHint { color: #a4abb6; }
+        QLabel#studioStatus { color: #a4abb6; }
+        QFrame#canvasSurface {
+            background: #151619;
+            border: 0;
+        }
+        QLabel#figurePreview {
+            background: #151619;
+            color: #8c939f;
+            border: 0;
+        }
+        QFrame#inspectorPanel {
+            background: #292b31;
+            border-left: 1px solid #383b42;
+        }
+        QLabel#inspectorTitle {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f2f4f7;
+        }
+        QLabel#inspectorMeta {
+            color: #a4abb6;
+            font-size: 12px;
+        }
+        QTableWidget {
+            border: 1px solid #3c4048;
+            border-radius: 8px;
+            background: #23252a;
+            color: #eef0f3;
+            gridline-color: #383b42;
+        }
+        QHeaderView::section {
+            background: #2d3036;
+            color: #cdd2da;
+            border: 0;
+            padding: 5px;
+        }
+        QLineEdit, QComboBox {
+            background: #202228;
+            color: #eef0f3;
+            border: 1px solid #444852;
+            border-radius: 6px;
+            padding: 5px 7px;
+        }
+        QPushButton {
+            background: #353942;
+            color: #f2f4f7;
+            border: 1px solid #464b55;
+            border-radius: 7px;
+            padding: 6px 10px;
+        }
+        QPushButton:hover { background: #414650; }
+        QPushButton:disabled { color: #737984; background: #2a2d33; border-color: #333740; }
+        QPushButton#primaryButton {
+            background: #0a84ff;
+            border-color: #0a84ff;
+            color: #ffffff;
             font-weight: 700;
         }
-        QLabel#workspaceHint { color: #60646c; }
-        QLabel#studioStatus { color: #555b64; }
-        QTableWidget {
-            border: 1px solid #d9dce0;
-            border-radius: 6px;
-            background: #ffffff;
-            gridline-color: #eceef1;
-        }
+        QCheckBox { color: #d9dde4; }
         """
     )
 
@@ -538,16 +614,17 @@ def _add_sciplot_view_menu(shell: Any, state: dict[str, Any]) -> None:
     from PyQt6 import QtGui
 
     view_menu = shell.menuBar().addMenu("View")
-    advanced_action = QtGui.QAction("Advanced Veusz Panels", shell)
-    advanced_action.setCheckable(True)
+    advanced_action = QtGui.QAction("Open Advanced Veusz Editor", shell)
+    advanced_action.setEnabled(False)
 
-    def toggle_advanced(checked: bool) -> None:
-        veusz_window = state.get("veusz_window")
-        if veusz_window is not None:
-            _set_veusz_advanced_panels_visible(veusz_window, checked)
+    def open_advanced_editor() -> None:
+        document_path = state.get("document_path")
+        if isinstance(document_path, Path):
+            _open_advanced_veusz_editor(shell, document_path)
 
-    advanced_action.triggered.connect(toggle_advanced)
+    advanced_action.triggered.connect(open_advanced_editor)
     view_menu.addAction(advanced_action)
+    state["advanced_editor_action"] = advanced_action
     shell._sciplot_view_actions = getattr(shell, "_sciplot_view_actions", []) + [advanced_action]
 
 
@@ -572,7 +649,16 @@ def _open_studio_target_in_new_window(shell: Any, target: Path, output_root: Pat
             )
         else:
             payload = prepare_studio_document(resolved, output_root=output_root)
-            next_window = _create_veusz_window(Path(payload["document"]))
+            context = _project_context_for_document(Path(payload["document"]))
+            if context is not None:
+                next_window = _create_sciplot_project_shell(
+                    project_dir=context["project_dir"],
+                    output_root=output_root,
+                    template=None,
+                    project_name=None,
+                )
+            else:
+                next_window = _create_sciplot_document_shell(Path(payload["document"]))
         next_window.show()
         shell._sciplot_open_windows = getattr(shell, "_sciplot_open_windows", []) + [next_window]
     except Exception as exc:
@@ -607,6 +693,128 @@ def _open_existing_path(shell: Any, path: Path | None, *, missing_label: str) ->
         QtWidgets.QMessageBox.information(shell, "SciPlot Studio", f"{missing_label} is not available yet.")
         return
     QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(path)))
+
+
+def _open_advanced_veusz_editor(shell: Any, document_path: Path) -> None:
+    from PyQt6 import QtWidgets
+
+    if not document_path.exists():
+        QtWidgets.QMessageBox.information(shell, "SciPlot Studio", "The Veusz document is not available yet.")
+        return
+    command = [
+        sys.executable,
+        "-m",
+        "sciplot_core.cli",
+        "studio",
+        str(document_path),
+        "--advanced-editor",
+    ]
+    try:
+        subprocess.Popen(command, cwd=REPO_ROOT)
+    except Exception as exc:
+        QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
+
+
+def _studio_worker_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    framework_paths = _qt_framework_paths()
+    if framework_paths:
+        joined = ":".join(str(path) for path in framework_paths)
+        for key in ("DYLD_FRAMEWORK_PATH", "DYLD_LIBRARY_PATH"):
+            current = env.get(key)
+            env[key] = f"{joined}:{current}" if current else joined
+        env["SCIPLOT_STUDIO_QT_RUNTIME"] = "1"
+    return env
+
+
+def _export_studio_document_worker(document_path: Path, *, formats: list[str]) -> dict[str, Any]:
+    command = [
+        sys.executable,
+        "-m",
+        "sciplot_core.veusz_worker",
+        "export-document",
+        str(document_path),
+        "--formats",
+        ",".join(formats),
+    ]
+    result = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+        env=_studio_worker_env(),
+    )
+    return json.loads(result.stdout)
+
+
+def _set_advanced_editor_enabled(state: dict[str, Any]) -> None:
+    action = state.get("advanced_editor_action")
+    document_path = state.get("document_path")
+    if action is not None:
+        action.setEnabled(bool(isinstance(document_path, Path) and document_path.exists()))
+
+
+def _preview_export_path(document_path: Path) -> Path:
+    return document_path.parent / "exports" / f"{document_path.stem}_300dpi.png"
+
+
+def _ensure_preview_export(document_path: Path) -> Path | None:
+    preview_path = _preview_export_path(document_path)
+    if preview_path.exists() and preview_path.stat().st_size > 0:
+        return preview_path
+    payload = _export_studio_document_worker(document_path, formats=["png_300"])
+    for item in payload.get("exports", []):
+        if isinstance(item, dict) and item.get("format") == "png_300":
+            path_value = item.get("path")
+            if isinstance(path_value, str):
+                candidate = Path(path_value).expanduser()
+                if candidate.exists() and candidate.stat().st_size > 0:
+                    return candidate
+    return preview_path if preview_path.exists() else None
+
+
+def _show_preview_image(label: Any, image_path: Path | None) -> None:
+    from PyQt6 import QtCore, QtGui
+
+    if image_path is None or not image_path.exists():
+        label.setPixmap(QtGui.QPixmap())
+        label.setText("Preview will appear here after Generate.")
+        return
+    pixmap = QtGui.QPixmap(str(image_path))
+    if pixmap.isNull():
+        label.setPixmap(QtGui.QPixmap())
+        label.setText("Preview could not be loaded.")
+        return
+    available = label.size()
+    if available.width() < 80 or available.height() < 80:
+        available = QtCore.QSize(820, 620)
+    scaled = pixmap.scaled(
+        available,
+        QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+        QtCore.Qt.TransformationMode.SmoothTransformation,
+    )
+    label.setText("")
+    label.setPixmap(scaled)
+
+
+def _first_export_path(exports: list[dict[str, Any]], *, preferred_format: str) -> Path | None:
+    preferred: Path | None = None
+    fallback: Path | None = None
+    for item in exports:
+        if not isinstance(item, dict):
+            continue
+        value = item.get("path")
+        if not isinstance(value, str):
+            continue
+        path = Path(value).expanduser()
+        if not path.exists():
+            continue
+        fallback = fallback or path
+        if item.get("format") == preferred_format:
+            preferred = path
+    return preferred or fallback
 
 
 def _last_studio_run(project_dir: Path) -> dict[str, Any] | None:
@@ -651,6 +859,72 @@ def _delivery_path_from_run(run: dict[str, Any] | None) -> Path | None:
     return None
 
 
+def _create_refine_surface() -> dict[str, Any]:
+    from PyQt6 import QtCore, QtWidgets
+
+    refine_workspace = QtWidgets.QWidget()
+    refine_workspace.setObjectName("refineWorkspace")
+    refine_layout = QtWidgets.QHBoxLayout(refine_workspace)
+    refine_layout.setContentsMargins(0, 0, 0, 0)
+    refine_layout.setSpacing(0)
+
+    canvas = QtWidgets.QFrame()
+    canvas.setObjectName("canvasSurface")
+    canvas_layout = QtWidgets.QVBoxLayout(canvas)
+    canvas_layout.setContentsMargins(24, 24, 24, 24)
+    canvas_layout.setSpacing(0)
+    preview_label = QtWidgets.QLabel("Preview will appear here after Generate.")
+    preview_label.setObjectName("figurePreview")
+    preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+    preview_label.setMinimumSize(640, 480)
+    canvas_layout.addWidget(preview_label, 1)
+    refine_layout.addWidget(canvas, 1)
+
+    inspector = QtWidgets.QFrame()
+    inspector.setObjectName("inspectorPanel")
+    inspector.setFixedWidth(316)
+    inspector_layout = QtWidgets.QVBoxLayout(inspector)
+    inspector_layout.setContentsMargins(16, 16, 16, 16)
+    inspector_layout.setSpacing(10)
+
+    title = QtWidgets.QLabel("Figure")
+    title.setObjectName("inspectorTitle")
+    inspector_layout.addWidget(title)
+
+    document_label = QtWidgets.QLabel("No document generated")
+    document_label.setObjectName("inspectorMeta")
+    document_label.setWordWrap(True)
+    inspector_layout.addWidget(document_label)
+
+    status_label = QtWidgets.QLabel("Ready to generate")
+    status_label.setObjectName("studioStatus")
+    status_label.setWordWrap(True)
+    inspector_layout.addWidget(status_label)
+
+    export_button = QtWidgets.QPushButton("Export")
+    export_button.setObjectName("primaryButton")
+    export_button.setEnabled(False)
+    review_button = QtWidgets.QPushButton("Review")
+    review_button.setEnabled(False)
+    delivery_button = QtWidgets.QPushButton("Delivery")
+    delivery_button.setEnabled(False)
+    inspector_layout.addWidget(export_button)
+    inspector_layout.addWidget(review_button)
+    inspector_layout.addWidget(delivery_button)
+    inspector_layout.addStretch(1)
+    refine_layout.addWidget(inspector)
+
+    return {
+        "workspace": refine_workspace,
+        "preview_label": preview_label,
+        "document_label": document_label,
+        "status_label": status_label,
+        "export_button": export_button,
+        "review_button": review_button,
+        "delivery_button": delivery_button,
+    }
+
+
 def _create_sciplot_project_shell(
     *,
     project_dir: Path,
@@ -676,7 +950,7 @@ def _create_sciplot_project_shell(
     stack.setObjectName("studioWorkspaceStack")
     shell.setCentralWidget(stack)
 
-    state: dict[str, Any] = {"veusz_window": None, "document_path": None}
+    state: dict[str, Any] = {"document_path": None, "preview_path": None}
     _add_sciplot_view_menu(shell, state)
 
     toolbar = QtWidgets.QToolBar("SciPlot")
@@ -687,16 +961,10 @@ def _create_sciplot_project_shell(
     open_project_action = QtGui.QAction("Open Project", shell)
     back_action = QtGui.QAction("Back to Setup", shell)
     generate_action = QtGui.QAction("Generate", shell)
-    save_action = QtGui.QAction("Save", shell)
-    undo_action = QtGui.QAction("Undo", shell)
-    redo_action = QtGui.QAction("Redo", shell)
     export_action = QtGui.QAction("Export", shell)
     review_action = QtGui.QAction("Review", shell)
     delivery_action = QtGui.QAction("Delivery", shell)
     back_action.setEnabled(False)
-    save_action.setEnabled(False)
-    undo_action.setEnabled(False)
-    redo_action.setEnabled(False)
     export_action.setEnabled(False)
     review_action.setEnabled(False)
     delivery_action.setEnabled(False)
@@ -706,9 +974,6 @@ def _create_sciplot_project_shell(
     toolbar.addAction(back_action)
     toolbar.addSeparator()
     toolbar.addAction(generate_action)
-    toolbar.addAction(save_action)
-    toolbar.addAction(undo_action)
-    toolbar.addAction(redo_action)
     toolbar.addAction(export_action)
     toolbar.addSeparator()
     toolbar.addAction(review_action)
@@ -748,6 +1013,7 @@ def _create_sciplot_project_shell(
     setup_box_layout.addWidget(status_label)
     actions = QtWidgets.QHBoxLayout()
     generate_button = QtWidgets.QPushButton("Generate")
+    generate_button.setObjectName("primaryButton")
     export_button = QtWidgets.QPushButton("Export")
     export_button.setEnabled(False)
     actions.addWidget(generate_button)
@@ -756,51 +1022,45 @@ def _create_sciplot_project_shell(
     setup_layout.addWidget(setup_box)
     setup_layout.addStretch(1)
 
-    refine_workspace = QtWidgets.QWidget()
-    refine_workspace.setObjectName("refineWorkspace")
-    refine_layout = QtWidgets.QVBoxLayout(refine_workspace)
-    refine_layout.setContentsMargins(0, 0, 0, 0)
-    refine_layout.setSpacing(0)
-    right_layout = QtWidgets.QVBoxLayout()
-    right_layout.setContentsMargins(0, 0, 0, 0)
-    refine_layout.addLayout(right_layout, 1)
-    refine_status = QtWidgets.QLabel()
-    refine_status.setObjectName("studioStatus")
-    refine_status.setContentsMargins(10, 6, 10, 6)
-    refine_layout.addWidget(refine_status)
+    refine = _create_refine_surface()
+    refine_workspace = refine["workspace"]
+    preview_label = refine["preview_label"]
+    document_label = refine["document_label"]
+    refine_status = refine["status_label"]
+    inspector_export_button = refine["export_button"]
+    review_button = refine["review_button"]
+    delivery_button = refine["delivery_button"]
     stack.addWidget(setup_workspace)
     stack.addWidget(refine_workspace)
 
     def refresh_refine_actions() -> None:
-        veusz_window = state.get("veusz_window")
-        has_document = isinstance(state.get("document_path"), Path) and veusz_window is not None
-        save_action.setEnabled(has_document)
+        has_document = isinstance(state.get("document_path"), Path)
         export_action.setEnabled(has_document)
         export_button.setEnabled(has_document)
+        inspector_export_button.setEnabled(has_document)
         back_action.setEnabled(has_document)
-        undo_action.setEnabled(bool(has_document and veusz_window.document.canUndo()))
-        redo_action.setEnabled(bool(has_document and veusz_window.document.canRedo()))
+        _set_advanced_editor_enabled(state)
 
     def set_review_targets(run: dict[str, Any] | None) -> None:
         review_path = _review_path_from_run(run)
         delivery_path = _delivery_path_from_run(run)
         state["review_path"] = review_path
         state["delivery_path"] = delivery_path
-        review_action.setEnabled(bool(review_path and review_path.exists()))
-        delivery_action.setEnabled(bool(delivery_path and delivery_path.exists()))
+        review_enabled = bool(review_path and review_path.exists())
+        delivery_enabled = bool(delivery_path and delivery_path.exists())
+        review_action.setEnabled(review_enabled)
+        delivery_action.setEnabled(delivery_enabled)
+        review_button.setEnabled(review_enabled)
+        delivery_button.setEnabled(delivery_enabled)
 
     def load_document(document_path: Path) -> None:
-        previous = state.get("veusz_window")
-        if previous is not None:
-            right_layout.removeWidget(previous)
-            previous.setParent(None)
-        veusz_window = _create_veusz_window(document_path)
-        _apply_sciplot_veusz_workspace_defaults(veusz_window, embedded=True)
-        state["veusz_window"] = veusz_window
         state["document_path"] = document_path
-        right_layout.addWidget(veusz_window)
-        status_label.setText(f"Loaded Veusz document:\n{document_path}")
-        refine_status.setText(f"Refine Workspace · {document_path}")
+        preview_path = _ensure_preview_export(document_path)
+        state["preview_path"] = preview_path
+        _show_preview_image(preview_label, preview_path)
+        document_label.setText(str(document_path))
+        status_label.setText("Figure generated. Review the preview, then export when ready.")
+        refine_status.setText("Generated preview")
         refresh_refine_actions()
         set_review_targets(_last_studio_run(project_dir))
         stack.setCurrentWidget(refine_workspace)
@@ -817,35 +1077,12 @@ def _create_sciplot_project_shell(
         except Exception as exc:
             QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
 
-    def save_current() -> None:
-        document_path = state.get("document_path")
-        veusz_window = state.get("veusz_window")
-        if isinstance(document_path, Path) and veusz_window is not None:
-            veusz_window.document.save(str(document_path))
-            refine_status.setText(f"Saved Veusz document · {document_path}")
-            refresh_refine_actions()
-
-    def undo_current() -> None:
-        veusz_window = state.get("veusz_window")
-        if veusz_window is not None and veusz_window.document.canUndo():
-            veusz_window.document.undoOperation()
-        refresh_refine_actions()
-
-    def redo_current() -> None:
-        veusz_window = state.get("veusz_window")
-        if veusz_window is not None and veusz_window.document.canRedo():
-            veusz_window.document.redoOperation()
-        refresh_refine_actions()
-
     def export_current() -> None:
         try:
             document_path = state.get("document_path")
-            veusz_window = state.get("veusz_window")
             if not isinstance(document_path, Path):
                 return
-            if veusz_window is not None:
-                veusz_window.document.save(str(document_path))
-            exports = export_studio_document(document_path, formats=list(EXPORT_FORMATS))["exports"]
+            exports = _export_studio_document_worker(document_path, formats=list(EXPORT_FORMATS))["exports"]
             studio_run = publish_studio_export_run(
                 project_dir=project_dir,
                 request_path=request_path,
@@ -853,7 +1090,7 @@ def _create_sciplot_project_shell(
                 exports=exports,
             )
             _register_studio_exports(project_dir, exports, studio_run=studio_run)
-            status_label.setText(f"Exported through SciPlot QA:\n{studio_run['output']}")
+            status_label.setText("Export complete. Review and delivery are available.")
             refine_status.setText(f"Exported through SciPlot QA · {studio_run['output']}")
             set_review_targets(studio_run)
             refresh_refine_actions()
@@ -862,13 +1099,15 @@ def _create_sciplot_project_shell(
 
     generate_button.clicked.connect(generate)
     export_button.clicked.connect(export_current)
+    inspector_export_button.clicked.connect(export_current)
+    review_button.clicked.connect(lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review"))
+    delivery_button.clicked.connect(
+        lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
+    )
     open_data_action.triggered.connect(lambda: _choose_and_open_data(shell, output_root))
     open_project_action.triggered.connect(lambda: _choose_and_open_project(shell, output_root))
     back_action.triggered.connect(lambda: stack.setCurrentWidget(setup_workspace))
     generate_action.triggered.connect(generate)
-    save_action.triggered.connect(save_current)
-    undo_action.triggered.connect(undo_current)
-    redo_action.triggered.connect(redo_current)
     export_action.triggered.connect(export_current)
     review_action.triggered.connect(
         lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review")
@@ -913,7 +1152,7 @@ def _create_sciplot_studio_shell(
         "project_dir": None,
         "request_path": None,
         "document_path": None,
-        "veusz_window": None,
+        "preview_path": None,
         "exports": list(EXPORT_FORMATS),
     }
     _add_sciplot_view_menu(shell, state)
@@ -926,16 +1165,10 @@ def _create_sciplot_studio_shell(
     open_project_action = QtGui.QAction("Open Project", shell)
     back_action = QtGui.QAction("Back to Setup", shell)
     generate_action = QtGui.QAction("Generate", shell)
-    save_action = QtGui.QAction("Save", shell)
-    undo_action = QtGui.QAction("Undo", shell)
-    redo_action = QtGui.QAction("Redo", shell)
     export_action = QtGui.QAction("Export", shell)
     review_action = QtGui.QAction("Review", shell)
     delivery_action = QtGui.QAction("Delivery", shell)
     back_action.setEnabled(False)
-    save_action.setEnabled(False)
-    undo_action.setEnabled(False)
-    redo_action.setEnabled(False)
     export_action.setEnabled(False)
     review_action.setEnabled(False)
     delivery_action.setEnabled(False)
@@ -945,10 +1178,6 @@ def _create_sciplot_studio_shell(
     toolbar.addAction(back_action)
     toolbar.addSeparator()
     toolbar.addAction(generate_action)
-    toolbar.addAction(save_action)
-    toolbar.addAction(undo_action)
-    toolbar.addAction(redo_action)
-    toolbar.addSeparator()
     toolbar.addAction(export_action)
     toolbar.addSeparator()
     toolbar.addAction(review_action)
@@ -1062,6 +1291,7 @@ def _create_sciplot_studio_shell(
 
     actions = QtWidgets.QHBoxLayout()
     generate_button = QtWidgets.QPushButton("Generate")
+    generate_button.setObjectName("primaryButton")
     export_button = QtWidgets.QPushButton("Export")
     export_button.setEnabled(False)
     actions.addWidget(generate_button)
@@ -1074,39 +1304,37 @@ def _create_sciplot_studio_shell(
     splitter.addWidget(figure_box)
     splitter.setStretchFactor(1, 1)
 
-    refine_workspace = QtWidgets.QWidget()
-    refine_workspace.setObjectName("refineWorkspace")
-    refine_layout = QtWidgets.QVBoxLayout(refine_workspace)
-    refine_layout.setContentsMargins(0, 0, 0, 0)
-    refine_layout.setSpacing(0)
-    right_layout = QtWidgets.QVBoxLayout()
-    right_layout.setContentsMargins(0, 0, 0, 0)
-    refine_layout.addLayout(right_layout, 1)
-    refine_status = QtWidgets.QLabel("Refine Workspace")
-    refine_status.setObjectName("studioStatus")
-    refine_status.setContentsMargins(10, 6, 10, 6)
-    refine_layout.addWidget(refine_status)
+    refine = _create_refine_surface()
+    refine_workspace = refine["workspace"]
+    preview_label = refine["preview_label"]
+    document_label = refine["document_label"]
+    refine_status = refine["status_label"]
+    inspector_export_button = refine["export_button"]
+    review_button = refine["review_button"]
+    delivery_button = refine["delivery_button"]
 
     stack.addWidget(setup_workspace)
     stack.addWidget(refine_workspace)
 
     def refresh_refine_actions() -> None:
-        veusz_window = state.get("veusz_window")
-        has_document = isinstance(state.get("document_path"), Path) and veusz_window is not None
-        save_action.setEnabled(has_document)
+        has_document = isinstance(state.get("document_path"), Path)
         export_action.setEnabled(has_document)
         export_button.setEnabled(has_document)
+        inspector_export_button.setEnabled(has_document)
         back_action.setEnabled(has_document)
-        undo_action.setEnabled(bool(has_document and veusz_window.document.canUndo()))
-        redo_action.setEnabled(bool(has_document and veusz_window.document.canRedo()))
+        _set_advanced_editor_enabled(state)
 
     def set_review_targets(run: dict[str, Any] | None) -> None:
         review_path = _review_path_from_run(run)
         delivery_path = _delivery_path_from_run(run)
         state["review_path"] = review_path
         state["delivery_path"] = delivery_path
-        review_action.setEnabled(bool(review_path and review_path.exists()))
-        delivery_action.setEnabled(bool(delivery_path and delivery_path.exists()))
+        review_enabled = bool(review_path and review_path.exists())
+        delivery_enabled = bool(delivery_path and delivery_path.exists())
+        review_action.setEnabled(review_enabled)
+        delivery_action.setEnabled(delivery_enabled)
+        review_button.setEnabled(review_enabled)
+        delivery_button.setEnabled(delivery_enabled)
 
     def build_current_project() -> dict[str, Any]:
         edited_session = dict(session)
@@ -1153,16 +1381,14 @@ def _create_sciplot_studio_shell(
         return payload
 
     def load_payload(payload: dict[str, Any]) -> None:
-        previous = state.get("veusz_window")
-        if previous is not None:
-            right_layout.removeWidget(previous)
-            previous.setParent(None)
-        veusz_window = _create_veusz_window(Path(payload["document"]))
-        _apply_sciplot_veusz_workspace_defaults(veusz_window, embedded=True)
-        state["veusz_window"] = veusz_window
-        right_layout.addWidget(veusz_window)
-        status_label.setText(f"SciPlot generated Veusz document:\n{payload['document']}")
-        refine_status.setText(f"Refine Workspace · {payload['document']}")
+        document_path = Path(payload["document"])
+        state["document_path"] = document_path
+        preview_path = _ensure_preview_export(document_path)
+        state["preview_path"] = preview_path
+        _show_preview_image(preview_label, preview_path)
+        document_label.setText(str(document_path))
+        status_label.setText("Figure generated. Review the preview, then export when ready.")
+        refine_status.setText("Generated preview")
         refresh_refine_actions()
         set_review_targets(None)
         stack.setCurrentWidget(refine_workspace)
@@ -1173,42 +1399,19 @@ def _create_sciplot_studio_shell(
         except Exception as exc:
             QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
 
-    def save_current() -> None:
-        document_path = state.get("document_path")
-        veusz_window = state.get("veusz_window")
-        if isinstance(document_path, Path) and veusz_window is not None:
-            veusz_window.document.save(str(document_path))
-            refine_status.setText(f"Saved Veusz document · {document_path}")
-            refresh_refine_actions()
-
-    def undo_current() -> None:
-        veusz_window = state.get("veusz_window")
-        if veusz_window is not None and veusz_window.document.canUndo():
-            veusz_window.document.undoOperation()
-        refresh_refine_actions()
-
-    def redo_current() -> None:
-        veusz_window = state.get("veusz_window")
-        if veusz_window is not None and veusz_window.document.canRedo():
-            veusz_window.document.redoOperation()
-        refresh_refine_actions()
-
     def export_current() -> None:
         try:
             document_path = state.get("document_path")
             project_dir = state.get("project_dir")
             request_path = state.get("request_path")
-            veusz_window = state.get("veusz_window")
             if (
                 not isinstance(document_path, Path)
                 or not isinstance(project_dir, Path)
                 or not isinstance(request_path, Path)
             ):
                 return
-            if veusz_window is not None:
-                veusz_window.document.save(str(document_path))
             formats = state.get("exports") if isinstance(state.get("exports"), list) else list(EXPORT_FORMATS)
-            exports = export_studio_document(document_path, formats=[str(item) for item in formats])["exports"]
+            exports = _export_studio_document_worker(document_path, formats=[str(item) for item in formats])["exports"]
             studio_run = publish_studio_export_run(
                 project_dir=project_dir,
                 request_path=request_path,
@@ -1216,7 +1419,7 @@ def _create_sciplot_studio_shell(
                 exports=exports,
             )
             _register_studio_exports(project_dir, exports, studio_run=studio_run)
-            status_label.setText(f"Exported through SciPlot QA:\n{studio_run['output']}")
+            status_label.setText("Export complete. Review and delivery are available.")
             refine_status.setText(f"Exported through SciPlot QA · {studio_run['output']}")
             set_review_targets(studio_run)
             refresh_refine_actions()
@@ -1225,20 +1428,127 @@ def _create_sciplot_studio_shell(
 
     generate_button.clicked.connect(generate)
     export_button.clicked.connect(export_current)
+    inspector_export_button.clicked.connect(export_current)
+    review_button.clicked.connect(lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review"))
+    delivery_button.clicked.connect(
+        lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
+    )
     move_up_button.clicked.connect(lambda: _move_table_row(groups_table, -1))
     move_down_button.clicked.connect(lambda: _move_table_row(groups_table, 1))
     open_data_action.triggered.connect(lambda: _choose_and_open_data(shell, output_root))
     open_project_action.triggered.connect(lambda: _choose_and_open_project(shell, output_root))
     back_action.triggered.connect(lambda: stack.setCurrentWidget(setup_workspace))
     generate_action.triggered.connect(generate)
-    save_action.triggered.connect(save_current)
-    undo_action.triggered.connect(undo_current)
-    redo_action.triggered.connect(redo_current)
     export_action.triggered.connect(export_current)
     review_action.triggered.connect(
         lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review")
     )
     delivery_action.triggered.connect(
+        lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
+    )
+    return shell
+
+
+def _create_sciplot_document_shell(document_path: Path) -> Any:
+    from PyQt6 import QtCore, QtGui, QtWidgets
+
+    document_path = document_path.expanduser().resolve()
+    shell = QtWidgets.QMainWindow()
+    shell.setWindowTitle("SciPlot Studio")
+    _apply_sciplot_shell_style(shell)
+
+    state: dict[str, Any] = {
+        "document_path": document_path,
+        "preview_path": None,
+        "review_path": None,
+        "delivery_path": None,
+    }
+    _add_sciplot_view_menu(shell, state)
+
+    toolbar = QtWidgets.QToolBar("SciPlot")
+    toolbar.setObjectName("sciplotPrimaryToolbar")
+    toolbar.setMovable(False)
+    shell.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
+    open_data_action = QtGui.QAction("Open Data", shell)
+    open_project_action = QtGui.QAction("Open Project", shell)
+    export_action = QtGui.QAction("Export", shell)
+    review_action = QtGui.QAction("Review", shell)
+    delivery_action = QtGui.QAction("Delivery", shell)
+    review_action.setEnabled(False)
+    delivery_action.setEnabled(False)
+    toolbar.addAction(open_data_action)
+    toolbar.addAction(open_project_action)
+    toolbar.addSeparator()
+    toolbar.addAction(export_action)
+    toolbar.addSeparator()
+    toolbar.addAction(review_action)
+    toolbar.addAction(delivery_action)
+
+    refine = _create_refine_surface()
+    shell.setCentralWidget(refine["workspace"])
+    preview_label = refine["preview_label"]
+    document_label = refine["document_label"]
+    status_label = refine["status_label"]
+    inspector_export_button = refine["export_button"]
+    review_button = refine["review_button"]
+    delivery_button = refine["delivery_button"]
+
+    context = _project_context_for_document(document_path)
+
+    def set_review_targets(run: dict[str, Any] | None) -> None:
+        review_path = _review_path_from_run(run)
+        delivery_path = _delivery_path_from_run(run)
+        state["review_path"] = review_path
+        state["delivery_path"] = delivery_path
+        review_enabled = bool(review_path and review_path.exists())
+        delivery_enabled = bool(delivery_path and delivery_path.exists())
+        review_action.setEnabled(review_enabled)
+        delivery_action.setEnabled(delivery_enabled)
+        review_button.setEnabled(review_enabled)
+        delivery_button.setEnabled(delivery_enabled)
+
+    def refresh() -> None:
+        preview_path = _ensure_preview_export(document_path)
+        state["preview_path"] = preview_path
+        _show_preview_image(preview_label, preview_path)
+        document_label.setText(str(document_path))
+        status_label.setText("Generated preview")
+        _set_advanced_editor_enabled(state)
+        if context is not None:
+            set_review_targets(_last_studio_run(context["project_dir"]))
+
+    def export_current() -> None:
+        try:
+            exports = _export_studio_document_worker(document_path, formats=list(EXPORT_FORMATS))["exports"]
+            if context is not None:
+                studio_run = publish_studio_export_run(
+                    project_dir=context["project_dir"],
+                    request_path=context["request_path"],
+                    document_path=document_path,
+                    exports=exports,
+                )
+                _register_studio_exports(context["project_dir"], exports, studio_run=studio_run)
+                status_label.setText("Export complete. Review and delivery are available.")
+                set_review_targets(studio_run)
+            else:
+                first = _first_export_path(exports, preferred_format="pdf")
+                status_label.setText(f"Exported {first}" if first is not None else "Export finished")
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
+
+    refresh()
+    open_data_action.triggered.connect(lambda: _choose_and_open_data(shell, None))
+    open_project_action.triggered.connect(lambda: _choose_and_open_project(shell, None))
+    export_action.triggered.connect(export_current)
+    inspector_export_button.clicked.connect(export_current)
+    review_action.triggered.connect(
+        lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review")
+    )
+    delivery_action.triggered.connect(
+        lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
+    )
+    review_button.clicked.connect(lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review"))
+    delivery_button.clicked.connect(
         lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
     )
     return shell
@@ -1398,6 +1708,9 @@ def _session_summary(session: dict[str, Any]) -> str:
 def _populate_groups_table(table: Any, groups: list[dict[str, Any]]) -> None:
     from PyQt6 import QtCore, QtWidgets
 
+    table.verticalHeader().setVisible(False)
+    table.setShowGrid(False)
+    table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
     table.setRowCount(len(groups))
     for row, group in enumerate(groups):
         files = group.get("files") if isinstance(group.get("files"), list) else []
@@ -1521,7 +1834,8 @@ def export_studio_document(document_path: Path, *, formats: list[str]) -> dict[s
         from veusz.document import CommandInterface
 
         _ = dataimport, widgets
-        app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+        existing_app = QtWidgets.QApplication.instance()
+        app = existing_app or QtWidgets.QApplication([])
         try:
             doc = document.Document()
             doc.load(str(document_path))
@@ -1546,7 +1860,8 @@ def export_studio_document(document_path: Path, *, formats: list[str]) -> dict[s
                     }
                 )
         finally:
-            app.quit()
+            if existing_app is None:
+                app.quit()
     payload: dict[str, Any] = {"kind": "sciplot_studio_export", "document": str(document_path), "exports": exports}
     if stderr_log.exists():
         payload["stderr_log"] = str(stderr_log)
@@ -1621,7 +1936,7 @@ def publish_studio_export_run(
         "semantic": {
             "semantic_family": "veusz_document",
             "rule_id": request.get("rule_id"),
-            "reason": "Exported from the native Veusz document embedded in SciPlot Studio.",
+            "reason": "Exported from a SciPlot Studio Veusz document.",
         },
         "final_recipe": None,
         "input": str(input_path) if input_path is not None else "",
@@ -1639,7 +1954,7 @@ def publish_studio_export_run(
         "layout_policy": {
             "kind": "sciplot_layout_policy",
             "policy_id": "veusz_native_document",
-            "review_mode": "native_veusz_editor",
+            "review_mode": "safe_preview_with_optional_advanced_editor",
         },
         "layout_quality": layout_quality,
         "operation_mode": normal_mode_payload(route="studio"),
@@ -3701,8 +4016,10 @@ def _export_suffix(fmt: str) -> tuple[str, int | None]:
     normalized = fmt.casefold()
     if normalized in {"tiff_300", "tif_300", "tiff"}:
         return "_300dpi.tiff", 300
-    if normalized == "png":
-        return ".png", 150
+    if normalized in {"png", "png_300"}:
+        return "_300dpi.png", 300
+    if normalized == "png_600":
+        return "_600dpi.png", 600
     if normalized == "svg":
         return ".svg", None
     return ".pdf", None

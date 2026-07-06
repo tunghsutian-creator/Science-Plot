@@ -261,6 +261,11 @@ def _build_parser() -> argparse.ArgumentParser:
     studio_parser.add_argument("--template", help="Preselect the SciPlot plot template, e.g. curve or stacked_curve.")
     studio_parser.add_argument("--name", help="Preselect the SciPlot project/figure name.")
     studio_parser.add_argument("--new", action="store_true", help="Open an empty embedded Veusz Studio window.")
+    studio_parser.add_argument(
+        "--advanced-editor",
+        action="store_true",
+        help="Open the full upstream Veusz editor for a generated .vsz document.",
+    )
     studio_parser.add_argument("--export", help="Comma-separated export formats, e.g. pdf,tiff_300.")
     studio_parser.add_argument(
         "--json",
@@ -504,6 +509,7 @@ def main(argv: list[str] | None = None) -> int:
                 template=args.template,
                 project_name=args.name,
                 new=args.new,
+                advanced_editor=args.advanced_editor,
                 export=args.export,
                 json_output=args.json,
                 prepare_only=args.prepare_only,

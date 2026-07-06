@@ -18,6 +18,12 @@ def export_request(request_path: Path, *, formats: list[str]) -> dict[str, Any]:
     return payload
 
 
+def export_document(document_path: Path, *, formats: list[str]) -> dict[str, Any]:
+    from sciplot_core.studio import export_studio_document
+
+    return export_studio_document(document_path.expanduser().resolve(), formats=formats)
+
+
 def _split_formats(value: str) -> list[str]:
     formats = [item.strip().lower() for item in value.split(",") if item.strip()]
     return formats or ["pdf", "tiff_300"]
@@ -29,6 +35,9 @@ def _build_parser() -> argparse.ArgumentParser:
     export_parser = subparsers.add_parser("export", help="Generate and export a Veusz document from a request.")
     export_parser.add_argument("request", type=Path)
     export_parser.add_argument("--formats", default="pdf,tiff_300")
+    export_document_parser = subparsers.add_parser("export-document", help="Export an existing Veusz document.")
+    export_document_parser.add_argument("document", type=Path)
+    export_document_parser.add_argument("--formats", default="pdf,tiff_300")
     return parser
 
 
@@ -38,6 +47,10 @@ def main(argv: list[str] | None = None) -> int:
         payload = export_request(args.request.expanduser(), formats=_split_formats(args.formats))
         print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
         return 0
+    if args.command == "export-document":
+        payload = export_document(args.document.expanduser(), formats=_split_formats(args.formats))
+        print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
+        return 0
     raise AssertionError(f"Unhandled command: {args.command}")
 
 
@@ -45,4 +58,4 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["export_request", "main"]
+__all__ = ["export_document", "export_request", "main"]
