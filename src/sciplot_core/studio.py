@@ -35,6 +35,34 @@ STACKED_TEMPLATE_IDS = {"stacked_curve", "segmented_stacked_curve"}
 STUDIO_TEMPLATE_IDS = ("curve", "stacked_curve", "segmented_stacked_curve")
 FIGURE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
 EXPORT_FORMATS = ("pdf", "tiff_300")
+STUDIO_COLORS = {
+    "bg_window": "#1e1f23",
+    "bg_topbar": "#1a1c20",
+    "bg_rail": "#16181c",
+    "bg_canvas": "#16181c",
+    "bg_inspector": "#1a1c20",
+    "bg_statusbar": "#16181c",
+    "bg_card": "#21262d",
+    "bg_input": "#1c1e21",
+    "bg_dropdown": "#292b31",
+    "bg_hover": "#30363d",
+    "fg_primary": "#e6edf3",
+    "fg_secondary": "#c9d1d9",
+    "fg_muted": "#8b949e",
+    "fg_disabled": "#484f58",
+    "accent": "#0e8475",
+    "accent_hover": "#0f9d8c",
+    "accent_bg": "#1a2e2b",
+    "border": "#30363d",
+    "border_light": "#282a2f",
+    "border_active": "#0e8475",
+    "success": "#0e8475",
+    "warning": "#d47f0c",
+    "error": "#ce3b4a",
+    "success_bg": "#1a2e2b",
+    "warning_bg": "#3d2e0a",
+    "error_bg": "#3d1a1e",
+}
 MARKER_MAP = {
     "circle": "circle",
     "diamond": "diamond",
@@ -481,105 +509,368 @@ def _group_box(title: str) -> Any:
 def _apply_sciplot_shell_style(shell: Any) -> None:
     shell.setObjectName("SciPlotStudioWindow")
     shell.resize(1320, 860)
-    shell.setStyleSheet(
-        """
-        QMainWindow#SciPlotStudioWindow { background: #202124; color: #eef0f3; }
-        QToolBar#sciplotPrimaryToolbar {
-            spacing: 6px;
-            padding: 5px 10px;
-            border: 0;
-            border-bottom: 1px solid #33363d;
-            background: #26282d;
-        }
-        QToolBar#sciplotPrimaryToolbar QToolButton {
-            color: #eef0f3;
-            padding: 5px 9px;
-            border-radius: 6px;
-        }
-        QToolBar#sciplotPrimaryToolbar QToolButton:hover { background: #353840; }
-        QToolBar#sciplotPrimaryToolbar QToolButton:disabled { color: #70757f; }
-        QWidget#setupWorkspace, QWidget#refineWorkspace { background: #202124; color: #eef0f3; }
-        QGroupBox {
-            font-weight: 600;
-            border: 1px solid #3c4048;
-            border-radius: 10px;
-            margin-top: 14px;
-            background: #292b31;
-            color: #eef0f3;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            left: 10px;
-            padding: 0 4px;
-            color: #cdd2da;
-        }
-        QLabel#workspaceTitle {
-            font-size: 18px;
-            font-weight: 700;
-            color: #f5f6f8;
-        }
-        QLabel#workspaceHint { color: #a4abb6; }
-        QLabel#studioStatus { color: #a4abb6; }
-        QFrame#canvasSurface {
-            background: #151619;
-            border: 0;
-        }
-        QLabel#figurePreview {
-            background: #151619;
-            color: #8c939f;
-            border: 0;
-        }
-        QFrame#inspectorPanel {
-            background: #292b31;
-            border-left: 1px solid #383b42;
-        }
-        QLabel#inspectorTitle {
-            font-size: 14px;
-            font-weight: 700;
-            color: #f2f4f7;
-        }
-        QLabel#inspectorMeta {
-            color: #a4abb6;
-            font-size: 12px;
-        }
-        QTableWidget {
-            border: 1px solid #3c4048;
-            border-radius: 8px;
-            background: #23252a;
-            color: #eef0f3;
-            gridline-color: #383b42;
-        }
-        QHeaderView::section {
-            background: #2d3036;
-            color: #cdd2da;
-            border: 0;
-            padding: 5px;
-        }
-        QLineEdit, QComboBox {
-            background: #202228;
-            color: #eef0f3;
-            border: 1px solid #444852;
-            border-radius: 6px;
-            padding: 5px 7px;
-        }
-        QPushButton {
-            background: #353942;
-            color: #f2f4f7;
-            border: 1px solid #464b55;
-            border-radius: 7px;
-            padding: 6px 10px;
-        }
-        QPushButton:hover { background: #414650; }
-        QPushButton:disabled { color: #737984; background: #2a2d33; border-color: #333740; }
-        QPushButton#primaryButton {
-            background: #0a84ff;
-            border-color: #0a84ff;
-            color: #ffffff;
-            font-weight: 700;
-        }
-        QCheckBox { color: #d9dde4; }
-        """
-    )
+    shell.setStyleSheet(_studio_styles())
+
+
+def _studio_styles() -> str:
+    colors = STUDIO_COLORS
+    return f"""
+    QMainWindow#SciPlotStudioWindow {{
+        background-color: {colors['bg_window']};
+        color: {colors['fg_secondary']};
+    }}
+    QLabel {{
+        color: {colors['fg_secondary']};
+    }}
+    QWidget#centralArea, QWidget#setupWorkspace, QWidget#refineWorkspace {{
+        background-color: {colors['bg_window']};
+        color: {colors['fg_secondary']};
+    }}
+    QToolBar#topBar {{
+        background-color: {colors['bg_topbar']};
+        border: none;
+        border-bottom: 1px solid {colors['border_light']};
+        padding: 0px 10px;
+        spacing: 6px;
+        min-height: 42px;
+        max-height: 42px;
+    }}
+    QLabel#topBarBrand {{
+        color: {colors['fg_secondary']};
+        font-size: 13px;
+        font-weight: 500;
+    }}
+    QLabel#topBarExperimentBadge {{
+        color: {colors['fg_muted']};
+        font-size: 11px;
+        padding: 2px 8px;
+        background-color: {colors['bg_card']};
+        border: 1px solid {colors['border']};
+        border-radius: 4px;
+    }}
+    QPushButton#topBarSizeBadge {{
+        color: {colors['fg_muted']};
+        font-size: 11px;
+        background-color: {colors['bg_card']};
+        border: 1px solid {colors['border']};
+        border-radius: 4px;
+        padding: 2px 8px;
+    }}
+    QPushButton#topBarSizeBadge:hover {{
+        color: {colors['fg_primary']};
+        border-color: {colors['fg_disabled']};
+    }}
+    QPushButton#topBarPrimary {{
+        background-color: {colors['accent']};
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 600;
+        border: none;
+        border-radius: 6px;
+        padding: 5px 14px;
+    }}
+    QPushButton#topBarPrimary:hover {{
+        background-color: {colors['accent_hover']};
+    }}
+    QPushButton#topBarPrimary:disabled {{
+        background-color: #1a3a36;
+        color: {colors['fg_disabled']};
+    }}
+    QPushButton#topBarOverflow {{
+        color: {colors['fg_muted']};
+        font-size: 13px;
+        border: none;
+        background: transparent;
+        padding: 4px 8px;
+        border-radius: 4px;
+    }}
+    QPushButton#topBarOverflow:hover {{
+        background-color: {colors['bg_hover']};
+        color: {colors['fg_primary']};
+    }}
+    QPushButton#topBarOverflow::menu-indicator {{
+        image: none;
+        width: 0px;
+    }}
+    QFrame#stageRail {{
+        background-color: {colors['bg_rail']};
+        border: none;
+        border-right: 1px solid {colors['border_light']};
+    }}
+    QPushButton#railBrandDot {{
+        color: {colors['accent']};
+        font-size: 12px;
+        border: none;
+        background: transparent;
+    }}
+    QPushButton#railBrandDot:hover {{
+        color: {colors['accent_hover']};
+    }}
+    QPushButton#stageDot {{
+        border: 2px solid {colors['fg_disabled']};
+        border-radius: 7px;
+        background-color: transparent;
+    }}
+    QPushButton#stageDot[active="true"] {{
+        border: 2px solid {colors['accent']};
+        background-color: {colors['accent']};
+    }}
+    QPushButton#stageDot:disabled {{
+        border-color: #2d3036;
+    }}
+    QFrame#stageConnLine, QFrame#railSeparator {{
+        color: {colors['border']};
+        background-color: {colors['border']};
+    }}
+    QPushButton#figureThumb {{
+        border: none;
+        border-radius: 3px;
+        background-color: {colors['bg_card']};
+        color: {colors['fg_muted']};
+        font-size: 10px;
+    }}
+    QPushButton#figureThumb[active="true"] {{
+        border-left: 2px solid {colors['accent']};
+        background-color: {colors['accent_bg']};
+    }}
+    QPushButton#figureThumb:hover {{
+        background-color: {colors['bg_hover']};
+    }}
+    QScrollArea#setupScroll {{
+        border: none;
+        background-color: {colors['bg_window']};
+    }}
+    QWidget#setupContent {{
+        background-color: {colors['bg_window']};
+    }}
+    QLabel#setupTitle {{
+        color: {colors['fg_primary']};
+        font-size: 18px;
+        font-weight: 600;
+    }}
+    QLabel#setupSubtitle, QLabel#studioStatus, QLabel#inspectorMeta {{
+        color: {colors['fg_muted']};
+        font-size: 12px;
+    }}
+    QFrame#templateCard {{
+        background-color: {colors['bg_card']};
+        border: 1px solid {colors['border']};
+        border-radius: 10px;
+    }}
+    QFrame#templateCard:hover {{
+        background-color: #292e36;
+        border-color: {colors['fg_disabled']};
+    }}
+    QFrame#templateCard[selected="true"] {{
+        background-color: #14211f;
+        border: 2px solid {colors['accent']};
+    }}
+    QLabel#templateCardIcon {{
+        color: {colors['fg_muted']};
+        font-size: 28px;
+    }}
+    QFrame#templateCard[selected="true"] QLabel#templateCardIcon {{
+        color: {colors['accent']};
+    }}
+    QLabel#templateCardTitle {{
+        color: {colors['fg_secondary']};
+        font-size: 12px;
+        font-weight: 600;
+    }}
+    QLabel#templateCardSubtitle {{
+        color: {colors['fg_muted']};
+        font-size: 10px;
+    }}
+    QFrame#dropZone {{
+        border: 2px dashed {colors['border']};
+        border-radius: 10px;
+        background-color: {colors['bg_topbar']};
+    }}
+    QFrame#dropZone[hovering="true"] {{
+        border-color: {colors['accent']};
+        background-color: #14211f;
+    }}
+    QLabel#dropZoneLabel {{
+        color: {colors['fg_disabled']};
+        font-size: 13px;
+    }}
+    QLabel#sectionHeaderLabel {{
+        color: {colors['fg_muted']};
+        font-size: 10px;
+        font-weight: 600;
+    }}
+    QTableWidget#samplesTable, QTableWidget#mappingGroupsTable {{
+        background-color: {colors['bg_card']};
+        border: 1px solid {colors['border']};
+        border-radius: 6px;
+        gridline-color: {colors['border']};
+        color: {colors['fg_secondary']};
+        font-size: 12px;
+    }}
+    QTableWidget#samplesTable::item:selected, QTableWidget#mappingGroupsTable::item:selected {{
+        background-color: {colors['accent_bg']};
+    }}
+    QHeaderView::section {{
+        background-color: {colors['bg_topbar']};
+        color: {colors['fg_muted']};
+        border: none;
+        padding: 5px 10px;
+        font-size: 10px;
+        font-weight: 600;
+    }}
+    QFrame#canvasSurface {{
+        background-color: {colors['bg_canvas']};
+        border: none;
+    }}
+    QLabel#figurePreview, QLabel#canvasPlaceholder {{
+        color: {colors['fg_disabled']};
+        font-size: 15px;
+        background-color: {colors['bg_canvas']};
+        border-radius: 8px;
+    }}
+    QFrame#inspectorPanel {{
+        background-color: {colors['bg_inspector']};
+        border: none;
+        border-left: 1px solid {colors['border_light']};
+    }}
+    QFrame#inspectorPanel QLabel {{
+        color: {colors['fg_secondary']};
+    }}
+    QFrame#inspectorPanel QLabel#inspectorMeta {{
+        color: {colors['fg_muted']};
+    }}
+    QPushButton#sectionHeader {{
+        color: {colors['fg_muted']};
+        font-size: 10px;
+        font-weight: 600;
+        text-align: left;
+        padding: 10px 14px 4px 14px;
+        border: none;
+        background: transparent;
+    }}
+    QPushButton#sectionHeader:hover {{
+        color: {colors['fg_secondary']};
+    }}
+    QFrame#sectionSeparator {{
+        background-color: {colors['bg_card']};
+        color: {colors['bg_card']};
+    }}
+    QTabWidget#refineTabs::pane {{
+        border: none;
+        background-color: {colors['bg_inspector']};
+    }}
+    QTabBar::tab {{
+        background-color: transparent;
+        color: {colors['fg_muted']};
+        border: none;
+        padding: 8px 10px;
+        font-size: 11px;
+        font-weight: 500;
+    }}
+    QTabBar::tab:selected {{
+        color: {colors['fg_secondary']};
+        border-bottom: 2px solid {colors['accent']};
+    }}
+    QTabBar::tab:hover {{
+        color: {colors['fg_secondary']};
+    }}
+    QLabel#tabSectionTitle {{
+        color: {colors['fg_muted']};
+        font-size: 10px;
+        font-weight: 600;
+    }}
+    QListWidget#seriesList, QListWidget#sourceFileList {{
+        background-color: {colors['bg_card']};
+        border: 1px solid {colors['border']};
+        border-radius: 4px;
+        color: {colors['fg_secondary']};
+    }}
+    QListWidget#seriesList::item, QListWidget#sourceFileList::item {{
+        padding: 6px 8px;
+    }}
+    QListWidget#seriesList::item:selected, QListWidget#sourceFileList::item:selected {{
+        background-color: {colors['accent_bg']};
+    }}
+    QPushButton#sizeButton, QPushButton#legendPosButton, QPushButton#templateChoiceButton {{
+        background-color: {colors['bg_card']};
+        border: 1px solid {colors['border']};
+        border-radius: 4px;
+        color: {colors['fg_secondary']};
+        padding: 6px 8px;
+    }}
+    QPushButton#sizeButton:checked, QPushButton#legendPosButton:checked, QPushButton#templateChoiceButton:checked {{
+        border: 2px solid {colors['accent']};
+        background-color: {colors['accent_bg']};
+        color: {colors['fg_primary']};
+    }}
+    QPushButton#outlineButton {{
+        background: transparent;
+        border: 1px solid {colors['border']};
+        border-radius: 5px;
+        color: {colors['fg_secondary']};
+        padding: 5px 9px;
+    }}
+    QPushButton#ghostButton {{
+        background: transparent;
+        border: none;
+        color: {colors['fg_muted']};
+        padding: 5px 9px;
+    }}
+    QPushButton#primaryButton {{
+        background-color: {colors['accent']};
+        border: none;
+        border-radius: 6px;
+        color: #ffffff;
+        font-weight: 600;
+        padding: 6px 12px;
+    }}
+    QPushButton#primaryButton:disabled, QPushButton#outlineButton:disabled, QPushButton#ghostButton:disabled {{
+        color: {colors['fg_disabled']};
+        border-color: {colors['border_light']};
+    }}
+    QPushButton:hover {{
+        background-color: {colors['bg_hover']};
+    }}
+    QLineEdit, QComboBox {{
+        background-color: {colors['bg_input']};
+        color: {colors['fg_secondary']};
+        border: 1px solid {colors['border']};
+        border-radius: 5px;
+        padding: 5px 7px;
+        selection-background-color: {colors['accent_bg']};
+    }}
+    QCheckBox {{
+        color: {colors['fg_secondary']};
+        spacing: 6px;
+    }}
+    QStatusBar#studioStatusBar {{
+        background-color: {colors['bg_statusbar']};
+        border: none;
+        border-top: 1px solid {colors['border_light']};
+        color: {colors['fg_disabled']};
+        font-size: 11px;
+        padding: 0px 10px;
+        min-height: 22px;
+        max-height: 22px;
+    }}
+    QLabel#statusText {{
+        color: {colors['fg_disabled']};
+        font-size: 11px;
+    }}
+    QMenu {{
+        background-color: {colors['bg_dropdown']};
+        color: {colors['fg_secondary']};
+        border: 1px solid {colors['border']};
+        padding: 4px;
+    }}
+    QMenu::item {{
+        padding: 5px 24px 5px 10px;
+        border-radius: 4px;
+    }}
+    QMenu::item:selected {{
+        background-color: {colors['bg_hover']};
+    }}
+    """
 
 
 def _set_veusz_advanced_panels_visible(window: Any, visible: bool) -> None:
@@ -613,7 +904,10 @@ def _apply_sciplot_veusz_workspace_defaults(window: Any, *, embedded: bool = Fal
 def _add_sciplot_view_menu(shell: Any, state: dict[str, Any]) -> None:
     from PyQt6 import QtGui
 
-    view_menu = shell.menuBar().addMenu("View")
+    menu_bar = shell.menuBar()
+    menu_bar.setNativeMenuBar(True)
+    menu_bar.hide()
+    view_menu = menu_bar.addMenu("View")
     advanced_action = QtGui.QAction("Open Advanced Veusz Editor", shell)
     advanced_action.setEnabled(False)
 
@@ -750,9 +1044,14 @@ def _export_studio_document_worker(document_path: Path, *, formats: list[str]) -
 
 
 def _set_advanced_editor_enabled(state: dict[str, Any]) -> None:
-    action = state.get("advanced_editor_action")
     document_path = state.get("document_path")
-    if action is not None:
+    actions = []
+    if state.get("advanced_editor_action") is not None:
+        actions.append(state["advanced_editor_action"])
+    extra_actions = state.get("advanced_editor_actions")
+    if isinstance(extra_actions, list):
+        actions.extend(extra_actions)
+    for action in actions:
         action.setEnabled(bool(isinstance(document_path, Path) and document_path.exists()))
 
 
@@ -857,6 +1156,934 @@ def _delivery_path_from_run(run: dict[str, Any] | None) -> Path | None:
     if isinstance(output, str) and output.strip():
         return Path(output).expanduser() / "delivery"
     return None
+
+
+def _refresh_qss(widget: Any) -> None:
+    widget.style().unpolish(widget)
+    widget.style().polish(widget)
+    widget.update()
+
+
+def _format_figure_size(value: str | None) -> str:
+    normalized = _normalize_optional_string(value) or "60x55"
+    return f"{normalized.replace('x', ' x ')} mm"
+
+
+def _experiment_family_label(session: dict[str, Any]) -> str:
+    return str(session.get("experiment_label") or session.get("experiment_type_id") or "Auto-detected")
+
+
+def _session_file_names(session: dict[str, Any], source_path: Path) -> list[str]:
+    names: list[str] = []
+    for group in _session_groups(session):
+        files = group.get("files") if isinstance(group.get("files"), list) else []
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            value = item.get("name") or item.get("source_path")
+            if isinstance(value, str) and value.strip():
+                names.append(Path(value).name)
+    return names or [source_path.name]
+
+
+def _template_card_specs() -> list[dict[str, str]]:
+    return [
+        {
+            "family": "rheology",
+            "template": "curve",
+            "icon": "●",
+            "title": "Rheology / DMA",
+            "subtitle": "Time and sweep curves",
+        },
+        {
+            "family": "mechanical",
+            "template": "curve",
+            "icon": "●",
+            "title": "Mechanical",
+            "subtitle": "Tensile and modulus",
+        },
+        {
+            "family": "thermal",
+            "template": "curve",
+            "icon": "●",
+            "title": "Thermal",
+            "subtitle": "DSC / TGA tables",
+        },
+        {
+            "family": "spectroscopy",
+            "template": "stacked_curve",
+            "icon": "●",
+            "title": "Spectroscopy",
+            "subtitle": "FTIR / Raman stacks",
+        },
+        {
+            "family": "diffraction",
+            "template": "stacked_curve",
+            "icon": "●",
+            "title": "Diffraction",
+            "subtitle": "XRD / WAXS",
+        },
+        {
+            "family": "chromatography",
+            "template": "curve",
+            "icon": "●",
+            "title": "Chromatography",
+            "subtitle": "GPC / HPLC",
+        },
+        {
+            "family": "scattering",
+            "template": "stacked_curve",
+            "icon": "●",
+            "title": "Scattering",
+            "subtitle": "SAXS / SANS",
+        },
+        {
+            "family": "other",
+            "template": "curve",
+            "icon": "●",
+            "title": "Other",
+            "subtitle": "Custom table",
+        },
+    ]
+
+
+def _top_bar_size_text(state: dict[str, Any]) -> str:
+    return _format_figure_size(str(state.get("figure_size") or "60x55"))
+
+
+def _set_button_checked(button: Any, checked: bool) -> None:
+    button.setChecked(checked)
+    _refresh_qss(button)
+
+
+def _build_top_bar(shell: Any, state: dict[str, Any]) -> dict[str, Any]:
+    from PyQt6 import QtCore, QtWidgets
+
+    top_bar = QtWidgets.QToolBar("TopBar", shell)
+    top_bar.setObjectName("topBar")
+    top_bar.setMovable(False)
+    top_bar.setFloatable(False)
+    top_bar.setIconSize(QtCore.QSize(20, 20))
+    top_bar.setContentsMargins(8, 0, 8, 0)
+
+    brand = QtWidgets.QLabel("● SciPlot Studio")
+    brand.setObjectName("topBarBrand")
+    brand.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+    top_bar.addWidget(brand)
+
+    experiment_badge = QtWidgets.QLabel(str(state.get("experiment_family") or "Auto"))
+    experiment_badge.setObjectName("topBarExperimentBadge")
+    top_bar.addWidget(experiment_badge)
+
+    spacer = QtWidgets.QWidget()
+    spacer.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
+    top_bar.addWidget(spacer)
+
+    size_badge = QtWidgets.QPushButton(_top_bar_size_text(state))
+    size_badge.setObjectName("topBarSizeBadge")
+    size_badge.setFlat(True)
+    size_badge.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+    top_bar.addWidget(size_badge)
+
+    spacer2 = QtWidgets.QWidget()
+    spacer2.setFixedWidth(8)
+    top_bar.addWidget(spacer2)
+
+    generate_btn = QtWidgets.QPushButton("Generate")
+    generate_btn.setObjectName("topBarPrimary")
+    generate_widget_action = top_bar.addWidget(generate_btn)
+
+    export_btn = QtWidgets.QPushButton("Export")
+    export_btn.setObjectName("topBarPrimary")
+    export_btn.setVisible(False)
+    export_widget_action = top_bar.addWidget(export_btn)
+    export_widget_action.setVisible(False)
+
+    overflow_btn = QtWidgets.QPushButton("···")
+    overflow_btn.setObjectName("topBarOverflow")
+    overflow_btn.setFlat(True)
+    overflow_btn.setFixedWidth(36)
+    overflow_menu = QtWidgets.QMenu(overflow_btn)
+    overflow_btn.setMenu(overflow_menu)
+    top_bar.addWidget(overflow_btn)
+
+    shell.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, top_bar)
+
+    open_data_action = overflow_menu.addAction("Open Data...")
+    open_project_action = overflow_menu.addAction("Open Project...")
+    overflow_menu.addSeparator()
+    setup_action = overflow_menu.addAction("Setup Workspace")
+    setup_action.setShortcut("Ctrl+1")
+    refine_action = overflow_menu.addAction("Refine Workspace")
+    refine_action.setShortcut("Ctrl+2")
+    refine_action.setEnabled(False)
+    overflow_menu.addSeparator()
+    advanced_action = overflow_menu.addAction("Open in Veusz Editor")
+    advanced_action.setShortcut("Ctrl+Shift+E")
+    advanced_action.setEnabled(False)
+    review_action = overflow_menu.addAction("View Review HTML")
+    review_action.setEnabled(False)
+    delivery_action = overflow_menu.addAction("Open Delivery Package")
+    delivery_action.setEnabled(False)
+    state.setdefault("advanced_editor_actions", []).append(advanced_action)
+
+    return {
+        "toolbar": top_bar,
+        "brand": brand,
+        "experiment_badge": experiment_badge,
+        "size_badge": size_badge,
+        "generate_btn": generate_btn,
+        "generate_widget_action": generate_widget_action,
+        "export_btn": export_btn,
+        "export_widget_action": export_widget_action,
+        "overflow_btn": overflow_btn,
+        "overflow_menu": overflow_menu,
+        "open_data_action": open_data_action,
+        "open_project_action": open_project_action,
+        "setup_action": setup_action,
+        "refine_action": refine_action,
+        "advanced_action": advanced_action,
+        "review_action": review_action,
+        "delivery_action": delivery_action,
+    }
+
+
+def _build_stage_rail(parent: Any, state: dict[str, Any]) -> dict[str, Any]:
+    from PyQt6 import QtCore, QtWidgets
+
+    rail = QtWidgets.QFrame(parent)
+    rail.setObjectName("stageRail")
+    rail.setFixedWidth(44)
+
+    layout = QtWidgets.QVBoxLayout(rail)
+    layout.setContentsMargins(0, 10, 0, 10)
+    layout.setSpacing(0)
+
+    brand_dot = QtWidgets.QPushButton("●")
+    brand_dot.setObjectName("railBrandDot")
+    brand_dot.setFixedSize(20, 20)
+    brand_dot.setFlat(True)
+    brand_dot.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+    brand_dot.setToolTip("Setup Workspace")
+    layout.addWidget(brand_dot, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+    layout.addSpacing(4)
+
+    setup_dot = QtWidgets.QPushButton("")
+    setup_dot.setObjectName("stageDot")
+    setup_dot.setProperty("active", True)
+    setup_dot.setFixedSize(14, 14)
+    setup_dot.setFlat(True)
+    setup_dot.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+    setup_dot.setToolTip("Setup Workspace")
+    layout.addWidget(setup_dot, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+
+    conn_line = QtWidgets.QFrame()
+    conn_line.setObjectName("stageConnLine")
+    conn_line.setFixedSize(2, 24)
+    conn_line.setFrameShape(QtWidgets.QFrame.Shape.VLine)
+    layout.addWidget(conn_line, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+
+    refine_dot = QtWidgets.QPushButton("")
+    refine_dot.setObjectName("stageDot")
+    refine_dot.setProperty("active", False)
+    refine_dot.setFixedSize(14, 14)
+    refine_dot.setFlat(True)
+    refine_dot.setEnabled(False)
+    refine_dot.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+    refine_dot.setToolTip("Refine Workspace")
+    layout.addWidget(refine_dot, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+
+    layout.addSpacing(6)
+    separator = QtWidgets.QFrame()
+    separator.setObjectName("railSeparator")
+    separator.setFixedSize(28, 1)
+    separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+    layout.addWidget(separator, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+    layout.addSpacing(4)
+
+    thumb_container = QtWidgets.QWidget()
+    thumb_container.setObjectName("figureThumbContainer")
+    thumb_layout = QtWidgets.QVBoxLayout(thumb_container)
+    thumb_layout.setContentsMargins(2, 0, 2, 0)
+    thumb_layout.setSpacing(4)
+    layout.addWidget(thumb_container, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+    layout.addStretch(1)
+
+    return {
+        "rail": rail,
+        "brand_dot": brand_dot,
+        "setup_dot": setup_dot,
+        "refine_dot": refine_dot,
+        "thumb_container": thumb_container,
+        "thumb_layout": thumb_layout,
+    }
+
+
+def _add_figure_thumbnail(thumb_layout: Any, preview_path: Path | None, state: dict[str, Any]) -> Any:
+    from PyQt6 import QtCore, QtGui, QtWidgets
+
+    while thumb_layout.count():
+        item = thumb_layout.takeAt(0)
+        widget = item.widget()
+        if widget is not None:
+            widget.deleteLater()
+
+    btn = QtWidgets.QPushButton("1")
+    btn.setObjectName("figureThumb")
+    btn.setProperty("active", True)
+    btn.setFixedSize(40, 24)
+    btn.setFlat(True)
+    btn.setToolTip("Generated figure")
+    if preview_path is not None and preview_path.exists():
+        pixmap = QtGui.QPixmap(str(preview_path))
+        if not pixmap.isNull():
+            scaled = pixmap.scaled(
+                40,
+                24,
+                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation,
+            )
+            btn.setText("")
+            btn.setIcon(QtGui.QIcon(scaled))
+            btn.setIconSize(QtCore.QSize(40, 24))
+    btn.clicked.connect(lambda: state.get("_switch_to_refine", lambda: None)())
+    thumb_layout.addWidget(btn)
+    return btn
+
+
+def _build_template_card(parent: Any, spec: dict[str, str], state: dict[str, Any]) -> Any:
+    from PyQt6 import QtCore, QtWidgets
+
+    card = QtWidgets.QFrame(parent)
+    card.setObjectName("templateCard")
+    card.setFixedSize(160, 120)
+    card.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+    card.setProperty("selected", state.get("selected_family") == spec["family"])
+    card.template_id = spec["template"]
+    card.family_id = spec["family"]
+
+    layout = QtWidgets.QVBoxLayout(card)
+    layout.setContentsMargins(14, 14, 14, 10)
+    layout.setSpacing(6)
+
+    icon_label = QtWidgets.QLabel(spec["icon"])
+    icon_label.setObjectName("templateCardIcon")
+    icon_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+    icon_label.setFixedHeight(36)
+    layout.addWidget(icon_label)
+
+    title_label = QtWidgets.QLabel(spec["title"])
+    title_label.setObjectName("templateCardTitle")
+    title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+    title_label.setWordWrap(True)
+    layout.addWidget(title_label)
+
+    subtitle_label = QtWidgets.QLabel(spec["subtitle"])
+    subtitle_label.setObjectName("templateCardSubtitle")
+    subtitle_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+    subtitle_label.setWordWrap(True)
+    layout.addWidget(subtitle_label)
+    return card
+
+
+def _select_template_card(card: Any, state: dict[str, Any]) -> None:
+    state["selected_template"] = str(getattr(card, "template_id", "curve"))
+    state["selected_family"] = str(getattr(card, "family_id", "other"))
+    for item in state.get("template_cards", []):
+        item.setProperty("selected", item is card)
+        _refresh_qss(item)
+    callback = state.get("_sync_template_controls")
+    if callable(callback):
+        callback()
+
+
+def _build_drop_zone(parent: Any, state: dict[str, Any]) -> Any:
+    from PyQt6 import QtCore, QtWidgets
+
+    zone = QtWidgets.QFrame(parent)
+    zone.setObjectName("dropZone")
+    zone.setFixedHeight(74)
+    zone.setAcceptDrops(True)
+    zone.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+
+    layout = QtWidgets.QVBoxLayout(zone)
+    layout.setContentsMargins(0, 0, 0, 0)
+    label = QtWidgets.QLabel("Drop data files here, or click to choose files")
+    label.setObjectName("dropZoneLabel")
+    label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+    layout.addWidget(label)
+
+    def open_picker(_event: Any) -> None:
+        shell = state.get("shell")
+        output_root = state.get("output_root")
+        if shell is not None:
+            _choose_and_open_data(shell, output_root if isinstance(output_root, Path) else None)
+
+    def drag_enter(event: Any) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+            zone.setProperty("hovering", True)
+            _refresh_qss(zone)
+
+    def drag_leave(_event: Any) -> None:
+        zone.setProperty("hovering", False)
+        _refresh_qss(zone)
+
+    def drop_event(event: Any) -> None:
+        zone.setProperty("hovering", False)
+        _refresh_qss(zone)
+        paths = [Path(url.toLocalFile()) for url in event.mimeData().urls() if url.toLocalFile()]
+        if paths and state.get("shell") is not None:
+            output_root = state.get("output_root")
+            _open_studio_target_in_new_window(
+                state["shell"],
+                paths[0],
+                output_root if isinstance(output_root, Path) else None,
+            )
+
+    zone.mousePressEvent = open_picker
+    zone.dragEnterEvent = drag_enter
+    zone.dragLeaveEvent = drag_leave
+    zone.dropEvent = drop_event
+    return zone
+
+
+def _populate_samples_table(table: Any, groups: list[dict[str, Any]]) -> None:
+    from PyQt6 import QtCore, QtWidgets
+
+    table.verticalHeader().setVisible(False)
+    table.setShowGrid(False)
+    table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+    table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
+    table.setRowCount(len(groups))
+    for row, group in enumerate(groups):
+        handle = QtWidgets.QTableWidgetItem("≡")
+        handle.setFlags(handle.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
+        table.setItem(row, 0, handle)
+        sample_item = QtWidgets.QTableWidgetItem(str(group.get("sample") or f"Sample {row + 1}"))
+        sample_item.setData(QtCore.Qt.ItemDataRole.UserRole, row)
+        table.setItem(row, 1, sample_item)
+        files = group.get("files") if isinstance(group.get("files"), list) else []
+        file_names = [
+            str(item.get("name") or Path(str(item.get("source_path") or "")).name)
+            for item in files
+            if isinstance(item, dict)
+        ]
+        files_text = ", ".join(file_names) if file_names else "1 file"
+        files_item = QtWidgets.QTableWidgetItem(files_text)
+        files_item.setFlags(files_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
+        table.setItem(row, 2, files_item)
+        mode_item = QtWidgets.QTableWidgetItem("Auto")
+        mode_item.setFlags(mode_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
+        table.setItem(row, 3, mode_item)
+
+
+def _groups_from_samples_table(table: Any, original_groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    from PyQt6 import QtCore
+
+    groups: list[dict[str, Any]] = []
+    for row in range(table.rowCount()):
+        item = table.item(row, 1)
+        source_index = item.data(QtCore.Qt.ItemDataRole.UserRole) if item is not None else row
+        try:
+            source_group = original_groups[int(source_index)]
+        except (IndexError, TypeError, ValueError):
+            source_group = original_groups[row] if row < len(original_groups) else {}
+        sample = item.text().strip() if item is not None else ""
+        updated = dict(source_group)
+        updated["sample"] = sample or str(source_group.get("sample") or f"Sample {row + 1}")
+        groups.append(updated)
+    return groups
+
+
+def _build_samples_panel(parent: Any, groups: list[dict[str, Any]], controls: dict[str, Any]) -> Any:
+    from PyQt6 import QtWidgets
+
+    container = QtWidgets.QWidget(parent)
+    layout = QtWidgets.QVBoxLayout(container)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(8)
+
+    header = QtWidgets.QLabel("Samples")
+    header.setObjectName("sectionHeaderLabel")
+    layout.addWidget(header)
+
+    table = QtWidgets.QTableWidget()
+    table.setObjectName("samplesTable")
+    table.setColumnCount(4)
+    table.setHorizontalHeaderLabels(["", "Legend Name", "Files", "Mode"])
+    table.horizontalHeader().setStretchLastSection(False)
+    table.setColumnWidth(0, 28)
+    table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.Stretch)
+    table.setColumnWidth(2, 120)
+    table.setColumnWidth(3, 80)
+    table.verticalHeader().setDefaultSectionSize(38)
+    _populate_samples_table(table, groups)
+    layout.addWidget(table, 1)
+
+    add_btn = QtWidgets.QPushButton("+ Add Sample")
+    add_btn.setObjectName("ghostButton")
+    add_btn.setEnabled(False)
+    layout.addWidget(add_btn)
+    controls["samples_table"] = table
+    controls["add_sample_btn"] = add_btn
+    return container
+
+
+def _build_setup_workspace(state: dict[str, Any], session: dict[str, Any], controls: dict[str, Any]) -> Any:
+    from PyQt6 import QtCore, QtWidgets
+
+    setup_workspace = QtWidgets.QWidget()
+    setup_workspace.setObjectName("setupWorkspace")
+    layout = QtWidgets.QVBoxLayout(setup_workspace)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+
+    scroll = QtWidgets.QScrollArea()
+    scroll.setObjectName("setupScroll")
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+    layout.addWidget(scroll)
+
+    content = QtWidgets.QWidget()
+    content.setObjectName("setupContent")
+    scroll.setWidget(content)
+    content_layout = QtWidgets.QVBoxLayout(content)
+    content_layout.setContentsMargins(40, 32, 40, 34)
+    content_layout.setSpacing(24)
+
+    grid = QtWidgets.QGridLayout()
+    grid.setHorizontalSpacing(14)
+    grid.setVerticalSpacing(14)
+    cards: list[Any] = []
+    for index, spec in enumerate(_template_card_specs()):
+        card = _build_template_card(content, spec, state)
+        card.mousePressEvent = lambda _event, selected=card: _select_template_card(selected, state)
+        cards.append(card)
+        grid.addWidget(card, index // 4, index % 4, QtCore.Qt.AlignmentFlag.AlignLeft)
+    state["template_cards"] = cards
+    content_layout.addLayout(grid)
+
+    drop_zone = _build_drop_zone(content, state)
+    content_layout.addWidget(drop_zone)
+    controls["drop_zone"] = drop_zone
+
+    groups = _session_groups(session)
+    samples_panel = _build_samples_panel(content, groups, controls)
+    content_layout.addWidget(samples_panel, 1)
+    content_layout.addStretch(1)
+
+    return setup_workspace
+
+
+def _build_section(title: str, *, expanded: bool) -> Any:
+    from PyQt6 import QtWidgets
+
+    container = QtWidgets.QWidget()
+    container.setObjectName("collapsibleSection")
+    container._expanded = expanded
+    container._title = title
+
+    main_layout = QtWidgets.QVBoxLayout(container)
+    main_layout.setContentsMargins(0, 0, 0, 0)
+    main_layout.setSpacing(0)
+
+    header = QtWidgets.QPushButton(("▾ " if expanded else "▸ ") + title)
+    header.setObjectName("sectionHeader")
+    header.setFlat(True)
+    main_layout.addWidget(header)
+
+    body = QtWidgets.QWidget()
+    body_layout = QtWidgets.QVBoxLayout(body)
+    body_layout.setContentsMargins(12, 4, 12, 8)
+    body_layout.setSpacing(6)
+    body.setVisible(expanded)
+    main_layout.addWidget(body)
+
+    separator = QtWidgets.QFrame()
+    separator.setObjectName("sectionSeparator")
+    separator.setFixedHeight(1)
+    separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
+    main_layout.addWidget(separator)
+
+    def toggle() -> None:
+        container._expanded = not container._expanded
+        body.setVisible(container._expanded)
+        header.setText(("▾ " if container._expanded else "▸ ") + container._title)
+
+    header.clicked.connect(toggle)
+    container.header = header
+    container.body = body
+    container.body_layout = body_layout
+    container.addWidget = body_layout.addWidget
+    container.addLayout = body_layout.addLayout
+    return container
+
+
+def _add_form_row(layout: Any, label_text: str, widget: Any) -> None:
+    from PyQt6 import QtWidgets
+
+    label = QtWidgets.QLabel(label_text)
+    label.setObjectName("inspectorMeta")
+    layout.addWidget(label)
+    layout.addWidget(widget)
+
+
+def _build_setup_inspector(state: dict[str, Any], controls: dict[str, Any]) -> Any:
+    from PyQt6 import QtWidgets
+
+    container = QtWidgets.QWidget()
+    layout = QtWidgets.QVBoxLayout(container)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+
+    data_section = _build_section("DATA", expanded=True)
+    files_list = QtWidgets.QListWidget()
+    files_list.setObjectName("sourceFileList")
+    for name in state.get("source_file_names", []):
+        files_list.addItem(str(name))
+    files_list.setFixedHeight(88)
+    data_section.addWidget(files_list)
+    layout.addWidget(data_section)
+
+    project_section = _build_section("PROJECT", expanded=True)
+    name_edit = QtWidgets.QLineEdit(str(state.get("project_name") or "SciPlot Project"))
+    name_edit.setObjectName("projectNameEdit")
+    project_section.addWidget(name_edit)
+    layout.addWidget(project_section)
+    controls["name_edit"] = name_edit
+
+    template_section = _build_section("TEMPLATE", expanded=True)
+    template_buttons: dict[str, Any] = {}
+    for template_id, label in [
+        ("curve", "● Curve"),
+        ("stacked_curve", "○ Stacked"),
+        ("segmented_stacked_curve", "○ Segmented"),
+    ]:
+        button = QtWidgets.QPushButton(label)
+        button.setObjectName("templateChoiceButton")
+        button.setCheckable(True)
+        button.clicked.connect(lambda _checked=False, value=template_id: state["_select_template_id"](value))
+        template_buttons[template_id] = button
+        template_section.addWidget(button)
+    layout.addWidget(template_section)
+    controls["template_buttons"] = template_buttons
+
+    figure_section = _build_section("FIGURE", expanded=False)
+    size_buttons: dict[str, Any] = {}
+    size_grid = QtWidgets.QGridLayout()
+    size_grid.setSpacing(6)
+    for index, size in enumerate(FIGURE_SIZE_PRESETS):
+        button = QtWidgets.QPushButton(_format_figure_size(size).replace(" mm", ""))
+        button.setObjectName("sizeButton")
+        button.setCheckable(True)
+        button.setFixedHeight(30)
+        button.clicked.connect(lambda _checked=False, value=size: state["_select_figure_size"](value))
+        size_buttons[size] = button
+        size_grid.addWidget(button, index // 3, index % 3)
+    figure_section.addLayout(size_grid)
+    layout.addWidget(figure_section)
+    controls["size_buttons"] = size_buttons
+
+    axes_section = _build_section("AXES", expanded=False)
+    x_label_edit = QtWidgets.QLineEdit()
+    x_label_edit.setPlaceholderText("Auto-detected")
+    y_label_edit = QtWidgets.QLineEdit()
+    y_label_edit.setPlaceholderText("Auto-detected")
+    x_min_edit = QtWidgets.QLineEdit()
+    x_min_edit.setPlaceholderText("Min")
+    x_max_edit = QtWidgets.QLineEdit()
+    x_max_edit.setPlaceholderText("Max")
+    log_x_check = QtWidgets.QCheckBox("Log X")
+    log_y_check = QtWidgets.QCheckBox("Log Y")
+    reverse_x_check = QtWidgets.QCheckBox("Reverse X")
+    _add_form_row(axes_section.body_layout, "X Axis Label", x_label_edit)
+    _add_form_row(axes_section.body_layout, "Y Axis Label", y_label_edit)
+    range_row = QtWidgets.QHBoxLayout()
+    range_row.addWidget(x_min_edit)
+    range_row.addWidget(x_max_edit)
+    axes_section.addLayout(range_row)
+    axes_section.addWidget(log_x_check)
+    axes_section.addWidget(log_y_check)
+    axes_section.addWidget(reverse_x_check)
+    layout.addWidget(axes_section)
+    controls.update(
+        {
+            "x_label_edit": x_label_edit,
+            "y_label_edit": y_label_edit,
+            "x_min_edit": x_min_edit,
+            "x_max_edit": x_max_edit,
+            "log_x_check": log_x_check,
+            "log_y_check": log_y_check,
+            "reverse_x_check": reverse_x_check,
+        }
+    )
+
+    labels_section = _build_section("LABELS", expanded=False)
+    label_mode_combo = QtWidgets.QComboBox()
+    for label, value in (("Legend", "legend"), ("Inline", "inline"), ("Auto", "auto")):
+        label_mode_combo.addItem(label, value)
+    labels_section.addWidget(label_mode_combo)
+    layout.addWidget(labels_section)
+    controls["label_mode_combo"] = label_mode_combo
+
+    export_section = _build_section("EXPORT", expanded=False)
+    export_checks: dict[str, Any] = {}
+    for fmt in EXPORT_FORMATS:
+        check = QtWidgets.QCheckBox(fmt.upper() if fmt == "pdf" else "TIFF 300 dpi")
+        check.setChecked(True)
+        export_checks[fmt] = check
+        export_section.addWidget(check)
+    layout.addWidget(export_section)
+    controls["export_checks"] = export_checks
+    controls["source_file_list"] = files_list
+
+    layout.addStretch(1)
+    return container
+
+
+def _build_refine_inspector(state: dict[str, Any], controls: dict[str, Any]) -> Any:
+    from PyQt6 import QtCore, QtWidgets
+
+    container = QtWidgets.QWidget()
+    main_layout = QtWidgets.QVBoxLayout(container)
+    main_layout.setContentsMargins(0, 0, 0, 0)
+    main_layout.setSpacing(0)
+
+    tab_widget = QtWidgets.QTabWidget()
+    tab_widget.setObjectName("refineTabs")
+
+    page_tab = QtWidgets.QWidget()
+    page_layout = QtWidgets.QVBoxLayout(page_tab)
+    page_layout.setContentsMargins(12, 12, 12, 12)
+    page_layout.setSpacing(10)
+    page_title = QtWidgets.QLabel("Figure Size")
+    page_title.setObjectName("tabSectionTitle")
+    page_layout.addWidget(page_title)
+    size_grid = QtWidgets.QGridLayout()
+    size_grid.setSpacing(6)
+    refine_size_buttons: dict[str, Any] = {}
+    for index, size in enumerate(FIGURE_SIZE_PRESETS):
+        button = QtWidgets.QPushButton(_format_figure_size(size).replace(" mm", ""))
+        button.setObjectName("sizeButton")
+        button.setCheckable(True)
+        button.setFixedSize(72, 32)
+        button.clicked.connect(lambda _checked=False, value=size: state["_select_figure_size"](value))
+        refine_size_buttons[size] = button
+        size_grid.addWidget(button, index // 3, index % 3)
+    page_layout.addLayout(size_grid)
+    page_layout.addWidget(QtWidgets.QLabel("Export Formats"))
+    page_layout.addWidget(QtWidgets.QLabel("PDF · TIFF 300 dpi"))
+    page_layout.addStretch(1)
+    tab_widget.addTab(page_tab, "Page")
+
+    axes_tab = QtWidgets.QWidget()
+    axes_layout = QtWidgets.QVBoxLayout(axes_tab)
+    axes_layout.setContentsMargins(12, 12, 12, 12)
+    axes_layout.setSpacing(8)
+    axes_layout.addWidget(QtWidgets.QLabel("X Axis Label"))
+    axes_layout.addWidget(QtWidgets.QLabel("From Setup inspector"))
+    axes_layout.addWidget(QtWidgets.QLabel("Y Axis Label"))
+    axes_layout.addWidget(QtWidgets.QLabel("From Setup inspector"))
+    axes_layout.addStretch(1)
+    tab_widget.addTab(axes_tab, "Axes")
+
+    series_tab = QtWidgets.QWidget()
+    series_layout = QtWidgets.QVBoxLayout(series_tab)
+    series_layout.setContentsMargins(12, 12, 12, 12)
+    series_layout.setSpacing(6)
+    series_title = QtWidgets.QLabel("Series Order & Names")
+    series_title.setObjectName("tabSectionTitle")
+    series_layout.addWidget(series_title)
+    series_list = QtWidgets.QListWidget()
+    series_list.setObjectName("seriesList")
+    series_list.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
+    series_list.setDefaultDropAction(QtCore.Qt.DropAction.MoveAction)
+    series_layout.addWidget(series_list, 1)
+    tab_widget.addTab(series_tab, "Series")
+
+    legend_tab = QtWidgets.QWidget()
+    legend_layout = QtWidgets.QVBoxLayout(legend_tab)
+    legend_layout.setContentsMargins(12, 12, 12, 12)
+    legend_layout.setSpacing(10)
+    legend_layout.addWidget(QtWidgets.QLabel("Legend Position"))
+    pos_grid = QtWidgets.QGridLayout()
+    for index, label in enumerate(["UR", "UL", "Auto", "LR", "LL"]):
+        button = QtWidgets.QPushButton(label)
+        button.setObjectName("legendPosButton")
+        button.setFixedSize(64, 34)
+        button.setCheckable(True)
+        pos_grid.addWidget(button, index // 3, index % 3)
+    legend_layout.addLayout(pos_grid)
+    legend_layout.addWidget(QtWidgets.QLabel("Label Mode"))
+    legend_mode = QtWidgets.QComboBox()
+    legend_mode.addItems(["Legend", "Inline", "Auto"])
+    legend_layout.addWidget(legend_mode)
+    legend_layout.addStretch(1)
+    tab_widget.addTab(legend_tab, "Legend")
+
+    export_tab = QtWidgets.QWidget()
+    export_layout = QtWidgets.QVBoxLayout(export_tab)
+    export_layout.setContentsMargins(12, 12, 12, 12)
+    export_layout.setSpacing(8)
+    export_layout.addWidget(QtWidgets.QLabel("Output"))
+    output_label = QtWidgets.QLabel("Export after generating a figure.")
+    output_label.setObjectName("inspectorMeta")
+    output_label.setWordWrap(True)
+    export_layout.addWidget(output_label)
+    export_layout.addStretch(1)
+    tab_widget.addTab(export_tab, "Export")
+
+    command_bar = QtWidgets.QWidget()
+    command_layout = QtWidgets.QHBoxLayout(command_bar)
+    command_layout.setContentsMargins(12, 8, 12, 8)
+    command_layout.setSpacing(6)
+    preview_btn = QtWidgets.QPushButton("Preview")
+    preview_btn.setObjectName("outlineButton")
+    apply_btn = QtWidgets.QPushButton("Apply")
+    apply_btn.setObjectName("outlineButton")
+    reset_btn = QtWidgets.QPushButton("Reset")
+    reset_btn.setObjectName("ghostButton")
+    preview_btn.setEnabled(False)
+    apply_btn.setEnabled(False)
+    reset_btn.setEnabled(False)
+    command_layout.addWidget(preview_btn)
+    command_layout.addWidget(apply_btn)
+    command_layout.addWidget(reset_btn)
+
+    main_layout.addWidget(tab_widget, 1)
+    main_layout.addWidget(command_bar)
+    controls.update(
+        {
+            "refine_size_buttons": refine_size_buttons,
+            "series_list": series_list,
+            "output_label": output_label,
+            "preview_btn": preview_btn,
+            "apply_btn": apply_btn,
+            "reset_btn": reset_btn,
+        }
+    )
+    return container
+
+
+def _build_inspector(parent: Any, state: dict[str, Any], controls: dict[str, Any]) -> dict[str, Any]:
+    from PyQt6 import QtWidgets
+
+    panel = QtWidgets.QFrame(parent)
+    panel.setObjectName("inspectorPanel")
+    panel.setFixedWidth(300)
+    panel.setMinimumWidth(280)
+
+    layout = QtWidgets.QVBoxLayout(panel)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+
+    inspector_stack = QtWidgets.QStackedWidget()
+    inspector_stack.setObjectName("inspectorStack")
+    setup_inspector = _build_setup_inspector(state, controls)
+    refine_inspector = _build_refine_inspector(state, controls)
+    inspector_stack.addWidget(setup_inspector)
+    inspector_stack.addWidget(refine_inspector)
+    layout.addWidget(inspector_stack)
+
+    return {
+        "panel": panel,
+        "stack": inspector_stack,
+        "setup_inspector": setup_inspector,
+        "refine_inspector": refine_inspector,
+    }
+
+
+def _build_refine_workspace(state: dict[str, Any], controls: dict[str, Any]) -> Any:
+    from PyQt6 import QtCore, QtWidgets
+
+    refine_workspace = QtWidgets.QWidget()
+    refine_workspace.setObjectName("refineWorkspace")
+    layout = QtWidgets.QVBoxLayout(refine_workspace)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+
+    canvas = QtWidgets.QFrame()
+    canvas.setObjectName("canvasSurface")
+    canvas_layout = QtWidgets.QVBoxLayout(canvas)
+    canvas_layout.setContentsMargins(42, 42, 42, 42)
+    canvas_layout.setSpacing(0)
+
+    preview_label = QtWidgets.QLabel("Generate a figure to preview it here.")
+    preview_label.setObjectName("figurePreview")
+    preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+    preview_label.setMinimumSize(640, 480)
+    canvas_layout.addWidget(preview_label, 1)
+    layout.addWidget(canvas, 1)
+    controls["preview_label"] = preview_label
+    controls["canvas_surface"] = canvas
+    return refine_workspace
+
+
+def _build_central_area(
+    shell: Any,
+    rail_widgets: dict[str, Any],
+    setup_workspace: Any,
+    refine_workspace: Any,
+    inspector_widgets: dict[str, Any],
+) -> dict[str, Any]:
+    from PyQt6 import QtWidgets
+
+    central = QtWidgets.QWidget()
+    central.setObjectName("centralArea")
+    shell.setCentralWidget(central)
+
+    layout = QtWidgets.QHBoxLayout(central)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+    layout.addWidget(rail_widgets["rail"])
+
+    stack = QtWidgets.QStackedWidget()
+    stack.setObjectName("studioWorkspaceStack")
+    stack.addWidget(setup_workspace)
+    stack.addWidget(refine_workspace)
+    layout.addWidget(stack, 1)
+    layout.addWidget(inspector_widgets["panel"])
+    return {"central": central, "stack": stack}
+
+
+def _build_status_bar(shell: Any) -> dict[str, Any]:
+    from PyQt6 import QtWidgets
+
+    bar = QtWidgets.QStatusBar(shell)
+    bar.setObjectName("studioStatusBar")
+    bar.setSizeGripEnabled(False)
+    status_indicator = QtWidgets.QLabel("Ready")
+    status_indicator.setObjectName("statusText")
+    info_label = QtWidgets.QLabel("")
+    info_label.setObjectName("statusText")
+    bar.addWidget(status_indicator)
+    bar.addPermanentWidget(info_label, 1)
+    shell.setStatusBar(bar)
+    return {"bar": bar, "status_indicator": status_indicator, "info_label": info_label}
+
+
+def _update_status_bar(status_widgets: dict[str, Any], state: dict[str, Any]) -> None:
+    if not status_widgets:
+        return
+    if state.get("document_path"):
+        lead = "Figure ready"
+    elif state.get("files_loaded"):
+        lead = f"{state.get('file_count', 1)} file loaded"
+    else:
+        lead = "Awaiting data"
+    parts = [lead]
+    sample_count = state.get("sample_count")
+    if sample_count:
+        parts.append(f"{sample_count} samples")
+    family = state.get("experiment_family")
+    if family:
+        parts.append(str(family))
+    if state.get("figure_size"):
+        parts.append(_format_figure_size(str(state["figure_size"])))
+    if state.get("qa_status"):
+        parts.append(str(state["qa_status"]))
+    status_widgets["info_label"].setText(" · ".join(parts))
 
 
 def _create_refine_surface() -> dict[str, Any]:
@@ -1132,196 +2359,144 @@ def _create_sciplot_studio_shell(
     template: str | None,
     project_name: str | None,
 ) -> Any:
-    from PyQt6 import QtCore, QtGui, QtWidgets
+    from PyQt6 import QtWidgets
 
     session = prepare_intake_session(source_path, output_root=output_root)
     selected_template = _normalize_optional_string(template) or _template_from_session(session)
     selected_project_name = _normalize_optional_string(project_name) or str(
         session.get("project_name") or source_path.stem
     )
+    selected_size = "120x110" if selected_template in STACKED_TEMPLATE_IDS else "60x55"
+    selected_family = "spectroscopy" if selected_template in STACKED_TEMPLATE_IDS else "rheology"
 
     shell = QtWidgets.QMainWindow()
     shell.setWindowTitle("SciPlot Studio")
+    shell.setMinimumSize(1120, 720)
     _apply_sciplot_shell_style(shell)
 
-    stack = QtWidgets.QStackedWidget()
-    stack.setObjectName("studioWorkspaceStack")
-    shell.setCentralWidget(stack)
-
     state: dict[str, Any] = {
+        "shell": shell,
+        "output_root": output_root,
+        "source_path": source_path,
+        "project_name": selected_project_name,
+        "selected_template": selected_template,
+        "selected_family": selected_family,
+        "figure_size": selected_size,
+        "experiment_family": _experiment_family_label(session),
+        "source_file_names": _session_file_names(session, source_path),
+        "files_loaded": True,
+        "file_count": len(_session_file_names(session, source_path)),
+        "sample_count": len(_session_groups(session)),
         "project_dir": None,
         "request_path": None,
         "document_path": None,
         "preview_path": None,
         "exports": list(EXPORT_FORMATS),
+        "review_path": None,
+        "delivery_path": None,
     }
+    state["_select_template_id"] = lambda _value: None
+    state["_select_figure_size"] = lambda _value: None
     _add_sciplot_view_menu(shell, state)
 
-    toolbar = QtWidgets.QToolBar("SciPlot")
-    toolbar.setObjectName("sciplotPrimaryToolbar")
-    toolbar.setMovable(False)
-    shell.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
-    open_data_action = QtGui.QAction("Open Data", shell)
-    open_project_action = QtGui.QAction("Open Project", shell)
-    back_action = QtGui.QAction("Back to Setup", shell)
-    generate_action = QtGui.QAction("Generate", shell)
-    export_action = QtGui.QAction("Export", shell)
-    review_action = QtGui.QAction("Review", shell)
-    delivery_action = QtGui.QAction("Delivery", shell)
-    back_action.setEnabled(False)
-    export_action.setEnabled(False)
-    review_action.setEnabled(False)
-    delivery_action.setEnabled(False)
-    toolbar.addAction(open_data_action)
-    toolbar.addAction(open_project_action)
-    toolbar.addSeparator()
-    toolbar.addAction(back_action)
-    toolbar.addSeparator()
-    toolbar.addAction(generate_action)
-    toolbar.addAction(export_action)
-    toolbar.addSeparator()
-    toolbar.addAction(review_action)
-    toolbar.addAction(delivery_action)
+    controls: dict[str, Any] = {}
+    top_widgets = _build_top_bar(shell, state)
+    rail_widgets = _build_stage_rail(shell, state)
+    setup_workspace = _build_setup_workspace(state, session, controls)
+    refine_workspace = _build_refine_workspace(state, controls)
+    inspector_widgets = _build_inspector(shell, state, controls)
+    central_widgets = _build_central_area(shell, rail_widgets, setup_workspace, refine_workspace, inspector_widgets)
+    status_widgets = _build_status_bar(shell)
+    stack = central_widgets["stack"]
 
-    setup_workspace = QtWidgets.QWidget()
-    setup_workspace.setObjectName("setupWorkspace")
-    setup_layout = QtWidgets.QVBoxLayout(setup_workspace)
-    _set_layout_margins(setup_layout)
-    title = QtWidgets.QLabel("Setup Workspace")
-    title.setObjectName("workspaceTitle")
-    hint = QtWidgets.QLabel("Choose the template, sample names, axes, size, and export formats before generating.")
-    hint.setObjectName("workspaceHint")
-    setup_layout.addWidget(title)
-    setup_layout.addWidget(hint)
-    splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
-    setup_layout.addWidget(splitter, 1)
+    def sync_template_controls() -> None:
+        template_id = str(state.get("selected_template") or "curve")
+        for button_id, button in controls.get("template_buttons", {}).items():
+            _set_button_checked(button, button_id == template_id)
+        for card in state.get("template_cards", []):
+            card.setProperty("selected", str(getattr(card, "family_id", "")) == str(state.get("selected_family")))
+            _refresh_qss(card)
+        label_mode_combo = controls.get("label_mode_combo")
+        if label_mode_combo is not None:
+            desired = "inline" if template_id in STACKED_TEMPLATE_IDS else "legend"
+            index = label_mode_combo.findData(desired)
+            if index >= 0:
+                label_mode_combo.setCurrentIndex(index)
+        top_widgets["experiment_badge"].setText(str(state.get("experiment_family") or "Auto"))
 
-    source_box = _group_box("Sources")
-    source_box.setMinimumWidth(260)
-    source_layout = QtWidgets.QVBoxLayout(source_box)
-    _set_layout_margins(source_layout)
-    form = QtWidgets.QFormLayout()
-    source_edit = QtWidgets.QLineEdit(str(source_path))
-    source_edit.setReadOnly(True)
-    form.addRow("Data", source_edit)
-    name_edit = QtWidgets.QLineEdit(selected_project_name)
-    form.addRow("Project", name_edit)
-    source_layout.addLayout(form)
-    status_label = QtWidgets.QLabel(_session_summary(session))
-    status_label.setObjectName("studioStatus")
-    status_label.setWordWrap(True)
-    source_layout.addWidget(status_label)
-    source_layout.addStretch(1)
+    def select_template_id(value: str) -> None:
+        state["selected_template"] = value
+        matching = next((item for item in _template_card_specs() if item["template"] == value), None)
+        if matching is not None:
+            state["selected_family"] = matching["family"]
+        sync_template_controls()
 
-    mapping_box = _group_box("Mapping")
-    mapping_box.setMinimumWidth(360)
-    mapping_layout = QtWidgets.QVBoxLayout(mapping_box)
-    _set_layout_margins(mapping_layout)
-    groups_table = QtWidgets.QTableWidget()
-    groups_table.setObjectName("mappingGroupsTable")
-    groups_table.setColumnCount(2)
-    groups_table.setHorizontalHeaderLabels(["Legend", "Files"])
-    groups_table.horizontalHeader().setStretchLastSection(True)
-    _populate_groups_table(groups_table, _session_groups(session))
-    mapping_layout.addWidget(groups_table, 1)
-    order_actions = QtWidgets.QHBoxLayout()
-    move_up_button = QtWidgets.QPushButton("Up")
-    move_down_button = QtWidgets.QPushButton("Down")
-    can_reorder_groups = groups_table.rowCount() > 1
-    move_up_button.setEnabled(can_reorder_groups)
-    move_down_button.setEnabled(can_reorder_groups)
-    order_actions.addWidget(move_up_button)
-    order_actions.addWidget(move_down_button)
-    mapping_layout.addLayout(order_actions)
+    def sync_size_controls() -> None:
+        value = str(state.get("figure_size") or "60x55")
+        top_widgets["size_badge"].setText(_format_figure_size(value))
+        for group_name in ("size_buttons", "refine_size_buttons"):
+            for size, button in controls.get(group_name, {}).items():
+                _set_button_checked(button, size == value)
+        _update_status_bar(status_widgets, state)
 
-    figure_box = _group_box("Figure Setup")
-    figure_box.setMinimumWidth(300)
-    figure_box.setMaximumWidth(380)
-    figure_layout = QtWidgets.QVBoxLayout(figure_box)
-    _set_layout_margins(figure_layout)
-    figure_form = QtWidgets.QFormLayout()
-    template_combo = QtWidgets.QComboBox()
-    for template_id, label in _studio_template_choices():
-        template_combo.addItem(label, template_id)
-    template_index = template_combo.findData(selected_template)
-    template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
-    figure_form.addRow("Template", template_combo)
-    size_combo = QtWidgets.QComboBox()
-    for size in FIGURE_SIZE_PRESETS:
-        size_combo.addItem(size, size)
-    size_combo.setCurrentIndex(size_combo.findData("120x110") if selected_template in STACKED_TEMPLATE_IDS else 0)
-    figure_form.addRow("Size", size_combo)
-    x_label_edit = QtWidgets.QLineEdit()
-    x_label_edit.setPlaceholderText("Auto")
-    figure_form.addRow("X label", x_label_edit)
-    y_label_edit = QtWidgets.QLineEdit()
-    y_label_edit.setPlaceholderText("Auto")
-    figure_form.addRow("Y label", y_label_edit)
-    x_min_edit = QtWidgets.QLineEdit()
-    x_min_edit.setPlaceholderText("Auto")
-    x_max_edit = QtWidgets.QLineEdit()
-    x_max_edit.setPlaceholderText("Auto")
-    range_row = QtWidgets.QHBoxLayout()
-    range_row.addWidget(x_min_edit)
-    range_row.addWidget(x_max_edit)
-    figure_form.addRow("X min/max", range_row)
-    reverse_x_check = QtWidgets.QCheckBox("Reverse X")
-    log_x_check = QtWidgets.QCheckBox("Log X")
-    log_y_check = QtWidgets.QCheckBox("Log Y")
-    axes_row = QtWidgets.QHBoxLayout()
-    axes_row.addWidget(reverse_x_check)
-    axes_row.addWidget(log_x_check)
-    axes_row.addWidget(log_y_check)
-    figure_form.addRow("Axes", axes_row)
-    label_mode_combo = QtWidgets.QComboBox()
-    for label, value in (("Legend", "legend"), ("Inline", "inline"), ("Auto", "auto")):
-        label_mode_combo.addItem(label, value)
-    if selected_template in STACKED_TEMPLATE_IDS:
-        label_mode_combo.setCurrentIndex(label_mode_combo.findData("inline"))
-    figure_form.addRow("Labels", label_mode_combo)
-    export_checks: dict[str, Any] = {}
-    export_row = QtWidgets.QHBoxLayout()
-    for fmt in EXPORT_FORMATS:
-        check = QtWidgets.QCheckBox(fmt)
-        check.setChecked(True)
-        export_checks[fmt] = check
-        export_row.addWidget(check)
-    figure_form.addRow("Exports", export_row)
-    figure_layout.addLayout(figure_form)
+    def select_figure_size(value: str) -> None:
+        state["figure_size"] = value
+        sync_size_controls()
 
-    actions = QtWidgets.QHBoxLayout()
-    generate_button = QtWidgets.QPushButton("Generate")
-    generate_button.setObjectName("primaryButton")
-    export_button = QtWidgets.QPushButton("Export")
-    export_button.setEnabled(False)
-    actions.addWidget(generate_button)
-    actions.addWidget(export_button)
-    figure_layout.addLayout(actions)
-    figure_layout.addStretch(1)
+    state["_sync_template_controls"] = sync_template_controls
+    state["_select_template_id"] = select_template_id
+    state["_select_figure_size"] = select_figure_size
 
-    splitter.addWidget(source_box)
-    splitter.addWidget(mapping_box)
-    splitter.addWidget(figure_box)
-    splitter.setStretchFactor(1, 1)
+    def show_size_menu() -> None:
+        from PyQt6 import QtCore
 
-    refine = _create_refine_surface()
-    refine_workspace = refine["workspace"]
-    preview_label = refine["preview_label"]
-    document_label = refine["document_label"]
-    refine_status = refine["status_label"]
-    inspector_export_button = refine["export_button"]
-    review_button = refine["review_button"]
-    delivery_button = refine["delivery_button"]
+        menu = QtWidgets.QMenu(top_widgets["size_badge"])
+        for size in FIGURE_SIZE_PRESETS:
+            action = menu.addAction(_format_figure_size(size))
+            action.setCheckable(True)
+            action.setChecked(size == state.get("figure_size"))
+            action.triggered.connect(lambda _checked=False, value=size: select_figure_size(value))
+        menu.popup(top_widgets["size_badge"].mapToGlobal(QtCore.QPoint(0, top_widgets["size_badge"].height())))
 
-    stack.addWidget(setup_workspace)
-    stack.addWidget(refine_workspace)
+    def set_stage_active(*, setup: bool) -> None:
+        rail_widgets["setup_dot"].setProperty("active", setup)
+        rail_widgets["refine_dot"].setProperty("active", not setup)
+        _refresh_qss(rail_widgets["setup_dot"])
+        _refresh_qss(rail_widgets["refine_dot"])
+
+    def switch_to_setup() -> None:
+        stack.setCurrentWidget(setup_workspace)
+        inspector_widgets["stack"].setCurrentIndex(0)
+        set_stage_active(setup=True)
+        top_widgets["generate_btn"].setVisible(True)
+        top_widgets["export_btn"].setVisible(False)
+        top_widgets["generate_widget_action"].setVisible(True)
+        top_widgets["export_widget_action"].setVisible(False)
+        _update_status_bar(status_widgets, state)
+
+    def switch_to_refine() -> None:
+        if not isinstance(state.get("document_path"), Path):
+            return
+        stack.setCurrentWidget(refine_workspace)
+        inspector_widgets["stack"].setCurrentIndex(1)
+        set_stage_active(setup=False)
+        top_widgets["generate_btn"].setVisible(False)
+        top_widgets["export_btn"].setVisible(True)
+        top_widgets["generate_widget_action"].setVisible(False)
+        top_widgets["export_widget_action"].setVisible(True)
+        _update_status_bar(status_widgets, state)
+
+    state["_switch_to_setup"] = switch_to_setup
+    state["_switch_to_refine"] = switch_to_refine
 
     def refresh_refine_actions() -> None:
         has_document = isinstance(state.get("document_path"), Path)
-        export_action.setEnabled(has_document)
-        export_button.setEnabled(has_document)
-        inspector_export_button.setEnabled(has_document)
-        back_action.setEnabled(has_document)
+        top_widgets["export_btn"].setEnabled(has_document)
+        top_widgets["refine_action"].setEnabled(has_document)
+        rail_widgets["refine_dot"].setEnabled(has_document)
+        controls["preview_btn"].setEnabled(has_document)
+        controls["apply_btn"].setEnabled(has_document)
+        controls["reset_btn"].setEnabled(has_document)
         _set_advanced_editor_enabled(state)
 
     def set_review_targets(run: dict[str, Any] | None) -> None:
@@ -1331,22 +2506,22 @@ def _create_sciplot_studio_shell(
         state["delivery_path"] = delivery_path
         review_enabled = bool(review_path and review_path.exists())
         delivery_enabled = bool(delivery_path and delivery_path.exists())
-        review_action.setEnabled(review_enabled)
-        delivery_action.setEnabled(delivery_enabled)
-        review_button.setEnabled(review_enabled)
-        delivery_button.setEnabled(delivery_enabled)
+        top_widgets["review_action"].setEnabled(review_enabled)
+        top_widgets["delivery_action"].setEnabled(delivery_enabled)
 
     def build_current_project() -> dict[str, Any]:
         edited_session = dict(session)
         edited_session["output_root"] = str(output_root.expanduser().resolve())
+        name_edit = controls["name_edit"]
+        samples_table = controls["samples_table"]
         edited_session["project_name"] = name_edit.text().strip() or source_path.stem or "SciPlot Project"
-        edited_session["groups"] = _groups_from_table(groups_table, _session_groups(session))
+        edited_session["groups"] = _groups_from_samples_table(samples_table, _session_groups(session))
         project = create_intake_project_from_session(edited_session)
         project_dir = Path(str(project["project_dir"])).expanduser().resolve()
         request_path = project_dir / "plot_request.json"
-        selected = str(template_combo.currentData() or "curve")
+        selected = str(state.get("selected_template") or "curve")
         selected_exports = [
-            fmt for fmt, check in export_checks.items() if check.isChecked()
+            fmt for fmt, check in controls["export_checks"].items() if check.isChecked()
         ] or list(EXPORT_FORMATS)
         state["exports"] = selected_exports
         _apply_panel_request_options(
@@ -1354,15 +2529,15 @@ def _create_sciplot_studio_shell(
             request_path=request_path,
             exports=selected_exports,
             render_options=_panel_render_options(
-                size=str(size_combo.currentData() or "60x55"),
-                x_label=x_label_edit.text(),
-                y_label=y_label_edit.text(),
-                x_min=x_min_edit.text(),
-                x_max=x_max_edit.text(),
-                reverse_x=reverse_x_check.isChecked(),
-                xscale="log" if log_x_check.isChecked() else "linear",
-                yscale="log" if log_y_check.isChecked() else "linear",
-                series_label_mode=str(label_mode_combo.currentData() or "legend"),
+                size=str(state.get("figure_size") or "60x55"),
+                x_label=controls["x_label_edit"].text(),
+                y_label=controls["y_label_edit"].text(),
+                x_min=controls["x_min_edit"].text(),
+                x_max=controls["x_max_edit"].text(),
+                reverse_x=controls["reverse_x_check"].isChecked(),
+                xscale="log" if controls["log_x_check"].isChecked() else "linear",
+                yscale="log" if controls["log_y_check"].isChecked() else "linear",
+                series_label_mode=str(controls["label_mode_combo"].currentData() or "legend"),
             ),
         )
         payload = prepare_studio_document(
@@ -1385,13 +2560,16 @@ def _create_sciplot_studio_shell(
         state["document_path"] = document_path
         preview_path = _ensure_preview_export(document_path)
         state["preview_path"] = preview_path
-        _show_preview_image(preview_label, preview_path)
-        document_label.setText(str(document_path))
-        status_label.setText("Figure generated. Review the preview, then export when ready.")
-        refine_status.setText("Generated preview")
+        _show_preview_image(controls["preview_label"], preview_path)
+        controls["output_label"].setText(str(document_path))
+        controls["series_list"].clear()
+        for group in _groups_from_samples_table(controls["samples_table"], _session_groups(session)):
+            controls["series_list"].addItem(str(group.get("sample") or "Sample"))
+        _add_figure_thumbnail(rail_widgets["thumb_layout"], preview_path, state)
+        state["qa_status"] = "Preview"
         refresh_refine_actions()
         set_review_targets(None)
-        stack.setCurrentWidget(refine_workspace)
+        switch_to_refine()
 
     def generate() -> None:
         try:
@@ -1419,33 +2597,50 @@ def _create_sciplot_studio_shell(
                 exports=exports,
             )
             _register_studio_exports(project_dir, exports, studio_run=studio_run)
-            status_label.setText("Export complete. Review and delivery are available.")
-            refine_status.setText(f"Exported through SciPlot QA · {studio_run['output']}")
+            state["qa_status"] = "Exported through SciPlot QA"
+            controls["output_label"].setText(str(studio_run["output"]))
             set_review_targets(studio_run)
             refresh_refine_actions()
+            _update_status_bar(status_widgets, state)
         except Exception as exc:
             QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
 
-    generate_button.clicked.connect(generate)
-    export_button.clicked.connect(export_current)
-    inspector_export_button.clicked.connect(export_current)
-    review_button.clicked.connect(lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review"))
-    delivery_button.clicked.connect(
-        lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
+    top_widgets["brand"].mousePressEvent = lambda _event: switch_to_setup()
+    rail_widgets["brand_dot"].clicked.connect(switch_to_setup)
+    rail_widgets["setup_dot"].clicked.connect(switch_to_setup)
+    rail_widgets["refine_dot"].clicked.connect(switch_to_refine)
+    top_widgets["size_badge"].clicked.connect(show_size_menu)
+    top_widgets["generate_btn"].clicked.connect(generate)
+    top_widgets["export_btn"].clicked.connect(export_current)
+    top_widgets["open_data_action"].triggered.connect(lambda: _choose_and_open_data(shell, output_root))
+    top_widgets["open_project_action"].triggered.connect(lambda: _choose_and_open_project(shell, output_root))
+    top_widgets["setup_action"].triggered.connect(switch_to_setup)
+    top_widgets["refine_action"].triggered.connect(switch_to_refine)
+    top_widgets["advanced_action"].triggered.connect(
+        lambda: _open_advanced_veusz_editor(shell, state["document_path"])
+        if isinstance(state.get("document_path"), Path)
+        else None
     )
-    move_up_button.clicked.connect(lambda: _move_table_row(groups_table, -1))
-    move_down_button.clicked.connect(lambda: _move_table_row(groups_table, 1))
-    open_data_action.triggered.connect(lambda: _choose_and_open_data(shell, output_root))
-    open_project_action.triggered.connect(lambda: _choose_and_open_project(shell, output_root))
-    back_action.triggered.connect(lambda: stack.setCurrentWidget(setup_workspace))
-    generate_action.triggered.connect(generate)
-    export_action.triggered.connect(export_current)
-    review_action.triggered.connect(
+    top_widgets["review_action"].triggered.connect(
         lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review")
     )
-    delivery_action.triggered.connect(
+    top_widgets["delivery_action"].triggered.connect(
         lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
     )
+
+    sync_template_controls()
+    sync_size_controls()
+    switch_to_setup()
+    refresh_refine_actions()
+    _update_status_bar(status_widgets, state)
+    shell._sciplot_widgets = {
+        "top": top_widgets,
+        "rail": rail_widgets,
+        "central": central_widgets,
+        "inspector": inspector_widgets,
+        "status": status_widgets,
+        "controls": controls,
+    }
     return shell
 
 
