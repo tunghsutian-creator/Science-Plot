@@ -9,8 +9,12 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core._utils import slug
-from sciplot_core.assisted_cleanup import CLEANUP_REQUEST_FILENAME, CLEANUP_RESULT_FILENAME, write_cleanup_request
+from sciplot_core._utils import slug, unique_path
+from sciplot_core.assisted_cleanup import (
+    CLEANUP_REQUEST_FILENAME,
+    consume_ready_cleanup_result,
+    write_cleanup_request,
+)
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.materials_rules import compute_analysis_metrics
 from sciplot_core.one_step import build_one_step_project, build_quality_actions
@@ -21,6 +25,14 @@ from sciplot_core.policy import (
     DELIVERY_DIR,
     layout_policy_for_semantic,
     layout_policy_payload,
+)
+from sciplot_core.publication import (
+    build_publication_intent,
+    build_transform_ledger,
+    build_transform_step,
+    get_publication_profile,
+    link_intent_to_transform_ledger,
+    write_publication_artifacts,
 )
 from sciplot_core.qa import run_qa
 from sciplot_core.render import json_safe, render_to_dir
@@ -78,7 +90,10 @@ def _clear_managed_artifacts(output_dir: Path) -> None:
         "review.html",
         "intervention_request.json",
         CLEANUP_REQUEST_FILENAME,
-        CLEANUP_RESULT_FILENAME,
+        "publication_intent.json",
+        "transform_ledger.json",
+        "journal_profile.json",
+        "publication_qa.json",
     ):
         path = output_dir / filename
         if path.exists():
@@ -99,7 +114,7 @@ def _request_options(request: dict[str, Any]) -> dict[str, Any]:
 def _archive_raw_input(input_path: Path, output_dir: Path) -> dict[str, Any]:
     raw_dir = output_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
-    destination = raw_dir / input_path.name
+    destination = unique_path(raw_dir, input_path.name)
     if input_path.is_dir():
         shutil.copytree(input_path, destination)
         kind = "directory"
@@ -700,6 +715,10 @@ def _update_intake_project_after_run(request_path: Path, manifest: dict[str, Any
         "delivery_package": manifest.get("delivery_package", {}),
         "layout_quality": manifest.get("layout_quality", {}),
         "one_step": manifest.get("one_step", {}),
+        "publication_intent": manifest.get("publication_intent", {}),
+        "transform_ledger": manifest.get("transform_ledger", {}),
+        "journal_profile": manifest.get("journal_profile", {}),
+        "publication_qa": manifest.get("publication_qa", {}),
     }
     if isinstance(manifest.get("study_model"), dict):
         project_manifest["study_model"] = manifest["study_model"]
@@ -712,6 +731,9 @@ def _update_intake_project_after_run(request_path: Path, manifest: dict[str, Any
         project_manifest["delivery_package"] = manifest["delivery_package"]
     if isinstance(manifest.get("one_step"), dict):
         project_manifest["one_step"] = manifest["one_step"]
+    for key in ("publication_intent", "transform_ledger", "journal_profile", "publication_qa"):
+        if isinstance(manifest.get(key), dict):
+            project_manifest[key] = manifest[key]
     intake_manifest_path.write_text(
         json.dumps(json_safe(project_manifest), indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -730,13 +752,21 @@ def _update_intake_project_after_run(request_path: Path, manifest: dict[str, Any
 
 def run_request(request_path: Path) -> dict[str, Any]:
     request_path = request_path.expanduser().resolve()
-    request = _load_request(request_path)
+    source_request = _load_request(request_path)
     base_dir = request_path.parent
-    input_path = _resolve_request_path(request.get("input"), base_dir=base_dir, field="input")
-    output_dir = _resolve_request_path(request.get("output"), base_dir=base_dir, field="output")
+    original_input_path = _resolve_request_path(source_request.get("input"), base_dir=base_dir, field="input")
+    output_dir = _resolve_request_path(source_request.get("output"), base_dir=base_dir, field="output")
     output_dir.mkdir(parents=True, exist_ok=True)
+    request, cleanup_application = consume_ready_cleanup_result(
+        source_request,
+        output_dir=output_dir,
+        request_path=request_path,
+    )
+    input_path = _resolve_request_path(request.get("input"), base_dir=base_dir, field="input")
     _clear_managed_artifacts(output_dir)
     raw_archive = _archive_raw_input(input_path, output_dir)
+    if cleanup_application is not None and original_input_path.resolve() != input_path.resolve():
+        raw_archive["pre_cleanup_input"] = _archive_raw_input(original_input_path, output_dir)
     (output_dir / "request_snapshot.json").write_text(
         json.dumps(request, indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -745,51 +775,80 @@ def run_request(request_path: Path) -> dict[str, Any]:
     requested_rule_id = request.get("rule_id") if isinstance(request.get("rule_id"), str) else None
     semantic = classify_source(input_path, requested_rule_id=requested_rule_id)
     study_model = study_model_from_request(request=request, semantic=semantic, input_path=input_path)
+    publication_intent = build_publication_intent(
+        study_model,
+        request=request,
+        existing=request.get("publication_intent")
+        if isinstance(request.get("publication_intent"), dict)
+        else None,
+    )
+    publication_profile = get_publication_profile(publication_intent["target_profile_id"])
+    transform_steps: list[dict[str, Any]] = []
+    if cleanup_application is not None:
+        transform_steps.append(
+            build_transform_step(
+                step_id="assisted_cleanup",
+                operation="confirmed_cleanup",
+                input_path=original_input_path,
+                output_path=input_path,
+                implementation_ref="sciplot_core.assisted_cleanup.consume_ready_cleanup_result",
+                parameters={
+                    "cleanup_result": cleanup_application["cleanup_result"],
+                    "mapping_proposal": cleanup_application["mapping_proposal"],
+                    "request_patch": cleanup_application["request_patch"],
+                    "human_confirmed": True,
+                },
+            )
+        )
     layout_policy = layout_policy_for_semantic(semantic, template=request.get("template"))
     final_recipe: str | None = None
 
     use_auto = request.get("recipe") == "auto" or (
         not request.get("recipe") and not request.get("template")
     )
+    pending_rule_blocked = semantic.get("rule_readiness") == "pending"
+    if semantic.get("needs_ai_intervention") and (use_auto or pending_rule_blocked):
+        intervention = build_intervention_request(
+            input_path=input_path,
+            output_dir=output_dir,
+            semantic=semantic,
+            request=request,
+        )
+        (output_dir / "intervention_request.json").write_text(
+            json.dumps(json_safe(intervention), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        write_cleanup_request(
+            output_dir,
+            input_path=input_path,
+            reason=str(intervention.get("category") or "semantic_intervention"),
+            semantic=semantic,
+            request=request,
+            intervention_request=output_dir / "intervention_request.json",
+            provider="codex",
+        )
+        one_step_status = build_one_step_project(
+            input_path=input_path,
+            request_path=request_path,
+            request=request,
+            semantic=semantic,
+            raw_archive=raw_archive,
+            study_model=study_model,
+            layout_policy=layout_policy,
+            layout_quality={},
+            qa=None,
+            delivery_package=None,
+            intervention_request=intervention,
+        )
+        _write_one_step_status(output_dir, one_step_status)
+        if pending_rule_blocked:
+            failure = f"Requested material rule `{semantic.get('rule_id')}` is pending fixture-backed acceptance."
+        else:
+            failure = "SciPlot could not auto-detect this input."
+        raise ValueError(
+            f"{failure} Intervention request written to {output_dir / 'intervention_request.json'}."
+        )
     if use_auto:
-        if semantic.get("needs_ai_intervention"):
-            intervention = build_intervention_request(
-                input_path=input_path,
-                output_dir=output_dir,
-                semantic=semantic,
-                request=request,
-            )
-            (output_dir / "intervention_request.json").write_text(
-                json.dumps(json_safe(intervention), indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            write_cleanup_request(
-                output_dir,
-                input_path=input_path,
-                reason=str(intervention.get("category") or "semantic_intervention"),
-                semantic=semantic,
-                request=request,
-                intervention_request=output_dir / "intervention_request.json",
-                provider="codex",
-            )
-            one_step_status = build_one_step_project(
-                input_path=input_path,
-                request_path=request_path,
-                request=request,
-                semantic=semantic,
-                raw_archive=raw_archive,
-                study_model=study_model,
-                layout_policy=layout_policy,
-                layout_quality={},
-                qa=None,
-                delivery_package=None,
-                intervention_request=intervention,
-            )
-            _write_one_step_status(output_dir, one_step_status)
-            raise ValueError(
-                "SciPlot could not auto-detect this input. "
-                f"Intervention request written to {output_dir / 'intervention_request.json'}."
-            )
         route = "auto"
         final_recipe = semantic.get("recommended_recipe")
         prepared = prepare_semantic_source(
@@ -800,6 +859,11 @@ def run_request(request_path: Path) -> dict[str, Any]:
             series_order=request.get("series_order"),
             column_confirmations=request.get("column_confirmations"),
             replicate_mode=request.get("replicate_mode"),
+        )
+        transform_steps.extend(
+            step
+            for step in prepared.get("transform_steps", [])
+            if isinstance(step, dict)
         )
         render_options = dict(semantic.get("render_options") or {})
         request_render_options = request.get("render_options")
@@ -855,6 +919,11 @@ def run_request(request_path: Path) -> dict[str, Any]:
             output_dir=output_dir,
             options=_request_options(request),
         )
+        transform_steps.extend(
+            step
+            for step in result.get("transform_steps", [])
+            if isinstance(step, dict)
+        )
     else:
         route = "render"
         template = request.get("template")
@@ -871,7 +940,36 @@ def run_request(request_path: Path) -> dict[str, Any]:
         )
         _write_render_report(output_dir, request=request, result=result)
 
-    qa = run_qa(output_dir)
+    transform_ledger = build_transform_ledger(
+        study_model,
+        request=request,
+        input_path=input_path,
+        steps=transform_steps,
+        existing=request.get("transform_ledger")
+        if isinstance(request.get("transform_ledger"), dict)
+        else None,
+    )
+    publication_intent = link_intent_to_transform_ledger(publication_intent, transform_ledger)
+    study_model["publication_intent_ref"] = "publication_intent.json"
+    publication_artifacts = write_publication_artifacts(
+        output_dir,
+        publication_intent=publication_intent,
+        transform_ledger=transform_ledger,
+        publication_profile=publication_profile,
+    )
+    qa = run_qa(
+        output_dir,
+        publication_profile=publication_profile,
+        strict_publication=bool(request.get("publication_strict")),
+    )
+    publication_qa = qa.get("publication") if isinstance(qa.get("publication"), dict) else {}
+    publication_artifacts = write_publication_artifacts(
+        output_dir,
+        publication_intent=publication_intent,
+        transform_ledger=transform_ledger,
+        publication_profile=publication_profile,
+        publication_qa=publication_qa,
+    )
     figures = _figures_from_result(result)
     analysis_metrics = result.get("analysis_metrics") if isinstance(result.get("analysis_metrics"), list) else []
     study_model = attach_run_artifacts_to_study_model(
@@ -886,6 +984,8 @@ def run_request(request_path: Path) -> dict[str, Any]:
         "created_at": datetime.now(UTC).isoformat(),
         "request_path": str(request_path),
         "request": json_safe(request),
+        "source_request": json_safe(source_request),
+        "cleanup_application": json_safe(cleanup_application) if cleanup_application is not None else None,
         "route": route,
         "semantic": json_safe(semantic),
         "final_recipe": final_recipe,
@@ -895,6 +995,11 @@ def run_request(request_path: Path) -> dict[str, Any]:
         "figures": figures,
         "result": json_safe(result),
         "study_model": json_safe(study_model),
+        "publication_intent": json_safe(publication_intent),
+        "transform_ledger": json_safe(transform_ledger),
+        "journal_profile": json_safe(publication_profile),
+        "publication_qa": json_safe(publication_qa),
+        "publication_artifacts": json_safe(publication_artifacts),
         "qa": qa,
         "render_engine": result.get("render_engine") or "veusz",
         "qa_target": result.get("qa_target") or "veusz_export",

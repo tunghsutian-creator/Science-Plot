@@ -28,8 +28,9 @@ from sciplot_core._utils import (
 from sciplot_core._utils import (
     token as _token,
 )
-from sciplot_core.materials_rules import match_rule, semantic_payload_from_rule
+from sciplot_core.materials_rules import get_rule, match_rule, semantic_payload_from_rule
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload
+from sciplot_core.publication import build_transform_step
 
 ensure_legacy_core()
 
@@ -173,6 +174,17 @@ def classify_source(
         requested_rule_id=requested_rule_id,
     )
     if matched_rule is not None:
+        if matched_rule.fixture_status != "ready":
+            return semantic_payload_from_rule(
+                matched_rule,
+                confidence=0.0,
+                reason=(
+                    f"Explicitly requested material rule `{matched_rule.rule_id}` is pending "
+                    "fixture-backed acceptance and cannot run in deterministic mode."
+                ),
+                vendor_model=vendor_model,
+                vendor_error=vendor_error,
+            )
         confidence = 96.0 if requested_rule_id else max(80.0, 98.0 - matched_rule.priority / 2)
         return semantic_payload_from_rule(
             matched_rule,
@@ -244,13 +256,13 @@ def classify_source(
         )
 
     if "impact" in compact_evidence or "冲击" in evidence:
-        return _classification(
-            semantic_family="impact_metric",
-            recommended_recipe="metrics_swelling",
-            template=_template_from_vendor(vendor_inspection, "box"),
-            render_options=_render_options_from_vendor(vendor_inspection),
-            confidence=85.0,
-            reason="Detected impact or impact-resistance metric data.",
+        return semantic_payload_from_rule(
+            get_rule("impact_metric"),
+            confidence=0.0,
+            reason=(
+                "Detected impact metric data, but its categorical/replicate Veusz contract is pending "
+                "fixture-backed acceptance."
+            ),
             vendor_model=vendor_model,
             vendor_error=vendor_error,
         )
@@ -1363,6 +1375,98 @@ def _write_curve_table(series_list: list[CurveSeriesPayload], output_path: Path)
     pd.DataFrame(rows).to_csv(output_path, header=False, index=False)
 
 
+def _ftir_source_files(source: Path) -> list[Path]:
+    suffixes = {".csv", ".tsv", ".txt"}
+    if source.is_file() and source.suffix.lower() in suffixes:
+        return [source]
+    if not source.is_dir():
+        return []
+    return sorted(
+        (path for path in source.iterdir() if path.is_file() and path.suffix.lower() in suffixes),
+        key=lambda path: path.name.casefold(),
+    )
+
+
+def _read_headerless_ftir_series(source: Path) -> CurveSeriesPayload:
+    raw: pd.DataFrame | None = None
+    last_error: Exception | None = None
+    for encoding in ("utf-8-sig", "utf-8", "gb18030", "gbk", "latin-1"):
+        try:
+            raw = pd.read_csv(source, header=None, sep=None, engine="python", encoding=encoding)
+            break
+        except Exception as exc:
+            last_error = exc
+    if raw is None:
+        raise ValueError(f"Could not read FTIR spectrum {source}.") from last_error
+    raw = raw.dropna(how="all").dropna(axis=1, how="all")
+    numeric = raw.apply(pd.to_numeric, errors="coerce")
+    best_points: list[tuple[float, float]] = []
+    for x_index in range(max(0, numeric.shape[1] - 1)):
+        y_index = x_index + 1
+        points = [
+            (float(x_value), float(y_value))
+            for x_value, y_value in zip(numeric.iloc[:, x_index], numeric.iloc[:, y_index], strict=False)
+            if pd.notna(x_value) and pd.notna(y_value)
+        ]
+        if len(points) > len(best_points):
+            best_points = points
+    if len(best_points) < 4:
+        raise ValueError(f"No numeric two-column FTIR spectrum found in {source}.")
+    x_values = [point[0] for point in best_points]
+    if min(x_values) < 50.0 or max(x_values) > 10000.0 or max(x_values) - min(x_values) < 100.0:
+        raise ValueError(f"FTIR wavenumber range is not plausible in {source}.")
+    return CurveSeriesPayload(
+        sample=_source_display_sample(source),
+        x_label="Wavenumber",
+        x_unit="cm^-1",
+        y_label="Transmittance",
+        y_unit="%",
+        points=tuple(best_points),
+    )
+
+
+def _read_ftir_series(source: Path) -> list[CurveSeriesPayload]:
+    structured = _scan_curve_series_source(
+        source,
+        x_aliases=("wavenumber", "cm-1", "cm^-1"),
+        y_aliases=("transmittance", "%t", "absorbance"),
+        x_label="Wavenumber",
+        y_label="Transmittance",
+        default_x_unit="cm^-1",
+        default_y_unit="%",
+        sample_prefix=source.stem,
+    )
+    if len(structured) == 1:
+        series = structured[0]
+        return [
+            CurveSeriesPayload(
+                sample=_source_display_sample(source),
+                x_label=series.x_label,
+                x_unit=series.x_unit,
+                y_label=series.y_label,
+                y_unit=series.y_unit,
+                points=series.points,
+            )
+        ]
+    if structured:
+        return structured
+    return [_read_headerless_ftir_series(source)]
+
+
+def _read_ftir_series_list(source: Path) -> list[CurveSeriesPayload]:
+    series_list: list[CurveSeriesPayload] = []
+    errors: list[str] = []
+    for path in _ftir_source_files(source):
+        try:
+            series_list.extend(_read_ftir_series(path))
+        except ValueError as exc:
+            errors.append(f"{path.name}: {exc}")
+    if not series_list:
+        detail = "; ".join(errors[:3])
+        raise ValueError(f"No FTIR spectra found under {source}. {detail}".strip())
+    return series_list
+
+
 def _series_order_map(series_order: object) -> dict[str, int]:
     if not isinstance(series_order, list | tuple):
         return {}
@@ -1812,6 +1916,33 @@ def _has_intake_grouped_series(series_list: list[CurveSeriesPayload]) -> bool:
     return any(_intake_group_name(series.sample) for series in series_list)
 
 
+def _semantic_preparation_result(
+    source: Path,
+    *,
+    processed_source: Path | None,
+    operation: str,
+    parameters: dict[str, Any] | None = None,
+    additional_outputs: tuple[Path, ...] = (),
+) -> dict[str, Any]:
+    output_path = processed_source if processed_source is not None else source
+    return {
+        "source": str(output_path),
+        "processed": processed_source is not None,
+        "processed_source": str(processed_source) if processed_source is not None else None,
+        "transform_steps": [
+            build_transform_step(
+                step_id="semantic_preparation",
+                operation=operation,
+                input_path=source,
+                output_path=output_path,
+                implementation_ref="sciplot_core.semantic.prepare_semantic_source",
+                parameters=parameters,
+                additional_outputs=additional_outputs,
+            )
+        ],
+    }
+
+
 def prepare_semantic_source(
     input_path: str | Path,
     *,
@@ -1838,6 +1969,8 @@ def prepare_semantic_source(
                 default_x_unit="rad/s",
                 metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
             )
+        source_sample_count = len(samples)
+        source_sample_files = [str(sample.source) for sample in samples]
         samples = _coalesce_replicate_sweep_samples(samples, replicate_mode=replicate_mode)
         samples = _ordered_sweep_samples(samples, series_order=series_order)
         if not samples:
@@ -1850,7 +1983,21 @@ def prepare_semantic_source(
             comparison_sheet="Frequency_Comparison",
             metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
         )
-        return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
+        return _semantic_preparation_result(
+            source,
+            processed_source=processed_source,
+            operation="aggregate_rheology_frequency_replicates",
+            parameters={
+                "replicate_mode": _normalized_replicate_mode(replicate_mode),
+                "source_sample_count": source_sample_count,
+                "output_sample_count": len(samples),
+                "source_sample_files": source_sample_files,
+                "output_sample_labels": [sample.sample for sample in samples],
+                "mean_definition": "arithmetic mean at exactly matching x values",
+                "representative_definition": "longest trace then closest terminal storage modulus to group median",
+                "series_order": list(series_order) if isinstance(series_order, list | tuple) else [],
+            },
+        )
 
     if family == "rheology_temperature_sweep" and source.is_dir():
         processed_source = processed_dir / "rheology_temperature_comparison.xlsx"
@@ -1863,6 +2010,8 @@ def prepare_semantic_source(
                 default_x_unit="°C",
                 metrics=_RHEOLOGY_SWEEP_METRICS,
             )
+        source_sample_count = len(samples)
+        source_sample_files = [str(sample.source) for sample in samples]
         samples = _coalesce_replicate_sweep_samples(samples, replicate_mode=replicate_mode)
         samples = _ordered_sweep_samples(samples, series_order=series_order)
         if not samples:
@@ -1874,7 +2023,21 @@ def prepare_semantic_source(
             processed_source,
             comparison_sheet="Temperature_Comparison",
         )
-        return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
+        return _semantic_preparation_result(
+            source,
+            processed_source=processed_source,
+            operation="aggregate_rheology_temperature_replicates",
+            parameters={
+                "replicate_mode": _normalized_replicate_mode(replicate_mode),
+                "source_sample_count": source_sample_count,
+                "output_sample_count": len(samples),
+                "source_sample_files": source_sample_files,
+                "output_sample_labels": [sample.sample for sample in samples],
+                "mean_definition": "arithmetic mean at exactly matching x values",
+                "representative_definition": "longest trace then closest terminal storage modulus to group median",
+                "series_order": list(series_order) if isinstance(series_order, list | tuple) else [],
+            },
+        )
 
     if family == "rheology_creep":
         processed_source = processed_dir / f"{source.stem}_creep_curve.csv"
@@ -1885,7 +2048,12 @@ def prepare_semantic_source(
             y_unit="1/Pa",
         )
         _write_curve_table([series], processed_source)
-        return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
+        return _semantic_preparation_result(
+            source,
+            processed_source=processed_source,
+            operation="extract_rheology_creep_curve",
+            parameters={"y_metric": "creep_compliance", "unit": "1/Pa"},
+        )
 
     if family == "rheology_stress_relaxation":
         processed_source = processed_dir / f"{source.stem}_stress_relaxation_curve.csv"
@@ -1895,25 +2063,73 @@ def prepare_semantic_source(
         elif source.is_dir():
             series_list = _order_curve_series_by_shared_right_height(series_list)
         _write_curve_table(series_list, processed_source)
-        return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
+        return _semantic_preparation_result(
+            source,
+            processed_source=processed_source,
+            operation="extract_and_normalize_stress_relaxation_curves",
+            parameters={
+                "normalization_definition": (
+                    "divide each normalized source series by its maximum absolute finite y value"
+                ),
+                "series_order": [series.sample for series in series_list],
+                "automatic_visual_ordering": not bool(_series_order_map(series_order)) and source.is_dir(),
+            },
+        )
+
+    if family == "ftir_spectrum":
+        processed_source = processed_dir / "ftir_comparison.csv"
+        series_list = _order_curve_series(_read_ftir_series_list(source), series_order)
+        _write_curve_table(series_list, processed_source)
+        return _semantic_preparation_result(
+            source,
+            processed_source=processed_source,
+            operation="reformat_and_order_ftir_spectra",
+            parameters={"series_order": [series.sample for series in series_list]},
+        )
 
     if family == "tensile_curve" and (source.is_dir() or source.suffix.lower() == ".csv"):
         processed_source = processed_dir / f"{source.stem}_tensile_curves.csv"
         series_list = _read_tensile_export_series_list(source)
+        input_series_labels = [series.sample for series in series_list]
+        representative_applied = False
+        additional_outputs: tuple[Path, ...] = ()
         if _has_intake_grouped_series(series_list):
             all_source = processed_source.with_name(f"{processed_source.stem}_all.csv")
             _write_curve_table(series_list, all_source)
             series_list = _representative_tensile_series(series_list)
+            representative_applied = True
+            additional_outputs = (all_source,)
         series_list = _order_curve_series(series_list, series_order)
         _write_curve_table(series_list, processed_source)
-        return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
+        return _semantic_preparation_result(
+            source,
+            processed_source=processed_source,
+            operation="extract_tensile_curves",
+            parameters={
+                "input_series_labels": input_series_labels,
+                "output_series_labels": [series.sample for series in series_list],
+                "representative_selection_applied": representative_applied,
+                "representative_definition": (
+                    "closest to group median tensile strength, then break strain, with deterministic sample order"
+                    if representative_applied
+                    else None
+                ),
+                "all_series_preserved_in_supporting_output": representative_applied,
+            },
+            additional_outputs=additional_outputs,
+        )
 
     if family == "tensile_curve" and source.suffix.lower() in {".xlsx", ".xls"}:
         processed_source = processed_dir / f"{source.stem}_tensile_workbook_curves.csv"
         series_list = _read_tensile_workbook_series(source)
         series_list = _order_curve_series(series_list, series_order)
         _write_curve_table(series_list, processed_source)
-        return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
+        return _semantic_preparation_result(
+            source,
+            processed_source=processed_source,
+            operation="extract_tensile_workbook_curves",
+            parameters={"series_order": [series.sample for series in series_list]},
+        )
 
     if family == "torque_curve":
         processed_source = processed_dir / "torque_comparison.csv"
@@ -1925,7 +2141,17 @@ def prepare_semantic_source(
         if curation is None and not _series_order_map(series_order):
             series_list = _compact_torque_series_labels(series_list)
         _write_curve_table(series_list, processed_source)
-        return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
+        return _semantic_preparation_result(
+            source,
+            processed_source=processed_source,
+            operation="extract_torque_curves",
+            parameters={
+                "curation_path": str(Path(curation_path).expanduser()) if curation_path is not None else None,
+                "curation_applied": curation is not None,
+                "series_order": [series.sample for series in series_list],
+                "time_zero_or_event_selection_requires_explicit_curation": True,
+            },
+        )
 
     if family == "impact_metric" and source.suffix.lower() in {".xlsx", ".xls", ".csv"}:
         try:
@@ -1934,9 +2160,19 @@ def prepare_semantic_source(
             rows = _read_impact_compact_table(source)
         processed_source = processed_dir / f"{source.stem}_impact_replicates.csv"
         pd.DataFrame(rows).to_csv(processed_source, header=False, index=False)
-        return {"source": str(processed_source), "processed": True, "processed_source": str(processed_source)}
+        return _semantic_preparation_result(
+            source,
+            processed_source=processed_source,
+            operation="extract_impact_replicates",
+            parameters={"replicate_count": len(rows)},
+        )
 
-    return {"source": str(source), "processed": False, "processed_source": None}
+    return _semantic_preparation_result(
+        source,
+        processed_source=None,
+        operation="identity",
+        parameters={"reason": "The input is already plot-ready for the selected semantic family."},
+    )
 
 
 def build_intervention_request(

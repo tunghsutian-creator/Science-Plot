@@ -500,7 +500,7 @@ a { color: inherit; text-decoration: none; }
   min-height: 0;
   display: grid;
   place-items: center;
-  padding: 16px 0 96px;
+  padding: 16px 0;
   overflow: hidden;
 }
 
@@ -519,81 +519,7 @@ a { color: inherit; text-decoration: none; }
   transition: box-shadow var(--motion) var(--ease), transform var(--motion) var(--ease);
 }
 .figure-stage.busy { box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow); }
-.figure-stage img,
-.figure-stage iframe { width: 100%; height: 100%; border: 0; object-fit: contain; background: #fff; }
-
-.figure-stage.interactive { cursor: crosshair; }
-
-.viz-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 1;
-}
-
-.viz-vline,
-.viz-hline {
-  position: absolute;
-  background: rgba(84, 96, 104, 0.45);
-}
-
-.viz-vline {
-  left: var(--vx, 48%);
-  top: 14%;
-  bottom: 14%;
-  width: 1px;
-  border-left: 1px dashed rgba(84, 96, 104, 0.55);
-  background: transparent;
-}
-
-.viz-hline {
-  left: 14%;
-  right: 14%;
-  top: var(--vy, 40%);
-  height: 1px;
-  border-top: 1px dashed rgba(84, 96, 104, 0.45);
-  background: transparent;
-}
-
-.viz-dot {
-  position: absolute;
-  left: var(--vx, 48%);
-  top: var(--vy, 40%);
-  width: 12px;
-  height: 12px;
-  margin: -6px 0 0 -6px;
-  border: 2px solid var(--accent);
-  border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(0, 124, 145, 0.15);
-}
-
-.viz-tooltip {
-  position: absolute;
-  left: min(calc(var(--vx, 48%) + 28px), calc(100% - 190px));
-  top: max(calc(var(--vy, 40%) - 72px), 22px);
-  min-width: 148px;
-  padding: 10px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--shadow-sm);
-  color: var(--ink);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.viz-size-badge {
-  position: absolute;
-  right: 22px;
-  bottom: 22px;
-  padding: 6px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--muted);
-  font-weight: 650;
-}
+.figure-stage img { width: 100%; height: 100%; border: 0; object-fit: contain; background: #fff; }
 
 .empty-state {
   display: grid;
@@ -604,73 +530,6 @@ a { color: inherit; text-decoration: none; }
   padding: 28px;
 }
 .empty-state b { color: var(--ink); }
-
-.floating-tools {
-  position: absolute;
-  left: 50%;
-  bottom: 24px;
-  transform: translateX(-50%);
-  display: inline-flex;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-}
-
-.floating-tools .icon-button {
-  width: 40px;
-  height: 40px;
-  border-color: transparent;
-  background: transparent;
-}
-
-.floating-tools .icon-button.active {
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-color: transparent;
-}
-
-.zoom-pill {
-  height: 40px;
-  min-width: 132px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--surface-soft);
-  color: var(--muted);
-  font-weight: 650;
-}
-
-.zoom-pill .icon-button {
-  width: 24px;
-  height: 24px;
-  color: var(--muted);
-}
-
-.tool-divider {
-  width: 1px;
-  height: 32px;
-  margin: 4px 6px;
-  background: var(--line);
-}
-
-.tool-readout {
-  min-width: 150px;
-  padding: 0 14px;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.25;
-  white-space: nowrap;
-}
 
 .inspector-head {
   min-height: 58px;
@@ -916,7 +775,8 @@ a { color: inherit; text-decoration: none; }
   .app { grid-template-rows: auto minmax(0, 1fr); }
   .topbar { grid-template-columns: 1fr; align-items: stretch; gap: 8px; padding: 10px; }
   .stage-nav { justify-self: stretch; overflow-x: auto; }
-  .actions { overflow-x: auto; padding-bottom: 2px; }
+  .actions { width: 100%; gap: 6px; overflow: visible; padding-bottom: 2px; }
+  .actions .button { flex: 1 1 0; min-width: 0; padding: 0 8px; font-size: 14px; }
   .flow-screen { padding: 10px; place-items: stretch; }
   .flow-shell { height: 100%; min-height: 0; grid-template-columns: 1fr; }
   .inspect-grid { grid-template-columns: 1fr; }
@@ -926,19 +786,8 @@ a { color: inherit; text-decoration: none; }
   .figure-list { display: flex; overflow-x: auto; }
   .figure-rail .panel-foot { display: none; }
   .figure-row { min-width: 150px; }
-  .canvas-body { align-items: start; padding: 12px 12px 124px; }
+  .canvas-body { align-items: start; padding: 12px; }
   .figure-stage { width: 100%; height: min(44vh, 360px); min-height: 260px; }
-  .floating-tools {
-    left: 12px;
-    right: 12px;
-    bottom: 76px;
-    max-width: none;
-    overflow-x: auto;
-    justify-content: flex-start;
-    transform: none;
-  }
-  .zoom-pill { min-width: 112px; }
-  .tool-readout { min-width: 136px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1021,12 +870,9 @@ const icon = {
   more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.5 6.3"/><path d="M3 12A9 9 0 0 1 18.5 5.7"/><path d="M18 2v5h5"/><path d="M6 22v-5H1"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
-  minus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>',
   cursor: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 3 7.5 17 2.5-7 6-2.5Z"/></svg>',
-  hand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 10V4.5a1.5 1.5 0 0 1 3 0V11"/><path d="M14 10.5V6a1.5 1.5 0 0 1 3 0v7"/><path d="M8 12.5 6.8 11a1.8 1.8 0 0 0-2.7 2.4l4.1 5A6 6 0 0 0 13 20h1a5 5 0 0 0 5-5v-3"/></svg>',
   crosshair: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v5M12 16v5M3 12h5M16 12h5"/><circle cx="12" cy="12" r="3"/></svg>',
-  box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6h12v12H6z"/><path d="M3 6h2M19 6h2M3 18h2M19 18h2"/></svg>',
   fit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/><path d="M3 3l6 6M21 3l-6 6M3 21l6-6M21 21l-6-6"/></svg>',
   gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>',
   chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>'
@@ -1051,14 +897,12 @@ const S = {
   plotOutput: "runs/run_001",
   lastProject: null,
   projectStatus: null,
-  workbenchPreview: null,
   activeFigure: 0,
   inspectorTab: "axes",
   refineOptions: {},
   clearRenderOptions: [],
   splitPolicy: null,
   refineDirty: false,
-  activeTool: "select",
   busy: "",
   toast: "",
   error: "",
@@ -1287,7 +1131,6 @@ function renderActions() {
   const actions = document.getElementById("topActions");
   if (S.stage === "review") {
     actions.innerHTML = `
-      <button class="button" id="previewBtn" ${busy || !S.lastProject ? "disabled" : ""}>${icon.eye}Preview</button>
       <button class="button primary" id="applyBtn" ${busy || !S.lastProject ? "disabled" : ""}>${icon.check}Apply</button>
       <button class="button" id="exportBtn" ${busy || !S.lastProject ? "disabled" : ""}>${icon.download}Export</button>
       <button class="icon-button" id="openProjectBtn" title="More">${icon.more}</button>
@@ -1493,148 +1336,20 @@ function renderTablePreview(selected) {
 }
 
 function figureSurfaceInfo() {
-  const previewUrl = S.workbenchPreview?.chart_spec?.preview_image_url;
   const statusPreview = S.projectStatus?.preview_figure?.url;
   const figure = currentFigure();
   const artifactUrl = figure?.url && /\.(png|jpe?g)$/i.test(figure.name || "") ? figure.url : "";
-  const webaggUrl = S.workbenchPreview?.webagg?.url;
   return {
-    imageUrl: previewUrl || statusPreview || artifactUrl,
-    webaggUrl
+    imageUrl: statusPreview || artifactUrl
   };
-}
-
-function chartSpec() {
-  return S.workbenchPreview?.chart_spec || {};
-}
-function optionEditable(key) {
-  const options = chartSpec().contract?.editable_options;
-  return !Array.isArray(options) || options.length === 0 || options.includes(key);
-}
-
-function chartRows() {
-  return Array.isArray(chartSpec().data) ? chartSpec().data.filter(row => Number.isFinite(Number(row.x)) && Number.isFinite(Number(row.y))) : [];
-}
-
-function currentFigureSizeLabel() {
-  return figureSizeOptions.find(item => item.v === S.figureSize)?.l || S.figureSize || "120 x 55 mm";
-}
-
-function axisConfig(axis) {
-  return chartSpec().axes?.[axis] || {};
-}
-
-function axisLabel(axis) {
-  return humanizeMathText(axisConfig(axis).label || chartSpec()[axis === "x" ? "xAxisLabel" : "yAxisLabel"] || axis.toUpperCase());
-}
-
-function axisUnit(label) {
-  const match = humanizeMathText(label).match(/\[([^\]]+)\]|\(([^)]+)\)/);
-  return match ? humanizeMathText(match[1] || match[2] || "").trim() : "";
-}
-
-function humanizeMathText(value) {
-  return String(value || "")
-    .replace(/\\cdot/g, "·")
-    .replace(/\$\^\{([^}]+)\}\$/g, "^$1")
-    .replace(/\^\{([^}]+)\}/g, "^$1")
-    .replace(/\$/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function axisShortName(axis) {
-  const label = axisLabel(axis);
-  if (/angular\s+frequency/i.test(label)) return "ω";
-  if (/storage\s+modulus/i.test(label)) return "G'";
-  if (/loss\s+modulus/i.test(label)) return 'G"';
-  const cleaned = String(label || axis).replace(/\[[^\]]+\]|\([^)]+\)/g, "").trim();
-  return cleaned.length > 18 ? cleaned.split(/\s+/).slice(0, 2).join(" ") : cleaned || axis.toUpperCase();
-}
-
-function fmtNumber(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "";
-  const abs = Math.abs(number);
-  if ((abs >= 10000 || (abs > 0 && abs < 0.01))) return number.toExponential(2);
-  if (abs >= 100) return number.toFixed(0);
-  if (abs >= 10) return number.toFixed(1);
-  return number.toFixed(2).replace(/\.?0+$/, "");
-}
-
-function axisReadout(axis, value) {
-  const unit = axisUnit(axisLabel(axis));
-  return `${axisShortName(axis)}: ${fmtNumber(value)}${unit ? ` ${unit}` : ""}`;
-}
-
-function transformAxisValue(value, axis) {
-  const config = axisConfig(axis);
-  const number = Number(value);
-  if (!Number.isFinite(number)) return null;
-  if (config.scale === "log") return number > 0 ? Math.log10(number) : null;
-  return number;
-}
-
-function axisPercent(value, axis) {
-  const config = axisConfig(axis);
-  const limits = Array.isArray(config.limits) ? config.limits : [];
-  let lo = transformAxisValue(limits[0], axis);
-  let hi = transformAxisValue(limits[1], axis);
-  const current = transformAxisValue(value, axis);
-  if (current === null) return axis === "x" ? 50 : 42;
-  const values = chartRows().map(row => transformAxisValue(row[axis], axis)).filter(value => value !== null);
-  if (lo === null && values.length) lo = Math.min(...values);
-  if (hi === null && values.length) hi = Math.max(...values);
-  if (lo === null || hi === null || lo === hi) return axis === "x" ? 50 : 42;
-  let ratio = (current - Math.min(lo, hi)) / Math.abs(hi - lo);
-  ratio = Math.max(0, Math.min(1, ratio));
-  if (config.reversed || lo > hi) ratio = 1 - ratio;
-  if (axis === "y") ratio = 1 - ratio;
-  return 14 + ratio * 72;
-}
-
-function overlayPointFromRow(row) {
-  const safe = row || {};
-  return {
-    vx: axisPercent(safe.x, "x"),
-    vy: axisPercent(safe.y, "y"),
-    line1: axisReadout("x", safe.x),
-    line2: `${safe.series ? `${safe.series}: ` : ""}${axisReadout("y", safe.y)}`
-  };
-}
-
-function defaultOverlayPoint() {
-  const rows = chartRows();
-  return overlayPointFromRow(rows[Math.floor(rows.length * 0.56)] || rows[0] || { x: 1.52, y: 2310 });
-}
-
-function renderVizOverlay() {
-  const point = defaultOverlayPoint();
-  return `
-    <div class="viz-overlay" id="vizOverlay" style="--vx:${point.vx}%;--vy:${point.vy}%">
-      <div class="viz-vline"></div>
-      <div class="viz-hline"></div>
-      <div class="viz-dot"></div>
-      <div class="viz-tooltip"><div id="vizLine1">${esc(point.line1)}</div><div id="vizLine2">${esc(point.line2)}</div></div>
-      <div class="viz-size-badge">${esc(currentFigureSizeLabel())}</div>
-    </div>
-  `;
-}
-
-function toolbarReadout() {
-  const point = defaultOverlayPoint();
-  return `<span id="toolLine1">${esc(point.line1)}</span><span id="toolLine2">${esc(point.line2)}</span>`;
 }
 
 function renderWorkbench() {
-  const surface = figureSurfaceInfo();
-  const hasOverlay = Boolean(surface.imageUrl && chartRows().length);
   const screen = document.getElementById("workbenchScreen");
   screen.innerHTML = `
     <aside class="figure-rail">
       <div class="panel-head"><div class="panel-title">Figures</div><span class="preview-meta">${resultFigures().length}</span></div>
       <div class="figure-list">${renderFigureList()}</div>
-      <div class="panel-foot"><button class="button subtle" id="previewFigureBtn">${icon.plus}Add figure</button></div>
     </aside>
     <section class="canvas-shell">
       <div class="canvas-top">
@@ -1642,21 +1357,7 @@ function renderWorkbench() {
         <div class="canvas-meta"><span class="status-dot ${S.busy ? "busy" : S.error ? "warn" : hasRenderedArtifacts() ? "ok" : ""}"></span><span>${esc(S.busy || (S.refineDirty ? "Draft" : "Ready"))}</span></div>
       </div>
       <div class="canvas-body">
-        <div class="figure-stage${S.busy ? " busy" : ""}${hasOverlay ? " interactive" : ""}" id="figureStage" data-interactive="${hasOverlay ? "true" : "false"}">${renderFigureSurface()}</div>
-        <div class="floating-tools">
-          <button class="icon-button${S.activeTool === "select" ? " active" : ""}" data-tool="select" title="Select">${icon.cursor}</button>
-          <button class="icon-button${S.activeTool === "pan" ? " active" : ""}" data-tool="pan" title="Pan">${icon.hand}</button>
-          <button class="icon-button${S.activeTool === "inspect" ? " active" : ""}" data-tool="inspect" title="Inspect point">${icon.crosshair}</button>
-          <button class="icon-button${S.activeTool === "box" ? " active" : ""}" data-tool="box" title="Box zoom">${icon.box}</button>
-          <div class="tool-divider"></div>
-          <div class="zoom-pill"><button class="icon-button" data-zoom="out" title="Zoom out">${icon.minus}</button><span>100%</span><button class="icon-button" data-zoom="in" title="Zoom in">${icon.plus}</button></div>
-          <div class="tool-divider"></div>
-          <button class="button subtle" data-tool="fit" title="Fit">${icon.fit}Fit</button>
-          <div class="tool-divider"></div>
-          <div class="tool-readout" id="toolReadout">${toolbarReadout()}</div>
-          <div class="tool-divider"></div>
-          <button class="icon-button" title="Canvas settings">${icon.gear}</button>
-        </div>
+        <div class="figure-stage${S.busy ? " busy" : ""}">${renderFigureSurface()}</div>
       </div>
     </section>
     <aside class="inspector" id="inspector">
@@ -1668,7 +1369,7 @@ function renderWorkbench() {
 
 function renderFigureList() {
   const figures = resultFigures();
-  const thumbFallback = S.workbenchPreview?.chart_spec?.preview_image_url || S.projectStatus?.preview_figure?.url || "";
+  const thumbFallback = S.projectStatus?.preview_figure?.url || "";
   if (!figures.length) {
     return `<div class="empty-state"><b>No artifact</b><span>Export with SciPlot first.</span></div>`;
   }
@@ -1686,9 +1387,8 @@ function renderFigureList() {
 function renderFigureSurface() {
   const surface = figureSurfaceInfo();
   if (surface.imageUrl) {
-    return `<img src="${esc(surface.imageUrl)}" alt="SciPlot rendered figure" onerror="this.parentElement.innerHTML='<div class=&quot;empty-state&quot;><b>Preview failed</b></div>'">${chartRows().length ? renderVizOverlay() : ""}`;
+    return `<img src="${esc(surface.imageUrl)}" alt="SciPlot rendered figure" onerror="this.parentElement.innerHTML='<div class=&quot;empty-state&quot;><b>Preview failed</b></div>'">`;
   }
-  if (surface.webaggUrl) return `<iframe src="${esc(surface.webaggUrl)}" title="SciPlot WebAgg preview"></iframe>`;
   if (S.busy) return `<div class="empty-state"><b>${esc(S.busy)}</b><span>Rendering through SciPlot</span></div>`;
   return `<div class="empty-state"><b>No rendered figure</b><span>Use Export to generate SciPlot artifacts.</span></div>`;
 }
@@ -1727,10 +1427,10 @@ function renderAppearanceInspector() {
   return `
     <div class="section">
       <div class="section-title">Style</div>
-      ${optionEditable("style_preset") ? `<select class="select" data-refine="style_preset">${selectOptions(styleOptions, refineVal("style_preset"))}</select>` : ""}
-      ${optionEditable("palette_preset") ? `<label class="label">Palette</label><select class="select" data-refine="palette_preset">${selectOptions(paletteOptions, refineVal("palette_preset"))}</select>` : ""}
-      ${optionEditable("baseline") ? `<label class="label">Baseline</label><select class="select" data-refine="baseline">${selectOptions(baselineOptions, refineVal("baseline"))}</select>` : ""}
-      ${optionEditable("stack_spacing_scale") ? `<label class="label">Stack gap</label><input class="input" type="number" min="0.05" step="0.05" data-refine="stack_spacing_scale" placeholder="Auto" value="${esc(refineVal("stack_spacing_scale"))}">` : ""}
+      <select class="select" data-refine="style_preset">${selectOptions(styleOptions, refineVal("style_preset"))}</select>
+      <label class="label">Palette</label><select class="select" data-refine="palette_preset">${selectOptions(paletteOptions, refineVal("palette_preset"))}</select>
+      <label class="label">Baseline</label><select class="select" data-refine="baseline">${selectOptions(baselineOptions, refineVal("baseline"))}</select>
+      <label class="label">Stack gap</label><input class="input" type="number" min="0.05" step="0.05" data-refine="stack_spacing_scale" placeholder="Auto" value="${esc(refineVal("stack_spacing_scale"))}">
     </div>
   `;
 }
@@ -1739,43 +1439,38 @@ function renderLegendInspector() {
   return `
     <div class="section">
       <div class="section-title">Labels</div>
-      ${optionEditable("series_label_mode") ? `<label class="label">Mode</label><select class="select" data-refine="series_label_mode">${selectOptions(labelModeOptions, refineVal("series_label_mode"))}</select>` : ""}
-      ${optionEditable("legend_position") ? `<label class="label">Legend position</label><select class="select" data-refine="legend_position">${selectOptions(legendOptions, refineVal("legend_position"))}</select>` : ""}
+      <label class="label">Mode</label><select class="select" data-refine="series_label_mode">${selectOptions(labelModeOptions, refineVal("series_label_mode"))}</select>
+      <label class="label">Legend position</label><select class="select" data-refine="legend_position">${selectOptions(legendOptions, refineVal("legend_position"))}</select>
     </div>
   `;
 }
 
 function renderAxesInspector() {
-  const axes = chartSpec().axes || {};
-  const xAxis = axes.x || {};
-  const yAxis = axes.y || {};
-  const xLimits = Array.isArray(xAxis.limits) ? xAxis.limits : [];
-  const yLimits = Array.isArray(yAxis.limits) ? yAxis.limits : [];
   return `
     <div class="section">
       <div class="section-title">X axis</div>
-      ${optionEditable("xscale") ? `<label class="label">Scale</label><select class="select" data-refine="xscale">${selectOptions(scaleOptions, refineVal("xscale") || xAxis.scale || "")}</select>` : ""}
-      ${optionEditable("reverse_x") ? `<label class="check-row"><span>Reverse</span><input type="checkbox" data-refine-check="reverse_x" ${refineChecked("reverse_x", xAxis.reversed)}></label>` : ""}
+      <label class="label">Scale</label><select class="select" data-refine="xscale">${selectOptions(scaleOptions, refineVal("xscale"))}</select>
+      <label class="check-row"><span>Reverse</span><input type="checkbox" data-refine-check="reverse_x" ${refineChecked("reverse_x")}></label>
       <label class="label">Limits</label>
       <div class="field-grid">
-        <input class="input" data-refine="x_min" placeholder="${esc(fmtNumber(xLimits[0]))}" value="${esc(refineVal("x_min"))}">
-        <input class="input" data-refine="x_max" placeholder="${esc(fmtNumber(xLimits[1]))}" value="${esc(refineVal("x_max"))}">
+        <input class="input" data-refine="x_min" placeholder="Auto" value="${esc(refineVal("x_min"))}">
+        <input class="input" data-refine="x_max" placeholder="Auto" value="${esc(refineVal("x_max"))}">
       </div>
-      ${optionEditable("x_tick_density") ? `<label class="label">Ticks</label><select class="select" data-refine="x_tick_density">${selectOptions(tickDensityOptions, refineVal("x_tick_density"))}</select>` : ""}
+      <label class="label">Ticks</label><select class="select" data-refine="x_tick_density">${selectOptions(tickDensityOptions, refineVal("x_tick_density"))}</select>
       <label class="label">Label</label>
-      <input class="input" data-refine="x_label_override" placeholder="${esc(axisLabel("x"))}" value="${esc(refineVal("x_label_override"))}">
+      <input class="input" data-refine="x_label_override" placeholder="X axis label" value="${esc(refineVal("x_label_override"))}">
     </div>
     <div class="section">
       <div class="section-title">Y axis</div>
-      ${optionEditable("yscale") ? `<label class="label">Scale</label><select class="select" data-refine="yscale">${selectOptions(scaleOptions, refineVal("yscale") || yAxis.scale || "")}</select>` : ""}
+      <label class="label">Scale</label><select class="select" data-refine="yscale">${selectOptions(scaleOptions, refineVal("yscale"))}</select>
       <label class="label">Limits</label>
       <div class="field-grid">
-        <input class="input" data-refine="y_min" placeholder="${esc(fmtNumber(yLimits[0]))}" value="${esc(refineVal("y_min"))}">
-        <input class="input" data-refine="y_max" placeholder="${esc(fmtNumber(yLimits[1]))}" value="${esc(refineVal("y_max"))}">
+        <input class="input" data-refine="y_min" placeholder="Auto" value="${esc(refineVal("y_min"))}">
+        <input class="input" data-refine="y_max" placeholder="Auto" value="${esc(refineVal("y_max"))}">
       </div>
-      ${optionEditable("y_tick_density") ? `<label class="label">Ticks</label><select class="select" data-refine="y_tick_density">${selectOptions(tickDensityOptions, refineVal("y_tick_density"))}</select>` : ""}
+      <label class="label">Ticks</label><select class="select" data-refine="y_tick_density">${selectOptions(tickDensityOptions, refineVal("y_tick_density"))}</select>
       <label class="label">Label</label>
-      <input class="input" data-refine="y_label_override" placeholder="${esc(axisLabel("y"))}" value="${esc(refineVal("y_label_override"))}">
+      <input class="input" data-refine="y_label_override" placeholder="Y axis label" value="${esc(refineVal("y_label_override"))}">
     </div>
   `;
 }
@@ -1793,8 +1488,7 @@ function renderInspectorRows() {
 }
 
 function renderSeriesInspector() {
-  if (!optionEditable("series_styles")) return `<div class="empty-state"><b>No series style</b></div>`;
-  const series = S.workbenchPreview?.chart_spec?.series || visibleGroups().map(group => ({ label: group.sample }));
+  const series = visibleGroups().map(group => ({ label: group.sample }));
   if (!series.length) return `<div class="empty-state"><b>No series</b></div>`;
   return `<div class="section"><div class="section-title">Series</div>${series.map(item => renderSeriesRow(String(item.label || item.series_id || "Series"), item.color || "#087783")).join("")}</div>`;
 }
@@ -1952,7 +1646,7 @@ function setSeriesStyle(label, key, value) {
   render();
 }
 function currentSeriesLabels() {
-  const series = S.workbenchPreview?.chart_spec?.series || visibleGroups().map(group => ({ label: group.sample }));
+  const series = visibleGroups().map(group => ({ label: group.sample }));
   return series.map(item => String(item.label || item.series_id || "").trim()).filter(Boolean);
 }
 function applyQualityActionDraft(actionId) {
@@ -2172,7 +1866,6 @@ async function createAndRenderProject() {
     S.stage = "review";
     S.busy = "";
     showToast(json.run_failed ? "Render needs attention" : "SciPlot artifacts ready");
-    await fetchWorkbenchSpec();
   } catch (error) {
     S.error = error.message;
     S.busy = "";
@@ -2243,43 +1936,6 @@ function resetRefine() {
   S.refineDirty = false;
 }
 
-async function fetchWorkbenchSpec() {
-  if (!S.lastProject?.project_slug) return;
-  try {
-    const response = await fetch(`/api/projects/${encodeURIComponent(S.lastProject.project_slug)}/workbench/spec`);
-    const json = await response.json();
-    if (response.ok) {
-      const payload = json.chart_spec ? json : { kind: "sciplot_workbench_spec", chart_spec: json };
-      if (payload.chart_spec?.kind === "sciplot_interactive_chart_spec") S.workbenchPreview = payload;
-    }
-  } catch (_error) {
-  }
-  render();
-}
-
-async function previewProject() {
-  if (!S.lastProject?.project_slug || S.busy) return;
-  S.busy = "Previewing";
-  S.error = "";
-  render();
-  try {
-    const response = await fetch(`/api/projects/${encodeURIComponent(S.lastProject.project_slug)}/workbench/preview`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(workbenchPayload())
-    });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.error || "Preview failed");
-    S.workbenchPreview = json;
-    showToast("Preview ready");
-  } catch (error) {
-    S.error = error.message;
-    showToast(error.message);
-  }
-  S.busy = "";
-  render();
-}
-
 async function applyProject() {
   if (!S.lastProject?.project_slug || S.busy) return;
   S.busy = "Applying";
@@ -2319,11 +1975,9 @@ async function exportProject() {
     const json = await response.json();
     if (!response.ok) throw new Error(json.error || "Export failed");
     S.lastProject = json;
-    S.workbenchPreview = null;
     await refreshStatus();
     resetRefine();
     showToast(json.run_failed ? "Export needs attention" : "Export complete");
-    await fetchWorkbenchSpec();
   } catch (error) {
     S.error = error.message;
     showToast(error.message);
@@ -2349,8 +2003,6 @@ async function loadProject(slug) {
     if (json.manifest) applyManifest(json.manifest);
     resetRefine();
     S.stage = hasRenderedArtifacts() ? "review" : "inspect";
-    S.workbenchPreview = null;
-    if (S.stage === "review") await fetchWorkbenchSpec();
     showToast("Project opened");
   } catch (error) {
     showToast(error.message);
@@ -2436,7 +2088,6 @@ document.addEventListener("click", event => {
   if (target.id === "backToSourceBtn" || target.id === "backSourceInline") setStage("source");
   if (target.id === "newSampleBtn") addGroup();
   if (target.id === "renderProjectBtn" || target.id === "renderProjectInline") createAndRenderProject();
-  if (target.id === "previewBtn" || target.id === "previewFloatBtn" || target.id === "previewFigureBtn") previewProject();
   if (target.id === "applyBtn" || target.id === "applyFloatBtn") applyProject();
   if (target.id === "exportBtn" || target.id === "exportFloatBtn") exportProject();
   if (target.id === "loadPreviewBtn") {
@@ -2451,10 +2102,6 @@ document.addEventListener("click", event => {
   if (target.dataset.export) toggleExport(target.dataset.export);
   if (target.dataset.qualityAction) applyQualityActionDraft(target.dataset.qualityAction);
   if (target.dataset.stageButton) setStage(target.dataset.stageButton);
-  if (target.dataset.tool) {
-    S.activeTool = target.dataset.tool === "fit" ? S.activeTool : target.dataset.tool;
-    render();
-  }
   if (target.dataset.figureIndex) {
     S.activeFigure = Number(target.dataset.figureIndex);
     render();
@@ -2479,29 +2126,6 @@ document.addEventListener("input", event => {
   if (target.id === "plotOutputInput") S.plotOutput = target.value;
   if (target.dataset.sampleName !== undefined) S.groups[Number(target.dataset.sampleName)].sample = target.value;
   if (target.dataset.refine) setRefine(target.dataset.refine, target.value);
-});
-
-document.addEventListener("pointermove", event => {
-  const stage = event.target.closest("#figureStage[data-interactive='true']");
-  if (!stage) return;
-  const rows = chartRows();
-  if (!rows.length) return;
-  const rect = stage.getBoundingClientRect();
-  const px = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-  const row = rows[Math.min(rows.length - 1, Math.max(0, Math.round(px * (rows.length - 1))))];
-  const point = overlayPointFromRow(row);
-  const overlay = document.getElementById("vizOverlay");
-  if (!overlay) return;
-  overlay.style.setProperty("--vx", `${point.vx}%`);
-  overlay.style.setProperty("--vy", `${point.vy}%`);
-  const vizLine1 = document.getElementById("vizLine1");
-  const vizLine2 = document.getElementById("vizLine2");
-  const toolLine1 = document.getElementById("toolLine1");
-  const toolLine2 = document.getElementById("toolLine2");
-  if (vizLine1) vizLine1.textContent = point.line1;
-  if (vizLine2) vizLine2.textContent = point.line2;
-  if (toolLine1) toolLine1.textContent = point.line1;
-  if (toolLine2) toolLine2.textContent = point.line2;
 });
 
 document.addEventListener("change", event => {

@@ -1,34 +1,27 @@
 from __future__ import annotations
 
-import inspect
 from collections.abc import Mapping
 from typing import Any
 
 from sciplot_core._bootstrap import ensure_legacy_core
-from sciplot_core.render import DEFAULT_EXPORT_FORMATS
+from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY, RENDER_OPTION_KEYS
 from sciplot_core.split import normalize_split_policy
 from sciplot_core.study_model import sync_study_model_samples
 
 ensure_legacy_core()
 
 from src.plot_contract import load_plot_contract, template_contract  # noqa: E402
-from src.rendering.options import validate_template_name  # noqa: E402
-from src.rendering.render_service import build_rendered_plots  # noqa: E402
 
-_RENDER_PARAMETER_NAMES = frozenset(
-    name
-    for name, parameter in inspect.signature(build_rendered_plots).parameters.items()
-    if name not in {"template", "input_path", "sheet"} and parameter.kind is inspect.Parameter.KEYWORD_ONLY
-)
+_RENDER_PARAMETER_NAMES = RENDER_OPTION_KEYS
 _INTAKE_EXPORT_FORMATS = frozenset({"pdf", "svg", "png", "png_300", "png_600", "tiff", "tiff_300"})
 
 
 def normalize_exports(exports: object) -> list[str]:
     if not isinstance(exports, list | tuple):
-        return list(DEFAULT_EXPORT_FORMATS)
+        return list(DEFAULT_EXPORT_FORMATS_POLICY)
     selected = [str(item).strip().lower() for item in exports if str(item).strip()]
     if not selected:
-        return list(DEFAULT_EXPORT_FORMATS)
+        return list(DEFAULT_EXPORT_FORMATS_POLICY)
     unknown = [item for item in selected if item not in _INTAKE_EXPORT_FORMATS]
     if unknown:
         known = ", ".join(sorted(_INTAKE_EXPORT_FORMATS))
@@ -58,7 +51,10 @@ def _validate_template_render_option_keys(keys: set[str], *, template: str | Non
     if not template:
         return
     contract = load_plot_contract()
-    resolved_template = validate_template_name(template)
+    resolved_template = str(template).strip()
+    if resolved_template not in contract.templates:
+        known = ", ".join(sorted(contract.templates))
+        raise ValueError(f"Unknown template: {resolved_template}. Supported templates: {known}")
     spec = (
         contract.templates[resolved_template]
         if resolved_template in contract.templates

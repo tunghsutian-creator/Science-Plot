@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import copy
+import json
 import re
 from pathlib import Path
 from typing import Any
 
 STUDY_MODEL_KIND = "sciplot_study_model"
-STUDY_MODEL_VERSION = 1
+STUDY_MODEL_VERSION = 2
 
 REPLICATE_MODES: dict[str, dict[str, str]] = {
     "mean": {
@@ -312,6 +313,94 @@ def _source_file_payload(file_info: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _statistics_method_contract(figure: dict[str, Any]) -> dict[str, Any]:
+    template = str(figure.get("default_template") or "").casefold()
+    figure_id = str(figure.get("id") or "").casefold()
+    method_required = template in {"bar", "box", "violin", "point_interval"} or "statistics" in figure_id
+    return {
+        "kind": "sciplot_statistics_method_contract",
+        "version": 1,
+        "status": "pending" if method_required else "not_requested",
+        "auto_inference_allowed": False,
+        "significance_required": False,
+        "method_id": None,
+        "method_version": None,
+        "source": None,
+        "n_definition": None,
+        "center": None,
+        "spread_or_interval": None,
+        "test": None,
+        "multiple_comparisons": None,
+        "parameters": {},
+    }
+
+
+def normalize_study_model(study_model: dict[str, Any]) -> dict[str, Any]:
+    """Add publication evidence fields without discarding v1 or unknown data."""
+
+    normalized = copy.deepcopy(study_model)
+    if normalized.get("kind") != STUDY_MODEL_KIND:
+        return normalized
+    raw_version = normalized.get("version", 1)
+    if isinstance(raw_version, int) and raw_version > STUDY_MODEL_VERSION:
+        # A future schema is not ours to rewrite or silently downgrade.
+        return normalized
+    normalized["version"] = STUDY_MODEL_VERSION
+    samples = normalized.get("samples") if isinstance(normalized.get("samples"), list) else []
+    sample_refs = [str(sample.get("id")) for sample in samples if isinstance(sample, dict) and sample.get("id")]
+    source_refs = [
+        str(replicate.get("id"))
+        for sample in samples
+        if isinstance(sample, dict)
+        for replicate in sample.get("replicates", [])
+        if isinstance(replicate, dict) and replicate.get("id")
+    ]
+    queue = normalized.get("figure_queue") if isinstance(normalized.get("figure_queue"), list) else []
+    normalized_queue: list[Any] = []
+    for index, value in enumerate(queue, start=1):
+        if not isinstance(value, dict):
+            # Preserve opaque extension entries. Consumers of the public model
+            # must ignore entries they do not understand rather than deleting
+            # them during an additive migration.
+            normalized_queue.append(copy.deepcopy(value))
+            continue
+        figure = copy.deepcopy(value)
+        panel_id = str(figure.get("id") or f"panel_{index}")
+        metric_refs = [str(figure["metric"])] if figure.get("metric") else []
+        evidence = (
+            copy.deepcopy(figure.get("evidence_contract"))
+            if isinstance(figure.get("evidence_contract"), dict)
+            else {}
+        )
+        evidence.setdefault("kind", "sciplot_panel_evidence_contract")
+        evidence.setdefault("version", 1)
+        evidence.setdefault("panel_id", panel_id)
+        evidence.setdefault("role", "primary_evidence" if index == 1 else "supporting_evidence")
+        evidence.setdefault("claim_refs", [])
+        evidence.setdefault("source_refs", source_refs)
+        evidence.setdefault("sample_refs", sample_refs)
+        evidence.setdefault("metric_refs", metric_refs)
+        evidence.setdefault("transform_step_refs", [])
+        evidence.setdefault("confirmation_status", "inferred" if metric_refs else "pending")
+        figure["evidence_contract"] = evidence
+        if not isinstance(figure.get("statistics_method"), dict):
+            figure["statistics_method"] = _statistics_method_contract(figure)
+        normalized_queue.append(figure)
+    normalized["figure_queue"] = normalized_queue
+    integrity = (
+        copy.deepcopy(normalized.get("scientific_integrity"))
+        if isinstance(normalized.get("scientific_integrity"), dict)
+        else {}
+    )
+    integrity.setdefault("scientific_outcome_agnostic", True)
+    integrity.setdefault("significance_required", False)
+    integrity.setdefault("silent_data_omission_allowed", False)
+    integrity.setdefault("statistics_must_be_explicit", True)
+    normalized["scientific_integrity"] = integrity
+    normalized.setdefault("publication_intent_ref", None)
+    return normalized
+
+
 def build_study_model(
     *,
     data_type: dict[str, Any],
@@ -362,7 +451,7 @@ def build_study_model(
                 "replicates": replicates,
             }
         )
-    return {
+    return normalize_study_model({
         "kind": STUDY_MODEL_KIND,
         "version": STUDY_MODEL_VERSION,
         "experiment": {
@@ -388,7 +477,7 @@ def build_study_model(
         "figure_queue": figure_queue,
         "render_defaults": dict(render_options or {}),
         "column_confirmation_required": bool(column_confirmations),
-    }
+    })
 
 
 def study_model_from_request(
@@ -399,7 +488,7 @@ def study_model_from_request(
 ) -> dict[str, Any]:
     existing = request.get("study_model")
     if isinstance(existing, dict) and existing.get("kind") == STUDY_MODEL_KIND:
-        return copy.deepcopy(existing)
+        return normalize_study_model(existing)
 
     rule_id = str(semantic.get("rule_id") or "") or None
     semantic_family = str(semantic.get("semantic_family") or "unknown")
@@ -429,7 +518,7 @@ def study_model_from_request(
         {**figure, "order": index, "status": "planned"}
         for index, figure in enumerate(copy.deepcopy(recommendation["figure_queue"]), start=1)
     ]
-    return {
+    return normalize_study_model({
         "kind": STUDY_MODEL_KIND,
         "version": STUDY_MODEL_VERSION,
         "experiment": {
@@ -456,7 +545,7 @@ def study_model_from_request(
         "figure_queue": figure_queue,
         "render_defaults": dict(request.get("render_options") or {}),
         "column_confirmation_required": bool(request.get("column_confirmations")),
-    }
+    })
 
 
 def sync_study_model_samples(
@@ -466,6 +555,7 @@ def sync_study_model_samples(
 ) -> dict[str, Any] | None:
     if not isinstance(study_model, dict) or study_model.get("kind") != STUDY_MODEL_KIND:
         return study_model
+    study_model = normalize_study_model(study_model)
     if not sample_order:
         return copy.deepcopy(study_model)
     selected = [str(item).strip() for item in sample_order if str(item).strip()]
@@ -480,6 +570,34 @@ def sync_study_model_samples(
         sample["order"] = index
     synced["samples"] = samples
     synced["sample_order"] = [sample["name"] for sample in samples]
+    valid_sample_refs = {
+        str(sample.get("id"))
+        for sample in samples
+        if isinstance(sample, dict) and sample.get("id")
+    }
+    valid_source_refs = {
+        str(replicate.get("id"))
+        for sample in samples
+        if isinstance(sample, dict)
+        for replicate in sample.get("replicates", [])
+        if isinstance(replicate, dict) and replicate.get("id")
+    }
+    for figure in synced.get("figure_queue", []):
+        if not isinstance(figure, dict):
+            continue
+        evidence = figure.get("evidence_contract")
+        if not isinstance(evidence, dict):
+            continue
+        sample_refs = evidence.get("sample_refs")
+        if isinstance(sample_refs, list):
+            evidence["sample_refs"] = [
+                str(ref) for ref in sample_refs if str(ref) in valid_sample_refs
+            ]
+        source_refs = evidence.get("source_refs")
+        if isinstance(source_refs, list):
+            evidence["source_refs"] = [
+                str(ref) for ref in source_refs if str(ref) in valid_source_refs
+            ]
     return synced
 
 
@@ -490,6 +608,16 @@ def _figure_artifact_key(path: str) -> str:
     return stem
 
 
+def _json_contract_matches(path: Path, expected_kind: str) -> bool:
+    if not path.exists() or not path.is_file():
+        return False
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    return isinstance(payload, dict) and payload.get("kind") == expected_kind
+
+
 def attach_run_artifacts_to_study_model(
     study_model: dict[str, Any],
     *,
@@ -498,7 +626,7 @@ def attach_run_artifacts_to_study_model(
     analysis_metrics: list[dict[str, Any]] | None = None,
     qa: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    updated = copy.deepcopy(study_model)
+    updated = normalize_study_model(study_model)
     artifact_groups: dict[str, list[dict[str, Any]]] = {}
     for figure in figures:
         artifact_groups.setdefault(_figure_artifact_key(figure), []).append(
@@ -510,14 +638,43 @@ def attach_run_artifacts_to_study_model(
         )
     grouped_artifacts = list(artifact_groups.values())
     queue = list(updated.get("figure_queue", []))
-    for index, figure in enumerate(queue):
-        artifacts = grouped_artifacts[index] if index < len(grouped_artifacts) else []
+    bound_keys: set[str] = set()
+    bindable_figures = [figure for figure in queue if isinstance(figure, dict)]
+    for figure in bindable_figures:
+        figure_id = str(figure.get("id") or "")
+        normalized_id = _figure_artifact_key(figure_id) if figure_id else ""
+        semantic_tokens = {
+            token
+            for field in ("id", "metric", "y_metric")
+            if (token := str(figure.get(field) or "").strip())
+        }
+        candidate_keys = [
+            key
+            for key in artifact_groups
+            if key == normalized_id
+            or (normalized_id and (key.endswith(normalized_id) or normalized_id.endswith(key)))
+            or any(token in key for token in semantic_tokens)
+        ]
+        matched_key = candidate_keys[0] if len(candidate_keys) == 1 else None
+        if matched_key is None and len(bindable_figures) == 1 and len(artifact_groups) == 1:
+            matched_key = next(iter(artifact_groups))
+        artifacts = artifact_groups.get(matched_key, []) if matched_key is not None else []
+        if matched_key is not None:
+            bound_keys.add(matched_key)
         figure["status"] = "rendered" if artifacts else "planned"
         figure["artifacts"] = artifacts
     updated["figure_queue"] = queue
+    unbound_artifacts = [
+        artifact
+        for key, group in artifact_groups.items()
+        if key not in bound_keys
+        for artifact in group
+    ]
     updated["run"] = {
         "output": str(output_dir),
         "figure_artifacts": [artifact for group in grouped_artifacts for artifact in group],
+        "unbound_figure_artifacts": unbound_artifacts,
+        "artifact_binding_policy": "stable_figure_id_or_unbound",
         "analysis_metrics": analysis_metrics or [],
         "qa": qa or {},
     }
@@ -540,6 +697,20 @@ def build_output_package_contract(output_dir: Path, *, manifest: dict[str, Any])
     raw_path = raw_archive.get("path")
     if isinstance(raw_path, str) and raw_path.strip():
         required.append(("raw_archive", Path(raw_path)))
+    publication_intent = (
+        manifest.get("publication_intent")
+        if isinstance(manifest.get("publication_intent"), dict)
+        else {}
+    )
+    if publication_intent:
+        required.extend(
+            [
+                ("publication_intent", output_dir / "publication_intent.json"),
+                ("transform_ledger", output_dir / "transform_ledger.json"),
+                ("journal_profile", output_dir / "journal_profile.json"),
+                ("publication_qa", output_dir / "publication_qa.json"),
+            ]
+        )
     artifact_status = [
         {
             "id": artifact_id,
@@ -554,9 +725,55 @@ def build_output_package_contract(output_dir: Path, *, manifest: dict[str, Any])
         [
             {"id": "pdf", "path": "", "exists": has_pdf},
             {"id": "tiff_300", "path": "", "exists": has_tiff_300},
-            {"id": "qa", "path": "", "exists": bool(manifest.get("qa"))},
+            {
+                "id": "qa",
+                "path": "",
+                "exists": bool(
+                    isinstance(manifest.get("qa"), dict)
+                    and manifest["qa"].get("status") == "passed"
+                ),
+            },
         ]
     )
+    if publication_intent:
+        transform_ledger = (
+            manifest.get("transform_ledger")
+            if isinstance(manifest.get("transform_ledger"), dict)
+            else {}
+        )
+        artifact_status.append(
+            {
+                "id": "transform_lineage_reviewed",
+                "path": str(output_dir / "transform_ledger.json"),
+                "exists": transform_ledger.get("status") in {"runtime_recorded", "confirmed"},
+            }
+        )
+        for filename, kind in {
+            "publication_intent.json": "sciplot_publication_intent",
+            "transform_ledger.json": "sciplot_transform_ledger",
+            "journal_profile.json": "sciplot_publication_profile",
+            "publication_qa.json": "sciplot_publication_qa",
+        }.items():
+            artifact_status.append(
+                {
+                    "id": f"{Path(filename).stem}_valid_contract",
+                    "path": str(output_dir / filename),
+                    "exists": _json_contract_matches(output_dir / filename, kind),
+                }
+            )
+    if publication_intent.get("target_status") == "confirmed":
+        publication_qa = (
+            manifest.get("publication_qa")
+            if isinstance(manifest.get("publication_qa"), dict)
+            else {}
+        )
+        artifact_status.append(
+            {
+                "id": "publication_qa_passed",
+                "path": str(output_dir / "publication_qa.json"),
+                "exists": publication_qa.get("status") == "passed",
+            }
+        )
     return {
         "kind": "sciplot_output_package_contract",
         "version": 1,
@@ -574,6 +791,7 @@ __all__ = [
     "build_study_model",
     "experiment_recommendation_payload",
     "normalize_replicate_mode",
+    "normalize_study_model",
     "study_model_from_request",
     "sync_study_model_samples",
 ]

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${SCIPLOT_CODEX_REPO:-/Users/dongxutian/Documents/research-plots}"
-PYTHON="$REPO/.venv/bin/python"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="${SCIPLOT_REPO:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+PYTHON="${SCIPLOT_PYTHON:-$REPO/.venv/bin/python}"
 
 if [[ ! -x "$PYTHON" ]]; then
   PYTHON="python3"

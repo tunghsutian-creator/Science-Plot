@@ -8,7 +8,6 @@ import json
 import mimetypes
 import os
 import re
-import shutil
 import subprocess
 import sys
 import webbrowser
@@ -31,12 +30,12 @@ from sciplot_core.ingest import smart_decode
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload, normal_mode_payload
 from sciplot_core.policy import (
+    DEFAULT_EXPORT_FORMATS_POLICY,
     FIGURE_SIZE_PRESETS,
     FTIR_SPECTRUM_RENDER_OPTIONS,
-    NMR_SPECTRUM_RENDER_OPTIONS,
     TORQUE_OFFSET_STACK_RENDER_OPTIONS,
 )
-from sciplot_core.render import DEFAULT_EXPORT_FORMATS
+from sciplot_core.publication import build_publication_intent, build_transform_ledger, get_publication_profile
 from sciplot_core.semantic import (
     classify_source,
     is_rheology_frequency_comparison_dir,
@@ -44,8 +43,6 @@ from sciplot_core.semantic import (
 )
 from sciplot_core.study_model import build_study_model, sync_study_model_samples
 from sciplot_core.workbench_contract import apply_request_patch, normalize_exports, normalize_render_options
-from sciplot_core.workbench_preview import build_chart_spec
-from sciplot_core.workbench_webagg import ensure_webagg_sidecar, webagg_available
 
 _STATIC_DIR = Path(__file__).with_name("intake_static")
 _DEFAULT_OUTPUT_ROOT = Path("outputs") / "intake_projects"
@@ -95,9 +92,6 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
             {"id": "rheology_stress_sweep", "label": "应力扫描", "rule_id": "rheology_stress_sweep"},
             {"id": "dma_temperature_sweep", "label": "DMA 温扫", "rule_id": "dma_temperature_sweep"},
             {"id": "dma_frequency_sweep", "label": "DMA 频扫", "rule_id": "dma_frequency_sweep"},
-            {"id": "capillary_rheometry", "label": "毛细管流变", "rule_id": "capillary_rheometry"},
-            {"id": "creep_recovery_curve", "label": "蠕变回复", "rule_id": "creep_recovery_curve"},
-            {"id": "dielectric_spectroscopy", "label": "介电谱", "rule_id": "dielectric_spectroscopy"},
             {"id": "unknown_rheology", "label": "未知流变", "rule_id": None},
         ),
     },
@@ -127,14 +121,6 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
                 "render_options": dict(TORQUE_OFFSET_STACK_RENDER_OPTIONS),
             },
             {"id": "impact_metric", "label": "冲击", "rule_id": "impact_metric", "chart": "box_with_points"},
-            {"id": "fracture_metric", "label": "断裂", "rule_id": "fracture_metric", "chart": "box_with_points"},
-            {"id": "fatigue_cycle_metric", "label": "疲劳", "rule_id": "fatigue_cycle_metric"},
-            {"id": "hardness_metric", "label": "硬度", "rule_id": "hardness_metric", "chart": "box_with_points"},
-            {"id": "mfi_metric", "label": "熔融指数", "rule_id": "mfi_metric"},
-            {"id": "tear_strength_metric", "label": "撕裂强度", "rule_id": "tear_strength_metric",
-             "chart": "box_with_points"},
-            {"id": "hysteresis_curve", "label": "滞后环", "rule_id": "hysteresis_curve"},
-            {"id": "abrasion_wear_metric", "label": "磨损", "rule_id": "abrasion_wear_metric"},
             {"id": "unknown_mechanical", "label": "未知力学", "rule_id": None},
         ),
     },
@@ -146,10 +132,6 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
             {"id": "dsc_curve", "label": "DSC", "rule_id": "dsc_curve", "chart": "stacked_curve"},
             {"id": "tga_curve", "label": "TGA", "rule_id": "tga_curve"},
             {"id": "dtg_curve", "label": "DTG", "rule_id": "dtg_curve"},
-            {"id": "dsc_kinetics", "label": "DSC 动力学", "rule_id": "dsc_kinetics"},
-            {"id": "tma_curve", "label": "TMA", "rule_id": "tma_curve"},
-            {"id": "thermal_conductivity_metric", "label": "导热系数", "rule_id": "thermal_conductivity_metric"},
-            {"id": "loi_metric", "label": "氧指数", "rule_id": "loi_metric"},
             {"id": "unknown_thermal", "label": "未知热分析", "rule_id": None},
         ),
     },
@@ -166,18 +148,7 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
                 "template": "stacked_curve",
                 "render_options": dict(FTIR_SPECTRUM_RENDER_OPTIONS),
             },
-            {"id": "raman_spectrum", "label": "Raman", "rule_id": "raman_spectrum"},
             {"id": "uvvis_spectrum", "label": "UV-vis", "rule_id": "uvvis_spectrum"},
-            {
-                "id": "nmr_spectrum",
-                "label": "NMR",
-                "rule_id": "nmr_spectrum",
-                "chart": "stacked_curve",
-                "template": "stacked_curve",
-                "render_options": dict(NMR_SPECTRUM_RENDER_OPTIONS),
-            },
-            {"id": "xps_spectrum", "label": "XPS", "rule_id": "xps_spectrum"},
-            {"id": "edx_spectrum", "label": "EDX/EDS", "rule_id": "edx_spectrum"},
             {"id": "unknown_spectroscopy", "label": "未知光谱", "rule_id": None},
         ),
     },
@@ -187,9 +158,7 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
         "icon": "scattering",
         "experiments": (
             {"id": "xrd_pattern", "label": "XRD", "rule_id": "xrd_pattern"},
-            {"id": "waxs_pattern", "label": "WAXS", "rule_id": "waxs_pattern"},
             {"id": "saxs_profile", "label": "SAXS", "rule_id": "saxs_profile"},
-            {"id": "sans_profile", "label": "SANS", "rule_id": "sans_profile"},
             {"id": "unknown_scattering", "label": "未知散射", "rule_id": None},
         ),
     },
@@ -199,13 +168,7 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
         "icon": "chromatography",
         "experiments": (
             {"id": "gpc_sec_chromatogram", "label": "GPC / SEC", "rule_id": "gpc_sec_chromatogram"},
-            {
-                "id": "molecular_weight_distribution",
-                "label": "分子量分布",
-                "rule_id": "molecular_weight_distribution",
-            },
             {"id": "unknown_chromatography", "label": "未知色谱", "rule_id": None},
-            {"id": "intrinsic_viscosity_metric", "label": "特性粘度", "rule_id": "intrinsic_viscosity_metric"},
         ),
     },
     {
@@ -214,16 +177,6 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
         "icon": "metrics",
         "experiments": (
             {"id": "swelling_curve", "label": "溶胀", "rule_id": "swelling_curve"},
-            {"id": "gel_fraction_metric", "label": "凝胶含量", "rule_id": "gel_fraction_metric"},
-            {"id": "degradation_mass_loss", "label": "降解失重", "rule_id": "degradation_mass_loss"},
-            {"id": "conductivity_curve", "label": "电导率", "rule_id": "conductivity_curve"},
-            {"id": "arrhenius_conductivity", "label": "Arrhenius", "rule_id": "arrhenius_conductivity"},
-            {"id": "dls_size_distribution", "label": "DLS", "rule_id": "dls_size_distribution"},
-            {"id": "bet_isotherm", "label": "BET", "rule_id": "bet_isotherm"},
-            {"id": "gas_permeability_metric", "label": "透气性", "rule_id": "gas_permeability_metric"},
-            {"id": "contact_angle_metric", "label": "接触角", "rule_id": "contact_angle_metric"},
-            {"id": "zeta_potential_metric", "label": "Zeta 电位", "rule_id": "zeta_potential_metric"},
-            {"id": "crosslink_density_metric", "label": "交联密度", "rule_id": "crosslink_density_metric"},
             {"id": "unknown_metrics", "label": "未知指标", "rule_id": None},
         ),
     },
@@ -436,6 +389,16 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
     studio_launcher_info["executable"] = bool(
         studio_launcher_info["exists"] and (studio_launcher.stat().st_mode & 0o111)
     )
+    veusz_launcher = project_dir / "Open_in_Veusz.command"
+    veusz_launcher_info = _artifact_info(veusz_launcher, project_slug=project_slug)
+    veusz_launcher_info["executable"] = bool(
+        veusz_launcher_info["exists"] and (veusz_launcher.stat().st_mode & 0o111)
+    )
+    export_edited_launcher = project_dir / "Export_Edited_Veusz.command"
+    export_edited_launcher_info = _artifact_info(export_edited_launcher, project_slug=project_slug)
+    export_edited_launcher_info["executable"] = bool(
+        export_edited_launcher_info["exists"] and (export_edited_launcher.stat().st_mode & 0o111)
+    )
     studio_documents = [
         _artifact_info(path, project_slug=project_slug)
         for path in sorted((project_dir / "studio").glob("*.vsz"))
@@ -458,10 +421,16 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
         "launcher": launcher_info,
         "studio": {
             "launcher": studio_launcher_info,
+            "veusz_launcher": veusz_launcher_info,
+            "export_edited_launcher": export_edited_launcher_info,
             "documents": studio_documents,
             "complete": bool(
                 studio_launcher_info["exists"]
                 and studio_launcher_info["executable"]
+                and veusz_launcher_info["exists"]
+                and veusz_launcher_info["executable"]
+                and export_edited_launcher_info["exists"]
+                and export_edited_launcher_info["executable"]
                 and studio_documents
                 and all(item["exists"] for item in studio_documents)
             ),
@@ -724,7 +693,6 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
     )
     assistant_available = codex_available()
     assistant_jobs = list_codex_jobs(project_path)
-    webagg = _workbench_webagg_status(project_slug=project_slug)
     return {
         "kind": "sciplot_project_status",
         "project_slug": project_slug,
@@ -738,11 +706,8 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         "figures": figures,
         "preview_figure": preview_figure,
         "workbench": {
-            "chart_spec_url": f"/api/projects/{quote(project_slug)}/workbench/spec",
-            "webagg_url": f"/api/projects/{quote(project_slug)}/workbench/webagg",
-            "preview_url": f"/api/projects/{quote(project_slug)}/workbench/preview",
             "apply_url": f"/api/projects/{quote(project_slug)}/workbench/apply",
-            "webagg": webagg,
+            "preview_source": "rendered_artifacts_only",
         },
         "operation_mode": operation_mode,
         "needs_assisted_cleanup": needs_assisted_cleanup,
@@ -762,19 +727,7 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
             "available": assistant_available,
             "jobs": assistant_jobs,
         },
-    }
-
-
-def _workbench_webagg_status(*, project_slug: str) -> dict[str, Any]:
-    available, reason = webagg_available()
-    return {
-        "kind": "sciplot_webagg_sidecar",
-        "available": available,
-        "running": False,
-        "reason": reason,
-        "url": None,
-        "project_slug": project_slug,
-    }
+}
 
 
 def _decode_text_preview(path: Path, *, max_bytes: int = 8192) -> str:
@@ -1175,6 +1128,15 @@ def create_intake_project_from_session(session: str | Path | dict[str, Any]) -> 
         exports=payload.get("exports"),
         render_options=payload.get("render_options"),
         column_confirmations=payload.get("column_confirmations"),
+        replicate_mode=payload.get("replicate_mode"),
+        recognition=payload.get("semantic")
+        if isinstance(payload.get("semantic"), dict)
+        else {
+            "semantic_family": payload.get("experiment_type_id"),
+            "rule_id": payload.get("rule_id"),
+            "confidence": payload.get("confidence"),
+            "reason": payload.get("reason"),
+        },
     )
 
 
@@ -1307,6 +1269,7 @@ def create_intake_project(
     render_options: dict[str, Any] | None = None,
     column_confirmations: list[dict[str, Any]] | None = None,
     replicate_mode: str | None = None,
+    recognition: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     data_type, experiment = _catalog_item(data_type_id, experiment_type_id)
     cleaned_groups = [group for group in groups if group.sample.strip() and group.files]
@@ -1316,9 +1279,8 @@ def create_intake_project(
     series_order = [group.sample.strip() for group in cleaned_groups]
     project_slug = slug(project_name or f"{experiment['label']}_{'_'.join(group.sample for group in cleaned_groups)}")
     output_root = output_root.expanduser().resolve()
-    project_dir = output_root / project_slug
-    if project_dir.exists():
-        shutil.rmtree(project_dir)
+    project_dir = unique_path(output_root, project_slug)
+    project_slug = project_dir.name
     raw_dir = project_dir / "raw"
     source_dir = project_dir / "source"
     runs_dir = project_dir / "runs"
@@ -1350,6 +1312,10 @@ def create_intake_project(
         manifest_groups.append({"sample": sample, "files": group_files})
 
     rule_id = experiment.get("rule_id")
+    recognition_payload = dict(recognition) if isinstance(recognition, dict) else {}
+    recognition_payload.setdefault("semantic_family", experiment_type_id)
+    recognition_payload.setdefault("rule_id", rule_id)
+    recognition_payload.setdefault("fixture_status", "ready" if rule_id else "unknown")
     selected_output = _resolve_plot_output(
         plot_output,
         project_dir=project_dir,
@@ -1401,6 +1367,21 @@ def create_intake_project(
         column_confirmations=selected_column_confirmations,
     )
     plot_request["study_model"] = study_model
+    publication_intent = build_publication_intent(study_model, request=plot_request)
+    transform_ledger = build_transform_ledger(
+        study_model,
+        request=plot_request,
+        input_path=source_dir,
+    )
+    # Intake has only planned the deterministic run. It must not claim that an
+    # identity transform (or any other transform) has already occurred.
+    transform_ledger["status"] = "pending_runtime"
+    transform_ledger["steps"] = []
+    transform_ledger["pending_reason"] = (
+        "Runtime transform steps are recorded when SciPlot prepares the Veusz document or executes the request."
+    )
+    plot_request["publication_intent"] = publication_intent
+    plot_request["transform_ledger"] = transform_ledger
     launcher_path = _write_project_launcher(project_dir, project_slug=project_slug)
     manifest = {
         "kind": "sciplot_intake_project",
@@ -1416,6 +1397,7 @@ def create_intake_project(
             "chart": experiment.get("chart"),
             "template": template,
         },
+        "recognition": json_safe(recognition_payload),
         "groups": manifest_groups,
         "warnings": warnings,
         "source_dir": str(source_dir),
@@ -1423,6 +1405,9 @@ def create_intake_project(
         "outputs_dir": str(selected_output),
         "launcher": launcher_path,
         "study_model": study_model,
+        "publication_intent": publication_intent,
+        "transform_ledger": transform_ledger,
+        "journal_profile": get_publication_profile(publication_intent["target_profile_id"]),
         "column_confirmations": selected_column_confirmations,
         "plot_options": {
             "output": str(selected_output),
@@ -1442,11 +1427,21 @@ def create_intake_project(
         studio_payload = prepare_studio_document(project_dir)
         if isinstance(studio_payload.get("studio"), dict):
             manifest["studio"] = studio_payload["studio"]
+        prepared_request = _read_json_if_exists(project_dir / "plot_request.json")
+        if isinstance(prepared_request, dict):
+            for key in ("study_model", "publication_intent", "transform_ledger"):
+                if isinstance(prepared_request.get(key), dict):
+                    manifest[key] = prepared_request[key]
+            intent = prepared_request.get("publication_intent")
+            if isinstance(intent, dict) and isinstance(intent.get("target_profile_id"), str):
+                manifest["journal_profile"] = get_publication_profile(intent["target_profile_id"])
     except Exception as exc:
         manifest["studio"] = {
             "kind": "sciplot_studio_document",
             "engine": "veusz",
-            "status": "needs_attention",
+            "status": "blocked",
+            "state": str(getattr(exc, "state", "needs_rule_repair")),
+            "reason_code": str(getattr(exc, "reason_code", "studio_preparation_failed")),
             "error": str(exc),
         }
     (project_dir / "intake_manifest.json").write_text(
@@ -1617,71 +1612,6 @@ def _project_template_for_contract(
     return None
 
 
-def _absolute_request_paths(request: dict[str, Any], *, base_dir: Path) -> dict[str, Any]:
-    patched = dict(request)
-    for key in ("input", "output", "curation"):
-        value = patched.get(key)
-        if not isinstance(value, str) or not value.strip():
-            continue
-        path = Path(value).expanduser()
-        if not path.is_absolute():
-            path = base_dir / path
-        patched[key] = str(path.resolve())
-    return patched
-
-
-def _workbench_cache_request_path(project_dir: Path) -> Path:
-    cache_dir = project_dir / "workbench_cache"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir / "preview_request.json"
-
-
-def workbench_chart_spec(project_dir: str | Path) -> dict[str, Any]:
-    project = _load_intake_project_request(project_dir)
-    slug = project.manifest.get("project_slug", Path(project_dir).name)
-    return build_chart_spec(project.request_path, project_slug=slug)
-
-
-def workbench_webagg(project_dir: str | Path) -> dict[str, Any]:
-    project = _load_intake_project_request(project_dir)
-    return ensure_webagg_sidecar(project_dir=project.project_dir, request_path=project.request_path)
-
-
-def preview_intake_project(
-    project_dir: str | Path,
-    *,
-    exports: list[str] | tuple[str, ...] | None = None,
-    render_options: dict[str, Any] | None = None,
-    clear_render_options: list[str] | tuple[str, ...] | None = None,
-    split_policy: dict[str, Any] | None = None,
-    series_order: list[str] | tuple[str, ...] | None = None,
-) -> dict[str, Any]:
-    project = _load_intake_project_request(project_dir)
-    template = _project_template_for_contract(project.project_dir, project.manifest, project.request)
-    patched_request = apply_request_patch(
-        project.request,
-        exports=exports,
-        render_options=render_options,
-        clear_render_options=clear_render_options,
-        split_policy=split_policy,
-        series_order=series_order,
-        template=template,
-    )
-    preview_request = _absolute_request_paths(patched_request, base_dir=project.request_path.parent)
-    preview_path = _workbench_cache_request_path(project.project_dir)
-    preview_path.write_text(json.dumps(json_safe(preview_request), indent=2, ensure_ascii=False), encoding="utf-8")
-    slug = project.manifest.get("project_slug", project.project_dir.name)
-    chart_spec = build_chart_spec(project.request_path, request_override=patched_request, project_slug=slug)
-    webagg = ensure_webagg_sidecar(project_dir=project.project_dir, request_path=preview_path)
-    return {
-        "kind": "sciplot_workbench_preview",
-        "mutates_request": False,
-        "request_path": str(preview_path),
-        "chart_spec": chart_spec,
-        "webagg": webagg,
-    }
-
-
 def apply_intake_project(
     project_dir: str | Path,
     *,
@@ -1719,7 +1649,7 @@ def apply_intake_project(
     plot_options = intake_manifest.get("plot_options") if isinstance(intake_manifest.get("plot_options"), dict) else {}
     intake_manifest["plot_options"] = {
         **plot_options,
-        "exports": patched_request.get("exports", list(DEFAULT_EXPORT_FORMATS)),
+        "exports": patched_request.get("exports", list(DEFAULT_EXPORT_FORMATS_POLICY)),
         "render_options": render_patch,
         **(
             {"split_policy": patched_request["split_policy"]}
@@ -1948,12 +1878,6 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                     if parts[3] == "status":
                         self._send_json(intake_project_status(project_dir))
                         return
-                    if len(parts) == 5 and parts[3] == "workbench" and parts[4] == "spec":
-                        self._send_json(workbench_chart_spec(project_dir))
-                        return
-                    if len(parts) == 5 and parts[3] == "workbench" and parts[4] == "webagg":
-                        self._send_json(workbench_webagg(project_dir))
-                        return
                     if parts[3] == "artifact":
                         query = parse_qs(parsed.query)
                         artifact_path = query.get("path", [""])[0]
@@ -2069,16 +1993,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                     length = int(self.headers.get("Content-Length", "0"))
                     payload = json.loads(self.rfile.read(length).decode("utf-8"))
                     project_dir = self._project_dir_from_request(parts[2])
-                    if parts[4] == "preview":
-                        project = preview_intake_project(
-                            project_dir,
-                            exports=payload.get("exports"),
-                            render_options=payload.get("render_options"),
-                            clear_render_options=payload.get("clear_render_options"),
-                            split_policy=payload.get("split_policy"),
-                            series_order=payload.get("series_order"),
-                        )
-                    elif parts[4] == "apply":
+                    if parts[4] == "apply":
                         project = apply_intake_project(
                             project_dir,
                             exports=payload.get("exports"),
@@ -2212,11 +2127,8 @@ __all__ = [
     "intake_project_status",
     "list_intake_projects",
     "prepare_intake_session",
-    "preview_intake_project",
     "preview_table_payload",
     "refresh_intake_project_zip",
     "rerun_intake_project",
     "serve_intake",
-    "workbench_chart_spec",
-    "workbench_webagg",
 ]

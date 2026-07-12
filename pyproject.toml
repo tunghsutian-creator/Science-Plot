@@ -21,7 +21,6 @@ dependencies = [
   "PyMuPDF",
   "Pillow",
   "platformdirs",
-  "tornado",
 ]
 
 [project.optional-dependencies]
@@ -56,6 +55,9 @@ sciplot_core = [
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "integration: exercises external runtimes or heavier renderer/export paths",
+]
 
 [tool.ruff]
 target-version = "py311"

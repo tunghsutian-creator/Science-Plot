@@ -23,6 +23,54 @@ FIGURE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x11
 
 DEFAULT_EXPORT_FORMATS_POLICY = ("pdf", "tiff_300")
 
+# Public request keys accepted by the compatibility intake surface.  Keep this
+# contract explicit and renderer-independent so importing intake never starts
+# Matplotlib merely to introspect a legacy function signature.
+RENDER_OPTION_KEYS = frozenset(
+    {
+        "size",
+        "xscale",
+        "yscale",
+        "reverse_x",
+        "x_min",
+        "x_max",
+        "y_min",
+        "y_max",
+        "x_padding_fraction",
+        "x_tick_density",
+        "y_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_edge_labels",
+        "series_order",
+        "series_include",
+        "series_styles",
+        "series_offsets",
+        "stack_spacing_scale",
+        "legend_position",
+        "series_label_mode",
+        "x_label_override",
+        "y_label_override",
+        "baseline",
+        "show_colorbar",
+        "style_preset",
+        "palette_preset",
+        "visual_theme_id",
+        "fit_options",
+        "extra_x_axis",
+        "extra_y_axis",
+        "x_axis_breaks",
+        "y_axis_breaks",
+        "reference_guides",
+        "reference_line",
+        "reference_band",
+        "text_annotations",
+        "shape_annotations",
+        "analytical_layers",
+        "data_variables",
+        "data_transforms",
+    }
+)
+
 DELIVERY_DIR = "delivery"
 DELIVERY_INTERNAL_DIR = "_sciplot_internal"
 DELIVERY_FIGURES_DIR = "figures"
@@ -65,12 +113,6 @@ FTIR_SPECTRUM_RENDER_OPTIONS: dict[str, Any] = {
     "x_max": 4000.0,
     "x_tick_density": "auto",
 }
-
-NMR_SPECTRUM_RENDER_OPTIONS: dict[str, Any] = {
-    **SPECTRUM_STACK_RENDER_OPTIONS,
-    "reverse_x": True,
-}
-
 
 @dataclass(frozen=True)
 class StrokePolicy:
@@ -125,26 +167,6 @@ FTIR_LAYOUT_POLICY = LayoutPolicy(
     },
 )
 
-NMR_LAYOUT_POLICY = LayoutPolicy(
-    policy_id="nmr_spectrum",
-    figure_size=SPECTRUM_JOURNAL_FIGURE_SIZE,
-    allowed_legend_positions=("upper_right", "upper_left", "lower_right", "lower_left", "inline"),
-    forbid_outside_legend=True,
-    inside_legend_max_series=4,
-    prefer_inline_min_series=5,
-    max_blank_area_ratio=0.18,
-    tick_policy={
-        "reverse_x": True,
-    },
-    stack_spacing_policy={
-        "mode": "auto",
-        "robust_peak": "p99-p01",
-        "min_gap_peak_fraction": 0.25,
-        "padding_peak_fraction": 0.10,
-        "nice_span_sequence": (1, 2, 5, 10, 20, 50, 100),
-    },
-)
-
 TORQUE_LAYOUT_POLICY = LayoutPolicy(
     policy_id="torque_curve",
     allowed_legend_positions=("upper_right", "lower_right", "upper_left", "lower_left", "inline"),
@@ -165,7 +187,6 @@ LAYOUT_POLICIES: dict[str, LayoutPolicy] = {
     "default": DEFAULT_LAYOUT_POLICY,
     "generic_curve": DEFAULT_LAYOUT_POLICY,
     "ftir_spectrum": FTIR_LAYOUT_POLICY,
-    "nmr_spectrum": NMR_LAYOUT_POLICY,
     "torque_curve": TORQUE_LAYOUT_POLICY,
     "rheology_stress_relaxation": STRESS_RELAXATION_LAYOUT_POLICY,
 }
@@ -236,8 +257,6 @@ __all__ = [
     "FTIR_LAYOUT_POLICY",
     "LAYOUT_POLICIES",
     "LayoutPolicy",
-    "NMR_LAYOUT_POLICY",
-    "NMR_SPECTRUM_RENDER_OPTIONS",
     "SPECTRUM_JOURNAL_COLORS",
     "SPECTRUM_JOURNAL_FIGURE_SIZE",
     "SPECTRUM_JOURNAL_PALETTE_ID",

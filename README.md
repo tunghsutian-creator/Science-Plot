@@ -1,408 +1,190 @@
 # SciPlot
 
-SciPlot is a local, script-first plotting workbench for polymer and materials
-science. It turns raw experiment tables into processed data, reviewable
-publication-style figures, QA artifacts, and repeatable request files.
+SciPlot 是面向材料科研日常出图的本地、可复现工作流。它把原始仪器数据变成可继续编辑的
+`studio/document.vsz`，由 Veusz 完成生产渲染，并交付 PDF、300 dpi TIFF、数据工作簿、
+分析记录和机器可读 QA。Luna/Codex 只在确定性程序无法识别数据或表达规则时介入。
 
-This repository is the source of truth for the SciPlot workflow. The goal is to
-make plotting faster than manual figure preparation while staying auditable,
-repeatable, and useful without requiring Codex for the normal plotting path.
+正式渲染器只有 Veusz。Matplotlib 公共回退和自研高级图形编辑器均不属于产品路线。
 
-## Ultimate Goal
+## 日常主流程
 
-Build a practical research plotting system where:
-
-- SciPlot handles data recognition, cleanup, units, axis labels, metrics,
-  journal-style defaults, rendering, and QA.
-- SciPlot Studio is the daily plotting surface for importing data, creating
-  project packages, editing figures, and exporting results through embedded
-  GPL Veusz.
-- The local Web app remains a compatibility surface for browser-based
-  confirmation and older project workflows. Opening the frontend always starts
-  in independent mode; no user-facing mode switch is required.
-- Optional assisted mode starts only when the user asks Codex to draw/repair or
-  when deterministic recognition blocks. Codex then controls the cleanup,
-  plotting repair, fixtures, and tests as the assistant.
-- The human reviewer confirms sample names, legend order, figure size, export
-  options, and final scientific meaning.
-
-The long-term target is not to automate a closed-source drawing program. The
-target is a small local plotting system that can beat manual figure software for
-polymer science because every plot is reproducible and every correction can
-become a reusable rule.
-
-## Daily Workflow
-
-Prefer the project wrapper:
+首次或交付前检查：
 
 ```bash
 skill/scripts/sciplot doctor --json
 ```
 
+要求 `status=ready`。随后，一条命令完成识别、VSZ 生成、导出、QA 与交付：
+
 ```bash
-skill/scripts/sciplot studio PATH --out outputs/intake_projects
+skill/scripts/sciplot studio PATH \
+  --out outputs/projects \
+  --export pdf,tiff_300 \
+  --json
 ```
 
-`doctor` must report `status=ready` before alpha use. See
-`docs/ALPHA_USER_GUIDE.md` for the current PhD-student daily-use contract.
+这是 Luna 应优先使用的入口。成功的科研交付必须同时满足：
 
-For a blank desktop editor:
+- 识别命中 fixture-backed `ready` 规则；
+- `studio/document.vsz` 已生成且是视觉权威；
+- PDF 与 300 dpi TIFF 成对存在；
+- `qa.status=passed`；
+- `delivery.complete=true`；
+- 导出记录中的 VSZ SHA-256 与当前文档一致。
+
+项目返回三种稳定状态：
+
+- `ready`：可直接使用交付包；
+- `needs_human_confirmation`：科学含义、样品分组或列角色需要人确认；
+- `needs_rule_repair`：解析、规则、转换或 QA 阻断，此时才让 Luna/Codex 修规则或数据。
+
+程序不会用占位曲线或假数据工作簿伪造成功。
+
+## 高级修图
+
+需要高级修正时，打开项目内的 `Open_in_Veusz.command`，或运行：
 
 ```bash
-skill/scripts/sciplot studio --new
+skill/scripts/sciplot studio PROJECT/studio/document.vsz --advanced-editor
 ```
 
-For the older browser confirmation flow:
+在完整 Veusz 中修改对象树、轴、图例、字体、标注和排版并保存。然后精确导出当前文档：
 
 ```bash
-skill/scripts/sciplot quick PATH
+skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
+```
+
+这一步不会重新生成 VSZ。手工保存的 `.vsz` 是视觉权威；显式再生成前会先归档旧文档。
+
+## 输出结构
+
+典型项目包含：
+
+```text
+PROJECT/
+  plot_request.json
+  intake_manifest.json
+  studio/
+    document.vsz
+    Open_in_Veusz.command
+  runs/
+    run_001/
+      manifest.json
+      analysis_report.md
+      review.html
+      request_snapshot.json
+      publication_intent.json
+      transform_ledger.json
+      publication_qa.json
+      tables/analysis_metrics.csv
+      raw/
+      figures/
+      delivery/
+```
+
+交付前读取 `manifest.json`、`review.html`、`tables/analysis_metrics.csv`、QA 和 `delivery/`；
+不要仅凭命令退出码或空预览判断成功。
+
+## 已实现能力
+
+- CSV、TSV、TXT、XLS/XLSX 与常见仪器文件夹的本地检查和读取；
+- 材料实验语义识别、单位/轴别名、样品顺序和 recipe 自动选择；
+- 拉伸、流变/DMA、DSC/TGA/DTG、FTIR/UV-Vis、XRD/SAXS、GPC/SEC、
+  扭矩和溶胀等 fixture-backed 生产规则；
+- 同指标多样品比较、谱图堆叠、replicate 处理和事件段选择；
+- Veusz `.vsz` 生成、完整 Veusz 高级编辑和 exact-current export；
+- 60/120/180 mm 单图尺寸以及 183 mm 组合图布局；
+- publication intent、transform ledger、研究模型和证据绑定；
+- PDF 页面/字体/尺寸/可见墨迹、TIFF 分辨率、PDF-TIFF 配对和哈希 QA；
+- 可携带 `delivery/`，包含图、数据工作簿、项目文件与内部审计材料；
+- `intervention_request.json`、`assisted_cleanup_request.json`、
+  `cleanup_result.json` 和 `revision_brief.md` 组成的可审计辅助修复链；
+- 文件夹 batch、3D PA 真实数据 acceptance 和扭矩专项 curation。
+
+未验收的 pending 规则不会自动进入绘图。新增规则默认是 pending，只有加入真实 fixture 与回归测试后
+才能成为 `ready`。
+
+## 浏览器兼容入口
+
+当用户明确需要在浏览器确认样品分组、图例名称、顺序、尺寸或导出格式时使用：
+
+```bash
 skill/scripts/sciplot app --out outputs/intake_projects
 ```
 
-For a high-confidence supported experiment path that should generate a complete
-auditable package in one step:
+浏览器只负责数据确认与导出请求，不提供 Matplotlib/WebAgg 实时绘图器。Source、Inspect 和 Samples
+是 data-confirmation stages, not plot-preview stages。Result Review 只在 Export 或辅助修复产生真实制品后出现。
+Do not use an empty plot preview as a placeholder during import, inspection, or grouping.
+
+## 辅助修复边界
+
+前端默认独立运行，没有用户可见的模式切换。正常路径不依赖 Codex。只有以下情况才允许助手介入：
+
+- `needs_rule_repair` 或 `needs_ai_intervention`；
+- `intervention_request.json` 或 `assisted_cleanup_request.json` 出现；
+- 用户明确要求 Luna/Codex 修改规则、清洗数据或调整 recipe。
+
+助手必须先保存原始输入，写出可验证的 `cleanup_result.json` 或 recipe/rule 补丁，增加 fixture 和测试，
+再回到同一确定性工作流重跑。不得要求用户“切换模式”，也不得静默改变科学含义。
+
+## 专家与验收命令
 
 ```bash
-skill/scripts/sciplot autoplot PATH --out outputs/autoplot_projects --json
-skill/scripts/sciplot one-step PATH --out outputs/one_step_projects --json
-```
+# 查看程序如何理解输入
+skill/scripts/sciplot inspect PATH --json
 
-`autoplot` is the stable daily script entrypoint. It uses the same local
-one-step workflow underneath, then writes `autoplot_summary.json` with the
-delivery folder, readiness state, structured QA, and optional assistant policy:
-Codex is only a cleanup/repair provider for QA failures, low-confidence
-semantics, messy inputs, or explicit user requests.
-See `docs/STABLE_AUTOPLOT_CONTRACT.md` for the stable script contract.
-
-For development acceptance against the representative 3D PA real-data folder:
-
-```bash
-skill/scripts/sciplot acceptance 3dpa PATH --out outputs/acceptance --json
-```
-
-The explicit version is:
-
-```bash
-skill/scripts/sciplot prepare PATH --out outputs/intake_projects --json
-skill/scripts/sciplot intake PATH --out outputs/intake_projects
-```
-
-The clickable macOS launcher is also available:
-
-```bash
-./Launch_SciPlot_App.command
-```
-
-For a confirmed request file:
-
-```bash
-skill/scripts/sciplot run plot_request.json
-```
-
-Default exports should stay:
-
-```json
-["pdf", "tiff_300"]
-```
-
-## Operating Model
-
-Default loop:
-
-```text
-inspect -> recipe/render -> qa -> human review -> revised request/script -> rerun
-```
-
-One-step loop:
-
-```text
-source -> semantic confidence gate -> render package -> structured QA -> ready / needs human confirmation / needs rule repair
-```
-
-Example request:
-
-```json
-{
-  "recipe": "auto",
-  "input": "data/frequency_sweep.xlsx",
-  "output": "outputs/run_001",
-  "exports": ["pdf", "tiff_300"],
-  "render_options": {
-    "style_preset": "nature",
-    "palette_preset": "spectrum_journal_8"
-  }
-}
-```
-
-`sciplot run` writes a reviewable export package containing `manifest.json`,
-`analysis_report.md`, `tables/analysis_metrics.csv`, `raw/`, `review.html`,
-`revision_brief.md`, PDF figures, and 300 DPI TIFF figures. It also writes a
-minimal user-facing `delivery/` folder:
-
-- `{project}.sciplot`
-- `{project}.xlsx`
-- `figures/{figure}.pdf`
-- `figures/{figure}_300dpi.tiff`
-- `_sciplot_internal/` for QA, manifests, raw/archive files, and audit trails
-
-If recognition or rendering cannot continue deterministically, SciPlot writes
-`intervention_request.json` and `assisted_cleanup_request.json`, marks
-`needs_ai_intervention`, and records `operation_mode=assisted_cleanup`. This is
-not a user-facing mode switch: the frontend remains the independent plotting
-surface, and a Codex-controlled assisted job writes `cleanup_result.json` when
-it reshapes data or repairs the plotting path. A confirmed result with non-low
-confidence is marked `ready_for_normal_mode`, and SciPlot can use the recorded
-`cleaned_data.path` as the next normal input.
-One-step runs also write `one_step_status.json`, so every output has an
-explicit state: `ready`, `needs_human_confirmation`, or `needs_rule_repair`.
-
-Cross-cutting defaults live in `src/sciplot_core/policy.py`: default exports
-are PDF plus 300 DPI TIFF, and the default figure size is `60x55`. Wider
-presets such as `120x55` remain available when selected by the user or required
-by a documented rule. The default production renderer is Veusz: SciPlot turns
-its request/options contract into a Veusz document, exports the actual Veusz
-PDF/TIFF output, and runs QA on those exported artifacts. The old Matplotlib
-production fallback has been removed from the public CLI/API; any remaining
-Matplotlib code is retained only inside legacy contract tests and reference
-helpers while the Veusz bridge absorbs those rules. Renderer quality thresholds
-such as legend footprint, legend canvas bounds, axis usable area, tick overlap,
-FTIR bounds, and stacked spacing live in
-`src/sciplot_core/_vendor/src/plot_contract.json`. Export QA also rasterizes
-PDFs to record visible ink fraction and content bounds, so non-empty files are
-not treated as publication-ready unless they contain real visible figure
-content.
-
-## Qt Studio And Web Compatibility
-
-SciPlot Studio is the primary local plotting frontend. `sciplot studio PATH`
-accepts a raw data file/folder, an existing SciPlot project, a
-`plot_request.json`, or a Veusz `.vsz` document. For raw paths it creates a
-project package under `outputs/intake_projects`, writes `studio/document.vsz`,
-and opens the embedded Veusz editor. SciPlot decides how the figure is drawn:
-it uses its data recognition, sample/legend names, template choice, and plotting
-contract to generate the official Veusz object tree and datasets. The matching
-`studio/spec.json` records the SciPlot-to-Veusz drawing instructions. Veusz then
-provides the native object tree, property editor, legend controls, undo/redo,
-and export UI for interactive edits after the SciPlot-generated figure appears.
-
-The Web app remains available for compatibility. `sciplot app`, `sciplot
-workbench`, and `sciplot intake` open the same browser workflow.
-
-Workflow:
-
-```text
-Source -> Inspect -> Samples -> Export -> Result Review
-```
-
-Stage rules:
-
-- Source, Inspect, and Samples are data-confirmation stages, not plot-preview stages.
-- Result Review appears only after Export or assisted repair produces rendered artifacts.
-- Do not use an empty plot preview as a placeholder during import, inspection, or grouping.
-- Read Result Review artifacts (`review.html`, figures, manifest, metrics, and QA) before reporting output.
-- Read the `delivery/` package before handing off final files.
-- Use `revision_brief.md` as the short handoff for optional assisted rule/style revisions.
-
-The UI lets the user confirm source binding, detected rules/templates, sample
-groups, sample/legend names, legend order, output directory, figure size, and
-export formats. Figure-size choices must stay aligned with the SciPlot contract
-presets: `60x55`, `120x55`, `180x55`, `60x110`, `120x110`, and `180x110`.
-The interactive plotting roadmap lives in
-`docs/INTERACTIVE_PLOT_WORKBENCH_PLAN.md`.
-
-## Commands
-
-Setup and checks:
-
-```bash
-make setup
-make test
-make lint
-make clean
-```
-
-Manual equivalents:
-
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -e '.[dev]'
-.venv/bin/python -m pytest -q
-.venv/bin/python -m ruff check .
-```
-
-Inspection:
-
-```bash
-skill/scripts/sciplot inspect INPUT --json
+# 查看生产规则
 skill/scripts/sciplot rules list --json
 skill/scripts/sciplot rules show rheology_temperature_sweep --json
-```
 
-`rules list` shows only fixture-backed ready rules by default. Use
-`skill/scripts/sciplot rules list --json --all` only for internal rule
-development.
-
-Rendering:
-
-```bash
+# 已确认 request 的可复现运行
 skill/scripts/sciplot run plot_request.json
-skill/scripts/sciplot one-step INPUT --out outputs/one_step_projects --json
-skill/scripts/sciplot qa OUTPUT_DIR
+
+# 稳定脚本包与批量验收
+skill/scripts/sciplot autoplot PATH --out outputs/autoplot_projects --json
+skill/scripts/sciplot batch INPUT_DIR --out outputs/batch --mode smoke
+skill/scripts/sciplot batch INPUT_DIR --out outputs/batch --mode all --tensile-root PATH
+skill/scripts/sciplot acceptance 3dpa PATH --out outputs/acceptance --json
+
+# 扭矩事件段整理
+skill/scripts/sciplot curate torque PATH --name PROJECT_NAME \
+  --out outputs/curation_projects --json
+
+# 单独复核输出
+skill/scripts/sciplot qa OUTPUT_DIR --strict-publication
 ```
 
-Batch and acceptance:
+`autoplot`、`run`、`batch` 和 recipe/render 是专家与兼容接口；日常新任务优先走 `studio`。
+
+## 安装与开发
 
 ```bash
-skill/scripts/sciplot batch INPUT_DIR --out OUTDIR --mode smoke
-skill/scripts/sciplot batch INPUT_DIR --out OUTDIR --mode all
-skill/scripts/sciplot batch INPUT_DIR --out OUTDIR --mode all --tensile-root PATH
+make setup       # 安装开发与 Veusz Studio 所需依赖
+make test
+make lint
+make clean       # 只清缓存，保留 outputs/ 科研交付
 ```
 
-Torque-rheometer curation:
+`make clean-all` 会删除 `outputs/`，只在明确不需要其中成果时使用。
 
-```bash
-skill/scripts/sciplot curate torque PATH --name PROJECT_NAME --out outputs/curation_projects --json
-```
+代码职责：
 
-Torque text exports with `Screw Torque` columns should map to `torque_curve`.
+- `src/sciplot_core/materials_rules.py`：实验族、轴/单位语义与 fixture readiness；
+- `src/sciplot_core/semantic.py`：识别和预处理；
+- `src/sciplot_core/studio.py`：VSZ 生命周期、Veusz 打开/导出与 Studio 交付；
+- `src/sciplot_core/workflow.py`：request 编排和辅助修复闭环；
+- `src/sciplot_core/qa.py`、`delivery.py`：制品 QA 与交付门禁；
+- `src/sciplot_core/publication.py`、`study_model.py`：出版与证据合同；
+- `src/sciplot_recipes/`：经过测试的实验族 recipe；
+- `third_party/veusz/`：迁移的生产渲染器黑盒。
 
-## Source Of Truth
+## 当前文档
 
-- `src/sciplot_core/materials_rules.py`: experiment-family aliases, axis
-  aliases, unit rules, common metrics, and deterministic rule metadata.
-- `src/sciplot_core/semantic.py`: source classification and semantic source
-  preparation.
-- `src/sciplot_core/workflow.py`: request execution, review artifacts, QA, and
-  optional intervention handoff.
-- `src/sciplot_core/intake.py`: Web app project/session workflow.
-- `src/sciplot_core/intake_static/index.html`: browser UI.
-- `src/sciplot_recipes/`: public recipe modules for known experiment families.
-- `skill/scripts/sciplot`: preferred wrapper for local use and assisted repair.
-- `AGENTS.md`: operating rules for assistant-driven repository work.
-- `skill/SKILL.md`: SciPlot Materials Analysis Skill instructions.
-- `DEVELOPMENT_LOG.md`: development log, project board, decisions, and next
-  steps.
+- [Alpha 使用指南](docs/ALPHA_USER_GUIDE.md)
+- [Luna / SciPlot 操作流](docs/SCIPLOT_OPERATION_FLOW_PLAN.md)
+- [VSZ-first Veusz 集成路线](docs/VSZ_FIRST_VEUSZ_INTEGRATION_PLAN.md)
+- [出版级科研绘图路线](docs/SCIPLOT_PUBLICATION_FIGURE_ULTIMATE_ROADMAP.md)
+- [稳定 autoplot 合同](docs/STABLE_AUTOPLOT_CONTRACT.md)
+- [第三方许可](docs/THIRD_PARTY_NOTICES.md)
 
-`_vendor/` is the migrated renderer black box. Do not inspect or modify it by
-default. Patch the public wrapper, semantic layer, recipes, fixtures, and tests
-first. Use `rule_id` or `y_metric` only when the user explicitly needs a local
-materials rule override.
-
-## Current Scope
-
-The first-class materials workflows are:
-
-- Rheology and DMA sweeps, including frequency and temperature comparisons.
-- Impact metrics and replicate summary plots.
-- Tensile export folders.
-- Thermal analysis.
-- Spectroscopy, scattering, and chromatography.
-- Stress relaxation and swelling/metric tables.
-- Torque-rheometer curation and event-segment plotting.
-
-Use `"recipe": "auto"` when SciPlot should choose the semantic family,
-preprocessor, recipe, and template automatically.
-
-Rheology sweep folders such as frequency or temperature scans that contain
-multiple sample exports should be treated as comparison groups: aggregate
-same-metric columns across samples, then plot each supported metric as a
-separate cross-sample figure.
-
-## Development Contract
-
-- Do not create one-off plotting scripts unless they call the public recipe or
-  render APIs.
-- Do not copy Matplotlib style constants into ad hoc scripts.
-- Keep experiment recognition, axis aliases, unit conversion, and analysis
-  metrics in the public SciPlot layer.
-- Keep generated outputs under ignored folders such as `outputs/` or
-  `.tmp_verify/`.
-- Add or update fixtures and tests for every new rule, recipe, or semantic
-  behavior.
-- For a user-supplied raw data path, prefer `sciplot studio PATH --out
-  outputs/intake_projects`; use the Web UI only when the user explicitly asks
-  for browser confirmation or Qt Studio lacks a needed confirmation control.
-- If `intervention_request.json`, `assisted_cleanup_request.json`,
-  `needs_ai_intervention`, or batch `interventions` appears, treat it as
-  assisted cleanup/repair: preserve raw data, patch code and tests when needed,
-  write or inspect `cleanup_result.json`, then rerun the request.
-
-## Roadmap
-
-Current standalone-operation and cleanup direction:
-`docs/INDEPENDENT_OPERATION_AND_CLEANUP_PLAN.md`.
-
-Current alpha user guide:
-`docs/ALPHA_USER_GUIDE.md`.
-
-Phase 1: Make Qt Studio the daily plotting surface.
-
-- Route raw files/folders through `sciplot studio PATH`.
-- Use Veusz as the default production renderer for `render`, `run`, `recipe`,
-  `one-step`, `autoplot`, and Studio exports. Do not add a parallel Matplotlib
-  production fallback.
-- Keep editing in Veusz's native GUI instead of rebuilding object/property
-  panels in SciPlot.
-- Keep SciPlot's layer focused on raw-data import, request generation, `.vsz`
-  regeneration, QA, delivery, and manifest/ZIP registration.
-- Keep the Web app as a compatibility fallback.
-- Keep QA and delivery packages as the quality gate for PDF/TIFF outputs.
-
-Phase 2: Strengthen polymer-science rules.
-
-- Finish rheology and impact as the first reliable real-data tracks.
-- Expand FTIR, XRD, tensile, thermal, and DMA fixtures from real examples.
-- Improve unit normalization, axis naming, legend ordering, and metrics.
-- Add more deterministic assisted-cleanup handoffs.
-
-Phase 3: Add interactive figure refinement.
-
-- Keep basic SciPlot controls for axes, ticks, legend, line width, marker size,
-  labels, and export presets on the Qt setup side.
-- Treat Veusz-exported PDF/TIFF as the QA baseline for Studio and CLI outputs.
-- Keep advanced manual edits in the Veusz document unless a setting has a clear
-  and safe SciPlot request mapping.
-
-Phase 4: Make assisted cleanup routine.
-
-- Keep the frontend default as independent mode; no manual mode switch.
-- Start assisted mode by explicit Codex-controlled draw/repair jobs.
-- Inspect `codex_jobs/*/sciplot_codex_handoff.json`, logs, status, and outputs
-  before reporting.
-- Convert repeated human corrections into tests, rules, recipes, or presets.
-
-Phase 5: Support manuscript workflows.
-
-- Add panel assembly, figure registry, journal presets, and PPT/manuscript
-  handoff exports.
-- Keep raw data, processed tables, request files, and QA artifacts connected to
-  every final figure.
-
-## Next Development Suggestions
-
-1. Broaden the `.vsz` bridge from generic curve tables to more
-   recipe-processed material outputs.
-2. Preserve Veusz as the native editor and keep SciPlot UI additions to small
-   integration actions.
-3. Roundtrip safe Veusz edits such as axis ranges, series names, colors, line
-   width, and marker size back into project metadata.
-4. Add real rheology and impact fixtures from the current polymer dataset.
-5. Add a prepared-data export/import route for users who need external
-   downstream analysis tools.
-7. Keep SciPlot request files plus `studio/spec.json` as the reproducible
-   automatic contract, while Veusz remains both renderer and editor.
-
-## Cleanup Policy
-
-The project should stay small and legible:
-
-- Keep root documentation in `README.md`, `AGENTS.md`, `DEVELOPMENT_LOG.md`,
-  and `skill/SKILL.md`.
-- Keep generated outputs in ignored directories only.
-- Delete stale mockups, scratch servers, copied app experiments, and old
-  one-off prototypes once their useful ideas are folded into Qt Studio.
-- Do not commit local caches such as `.pytest_cache/`, `.ruff_cache/`,
-  `__pycache__/`, `.DS_Store`, `.tmp_verify/`, or `outputs/`.
-- Run `make clean` when generated output or cache directories start to clutter
-  the workspace.
-- Update `DEVELOPMENT_LOG.md` during every non-trivial development turn.
+历史 UI、Swift sidecar、WebAgg 和旧版路线文档已移除；Git 历史保留其开发记录。

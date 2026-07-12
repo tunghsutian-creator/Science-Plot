@@ -7,7 +7,7 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from sciplot_core._utils import json_safe, slug
+from sciplot_core._utils import json_safe, slug, text_preview
 from sciplot_core.render import DEFAULT_EXPORT_FORMATS, inspect_payload
 from sciplot_core.semantic import (
     build_intervention_request,
@@ -18,6 +18,7 @@ from sciplot_core.semantic import (
 from sciplot_core.workflow import run_request
 
 _TABLE_SUFFIXES = {".csv", ".xlsx", ".xls"}
+_TORQUE_TEXT_SUFFIXES = {".txt", ".tsv"}
 _RECORDED_SKIP_SUFFIXES = {".txt", ".tif", ".tiff", ".id_tens", ".is_tens"}
 _SMOKE_MAX_RUNS = 6
 _MAX_RECORDED_SKIPS = 200
@@ -29,8 +30,10 @@ _SMOKE_SEMANTIC_PRIORITY = {
     "rheology_creep": 3,
     "rheology_stress_relaxation": 4,
     "tensile_curve": 5,
-    "generic_replicate": 6,
-    "generic_curve": 7,
+    "ftir_spectrum": 6,
+    "torque_curve": 7,
+    "generic_replicate": 8,
+    "generic_curve": 9,
 }
 
 
@@ -69,6 +72,19 @@ def _is_tensile_related(path: Path) -> bool:
         or path.name.casefold().endswith(".is_tens_exports")
         or _is_under_tensile_export_dir(path)
     )
+
+
+def _is_torque_text_export(path: Path) -> bool:
+    if not path.is_file() or path.suffix.lower() not in _TORQUE_TEXT_SUFFIXES:
+        return False
+    path_text = path.as_posix().casefold()
+    if "torque" in path_text or "转矩" in path_text:
+        return True
+    try:
+        preview = text_preview(path).casefold()
+    except Exception:
+        return False
+    return "screw torque" in preview or "screwtorque" in preview or "转矩" in preview
 
 
 def _is_under_any_root(path: Path, roots: tuple[Path, ...]) -> bool:
@@ -114,7 +130,8 @@ def _candidate_sources(
         (
             path
             for path in all_files
-            if path.suffix.lower() in _TABLE_SUFFIXES and not _is_under_tensile_export_dir(path)
+            if (path.suffix.lower() in _TABLE_SUFFIXES or _is_torque_text_export(path))
+            and not _is_under_tensile_export_dir(path)
             and not _is_under_any_dir(path, rheology_comparison_dirs)
         ),
         key=_smoke_priority,
@@ -220,7 +237,11 @@ def run_batch(
     all_files = sorted((path for path in input_dir.rglob("*") if path.is_file()), key=lambda path: path.as_posix())
     for source in all_files:
         suffix = source.suffix.lower()
-        if suffix in _RECORDED_SKIP_SUFFIXES and len(skipped) < _MAX_RECORDED_SKIPS:
+        if (
+            suffix in _RECORDED_SKIP_SUFFIXES
+            and not _is_torque_text_export(source)
+            and len(skipped) < _MAX_RECORDED_SKIPS
+        ):
             skipped.append({"path": str(source), "reason": f"skipped_{suffix.lstrip('.')}_input"})
 
     candidates: list[tuple[Path, dict[str, Any]]] = []

@@ -15,7 +15,6 @@ from sciplot_core._utils import token as _utils_token
 from sciplot_core.policy import (
     DEFAULT_PALETTE_PRESET,
     FTIR_SPECTRUM_RENDER_OPTIONS,
-    NMR_SPECTRUM_RENDER_OPTIONS,
     TORQUE_CURVE_RENDER_OPTIONS,
 )
 from sciplot_core.study_model import experiment_recommendation_payload
@@ -93,7 +92,7 @@ class SemanticRule:
     analysis: tuple[AnalysisSpec, ...] = ()
     available_metrics: tuple[str, ...] = ()
     fixture_path: str | None = None
-    fixture_status: str = "ready"
+    fixture_status: str = "pending"
     priority: int = 100
     reason: str = ""
 
@@ -206,7 +205,7 @@ def _rule(
     analysis: tuple[AnalysisSpec, ...] = (),
     available_metrics: tuple[str, ...] = (),
     fixture_path: str | None = None,
-    fixture_status: str = "ready",
+    fixture_status: str = "pending",
     priority: int = 100,
     reason: str = "",
 ) -> SemanticRule:
@@ -280,6 +279,7 @@ RULES: tuple[SemanticRule, ...] = (
         render_options=_POINT_LINE_LOG,
         analysis=(AnalysisSpec("terminal_modulus", "last finite G' value", ("G'",), "Pa"),),
         fixture_path="tests/fixtures/polymer_corpus/rheology_dma/rheology_frequency_excerpt.csv",
+        fixture_status="ready",
         priority=20,
         reason="Rheology frequency sweep with modulus/viscosity metrics.",
     ),
@@ -311,6 +311,7 @@ RULES: tuple[SemanticRule, ...] = (
         ),
         available_metrics=("tan_delta", "softening_temperature_candidate"),
         fixture_path="tests/fixtures/materials_rules/rheology_temperature_sweep.csv",
+        fixture_status="ready",
         priority=10,
         reason="Rheology/DMA temperature sweep with modulus priority G′, |G*|, then G″.",
     ),
@@ -326,6 +327,7 @@ RULES: tuple[SemanticRule, ...] = (
         column_aliases=("time", "storage modulus", "modulus"),
         analysis=(AnalysisSpec("peak_modulus_time_s", "time at maximum modulus", ("time", "modulus"), "s"),),
         fixture_path="tests/fixtures/materials_rules/rheology_time_sweep.csv",
+        fixture_status="ready",
         priority=28,
     ),
     _rule(
@@ -342,6 +344,7 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("peak_modulus_strain_percent", "strain at maximum modulus", ("strain", "modulus"), "%"),
         ),
         fixture_path="tests/fixtures/materials_rules/rheology_strain_sweep.csv",
+        fixture_status="ready",
         priority=28,
     ),
     _rule(
@@ -356,6 +359,7 @@ RULES: tuple[SemanticRule, ...] = (
         column_aliases=("stress", "storage modulus", "modulus"),
         analysis=(AnalysisSpec("peak_modulus_stress_Pa", "stress at maximum modulus", ("stress", "modulus"), "Pa"),),
         fixture_path="tests/fixtures/materials_rules/rheology_stress_sweep.csv",
+        fixture_status="ready",
         priority=28,
     ),
     _rule(
@@ -372,6 +376,7 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("recovery_ratio", "recovery segment if available", ("Creep compliance",), "fraction"),
         ),
         fixture_path="tests/fixtures/semantic/creep_utf16.csv",
+        fixture_status="ready",
         priority=30,
     ),
     _rule(
@@ -393,6 +398,7 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("t50_s", "time to normalized value <= 0.5", ("stress", "time"), "s"),
         ),
         fixture_path="tests/fixtures/semantic/stress_relaxation_utf16.csv",
+        fixture_status="ready",
         priority=25,
     ),
     _rule(
@@ -412,6 +418,7 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("toughness_MPa_percent", "area under stress-strain curve", ("strain", "stress"), "MPa %"),
         ),
         fixture_path="tests/fixtures/semantic/Specimen.is_tens_Exports",
+        fixture_status="ready",
         priority=40,
     ),
     _rule(
@@ -421,7 +428,7 @@ RULES: tuple[SemanticRule, ...] = (
         "curve",
         TIME_AXIS,
         TORQUE_AXIS,
-        keywords=("screwtorque", "screw torque", "转矩"),
+        keywords=("screwtorque", "screw torque", "screw speed", "setting torque", "转矩"),
         path_keywords=("torque", "转矩"),
         column_aliases=("screw torque", "转矩"),
         analysis=(
@@ -452,6 +459,7 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("peak_compressive_stress_MPa", "maximum compressive stress", ("strain", "stress"), "MPa"),
         ),
         fixture_path="tests/fixtures/materials_rules/compression_curve.csv",
+        fixture_status="ready",
         priority=34,
     ),
     _rule(
@@ -466,6 +474,7 @@ RULES: tuple[SemanticRule, ...] = (
         column_aliases=("strain", "stress"),
         analysis=(AnalysisSpec("peak_flexural_stress_MPa", "maximum flexural stress", ("strain", "stress"), "MPa"),),
         fixture_path="tests/fixtures/materials_rules/flexural_curve.csv",
+        fixture_status="ready",
         priority=34,
     ),
     _rule(
@@ -478,29 +487,8 @@ RULES: tuple[SemanticRule, ...] = (
         keywords=("impact", "冲击"),
         analysis=(AnalysisSpec("max_impact_strength", "maximum replicate/metric value", ("impact",), "kJ/m2"),),
         fixture_path="tests/fixtures/polymer_corpus/impact_metrics/foam_impact_metrics.csv",
+        fixture_status="pending",
         priority=5,
-    ),
-    _rule(
-        "fracture_metric",
-        "fracture_metric",
-        "metrics_swelling",
-        "bar",
-        AxisSpec("Sample", "", "Sample"),
-        AxisSpec("Fracture toughness", "MPa.m^0.5", "Fracture toughness", aliases=("fracture", "KIC")),
-        keywords=("fracture", "toughness", "KIC"),
-        fixture_status="pending",
-        priority=85,
-    ),
-    _rule(
-        "fatigue_cycle_metric",
-        "fatigue_cycle_metric",
-        "metrics_swelling",
-        "point_line",
-        AxisSpec("Cycle", "1", "Cycle", aliases=("cycle", "cycles")),
-        AxisSpec("Property retention", "%", "Property retention (%)", aliases=("retention",)),
-        keywords=("fatigue", "cycle"),
-        fixture_status="pending",
-        priority=85,
     ),
     _rule(
         "dsc_curve",
@@ -516,6 +504,7 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("peak_temperature_C", "largest absolute heat-flow peak", ("temperature", "heat flow"), "C"),
         ),
         fixture_path="tests/fixtures/materials_rules/dsc_curve.csv",
+        fixture_status="ready",
         priority=8,
     ),
     _rule(
@@ -533,6 +522,7 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("t10_temperature_C", "temperature at 10% mass loss", ("temperature", "mass"), "C"),
         ),
         fixture_path="tests/fixtures/polymer_corpus/thermal_dsc_tga/evoh_ega_excerpt.csv",
+        fixture_status="ready",
         priority=42,
     ),
     _rule(
@@ -547,6 +537,7 @@ RULES: tuple[SemanticRule, ...] = (
         column_aliases=("temperature", "dtg", "derivative"),
         analysis=(AnalysisSpec("dtg_peak_temperature_C", "maximum derivative loss", ("temperature", "dtg"), "C"),),
         fixture_path="tests/fixtures/materials_rules/dtg_curve.csv",
+        fixture_status="ready",
         priority=32,
     ),
     _rule(
@@ -568,6 +559,7 @@ RULES: tuple[SemanticRule, ...] = (
             ),
         ),
         fixture_path="tests/fixtures/materials_rules/dma_temperature_sweep.csv",
+        fixture_status="ready",
         priority=30,
     ),
     _rule(
@@ -578,6 +570,7 @@ RULES: tuple[SemanticRule, ...] = (
         AxisSpec("Wavenumber", "cm^-1", "Wavenumber (cm$^{-1}$)", aliases=("wavenumber", "cm-1"), reverse=True),
         AxisSpec("Transmittance", "%", "Transmittance (%)", aliases=("transmittance", "%T", "absorbance")),
         keywords=("ftir", "wavenumber"),
+        path_keywords=("ftir", "红外"),
         column_aliases=("wavenumber", "transmittance"),
         render_options=dict(FTIR_SPECTRUM_RENDER_OPTIONS),
         analysis=(
@@ -589,18 +582,8 @@ RULES: tuple[SemanticRule, ...] = (
             ),
         ),
         fixture_path="tests/fixtures/polymer_corpus/spectroscopy_ftir_uvvis/ftir_plastics_pet_excerpt.csv",
+        fixture_status="ready",
         priority=50,
-    ),
-    _rule(
-        "raman_spectrum",
-        "raman_spectrum",
-        "spectroscopy",
-        "curve",
-        AxisSpec("Raman shift", "cm^-1", "Raman shift (cm$^{-1}$)"),
-        AxisSpec("Intensity", "a.u.", "Intensity (a.u.)"),
-        keywords=("raman",),
-        fixture_status="pending",
-        priority=80,
     ),
     _rule(
         "uvvis_spectrum",
@@ -621,30 +604,8 @@ RULES: tuple[SemanticRule, ...] = (
             ),
         ),
         fixture_path="tests/fixtures/materials_rules/uvvis_spectrum.csv",
+        fixture_status="ready",
         priority=36,
-    ),
-    _rule(
-        "nmr_spectrum",
-        "nmr_spectrum",
-        "spectroscopy",
-        "stacked_curve",
-        AxisSpec("Chemical shift", "ppm", "Chemical shift (ppm)", reverse=True),
-        AxisSpec("Intensity", "a.u.", "Intensity (a.u.)"),
-        keywords=("nmr", "ppm"),
-        render_options=dict(NMR_SPECTRUM_RENDER_OPTIONS),
-        fixture_status="pending",
-        priority=80,
-    ),
-    _rule(
-        "xps_spectrum",
-        "xps_spectrum",
-        "spectroscopy",
-        "curve",
-        AxisSpec("Binding energy", "eV", "Binding energy (eV)", reverse=True),
-        AxisSpec("Intensity", "a.u.", "Intensity (a.u.)"),
-        keywords=("xps", "bindingenergy"),
-        fixture_status="pending",
-        priority=80,
     ),
     _rule(
         "xrd_pattern",
@@ -657,18 +618,8 @@ RULES: tuple[SemanticRule, ...] = (
         column_aliases=("2theta", "intensity"),
         analysis=(AnalysisSpec("main_peak_2theta", "maximum intensity position", ("2theta", "intensity"), "degree"),),
         fixture_path="tests/fixtures/materials_rules/xrd_pattern.csv",
+        fixture_status="ready",
         priority=46,
-    ),
-    _rule(
-        "waxs_pattern",
-        "waxs_pattern",
-        "scattering",
-        "curve",
-        AxisSpec("q", "nm^-1", "q (nm$^{-1}$)"),
-        AxisSpec("Intensity", "a.u.", "Intensity (a.u.)"),
-        keywords=("waxs", "waxd"),
-        fixture_status="pending",
-        priority=48,
     ),
     _rule(
         "saxs_profile",
@@ -681,18 +632,8 @@ RULES: tuple[SemanticRule, ...] = (
         column_aliases=("q_nm-1", "intensity"),
         analysis=(AnalysisSpec("main_scattering_peak_q", "maximum intensity q", ("q", "intensity"), "nm^-1"),),
         fixture_path="tests/fixtures/polymer_corpus/scattering_xrd_saxs_waxs/waxd_saxs_excerpt.csv",
+        fixture_status="ready",
         priority=47,
-    ),
-    _rule(
-        "sans_profile",
-        "sans_profile",
-        "scattering",
-        "curve",
-        AxisSpec("q", "nm^-1", "q (nm$^{-1}$)"),
-        AxisSpec("Intensity", "a.u.", "Intensity (a.u.)"),
-        keywords=("sans",),
-        fixture_status="pending",
-        priority=80,
     ),
     _rule(
         "gpc_sec_chromatogram",
@@ -712,18 +653,8 @@ RULES: tuple[SemanticRule, ...] = (
             ),
         ),
         fixture_path="tests/fixtures/polymer_corpus/chromatography_gpc_sec/gpc_dmf_excerpt.csv",
+        fixture_status="ready",
         priority=49,
-    ),
-    _rule(
-        "molecular_weight_distribution",
-        "molecular_weight_distribution",
-        "chromatography",
-        "curve",
-        AxisSpec("Molecular weight", "g/mol", "Molecular weight (g/mol)", scale="log"),
-        AxisSpec("dW/dlogM", "a.u.", "dW/dlogM"),
-        keywords=("molecularweight", "mw", "mn"),
-        fixture_status="pending",
-        priority=75,
     ),
     _rule(
         "swelling_curve",
@@ -736,73 +667,8 @@ RULES: tuple[SemanticRule, ...] = (
         column_aliases=("swelling ratio", "gel fraction"),
         analysis=(AnalysisSpec("equilibrium_swelling_ratio", "last finite swelling ratio", ("swelling ratio",), "1"),),
         fixture_path="tests/fixtures/polymer_corpus/swelling_gel/hydrogel_swelling_excerpt.csv",
+        fixture_status="ready",
         priority=55,
-    ),
-    _rule(
-        "gel_fraction_metric",
-        "gel_fraction_metric",
-        "metrics_swelling",
-        "bar",
-        AxisSpec("Sample", "", "Sample"),
-        AxisSpec("Gel fraction", "%", "Gel fraction (%)"),
-        keywords=("gelfraction", "gel fraction"),
-        fixture_status="pending",
-        priority=70,
-    ),
-    _rule(
-        "degradation_mass_loss",
-        "degradation_mass_loss",
-        "metrics_swelling",
-        "point_line",
-        TIME_AXIS,
-        AxisSpec("Mass loss", "%", "Mass loss (%)"),
-        keywords=("degradation", "massloss"),
-        fixture_status="pending",
-        priority=75,
-    ),
-    _rule(
-        "conductivity_curve",
-        "conductivity_curve",
-        "metrics_swelling",
-        "point_line",
-        AxisSpec("Temperature", "C", "Temperature (°C)"),
-        AxisSpec("Conductivity", "S/cm", "Conductivity (S/cm)"),
-        keywords=("conductivity",),
-        fixture_status="pending",
-        priority=80,
-    ),
-    _rule(
-        "arrhenius_conductivity",
-        "arrhenius_conductivity",
-        "metrics_swelling",
-        "scatter_fit",
-        AxisSpec("1000/T", "K^-1", "1000/T (K$^{-1}$)"),
-        AxisSpec("log conductivity", "S/cm", "log conductivity"),
-        keywords=("arrhenius",),
-        fixture_status="pending",
-        priority=80,
-    ),
-    _rule(
-        "dls_size_distribution",
-        "dls_size_distribution",
-        "metrics_swelling",
-        "curve",
-        AxisSpec("Diameter", "nm", "Diameter (nm)", scale="log"),
-        AxisSpec("Intensity", "%", "Intensity (%)"),
-        keywords=("dls", "size distribution"),
-        fixture_status="pending",
-        priority=80,
-    ),
-    _rule(
-        "bet_isotherm",
-        "bet_isotherm",
-        "metrics_swelling",
-        "curve",
-        AxisSpec("Relative pressure", "P/P0", "Relative pressure (P/P$_0$)"),
-        AxisSpec("Quantity adsorbed", "cm3/g", "Quantity adsorbed (cm$^3$/g)"),
-        keywords=("bet", "isotherm"),
-        fixture_status="pending",
-        priority=80,
     ),
     _rule(
         "dma_frequency_sweep",
@@ -832,328 +698,9 @@ RULES: tuple[SemanticRule, ...] = (
             ),
         ),
         fixture_path="tests/fixtures/materials_rules/dma_frequency_sweep.csv",
+        fixture_status="ready",
         priority=30,
         reason="DMA frequency sweep (isothermal) with E′, E″, tanδ vs angular frequency.",
-    ),
-    _rule(
-        "dielectric_spectroscopy",
-        "dielectric_spectroscopy",
-        "spectroscopy",
-        "point_line",
-        RHEOLOGY_X_FREQUENCY,
-        AxisSpec(
-            "Permittivity",
-            "1",
-            "Permittivity, ε′",
-            aliases=("permittivity", "ε'", "epsilon'", "ε′", "dielectric constant"),
-            priority_labels=("ε'", "Permittivity", "ε\""),
-            scale="log",
-        ),
-        keywords=("dielectric", "dea", "permittivity", "ε'", "epsilon'"),
-        path_keywords=("/dielectric/", "dea"),
-        column_aliases=("frequency", "permittivity", "dielectric loss", "loss tangent"),
-        fixture_status="pending",
-        priority=52,
-        reason="Dielectric spectroscopy: permittivity ε′, loss ε″ vs frequency.",
-    ),
-    _rule(
-        "dsc_kinetics",
-        "dsc_kinetics",
-        "thermal",
-        "curve",
-        AxisSpec("Temperature", "C", "Temperature (°C)", aliases=("temperature", "temp")),
-        AxisSpec(
-            "Normalized heat flow",
-            "W/g",
-            "Normalized heat flow (W/g)",
-            aliases=("heat flow", "dsc", "normalized"),
-        ),
-        keywords=("dsc kinetics", "kissinger", "ozawa", "heating rate", "activation energy"),
-        path_keywords=("/dsc_kinetics/", "kinetics"),
-        column_aliases=("temperature", "heat flow", "normalized heat flow"),
-        fixture_status="pending",
-        priority=9,
-        reason="DSC multi-heating-rate kinetics for activation energy (Kissinger/Ozawa).",
-    ),
-    _rule(
-        "tma_curve",
-        "tma_curve",
-        "thermal",
-        "curve",
-        RHEOLOGY_X_TEMPERATURE,
-        AxisSpec(
-            "Dimension change",
-            "um",
-            "Dimension change (µm)",
-            aliases=("dimension change", "displacement", "dL", "strain"),
-        ),
-        keywords=("tma", "thermomechanical", "dilatometry", "cte", "热机械", "膨胀系数"),
-        path_keywords=("/tma/", "thermomechanical"),
-        column_aliases=("temperature", "dimension change", "expansion"),
-        fixture_status="pending",
-        priority=45,
-        reason="Thermomechanical analysis: dimension change/CTE vs temperature.",
-    ),
-    _rule(
-        "capillary_rheometry",
-        "capillary_rheometry",
-        "rheology_dma",
-        "point_line",
-        AxisSpec(
-            "Shear rate",
-            "1/s",
-            "Shear rate (s$^{-1}$)",
-            aliases=("shear rate", "gamma dot"),
-            scale="log",
-        ),
-        AxisSpec(
-            "Shear viscosity",
-            "Pa.s",
-            "Shear viscosity (Pa·s)",
-            aliases=("viscosity", "shear viscosity", "η"),
-            scale="log",
-        ),
-        keywords=("capillary", "shear viscosity", "flow curve", "shear rate", "melt viscosity"),
-        path_keywords=("capillary", "flow"),
-        column_aliases=("shear rate", "viscosity", "shear viscosity", "pressure"),
-        render_options=_POINT_LINE_LOG,
-        fixture_status="pending",
-        priority=38,
-        reason="Capillary rheometry flow curve: shear viscosity vs shear rate.",
-    ),
-    _rule(
-        "creep_recovery_curve",
-        "creep_recovery_curve",
-        "rheology_dma",
-        "curve",
-        TIME_AXIS,
-        AxisSpec(
-            "Strain",
-            "%",
-            "Strain (%)",
-            aliases=("strain", "γ", "gamma", "compliance"),
-        ),
-        keywords=("creep recovery", "creeprecovery", "creep and recovery"),
-        path_keywords=("creep_recovery", "recovery"),
-        column_aliases=("time", "strain", "compliance"),
-        fixture_status="pending",
-        priority=32,
-        reason="Creep-recovery cycle: loading + unloading recovery segments.",
-    ),
-    _rule(
-        "hardness_metric",
-        "hardness_metric",
-        "metrics_swelling",
-        "box",
-        AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec(
-            "Hardness",
-            "1",
-            "Hardness (Shore A/D)",
-            aliases=("hardness", "shore", "shore a", "shore d", "rockwell", "硬度"),
-        ),
-        keywords=("hardness", "shore", "rockwell", "硬度"),
-        fixture_status="pending",
-        priority=65,
-        reason="Shore A/D or Rockwell hardness measurement.",
-    ),
-    _rule(
-        "mfi_metric",
-        "mfi_metric",
-        "metrics_swelling",
-        "bar",
-        AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec(
-            "Melt flow index",
-            "g/10min",
-            "MFI (g/10 min)",
-            aliases=("mfi", "melt flow index", "mfr", "melt index", "熔融指数"),
-        ),
-        keywords=("mfi", "mfr", "melt flow", "melt index", "熔融指数"),
-        fixture_status="pending",
-        priority=60,
-        reason="Melt flow index / melt flow rate measurement.",
-    ),
-    _rule(
-        "tear_strength_metric",
-        "tear_strength_metric",
-        "tensile",
-        "box",
-        AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec(
-            "Tear strength",
-            "kN/m",
-            "Tear strength (kN/m)",
-            aliases=("tear strength", "tear resistance", "撕裂"),
-        ),
-        keywords=("tear", "tear strength", "撕裂"),
-        fixture_status="pending",
-        priority=68,
-        reason="Tear strength / trouser tear measurement.",
-    ),
-    _rule(
-        "hysteresis_curve",
-        "hysteresis_curve",
-        "tensile",
-        "curve",
-        STRAIN_AXIS,
-        STRESS_AXIS,
-        keywords=("hysteresis", "cyclic", "loading unloading", "energy dissipation", "滞后"),
-        path_keywords=("hysteresis", "cyclic"),
-        column_aliases=("strain", "stress", "cycle"),
-        fixture_status="pending",
-        priority=55,
-        reason="Cyclic loading-unloading hysteresis loop with energy dissipation.",
-    ),
-    _rule(
-        "gas_permeability_metric",
-        "gas_permeability_metric",
-        "metrics_swelling",
-        "bar",
-        AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec(
-            "Permeability",
-            "barrer",
-            "Permeability (Barrer)",
-            aliases=("permeability", "barrer", "O2", "CO2", "WVTR", "透氧"),
-        ),
-        keywords=("permeability", "barrer", "wvtr", "otr", "gas barrier", "透氧", "透湿"),
-        fixture_status="pending",
-        priority=65,
-        reason="Gas permeability (O₂, CO₂) or water vapor transmission rate.",
-    ),
-    _rule(
-        "loi_metric",
-        "loi_metric",
-        "metrics_swelling",
-        "bar",
-        AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec(
-            "Limiting oxygen index",
-            "%",
-            "LOI (%)",
-            aliases=("loi", "limiting oxygen index", "氧指数", "oxygen index"),
-        ),
-        keywords=("loi", "oxygen index", "limiting oxygen", "氧指数", "flame"),
-        fixture_status="pending",
-        priority=65,
-        reason="Limiting oxygen index for flame retardancy.",
-    ),
-    _rule(
-        "thermal_conductivity_metric",
-        "thermal_conductivity_metric",
-        "thermal",
-        "bar",
-        AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec(
-            "Thermal conductivity",
-            "W/(m·K)",
-            "Thermal conductivity (W/(m·K))",
-            aliases=("thermal conductivity", "κ", "k", "导热系数", "lambda"),
-        ),
-        keywords=("thermal conductivity", "导热系数", "κ", "lambda"),
-        fixture_status="pending",
-        priority=65,
-        reason="Thermal conductivity (guarded hot plate / laser flash).",
-    ),
-    _rule(
-        "contact_angle_metric",
-        "contact_angle_metric",
-        "metrics_swelling",
-        "box",
-        AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec(
-            "Contact angle",
-            "degree",
-            "Contact angle (°)",
-            aliases=("contact angle", "θ", "接触角", "surface energy", "wettability"),
-        ),
-        keywords=("contact angle", "θ", "接触角", "wettability", "surface energy"),
-        fixture_status="pending",
-        priority=65,
-        reason="Contact angle / surface energy / wettability measurement.",
-    ),
-    _rule(
-        "intrinsic_viscosity_metric",
-        "intrinsic_viscosity_metric",
-        "chromatography",
-        "bar",
-        AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec(
-            "Intrinsic viscosity",
-            "dL/g",
-            "Intrinsic viscosity, [η] (dL/g)",
-            aliases=("intrinsic viscosity", "[η]", "[eta]", "特性粘度"),
-        ),
-        keywords=("intrinsic viscosity", "limiting viscosity", "特性粘度"),
-        fixture_status="pending",
-        priority=80,
-        reason="Intrinsic viscosity / limiting viscosity number.",
-    ),
-    _rule(
-        "zeta_potential_metric",
-        "zeta_potential_metric",
-        "metrics_swelling",
-        "bar",
-        AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec(
-            "Zeta potential",
-            "mV",
-            "Zeta potential (mV)",
-            aliases=("zeta potential", "ζ", "zeta", "Zeta电位"),
-        ),
-        keywords=("zeta", "ζ", "zeta potential", "Zeta电位"),
-        fixture_status="pending",
-        priority=70,
-        reason="Zeta potential for colloidal/particle stability.",
-    ),
-    _rule(
-        "edx_spectrum",
-        "edx_spectrum",
-        "spectroscopy",
-        "curve",
-        AxisSpec("Energy", "keV", "Energy (keV)", aliases=("energy", "keV", "eV")),
-        AxisSpec("Intensity", "count", "Intensity (counts)", aliases=("intensity", "count", "counts")),
-        keywords=("edx", "eds", "edax", "energy dispersive", "elemental"),
-        path_keywords=("edx", "eds"),
-        column_aliases=("energy", "intensity", "counts"),
-        fixture_status="pending",
-        priority=53,
-        reason="EDX/EDS elemental analysis spectrum.",
-    ),
-    _rule(
-        "crosslink_density_metric",
-        "crosslink_density_metric",
-        "metrics_swelling",
-        "bar",
-        AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec(
-            "Crosslink density",
-            "mol/m3",
-            "Crosslink density, νₑ (mol/m$^3$)",
-            aliases=("crosslink density", "νₑ", "Mc", "交联密度", "network density"),
-        ),
-        keywords=("crosslink", "νₑ", "Mc", "交联密度", "crosslinking density"),
-        fixture_status="pending",
-        priority=70,
-        reason="Crosslink density from swelling, modulus, or Flory-Rehner.",
-    ),
-    _rule(
-        "abrasion_wear_metric",
-        "abrasion_wear_metric",
-        "metrics_swelling",
-        "bar",
-        AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec(
-            "Volume loss",
-            "mm3",
-            "Volume loss (mm$^3$)",
-            aliases=("volume loss", "wear", "abrasion", "taber", "磨损"),
-        ),
-        keywords=("abrasion", "wear", "taber", "磨损"),
-        fixture_status="pending",
-        priority=75,
-        reason="Abrasion/wear resistance (Taber, DIN, or equivalent).",
     ),
 )
 
@@ -1222,20 +769,36 @@ def match_rule(
     if requested_rule_id:
         return get_rule(requested_rule_id)
     candidates: list[tuple[int, SemanticRule]] = []
+    # Automatic production matching is deliberately narrower than the full
+    # registry. Pending rules remain inspectable and explicitly addressable,
+    # but they cannot silently enter the deterministic plotting path before a
+    # fixture-backed acceptance promotes them to ``ready``.
     for rule in RULES:
+        if not _is_ready_rule(rule):
+            continue
         score = 0
         if vendor_model and vendor_model in rule.vendor_models:
             score += 100
         if experiment_family and experiment_family in rule.experiment_families:
             score += 40
-        score += 35 * sum(1 for item in rule.keywords if normalize_token(item) in compact_evidence)
+        score += 35 * sum(1 for item in rule.keywords if _matches_rule_token(item, evidence, compact_evidence))
         score += 45 * sum(1 for item in rule.path_keywords if item.casefold() in evidence)
-        score += 30 * sum(1 for item in rule.column_aliases if normalize_token(item) in compact_evidence)
+        score += 30 * sum(
+            1 for item in rule.column_aliases if _matches_rule_token(item, evidence, compact_evidence)
+        )
         if score:
             candidates.append((score - rule.priority, rule))
     if not candidates:
         return None
     return max(candidates, key=lambda item: item[0])[1]
+
+
+def _matches_rule_token(item: str, evidence: str, compact_evidence: str) -> bool:
+    normalized = normalize_token(item)
+    raw = str(item).strip().casefold()
+    if raw.isascii() and normalized.isascii() and normalized.isalnum() and len(normalized) <= 3:
+        return re.search(rf"(?<![a-z0-9]){re.escape(raw)}(?![a-z0-9])", evidence) is not None
+    return normalized in compact_evidence
 
 
 def semantic_payload_from_rule(
@@ -1247,6 +810,7 @@ def semantic_payload_from_rule(
     vendor_error: str | None = None,
 ) -> dict[str, Any]:
     payload = rule.to_payload()
+    rule_ready = _is_ready_rule(rule)
     render_options = dict(rule.render_options)
     if rule.x_axis.scale != "linear":
         render_options.setdefault("xscale", rule.x_axis.scale)
@@ -1264,9 +828,19 @@ def semantic_payload_from_rule(
         "recommended_recipe": rule.recipe,
         "template": rule.template,
         "render_options": render_options,
-        "confidence": confidence,
-        "reason": reason or rule.reason or f"Matched material rule `{rule.rule_id}`.",
-        "needs_ai_intervention": False,
+        "confidence": confidence if rule_ready else 0.0,
+        "reason": (
+            reason
+            or rule.reason
+            or (
+                f"Material rule `{rule.rule_id}` is pending fixture-backed acceptance."
+                if not rule_ready
+                else f"Matched material rule `{rule.rule_id}`."
+            )
+        ),
+        "needs_ai_intervention": not rule_ready,
+        "production_status": "ready" if rule_ready else "needs_rule_repair",
+        "rule_readiness": rule.fixture_status,
         "vendor_model": vendor_model,
         "vendor_error": vendor_error,
         "axis_plan": payload["axis_plan"],
@@ -1278,7 +852,14 @@ def semantic_payload_from_rule(
             semantic_family=rule.semantic_family,
             experiment_type_id=rule.rule_id,
         ),
-        "missing_requirements": [],
+        "missing_requirements": (
+            []
+            if rule_ready
+            else [
+                "fixture_backed_rule_acceptance",
+                "deterministic_semantic_rule_promotion",
+            ]
+        ),
         "rule_priority": rule.priority,
     }
 
@@ -1520,13 +1101,13 @@ def compute_analysis_metrics(
         )
     elif rule_id == "swelling_curve":
         rows = _swelling_metrics(source_path)
-    elif rule_id in {"ftir_spectrum", "raman_spectrum", "uvvis_spectrum", "nmr_spectrum", "xps_spectrum"}:
+    elif rule_id in {"ftir_spectrum", "uvvis_spectrum"}:
         rows = _generic_peak_metrics(
             source_path,
             metric_name=_analysis_metric_name(semantic, "strongest_peak_position"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
         )
-    elif rule_id in {"xrd_pattern", "waxs_pattern", "saxs_profile", "sans_profile"}:
+    elif rule_id in {"xrd_pattern", "saxs_profile"}:
         rows = _generic_peak_metrics(
             source_path,
             metric_name=_analysis_metric_name(semantic, "main_scattering_peak_q"),
@@ -1551,13 +1132,19 @@ def compute_analysis_metrics(
 
 JOURNAL_PRESETS: dict[str, dict[str, Any]] = {
     "nature": {
-        "label": "Nature",
+        "label": "SciPlot publication layout (legacy Nature alias)",
         "sizes": ("60x55", "120x55", "180x55"),
         "style_preset": "nature",
         "palette_preset": DEFAULT_PALETTE_PRESET,
         "exports": ("pdf", "tiff_300"),
         "max_width_mm": 180,
-        "description": "Nature journal: 1-col (60 mm), 1.5-col (120 mm), 2-col (180 mm).",
+        "description": (
+            "Legacy compatibility alias. The 60/120/180 mm values are SciPlot panel widths, "
+            "not verified Nature column widths or a compliance claim."
+        ),
+        "verified_compliance": False,
+        "compatibility_alias": True,
+        "publication_profile_id": "sciplot_composite_183_v1",
     },
     "acs": {
         "label": "ACS",
@@ -1566,7 +1153,10 @@ JOURNAL_PRESETS: dict[str, dict[str, Any]] = {
         "palette_preset": DEFAULT_PALETTE_PRESET,
         "exports": ("pdf", "tiff_300"),
         "max_width_mm": 120,
-        "description": "ACS journals: single-column figures up to 120 mm wide.",
+        "description": "Legacy unverified SciPlot style hint; not an ACS submission-compliance profile.",
+        "verified_compliance": False,
+        "compatibility_alias": True,
+        "publication_profile_id": "sciplot_composite_183_v1",
     },
     "science": {
         "label": "Science",
@@ -1575,7 +1165,10 @@ JOURNAL_PRESETS: dict[str, dict[str, Any]] = {
         "palette_preset": DEFAULT_PALETTE_PRESET,
         "exports": ("pdf", "tiff_300"),
         "max_width_mm": 120,
-        "description": "Science journal: single-column or 2/3-page width.",
+        "description": "Legacy unverified SciPlot style hint; not a Science submission-compliance profile.",
+        "verified_compliance": False,
+        "compatibility_alias": True,
+        "publication_profile_id": "sciplot_composite_183_v1",
     },
     "elsevier": {
         "label": "Elsevier",
@@ -1584,7 +1177,10 @@ JOURNAL_PRESETS: dict[str, dict[str, Any]] = {
         "palette_preset": DEFAULT_PALETTE_PRESET,
         "exports": ("pdf", "tiff_300"),
         "max_width_mm": 180,
-        "description": "Elsevier journals: 1-col (60 mm), 1.5-col (120 mm), 2-col (180 mm).",
+        "description": "Legacy unverified SciPlot style hint; not an Elsevier submission-compliance profile.",
+        "verified_compliance": False,
+        "compatibility_alias": True,
+        "publication_profile_id": "sciplot_composite_183_v1",
     },
     "wiley": {
         "label": "Wiley",
@@ -1593,7 +1189,10 @@ JOURNAL_PRESETS: dict[str, dict[str, Any]] = {
         "palette_preset": DEFAULT_PALETTE_PRESET,
         "exports": ("pdf", "tiff_300"),
         "max_width_mm": 180,
-        "description": "Wiley journals: full range of figure sizes.",
+        "description": "Legacy unverified SciPlot style hint; not a Wiley submission-compliance profile.",
+        "verified_compliance": False,
+        "compatibility_alias": True,
+        "publication_profile_id": "sciplot_composite_183_v1",
     },
     "acs_macromolecules": {
         "label": "Macromolecules (ACS)",
@@ -1602,7 +1201,10 @@ JOURNAL_PRESETS: dict[str, dict[str, Any]] = {
         "palette_preset": DEFAULT_PALETTE_PRESET,
         "exports": ("pdf", "tiff_300"),
         "max_width_mm": 120,
-        "description": "ACS Macromolecules: figures fit within single column (60 mm) or page width (120 mm).",
+        "description": "Legacy unverified SciPlot style hint; not a Macromolecules compliance profile.",
+        "verified_compliance": False,
+        "compatibility_alias": True,
+        "publication_profile_id": "sciplot_composite_183_v1",
     },
     "polymer": {
         "label": "Polymer (Elsevier)",
@@ -1611,7 +1213,10 @@ JOURNAL_PRESETS: dict[str, dict[str, Any]] = {
         "palette_preset": DEFAULT_PALETTE_PRESET,
         "exports": ("pdf", "tiff_300"),
         "max_width_mm": 180,
-        "description": "Polymer journal (Elsevier): standard Elsevier figure sizes.",
+        "description": "Legacy unverified SciPlot style hint; not a Polymer submission-compliance profile.",
+        "verified_compliance": False,
+        "compatibility_alias": True,
+        "publication_profile_id": "sciplot_composite_183_v1",
     },
 }
 
@@ -1625,6 +1230,9 @@ def list_journal_presets() -> list[dict[str, Any]]:
             "sizes": list(preset["sizes"]),
             "style_preset": preset["style_preset"],
             "palette_preset": preset["palette_preset"],
+            "verified_compliance": preset["verified_compliance"],
+            "compatibility_alias": preset["compatibility_alias"],
+            "publication_profile_id": preset["publication_profile_id"],
         }
         for preset_id, preset in JOURNAL_PRESETS.items()
     ]

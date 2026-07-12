@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -14,6 +13,7 @@ from sciplot_core.ingest import normalized_source
 from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY
 from sciplot_core.semantic import classify_source
 from sciplot_core.split import SUPPORTED_SPLIT_TEMPLATES, build_split_plan, normalize_split_policy
+from sciplot_core.veusz_runtime import veusz_worker_environment
 
 ensure_legacy_core()
 
@@ -91,17 +91,7 @@ def _series_labels_for_split(source: Path, sheet: str | int, options: dict[str, 
 
 
 def _veusz_worker_env() -> dict[str, str]:
-    env = os.environ.copy()
-    env.setdefault("QT_QPA_PLATFORM", "offscreen")
-    framework_paths = [Path("/opt/homebrew/opt/qtbase/lib"), Path("/opt/homebrew/opt/qt/lib")]
-    existing = [str(path) for path in framework_paths if path.exists()]
-    if existing:
-        joined = ":".join(existing)
-        for key in ("DYLD_FRAMEWORK_PATH", "DYLD_LIBRARY_PATH"):
-            current = env.get(key)
-            env[key] = f"{joined}:{current}" if current else joined
-        env.setdefault("SCIPLOT_STUDIO_QT_RUNTIME", "1")
-    return env
+    return veusz_worker_environment()
 
 
 def _read_json_if_exists(path: Path) -> dict[str, Any]:

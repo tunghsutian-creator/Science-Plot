@@ -23,8 +23,15 @@ from sciplot_core.delivery import build_delivery_package
 from sciplot_core.intake import create_intake_project_from_session, prepare_intake_session
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import DEFAULT_PALETTE_PRESET, SPECTRUM_JOURNAL_COLORS
+from sciplot_core.publication import (
+    build_publication_intent,
+    build_transform_ledger,
+    get_publication_profile,
+    link_intent_to_transform_ledger,
+    write_publication_artifacts,
+)
 from sciplot_core.qa import run_qa
-from sciplot_core.study_model import build_output_package_contract
+from sciplot_core.study_model import build_output_package_contract, normalize_study_model
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VEUSZ_ROOT = REPO_ROOT / "third_party" / "veusz"
@@ -32,53 +39,6 @@ VEUSZ_COMMIT = "264084b06eb306d860c7757c637f37b78bb2333f"
 
 DEFAULT_PALETTE = SPECTRUM_JOURNAL_COLORS
 STACKED_TEMPLATE_IDS = {"stacked_curve", "segmented_stacked_curve"}
-STUDIO_TEMPLATE_IDS = ("curve", "stacked_curve", "segmented_stacked_curve")
-FIGURE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
-EXPORT_FORMATS = ("pdf", "tiff_300")
-SERIES_MARKER_CHOICES = (
-    ("None", "none"),
-    ("Circle", "circle"),
-    ("Square", "square"),
-    ("Triangle", "triangle"),
-    ("Diamond", "diamond"),
-    ("X", "x"),
-    ("Plus", "plus"),
-)
-LEGEND_POSITION_CHOICES = (
-    ("Top R", "upper_right"),
-    ("Top L", "upper_left"),
-    ("Auto", "auto"),
-    ("Bot R", "lower_right"),
-    ("Bot L", "lower_left"),
-)
-STUDIO_COLORS = {
-    "bg_window": "#fbfaf7",
-    "bg_topbar": "#f8f7f3",
-    "bg_rail": "#f2f0eb",
-    "bg_canvas": "#eeece6",
-    "bg_inspector": "#fbfaf7",
-    "bg_statusbar": "#f2f0eb",
-    "bg_card": "#ffffff",
-    "bg_input": "#f3f2ee",
-    "bg_dropdown": "#ffffff",
-    "bg_hover": "#ece9e2",
-    "fg_primary": "#1f2329",
-    "fg_secondary": "#343941",
-    "fg_muted": "#6f7680",
-    "fg_disabled": "#a3a8af",
-    "accent": "#0a84ff",
-    "accent_hover": "#006edb",
-    "accent_bg": "#dcecff",
-    "border": "#dedbd2",
-    "border_light": "#ebe8df",
-    "border_active": "#0a84ff",
-    "success": "#138a64",
-    "warning": "#b96a00",
-    "error": "#c7364b",
-    "success_bg": "#dff4ec",
-    "warning_bg": "#fff0d6",
-    "error_bg": "#ffe4e9",
-}
 MARKER_MAP = {
     "circle": "circle",
     "diamond": "diamond",
@@ -92,6 +52,14 @@ MARKER_MAP = {
     False: "none",
     True: "circle",
 }
+
+
+class StudioPreparationBlocked(ValueError):
+    state = "needs_rule_repair"
+
+    def __init__(self, reason_code: str, message: str) -> None:
+        self.reason_code = reason_code
+        super().__init__(message)
 
 
 @dataclass(frozen=True)
@@ -202,13 +170,18 @@ def prepare_studio_document(
         and project_name is None
     ):
         launcher = _write_studio_launcher(project_dir)
+        veusz_launcher = _write_veusz_launcher(project_dir, existing_document)
+        export_edited_launcher = _write_export_edited_launcher(project_dir)
+        generated_hash = _registered_generated_hash(project_dir)
         studio_block = _studio_block(
             document_path=existing_document,
             spec_path=_veusz_spec_path(existing_document),
             launcher=launcher,
+            veusz_launcher=veusz_launcher,
+            export_edited_launcher=export_edited_launcher,
             request_path=request_path,
             series_count=_count_veusz_series(existing_document),
-            generated_hash=_registered_generated_hash(project_dir),
+            generated_hash=generated_hash,
         )
         _register_studio_block(project_dir, studio_block)
         return {
@@ -218,7 +191,10 @@ def prepare_studio_document(
             "request": str(request_path),
             "document": str(existing_document),
             "launcher": str(launcher),
+            "veusz_launcher": str(veusz_launcher),
+            "export_edited_launcher": str(export_edited_launcher),
             "series_count": studio_block["series_count"],
+            "document_state": studio_block["document_state"],
             "studio": studio_block,
             "preserved_existing_document": True,
         }
@@ -232,14 +208,51 @@ def prepare_studio_document(
     document_path = project_dir / "studio" / "document.vsz"
     document_path.parent.mkdir(parents=True, exist_ok=True)
     _archive_manual_document_if_needed(project_dir, document_path)
-    series, axis_info = _series_from_request(request, base_dir=request_path.parent)
+    series, axis_info, transform_steps, source_root = _series_from_request(
+        request,
+        base_dir=request_path.parent,
+    )
+    study_model = normalize_study_model(
+        request.get("study_model")
+        if isinstance(request.get("study_model"), dict)
+        else {"kind": "sciplot_study_model", "version": 1, "samples": [], "figure_queue": []}
+    )
+    transform_ledger = build_transform_ledger(
+        study_model,
+        request=request,
+        input_path=source_root,
+        steps=transform_steps,
+        existing=request.get("transform_ledger")
+        if isinstance(request.get("transform_ledger"), dict)
+        else None,
+    )
+    publication_intent = build_publication_intent(
+        study_model,
+        request=request,
+        existing=request.get("publication_intent")
+        if isinstance(request.get("publication_intent"), dict)
+        else None,
+    )
+    publication_intent = link_intent_to_transform_ledger(publication_intent, transform_ledger)
+    study_model["publication_intent_ref"] = "publication_intent.json"
+    request["study_model"] = study_model
+    request["publication_intent"] = publication_intent
+    request["transform_ledger"] = transform_ledger
+    request_path.write_text(
+        json.dumps(json_safe(request), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
     spec_path = _write_veusz_document(document_path, request=request, series=series, axis_info=axis_info)
     launcher = _write_studio_launcher(project_dir)
+    veusz_launcher = _write_veusz_launcher(project_dir, document_path)
+    export_edited_launcher = _write_export_edited_launcher(project_dir)
     generated_hash = _hash_file(document_path)
     studio_block = _studio_block(
         document_path=document_path,
         spec_path=spec_path,
         launcher=launcher,
+        veusz_launcher=veusz_launcher,
+        export_edited_launcher=export_edited_launcher,
         request_path=request_path,
         series_count=len(series),
         generated_hash=generated_hash,
@@ -252,7 +265,10 @@ def prepare_studio_document(
         "request": str(request_path),
         "document": str(document_path),
         "launcher": str(launcher),
+        "veusz_launcher": str(veusz_launcher),
+        "export_edited_launcher": str(export_edited_launcher),
         "series_count": len(series),
+        "document_state": studio_block["document_state"],
         "studio": studio_block,
     }
 
@@ -337,6 +353,10 @@ def run_studio_command(
 
     if json_output or prepare_only or export:
         print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
+        if export:
+            studio_run = payload.get("studio_run")
+            if not isinstance(studio_run, dict) or studio_run.get("ready_to_use") is not True:
+                return 1
         return 0
 
     return launch_veusz_gui(document_path)
@@ -385,44 +405,13 @@ def launch_sciplot_studio(
     template: str | None = None,
     project_name: str | None = None,
 ) -> int:
-    _ensure_veusz_on_path()
-    from PyQt6 import QtWidgets
-
-    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
-    resolved = target.expanduser().resolve()
-    if _is_raw_studio_source(resolved):
-        window = _create_sciplot_studio_shell(
-            source_path=resolved,
-            output_root=output_root or Path("outputs") / "intake_projects",
-            template=template,
-            project_name=project_name,
-        )
-    elif resolved.is_dir() and (resolved / "plot_request.json").exists():
-        window = _create_sciplot_project_shell(
-            project_dir=resolved,
-            output_root=output_root,
-            template=template,
-            project_name=project_name,
-        )
-    else:
-        payload = prepare_studio_document(
-            resolved,
-            output_root=output_root,
-            template=template,
-            project_name=project_name,
-        )
-        context = _project_context_for_document(Path(payload["document"]))
-        if context is not None:
-            window = _create_sciplot_project_shell(
-                project_dir=context["project_dir"],
-                output_root=output_root,
-                template=template,
-                project_name=project_name,
-            )
-        else:
-            window = _create_sciplot_document_shell(Path(payload["document"]))
-    window.show()
-    return int(app.exec())
+    payload = prepare_studio_document(
+        target.expanduser().resolve(),
+        output_root=output_root,
+        template=template,
+        project_name=project_name,
+    )
+    return launch_veusz_gui(Path(payload["document"]))
 
 
 def _create_veusz_window(document_path: Path | None) -> Any:
@@ -509,2902 +498,6 @@ def _ensure_veusz_loader_compat() -> None:
     mime._sciplot_safe_clipboard = True
 
 
-def _set_layout_margins(layout: Any, value: int = 12, spacing: int = 10) -> None:
-    layout.setContentsMargins(value, value, value, value)
-    layout.setSpacing(spacing)
-
-
-def _group_box(title: str) -> Any:
-    from PyQt6 import QtWidgets
-
-    box = QtWidgets.QGroupBox(title)
-    box.setFlat(False)
-    return box
-
-
-def _apply_sciplot_shell_style(shell: Any) -> None:
-    shell.setObjectName("SciPlotStudioWindow")
-    shell.resize(1320, 860)
-    shell.setStyleSheet(_studio_styles())
-
-
-def _studio_styles() -> str:
-    colors = STUDIO_COLORS
-    return f"""
-    QMainWindow#SciPlotStudioWindow {{
-        background-color: {colors['bg_window']};
-        color: {colors['fg_secondary']};
-    }}
-    QLabel {{
-        color: {colors['fg_secondary']};
-    }}
-    QWidget#centralArea, QWidget#setupWorkspace, QWidget#refineWorkspace {{
-        background-color: {colors['bg_window']};
-        color: {colors['fg_secondary']};
-    }}
-    QToolBar#topBar {{
-        background-color: {colors['bg_topbar']};
-        border: none;
-        border-bottom: 1px solid {colors['border_light']};
-        padding: 0px 10px;
-        spacing: 6px;
-        min-height: 42px;
-        max-height: 42px;
-    }}
-    QLabel#topBarBrand {{
-        color: {colors['fg_secondary']};
-        font-size: 13px;
-        font-weight: 500;
-    }}
-    QLabel#topBarExperimentBadge {{
-        color: {colors['fg_muted']};
-        font-size: 11px;
-        padding: 2px 8px;
-        background-color: {colors['bg_card']};
-        border: 1px solid {colors['border']};
-        border-radius: 4px;
-    }}
-    QPushButton#topBarSizeBadge {{
-        color: {colors['fg_muted']};
-        font-size: 11px;
-        background-color: {colors['bg_card']};
-        border: 1px solid {colors['border']};
-        border-radius: 4px;
-        padding: 2px 8px;
-    }}
-    QPushButton#topBarSizeBadge:hover {{
-        color: {colors['fg_primary']};
-        border-color: {colors['fg_disabled']};
-    }}
-    QPushButton#topBarPrimary {{
-        background-color: {colors['accent']};
-        color: #ffffff;
-        font-size: 12px;
-        font-weight: 600;
-        border: none;
-        border-radius: 6px;
-        padding: 5px 14px;
-    }}
-    QPushButton#topBarPrimary:hover {{
-        background-color: {colors['accent_hover']};
-    }}
-    QPushButton#topBarPrimary:disabled {{
-        background-color: {colors['accent_bg']};
-        color: {colors['fg_disabled']};
-    }}
-    QPushButton#topBarOverflow {{
-        color: {colors['fg_muted']};
-        font-size: 13px;
-        border: none;
-        background: transparent;
-        padding: 4px 8px;
-        border-radius: 4px;
-    }}
-    QPushButton#topBarOverflow:hover {{
-        background-color: {colors['bg_hover']};
-        color: {colors['fg_primary']};
-    }}
-    QPushButton#topBarOverflow::menu-indicator {{
-        image: none;
-        width: 0px;
-    }}
-    QFrame#stageRail {{
-        background-color: {colors['bg_rail']};
-        border: none;
-        border-right: 1px solid {colors['border_light']};
-    }}
-    QPushButton#railBrandDot {{
-        color: {colors['accent']};
-        font-size: 12px;
-        border: none;
-        background: transparent;
-    }}
-    QPushButton#railBrandDot:hover {{
-        color: {colors['accent_hover']};
-    }}
-    QPushButton#stageDot {{
-        border: 2px solid {colors['fg_disabled']};
-        border-radius: 7px;
-        background-color: transparent;
-    }}
-    QPushButton#stageDot[active="true"] {{
-        border: 2px solid {colors['accent']};
-        background-color: {colors['accent']};
-    }}
-    QPushButton#stageDot:disabled {{
-        border-color: {colors['border']};
-    }}
-    QFrame#stageConnLine, QFrame#railSeparator {{
-        color: {colors['border']};
-        background-color: {colors['border']};
-    }}
-    QPushButton#figureThumb {{
-        border: none;
-        border-radius: 3px;
-        background-color: {colors['bg_card']};
-        color: {colors['fg_muted']};
-        font-size: 10px;
-    }}
-    QPushButton#figureThumb[active="true"] {{
-        border-left: 2px solid {colors['accent']};
-        background-color: {colors['accent_bg']};
-    }}
-    QPushButton#figureThumb:hover {{
-        background-color: {colors['bg_hover']};
-    }}
-    QScrollArea#setupScroll {{
-        border: none;
-        background-color: {colors['bg_window']};
-    }}
-    QWidget#setupContent {{
-        background-color: {colors['bg_window']};
-    }}
-    QFrame#plotIntentStrip, QFrame#dataPreviewPanel {{
-        background-color: {colors['bg_card']};
-        border: 1px solid {colors['border']};
-        border-radius: 8px;
-    }}
-    QLabel#panelTitle {{
-        color: {colors['fg_secondary']};
-        font-size: 13px;
-        font-weight: 600;
-    }}
-    QLabel#panelMeta {{
-        color: {colors['fg_muted']};
-        font-size: 11px;
-    }}
-    QPushButton#intentChip {{
-        background-color: {colors['bg_card']};
-        border: 1px solid {colors['border']};
-        border-radius: 6px;
-        color: {colors['fg_muted']};
-        padding: 5px 10px;
-    }}
-    QPushButton#intentChip:checked {{
-        background-color: {colors['accent_bg']};
-        border-color: {colors['accent']};
-        color: {colors['fg_primary']};
-    }}
-    QTableWidget#dataPreviewTable {{
-        background-color: {colors['bg_topbar']};
-        border: 1px solid {colors['border']};
-        border-radius: 6px;
-        color: {colors['fg_secondary']};
-        gridline-color: {colors['border']};
-        font-size: 11px;
-    }}
-    QLabel#setupTitle {{
-        color: {colors['fg_primary']};
-        font-size: 18px;
-        font-weight: 600;
-    }}
-    QLabel#setupSubtitle, QLabel#studioStatus, QLabel#inspectorMeta {{
-        color: {colors['fg_muted']};
-        font-size: 12px;
-    }}
-    QFrame#templateCard {{
-        background-color: {colors['bg_card']};
-        border: 1px solid {colors['border']};
-        border-radius: 10px;
-    }}
-    QFrame#templateCard:hover {{
-        background-color: {colors['bg_hover']};
-        border-color: {colors['fg_disabled']};
-    }}
-    QFrame#templateCard[selected="true"] {{
-        background-color: {colors['accent_bg']};
-        border: 2px solid {colors['accent']};
-    }}
-    QLabel#templateCardIcon {{
-        color: {colors['fg_muted']};
-        font-size: 28px;
-    }}
-    QFrame#templateCard[selected="true"] QLabel#templateCardIcon {{
-        color: {colors['accent']};
-    }}
-    QLabel#templateCardTitle {{
-        color: {colors['fg_secondary']};
-        font-size: 12px;
-        font-weight: 600;
-    }}
-    QLabel#templateCardSubtitle {{
-        color: {colors['fg_muted']};
-        font-size: 10px;
-    }}
-    QFrame#dropZone {{
-        border: 2px dashed {colors['border']};
-        border-radius: 10px;
-        background-color: {colors['bg_topbar']};
-    }}
-    QFrame#dropZone[hovering="true"] {{
-        border-color: {colors['accent']};
-        background-color: {colors['accent_bg']};
-    }}
-    QLabel#dropZoneLabel {{
-        color: {colors['fg_disabled']};
-        font-size: 13px;
-    }}
-    QLabel#sectionHeaderLabel {{
-        color: {colors['fg_muted']};
-        font-size: 10px;
-        font-weight: 600;
-    }}
-    QTableWidget#samplesTable, QTableWidget#mappingGroupsTable {{
-        background-color: {colors['bg_card']};
-        border: 1px solid {colors['border']};
-        border-radius: 6px;
-        gridline-color: {colors['border']};
-        color: {colors['fg_secondary']};
-        font-size: 12px;
-    }}
-    QTableWidget#samplesTable::item:selected, QTableWidget#mappingGroupsTable::item:selected {{
-        background-color: {colors['accent_bg']};
-        color: {colors['fg_primary']};
-    }}
-    QTableWidget::item {{
-        border: none;
-    }}
-    QHeaderView::section {{
-        background-color: {colors['bg_topbar']};
-        color: {colors['fg_muted']};
-        border: none;
-        padding: 5px 10px;
-        font-size: 10px;
-        font-weight: 600;
-    }}
-    QFrame#canvasSurface {{
-        background-color: {colors['bg_canvas']};
-        border: none;
-    }}
-    QLabel#figurePreview, QLabel#canvasPlaceholder {{
-        color: {colors['fg_disabled']};
-        font-size: 15px;
-        background-color: {colors['bg_canvas']};
-        border-radius: 8px;
-    }}
-    QFrame#inspectorPanel {{
-        background-color: {colors['bg_inspector']};
-        border: none;
-        border-left: 1px solid {colors['border_light']};
-    }}
-    QFrame#inspectorPanel QLabel {{
-        color: {colors['fg_secondary']};
-    }}
-    QFrame#inspectorPanel QLabel#inspectorMeta {{
-        color: {colors['fg_muted']};
-    }}
-    QPushButton#sectionHeader {{
-        color: {colors['fg_muted']};
-        font-size: 10px;
-        font-weight: 600;
-        text-align: left;
-        padding: 10px 14px 4px 14px;
-        border: none;
-        background: transparent;
-    }}
-    QPushButton#sectionHeader:hover {{
-        color: {colors['fg_secondary']};
-    }}
-    QFrame#sectionSeparator {{
-        background-color: {colors['bg_card']};
-        color: {colors['bg_card']};
-    }}
-    QTabWidget#refineTabs::pane {{
-        border: none;
-        background-color: {colors['bg_inspector']};
-    }}
-    QTabBar::tab {{
-        background-color: transparent;
-        color: {colors['fg_muted']};
-        border: none;
-        padding: 8px 10px;
-        font-size: 11px;
-        font-weight: 500;
-    }}
-    QTabBar::tab:selected {{
-        color: {colors['fg_secondary']};
-        border-bottom: 2px solid {colors['accent']};
-    }}
-    QTabBar::tab:hover {{
-        color: {colors['fg_secondary']};
-    }}
-    QLabel#tabSectionTitle {{
-        color: {colors['fg_muted']};
-        font-size: 10px;
-        font-weight: 600;
-    }}
-    QListWidget#seriesList, QListWidget#sourceFileList {{
-        background-color: {colors['bg_card']};
-        border: 1px solid {colors['border']};
-        border-radius: 6px;
-        color: {colors['fg_secondary']};
-    }}
-    QListWidget#seriesList::item, QListWidget#sourceFileList::item {{
-        padding: 7px 8px;
-    }}
-    QListWidget#seriesList::item:selected, QListWidget#sourceFileList::item:selected {{
-        background-color: {colors['accent_bg']};
-        color: {colors['fg_primary']};
-    }}
-    QLabel#seriesInspectorValue {{
-        color: {colors['fg_muted']};
-        font-size: 11px;
-    }}
-    QPushButton#seriesColorSwatch {{
-        border: 1px solid {colors['border']};
-        border-radius: 7px;
-        min-width: 18px;
-        max-width: 18px;
-        min-height: 18px;
-        max-height: 18px;
-        padding: 0px;
-    }}
-    QPushButton#seriesColorSwatch:checked {{
-        border: 2px solid {colors['fg_primary']};
-    }}
-    QPushButton#sizeButton, QPushButton#legendPosButton, QPushButton#templateChoiceButton {{
-        background-color: {colors['bg_card']};
-        border: 1px solid {colors['border']};
-        border-radius: 4px;
-        color: {colors['fg_secondary']};
-        padding: 6px 8px;
-    }}
-    QPushButton#sizeButton:checked, QPushButton#legendPosButton:checked, QPushButton#templateChoiceButton:checked {{
-        border: 2px solid {colors['accent']};
-        background-color: {colors['accent_bg']};
-        color: {colors['fg_primary']};
-    }}
-    QPushButton#outlineButton {{
-        background: transparent;
-        border: 1px solid {colors['border']};
-        border-radius: 5px;
-        color: {colors['fg_secondary']};
-        padding: 5px 9px;
-    }}
-    QPushButton#ghostButton {{
-        background: transparent;
-        border: none;
-        color: {colors['fg_muted']};
-        padding: 5px 9px;
-    }}
-    QPushButton#primaryButton {{
-        background-color: {colors['accent']};
-        border: none;
-        border-radius: 6px;
-        color: #ffffff;
-        font-weight: 600;
-        padding: 6px 12px;
-    }}
-    QPushButton#primaryButton:disabled, QPushButton#outlineButton:disabled, QPushButton#ghostButton:disabled {{
-        color: {colors['fg_disabled']};
-        border-color: {colors['border_light']};
-    }}
-    QPushButton:hover {{
-        background-color: {colors['bg_hover']};
-    }}
-    QLineEdit, QComboBox, QDoubleSpinBox {{
-        background-color: {colors['bg_input']};
-        color: {colors['fg_secondary']};
-        border: 1px solid {colors['border']};
-        border-radius: 5px;
-        padding: 5px 7px;
-        selection-background-color: {colors['accent_bg']};
-        min-height: 22px;
-    }}
-    QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus {{
-        border-color: {colors['border_active']};
-        background-color: {colors['bg_card']};
-    }}
-    QComboBox::drop-down {{
-        width: 22px;
-        border: none;
-        background: transparent;
-    }}
-    QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
-        width: 16px;
-        border: none;
-        background-color: transparent;
-    }}
-    QCheckBox {{
-        color: {colors['fg_secondary']};
-        spacing: 6px;
-    }}
-    QStatusBar#studioStatusBar {{
-        background-color: {colors['bg_statusbar']};
-        border: none;
-        border-top: 1px solid {colors['border_light']};
-        color: {colors['fg_disabled']};
-        font-size: 11px;
-        padding: 0px 10px;
-        min-height: 22px;
-        max-height: 22px;
-    }}
-    QLabel#statusText {{
-        color: {colors['fg_disabled']};
-        font-size: 11px;
-    }}
-    QMenu {{
-        background-color: {colors['bg_dropdown']};
-        color: {colors['fg_secondary']};
-        border: 1px solid {colors['border']};
-        padding: 4px;
-    }}
-    QMenu::item {{
-        padding: 5px 24px 5px 10px;
-        border-radius: 4px;
-    }}
-    QMenu::item:selected {{
-        background-color: {colors['bg_hover']};
-    }}
-    """
-
-
-def _set_veusz_advanced_panels_visible(window: Any, visible: bool) -> None:
-    for attr in ("console", "datadock", "formatdock"):
-        widget = getattr(window, attr, None)
-        if widget is not None:
-            widget.setVisible(visible)
-    for attr in ("maintoolbar", "datatoolbar"):
-        toolbar = getattr(window, attr, None)
-        if toolbar is not None:
-            toolbar.setVisible(visible)
-    treeedit = getattr(window, "treeedit", None)
-    for attr in ("addtoolbar", "edittoolbar"):
-        toolbar = getattr(treeedit, attr, None)
-        if toolbar is not None:
-            toolbar.setVisible(visible)
-
-
-def _apply_sciplot_veusz_workspace_defaults(window: Any, *, embedded: bool = False) -> None:
-    """Use Veusz as the real editor while keeping low-frequency UI folded away."""
-    _set_veusz_advanced_panels_visible(window, False)
-    if embedded:
-        menu_bar = window.menuBar()
-        if menu_bar is not None:
-            menu_bar.hide()
-        status_bar = window.statusBar()
-        if status_bar is not None:
-            status_bar.hide()
-
-
-def _add_sciplot_view_menu(shell: Any, state: dict[str, Any]) -> None:
-    from PyQt6 import QtGui
-
-    menu_bar = shell.menuBar()
-    menu_bar.setNativeMenuBar(True)
-    menu_bar.hide()
-    view_menu = menu_bar.addMenu("View")
-    advanced_action = QtGui.QAction("Open Advanced Veusz Editor", shell)
-    advanced_action.setEnabled(False)
-
-    def open_advanced_editor() -> None:
-        document_path = state.get("document_path")
-        if isinstance(document_path, Path):
-            _open_advanced_veusz_editor(shell, document_path)
-
-    advanced_action.triggered.connect(open_advanced_editor)
-    view_menu.addAction(advanced_action)
-    state["advanced_editor_action"] = advanced_action
-    shell._sciplot_view_actions = getattr(shell, "_sciplot_view_actions", []) + [advanced_action]
-
-
-def _open_studio_target_in_new_window(shell: Any, target: Path, output_root: Path | None) -> None:
-    from PyQt6 import QtWidgets
-
-    try:
-        resolved = target.expanduser().resolve()
-        if _is_raw_studio_source(resolved):
-            next_window = _create_sciplot_studio_shell(
-                source_path=resolved,
-                output_root=output_root or Path("outputs") / "intake_projects",
-                template=None,
-                project_name=None,
-            )
-        elif resolved.is_dir() and (resolved / "plot_request.json").exists():
-            next_window = _create_sciplot_project_shell(
-                project_dir=resolved,
-                output_root=output_root,
-                template=None,
-                project_name=None,
-            )
-        else:
-            payload = prepare_studio_document(resolved, output_root=output_root)
-            context = _project_context_for_document(Path(payload["document"]))
-            if context is not None:
-                next_window = _create_sciplot_project_shell(
-                    project_dir=context["project_dir"],
-                    output_root=output_root,
-                    template=None,
-                    project_name=None,
-                )
-            else:
-                next_window = _create_sciplot_document_shell(Path(payload["document"]))
-        next_window.show()
-        shell._sciplot_open_windows = getattr(shell, "_sciplot_open_windows", []) + [next_window]
-    except Exception as exc:
-        QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
-
-
-def _choose_and_open_data(shell: Any, output_root: Path | None) -> None:
-    from PyQt6 import QtWidgets
-
-    filename, _filter = QtWidgets.QFileDialog.getOpenFileName(
-        shell,
-        "Open data file",
-        str(Path.home()),
-        "Data files (*.csv *.txt *.tsv *.xlsx *.xls *.json *.vsz);;All files (*)",
-    )
-    if filename:
-        _open_studio_target_in_new_window(shell, Path(filename), output_root)
-
-
-def _choose_and_open_project(shell: Any, output_root: Path | None) -> None:
-    from PyQt6 import QtWidgets
-
-    dirname = QtWidgets.QFileDialog.getExistingDirectory(shell, "Open SciPlot project or data folder", str(Path.home()))
-    if dirname:
-        _open_studio_target_in_new_window(shell, Path(dirname), output_root)
-
-
-def _open_existing_path(shell: Any, path: Path | None, *, missing_label: str) -> None:
-    from PyQt6 import QtCore, QtGui, QtWidgets
-
-    if path is None or not path.exists():
-        QtWidgets.QMessageBox.information(shell, "SciPlot Studio", f"{missing_label} is not available yet.")
-        return
-    QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(path)))
-
-
-def _open_advanced_veusz_editor(shell: Any, document_path: Path) -> None:
-    from PyQt6 import QtWidgets
-
-    if not document_path.exists():
-        QtWidgets.QMessageBox.information(shell, "SciPlot Studio", "The Veusz document is not available yet.")
-        return
-    command = [
-        sys.executable,
-        "-m",
-        "sciplot_core.cli",
-        "studio",
-        str(document_path),
-        "--advanced-editor",
-    ]
-    try:
-        subprocess.Popen(command, cwd=REPO_ROOT)
-    except Exception as exc:
-        QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
-
-
-def _studio_worker_env() -> dict[str, str]:
-    env = os.environ.copy()
-    env["QT_QPA_PLATFORM"] = "offscreen"
-    framework_paths = _qt_framework_paths()
-    if framework_paths:
-        joined = ":".join(str(path) for path in framework_paths)
-        for key in ("DYLD_FRAMEWORK_PATH", "DYLD_LIBRARY_PATH"):
-            current = env.get(key)
-            env[key] = f"{joined}:{current}" if current else joined
-        env["SCIPLOT_STUDIO_QT_RUNTIME"] = "1"
-    return env
-
-
-def _export_studio_document_worker(document_path: Path, *, formats: list[str]) -> dict[str, Any]:
-    command = [
-        sys.executable,
-        "-m",
-        "sciplot_core.veusz_worker",
-        "export-document",
-        str(document_path),
-        "--formats",
-        ",".join(formats),
-    ]
-    result = subprocess.run(
-        command,
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        check=True,
-        env=_studio_worker_env(),
-    )
-    return json.loads(result.stdout)
-
-
-def _set_advanced_editor_enabled(state: dict[str, Any]) -> None:
-    document_path = state.get("document_path")
-    actions = []
-    if state.get("advanced_editor_action") is not None:
-        actions.append(state["advanced_editor_action"])
-    extra_actions = state.get("advanced_editor_actions")
-    if isinstance(extra_actions, list):
-        actions.extend(extra_actions)
-    for action in actions:
-        action.setEnabled(bool(isinstance(document_path, Path) and document_path.exists()))
-
-
-def _preview_export_path(document_path: Path) -> Path:
-    return document_path.parent / "exports" / f"{document_path.stem}_300dpi.png"
-
-
-def _ensure_preview_export(document_path: Path) -> Path | None:
-    preview_path = _preview_export_path(document_path)
-    if preview_path.exists() and preview_path.stat().st_size > 0:
-        return preview_path
-    payload = _export_studio_document_worker(document_path, formats=["png_300"])
-    for item in payload.get("exports", []):
-        if isinstance(item, dict) and item.get("format") == "png_300":
-            path_value = item.get("path")
-            if isinstance(path_value, str):
-                candidate = Path(path_value).expanduser()
-                if candidate.exists() and candidate.stat().st_size > 0:
-                    return candidate
-    return preview_path if preview_path.exists() else None
-
-
-def _show_preview_image(label: Any, image_path: Path | None) -> None:
-    from PyQt6 import QtCore, QtGui
-
-    if image_path is None or not image_path.exists():
-        label.setPixmap(QtGui.QPixmap())
-        label.setText("Preview will appear here after Generate.")
-        return
-    pixmap = QtGui.QPixmap(str(image_path))
-    if pixmap.isNull():
-        label.setPixmap(QtGui.QPixmap())
-        label.setText("Preview could not be loaded.")
-        return
-    pixmap.setDevicePixelRatio(1.0)
-    available = label.size()
-    if available.width() < 760 or available.height() < 560:
-        available = QtCore.QSize(820, 620)
-    scaled = pixmap.scaled(
-        available,
-        QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-        QtCore.Qt.TransformationMode.SmoothTransformation,
-    )
-    scaled.setDevicePixelRatio(1.0)
-    label.setText("")
-    label.setPixmap(scaled)
-
-
-def _first_export_path(exports: list[dict[str, Any]], *, preferred_format: str) -> Path | None:
-    preferred: Path | None = None
-    fallback: Path | None = None
-    for item in exports:
-        if not isinstance(item, dict):
-            continue
-        value = item.get("path")
-        if not isinstance(value, str):
-            continue
-        path = Path(value).expanduser()
-        if not path.exists():
-            continue
-        fallback = fallback or path
-        if item.get("format") == preferred_format:
-            preferred = path
-    return preferred or fallback
-
-
-def _last_studio_run(project_dir: Path) -> dict[str, Any] | None:
-    manifest_paths = [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]
-    for manifest_path in manifest_paths:
-        if not manifest_path.exists():
-            continue
-        try:
-            payload = _read_json(manifest_path)
-        except Exception:
-            continue
-        studio = payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
-        run = studio.get("last_export_run")
-        if isinstance(run, dict):
-            return run
-    return None
-
-
-def _review_path_from_run(run: dict[str, Any] | None) -> Path | None:
-    if not isinstance(run, dict):
-        return None
-    value = run.get("review_html")
-    if isinstance(value, str) and value.strip():
-        return Path(value).expanduser()
-    output = run.get("output")
-    if isinstance(output, str) and output.strip():
-        return Path(output).expanduser() / "review.html"
-    return None
-
-
-def _delivery_path_from_run(run: dict[str, Any] | None) -> Path | None:
-    if not isinstance(run, dict):
-        return None
-    delivery = run.get("delivery_package")
-    if isinstance(delivery, dict):
-        value = delivery.get("path")
-        if isinstance(value, str) and value.strip():
-            return Path(value).expanduser()
-    output = run.get("output")
-    if isinstance(output, str) and output.strip():
-        return Path(output).expanduser() / "delivery"
-    return None
-
-
-def _refresh_qss(widget: Any) -> None:
-    widget.style().unpolish(widget)
-    widget.style().polish(widget)
-    widget.update()
-
-
-def _format_figure_size(value: str | None) -> str:
-    normalized = _normalize_optional_string(value) or "60x55"
-    return f"{normalized.replace('x', ' x ')} mm"
-
-
-def _experiment_family_label(session: dict[str, Any]) -> str:
-    return str(session.get("experiment_label") or session.get("experiment_type_id") or "Auto-detected")
-
-
-def _session_file_names(session: dict[str, Any], source_path: Path) -> list[str]:
-    names: list[str] = []
-    for group in _session_groups(session):
-        files = group.get("files") if isinstance(group.get("files"), list) else []
-        for item in files:
-            if not isinstance(item, dict):
-                continue
-            value = item.get("name") or item.get("source_path")
-            if isinstance(value, str) and value.strip():
-                names.append(Path(value).name)
-    return names or [source_path.name]
-
-
-def _preview_source_path(source_path: Path, session: dict[str, Any]) -> Path | None:
-    candidates: list[Path] = []
-    for group in _session_groups(session):
-        files = group.get("files") if isinstance(group.get("files"), list) else []
-        for item in files:
-            if isinstance(item, dict) and isinstance(item.get("source_path"), str):
-                candidates.append(Path(item["source_path"]).expanduser())
-    if source_path.is_file():
-        candidates.append(source_path)
-    if source_path.is_dir():
-        candidates.extend(sorted(source_path.glob("*.csv"))[:2])
-        candidates.extend(sorted(source_path.glob("*.txt"))[:2])
-        candidates.extend(sorted(source_path.glob("*.tsv"))[:2])
-        candidates.extend(sorted(source_path.glob("*.xlsx"))[:2])
-    for candidate in candidates:
-        if candidate.exists() and candidate.is_file():
-            return candidate.resolve()
-    return None
-
-
-def _read_preview_frame(path: Path | None) -> pd.DataFrame:
-    if path is None:
-        return pd.DataFrame()
-    suffix = path.suffix.lower()
-    try:
-        if suffix in {".xlsx", ".xls"}:
-            return pd.read_excel(path, nrows=8)
-        if suffix == ".tsv":
-            return pd.read_csv(path, sep="\t", nrows=8)
-        return pd.read_csv(path, sep=None, engine="python", nrows=8)
-    except Exception:
-        try:
-            return pd.read_csv(path, nrows=8)
-        except Exception:
-            return pd.DataFrame()
-
-
-def _numeric_preview_columns(frame: pd.DataFrame) -> list[str]:
-    numeric: list[str] = []
-    for column in frame.columns:
-        series = pd.to_numeric(frame[column], errors="coerce")
-        if int(series.notna().sum()) > 0:
-            numeric.append(str(column))
-    return numeric
-
-
-def _suggest_role_columns(frame: pd.DataFrame, session: dict[str, Any]) -> tuple[str | None, str | None]:
-    if frame.empty:
-        return None, None
-    columns = [str(column) for column in frame.columns]
-    numeric_columns = _numeric_preview_columns(frame) or columns
-    axis_plan = session.get("semantic", {}).get("axis_plan") if isinstance(session.get("semantic"), dict) else {}
-    x_aliases = []
-    y_aliases = []
-    if isinstance(axis_plan, dict):
-        x_plan = axis_plan.get("x") if isinstance(axis_plan.get("x"), dict) else {}
-        y_plan = axis_plan.get("y") if isinstance(axis_plan.get("y"), dict) else {}
-        x_aliases = [str(item).casefold() for item in x_plan.get("aliases", []) if isinstance(item, str)]
-        y_aliases = [str(item).casefold() for item in y_plan.get("aliases", []) if isinstance(item, str)]
-        for label in (x_plan.get("display_label"), x_plan.get("canonical_label")):
-            if isinstance(label, str):
-                x_aliases.append(label.casefold())
-        for label in (y_plan.get("display_label"), y_plan.get("canonical_label")):
-            if isinstance(label, str):
-                y_aliases.append(label.casefold())
-
-    def match_column(aliases: list[str], pool: list[str]) -> str | None:
-        for column in pool:
-            text = column.casefold()
-            if any(alias and alias in text for alias in aliases):
-                return column
-        return None
-
-    x_column = match_column(x_aliases, numeric_columns) or numeric_columns[0]
-    remaining = [column for column in numeric_columns if column != x_column]
-    y_column = match_column(y_aliases, remaining) or (remaining[0] if remaining else None)
-    return x_column, y_column
-
-
-def _populate_data_preview_table(table: Any, frame: pd.DataFrame) -> None:
-    from PyQt6 import QtWidgets
-
-    table.setShowGrid(False)
-    table.verticalHeader().setVisible(False)
-    table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
-    table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.NoSelection)
-    if frame.empty:
-        table.setRowCount(0)
-        table.setColumnCount(0)
-        return
-    preview = frame.iloc[:8, :8].copy()
-    table.setColumnCount(len(preview.columns))
-    table.setHorizontalHeaderLabels([str(column) for column in preview.columns])
-    table.setRowCount(len(preview.index))
-    for row_index, (_idx, row) in enumerate(preview.iterrows()):
-        for col_index, value in enumerate(row.tolist()):
-            text = "" if pd.isna(value) else str(value)
-            table.setItem(row_index, col_index, QtWidgets.QTableWidgetItem(text))
-    table.horizontalHeader().setStretchLastSection(True)
-    table.resizeRowsToContents()
-
-
-def _column_confirmation_from_controls(controls: dict[str, Any], state: dict[str, Any]) -> list[dict[str, Any]]:
-    frame = state.get("preview_frame")
-    source_path = state.get("preview_source_path")
-    if not isinstance(frame, pd.DataFrame) or frame.empty or not isinstance(source_path, Path):
-        return []
-    x_column = controls["x_role_combo"].currentText()
-    y_column = controls["y_role_combo"].currentText()
-    confirmations = []
-    for index, column in enumerate([str(item) for item in frame.columns]):
-        role = "auto"
-        if column == x_column:
-            role = "x"
-        elif column == y_column:
-            role = "y"
-        confirmed_type = "numeric" if column in _numeric_preview_columns(frame) else "text"
-        confirmations.append(
-            {
-                "index": index,
-                "name": column,
-                "confirmed_type": confirmed_type,
-                "role": role,
-            }
-        )
-    return [{"file_name": source_path.name, "source_path": str(source_path), "columns": confirmations}]
-
-
-def _series_entries_from_studio_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    studio = payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
-    spec_value = studio.get("spec") if isinstance(studio, dict) else None
-    spec_path: Path | None = None
-    if isinstance(spec_value, str) and spec_value.strip():
-        spec_path = Path(spec_value).expanduser()
-    elif isinstance(payload.get("document"), str):
-        spec_path = _veusz_spec_path(Path(str(payload["document"])).expanduser())
-    if spec_path is None or not spec_path.exists():
-        return []
-    spec = _read_json(spec_path)
-    series = spec.get("series") if isinstance(spec.get("series"), list) else []
-    entries: list[dict[str, Any]] = []
-    for index, item in enumerate(series):
-        if not isinstance(item, dict):
-            continue
-        label = str(item.get("label") or item.get("name") or f"Series {index + 1}")
-        entries.append(
-            {
-                "series_id": label,
-                "label": label,
-                "enabled": True,
-                "color": str(item.get("color") or DEFAULT_PALETTE[index % len(DEFAULT_PALETTE)]),
-                "line_width": item.get("line_width_pt") or 1.2,
-                "marker": str(item.get("marker") or "none"),
-                "marker_size": item.get("marker_size_pt") or 0.0,
-            }
-        )
-    return entries
-
-
-def _template_card_specs() -> list[dict[str, str]]:
-    return [
-        {
-            "family": "rheology",
-            "template": "curve",
-            "icon": "●",
-            "title": "Rheology / DMA",
-            "subtitle": "Time and sweep curves",
-        },
-        {
-            "family": "mechanical",
-            "template": "curve",
-            "icon": "●",
-            "title": "Mechanical",
-            "subtitle": "Tensile and modulus",
-        },
-        {
-            "family": "thermal",
-            "template": "curve",
-            "icon": "●",
-            "title": "Thermal",
-            "subtitle": "DSC / TGA tables",
-        },
-        {
-            "family": "spectroscopy",
-            "template": "stacked_curve",
-            "icon": "●",
-            "title": "Spectroscopy",
-            "subtitle": "FTIR / Raman stacks",
-        },
-        {
-            "family": "diffraction",
-            "template": "stacked_curve",
-            "icon": "●",
-            "title": "Diffraction",
-            "subtitle": "XRD / WAXS",
-        },
-        {
-            "family": "chromatography",
-            "template": "curve",
-            "icon": "●",
-            "title": "Chromatography",
-            "subtitle": "GPC / HPLC",
-        },
-        {
-            "family": "scattering",
-            "template": "stacked_curve",
-            "icon": "●",
-            "title": "Scattering",
-            "subtitle": "SAXS / SANS",
-        },
-        {
-            "family": "other",
-            "template": "curve",
-            "icon": "●",
-            "title": "Other",
-            "subtitle": "Custom table",
-        },
-    ]
-
-
-def _top_bar_size_text(state: dict[str, Any]) -> str:
-    return _format_figure_size(str(state.get("figure_size") or "60x55"))
-
-
-def _set_button_checked(button: Any, checked: bool) -> None:
-    button.setChecked(checked)
-    _refresh_qss(button)
-
-
-def _build_top_bar(shell: Any, state: dict[str, Any]) -> dict[str, Any]:
-    from PyQt6 import QtCore, QtWidgets
-
-    top_bar = QtWidgets.QToolBar("TopBar", shell)
-    top_bar.setObjectName("topBar")
-    top_bar.setMovable(False)
-    top_bar.setFloatable(False)
-    top_bar.setIconSize(QtCore.QSize(20, 20))
-    top_bar.setContentsMargins(8, 0, 8, 0)
-
-    brand = QtWidgets.QLabel("● SciPlot Studio")
-    brand.setObjectName("topBarBrand")
-    brand.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-    top_bar.addWidget(brand)
-
-    experiment_badge = QtWidgets.QLabel(str(state.get("experiment_family") or "Auto"))
-    experiment_badge.setObjectName("topBarExperimentBadge")
-    top_bar.addWidget(experiment_badge)
-
-    spacer = QtWidgets.QWidget()
-    spacer.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
-    top_bar.addWidget(spacer)
-
-    size_badge = QtWidgets.QPushButton(_top_bar_size_text(state))
-    size_badge.setObjectName("topBarSizeBadge")
-    size_badge.setFlat(True)
-    size_badge.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-    top_bar.addWidget(size_badge)
-
-    spacer2 = QtWidgets.QWidget()
-    spacer2.setFixedWidth(8)
-    top_bar.addWidget(spacer2)
-
-    generate_btn = QtWidgets.QPushButton("Generate")
-    generate_btn.setObjectName("topBarPrimary")
-    generate_widget_action = top_bar.addWidget(generate_btn)
-
-    export_btn = QtWidgets.QPushButton("Export")
-    export_btn.setObjectName("topBarPrimary")
-    export_btn.setVisible(False)
-    export_widget_action = top_bar.addWidget(export_btn)
-    export_widget_action.setVisible(False)
-
-    overflow_btn = QtWidgets.QPushButton("···")
-    overflow_btn.setObjectName("topBarOverflow")
-    overflow_btn.setFlat(True)
-    overflow_btn.setFixedWidth(36)
-    overflow_menu = QtWidgets.QMenu(overflow_btn)
-    overflow_btn.setMenu(overflow_menu)
-    top_bar.addWidget(overflow_btn)
-
-    shell.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, top_bar)
-
-    open_data_action = overflow_menu.addAction("Open Data...")
-    open_project_action = overflow_menu.addAction("Open Project...")
-    overflow_menu.addSeparator()
-    setup_action = overflow_menu.addAction("Setup Workspace")
-    setup_action.setShortcut("Ctrl+1")
-    refine_action = overflow_menu.addAction("Refine Workspace")
-    refine_action.setShortcut("Ctrl+2")
-    refine_action.setEnabled(False)
-    overflow_menu.addSeparator()
-    advanced_action = overflow_menu.addAction("Open in Veusz Editor")
-    advanced_action.setShortcut("Ctrl+Shift+E")
-    advanced_action.setEnabled(False)
-    review_action = overflow_menu.addAction("View Review HTML")
-    review_action.setEnabled(False)
-    delivery_action = overflow_menu.addAction("Open Delivery Package")
-    delivery_action.setEnabled(False)
-    state.setdefault("advanced_editor_actions", []).append(advanced_action)
-
-    return {
-        "toolbar": top_bar,
-        "brand": brand,
-        "experiment_badge": experiment_badge,
-        "size_badge": size_badge,
-        "generate_btn": generate_btn,
-        "generate_widget_action": generate_widget_action,
-        "export_btn": export_btn,
-        "export_widget_action": export_widget_action,
-        "overflow_btn": overflow_btn,
-        "overflow_menu": overflow_menu,
-        "open_data_action": open_data_action,
-        "open_project_action": open_project_action,
-        "setup_action": setup_action,
-        "refine_action": refine_action,
-        "advanced_action": advanced_action,
-        "review_action": review_action,
-        "delivery_action": delivery_action,
-    }
-
-
-def _build_stage_rail(parent: Any, state: dict[str, Any]) -> dict[str, Any]:
-    from PyQt6 import QtCore, QtWidgets
-
-    rail = QtWidgets.QFrame(parent)
-    rail.setObjectName("stageRail")
-    rail.setFixedWidth(44)
-
-    layout = QtWidgets.QVBoxLayout(rail)
-    layout.setContentsMargins(0, 10, 0, 10)
-    layout.setSpacing(0)
-
-    brand_dot = QtWidgets.QPushButton("●")
-    brand_dot.setObjectName("railBrandDot")
-    brand_dot.setFixedSize(20, 20)
-    brand_dot.setFlat(True)
-    brand_dot.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-    brand_dot.setToolTip("Setup Workspace")
-    layout.addWidget(brand_dot, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
-    layout.addSpacing(4)
-
-    setup_dot = QtWidgets.QPushButton("")
-    setup_dot.setObjectName("stageDot")
-    setup_dot.setProperty("active", True)
-    setup_dot.setFixedSize(14, 14)
-    setup_dot.setFlat(True)
-    setup_dot.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-    setup_dot.setToolTip("Setup Workspace")
-    layout.addWidget(setup_dot, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
-
-    conn_line = QtWidgets.QFrame()
-    conn_line.setObjectName("stageConnLine")
-    conn_line.setFixedSize(2, 24)
-    conn_line.setFrameShape(QtWidgets.QFrame.Shape.VLine)
-    layout.addWidget(conn_line, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
-
-    refine_dot = QtWidgets.QPushButton("")
-    refine_dot.setObjectName("stageDot")
-    refine_dot.setProperty("active", False)
-    refine_dot.setFixedSize(14, 14)
-    refine_dot.setFlat(True)
-    refine_dot.setEnabled(False)
-    refine_dot.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-    refine_dot.setToolTip("Refine Workspace")
-    layout.addWidget(refine_dot, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
-
-    layout.addSpacing(6)
-    separator = QtWidgets.QFrame()
-    separator.setObjectName("railSeparator")
-    separator.setFixedSize(28, 1)
-    separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
-    layout.addWidget(separator, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
-    layout.addSpacing(4)
-
-    thumb_container = QtWidgets.QWidget()
-    thumb_container.setObjectName("figureThumbContainer")
-    thumb_layout = QtWidgets.QVBoxLayout(thumb_container)
-    thumb_layout.setContentsMargins(2, 0, 2, 0)
-    thumb_layout.setSpacing(4)
-    layout.addWidget(thumb_container, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
-    layout.addStretch(1)
-
-    return {
-        "rail": rail,
-        "brand_dot": brand_dot,
-        "setup_dot": setup_dot,
-        "refine_dot": refine_dot,
-        "thumb_container": thumb_container,
-        "thumb_layout": thumb_layout,
-    }
-
-
-def _add_figure_thumbnail(thumb_layout: Any, preview_path: Path | None, state: dict[str, Any]) -> Any:
-    from PyQt6 import QtCore, QtGui, QtWidgets
-
-    while thumb_layout.count():
-        item = thumb_layout.takeAt(0)
-        widget = item.widget()
-        if widget is not None:
-            widget.deleteLater()
-
-    btn = QtWidgets.QPushButton("1")
-    btn.setObjectName("figureThumb")
-    btn.setProperty("active", True)
-    btn.setFixedSize(40, 24)
-    btn.setFlat(True)
-    btn.setToolTip("Generated figure")
-    if preview_path is not None and preview_path.exists():
-        pixmap = QtGui.QPixmap(str(preview_path))
-        if not pixmap.isNull():
-            scaled = pixmap.scaled(
-                40,
-                24,
-                QtCore.Qt.AspectRatioMode.KeepAspectRatio,
-                QtCore.Qt.TransformationMode.SmoothTransformation,
-            )
-            btn.setText("")
-            btn.setIcon(QtGui.QIcon(scaled))
-            btn.setIconSize(QtCore.QSize(40, 24))
-    btn.clicked.connect(lambda: state.get("_switch_to_refine", lambda: None)())
-    thumb_layout.addWidget(btn)
-    return btn
-
-
-def _build_template_card(parent: Any, spec: dict[str, str], state: dict[str, Any]) -> Any:
-    from PyQt6 import QtCore, QtWidgets
-
-    card = QtWidgets.QFrame(parent)
-    card.setObjectName("templateCard")
-    card.setFixedSize(160, 120)
-    card.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-    card.setProperty("selected", state.get("selected_family") == spec["family"])
-    card.template_id = spec["template"]
-    card.family_id = spec["family"]
-
-    layout = QtWidgets.QVBoxLayout(card)
-    layout.setContentsMargins(14, 14, 14, 10)
-    layout.setSpacing(6)
-
-    icon_label = QtWidgets.QLabel(spec["icon"])
-    icon_label.setObjectName("templateCardIcon")
-    icon_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-    icon_label.setFixedHeight(36)
-    layout.addWidget(icon_label)
-
-    title_label = QtWidgets.QLabel(spec["title"])
-    title_label.setObjectName("templateCardTitle")
-    title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-    title_label.setWordWrap(True)
-    layout.addWidget(title_label)
-
-    subtitle_label = QtWidgets.QLabel(spec["subtitle"])
-    subtitle_label.setObjectName("templateCardSubtitle")
-    subtitle_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-    subtitle_label.setWordWrap(True)
-    layout.addWidget(subtitle_label)
-    return card
-
-
-def _select_template_card(card: Any, state: dict[str, Any]) -> None:
-    state["selected_template"] = str(getattr(card, "template_id", "curve"))
-    state["selected_family"] = str(getattr(card, "family_id", "other"))
-    for item in state.get("template_cards", []):
-        item.setProperty("selected", item is card)
-        _refresh_qss(item)
-    callback = state.get("_sync_template_controls")
-    if callable(callback):
-        callback()
-
-
-def _build_drop_zone(parent: Any, state: dict[str, Any]) -> Any:
-    from PyQt6 import QtCore, QtWidgets
-
-    zone = QtWidgets.QFrame(parent)
-    zone.setObjectName("dropZone")
-    zone.setFixedHeight(74)
-    zone.setAcceptDrops(True)
-    zone.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-
-    layout = QtWidgets.QVBoxLayout(zone)
-    layout.setContentsMargins(0, 0, 0, 0)
-    label = QtWidgets.QLabel("Drop data files here, or click to choose files")
-    label.setObjectName("dropZoneLabel")
-    label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-    layout.addWidget(label)
-
-    def open_picker(_event: Any) -> None:
-        shell = state.get("shell")
-        output_root = state.get("output_root")
-        if shell is not None:
-            _choose_and_open_data(shell, output_root if isinstance(output_root, Path) else None)
-
-    def drag_enter(event: Any) -> None:
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-            zone.setProperty("hovering", True)
-            _refresh_qss(zone)
-
-    def drag_leave(_event: Any) -> None:
-        zone.setProperty("hovering", False)
-        _refresh_qss(zone)
-
-    def drop_event(event: Any) -> None:
-        zone.setProperty("hovering", False)
-        _refresh_qss(zone)
-        paths = [Path(url.toLocalFile()) for url in event.mimeData().urls() if url.toLocalFile()]
-        if paths and state.get("shell") is not None:
-            output_root = state.get("output_root")
-            _open_studio_target_in_new_window(
-                state["shell"],
-                paths[0],
-                output_root if isinstance(output_root, Path) else None,
-            )
-
-    zone.mousePressEvent = open_picker
-    zone.dragEnterEvent = drag_enter
-    zone.dragLeaveEvent = drag_leave
-    zone.dropEvent = drop_event
-    return zone
-
-
-def _populate_samples_table(table: Any, groups: list[dict[str, Any]]) -> None:
-    from PyQt6 import QtCore, QtWidgets
-
-    table.verticalHeader().setVisible(False)
-    table.setShowGrid(False)
-    table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
-    table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
-    table.setRowCount(len(groups))
-    for row, group in enumerate(groups):
-        handle = QtWidgets.QTableWidgetItem("≡")
-        handle.setFlags(handle.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
-        table.setItem(row, 0, handle)
-        sample_item = QtWidgets.QTableWidgetItem(str(group.get("sample") or f"Sample {row + 1}"))
-        sample_item.setData(QtCore.Qt.ItemDataRole.UserRole, row)
-        table.setItem(row, 1, sample_item)
-        files = group.get("files") if isinstance(group.get("files"), list) else []
-        file_names = [
-            str(item.get("name") or Path(str(item.get("source_path") or "")).name)
-            for item in files
-            if isinstance(item, dict)
-        ]
-        files_text = ", ".join(file_names) if file_names else "1 file"
-        files_item = QtWidgets.QTableWidgetItem(files_text)
-        files_item.setFlags(files_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
-        table.setItem(row, 2, files_item)
-        mode_item = QtWidgets.QTableWidgetItem("Auto")
-        mode_item.setFlags(mode_item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
-        table.setItem(row, 3, mode_item)
-
-
-def _groups_from_samples_table(table: Any, original_groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    from PyQt6 import QtCore
-
-    groups: list[dict[str, Any]] = []
-    for row in range(table.rowCount()):
-        item = table.item(row, 1)
-        source_index = item.data(QtCore.Qt.ItemDataRole.UserRole) if item is not None else row
-        try:
-            source_group = original_groups[int(source_index)]
-        except (IndexError, TypeError, ValueError):
-            source_group = original_groups[row] if row < len(original_groups) else {}
-        sample = item.text().strip() if item is not None else ""
-        updated = dict(source_group)
-        updated["sample"] = sample or str(source_group.get("sample") or f"Sample {row + 1}")
-        groups.append(updated)
-    return groups
-
-
-def _build_samples_panel(parent: Any, groups: list[dict[str, Any]], controls: dict[str, Any]) -> Any:
-    from PyQt6 import QtWidgets
-
-    container = QtWidgets.QWidget(parent)
-    layout = QtWidgets.QVBoxLayout(container)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(8)
-
-    header = QtWidgets.QLabel("Samples")
-    header.setObjectName("sectionHeaderLabel")
-    layout.addWidget(header)
-
-    table = QtWidgets.QTableWidget()
-    table.setObjectName("samplesTable")
-    table.setColumnCount(4)
-    table.setHorizontalHeaderLabels(["", "Legend Name", "Files", "Mode"])
-    table.horizontalHeader().setStretchLastSection(False)
-    table.setColumnWidth(0, 28)
-    table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.Stretch)
-    table.setColumnWidth(2, 120)
-    table.setColumnWidth(3, 80)
-    table.verticalHeader().setDefaultSectionSize(38)
-    _populate_samples_table(table, groups)
-    layout.addWidget(table, 1)
-
-    controls["samples_table"] = table
-    return container
-
-
-def _build_plot_intent_strip(parent: Any, state: dict[str, Any], controls: dict[str, Any]) -> Any:
-    from PyQt6 import QtWidgets
-
-    strip = QtWidgets.QFrame(parent)
-    strip.setObjectName("plotIntentStrip")
-    layout = QtWidgets.QHBoxLayout(strip)
-    layout.setContentsMargins(12, 10, 12, 10)
-    layout.setSpacing(8)
-
-    title = QtWidgets.QLabel("Plot intent")
-    title.setObjectName("panelTitle")
-    layout.addWidget(title)
-    meta = QtWidgets.QLabel(str(state.get("experiment_family") or "Auto-detected"))
-    meta.setObjectName("panelMeta")
-    layout.addWidget(meta)
-    layout.addStretch(1)
-
-    intent_buttons: dict[str, Any] = {}
-    for template_id, label in [
-        ("curve", "Curve"),
-        ("stacked_curve", "Stacked"),
-        ("segmented_stacked_curve", "Segmented"),
-    ]:
-        button = QtWidgets.QPushButton(label)
-        button.setObjectName("intentChip")
-        button.setCheckable(True)
-        button.clicked.connect(lambda _checked=False, value=template_id: state["_select_template_id"](value))
-        layout.addWidget(button)
-        intent_buttons[template_id] = button
-    controls["intent_buttons"] = intent_buttons
-    return strip
-
-
-def _build_data_preview_panel(
-    parent: Any,
-    state: dict[str, Any],
-    session: dict[str, Any],
-    controls: dict[str, Any],
-) -> Any:
-    from PyQt6 import QtWidgets
-
-    panel = QtWidgets.QFrame(parent)
-    panel.setObjectName("dataPreviewPanel")
-    layout = QtWidgets.QVBoxLayout(panel)
-    layout.setContentsMargins(12, 12, 12, 12)
-    layout.setSpacing(10)
-
-    header = QtWidgets.QHBoxLayout()
-    title = QtWidgets.QLabel("Data preview")
-    title.setObjectName("panelTitle")
-    source_path = state.get("preview_source_path")
-    source_label = QtWidgets.QLabel(Path(source_path).name if isinstance(source_path, Path) else "No readable table")
-    source_label.setObjectName("panelMeta")
-    header.addWidget(title)
-    header.addWidget(source_label)
-    header.addStretch(1)
-    layout.addLayout(header)
-
-    role_row = QtWidgets.QHBoxLayout()
-    role_row.setSpacing(8)
-    x_combo = QtWidgets.QComboBox()
-    y_combo = QtWidgets.QComboBox()
-    columns = [str(column) for column in state.get("preview_columns", [])]
-    x_combo.addItems(columns)
-    y_combo.addItems(columns)
-    x_suggestion, y_suggestion = _suggest_role_columns(state.get("preview_frame", pd.DataFrame()), session)
-    if x_suggestion and x_combo.findText(x_suggestion) >= 0:
-        x_combo.setCurrentIndex(x_combo.findText(x_suggestion))
-    if y_suggestion and y_combo.findText(y_suggestion) >= 0:
-        y_combo.setCurrentIndex(y_combo.findText(y_suggestion))
-    role_row.addWidget(QtWidgets.QLabel("X"))
-    role_row.addWidget(x_combo, 1)
-    role_row.addWidget(QtWidgets.QLabel("Y"))
-    role_row.addWidget(y_combo, 1)
-    layout.addLayout(role_row)
-
-    preview_table = QtWidgets.QTableWidget()
-    preview_table.setObjectName("dataPreviewTable")
-    preview_table.setMinimumHeight(210)
-    _populate_data_preview_table(preview_table, state.get("preview_frame", pd.DataFrame()))
-    layout.addWidget(preview_table, 1)
-
-    controls["x_role_combo"] = x_combo
-    controls["y_role_combo"] = y_combo
-    controls["data_preview_table"] = preview_table
-    controls["data_preview_source_label"] = source_label
-    return panel
-
-
-def _build_setup_workspace(state: dict[str, Any], session: dict[str, Any], controls: dict[str, Any]) -> Any:
-    from PyQt6 import QtWidgets
-
-    setup_workspace = QtWidgets.QWidget()
-    setup_workspace.setObjectName("setupWorkspace")
-    layout = QtWidgets.QVBoxLayout(setup_workspace)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-
-    scroll = QtWidgets.QScrollArea()
-    scroll.setObjectName("setupScroll")
-    scroll.setWidgetResizable(True)
-    scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-    layout.addWidget(scroll)
-
-    content = QtWidgets.QWidget()
-    content.setObjectName("setupContent")
-    scroll.setWidget(content)
-    content_layout = QtWidgets.QVBoxLayout(content)
-    content_layout.setContentsMargins(32, 24, 32, 28)
-    content_layout.setSpacing(14)
-
-    state["template_cards"] = []
-    intent_strip = _build_plot_intent_strip(content, state, controls)
-    content_layout.addWidget(intent_strip)
-
-    data_preview = _build_data_preview_panel(content, state, session, controls)
-    content_layout.addWidget(data_preview, 2)
-
-    drop_zone = _build_drop_zone(content, state)
-    drop_zone.setFixedHeight(50)
-    content_layout.addWidget(drop_zone)
-    controls["drop_zone"] = drop_zone
-
-    groups = _session_groups(session)
-    samples_panel = _build_samples_panel(content, groups, controls)
-    content_layout.addWidget(samples_panel, 1)
-    content_layout.addStretch(1)
-
-    return setup_workspace
-
-
-def _build_section(title: str, *, expanded: bool) -> Any:
-    from PyQt6 import QtWidgets
-
-    container = QtWidgets.QWidget()
-    container.setObjectName("collapsibleSection")
-    container._expanded = expanded
-    container._title = title
-
-    main_layout = QtWidgets.QVBoxLayout(container)
-    main_layout.setContentsMargins(0, 0, 0, 0)
-    main_layout.setSpacing(0)
-
-    header = QtWidgets.QPushButton(("▾ " if expanded else "▸ ") + title)
-    header.setObjectName("sectionHeader")
-    header.setFlat(True)
-    main_layout.addWidget(header)
-
-    body = QtWidgets.QWidget()
-    body_layout = QtWidgets.QVBoxLayout(body)
-    body_layout.setContentsMargins(12, 4, 12, 8)
-    body_layout.setSpacing(6)
-    body.setVisible(expanded)
-    main_layout.addWidget(body)
-
-    separator = QtWidgets.QFrame()
-    separator.setObjectName("sectionSeparator")
-    separator.setFixedHeight(1)
-    separator.setFrameShape(QtWidgets.QFrame.Shape.HLine)
-    main_layout.addWidget(separator)
-
-    def toggle() -> None:
-        container._expanded = not container._expanded
-        body.setVisible(container._expanded)
-        header.setText(("▾ " if container._expanded else "▸ ") + container._title)
-
-    header.clicked.connect(toggle)
-    container.header = header
-    container.body = body
-    container.body_layout = body_layout
-    container.addWidget = body_layout.addWidget
-    container.addLayout = body_layout.addLayout
-    return container
-
-
-def _add_form_row(layout: Any, label_text: str, widget: Any) -> None:
-    from PyQt6 import QtWidgets
-
-    label = QtWidgets.QLabel(label_text)
-    label.setObjectName("inspectorMeta")
-    layout.addWidget(label)
-    layout.addWidget(widget)
-
-
-def _build_setup_inspector(state: dict[str, Any], controls: dict[str, Any]) -> Any:
-    from PyQt6 import QtWidgets
-
-    container = QtWidgets.QWidget()
-    layout = QtWidgets.QVBoxLayout(container)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-
-    data_section = _build_section("DATA", expanded=False)
-    files_list = QtWidgets.QListWidget()
-    files_list.setObjectName("sourceFileList")
-    for name in state.get("source_file_names", []):
-        files_list.addItem(str(name))
-    files_list.setFixedHeight(88)
-    data_section.addWidget(files_list)
-    layout.addWidget(data_section)
-
-    project_section = _build_section("PROJECT", expanded=True)
-    name_edit = QtWidgets.QLineEdit(str(state.get("project_name") or "SciPlot Project"))
-    name_edit.setObjectName("projectNameEdit")
-    project_section.addWidget(name_edit)
-    layout.addWidget(project_section)
-    controls["name_edit"] = name_edit
-
-    template_section = _build_section("TEMPLATE", expanded=False)
-    template_buttons: dict[str, Any] = {}
-    for template_id, label in [
-        ("curve", "● Curve"),
-        ("stacked_curve", "○ Stacked"),
-        ("segmented_stacked_curve", "○ Segmented"),
-    ]:
-        button = QtWidgets.QPushButton(label)
-        button.setObjectName("templateChoiceButton")
-        button.setCheckable(True)
-        button.clicked.connect(lambda _checked=False, value=template_id: state["_select_template_id"](value))
-        template_buttons[template_id] = button
-        template_section.addWidget(button)
-    layout.addWidget(template_section)
-    controls["template_buttons"] = template_buttons
-
-    figure_section = _build_section("FIGURE", expanded=False)
-    size_buttons: dict[str, Any] = {}
-    size_grid = QtWidgets.QGridLayout()
-    size_grid.setSpacing(6)
-    for index, size in enumerate(FIGURE_SIZE_PRESETS):
-        button = QtWidgets.QPushButton(_format_figure_size(size).replace(" mm", ""))
-        button.setObjectName("sizeButton")
-        button.setCheckable(True)
-        button.setFixedHeight(30)
-        button.clicked.connect(lambda _checked=False, value=size: state["_select_figure_size"](value))
-        size_buttons[size] = button
-        size_grid.addWidget(button, index // 3, index % 3)
-    figure_section.addLayout(size_grid)
-    layout.addWidget(figure_section)
-    controls["size_buttons"] = size_buttons
-
-    axes_section = _build_section("AXES", expanded=False)
-    x_label_edit = QtWidgets.QLineEdit()
-    x_label_edit.setPlaceholderText("Auto-detected")
-    y_label_edit = QtWidgets.QLineEdit()
-    y_label_edit.setPlaceholderText("Auto-detected")
-    x_min_edit = QtWidgets.QLineEdit()
-    x_min_edit.setPlaceholderText("Min")
-    x_max_edit = QtWidgets.QLineEdit()
-    x_max_edit.setPlaceholderText("Max")
-    log_x_check = QtWidgets.QCheckBox("Log X")
-    log_y_check = QtWidgets.QCheckBox("Log Y")
-    reverse_x_check = QtWidgets.QCheckBox("Reverse X")
-    _add_form_row(axes_section.body_layout, "X Axis Label", x_label_edit)
-    _add_form_row(axes_section.body_layout, "Y Axis Label", y_label_edit)
-    range_row = QtWidgets.QHBoxLayout()
-    range_row.addWidget(x_min_edit)
-    range_row.addWidget(x_max_edit)
-    axes_section.addLayout(range_row)
-    axes_section.addWidget(log_x_check)
-    axes_section.addWidget(log_y_check)
-    axes_section.addWidget(reverse_x_check)
-    layout.addWidget(axes_section)
-    controls.update(
-        {
-            "x_label_edit": x_label_edit,
-            "y_label_edit": y_label_edit,
-            "x_min_edit": x_min_edit,
-            "x_max_edit": x_max_edit,
-            "log_x_check": log_x_check,
-            "log_y_check": log_y_check,
-            "reverse_x_check": reverse_x_check,
-        }
-    )
-
-    labels_section = _build_section("LABELS", expanded=False)
-    label_mode_combo = QtWidgets.QComboBox()
-    for label, value in (("Legend", "legend"), ("Inline", "inline"), ("Auto", "auto")):
-        label_mode_combo.addItem(label, value)
-    labels_section.addWidget(label_mode_combo)
-    layout.addWidget(labels_section)
-    controls["label_mode_combo"] = label_mode_combo
-
-    export_section = _build_section("EXPORT", expanded=False)
-    export_checks: dict[str, Any] = {}
-    for fmt in EXPORT_FORMATS:
-        check = QtWidgets.QCheckBox(fmt.upper() if fmt == "pdf" else "TIFF 300 dpi")
-        check.setChecked(True)
-        export_checks[fmt] = check
-        export_section.addWidget(check)
-    layout.addWidget(export_section)
-    controls["export_checks"] = export_checks
-    controls["source_file_list"] = files_list
-
-    layout.addStretch(1)
-    return container
-
-
-def _build_refine_inspector(state: dict[str, Any], controls: dict[str, Any]) -> Any:
-    from PyQt6 import QtCore, QtWidgets
-
-    container = QtWidgets.QWidget()
-    main_layout = QtWidgets.QVBoxLayout(container)
-    main_layout.setContentsMargins(0, 0, 0, 0)
-    main_layout.setSpacing(0)
-
-    tab_widget = QtWidgets.QTabWidget()
-    tab_widget.setObjectName("refineTabs")
-
-    page_tab = QtWidgets.QWidget()
-    page_layout = QtWidgets.QVBoxLayout(page_tab)
-    page_layout.setContentsMargins(12, 12, 12, 12)
-    page_layout.setSpacing(10)
-    page_title = QtWidgets.QLabel("Figure Size")
-    page_title.setObjectName("tabSectionTitle")
-    page_layout.addWidget(page_title)
-    size_grid = QtWidgets.QGridLayout()
-    size_grid.setSpacing(6)
-    refine_size_buttons: dict[str, Any] = {}
-    for index, size in enumerate(FIGURE_SIZE_PRESETS):
-        button = QtWidgets.QPushButton(_format_figure_size(size).replace(" mm", ""))
-        button.setObjectName("sizeButton")
-        button.setCheckable(True)
-        button.setFixedSize(72, 32)
-        button.clicked.connect(lambda _checked=False, value=size: state["_select_figure_size"](value))
-        refine_size_buttons[size] = button
-        size_grid.addWidget(button, index // 3, index % 3)
-    page_layout.addLayout(size_grid)
-    page_layout.addWidget(QtWidgets.QLabel("Export Formats"))
-    page_layout.addWidget(QtWidgets.QLabel("PDF · TIFF 300 dpi"))
-    page_layout.addStretch(1)
-    tab_widget.addTab(page_tab, "Page")
-
-    axes_tab = QtWidgets.QWidget()
-    axes_layout = QtWidgets.QVBoxLayout(axes_tab)
-    axes_layout.setContentsMargins(12, 12, 12, 12)
-    axes_layout.setSpacing(8)
-    refine_x_label_edit = QtWidgets.QLineEdit()
-    refine_x_label_edit.setPlaceholderText("Use confirmed X column")
-    refine_y_label_edit = QtWidgets.QLineEdit()
-    refine_y_label_edit.setPlaceholderText("Use confirmed Y column")
-    refine_x_min_edit = QtWidgets.QLineEdit()
-    refine_x_min_edit.setPlaceholderText("Min")
-    refine_x_max_edit = QtWidgets.QLineEdit()
-    refine_x_max_edit.setPlaceholderText("Max")
-    refine_log_x_check = QtWidgets.QCheckBox("Log X")
-    refine_log_y_check = QtWidgets.QCheckBox("Log Y")
-    refine_reverse_x_check = QtWidgets.QCheckBox("Reverse X")
-    axes_layout.addWidget(QtWidgets.QLabel("X Axis Label"))
-    axes_layout.addWidget(refine_x_label_edit)
-    axes_layout.addWidget(QtWidgets.QLabel("Y Axis Label"))
-    axes_layout.addWidget(refine_y_label_edit)
-    axes_layout.addWidget(QtWidgets.QLabel("X Range"))
-    refine_range_row = QtWidgets.QHBoxLayout()
-    refine_range_row.addWidget(refine_x_min_edit)
-    refine_range_row.addWidget(refine_x_max_edit)
-    axes_layout.addLayout(refine_range_row)
-    axes_layout.addWidget(refine_log_x_check)
-    axes_layout.addWidget(refine_log_y_check)
-    axes_layout.addWidget(refine_reverse_x_check)
-    axes_layout.addStretch(1)
-    tab_widget.addTab(axes_tab, "Axes")
-
-    series_tab = QtWidgets.QWidget()
-    series_layout = QtWidgets.QVBoxLayout(series_tab)
-    series_layout.setContentsMargins(12, 12, 12, 12)
-    series_layout.setSpacing(6)
-    series_title = QtWidgets.QLabel("Series Order & Names")
-    series_title.setObjectName("tabSectionTitle")
-    series_layout.addWidget(series_title)
-    series_list = QtWidgets.QListWidget()
-    series_list.setObjectName("seriesList")
-    series_list.setDragDropMode(QtWidgets.QAbstractItemView.DragDropMode.InternalMove)
-    series_list.setDefaultDropAction(QtCore.Qt.DropAction.MoveAction)
-    series_list.setMinimumHeight(96)
-    series_list.setMaximumHeight(150)
-    series_list.setSizePolicy(
-        QtWidgets.QSizePolicy.Policy.Expanding,
-        QtWidgets.QSizePolicy.Policy.Fixed,
-    )
-    series_layout.addWidget(series_list)
-    selected_series_label = QtWidgets.QLabel("No generated series")
-    selected_series_label.setObjectName("seriesInspectorValue")
-    series_layout.addWidget(selected_series_label)
-    series_enabled_check = QtWidgets.QCheckBox("Show selected series")
-    series_enabled_check.setChecked(True)
-    series_layout.addWidget(series_enabled_check)
-
-    color_label = QtWidgets.QLabel("Color")
-    color_label.setObjectName("tabSectionTitle")
-    series_layout.addWidget(color_label)
-    color_row = QtWidgets.QHBoxLayout()
-    color_row.setSpacing(6)
-    series_color_buttons: dict[str, Any] = {}
-    for color in DEFAULT_PALETTE:
-        button = QtWidgets.QPushButton("")
-        button.setObjectName("seriesColorSwatch")
-        button.setCheckable(True)
-        button.setToolTip(color)
-        button.setStyleSheet(f"QPushButton#seriesColorSwatch {{ background-color: {color}; }}")
-        color_row.addWidget(button)
-        series_color_buttons[color] = button
-    color_row.addStretch(1)
-    series_layout.addLayout(color_row)
-
-    line_width_label = QtWidgets.QLabel("Line Width")
-    line_width_label.setObjectName("tabSectionTitle")
-    series_layout.addWidget(line_width_label)
-    series_line_width_spin = QtWidgets.QDoubleSpinBox()
-    series_line_width_spin.setRange(0.6, 2.4)
-    series_line_width_spin.setSingleStep(0.1)
-    series_line_width_spin.setDecimals(1)
-    series_line_width_spin.setSuffix(" pt")
-    series_line_width_spin.setValue(1.2)
-    series_layout.addWidget(series_line_width_spin)
-
-    marker_row = QtWidgets.QHBoxLayout()
-    marker_row.setSpacing(8)
-    series_marker_combo = QtWidgets.QComboBox()
-    for label, value in SERIES_MARKER_CHOICES:
-        series_marker_combo.addItem(label, value)
-    series_marker_size_spin = QtWidgets.QDoubleSpinBox()
-    series_marker_size_spin.setRange(0.0, 8.0)
-    series_marker_size_spin.setSingleStep(0.5)
-    series_marker_size_spin.setDecimals(1)
-    series_marker_size_spin.setSuffix(" pt")
-    series_marker_size_spin.setValue(0.0)
-    marker_row.addWidget(series_marker_combo, 1)
-    marker_row.addWidget(series_marker_size_spin, 1)
-    series_layout.addLayout(marker_row)
-    series_layout.addStretch(1)
-    tab_widget.addTab(series_tab, "Series")
-
-    legend_tab = QtWidgets.QWidget()
-    legend_layout = QtWidgets.QVBoxLayout(legend_tab)
-    legend_layout.setContentsMargins(12, 12, 12, 12)
-    legend_layout.setSpacing(10)
-    legend_layout.addWidget(QtWidgets.QLabel("Legend Position"))
-    pos_grid = QtWidgets.QGridLayout()
-    legend_position_buttons: dict[str, Any] = {}
-    for index, (label, value) in enumerate(LEGEND_POSITION_CHOICES):
-        button = QtWidgets.QPushButton(label)
-        button.setObjectName("legendPosButton")
-        button.setFixedSize(64, 34)
-        button.setCheckable(True)
-        button.clicked.connect(lambda _checked=False, pos=value: state["_select_legend_position"](pos))
-        pos_grid.addWidget(button, index // 3, index % 3)
-        legend_position_buttons[value] = button
-    legend_layout.addLayout(pos_grid)
-    legend_layout.addWidget(QtWidgets.QLabel("Label Mode"))
-    legend_mode = QtWidgets.QComboBox()
-    for label, value in (("Legend", "legend"), ("Inline", "inline"), ("Auto", "auto")):
-        legend_mode.addItem(label, value)
-    legend_layout.addWidget(legend_mode)
-    legend_layout.addStretch(1)
-    tab_widget.addTab(legend_tab, "Legend")
-
-    export_tab = QtWidgets.QWidget()
-    export_layout = QtWidgets.QVBoxLayout(export_tab)
-    export_layout.setContentsMargins(12, 12, 12, 12)
-    export_layout.setSpacing(8)
-    export_layout.addWidget(QtWidgets.QLabel("Output"))
-    output_label = QtWidgets.QLabel("Export after generating a figure.")
-    output_label.setObjectName("inspectorMeta")
-    output_label.setWordWrap(True)
-    export_layout.addWidget(output_label)
-    export_layout.addStretch(1)
-    tab_widget.addTab(export_tab, "Export")
-
-    command_bar = QtWidgets.QWidget()
-    command_layout = QtWidgets.QHBoxLayout(command_bar)
-    command_layout.setContentsMargins(12, 8, 12, 8)
-    command_layout.setSpacing(6)
-    preview_btn = QtWidgets.QPushButton("Preview")
-    preview_btn.setObjectName("outlineButton")
-    apply_btn = QtWidgets.QPushButton("Apply")
-    apply_btn.setObjectName("outlineButton")
-    reset_btn = QtWidgets.QPushButton("Reset")
-    reset_btn.setObjectName("ghostButton")
-    preview_btn.setEnabled(False)
-    apply_btn.setEnabled(False)
-    reset_btn.setEnabled(False)
-    command_layout.addWidget(preview_btn)
-    command_layout.addWidget(apply_btn)
-    command_layout.addWidget(reset_btn)
-
-    main_layout.addWidget(tab_widget, 1)
-    main_layout.addWidget(command_bar)
-    controls.update(
-        {
-            "refine_size_buttons": refine_size_buttons,
-            "refine_x_label_edit": refine_x_label_edit,
-            "refine_y_label_edit": refine_y_label_edit,
-            "refine_x_min_edit": refine_x_min_edit,
-            "refine_x_max_edit": refine_x_max_edit,
-            "refine_log_x_check": refine_log_x_check,
-            "refine_log_y_check": refine_log_y_check,
-            "refine_reverse_x_check": refine_reverse_x_check,
-            "series_list": series_list,
-            "selected_series_label": selected_series_label,
-            "series_enabled_check": series_enabled_check,
-            "series_color_buttons": series_color_buttons,
-            "series_line_width_spin": series_line_width_spin,
-            "series_marker_combo": series_marker_combo,
-            "series_marker_size_spin": series_marker_size_spin,
-            "legend_position_buttons": legend_position_buttons,
-            "refine_label_mode_combo": legend_mode,
-            "output_label": output_label,
-            "preview_btn": preview_btn,
-            "apply_btn": apply_btn,
-            "reset_btn": reset_btn,
-        }
-    )
-    return container
-
-
-def _build_inspector(parent: Any, state: dict[str, Any], controls: dict[str, Any]) -> dict[str, Any]:
-    from PyQt6 import QtWidgets
-
-    panel = QtWidgets.QFrame(parent)
-    panel.setObjectName("inspectorPanel")
-    panel.setFixedWidth(300)
-    panel.setMinimumWidth(280)
-
-    layout = QtWidgets.QVBoxLayout(panel)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-
-    inspector_stack = QtWidgets.QStackedWidget()
-    inspector_stack.setObjectName("inspectorStack")
-    setup_inspector = _build_setup_inspector(state, controls)
-    refine_inspector = _build_refine_inspector(state, controls)
-    inspector_stack.addWidget(setup_inspector)
-    inspector_stack.addWidget(refine_inspector)
-    layout.addWidget(inspector_stack)
-
-    return {
-        "panel": panel,
-        "stack": inspector_stack,
-        "setup_inspector": setup_inspector,
-        "refine_inspector": refine_inspector,
-    }
-
-
-def _build_refine_workspace(state: dict[str, Any], controls: dict[str, Any]) -> Any:
-    from PyQt6 import QtCore, QtWidgets
-
-    refine_workspace = QtWidgets.QWidget()
-    refine_workspace.setObjectName("refineWorkspace")
-    layout = QtWidgets.QVBoxLayout(refine_workspace)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-
-    canvas = QtWidgets.QFrame()
-    canvas.setObjectName("canvasSurface")
-    canvas_layout = QtWidgets.QVBoxLayout(canvas)
-    canvas_layout.setContentsMargins(42, 42, 42, 42)
-    canvas_layout.setSpacing(0)
-
-    preview_label = QtWidgets.QLabel("Generate a figure to preview it here.")
-    preview_label.setObjectName("figurePreview")
-    preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-    preview_label.setMinimumSize(820, 620)
-    canvas_layout.addWidget(preview_label, 1)
-    layout.addWidget(canvas, 1)
-    controls["preview_label"] = preview_label
-    controls["canvas_surface"] = canvas
-    return refine_workspace
-
-
-def _build_central_area(
-    shell: Any,
-    rail_widgets: dict[str, Any],
-    setup_workspace: Any,
-    refine_workspace: Any,
-    inspector_widgets: dict[str, Any],
-) -> dict[str, Any]:
-    from PyQt6 import QtWidgets
-
-    central = QtWidgets.QWidget()
-    central.setObjectName("centralArea")
-    shell.setCentralWidget(central)
-
-    layout = QtWidgets.QHBoxLayout(central)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-    layout.addWidget(rail_widgets["rail"])
-
-    stack = QtWidgets.QStackedWidget()
-    stack.setObjectName("studioWorkspaceStack")
-    stack.addWidget(setup_workspace)
-    stack.addWidget(refine_workspace)
-    layout.addWidget(stack, 1)
-    layout.addWidget(inspector_widgets["panel"])
-    return {"central": central, "stack": stack}
-
-
-def _build_status_bar(shell: Any) -> dict[str, Any]:
-    from PyQt6 import QtWidgets
-
-    bar = QtWidgets.QStatusBar(shell)
-    bar.setObjectName("studioStatusBar")
-    bar.setSizeGripEnabled(False)
-    status_indicator = QtWidgets.QLabel("Ready")
-    status_indicator.setObjectName("statusText")
-    info_label = QtWidgets.QLabel("")
-    info_label.setObjectName("statusText")
-    bar.addWidget(status_indicator)
-    bar.addPermanentWidget(info_label, 1)
-    shell.setStatusBar(bar)
-    return {"bar": bar, "status_indicator": status_indicator, "info_label": info_label}
-
-
-def _update_status_bar(status_widgets: dict[str, Any], state: dict[str, Any]) -> None:
-    if not status_widgets:
-        return
-    if state.get("document_path"):
-        lead = "Figure ready"
-    elif state.get("files_loaded"):
-        lead = f"{state.get('file_count', 1)} file loaded"
-    else:
-        lead = "Awaiting data"
-    parts = [lead]
-    sample_count = state.get("sample_count")
-    if sample_count:
-        parts.append(f"{sample_count} samples")
-    family = state.get("experiment_family")
-    if family:
-        parts.append(str(family))
-    if state.get("figure_size"):
-        parts.append(_format_figure_size(str(state["figure_size"])))
-    if state.get("qa_status"):
-        parts.append(str(state["qa_status"]))
-    status_widgets["info_label"].setText(" · ".join(parts))
-
-
-def _create_refine_surface() -> dict[str, Any]:
-    from PyQt6 import QtCore, QtWidgets
-
-    refine_workspace = QtWidgets.QWidget()
-    refine_workspace.setObjectName("refineWorkspace")
-    refine_layout = QtWidgets.QHBoxLayout(refine_workspace)
-    refine_layout.setContentsMargins(0, 0, 0, 0)
-    refine_layout.setSpacing(0)
-
-    canvas = QtWidgets.QFrame()
-    canvas.setObjectName("canvasSurface")
-    canvas_layout = QtWidgets.QVBoxLayout(canvas)
-    canvas_layout.setContentsMargins(24, 24, 24, 24)
-    canvas_layout.setSpacing(0)
-    preview_label = QtWidgets.QLabel("Preview will appear here after Generate.")
-    preview_label.setObjectName("figurePreview")
-    preview_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-    preview_label.setMinimumSize(820, 620)
-    canvas_layout.addWidget(preview_label, 1)
-    refine_layout.addWidget(canvas, 1)
-
-    inspector = QtWidgets.QFrame()
-    inspector.setObjectName("inspectorPanel")
-    inspector.setFixedWidth(316)
-    inspector_layout = QtWidgets.QVBoxLayout(inspector)
-    inspector_layout.setContentsMargins(16, 16, 16, 16)
-    inspector_layout.setSpacing(10)
-
-    title = QtWidgets.QLabel("Figure")
-    title.setObjectName("inspectorTitle")
-    inspector_layout.addWidget(title)
-
-    document_label = QtWidgets.QLabel("No document generated")
-    document_label.setObjectName("inspectorMeta")
-    document_label.setWordWrap(True)
-    inspector_layout.addWidget(document_label)
-
-    status_label = QtWidgets.QLabel("Ready to generate")
-    status_label.setObjectName("studioStatus")
-    status_label.setWordWrap(True)
-    inspector_layout.addWidget(status_label)
-
-    export_button = QtWidgets.QPushButton("Export")
-    export_button.setObjectName("primaryButton")
-    export_button.setEnabled(False)
-    review_button = QtWidgets.QPushButton("Review")
-    review_button.setEnabled(False)
-    delivery_button = QtWidgets.QPushButton("Delivery")
-    delivery_button.setEnabled(False)
-    inspector_layout.addWidget(export_button)
-    inspector_layout.addWidget(review_button)
-    inspector_layout.addWidget(delivery_button)
-    inspector_layout.addStretch(1)
-    refine_layout.addWidget(inspector)
-
-    return {
-        "workspace": refine_workspace,
-        "preview_label": preview_label,
-        "document_label": document_label,
-        "status_label": status_label,
-        "export_button": export_button,
-        "review_button": review_button,
-        "delivery_button": delivery_button,
-    }
-
-
-def _create_sciplot_project_shell(
-    *,
-    project_dir: Path,
-    output_root: Path | None,
-    template: str | None,
-    project_name: str | None,
-) -> Any:
-    from PyQt6 import QtCore, QtGui, QtWidgets
-
-    project_dir = project_dir.expanduser().resolve()
-    request_path = project_dir / "plot_request.json"
-    request = _read_json(request_path)
-    selected_template = _normalize_optional_string(template) or str(request.get("template") or "curve")
-    selected_project_name = (
-        _normalize_optional_string(project_name) or _manifest_project_name(project_dir) or project_dir.name
-    )
-
-    shell = QtWidgets.QMainWindow()
-    shell.setWindowTitle("SciPlot Studio")
-    _apply_sciplot_shell_style(shell)
-
-    stack = QtWidgets.QStackedWidget()
-    stack.setObjectName("studioWorkspaceStack")
-    shell.setCentralWidget(stack)
-
-    state: dict[str, Any] = {"document_path": None, "preview_path": None}
-    _add_sciplot_view_menu(shell, state)
-
-    toolbar = QtWidgets.QToolBar("SciPlot")
-    toolbar.setObjectName("sciplotPrimaryToolbar")
-    toolbar.setMovable(False)
-    shell.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
-    open_data_action = QtGui.QAction("Open Data", shell)
-    open_project_action = QtGui.QAction("Open Project", shell)
-    back_action = QtGui.QAction("Back to Setup", shell)
-    generate_action = QtGui.QAction("Generate", shell)
-    export_action = QtGui.QAction("Export", shell)
-    review_action = QtGui.QAction("Review", shell)
-    delivery_action = QtGui.QAction("Delivery", shell)
-    back_action.setEnabled(False)
-    export_action.setEnabled(False)
-    review_action.setEnabled(False)
-    delivery_action.setEnabled(False)
-    toolbar.addAction(open_data_action)
-    toolbar.addAction(open_project_action)
-    toolbar.addSeparator()
-    toolbar.addAction(back_action)
-    toolbar.addSeparator()
-    toolbar.addAction(generate_action)
-    toolbar.addAction(export_action)
-    toolbar.addSeparator()
-    toolbar.addAction(review_action)
-    toolbar.addAction(delivery_action)
-
-    setup_workspace = QtWidgets.QWidget()
-    setup_workspace.setObjectName("setupWorkspace")
-    setup_layout = QtWidgets.QVBoxLayout(setup_workspace)
-    _set_layout_margins(setup_layout)
-    title = QtWidgets.QLabel("Setup Workspace")
-    title.setObjectName("workspaceTitle")
-    hint = QtWidgets.QLabel("Confirm the reopened project's template before regenerating the Veusz figure.")
-    hint.setObjectName("workspaceHint")
-    setup_layout.addWidget(title)
-    setup_layout.addWidget(hint)
-
-    setup_box = _group_box("Project Setup")
-    setup_box_layout = QtWidgets.QVBoxLayout(setup_box)
-    _set_layout_margins(setup_box_layout)
-    form = QtWidgets.QFormLayout()
-    project_edit = QtWidgets.QLineEdit(str(project_dir))
-    project_edit.setReadOnly(True)
-    form.addRow("Project", project_edit)
-    name_edit = QtWidgets.QLineEdit(selected_project_name)
-    form.addRow("Name", name_edit)
-    template_combo = QtWidgets.QComboBox()
-    for template_id, label in _studio_template_choices():
-        template_combo.addItem(label, template_id)
-    template_index = template_combo.findData(selected_template)
-    template_combo.setCurrentIndex(template_index if template_index >= 0 else 0)
-    form.addRow("Template", template_combo)
-    setup_box_layout.addLayout(form)
-
-    status_label = QtWidgets.QLabel()
-    status_label.setObjectName("studioStatus")
-    status_label.setWordWrap(True)
-    setup_box_layout.addWidget(status_label)
-    actions = QtWidgets.QHBoxLayout()
-    generate_button = QtWidgets.QPushButton("Generate")
-    generate_button.setObjectName("primaryButton")
-    export_button = QtWidgets.QPushButton("Export")
-    export_button.setEnabled(False)
-    actions.addWidget(generate_button)
-    actions.addWidget(export_button)
-    setup_box_layout.addLayout(actions)
-    setup_layout.addWidget(setup_box)
-    setup_layout.addStretch(1)
-
-    refine = _create_refine_surface()
-    refine_workspace = refine["workspace"]
-    preview_label = refine["preview_label"]
-    document_label = refine["document_label"]
-    refine_status = refine["status_label"]
-    inspector_export_button = refine["export_button"]
-    review_button = refine["review_button"]
-    delivery_button = refine["delivery_button"]
-    stack.addWidget(setup_workspace)
-    stack.addWidget(refine_workspace)
-
-    def refresh_refine_actions() -> None:
-        has_document = isinstance(state.get("document_path"), Path)
-        export_action.setEnabled(has_document)
-        export_button.setEnabled(has_document)
-        inspector_export_button.setEnabled(has_document)
-        back_action.setEnabled(has_document)
-        _set_advanced_editor_enabled(state)
-
-    def set_review_targets(run: dict[str, Any] | None) -> None:
-        review_path = _review_path_from_run(run)
-        delivery_path = _delivery_path_from_run(run)
-        state["review_path"] = review_path
-        state["delivery_path"] = delivery_path
-        review_enabled = bool(review_path and review_path.exists())
-        delivery_enabled = bool(delivery_path and delivery_path.exists())
-        review_action.setEnabled(review_enabled)
-        delivery_action.setEnabled(delivery_enabled)
-        review_button.setEnabled(review_enabled)
-        delivery_button.setEnabled(delivery_enabled)
-
-    def load_document(document_path: Path) -> None:
-        state["document_path"] = document_path
-        preview_path = _ensure_preview_export(document_path)
-        state["preview_path"] = preview_path
-        _show_preview_image(preview_label, preview_path)
-        document_label.setText(str(document_path))
-        status_label.setText("Figure generated. Review the preview, then export when ready.")
-        refine_status.setText("Generated preview")
-        refresh_refine_actions()
-        set_review_targets(_last_studio_run(project_dir))
-        stack.setCurrentWidget(refine_workspace)
-
-    def generate() -> None:
-        try:
-            payload = prepare_studio_document(
-                project_dir,
-                output_root=output_root,
-                template=str(template_combo.currentData() or "curve"),
-                project_name=name_edit.text().strip() or selected_project_name,
-            )
-            load_document(Path(payload["document"]))
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
-
-    def export_current() -> None:
-        try:
-            document_path = state.get("document_path")
-            if not isinstance(document_path, Path):
-                return
-            exports = _export_studio_document_worker(document_path, formats=list(EXPORT_FORMATS))["exports"]
-            studio_run = publish_studio_export_run(
-                project_dir=project_dir,
-                request_path=request_path,
-                document_path=document_path,
-                exports=exports,
-            )
-            _register_studio_exports(project_dir, exports, studio_run=studio_run)
-            status_label.setText("Export complete. Review and delivery are available.")
-            refine_status.setText(f"Exported through SciPlot QA · {studio_run['output']}")
-            set_review_targets(studio_run)
-            refresh_refine_actions()
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
-
-    generate_button.clicked.connect(generate)
-    export_button.clicked.connect(export_current)
-    inspector_export_button.clicked.connect(export_current)
-    review_button.clicked.connect(lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review"))
-    delivery_button.clicked.connect(
-        lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
-    )
-    open_data_action.triggered.connect(lambda: _choose_and_open_data(shell, output_root))
-    open_project_action.triggered.connect(lambda: _choose_and_open_project(shell, output_root))
-    back_action.triggered.connect(lambda: stack.setCurrentWidget(setup_workspace))
-    generate_action.triggered.connect(generate)
-    export_action.triggered.connect(export_current)
-    review_action.triggered.connect(
-        lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review")
-    )
-    delivery_action.triggered.connect(
-        lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
-    )
-    payload = prepare_studio_document(
-        project_dir,
-        output_root=output_root,
-        template=template,
-        project_name=project_name,
-    )
-    load_document(Path(payload["document"]))
-    return shell
-
-
-def _create_sciplot_studio_shell(
-    *,
-    source_path: Path,
-    output_root: Path,
-    template: str | None,
-    project_name: str | None,
-) -> Any:
-    from PyQt6 import QtWidgets
-
-    session = prepare_intake_session(source_path, output_root=output_root)
-    selected_template = _normalize_optional_string(template) or _template_from_session(session)
-    selected_project_name = _normalize_optional_string(project_name) or str(
-        session.get("project_name") or source_path.stem
-    )
-    selected_size = "120x110" if selected_template in STACKED_TEMPLATE_IDS else "60x55"
-    selected_family = "spectroscopy" if selected_template in STACKED_TEMPLATE_IDS else "rheology"
-    preview_source_path = _preview_source_path(source_path, session)
-    preview_frame = _read_preview_frame(preview_source_path)
-
-    shell = QtWidgets.QMainWindow()
-    shell.setWindowTitle("SciPlot Studio")
-    shell.setMinimumSize(1120, 720)
-    _apply_sciplot_shell_style(shell)
-
-    state: dict[str, Any] = {
-        "shell": shell,
-        "output_root": output_root,
-        "source_path": source_path,
-        "project_name": selected_project_name,
-        "selected_template": selected_template,
-        "selected_family": selected_family,
-        "figure_size": selected_size,
-        "experiment_family": _experiment_family_label(session),
-        "source_file_names": _session_file_names(session, source_path),
-        "preview_source_path": preview_source_path,
-        "preview_frame": preview_frame,
-        "preview_columns": [str(column) for column in preview_frame.columns],
-        "files_loaded": True,
-        "file_count": len(_session_file_names(session, source_path)),
-        "sample_count": len(_session_groups(session)),
-        "project_dir": None,
-        "request_path": None,
-        "document_path": None,
-        "preview_path": None,
-        "exports": list(EXPORT_FORMATS),
-        "review_path": None,
-        "delivery_path": None,
-        "legend_position": "auto",
-        "series_entries": [],
-        "series_style_edits": {},
-    }
-    state["_select_template_id"] = lambda _value: None
-    state["_select_figure_size"] = lambda _value: None
-    state["_select_legend_position"] = lambda _value: None
-    _add_sciplot_view_menu(shell, state)
-
-    controls: dict[str, Any] = {}
-    top_widgets = _build_top_bar(shell, state)
-    rail_widgets = _build_stage_rail(shell, state)
-    setup_workspace = _build_setup_workspace(state, session, controls)
-    refine_workspace = _build_refine_workspace(state, controls)
-    inspector_widgets = _build_inspector(shell, state, controls)
-    central_widgets = _build_central_area(shell, rail_widgets, setup_workspace, refine_workspace, inspector_widgets)
-    status_widgets = _build_status_bar(shell)
-    stack = central_widgets["stack"]
-
-    def sync_template_controls() -> None:
-        template_id = str(state.get("selected_template") or "curve")
-        for button_id, button in controls.get("template_buttons", {}).items():
-            _set_button_checked(button, button_id == template_id)
-        for button_id, button in controls.get("intent_buttons", {}).items():
-            _set_button_checked(button, button_id == template_id)
-        for card in state.get("template_cards", []):
-            card.setProperty("selected", str(getattr(card, "family_id", "")) == str(state.get("selected_family")))
-            _refresh_qss(card)
-        label_mode_combo = controls.get("label_mode_combo")
-        if label_mode_combo is not None:
-            desired = "inline" if template_id in STACKED_TEMPLATE_IDS else "legend"
-            index = label_mode_combo.findData(desired)
-            if index >= 0:
-                label_mode_combo.setCurrentIndex(index)
-        refine_label_mode_combo = controls.get("refine_label_mode_combo")
-        if refine_label_mode_combo is not None:
-            desired = "inline" if template_id in STACKED_TEMPLATE_IDS else "legend"
-            index = refine_label_mode_combo.findData(desired)
-            if index >= 0:
-                refine_label_mode_combo.setCurrentIndex(index)
-        top_widgets["experiment_badge"].setText(str(state.get("experiment_family") or "Auto"))
-
-    def select_template_id(value: str) -> None:
-        state["selected_template"] = value
-        matching = next((item for item in _template_card_specs() if item["template"] == value), None)
-        if matching is not None:
-            state["selected_family"] = matching["family"]
-        sync_template_controls()
-
-    def sync_size_controls() -> None:
-        value = str(state.get("figure_size") or "60x55")
-        top_widgets["size_badge"].setText(_format_figure_size(value))
-        for group_name in ("size_buttons", "refine_size_buttons"):
-            for size, button in controls.get(group_name, {}).items():
-                _set_button_checked(button, size == value)
-        _update_status_bar(status_widgets, state)
-
-    def select_figure_size(value: str) -> None:
-        state["figure_size"] = value
-        sync_size_controls()
-
-    def sync_legend_position_controls() -> None:
-        current = str(state.get("legend_position") or "auto")
-        for value, button in controls.get("legend_position_buttons", {}).items():
-            _set_button_checked(button, value == current)
-
-    def select_legend_position(value: str) -> None:
-        state["legend_position"] = value
-        sync_legend_position_controls()
-
-    state["_sync_template_controls"] = sync_template_controls
-    state["_select_template_id"] = select_template_id
-    state["_select_figure_size"] = select_figure_size
-    state["_select_legend_position"] = select_legend_position
-
-    series_loading = {"active": False}
-
-    def selected_series_label() -> str | None:
-        from PyQt6 import QtCore
-
-        item = controls["series_list"].currentItem()
-        if item is None:
-            return None
-        value = item.data(QtCore.Qt.ItemDataRole.UserRole)
-        return str(value) if value else item.text().strip()
-
-    def default_style_for_series(label: str) -> dict[str, Any]:
-        for entry in state.get("series_entries", []):
-            if isinstance(entry, dict) and entry.get("series_id") == label:
-                return dict(entry)
-        return {
-            "series_id": label,
-            "label": label,
-            "enabled": True,
-            "color": DEFAULT_PALETTE[0],
-            "line_width": 1.2,
-            "marker": "none",
-            "marker_size": 0.0,
-        }
-
-    def set_series_color_swatch(color: str) -> None:
-        for value, button in controls.get("series_color_buttons", {}).items():
-            button.blockSignals(True)
-            _set_button_checked(button, value.casefold() == color.casefold())
-            button.blockSignals(False)
-
-    def current_series_color() -> str:
-        for value, button in controls.get("series_color_buttons", {}).items():
-            if button.isChecked():
-                return str(value)
-        label = selected_series_label()
-        if label:
-            style = state.get("series_style_edits", {}).get(label, {})
-            if isinstance(style, dict) and isinstance(style.get("color"), str):
-                return str(style["color"])
-        return DEFAULT_PALETTE[0]
-
-    def save_selected_series_style(*, color_override: str | None = None) -> None:
-        if series_loading["active"]:
-            return
-        label = selected_series_label()
-        if not label:
-            return
-        style = dict(default_style_for_series(label))
-        style.update(state.get("series_style_edits", {}).get(label, {}))
-        style["series_id"] = label
-        style["label"] = label
-        style["enabled"] = controls["series_enabled_check"].isChecked()
-        style["color"] = color_override or current_series_color()
-        style["line_width"] = float(controls["series_line_width_spin"].value())
-        style["marker"] = str(controls["series_marker_combo"].currentData() or "none")
-        style["marker_size"] = float(controls["series_marker_size_spin"].value())
-        state.setdefault("series_style_edits", {})[label] = style
-        controls["selected_series_label"].setText(label)
-
-    def load_selected_series_style() -> None:
-        label = selected_series_label()
-        series_loading["active"] = True
-        try:
-            enabled = bool(label)
-            for key in (
-                "series_enabled_check",
-                "series_line_width_spin",
-                "series_marker_combo",
-                "series_marker_size_spin",
-            ):
-                controls[key].setEnabled(enabled)
-            for button in controls.get("series_color_buttons", {}).values():
-                button.setEnabled(enabled)
-            if not label:
-                controls["selected_series_label"].setText("No generated series")
-                set_series_color_swatch(DEFAULT_PALETTE[0])
-                return
-            style = dict(default_style_for_series(label))
-            style.update(state.get("series_style_edits", {}).get(label, {}))
-            controls["selected_series_label"].setText(label)
-            controls["series_enabled_check"].blockSignals(True)
-            controls["series_enabled_check"].setChecked(bool(style.get("enabled", True)))
-            controls["series_enabled_check"].blockSignals(False)
-            controls["series_line_width_spin"].blockSignals(True)
-            controls["series_line_width_spin"].setValue(float(style.get("line_width") or 1.2))
-            controls["series_line_width_spin"].blockSignals(False)
-            marker_index = controls["series_marker_combo"].findData(str(style.get("marker") or "none"))
-            controls["series_marker_combo"].blockSignals(True)
-            controls["series_marker_combo"].setCurrentIndex(marker_index if marker_index >= 0 else 0)
-            controls["series_marker_combo"].blockSignals(False)
-            controls["series_marker_size_spin"].blockSignals(True)
-            controls["series_marker_size_spin"].setValue(float(style.get("marker_size") or 0.0))
-            controls["series_marker_size_spin"].blockSignals(False)
-            set_series_color_swatch(str(style.get("color") or DEFAULT_PALETTE[0]))
-        finally:
-            series_loading["active"] = False
-
-    def populate_series_controls(entries: list[dict[str, Any]]) -> None:
-        from PyQt6 import QtCore, QtWidgets
-
-        state["series_entries"] = entries
-        series_list = controls["series_list"]
-        series_list.blockSignals(True)
-        series_list.clear()
-        for index, entry in enumerate(entries):
-            label = str(entry.get("series_id") or entry.get("label") or f"Series {index + 1}")
-            state.setdefault("series_style_edits", {}).setdefault(label, dict(entry))
-            item = QtWidgets.QListWidgetItem(label)
-            item.setData(QtCore.Qt.ItemDataRole.UserRole, label)
-            item.setToolTip(label)
-            series_list.addItem(item)
-        series_list.blockSignals(False)
-        if series_list.count():
-            series_list.setCurrentRow(0)
-        load_selected_series_style()
-
-    def series_styles_from_controls() -> tuple[list[dict[str, Any]], list[str]]:
-        from PyQt6 import QtCore
-
-        save_selected_series_style()
-        series_list = controls["series_list"]
-        styles: list[dict[str, Any]] = []
-        order: list[str] = []
-        for row in range(series_list.count()):
-            item = series_list.item(row)
-            label = str(item.data(QtCore.Qt.ItemDataRole.UserRole) or item.text()).strip()
-            if not label:
-                continue
-            order.append(label)
-            style = dict(default_style_for_series(label))
-            style.update(state.get("series_style_edits", {}).get(label, {}))
-            styles.append(
-                {
-                    "series_id": label,
-                    "enabled": bool(style.get("enabled", True)),
-                    "color": str(style.get("color") or DEFAULT_PALETTE[len(styles) % len(DEFAULT_PALETTE)]),
-                    "marker": str(style.get("marker") or "none"),
-                    "line_width": float(style.get("line_width") or 1.2),
-                    "marker_size": float(style.get("marker_size") or 0.0),
-                }
-            )
-        return styles, order
-
-    def show_size_menu() -> None:
-        from PyQt6 import QtCore
-
-        menu = QtWidgets.QMenu(top_widgets["size_badge"])
-        for size in FIGURE_SIZE_PRESETS:
-            action = menu.addAction(_format_figure_size(size))
-            action.setCheckable(True)
-            action.setChecked(size == state.get("figure_size"))
-            action.triggered.connect(lambda _checked=False, value=size: select_figure_size(value))
-        menu.popup(top_widgets["size_badge"].mapToGlobal(QtCore.QPoint(0, top_widgets["size_badge"].height())))
-
-    controls["series_list"].currentItemChanged.connect(lambda _current, _previous: load_selected_series_style())
-    controls["series_enabled_check"].toggled.connect(lambda _checked: save_selected_series_style())
-    controls["series_line_width_spin"].valueChanged.connect(lambda _value: save_selected_series_style())
-    controls["series_marker_combo"].currentIndexChanged.connect(lambda _index: save_selected_series_style())
-    controls["series_marker_size_spin"].valueChanged.connect(lambda _value: save_selected_series_style())
-    for swatch_color, swatch_button in controls.get("series_color_buttons", {}).items():
-        swatch_button.clicked.connect(
-            lambda _checked=False, color=swatch_color: (
-                set_series_color_swatch(str(color)),
-                save_selected_series_style(color_override=str(color)),
-            )
-        )
-
-    def set_stage_active(*, setup: bool) -> None:
-        rail_widgets["setup_dot"].setProperty("active", setup)
-        rail_widgets["refine_dot"].setProperty("active", not setup)
-        _refresh_qss(rail_widgets["setup_dot"])
-        _refresh_qss(rail_widgets["refine_dot"])
-
-    def switch_to_setup() -> None:
-        stack.setCurrentWidget(setup_workspace)
-        inspector_widgets["stack"].setCurrentIndex(0)
-        set_stage_active(setup=True)
-        top_widgets["generate_btn"].setVisible(True)
-        top_widgets["export_btn"].setVisible(False)
-        top_widgets["generate_widget_action"].setVisible(True)
-        top_widgets["export_widget_action"].setVisible(False)
-        _update_status_bar(status_widgets, state)
-
-    def switch_to_refine() -> None:
-        if not isinstance(state.get("document_path"), Path):
-            return
-        stack.setCurrentWidget(refine_workspace)
-        inspector_widgets["stack"].setCurrentIndex(1)
-        set_stage_active(setup=False)
-        top_widgets["generate_btn"].setVisible(False)
-        top_widgets["export_btn"].setVisible(True)
-        top_widgets["generate_widget_action"].setVisible(False)
-        top_widgets["export_widget_action"].setVisible(True)
-        _update_status_bar(status_widgets, state)
-
-    state["_switch_to_setup"] = switch_to_setup
-    state["_switch_to_refine"] = switch_to_refine
-
-    def refresh_refine_actions() -> None:
-        has_document = isinstance(state.get("document_path"), Path)
-        top_widgets["export_btn"].setEnabled(has_document)
-        top_widgets["refine_action"].setEnabled(has_document)
-        rail_widgets["refine_dot"].setEnabled(has_document)
-        controls["preview_btn"].setEnabled(has_document)
-        controls["apply_btn"].setEnabled(has_document)
-        controls["reset_btn"].setEnabled(has_document)
-        _set_advanced_editor_enabled(state)
-
-    def set_review_targets(run: dict[str, Any] | None) -> None:
-        review_path = _review_path_from_run(run)
-        delivery_path = _delivery_path_from_run(run)
-        state["review_path"] = review_path
-        state["delivery_path"] = delivery_path
-        review_enabled = bool(review_path and review_path.exists())
-        delivery_enabled = bool(delivery_path and delivery_path.exists())
-        top_widgets["review_action"].setEnabled(review_enabled)
-        top_widgets["delivery_action"].setEnabled(delivery_enabled)
-
-    def build_current_project() -> dict[str, Any]:
-        edited_session = dict(session)
-        edited_session["output_root"] = str(output_root.expanduser().resolve())
-        name_edit = controls["name_edit"]
-        samples_table = controls["samples_table"]
-        edited_session["project_name"] = name_edit.text().strip() or source_path.stem or "SciPlot Project"
-        edited_session["groups"] = _groups_from_samples_table(samples_table, _session_groups(session))
-        project = create_intake_project_from_session(edited_session)
-        project_dir = Path(str(project["project_dir"])).expanduser().resolve()
-        request_path = project_dir / "plot_request.json"
-        selected = str(state.get("selected_template") or "curve")
-        selected_exports = [
-            fmt for fmt, check in controls["export_checks"].items() if check.isChecked()
-        ] or list(EXPORT_FORMATS)
-        state["exports"] = selected_exports
-        column_confirmations = _column_confirmation_from_controls(controls, state)
-        x_role = controls["x_role_combo"].currentText().strip()
-        y_role = controls["y_role_combo"].currentText().strip()
-        x_label_text = (
-            controls["refine_x_label_edit"].text().strip()
-            or controls["x_label_edit"].text().strip()
-            or x_role
-        )
-        y_label_text = (
-            controls["refine_y_label_edit"].text().strip()
-            or controls["y_label_edit"].text().strip()
-            or y_role
-        )
-        x_min_text = controls["refine_x_min_edit"].text().strip() or controls["x_min_edit"].text()
-        x_max_text = controls["refine_x_max_edit"].text().strip() or controls["x_max_edit"].text()
-        reverse_x = controls["refine_reverse_x_check"].isChecked() or controls["reverse_x_check"].isChecked()
-        log_x = controls["refine_log_x_check"].isChecked() or controls["log_x_check"].isChecked()
-        log_y = controls["refine_log_y_check"].isChecked() or controls["log_y_check"].isChecked()
-        label_mode_widget = controls.get("refine_label_mode_combo") or controls["label_mode_combo"]
-        series_styles, series_order = series_styles_from_controls()
-        _apply_panel_request_options(
-            project_dir,
-            request_path=request_path,
-            exports=selected_exports,
-            render_options=_panel_render_options(
-                size=str(state.get("figure_size") or "60x55"),
-                x_label=x_label_text,
-                y_label=y_label_text,
-                x_min=x_min_text,
-                x_max=x_max_text,
-                reverse_x=reverse_x,
-                xscale="log" if log_x else "linear",
-                yscale="log" if log_y else "linear",
-                series_label_mode=str(label_mode_widget.currentData() or "legend"),
-                legend_position=str(state.get("legend_position") or "auto"),
-                series_styles=series_styles,
-                series_order=series_order,
-            ),
-            column_confirmations=column_confirmations,
-        )
-        payload = prepare_studio_document(
-            project_dir,
-            output_root=output_root,
-            template=selected,
-            project_name=edited_session["project_name"],
-        )
-        state.update(
-            {
-                "project_dir": project_dir,
-                "request_path": request_path,
-                "document_path": Path(payload["document"]),
-            }
-        )
-        return payload
-
-    def load_payload(payload: dict[str, Any], *, status: str = "Preview") -> None:
-        document_path = Path(payload["document"])
-        state["document_path"] = document_path
-        preview_path = _ensure_preview_export(document_path)
-        state["preview_path"] = preview_path
-        _show_preview_image(controls["preview_label"], preview_path)
-        controls["output_label"].setText(str(document_path))
-        _add_figure_thumbnail(rail_widgets["thumb_layout"], preview_path, state)
-        state["qa_status"] = status
-        refresh_refine_actions()
-        set_review_targets(None)
-        populate_series_controls(_series_entries_from_studio_payload(payload))
-        switch_to_refine()
-
-    def generate(*, status: str = "Preview") -> None:
-        try:
-            load_payload(build_current_project(), status=status)
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
-
-    def reset_refine_controls() -> None:
-        for key in (
-            "refine_x_label_edit",
-            "refine_y_label_edit",
-            "refine_x_min_edit",
-            "refine_x_max_edit",
-        ):
-            controls[key].clear()
-        for key in ("refine_log_x_check", "refine_log_y_check", "refine_reverse_x_check"):
-            controls[key].setChecked(False)
-        x_suggestion, y_suggestion = _suggest_role_columns(state.get("preview_frame", pd.DataFrame()), session)
-        if x_suggestion and controls["x_role_combo"].findText(x_suggestion) >= 0:
-            controls["x_role_combo"].setCurrentIndex(controls["x_role_combo"].findText(x_suggestion))
-        if y_suggestion and controls["y_role_combo"].findText(y_suggestion) >= 0:
-            controls["y_role_combo"].setCurrentIndex(controls["y_role_combo"].findText(y_suggestion))
-        state["legend_position"] = "auto"
-        state["series_style_edits"] = {
-            str(entry.get("series_id") or entry.get("label")): dict(entry)
-            for entry in state.get("series_entries", [])
-            if isinstance(entry, dict) and (entry.get("series_id") or entry.get("label"))
-        }
-        sync_legend_position_controls()
-        populate_series_controls([dict(entry) for entry in state.get("series_entries", []) if isinstance(entry, dict)])
-        sync_template_controls()
-        sync_size_controls()
-
-    def export_current() -> None:
-        try:
-            document_path = state.get("document_path")
-            project_dir = state.get("project_dir")
-            request_path = state.get("request_path")
-            if (
-                not isinstance(document_path, Path)
-                or not isinstance(project_dir, Path)
-                or not isinstance(request_path, Path)
-            ):
-                return
-            formats = state.get("exports") if isinstance(state.get("exports"), list) else list(EXPORT_FORMATS)
-            exports = _export_studio_document_worker(document_path, formats=[str(item) for item in formats])["exports"]
-            studio_run = publish_studio_export_run(
-                project_dir=project_dir,
-                request_path=request_path,
-                document_path=document_path,
-                exports=exports,
-            )
-            _register_studio_exports(project_dir, exports, studio_run=studio_run)
-            state["qa_status"] = "Exported through SciPlot QA"
-            controls["output_label"].setText(str(studio_run["output"]))
-            set_review_targets(studio_run)
-            refresh_refine_actions()
-            _update_status_bar(status_widgets, state)
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
-
-    top_widgets["brand"].mousePressEvent = lambda _event: switch_to_setup()
-    rail_widgets["brand_dot"].clicked.connect(switch_to_setup)
-    rail_widgets["setup_dot"].clicked.connect(switch_to_setup)
-    rail_widgets["refine_dot"].clicked.connect(switch_to_refine)
-    top_widgets["size_badge"].clicked.connect(show_size_menu)
-    top_widgets["generate_btn"].clicked.connect(lambda: generate(status="Preview"))
-    top_widgets["export_btn"].clicked.connect(export_current)
-    controls["preview_btn"].clicked.connect(lambda: generate(status="Preview"))
-    controls["apply_btn"].clicked.connect(lambda: generate(status="Applied"))
-    controls["reset_btn"].clicked.connect(reset_refine_controls)
-    top_widgets["open_data_action"].triggered.connect(lambda: _choose_and_open_data(shell, output_root))
-    top_widgets["open_project_action"].triggered.connect(lambda: _choose_and_open_project(shell, output_root))
-    top_widgets["setup_action"].triggered.connect(switch_to_setup)
-    top_widgets["refine_action"].triggered.connect(switch_to_refine)
-    top_widgets["advanced_action"].triggered.connect(
-        lambda: _open_advanced_veusz_editor(shell, state["document_path"])
-        if isinstance(state.get("document_path"), Path)
-        else None
-    )
-    top_widgets["review_action"].triggered.connect(
-        lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review")
-    )
-    top_widgets["delivery_action"].triggered.connect(
-        lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
-    )
-
-    sync_template_controls()
-    sync_size_controls()
-    sync_legend_position_controls()
-    load_selected_series_style()
-    switch_to_setup()
-    refresh_refine_actions()
-    _update_status_bar(status_widgets, state)
-    shell._sciplot_widgets = {
-        "top": top_widgets,
-        "rail": rail_widgets,
-        "central": central_widgets,
-        "inspector": inspector_widgets,
-        "status": status_widgets,
-        "controls": controls,
-    }
-    return shell
-
-
-def _create_sciplot_document_shell(document_path: Path) -> Any:
-    from PyQt6 import QtCore, QtGui, QtWidgets
-
-    document_path = document_path.expanduser().resolve()
-    shell = QtWidgets.QMainWindow()
-    shell.setWindowTitle("SciPlot Studio")
-    _apply_sciplot_shell_style(shell)
-
-    state: dict[str, Any] = {
-        "document_path": document_path,
-        "preview_path": None,
-        "review_path": None,
-        "delivery_path": None,
-    }
-    _add_sciplot_view_menu(shell, state)
-
-    toolbar = QtWidgets.QToolBar("SciPlot")
-    toolbar.setObjectName("sciplotPrimaryToolbar")
-    toolbar.setMovable(False)
-    shell.addToolBar(QtCore.Qt.ToolBarArea.TopToolBarArea, toolbar)
-    open_data_action = QtGui.QAction("Open Data", shell)
-    open_project_action = QtGui.QAction("Open Project", shell)
-    export_action = QtGui.QAction("Export", shell)
-    review_action = QtGui.QAction("Review", shell)
-    delivery_action = QtGui.QAction("Delivery", shell)
-    review_action.setEnabled(False)
-    delivery_action.setEnabled(False)
-    toolbar.addAction(open_data_action)
-    toolbar.addAction(open_project_action)
-    toolbar.addSeparator()
-    toolbar.addAction(export_action)
-    toolbar.addSeparator()
-    toolbar.addAction(review_action)
-    toolbar.addAction(delivery_action)
-
-    refine = _create_refine_surface()
-    shell.setCentralWidget(refine["workspace"])
-    preview_label = refine["preview_label"]
-    document_label = refine["document_label"]
-    status_label = refine["status_label"]
-    inspector_export_button = refine["export_button"]
-    review_button = refine["review_button"]
-    delivery_button = refine["delivery_button"]
-
-    context = _project_context_for_document(document_path)
-
-    def set_review_targets(run: dict[str, Any] | None) -> None:
-        review_path = _review_path_from_run(run)
-        delivery_path = _delivery_path_from_run(run)
-        state["review_path"] = review_path
-        state["delivery_path"] = delivery_path
-        review_enabled = bool(review_path and review_path.exists())
-        delivery_enabled = bool(delivery_path and delivery_path.exists())
-        review_action.setEnabled(review_enabled)
-        delivery_action.setEnabled(delivery_enabled)
-        review_button.setEnabled(review_enabled)
-        delivery_button.setEnabled(delivery_enabled)
-
-    def refresh() -> None:
-        preview_path = _ensure_preview_export(document_path)
-        state["preview_path"] = preview_path
-        _show_preview_image(preview_label, preview_path)
-        document_label.setText(str(document_path))
-        status_label.setText("Generated preview")
-        _set_advanced_editor_enabled(state)
-        if context is not None:
-            set_review_targets(_last_studio_run(context["project_dir"]))
-
-    def export_current() -> None:
-        try:
-            exports = _export_studio_document_worker(document_path, formats=list(EXPORT_FORMATS))["exports"]
-            if context is not None:
-                studio_run = publish_studio_export_run(
-                    project_dir=context["project_dir"],
-                    request_path=context["request_path"],
-                    document_path=document_path,
-                    exports=exports,
-                )
-                _register_studio_exports(context["project_dir"], exports, studio_run=studio_run)
-                status_label.setText("Export complete. Review and delivery are available.")
-                set_review_targets(studio_run)
-            else:
-                first = _first_export_path(exports, preferred_format="pdf")
-                status_label.setText(f"Exported {first}" if first is not None else "Export finished")
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(shell, "SciPlot Studio", str(exc))
-
-    refresh()
-    open_data_action.triggered.connect(lambda: _choose_and_open_data(shell, None))
-    open_project_action.triggered.connect(lambda: _choose_and_open_project(shell, None))
-    export_action.triggered.connect(export_current)
-    inspector_export_button.clicked.connect(export_current)
-    review_action.triggered.connect(
-        lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review")
-    )
-    delivery_action.triggered.connect(
-        lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
-    )
-    review_button.clicked.connect(lambda: _open_existing_path(shell, state.get("review_path"), missing_label="Review"))
-    delivery_button.clicked.connect(
-        lambda: _open_existing_path(shell, state.get("delivery_path"), missing_label="Delivery package")
-    )
-    return shell
 
 
 def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
@@ -3458,52 +551,11 @@ def _project_context_for_document(document_path: Path) -> dict[str, Path] | None
     return None
 
 
-def _manifest_project_name(project_dir: Path) -> str | None:
-    for manifest_path in [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]:
-        if not manifest_path.exists():
-            continue
-        try:
-            payload = _read_json(manifest_path)
-        except Exception:
-            continue
-        value = payload.get("project_name")
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _studio_template_choices() -> list[tuple[str, str]]:
-    try:
-        from sciplot_core.contract import load_plot_contract
-
-        contract = load_plot_contract()
-        choices: list[tuple[str, str]] = []
-        for template_id in STUDIO_TEMPLATE_IDS:
-            spec = contract.templates.get(template_id)
-            label = getattr(spec, "label", None) or template_id.replace("_", " ").title()
-            choices.append((template_id, f"{label} ({template_id})"))
-        return choices
-    except Exception:
-        return [
-            ("curve", "Curve (curve)"),
-            ("stacked_curve", "Stacked curve (stacked_curve)"),
-            ("segmented_stacked_curve", "Segmented stacked curve (segmented_stacked_curve)"),
-        ]
-
-
 def _normalize_optional_string(value: str | None) -> str | None:
     if not isinstance(value, str):
         return None
     stripped = value.strip()
     return stripped or None
-
-
-def _is_raw_studio_source(path: Path) -> bool:
-    if path.suffix.lower() in {".vsz", ".json"}:
-        return False
-    if path.is_dir() and (path / "plot_request.json").exists():
-        return False
-    return path.exists()
 
 
 def _project_studio_document(project_dir: Path) -> Path | None:
@@ -3535,161 +587,6 @@ def _count_veusz_series(document_path: Path) -> int:
     except OSError:
         return 0
     return text.count("Add('xy',")
-
-
-def _template_from_session(session: dict[str, Any]) -> str:
-    experiment_type = str(session.get("experiment_type_id") or "").casefold()
-    if "spectrum" in experiment_type or "stack" in experiment_type:
-        return "stacked_curve"
-    return "curve"
-
-
-def _session_groups(session: dict[str, Any]) -> list[dict[str, Any]]:
-    groups = session.get("groups") if isinstance(session.get("groups"), list) else []
-    normalized = [group for group in groups if isinstance(group, dict)]
-    if normalized:
-        return normalized
-    source = Path(str(session.get("input_path") or "source")).expanduser()
-    return [{"sample": source.stem or source.name or "Sample 1", "files": []}]
-
-
-def _session_summary(session: dict[str, Any]) -> str:
-    label = session.get("experiment_label") or session.get("experiment_type_id") or "Unknown"
-    return f"Detected: {label}"
-
-
-def _populate_groups_table(table: Any, groups: list[dict[str, Any]]) -> None:
-    from PyQt6 import QtCore, QtWidgets
-
-    table.verticalHeader().setVisible(False)
-    table.setShowGrid(False)
-    table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
-    table.setRowCount(len(groups))
-    for row, group in enumerate(groups):
-        files = group.get("files") if isinstance(group.get("files"), list) else []
-        filenames = ", ".join(
-            str(item.get("name") or item.get("source_path") or "") for item in files if isinstance(item, dict)
-        )
-        sample_item = QtWidgets.QTableWidgetItem(str(group.get("sample") or f"Sample {row + 1}"))
-        sample_item.setData(QtCore.Qt.ItemDataRole.UserRole, row)
-        table.setItem(row, 0, sample_item)
-        files_item = QtWidgets.QTableWidgetItem(filenames)
-        files_item.setData(QtCore.Qt.ItemDataRole.UserRole, row)
-        table.setItem(row, 1, files_item)
-
-
-def _groups_from_table(table: Any, original_groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    from PyQt6 import QtCore
-
-    groups: list[dict[str, Any]] = []
-    for row in range(table.rowCount()):
-        item = table.item(row, 0)
-        source_index = item.data(QtCore.Qt.ItemDataRole.UserRole) if item is not None else row
-        try:
-            source_group = original_groups[int(source_index)]
-        except (IndexError, TypeError, ValueError):
-            source_group = original_groups[row] if row < len(original_groups) else {}
-        sample = item.text().strip() if item is not None else ""
-        updated = dict(source_group)
-        updated["sample"] = sample or str(source_group.get("sample") or f"Sample {row + 1}")
-        groups.append(updated)
-    return groups
-
-
-def _move_table_row(table: Any, direction: int) -> None:
-    row = table.currentRow()
-    target = row + direction
-    if row < 0 or target < 0 or target >= table.rowCount():
-        return
-    column_count = table.columnCount()
-    row_items = [table.takeItem(row, column) for column in range(column_count)]
-    target_items = [table.takeItem(target, column) for column in range(column_count)]
-    for column, item in enumerate(target_items):
-        table.setItem(row, column, item)
-    for column, item in enumerate(row_items):
-        table.setItem(target, column, item)
-    table.setCurrentCell(target, 0)
-
-
-def _panel_render_options(
-    *,
-    size: str,
-    x_label: str,
-    y_label: str,
-    x_min: str,
-    x_max: str,
-    reverse_x: bool,
-    xscale: str,
-    yscale: str,
-    series_label_mode: str,
-    legend_position: str = "auto",
-    series_styles: list[dict[str, Any]] | None = None,
-    series_order: list[str] | None = None,
-) -> dict[str, Any]:
-    options: dict[str, Any] = {"size": size, "series_label_mode": series_label_mode}
-    x_label_value = _normalize_optional_string(x_label)
-    y_label_value = _normalize_optional_string(y_label)
-    if x_label_value:
-        options["x_label_override"] = x_label_value
-    if y_label_value:
-        options["y_label_override"] = y_label_value
-    x_min_value = _optional_float(x_min)
-    x_max_value = _optional_float(x_max)
-    if x_min_value is not None:
-        options["x_min"] = x_min_value
-    if x_max_value is not None:
-        options["x_max"] = x_max_value
-    if reverse_x:
-        options["reverse_x"] = True
-    if xscale == "log":
-        options["xscale"] = "log"
-    if yscale == "log":
-        options["yscale"] = "log"
-    legend_value = str(legend_position or "auto").strip()
-    if legend_value:
-        options["legend_position"] = legend_value
-    if series_order:
-        options["series_order"] = series_order
-        options["series_include"] = series_order
-    if series_styles:
-        options["series_styles"] = series_styles
-    return options
-
-
-def _apply_panel_request_options(
-    project_dir: Path,
-    *,
-    request_path: Path,
-    exports: list[str],
-    render_options: dict[str, Any],
-    column_confirmations: list[dict[str, Any]] | None = None,
-) -> None:
-    if request_path.exists():
-        request = _read_json(request_path)
-        request["exports"] = exports
-        existing_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
-        request["render_options"] = {**existing_options, **render_options}
-        if column_confirmations:
-            request["column_confirmations"] = column_confirmations
-        request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
-    for manifest_path in [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]:
-        if not manifest_path.exists():
-            continue
-        payload = _read_json(manifest_path)
-        plot_options = payload.get("plot_options") if isinstance(payload.get("plot_options"), dict) else {}
-        existing_render = (
-            plot_options.get("render_options")
-            if isinstance(plot_options.get("render_options"), dict)
-            else {}
-        )
-        payload["plot_options"] = {
-            **plot_options,
-            "exports": exports,
-            "render_options": {**existing_render, **render_options},
-        }
-        if column_confirmations:
-            payload["column_confirmations"] = column_confirmations
-        manifest_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def export_studio_document(document_path: Path, *, formats: list[str]) -> dict[str, Any]:
@@ -3745,6 +642,10 @@ def publish_studio_export_run(
     exports: list[dict[str, Any]],
 ) -> dict[str, Any]:
     request = _read_json(request_path)
+    document_state = _studio_document_state(
+        document_path,
+        generated_hash=_registered_generated_hash(project_dir),
+    )
     output_dir = _next_studio_run_dir(project_dir)
     figures_dir = output_dir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
@@ -3777,8 +678,66 @@ def publish_studio_export_run(
     input_path = _resolve_request_input(request, base_dir=request_path.parent)
     raw_archive = _archive_studio_input(input_path, output_dir) if input_path is not None else {}
     processed_source = _write_studio_data_snapshot(input_path, output_dir) if input_path is not None else None
+    study_model = normalize_study_model(
+        request.get("study_model")
+        if isinstance(request.get("study_model"), dict)
+        else {"kind": "sciplot_study_model", "version": 1, "samples": [], "figure_queue": []}
+    )
+    publication_intent = build_publication_intent(
+        study_model,
+        request=request,
+        existing=request.get("publication_intent")
+        if isinstance(request.get("publication_intent"), dict)
+        else None,
+    )
+    publication_profile = get_publication_profile(publication_intent["target_profile_id"])
+    existing_transform_ledger = (
+        request.get("transform_ledger")
+        if isinstance(request.get("transform_ledger"), dict)
+        else None
+    )
+    transform_ledger = build_transform_ledger(
+        study_model,
+        request=request,
+        input_path=input_path or document_path,
+        existing=existing_transform_ledger,
+    )
+    if (
+        isinstance(existing_transform_ledger, dict)
+        and existing_transform_ledger.get("status") == "pending_runtime"
+        and not existing_transform_ledger.get("steps")
+    ):
+        # The document may have been prepared by an older SciPlot version that
+        # did not persist runtime preprocessing. Do not rewrite that uncertainty
+        # as an identity transform merely because the edited VSZ now exists.
+        transform_ledger["status"] = "incomplete_lineage"
+        transform_ledger["steps"] = []
+        transform_ledger["limitations"] = [
+            "The saved Veusz document predates persisted runtime transform steps; "
+            "preprocessing lineage requires review."
+        ]
+    publication_intent = link_intent_to_transform_ledger(publication_intent, transform_ledger)
+    study_model["publication_intent_ref"] = "publication_intent.json"
+    publication_artifacts = write_publication_artifacts(
+        output_dir,
+        publication_intent=publication_intent,
+        transform_ledger=transform_ledger,
+        publication_profile=publication_profile,
+    )
     _write_studio_analysis_report(output_dir, request=request, document_path=document_path, figures=figures)
-    qa = _run_studio_qa(output_dir)
+    qa = _run_studio_qa(
+        output_dir,
+        publication_profile=publication_profile,
+        strict_publication=bool(request.get("publication_strict")),
+    )
+    publication_qa = qa.get("publication") if isinstance(qa.get("publication"), dict) else {}
+    publication_artifacts = write_publication_artifacts(
+        output_dir,
+        publication_intent=publication_intent,
+        transform_ledger=transform_ledger,
+        publication_profile=publication_profile,
+        publication_qa=publication_qa,
+    )
     layout_quality = _studio_layout_quality_from_spec(document_path)
     result = {
         "kind": "sciplot_studio_export_result",
@@ -3788,6 +747,9 @@ def publish_studio_export_run(
         "document": str(document_path),
         "veusz_document": str(document_path),
         "veusz_spec": str(_veusz_spec_path(document_path)),
+        "document_authority": document_state["authority"],
+        "exported_document_hash": document_state["current_hash"],
+        "manual_edit_detected": document_state["manual_edit_detected"],
         "export_formats": [str(item.get("format")) for item in copied_exports if item.get("format")],
         "exports": copied_exports,
         "outputs": figures,
@@ -3796,30 +758,52 @@ def publish_studio_export_run(
         "template": request.get("template") or request.get("recipe") or "veusz_document",
         "operation_mode": normal_mode_payload(route="studio"),
     }
+    intake_manifest_path = project_dir / "intake_manifest.json"
+    intake_manifest = _read_json(intake_manifest_path) if intake_manifest_path.exists() else {}
+    recognition = (
+        intake_manifest.get("recognition")
+        if isinstance(intake_manifest.get("recognition"), dict)
+        else {}
+    )
+    semantic = {
+        **recognition,
+        "semantic_family": recognition.get("semantic_family")
+        or intake_manifest.get("experiment", {}).get("id")
+        or request.get("rule_id")
+        or "unknown",
+        "rule_id": recognition.get("rule_id") or request.get("rule_id"),
+        "reason": recognition.get("reason") or "Exported from the canonical SciPlot Veusz document.",
+        "route": "studio",
+    }
     manifest = {
         "kind": "sciplot_run",
         "created_at": datetime.now(UTC).isoformat(),
         "request_path": str(request_path),
         "request": json_safe(request),
         "route": "studio",
-        "semantic": {
-            "semantic_family": "veusz_document",
-            "rule_id": request.get("rule_id"),
-            "reason": "Exported from a SciPlot Studio Veusz document.",
-        },
+        "semantic": semantic,
         "final_recipe": None,
         "input": str(input_path) if input_path is not None else "",
         "raw_archive": json_safe(raw_archive),
         "output": str(output_dir),
         "figures": figures,
         "result": json_safe(result),
-        "study_model": json_safe(request.get("study_model") if isinstance(request.get("study_model"), dict) else {}),
+        "study_model": json_safe(study_model),
+        "publication_intent": json_safe(publication_intent),
+        "transform_ledger": json_safe(transform_ledger),
+        "journal_profile": json_safe(publication_profile),
+        "publication_qa": json_safe(publication_qa),
+        "publication_artifacts": json_safe(publication_artifacts),
         "qa": qa,
         "render_engine": "veusz",
         "qa_target": "veusz_export",
         "veusz_document": str(document_path),
         "veusz_spec": str(_veusz_spec_path(document_path)),
         "manual_edit_hash": _hash_file(document_path),
+        "document_authority": document_state["authority"],
+        "exported_document_hash": document_state["current_hash"],
+        "manual_edit_detected": document_state["manual_edit_detected"],
+        "document_state": document_state,
         "layout_policy": {
             "kind": "sciplot_layout_policy",
             "policy_id": "veusz_native_document",
@@ -3834,6 +818,10 @@ def publish_studio_export_run(
             "document": str(document_path),
             "spec": str(_veusz_spec_path(document_path)),
             "manual_edit_hash": _hash_file(document_path),
+            "document_authority": document_state["authority"],
+            "exported_document_hash": document_state["current_hash"],
+            "manual_edit_detected": document_state["manual_edit_detected"],
+            "document_state": document_state,
             "upstream": upstream_status()["veusz"],
             "operation_mode": normal_mode_payload(route="studio"),
         },
@@ -3851,6 +839,13 @@ def publish_studio_export_run(
     )
     manifest["package_contract"] = build_output_package_contract(output_dir, manifest=manifest)
     manifest["delivery_package"] = build_delivery_package(output_dir, manifest=manifest)
+    ready_to_use = bool(
+        qa.get("status") == "passed"
+        and manifest["package_contract"].get("complete") is True
+        and manifest["delivery_package"].get("complete") is True
+    )
+    manifest["state"] = "ready" if ready_to_use else "needs_rule_repair"
+    manifest["ready_to_use"] = ready_to_use
     (output_dir / "manifest.json").write_text(
         json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -3866,6 +861,8 @@ def publish_studio_export_run(
         "qa": qa,
         "package_contract": manifest["package_contract"],
         "delivery_package": manifest["delivery_package"],
+        "state": manifest["state"],
+        "ready_to_use": ready_to_use,
     }
 
 
@@ -4031,8 +1028,11 @@ def _write_studio_data_snapshot(input_path: Path, output_dir: Path) -> Path:
     destination = processed_dir / "studio_export_data.xlsx"
     try:
         frames = _read_source_frames(input_path)
-    except Exception:
-        frames = [(input_path.stem or "source", pd.DataFrame({"source_path": [str(input_path)]}))]
+    except Exception as exc:
+        raise StudioPreparationBlocked(
+            "studio_data_snapshot_failed",
+            f"Studio could not create a data snapshot from {input_path}: {exc}",
+        ) from exc
     with pd.ExcelWriter(destination) as writer:
         used_names: set[str] = set()
         for index, (label, frame) in enumerate(frames, start=1):
@@ -4054,12 +1054,21 @@ def _excel_sheet_name(label: str, *, fallback: str, used: set[str]) -> str:
     return candidate
 
 
-def _run_studio_qa(output_dir: Path) -> dict[str, Any]:
+def _run_studio_qa(
+    output_dir: Path,
+    *,
+    publication_profile: dict[str, Any] | None = None,
+    strict_publication: bool = False,
+) -> dict[str, Any]:
     try:
-        return run_qa(output_dir)
+        return run_qa(
+            output_dir,
+            publication_profile=publication_profile,
+            strict_publication=strict_publication,
+        )
     except ValueError as exc:
         return {
-            "status": "skipped",
+            "status": "failed",
             "reason": str(exc),
             "pdf_count": 0,
             "pdfs": [],
@@ -4233,15 +1242,20 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _series_from_request(request: dict[str, Any], *, base_dir: Path) -> tuple[list[StudioSeries], dict[str, str]]:
+def _series_from_request(
+    request: dict[str, Any],
+    *,
+    base_dir: Path,
+) -> tuple[list[StudioSeries], dict[str, str], list[dict[str, Any]], Path]:
     input_value = request.get("input")
     if not isinstance(input_value, str) or not input_value.strip():
         raise ValueError("plot_request.json needs an input path for Studio document generation.")
     source = Path(input_value).expanduser()
     if not source.is_absolute():
         source = (base_dir / source).resolve()
+    source_root = source
     render_options = _effective_render_options(request)
-    source = _studio_source_for_request(source, request=request, base_dir=base_dir)
+    source, transform_steps = _studio_source_for_request(source, request=request, base_dir=base_dir)
     frames = _read_source_frames(source, request=request)
     metric_pair = _preferred_metric_pair(request)
     raw_series: list[StudioSeries] = []
@@ -4279,45 +1293,56 @@ def _series_from_request(request: dict[str, Any], *, base_dir: Path) -> tuple[li
             )
 
     if not raw_series:
-        raw_series = [
-            StudioSeries(
-                label="SciPlot placeholder",
-                x_name="x_1_1",
-                y_name="y_1_1",
-                x_values=(0.0, 1.0),
-                y_values=(0.0, 1.0),
-                color=DEFAULT_PALETTE[0],
-            )
-        ]
+        raise StudioPreparationBlocked(
+            "no_plottable_numeric_series",
+            f"Studio found no plottable numeric x/y series in {source}; no placeholder data were generated.",
+        )
 
     render_options = _apply_domain_render_defaults(render_options, request=request, axis_info=axis_info)
     styled = _apply_series_options(raw_series, render_options=render_options, request=request)
     styled = _apply_template_series_transforms(styled, request=request, render_options=render_options)
     axis_info["x_label"] = str(render_options.get("x_label_override") or axis_info["x_label"])
     axis_info["y_label"] = str(render_options.get("y_label_override") or axis_info["y_label"])
-    return styled, axis_info
+    return styled, axis_info, transform_steps, source_root
 
 
-def _studio_source_for_request(source: Path, *, request: dict[str, Any], base_dir: Path) -> Path:
+def _studio_source_for_request(
+    source: Path,
+    *,
+    request: dict[str, Any],
+    base_dir: Path,
+) -> tuple[Path, list[dict[str, Any]]]:
     rule_id = str(request.get("rule_id") or "").strip()
-    if rule_id != "tensile_curve":
-        return source
+    if not rule_id:
+        return source, []
     from sciplot_core.semantic import classify_source, prepare_semantic_source
 
     output_dir = base_dir / "studio"
     semantic = classify_source(source, requested_rule_id=rule_id)
+    curation_value = request.get("curation")
+    curation_path: Path | None = None
+    if isinstance(curation_value, str) and curation_value.strip():
+        curation_path = Path(curation_value).expanduser()
+        if not curation_path.is_absolute():
+            curation_path = (base_dir / curation_path).resolve()
     prepared = prepare_semantic_source(
         source,
         output_dir=output_dir,
         semantic=semantic,
+        curation_path=curation_path,
         series_order=request.get("series_order"),
         column_confirmations=request.get("column_confirmations"),
         replicate_mode=request.get("replicate_mode"),
     )
     prepared_source = prepared.get("source")
+    transform_steps = [
+        step
+        for step in prepared.get("transform_steps", [])
+        if isinstance(step, dict)
+    ]
     if isinstance(prepared_source, str) and prepared_source.strip():
-        return Path(prepared_source).expanduser()
-    return source
+        return Path(prepared_source).expanduser(), transform_steps
+    return source, transform_steps
 
 
 def _read_source_frames(source: Path, *, request: dict[str, Any] | None = None) -> list[tuple[str, pd.DataFrame]]:
@@ -4408,7 +1433,7 @@ def _preferred_metric_pair(request: dict[str, Any]) -> tuple[str, str] | None:
     study_model = request.get("study_model") if isinstance(request.get("study_model"), dict) else {}
     figure_queue = study_model.get("figure_queue") if isinstance(study_model.get("figure_queue"), list) else []
     if (not x_metric or not y_metric) and figure_queue:
-        first_figure = figure_queue[0] if isinstance(figure_queue[0], dict) else {}
+        first_figure = next((item for item in figure_queue if isinstance(item, dict)), {})
         x_metric = x_metric or _clean_metric_id(first_figure.get("x_metric"))
         y_metric = y_metric or _clean_metric_id(first_figure.get("y_metric"))
     rule_id = str(request.get("rule_id") or "").strip()
@@ -5131,6 +2156,10 @@ def _build_veusz_plot_spec(
         "show": show_key,
         "columns": _legend_columns(series_count=len(series), mode=legend_mode),
         "mode": legend_mode,
+        "horz_position": _normalize_optional_string(render_options.get("legend_horz_position")),
+        "vert_position": _normalize_optional_string(render_options.get("legend_vert_position")),
+        "horz_manual": _optional_float(render_options.get("legend_horz_manual")),
+        "vert_manual": _optional_float(render_options.get("legend_vert_manual")),
     }
     if show_key:
         legend_spec["label_load"] = label_load
@@ -5275,7 +2304,14 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("keyLength", "0.40cm")
         interface.Set("marginSize", 0.15)
         interface.Set("columns", int(legend["columns"]))
-        _apply_key_position(interface, str(legend.get("mode") or "inside_best"))
+        _apply_key_position(
+            interface,
+            str(legend.get("mode") or "inside_best"),
+            horz_position=_normalize_optional_string(legend.get("horz_position")),
+            vert_position=_normalize_optional_string(legend.get("vert_position")),
+            horz_manual=_optional_float(legend.get("horz_manual")),
+            vert_manual=_optional_float(legend.get("vert_manual")),
+        )
         interface.Set("Background/hide", not bool(style["legend_frameon"]))
         interface.Set("Border/hide", not bool(style["legend_frameon"]))
         interface.To("..")
@@ -5319,8 +2355,26 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     interface.To("..")
 
 
-def _apply_key_position(interface: Any, mode: str) -> None:
+def _apply_key_position(
+    interface: Any,
+    mode: str,
+    *,
+    horz_position: str | None = None,
+    vert_position: str | None = None,
+    horz_manual: float | None = None,
+    vert_manual: float | None = None,
+) -> None:
     normalized = str(mode or "inside_best").strip().casefold()
+    if normalized == "manual" or horz_position is not None or vert_position is not None:
+        horz = str(horz_position or "manual")
+        vert = str(vert_position or "manual")
+        interface.Set("horzPosn", horz)
+        interface.Set("vertPosn", vert)
+        if horz == "manual":
+            interface.Set("horzManual", float(horz_manual if horz_manual is not None else 0.5))
+        if vert == "manual":
+            interface.Set("vertManual", float(vert_manual if vert_manual is not None else 0.5))
+        return
     if normalized == "outside_right":
         interface.Set("horzPosn", "manual")
         interface.Set("horzManual", 1.02)
@@ -5481,7 +2535,7 @@ def _veusz_legend_mode(render_options: dict[str, Any], *, template_id: str) -> s
     legend_position = str(render_options.get("legend_position") or "auto").strip().casefold()
     if legend_position in {"none", "hide", "hidden", "off"}:
         return "none"
-    if legend_position in {"outside_right", "upper_right", "upper_left", "lower_left", "lower_right"}:
+    if legend_position in {"outside_right", "upper_right", "upper_left", "lower_left", "lower_right", "manual"}:
         return legend_position
     if template_id in STACKED_TEMPLATE_IDS:
         label_mode = str(render_options.get("series_label_mode") or "").casefold()
@@ -5683,6 +2737,52 @@ def _write_studio_launcher(project_dir: Path) -> Path:
     return launcher
 
 
+def _write_veusz_launcher(project_dir: Path, document_path: Path) -> Path:
+    launcher = project_dir / "Open_in_Veusz.command"
+    resolved_project = project_dir.expanduser().resolve()
+    resolved_document = document_path.expanduser().resolve()
+    try:
+        relative_document = resolved_document.relative_to(resolved_project)
+    except ValueError:
+        document_argument = f'"{resolved_document}"'
+    else:
+        document_argument = f'"${{PROJECT_DIR}}/{relative_document}"'
+    launcher.write_text(
+        "\n".join(
+            [
+                "#!/bin/zsh",
+                "set -euo pipefail",
+                'PROJECT_DIR="${0:A:h}"',
+                f'cd "{REPO_ROOT}"',
+                f"exec skill/scripts/sciplot studio {document_argument} --advanced-editor",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    launcher.chmod(0o755)
+    return launcher
+
+
+def _write_export_edited_launcher(project_dir: Path) -> Path:
+    launcher = project_dir / "Export_Edited_Veusz.command"
+    launcher.write_text(
+        "\n".join(
+            [
+                "#!/bin/zsh",
+                "set -euo pipefail",
+                'PROJECT_DIR="${0:A:h}"',
+                f'cd "{REPO_ROOT}"',
+                'skill/scripts/sciplot studio "${PROJECT_DIR}" --export pdf,tiff_300 --json',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    launcher.chmod(0o755)
+    return launcher
+
+
 def _veusz_spec_path(document_path: Path) -> Path:
     if document_path.name == "document.vsz":
         return document_path.parent / "spec.json"
@@ -5699,6 +2799,28 @@ def _hash_file(path: Path) -> str | None:
     return digest.hexdigest()
 
 
+def _studio_document_state(document_path: Path, *, generated_hash: str | None) -> dict[str, Any]:
+    current_hash = _hash_file(document_path)
+    manual_edit_detected = bool(generated_hash and current_hash and current_hash != generated_hash)
+    if manual_edit_detected:
+        authority = "veusz_manual"
+    elif generated_hash and current_hash == generated_hash:
+        authority = "sciplot_generated"
+    else:
+        authority = "veusz_document"
+    regeneration_requires_archive = bool(current_hash and (manual_edit_detected or generated_hash is None))
+    return {
+        "kind": "sciplot_vsz_document_state",
+        "authority": authority,
+        "generated_hash": generated_hash,
+        "current_hash": current_hash,
+        "manual_edit_detected": manual_edit_detected,
+        "preserve_on_open": True,
+        "export_exact_current_document": True,
+        "regeneration_requires_archive": regeneration_requires_archive,
+    }
+
+
 def _registered_generated_hash(project_dir: Path) -> str | None:
     for manifest_path in [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]:
         if not manifest_path.exists():
@@ -5708,7 +2830,7 @@ def _registered_generated_hash(project_dir: Path) -> str | None:
         except Exception:
             continue
         studio = payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
-        value = studio.get("generated_hash") or studio.get("manual_edit_hash")
+        value = studio.get("generated_hash")
         if isinstance(value, str) and value.strip():
             return value
     return None
@@ -5736,10 +2858,13 @@ def _studio_block(
     document_path: Path,
     spec_path: Path,
     launcher: Path,
+    veusz_launcher: Path,
+    export_edited_launcher: Path,
     request_path: Path,
     series_count: int,
     generated_hash: str | None,
 ) -> dict[str, Any]:
+    document_state = _studio_document_state(document_path, generated_hash=generated_hash)
     return {
         "kind": "sciplot_studio_document",
         "engine": "veusz",
@@ -5749,10 +2874,15 @@ def _studio_block(
         "document": str(document_path),
         "spec": str(spec_path),
         "launcher": str(launcher),
+        "veusz_launcher": str(veusz_launcher),
+        "export_edited_launcher": str(export_edited_launcher),
         "generated_from": str(request_path),
         "series_count": series_count,
         "generated_hash": generated_hash,
-        "manual_edit_hash": _hash_file(document_path),
+        "manual_edit_hash": document_state["current_hash"],
+        "document_authority": document_state["authority"],
+        "manual_edit_detected": document_state["manual_edit_detected"],
+        "document_state": document_state,
         "upstream": upstream_status()["veusz"],
         "operation_mode": normal_mode_payload(route="studio"),
     }

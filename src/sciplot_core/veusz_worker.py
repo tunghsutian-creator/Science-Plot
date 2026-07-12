@@ -9,9 +9,11 @@ from sciplot_core._utils import json_safe
 
 
 def export_request(request_path: Path, *, formats: list[str]) -> dict[str, Any]:
+    """Compile one request to VSZ, then export through the production renderer."""
+
     from sciplot_core.studio import export_studio_document, prepare_studio_document
 
-    payload = prepare_studio_document(request_path)
+    payload = prepare_studio_document(request_path.expanduser().resolve())
     document_path = Path(str(payload["document"]))
     export_payload = export_studio_document(document_path, formats=formats)
     payload["exports"] = export_payload["exports"]
@@ -19,6 +21,8 @@ def export_request(request_path: Path, *, formats: list[str]) -> dict[str, Any]:
 
 
 def export_document(document_path: Path, *, formats: list[str]) -> dict[str, Any]:
+    """Export the exact current VSZ without regenerating it."""
+
     from sciplot_core.studio import export_studio_document
 
     return export_studio_document(document_path.expanduser().resolve(), formats=formats)
@@ -30,7 +34,7 @@ def _split_formats(value: str) -> list[str]:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Internal SciPlot Veusz rendering worker.")
+    parser = argparse.ArgumentParser(description="Internal SciPlot Veusz export worker.")
     subparsers = parser.add_subparsers(dest="command", required=True)
     export_parser = subparsers.add_parser("export", help="Generate and export a Veusz document from a request.")
     export_parser.add_argument("request", type=Path)
@@ -44,14 +48,11 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     if args.command == "export":
-        payload = export_request(args.request.expanduser(), formats=_split_formats(args.formats))
-        print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
-        return 0
-    if args.command == "export-document":
-        payload = export_document(args.document.expanduser(), formats=_split_formats(args.formats))
-        print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
-        return 0
-    raise AssertionError(f"Unhandled command: {args.command}")
+        payload = export_request(args.request, formats=_split_formats(args.formats))
+    else:
+        payload = export_document(args.document, formats=_split_formats(args.formats))
+    print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
+    return 0
 
 
 if __name__ == "__main__":

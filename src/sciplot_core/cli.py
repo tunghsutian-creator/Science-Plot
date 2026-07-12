@@ -6,20 +6,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.acceptance import run_3dpa_acceptance
-from sciplot_core.assisted_cleanup import load_cleanup_result, write_cleanup_result
-from sciplot_core.autoplot import run_autoplot
-from sciplot_core.batch import run_batch
-from sciplot_core.curate import curate_torque_project
-from sciplot_core.doctor import doctor_payload
-from sciplot_core.intake import intake_catalog_payload, prepare_intake_session, serve_intake
-from sciplot_core.materials_rules import list_rules_payload, show_rule_payload
-from sciplot_core.qa import run_qa
-from sciplot_core.render import inspect_payload, render_to_dir
-from sciplot_core.studio import run_studio_command
-from sciplot_core.workflow import run_one_step, run_request
-from sciplot_recipes import run_recipe
-
 
 def _coerce_sheet(value: str) -> str | int:
     try:
@@ -57,7 +43,7 @@ def _recovery_hint(input_path: Path | None) -> str:
     return (
         f"Hint: run `sciplot inspect {target} --json` to see how SciPlot read the table, "
         f"reshape it as a 2-column curve / replicate / heatmap table, "
-        f"or open it in the workbench with `sciplot intake {target}`."
+        f"or prepare an editable Veusz project with `sciplot studio {target}`."
     )
 
 
@@ -71,6 +57,26 @@ def _load_options(value: str | None) -> dict[str, Any]:
 
 def _print_json(payload: object) -> None:
     print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+
+def serve_intake(**kwargs: Any) -> None:
+    """Lazy compatibility seam; keeps CLI startup independent of the Web app."""
+
+    from sciplot_core.intake import serve_intake as _serve_intake
+
+    _serve_intake(**kwargs)
+
+
+def run_one_step(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    from sciplot_core.workflow import run_one_step as _run_one_step
+
+    return _run_one_step(*args, **kwargs)
+
+
+def run_autoplot(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    from sciplot_core.autoplot import run_autoplot as _run_autoplot
+
+    return _run_autoplot(*args, **kwargs)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -112,7 +118,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     one_step_parser = subparsers.add_parser(
         "one-step",
-        help="Generate a complete SciPlot figure package from a high-confidence raw data path.",
+        help=argparse.SUPPRESS,
     )
     one_step_parser.add_argument("input", type=Path)
     one_step_parser.add_argument("--out", type=Path, default=Path("outputs") / "one_step_projects")
@@ -141,7 +147,7 @@ def _build_parser() -> argparse.ArgumentParser:
     acceptance_3dpa_parser.add_argument("--dense-series", type=int, default=44)
     acceptance_3dpa_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
 
-    quick_parser = subparsers.add_parser("quick", help="Open the shortest confirmation flow for a raw data path.")
+    quick_parser = subparsers.add_parser("quick", help=argparse.SUPPRESS)
     quick_parser.add_argument("input", type=Path)
     quick_parser.add_argument("--host", default="127.0.0.1")
     quick_parser.add_argument("--port", type=int, default=0, help="Use 0 to choose a free local port.")
@@ -157,7 +163,7 @@ def _build_parser() -> argparse.ArgumentParser:
     curate_torque_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     curate_torque_parser.add_argument("--open", action="store_true", help="Open the review HTML after export.")
 
-    prepare_parser = subparsers.add_parser("prepare", help="Prepare a SciPlot intake session from a path.")
+    prepare_parser = subparsers.add_parser("prepare", help=argparse.SUPPRESS)
     prepare_parser.add_argument("input", type=Path)
     prepare_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
     prepare_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
@@ -228,7 +234,7 @@ def _build_parser() -> argparse.ArgumentParser:
     app_parser.add_argument("--project", help="Open an existing intake project under --out.")
     app_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
 
-    intake_parser = subparsers.add_parser("intake", help="Open the SciPlot intake project builder.")
+    intake_parser = subparsers.add_parser("intake", help=argparse.SUPPRESS)
     intake_parser.add_argument("input", nargs="?", type=Path)
     intake_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
     intake_parser.add_argument("--all", action="store_true", help="Include pending internal catalog entries.")
@@ -239,7 +245,7 @@ def _build_parser() -> argparse.ArgumentParser:
     intake_parser.add_argument("--project", help="Open an existing intake project under --out.")
     intake_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
 
-    workbench_parser = subparsers.add_parser("workbench", help="Open the SciPlot Web workbench.")
+    workbench_parser = subparsers.add_parser("workbench", help=argparse.SUPPRESS)
     workbench_parser.add_argument("input", nargs="?", type=Path)
     workbench_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
     workbench_parser.add_argument("--all", action="store_true", help="Include pending internal catalog entries.")
@@ -291,6 +297,40 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Fail when any golden target is missing from the rendered output.",
     )
+    qa_parser.add_argument(
+        "--publication-profile",
+        "--profile",
+        help="Publication profile id or JSON path for final-artifact checks.",
+    )
+    qa_parser.add_argument(
+        "--strict-publication",
+        action="store_true",
+        help="Return a failed QA status when publication-profile checks need revision.",
+    )
+
+    publication_parser = subparsers.add_parser(
+        "publication",
+        help="Inspect SciPlot publication profiles and 183 mm composite layouts.",
+    )
+    publication_subparsers = publication_parser.add_subparsers(dest="publication_command", required=True)
+    publication_profiles_parser = publication_subparsers.add_parser("profiles", help="List publication profiles.")
+    publication_profiles_parser.add_argument("--json", action="store_true")
+    publication_profile_parser = publication_subparsers.add_parser("profile", help="Show one publication profile.")
+    publication_profile_parser.add_argument("profile_id")
+    publication_profile_parser.add_argument("--json", action="store_true")
+    publication_layouts_parser = publication_subparsers.add_parser("layouts", help="List composite layouts.")
+    publication_layouts_parser.add_argument("--json", action="store_true")
+    publication_layout_parser = publication_subparsers.add_parser("layout", help="Show one composite layout.")
+    publication_layout_parser.add_argument("layout_id")
+    publication_layout_parser.add_argument("--height-mm", type=float, default=55.0)
+    publication_layout_parser.add_argument("--json", action="store_true")
+
+    hidden_compatibility_commands = {"one-step", "quick", "prepare", "intake", "workbench"}
+    subparsers._choices_actions[:] = [  # type: ignore[attr-defined]
+        action for action in subparsers._choices_actions if action.dest not in hidden_compatibility_commands
+    ]
+    public_commands = [name for name in subparsers.choices if name not in hidden_compatibility_commands]
+    subparsers.metavar = "{" + ",".join(public_commands) + "}"
 
     return parser
 
@@ -300,6 +340,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "inspect":
+            from sciplot_core.render import inspect_payload
+
             payload = inspect_payload(_resolve_input(args.input), sheet=_coerce_sheet(args.sheet))
             if args.json:
                 _print_json(payload)
@@ -307,6 +349,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(payload.get("recommendation_summary", "No recommendation summary available."))
             return 0
         if args.command == "doctor":
+            from sciplot_core.doctor import doctor_payload
+
             payload = doctor_payload()
             if args.json:
                 _print_json(payload)
@@ -322,6 +366,8 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"{marker}  {check['label']}: {check.get('detail') or check['status']}")
             return 0 if payload["status"] == "ready" else 1
         if args.command == "render":
+            from sciplot_core.render import inspect_payload, render_to_dir
+
             source = _resolve_input(args.input)
             sheet = _coerce_sheet(args.sheet)
             template = args.template
@@ -347,6 +393,8 @@ def main(argv: list[str] | None = None) -> int:
             _print_json(payload)
             return 0
         if args.command == "recipe":
+            from sciplot_recipes import run_recipe
+
             payload = run_recipe(
                 args.name,
                 _resolve_input(args.input),
@@ -356,7 +404,14 @@ def main(argv: list[str] | None = None) -> int:
             _print_json(payload)
             return 0
         if args.command == "run":
-            _print_json(run_request(_resolve_input(args.request, kind="Request file")))
+            from sciplot_core.workflow import run_request
+
+            payload = run_request(_resolve_input(args.request, kind="Request file"))
+            _print_json(payload)
+            request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
+            qa = payload.get("qa") if isinstance(payload.get("qa"), dict) else {}
+            if bool(request.get("publication_strict")) and qa.get("status") != "passed":
+                return 1
             return 0
         if args.command == "one-step":
             payload = run_one_step(
@@ -368,7 +423,7 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(payload["run_output"])
-            return 0
+            return 0 if payload.get("status") == "ready" else 1
         if args.command == "autoplot":
             payload = run_autoplot(
                 _resolve_input(args.input),
@@ -379,9 +434,11 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(payload["delivery"] or payload["run_output"])
-            return 0
+            return 0 if payload.get("state") == "ready" and payload.get("ready_to_use") is not False else 1
         if args.command == "acceptance":
             if args.acceptance_command == "3dpa":
+                from sciplot_core.acceptance import run_3dpa_acceptance
+
                 payload = run_3dpa_acceptance(
                     _resolve_input(args.input),
                     output_root=args.out.expanduser(),
@@ -405,6 +462,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "curate":
             if args.curate_command == "torque":
+                from sciplot_core.curate import curate_torque_project
+
                 payload = curate_torque_project(
                     args.input.expanduser(),
                     output_root=args.out.expanduser(),
@@ -417,6 +476,8 @@ def main(argv: list[str] | None = None) -> int:
                     print(payload["review_html"])
                 return 0
         if args.command == "prepare":
+            from sciplot_core.intake import prepare_intake_session
+
             payload = prepare_intake_session(args.input.expanduser(), output_root=args.out.expanduser())
             if args.json:
                 _print_json(payload)
@@ -424,6 +485,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(payload["session_path"])
             return 0
         if args.command == "rules":
+            from sciplot_core.materials_rules import list_rules_payload, show_rule_payload
+
             if args.rules_command == "list":
                 payload = list_rules_payload(include_pending=args.all)
                 if args.json:
@@ -443,6 +506,8 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"{payload['rule_id']}: {x_label} -> {y_label}")
                 return 0
         if args.command == "cleanup":
+            from sciplot_core.assisted_cleanup import load_cleanup_result, write_cleanup_result
+
             if args.cleanup_command == "result":
                 payload = write_cleanup_result(
                     args.output_dir.expanduser(),
@@ -470,6 +535,8 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 return 0
         if args.command == "batch":
+            from sciplot_core.batch import run_batch
+
             _print_json(
                 run_batch(
                     args.input_dir.expanduser(),
@@ -480,6 +547,8 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
         if args.command in {"app", "intake", "workbench"}:
+            from sciplot_core.intake import intake_catalog_payload
+
             if args.catalog:
                 payload = intake_catalog_payload(include_pending=args.all)
                 if args.json:
@@ -502,6 +571,8 @@ def main(argv: list[str] | None = None) -> int:
             serve_intake(**serve_kwargs)
             return 0
         if args.command == "studio":
+            from sciplot_core.studio import run_studio_command
+
             original_argv = list(sys.argv[1:] if argv is None else argv)
             return run_studio_command(
                 target=args.target.expanduser() if args.target else None,
@@ -516,15 +587,39 @@ def main(argv: list[str] | None = None) -> int:
                 qt_smoke=args.qt_smoke,
                 original_argv=original_argv,
             )
-        if args.command == "qa":
-            _print_json(
-                run_qa(
-                    args.output_dir.expanduser(),
-                    goldens_dir=args.goldens.expanduser() if args.goldens else None,
-                    require_all_goldens=args.strict_goldens,
-                )
+        if args.command == "publication":
+            from sciplot_core.publication import (
+                build_composite_layout,
+                get_publication_profile,
+                list_composite_layouts,
+                list_publication_profiles,
             )
+
+            if args.publication_command == "profiles":
+                payload = {"kind": "sciplot_publication_profiles", "profiles": list_publication_profiles()}
+            elif args.publication_command == "profile":
+                payload = get_publication_profile(args.profile_id)
+            elif args.publication_command == "layouts":
+                payload = {"kind": "sciplot_composite_layouts", "layouts": list_composite_layouts()}
+            else:
+                payload = build_composite_layout(args.layout_id, canvas_height_mm=args.height_mm)
+            if args.json:
+                _print_json(payload)
+            else:
+                print(json.dumps(payload, indent=2, ensure_ascii=False))
             return 0
+        if args.command == "qa":
+            from sciplot_core.qa import run_qa
+
+            payload = run_qa(
+                args.output_dir.expanduser(),
+                goldens_dir=args.goldens.expanduser() if args.goldens else None,
+                require_all_goldens=args.strict_goldens,
+                publication_profile=args.publication_profile,
+                strict_publication=args.strict_publication,
+            )
+            _print_json(payload)
+            return 0 if payload.get("status") == "passed" else 1
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         if args.command in {"inspect", "render", "recipe"} and any(
