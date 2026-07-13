@@ -101,14 +101,27 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
         "icon": "tensile",
         "experiments": (
             {"id": "tensile_curve", "label": "拉伸曲线", "rule_id": "tensile_curve"},
-            {"id": "tensile_strength", "label": "拉伸强度", "rule_id": "tensile_curve", "chart": "box_with_points"},
+            {
+                "id": "tensile_strength",
+                "label": "拉伸强度",
+                "rule_id": "tensile_curve",
+                "chart": "box_strip",
+                "template": "box_strip",
+            },
             {
                 "id": "elongation_at_break",
                 "label": "断裂伸长率",
                 "rule_id": "tensile_curve",
-                "chart": "box_with_points",
+                "chart": "box_strip",
+                "template": "box_strip",
             },
-            {"id": "youngs_modulus", "label": "杨氏模量", "rule_id": "tensile_curve", "chart": "box_with_points"},
+            {
+                "id": "youngs_modulus",
+                "label": "杨氏模量",
+                "rule_id": "tensile_curve",
+                "chart": "box_strip",
+                "template": "box_strip",
+            },
             {"id": "compression_curve", "label": "压缩", "rule_id": "compression_curve"},
             {"id": "flexural_curve", "label": "弯曲", "rule_id": "flexural_curve"},
             {"id": "torque_curve", "label": "转矩曲线", "rule_id": "torque_curve", "chart": "curve"},
@@ -120,7 +133,14 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
                 "template": "stacked_curve",
                 "render_options": dict(TORQUE_OFFSET_STACK_RENDER_OPTIONS),
             },
-            {"id": "impact_metric", "label": "冲击", "rule_id": "impact_metric", "chart": "box_with_points"},
+            {
+                "id": "impact_metric",
+                "label": "冲击",
+                "rule_id": "impact_metric",
+                "chart": "box_strip",
+                "template": "box_strip",
+                "default_replicate_mode": "individual",
+            },
             {"id": "unknown_mechanical", "label": "未知力学", "rule_id": None},
         ),
     },
@@ -1335,7 +1355,9 @@ def create_intake_project(
     )
     selected_render_options.setdefault("series_order", series_order)
     selected_column_confirmations = _selected_column_confirmations(column_confirmations)
-    selected_replicate_mode = _selected_replicate_mode(replicate_mode)
+    selected_replicate_mode = _selected_replicate_mode(
+        replicate_mode if replicate_mode is not None else experiment.get("default_replicate_mode")
+    )
     plot_request = {
         "recipe": "auto",
         "input": str(source_dir),

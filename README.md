@@ -89,8 +89,8 @@ PROJECT/
 
 - CSV、TSV、TXT、XLS/XLSX 与常见仪器文件夹的本地检查和读取；
 - 材料实验语义识别、单位/轴别名、样品顺序和 recipe 自动选择；
-- 拉伸、流变/DMA、DSC/TGA/DTG、FTIR/UV-Vis、XRD/SAXS、GPC/SEC、
-  扭矩和溶胀等 fixture-backed 生产规则；
+- 拉伸、冲击强度、流变/DMA、DSC/TGA/DTG、FTIR/UV-Vis、XRD/SAXS、
+  GPC/SEC、扭矩和溶胀等 fixture-backed 生产规则；
 - 同指标多样品比较、谱图堆叠、replicate 处理和事件段选择；
 - Veusz `.vsz` 生成、完整 Veusz 高级编辑和 exact-current export；
 - 60/120/180 mm 单图尺寸以及 183 mm 组合图布局；
@@ -102,8 +102,11 @@ PROJECT/
 - `intervention_request.json`、`assisted_cleanup_request.json`、
   `cleanup_result.json` 和 `revision_brief.md` 组成的可审计辅助修复链；
 - 文件夹 batch、3D PA 真实数据 acceptance 和扭矩专项 curation。
-- 22 个 ready 规则的 Studio 生命周期 acceptance 矩阵，并把真实数据证据与
+- 23 个 ready 规则的 Studio 生命周期 acceptance 矩阵，并把真实数据证据与
   instrument-shaped fixture 明确分开。
+
+`impact_metric` 保留每一个原始观测值：`n=1` 只画真实散点，`n>=2` 才叠加
+Veusz 原生 median/IQR 箱线摘要；也可显式选择 `raw_only`，SciPlot 不生成伪重复样。
 
 未验收的 pending 规则不会自动进入绘图。新增规则默认是 pending，只有加入真实 fixture 与回归测试后
 才能成为 `ready`。

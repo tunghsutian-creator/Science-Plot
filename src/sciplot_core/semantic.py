@@ -64,6 +64,23 @@ class RheologySweepSample:
     rows: tuple[dict[str, float], ...]
 
 
+@dataclass(frozen=True)
+class ImpactReplicatePayload:
+    rows: tuple[tuple[object, ...], ...]
+    samples: tuple[str, ...]
+    replicate_counts: tuple[int, ...]
+    values: tuple[tuple[float, ...], ...]
+    unit: str = "kJ/m2"
+
+    @property
+    def total_replicates(self) -> int:
+        return sum(self.replicate_counts)
+
+
+class _ImpactDataValidationError(ValueError):
+    """Raised when an impact-shaped table contains scientifically invalid data."""
+
+
 _RHEOLOGY_SWEEP_METRICS = (
     ("storage_modulus", "Storage Modulus", ("storagemodulus", "storage modulus", "g'", "g′"), "Pa"),
     ("loss_modulus", "Loss Modulus", ("lossmodulus", 'g"', "g″"), "Pa"),
@@ -263,10 +280,10 @@ def classify_source(
     if "impact" in compact_evidence or "冲击" in evidence:
         return semantic_payload_from_rule(
             get_rule("impact_metric"),
-            confidence=0.0,
+            confidence=86.0,
             reason=(
-                "Detected impact metric data, but its categorical/replicate Veusz contract is pending "
-                "fixture-backed acceptance."
+                "Detected impact-strength data; preserve every observation and use the categorical replicate "
+                "Veusz contract without fabricating missing replicates."
             ),
             vendor_model=vendor_model,
             vendor_error=vendor_error,
@@ -1354,11 +1371,74 @@ def _read_tensile_workbook_series(source: Path) -> list[CurveSeriesPayload]:
     return series_list
 
 
-def _read_impact_block_table(source: Path) -> list[list[object]]:
+def _canonical_impact_unit(value: object) -> str | None:
+    text = _clean_text(value)
+    if not text:
+        return None
+    compact = (
+        text.casefold()
+        .replace("²", "2")
+        .replace("^", "")
+        .replace("−", "-")
+        .replace("⁻", "-")
+    )
+    compact = re.sub(r"[\s·*/()\[\]{}]", "", compact)
+    if "kj" in compact and ("m2" in compact or "m-2" in compact):
+        return "kJ/m2"
+    return None
+
+
+def _validated_impact_unit(values: list[object]) -> str:
+    explicit = [_clean_text(value) for value in values if _clean_text(value)]
+    unknown = [value for value in explicit if _canonical_impact_unit(value) is None]
+    if unknown:
+        raise _ImpactDataValidationError(
+            "Impact strength units must resolve to kJ/m2; unsupported values: "
+            + ", ".join(sorted(set(unknown)))
+        )
+    return "kJ/m2"
+
+
+def _impact_unit_candidate_from_header(header: str) -> str | None:
+    bracketed = re.search(r"\(([^)]+)\)|\[([^\]]+)\]", header)
+    if bracketed:
+        candidate = next((group for group in bracketed.groups() if group), "")
+        return candidate.strip() or None
+    compact = header.casefold()
+    if any(token in compact for token in ("kj", "mpa", "gpa", "j/", "m²", "m2", "m^2")):
+        return header
+    return None
+
+
+def _impact_payload(groups: dict[str, list[float]], *, unit: str) -> ImpactReplicatePayload:
+    populated = [(sample, values) for sample, values in groups.items() if values]
+    if not populated:
+        raise ValueError("Impact table did not contain numeric impact values.")
+    max_len = max(len(values) for _sample, values in populated)
+    rows: list[tuple[object, ...]] = [
+        tuple("Impact strength" for _sample, _values in populated),
+        tuple(unit for _sample, _values in populated),
+        tuple(sample for sample, _values in populated),
+    ]
+    for row_index in range(max_len):
+        rows.append(
+            tuple(values[row_index] if row_index < len(values) else "" for _sample, values in populated)
+        )
+    return ImpactReplicatePayload(
+        rows=tuple(rows),
+        samples=tuple(sample for sample, _values in populated),
+        replicate_counts=tuple(len(values) for _sample, values in populated),
+        values=tuple(tuple(values) for _sample, values in populated),
+        unit=unit,
+    )
+
+
+def _read_impact_block_table(source: Path) -> ImpactReplicatePayload:
     raw = read_raw_table(source).dropna(axis=1, how="all")
     if raw.shape[0] < 3:
         raise ValueError("Impact block table needs at least three rows.")
-    re_columns: list[tuple[str, int, str]] = []
+    re_columns: list[tuple[str, int]] = []
+    unit_candidates: list[object] = []
     for column in range(raw.shape[1]):
         header = _clean_text(raw.iat[1, column] if raw.shape[0] > 1 else "")
         header_token = _token(header)
@@ -1372,34 +1452,23 @@ def _read_impact_block_table(source: Path) -> list[list[object]]:
                 break
         if not sample:
             sample = f"Sample {len(re_columns) + 1}"
-        unit = "kJ/m2"
-        if "kj" in header_token:
-            unit = "kJ/m2"
-        re_columns.append((sample, column, unit))
-    if len(re_columns) < 2:
+        unit_candidate = _impact_unit_candidate_from_header(header)
+        if unit_candidate:
+            unit_candidates.append(unit_candidate)
+        re_columns.append((sample, column))
+    if not re_columns:
         raise ValueError("Could not find grouped impact strength columns.")
-    value_columns: list[list[float]] = []
-    for _sample, column, _unit in re_columns:
-        values: list[float] = []
+    groups: dict[str, list[float]] = {}
+    for sample, column in re_columns:
+        values = groups.setdefault(sample, [])
         for row_index in range(2, raw.shape[0]):
             value = _float(raw.iat[row_index, column])
             if value is not None:
                 values.append(value)
-        value_columns.append(values)
-    if not any(value_columns):
-        raise ValueError("Grouped impact strength columns did not contain numeric values.")
-    max_len = max(len(values) for values in value_columns)
-    rows: list[list[object]] = [
-        ["Impact strength" for _sample, _column, _unit in re_columns],
-        [unit for _sample, _column, unit in re_columns],
-        [sample for sample, _column, _unit in re_columns],
-    ]
-    for row_index in range(max_len):
-        rows.append([values[row_index] if row_index < len(values) else "" for values in value_columns])
-    return rows
+    return _impact_payload(groups, unit=_validated_impact_unit(unit_candidates))
 
 
-def _read_impact_compact_table(source: Path) -> list[list[object]]:
+def _read_impact_compact_table(source: Path) -> ImpactReplicatePayload:
     raw = read_raw_table(source).dropna(how="all").dropna(axis=1, how="all")
     if raw.shape[0] < 2:
         raise ValueError("Impact compact table needs a header and at least one data row.")
@@ -1409,29 +1478,52 @@ def _read_impact_compact_table(source: Path) -> list[list[object]]:
     if sample_col is None or metric_col is None:
         raise ValueError("Impact compact table needs sample and impact columns.")
     unit_col = metric_col + 1 if metric_col + 1 < raw.shape[1] else None
-    samples: list[str] = []
-    values: list[float] = []
-    units: list[str] = []
+    groups: dict[str, list[float]] = {}
+    units: list[object] = []
     for row_index in range(1, raw.shape[0]):
         sample = _clean_text(raw.iat[row_index, sample_col])
         value = _float(raw.iat[row_index, metric_col])
         if not sample or value is None:
             continue
-        samples.append(sample)
-        values.append(value)
+        groups.setdefault(sample, []).append(value)
         if unit_col is not None:
             unit = _clean_text(raw.iat[row_index, unit_col])
             if unit:
                 units.append(unit)
-    if not values:
-        raise ValueError("Impact compact table did not contain numeric impact values.")
-    unit = units[0] if units else "kJ/m2"
-    return [
-        ["Impact strength" for _sample in samples],
-        [unit for _sample in samples],
-        samples,
-        values,
-    ]
+    return _impact_payload(groups, unit=_validated_impact_unit(units))
+
+
+def _read_impact_source(source: Path) -> ImpactReplicatePayload:
+    if source.is_dir():
+        sources = [
+            path
+            for path in sorted(source.rglob("*"))
+            if path.is_file() and path.suffix.lower() in {".xlsx", ".xls", ".csv"}
+        ]
+    else:
+        sources = [source]
+    if not sources:
+        raise ValueError(f"No impact-strength tables found under {source}.")
+    groups: dict[str, list[float]] = {}
+    errors: list[str] = []
+    for path in sources:
+        try:
+            try:
+                payload = _read_impact_block_table(path)
+            except _ImpactDataValidationError:
+                raise
+            except ValueError:
+                payload = _read_impact_compact_table(path)
+        except _ImpactDataValidationError:
+            raise
+        except ValueError as exc:
+            errors.append(f"{path.name}: {exc}")
+            continue
+        for sample, values in zip(payload.samples, payload.values, strict=True):
+            groups.setdefault(sample, []).extend(values)
+    if not groups:
+        raise ValueError("Could not parse impact-strength tables: " + "; ".join(errors))
+    return _impact_payload(groups, unit="kJ/m2")
 
 
 def _write_curve_table(series_list: list[CurveSeriesPayload], output_path: Path) -> None:
@@ -2238,18 +2330,26 @@ def prepare_semantic_source(
             },
         )
 
-    if family == "impact_metric" and source.suffix.lower() in {".xlsx", ".xls", ".csv"}:
-        try:
-            rows = _read_impact_block_table(source)
-        except ValueError:
-            rows = _read_impact_compact_table(source)
+    if family == "impact_metric" and (
+        source.is_dir() or source.suffix.lower() in {".xlsx", ".xls", ".csv"}
+    ):
+        impact = _read_impact_source(source)
         processed_source = processed_dir / f"{source.stem}_impact_replicates.csv"
-        pd.DataFrame(rows).to_csv(processed_source, header=False, index=False)
+        pd.DataFrame(impact.rows).to_csv(processed_source, header=False, index=False)
         return _semantic_preparation_result(
             source,
             processed_source=processed_source,
             operation="extract_impact_replicates",
-            parameters={"replicate_count": len(rows)},
+            parameters={
+                "group_count": len(impact.samples),
+                "sample_order": list(impact.samples),
+                "replicate_counts": dict(zip(impact.samples, impact.replicate_counts, strict=True)),
+                "replicate_count_total": impact.total_replicates,
+                "raw_values_preserved": True,
+                "canonical_unit": impact.unit,
+                "summary_statistic_default": "median_iqr",
+                "minimum_box_replicates": 2,
+            },
         )
 
     return _semantic_preparation_result(

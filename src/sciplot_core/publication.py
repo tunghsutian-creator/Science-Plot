@@ -521,7 +521,9 @@ def _figure_height_mm(request: dict[str, Any]) -> float:
 def _statistics_contract_for_figure(figure: dict[str, Any]) -> dict[str, Any]:
     template = str(figure.get("default_template") or "").casefold()
     figure_id = str(figure.get("id") or "").casefold()
-    needs_method = template in {"bar", "box", "violin", "point_interval"} or "statistics" in figure_id
+    needs_method = template in {"bar", "box", "box_strip", "violin", "point_interval"} or (
+        "statistics" in figure_id
+    )
     return {
         "kind": "sciplot_statistics_method_contract",
         "version": 1,

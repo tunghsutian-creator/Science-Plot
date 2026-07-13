@@ -161,6 +161,19 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
             },
         ),
     },
+    "impact_metric": {
+        "default_replicate_mode": "individual",
+        "figure_queue": (
+            {
+                "id": "impact_strength_by_sample",
+                "title": "Impact strength by sample",
+                "metric": "impact_strength",
+                "x_metric": "sample",
+                "y_metric": "impact_strength",
+                "default_template": "box_strip",
+            },
+        ),
+    },
     "torque_offset_stack": {
         "default_replicate_mode": "individual",
         "figure_queue": (
@@ -316,7 +329,9 @@ def _source_file_payload(file_info: dict[str, Any]) -> dict[str, Any]:
 def _statistics_method_contract(figure: dict[str, Any]) -> dict[str, Any]:
     template = str(figure.get("default_template") or "").casefold()
     figure_id = str(figure.get("id") or "").casefold()
-    method_required = template in {"bar", "box", "violin", "point_interval"} or "statistics" in figure_id
+    method_required = template in {"bar", "box", "box_strip", "violin", "point_interval"} or (
+        "statistics" in figure_id
+    )
     return {
         "kind": "sciplot_statistics_method_contract",
         "version": 1,

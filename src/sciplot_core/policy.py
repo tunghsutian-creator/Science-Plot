@@ -63,6 +63,11 @@ DEFAULT_LEGEND_CURVE_CLEARANCE_MM = 2.0
 DEFAULT_LEGEND_EDGE_PADDING_MM = 1.0
 INSIDE_LEGEND_POSITIONS = ("upper_right", "lower_right", "upper_left", "lower_left")
 REMOVED_OUTSIDE_LEGEND_POSITIONS = frozenset({"outside", "outside_right", "right_outside"})
+DEFAULT_CATEGORICAL_SUMMARY = "median_iqr"
+CATEGORICAL_SUMMARY_OPTIONS = ("median_iqr", "raw_only")
+DEFAULT_RAW_POINT_JITTER_FRACTION = 0.12
+MAX_RAW_POINT_JITTER_FRACTION = 0.35
+MIN_BOX_REPLICATES = 2
 
 # Public request keys accepted by the compatibility intake surface.  Keep this
 # contract explicit and renderer-independent so importing intake never starts
@@ -94,6 +99,8 @@ RENDER_OPTION_KEYS = frozenset(
         "marker_sequence",
         "marker_size",
         "marker_fill_mode",
+        "summary_statistic",
+        "raw_point_jitter_fraction",
         "palette_colors",
         "font_size_pt",
         "legend_font_size_pt",
@@ -148,6 +155,27 @@ DEFAULT_RENDER_OPTIONS: dict[str, Any] = {
     "size": DEFAULT_FIGURE_SIZE,
     "palette_preset": DEFAULT_PALETTE_PRESET,
 }
+
+
+def normalize_categorical_summary(value: object) -> str:
+    normalized = str(value or DEFAULT_CATEGORICAL_SUMMARY).strip().casefold()
+    if normalized not in CATEGORICAL_SUMMARY_OPTIONS:
+        known = ", ".join(CATEGORICAL_SUMMARY_OPTIONS)
+        raise ValueError(f"Unknown categorical summary `{value}`. Available: {known}.")
+    return normalized
+
+
+def normalize_raw_point_jitter_fraction(value: object) -> float:
+    if value in (None, ""):
+        return DEFAULT_RAW_POINT_JITTER_FRACTION
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Raw-point jitter fraction must be a finite number between 0 and 0.35.") from exc
+    if not math.isfinite(normalized) or not 0.0 <= normalized <= MAX_RAW_POINT_JITTER_FRACTION:
+        raise ValueError("Raw-point jitter fraction must be a finite number between 0 and 0.35.")
+    return normalized
+
 
 RHEOLOGY_FREQUENCY_X_LABEL = "ω (rad s⁻¹)"
 RHEOLOGY_FREQUENCY_X_RENDER_LABEL = "\\omega (rad s^{-1})"

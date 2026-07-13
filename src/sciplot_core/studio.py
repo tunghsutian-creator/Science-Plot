@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,7 @@ from sciplot_core.delivery import build_delivery_package
 from sciplot_core.intake import create_intake_project_from_session, prepare_intake_session
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import (
+    DEFAULT_CATEGORICAL_SUMMARY,
     DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
     DEFAULT_LEGEND_EDGE_PADDING_MM,
     DEFAULT_LINE_STYLE_SEQUENCE,
@@ -31,11 +33,15 @@ from sciplot_core.policy import (
     DEFAULT_LOG_TICK_FORMAT,
     DEFAULT_PALETTE_COLORS,
     DEFAULT_PALETTE_PRESET,
+    DEFAULT_RAW_POINT_JITTER_FRACTION,
     FIXED_PUBLICATION_FRAME_POLICY,
+    MIN_BOX_REPLICATES,
     RHEOLOGY_FREQUENCY_X_RENDER_LABEL,
     anchored_log_decade_ticks,
     is_removed_outside_legend_position,
+    normalize_categorical_summary,
     normalize_legend_position,
+    normalize_raw_point_jitter_fraction,
     rheology_metric_axis_label,
 )
 from sciplot_core.publication import (
@@ -54,6 +60,7 @@ VEUSZ_COMMIT = "264084b06eb306d860c7757c637f37b78bb2333f"
 
 DEFAULT_PALETTE = DEFAULT_PALETTE_COLORS
 STACKED_TEMPLATE_IDS = {"stacked_curve", "segmented_stacked_curve"}
+CATEGORICAL_TEMPLATE_IDS = {"box", "box_strip"}
 POINT_LINE_MARKERS = ("circle", "square", "diamond", "triangle")
 MARKER_MAP = {
     "circle": "circle",
@@ -90,6 +97,8 @@ class StudioSeries:
     marker: str | bool | None = None
     marker_size: float | None = None
     line_style: str = "solid"
+    presentation_kind: str = "curve"
+    category_position: float | None = None
 
 
 @dataclass(frozen=True)
@@ -599,7 +608,8 @@ def _count_veusz_series(document_path: Path) -> int:
         text = document_path.read_text(encoding="utf-8")
     except OSError:
         return 0
-    return text.count("Add('xy',")
+    count = text.count("Add('xy',")
+    return max(count - text.count("Add('xy', name='category_axis_label_provider'"), 0)
 
 
 def export_studio_document(document_path: Path, *, formats: list[str]) -> dict[str, Any]:
@@ -1298,7 +1308,7 @@ def _series_from_request(
     request: dict[str, Any],
     *,
     base_dir: Path,
-) -> tuple[list[StudioSeries], dict[str, str], list[dict[str, Any]], Path]:
+) -> tuple[list[StudioSeries], dict[str, Any], list[dict[str, Any]], Path]:
     input_value = request.get("input")
     if not isinstance(input_value, str) or not input_value.strip():
         raise ValueError("plot_request.json needs an input path for Studio document generation.")
@@ -1311,38 +1321,44 @@ def _series_from_request(
     frames = _read_source_frames(source, request=request)
     metric_pair = _preferred_metric_pair(request)
     raw_series: list[StudioSeries] = []
-    axis_info = {"x_label": "x", "y_label": "y"}
-    for frame_index, (source_label, frame) in enumerate(frames):
-        numeric = _coerced_numeric_frame(frame)
-        if numeric.shape[1] < 2:
-            continue
-        pairs = _xy_pairs_for_request(numeric, request=request)
-        first_x, first_y = pairs[0]
-        if axis_info["x_label"] == "x":
-            axis_info["x_label"] = _axis_label_from_column(frame, first_x)
-        if axis_info["y_label"] == "y":
-            axis_info["y_label"] = _axis_label_from_column(frame, first_y)
-        for column_index, (x_column, y_column) in enumerate(pairs, start=1):
-            pair_frame = numeric[[x_column, y_column]].dropna()
-            if pair_frame.empty:
+    axis_info: dict[str, Any] = {"x_label": "x", "y_label": "y"}
+    if _request_template(request) in CATEGORICAL_TEMPLATE_IDS:
+        raw_series, axis_info = _categorical_series_from_frames(
+            frames,
+            render_options=render_options,
+        )
+    else:
+        for frame_index, (source_label, frame) in enumerate(frames):
+            numeric = _coerced_numeric_frame(frame)
+            if numeric.shape[1] < 2:
                 continue
-            x_values = tuple(float(value) for value in pair_frame[x_column].tolist())
-            y_values = tuple(float(value) for value in pair_frame[y_column].tolist())
-            fallback = source_label if len(pairs) == 1 else str(y_column)
-            if metric_pair is not None and len(pairs) == 1:
-                label = source_label
-            else:
-                label = _series_label_from_column(frame[y_column], fallback=fallback)
-            raw_series.append(
-                StudioSeries(
-                    label=label,
-                    x_name=f"x_{frame_index + 1}_{column_index}",
-                    y_name=f"y_{frame_index + 1}_{column_index}",
-                    x_values=x_values,
-                    y_values=y_values,
-                    color=DEFAULT_PALETTE[(len(raw_series)) % len(DEFAULT_PALETTE)],
+            pairs = _xy_pairs_for_request(numeric, request=request)
+            first_x, first_y = pairs[0]
+            if axis_info["x_label"] == "x":
+                axis_info["x_label"] = _axis_label_from_column(frame, first_x)
+            if axis_info["y_label"] == "y":
+                axis_info["y_label"] = _axis_label_from_column(frame, first_y)
+            for column_index, (x_column, y_column) in enumerate(pairs, start=1):
+                pair_frame = numeric[[x_column, y_column]].dropna()
+                if pair_frame.empty:
+                    continue
+                x_values = tuple(float(value) for value in pair_frame[x_column].tolist())
+                y_values = tuple(float(value) for value in pair_frame[y_column].tolist())
+                fallback = source_label if len(pairs) == 1 else str(y_column)
+                if metric_pair is not None and len(pairs) == 1:
+                    label = source_label
+                else:
+                    label = _series_label_from_column(frame[y_column], fallback=fallback)
+                raw_series.append(
+                    StudioSeries(
+                        label=label,
+                        x_name=f"x_{frame_index + 1}_{column_index}",
+                        y_name=f"y_{frame_index + 1}_{column_index}",
+                        x_values=x_values,
+                        y_values=y_values,
+                        color=DEFAULT_PALETTE[(len(raw_series)) % len(DEFAULT_PALETTE)],
+                    )
                 )
-            )
 
     if not raw_series:
         raise StudioPreparationBlocked(
@@ -1352,10 +1368,130 @@ def _series_from_request(
 
     render_options = _apply_domain_render_defaults(render_options, request=request, axis_info=axis_info)
     styled = _apply_series_options(raw_series, render_options=render_options, request=request)
+    if axis_info.get("presentation_kind") == "categorical_replicates":
+        styled = _reindex_categorical_series(styled, render_options=render_options)
+        axis_info["category_labels"] = [item.label for item in styled]
+        axis_info["category_positions"] = [float(index) for index in range(1, len(styled) + 1)]
+        axis_info["raw_replicate_count"] = sum(len(item.y_values) for item in styled)
     styled = _apply_template_series_transforms(styled, request=request, render_options=render_options)
     axis_info["x_label"] = str(render_options.get("x_label_override") or axis_info["x_label"])
     axis_info["y_label"] = str(render_options.get("y_label_override") or axis_info["y_label"])
     return styled, axis_info, transform_steps, source_root
+
+
+def _clean_studio_cell(value: object) -> str:
+    if value is None or pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
+def _categorical_metric_label(value: object) -> str:
+    label = _clean_studio_cell(value)
+    return re.sub(r"\.\d+$", "", label).strip()
+
+
+def _categorical_axis_label(metric: str, unit: str) -> str:
+    if not metric:
+        metric = "Value"
+    normalized_unit = unit.strip()
+    if normalized_unit.casefold() in {"", "1", "a.u.", "au"}:
+        return metric
+    return f"{metric} ({normalized_unit})"
+
+
+def _deterministic_category_positions(center: float, count: int, *, fraction: float) -> tuple[float, ...]:
+    if count <= 1:
+        return (center,)
+    bounded = min(max(float(fraction), 0.0), 0.35)
+    step = (2.0 * bounded) / float(count - 1)
+    return tuple(center - bounded + index * step for index in range(count))
+
+
+def _categorical_series_from_frames(
+    frames: list[tuple[str, pd.DataFrame]],
+    *,
+    render_options: dict[str, Any],
+) -> tuple[list[StudioSeries], dict[str, Any]]:
+    grouped: dict[str, list[float]] = {}
+    metric_labels: list[str] = []
+    units: list[str] = []
+    for source_label, frame in frames:
+        if frame.shape[0] < 3:
+            continue
+        for column in frame.columns:
+            values = pd.to_numeric(frame[column].iloc[2:], errors="coerce").dropna()
+            if values.empty:
+                continue
+            sample = _clean_studio_cell(frame[column].iloc[1]) or source_label or str(column)
+            grouped.setdefault(sample, []).extend(float(value) for value in values.tolist())
+            metric = _categorical_metric_label(column)
+            if metric:
+                metric_labels.append(metric)
+            unit = _clean_studio_cell(frame[column].iloc[0])
+            if unit:
+                units.append(unit)
+    if not grouped:
+        return [], {"x_label": "Sample", "y_label": "Value"}
+    distinct_metrics = list(dict.fromkeys(metric_labels))
+    distinct_units = list(dict.fromkeys(units))
+    normalized_metrics = {metric.casefold() for metric in distinct_metrics}
+    normalized_units = {re.sub(r"\s+", " ", unit).strip().casefold() for unit in distinct_units}
+    if len(normalized_metrics) > 1:
+        raise StudioPreparationBlocked(
+            "mixed_categorical_metrics",
+            "Categorical replicate rendering requires one metric; found: "
+            + ", ".join(distinct_metrics),
+        )
+    if len(normalized_units) > 1:
+        raise StudioPreparationBlocked(
+            "mixed_categorical_units",
+            "Categorical replicate rendering requires one unit; found: " + ", ".join(distinct_units),
+        )
+    metric = distinct_metrics[0] if distinct_metrics else "Value"
+    unit = distinct_units[0] if distinct_units else ""
+    jitter = normalize_raw_point_jitter_fraction(
+        render_options.get("raw_point_jitter_fraction", DEFAULT_RAW_POINT_JITTER_FRACTION)
+    )
+    series: list[StudioSeries] = []
+    for index, (sample, values) in enumerate(grouped.items(), start=1):
+        series.append(
+            StudioSeries(
+                label=sample,
+                x_name=f"category_x_{index}",
+                y_name=f"category_y_{index}",
+                x_values=_deterministic_category_positions(float(index), len(values), fraction=jitter),
+                y_values=tuple(values),
+                color=DEFAULT_PALETTE[(index - 1) % len(DEFAULT_PALETTE)],
+                presentation_kind="categorical_replicates",
+                category_position=float(index),
+            )
+        )
+    return series, {
+        "x_label": "Sample",
+        "y_label": _categorical_axis_label(metric, unit),
+        "presentation_kind": "categorical_replicates",
+        "category_labels": list(grouped),
+        "category_positions": [float(index) for index in range(1, len(grouped) + 1)],
+        "raw_replicate_count": sum(len(values) for values in grouped.values()),
+    }
+
+
+def _reindex_categorical_series(
+    series: list[StudioSeries],
+    *,
+    render_options: dict[str, Any],
+) -> list[StudioSeries]:
+    jitter = normalize_raw_point_jitter_fraction(
+        render_options.get("raw_point_jitter_fraction", DEFAULT_RAW_POINT_JITTER_FRACTION)
+    )
+    return [
+        replace(
+            item,
+            x_values=_deterministic_category_positions(float(index), len(item.y_values), fraction=jitter),
+            category_position=float(index),
+        )
+        for index, item in enumerate(series, start=1)
+    ]
 
 
 def _studio_source_for_request(
@@ -1680,9 +1816,9 @@ def _apply_series_options(
         style = style_by_label.get(item.label, {})
         if style.get("visible") is False or style.get("enabled") is False:
             continue
-        default_marker = (
-            marker_sequence[index % len(marker_sequence)] if template_id == "point_line" else "none"
-        )
+        default_marker = marker_sequence[index % len(marker_sequence)] if (
+            template_id == "point_line" or item.presentation_kind == "categorical_replicates"
+        ) else "none"
         default_line_style = (
             line_style_sequence[index % len(line_style_sequence)]
             if template_id != "point_line" and len(ordered) > 1
@@ -1700,6 +1836,8 @@ def _apply_series_options(
                 marker=style.get("marker", item.marker or default_marker),
                 marker_size=_optional_float(style.get("marker_size")) or default_marker_size,
                 line_style=str(style.get("line_style") or style.get("linestyle") or default_line_style),
+                presentation_kind=item.presentation_kind,
+                category_position=item.category_position,
             )
         )
     return styled or series
@@ -1804,11 +1942,25 @@ def _apply_domain_render_defaults(
     render_options: dict[str, Any],
     *,
     request: dict[str, Any],
-    axis_info: dict[str, str],
+    axis_info: dict[str, Any],
 ) -> dict[str, Any]:
     updated = dict(render_options)
     explicit_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
     template_id = _request_template(request)
+    category_positions = axis_info.get("category_positions")
+    if template_id in CATEGORICAL_TEMPLATE_IDS and isinstance(category_positions, list) and category_positions:
+        updated["summary_statistic"] = normalize_categorical_summary(
+            updated.get("summary_statistic") or DEFAULT_CATEGORICAL_SUMMARY
+        )
+        updated["raw_point_jitter_fraction"] = normalize_raw_point_jitter_fraction(
+            updated.get("raw_point_jitter_fraction", DEFAULT_RAW_POINT_JITTER_FRACTION)
+        )
+        updated.setdefault("x_min", float(min(category_positions)) - 0.5)
+        updated.setdefault("x_max", float(max(category_positions)) + 0.5)
+        updated.setdefault("x_ticks", list(category_positions))
+        updated.setdefault("x_label_override", "Sample")
+        updated.setdefault("legend_position", "none")
+        updated.setdefault("series_label_mode", "none")
     if template_id in STACKED_TEMPLATE_IDS and _looks_like_wavenumber_axis(axis_info):
         label_mode = str(updated.get("series_label_mode") or "").strip().casefold()
         legend_position = str(updated.get("legend_position") or "").strip().casefold()
@@ -2241,7 +2393,7 @@ def _apply_readability_render_defaults(
     render_options: dict[str, Any],
     *,
     request: dict[str, Any],
-    axis_info: dict[str, str],
+    axis_info: dict[str, Any],
     series: list[StudioSeries],
     template_id: str,
 ) -> dict[str, Any]:
@@ -2262,6 +2414,10 @@ def _apply_readability_render_defaults(
             updated.setdefault("series_label_offset_fraction", 0.018)
             updated.setdefault("series_label_vertical_align", "bottom")
             autofixes.append("direct_label_offset")
+        if autofixes:
+            updated["_autofixes_applied"] = sorted(set(autofixes))
+        return updated
+    if template_id in CATEGORICAL_TEMPLATE_IDS:
         if autofixes:
             updated["_autofixes_applied"] = sorted(set(autofixes))
         return updated
@@ -2405,22 +2561,22 @@ def _request_template(request: dict[str, Any]) -> str:
     return "curve"
 
 
-def _looks_like_wavenumber_axis(axis_info: dict[str, str]) -> bool:
+def _looks_like_wavenumber_axis(axis_info: dict[str, Any]) -> bool:
     text = " ".join(str(value) for value in axis_info.values()).casefold()
     return "wavenumber" in text or ("cm" in text and ("-1" in text or "−1" in text or "^{-1}" in text))
 
 
-def _looks_like_torque_axis(axis_info: dict[str, str]) -> bool:
+def _looks_like_torque_axis(axis_info: dict[str, Any]) -> bool:
     text = " ".join(str(value) for value in axis_info.values()).casefold()
     return "torque" in text or "转矩" in text or "screw" in text
 
 
-def _looks_like_frequency_axis(axis_info: dict[str, str]) -> bool:
+def _looks_like_frequency_axis(axis_info: dict[str, Any]) -> bool:
     text = " ".join(str(value) for value in axis_info.values()).casefold()
     return "frequency" in text or "angular" in text or "rad/s" in text or "hz" in text
 
 
-def _looks_like_tensile_axis(axis_info: dict[str, str]) -> bool:
+def _looks_like_tensile_axis(axis_info: dict[str, Any]) -> bool:
     text = " ".join(str(value) for value in axis_info.values()).casefold()
     return ("strain" in text and "stress" in text) or "tensile" in text or "拉伸" in text
 
@@ -2481,7 +2637,7 @@ def _write_veusz_document(
     *,
     request: dict[str, Any],
     series: list[StudioSeries],
-    axis_info: dict[str, str],
+    axis_info: dict[str, Any],
 ) -> Path:
     render_options = _effective_render_options(request)
     render_options = _apply_domain_render_defaults(render_options, request=request, axis_info=axis_info)
@@ -2527,13 +2683,79 @@ def _write_veusz_document(
     return spec_path
 
 
+def _categorical_plot_contract(
+    series: list[StudioSeries],
+    *,
+    template_id: str,
+    render_options: dict[str, Any],
+) -> dict[str, Any] | None:
+    categorical = [item for item in series if item.presentation_kind == "categorical_replicates"]
+    if not categorical:
+        return None
+    summary_statistic = normalize_categorical_summary(
+        render_options.get("summary_statistic") or DEFAULT_CATEGORICAL_SUMMARY
+    )
+    groups: list[dict[str, Any]] = []
+    for index, item in enumerate(categorical, start=1):
+        values = [float(value) for value in item.y_values if math.isfinite(float(value))]
+        position = float(item.category_position if item.category_position is not None else index)
+        eligible = summary_statistic == "median_iqr" and len(values) >= MIN_BOX_REPLICATES
+        groups.append(
+            {
+                "label": item.label,
+                "position": position,
+                "y_name": item.y_name,
+                "raw_values": values,
+                "replicate_count": len(values),
+                "boxplot_eligible": eligible,
+                "summary_status": (
+                    "boxplot"
+                    if eligible
+                    else "raw_only"
+                    if summary_statistic == "raw_only"
+                    else "insufficient_replicates"
+                ),
+                "descriptive_statistics": {
+                    "minimum": min(values),
+                    "q1": _quantile(values, 0.25),
+                    "median": _quantile(values, 0.5),
+                    "q3": _quantile(values, 0.75),
+                    "maximum": max(values),
+                },
+                "raw_points_visible": (
+                    template_id == "box_strip"
+                    or summary_statistic == "raw_only"
+                    or len(values) < MIN_BOX_REPLICATES
+                ),
+            }
+        )
+    return {
+        "kind": "sciplot_categorical_replicate_contract",
+        "version": 1,
+        "presentation_kind": "box_strip" if template_id == "box_strip" else "box",
+        "summary_statistic": summary_statistic,
+        "minimum_box_replicates": MIN_BOX_REPLICATES,
+        "box_whisker_mode": "1.5IQR",
+        "mean_marker_visible": False,
+        "native_veusz_boxplot": summary_statistic == "median_iqr" and any(
+            group["boxplot_eligible"] for group in groups
+        ),
+        "raw_values_preserved": True,
+        "raw_replicate_count": sum(group["replicate_count"] for group in groups),
+        "groups": groups,
+        "insufficient_replicate_groups": [
+            group["label"] for group in groups if group["summary_status"] == "insufficient_replicates"
+        ],
+    }
+
+
 def _build_veusz_plot_spec(
     *,
     request: dict[str, Any],
     render_options: dict[str, Any],
     template_id: str,
     series: list[StudioSeries],
-    axis_info: dict[str, str],
+    axis_info: dict[str, Any],
     axis_contract: _VeuszAxisContract,
     style: _VeuszStyleContract,
     width_mm: float,
@@ -2542,6 +2764,11 @@ def _build_veusz_plot_spec(
     show_key: bool,
     show_direct_labels: bool,
 ) -> dict[str, Any]:
+    categorical_contract = _categorical_plot_contract(
+        series,
+        template_id=template_id,
+        render_options=render_options,
+    )
     label_specs: list[dict[str, Any]] = []
     if show_direct_labels:
         side = str(render_options.get("series_label_side") or "auto").strip().casefold()
@@ -2696,6 +2923,9 @@ def _build_veusz_plot_spec(
                 "max": axis_contract.x_max,
                 "ticks": list(axis_contract.x_ticks),
                 "reverse": render_options.get("reverse_x") is True,
+                "mode": "labels" if categorical_contract is not None else "numeric",
+                "category_labels": list(axis_info.get("category_labels") or []),
+                "category_positions": list(axis_info.get("category_positions") or []),
             },
             "y": {
                 "label": axis_info["y_label"],
@@ -2721,6 +2951,7 @@ def _build_veusz_plot_spec(
             },
         },
         "legend": legend_spec,
+        "categorical": categorical_contract,
         "series": [
             {
                 "name": f"series_{index}",
@@ -2738,6 +2969,19 @@ def _build_veusz_plot_spec(
                     "white"
                     if str(render_options.get("marker_fill_mode") or "filled").casefold() == "open"
                     else item.color
+                ),
+                "presentation_kind": item.presentation_kind,
+                "category_position": item.category_position,
+                "plot_line_hide": item.presentation_kind == "categorical_replicates",
+                "raw_points_visible": (
+                    next(
+                        (
+                            bool(group["raw_points_visible"])
+                            for group in (categorical_contract or {}).get("groups", [])
+                            if group.get("label") == item.label
+                        ),
+                        True,
+                    )
                 ),
             }
             for index, item in enumerate(series, start=1)
@@ -2777,11 +3021,25 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     style = spec["style"]
     axes = spec["axes"]
     size_mm = spec["size_mm"]
+    categorical = spec.get("categorical") if isinstance(spec.get("categorical"), dict) else None
     for item in spec["series"]:
         x_data = "\n".join(f"{float(value):.12g}" for value in item["x_values"])
         y_data = "\n".join(f"{float(value):.12g}" for value in item["y_values"])
         interface.ImportString(f"{item['x_name']}(numeric)", x_data)
         interface.ImportString(f"{item['y_name']}(numeric)", y_data)
+    if categorical is not None:
+        groups = [group for group in categorical.get("groups", []) if isinstance(group, dict)]
+        interface.SetDataText("category_axis_labels", [str(group["label"]) for group in groups])
+        interface.ImportString(
+            "category_axis_x(numeric)",
+            "\n".join(f"{float(group['position']):.12g}" for group in groups),
+        )
+        interface.ImportString(
+            "category_axis_y(numeric)",
+            "\n".join(
+                f"{float(group['descriptive_statistics']['median']):.12g}" for group in groups
+            ),
+        )
     interface.Set("StyleSheet/Font/font", style["font_family"])
     interface.Set("StyleSheet/Font/size", _pt(float(style["font_size_pt"])))
     interface.Set("StyleSheet/Line/width", _pt(float(style["line_width_pt"])))
@@ -2821,6 +3079,29 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("Background/hide", not bool(style["legend_frameon"]))
         interface.Set("Border/hide", not bool(style["legend_frameon"]))
         interface.To("..")
+    if categorical is not None and categorical.get("native_veusz_boxplot") is True:
+        box_groups = [
+            group
+            for group in categorical.get("groups", [])
+            if isinstance(group, dict) and group.get("boxplot_eligible") is True
+        ]
+        interface.Add("boxplot", name="categorical_boxplot", autoadd=False)
+        interface.To("categorical_boxplot")
+        interface.Set("values", tuple(str(group["y_name"]) for group in box_groups))
+        interface.Set("posn", [float(group["position"]) for group in box_groups])
+        interface.Set("whiskermode", str(categorical.get("box_whisker_mode") or "1.5IQR"))
+        interface.Set("fillfraction", 0.52)
+        interface.Set("meanmarker", "none")
+        interface.Set("outliersmarker", "none")
+        interface.Set("Fill/color", "#D9E2E8")
+        interface.Set("Fill/transparency", 20)
+        interface.Set("Border/color", "black")
+        interface.Set("Border/width", _pt(float(style["line_width_pt"])))
+        interface.Set("Whisker/color", "black")
+        interface.Set("Whisker/width", _pt(float(style["line_width_pt"])))
+        interface.Set("MarkersLine/hide", True)
+        interface.Set("MarkersFill/hide", True)
+        interface.To("..")
     for item in spec["series"]:
         interface.Add("xy", name=item["name"], autoadd=False)
         interface.To(item["name"])
@@ -2833,6 +3114,11 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("MarkerLine/color", item["color"])
         interface.Set("MarkerLine/width", _pt(float(style["marker_line_width_pt"])))
         interface.Set("marker", item["marker"])
+        if item.get("plot_line_hide") is True:
+            interface.Set("PlotLine/hide", True)
+        if item.get("raw_points_visible") is False:
+            interface.Set("MarkerFill/hide", True)
+            interface.Set("MarkerLine/hide", True)
         interface.Set("PlotLine/transparency", _alpha_to_transparency(float(style["line_alpha"])))
         interface.Set("MarkerFill/transparency", _alpha_to_transparency(float(style["marker_alpha"])))
         interface.Set("MarkerLine/transparency", _alpha_to_transparency(float(style["marker_alpha"])))
@@ -2843,6 +3129,19 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
             interface.Set("markerSize", _pt(float(item["marker_size_pt"])))
         elif marker != "none":
             interface.Set("markerSize", _pt(float(style["marker_size_pt"])))
+        interface.To("..")
+    if categorical is not None:
+        interface.Add("xy", name="category_axis_label_provider", autoadd=False)
+        interface.To("category_axis_label_provider")
+        interface.Set("xData", "category_axis_x")
+        interface.Set("yData", "category_axis_y")
+        interface.Set("labels", "category_axis_labels")
+        interface.Set("marker", "none")
+        interface.Set("PlotLine/hide", True)
+        interface.Set("MarkerFill/hide", True)
+        interface.Set("MarkerLine/hide", True)
+        interface.Set("ErrorBarLine/hide", True)
+        interface.Set("Label/hide", True)
         interface.To("..")
     for item in spec["direct_labels"]:
         interface.Add("label", name=item["name"], autoadd=False)
@@ -2905,6 +3204,8 @@ def _add_veusz_axis(interface: Any, axis: str, axis_spec: dict[str, Any], style:
     interface.Set("label", axis_spec["label"])
     if axis == "y":
         interface.Set("direction", "vertical")
+    if axis_spec.get("mode") == "labels":
+        interface.Set("mode", "labels")
     interface.Set("autoMirror", False)
     interface.Set("outerticks", True)
     interface.Set("Line/color", "black")
@@ -3239,6 +3540,8 @@ def _series_label_anchor(item: StudioSeries, *, reverse_x: bool, side: str) -> t
 
 def _show_veusz_key(*, template_id: str, render_options: dict[str, Any], series_count: int) -> bool:
     if series_count <= 1:
+        return False
+    if template_id in CATEGORICAL_TEMPLATE_IDS:
         return False
     label_mode = str(render_options.get("series_label_mode") or "legend").strip().casefold()
     legend_position = str(render_options.get("legend_position") or "auto").strip().casefold()

@@ -4,7 +4,12 @@ from collections.abc import Mapping
 from typing import Any
 
 from sciplot_core._bootstrap import ensure_legacy_core
-from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY, RENDER_OPTION_KEYS
+from sciplot_core.policy import (
+    DEFAULT_EXPORT_FORMATS_POLICY,
+    RENDER_OPTION_KEYS,
+    normalize_categorical_summary,
+    normalize_raw_point_jitter_fraction,
+)
 from sciplot_core.split import normalize_split_policy
 from sciplot_core.study_model import sync_study_model_samples
 
@@ -98,6 +103,13 @@ def normalize_render_options(
     if size is not None and str(size) not in size_names:
         allowed = ", ".join(size_names)
         raise ValueError(f"Unsupported figure size `{size}`. Allowed sizes: {allowed}.")
+
+    if "summary_statistic" in selected:
+        selected["summary_statistic"] = normalize_categorical_summary(selected["summary_statistic"])
+    if "raw_point_jitter_fraction" in selected:
+        selected["raw_point_jitter_fraction"] = normalize_raw_point_jitter_fraction(
+            selected["raw_point_jitter_fraction"]
+        )
 
     _validate_template_render_option_keys(set(selected), template=template)
     return selected

@@ -481,14 +481,36 @@ RULES: tuple[SemanticRule, ...] = (
         "impact_metric",
         "impact_metric",
         "metrics_swelling",
-        "box",
+        "box_strip",
         AxisSpec("Sample", "", "Sample", aliases=("sample",)),
         AxisSpec("Impact strength", "kJ/m2", "Impact strength (kJ/m$^2$)", aliases=("impact strength", "冲击")),
         keywords=("impact", "冲击"),
-        analysis=(AnalysisSpec("max_impact_strength", "maximum replicate/metric value", ("impact",), "kJ/m2"),),
+        render_options={
+            **_DEFAULT_RENDER_OPTIONS,
+            "legend_position": "none",
+            "series_label_mode": "none",
+            "x_label_override": "Sample",
+            "y_label_override": "Impact strength (kJ/m^2)",
+            "summary_statistic": "median_iqr",
+            "raw_point_jitter_fraction": 0.12,
+        },
+        analysis=(
+            AnalysisSpec("impact_group_n", "per-sample raw replicate count", ("impact",), "count"),
+            AnalysisSpec("impact_group_median", "per-sample median of raw values", ("impact",), "kJ/m2"),
+            AnalysisSpec(
+                "impact_group_iqr",
+                "per-sample interquartile range when at least two raw values are available",
+                ("impact",),
+                "kJ/m2",
+            ),
+        ),
         fixture_path="tests/fixtures/polymer_corpus/impact_metrics/foam_impact_metrics.csv",
-        fixture_status="pending",
+        fixture_status="ready",
         priority=5,
+        reason=(
+            "Impact-strength groups preserve every raw observation; groups with at least two replicates use "
+            "a native Veusz median/IQR box summary, while smaller groups remain raw-point only."
+        ),
     ),
     _rule(
         "dsc_curve",
@@ -1056,6 +1078,57 @@ def _swelling_metrics(source_path: Path) -> list[dict[str, Any]]:
     return [_metric("equilibrium_swelling_ratio", float(values.iloc[-1]), "1")]
 
 
+def _impact_metrics(processed_source: Path) -> list[dict[str, Any]]:
+    raw = pd.read_csv(processed_source, header=None)
+    if raw.shape[0] < 4:
+        return [
+            _metric(
+                "impact_group_n",
+                None,
+                "count",
+                "skipped",
+                "The prepared impact table did not contain categorical raw values.",
+            )
+        ]
+    rows: list[dict[str, Any]] = []
+    for column in range(raw.shape[1]):
+        sample = str(raw.iat[2, column]).strip()
+        if not sample or sample.casefold() == "nan":
+            sample = f"Sample {column + 1}"
+        unit = str(raw.iat[1, column]).strip()
+        if not unit or unit.casefold() == "nan":
+            unit = "kJ/m2"
+        values = pd.to_numeric(raw.iloc[3:, column], errors="coerce").dropna().to_numpy(dtype=float)
+        if values.size == 0:
+            continue
+        rows.append(_metric(f"impact_group_n[{sample}]", int(values.size), "count"))
+        rows.append(_metric(f"impact_group_median[{sample}]", float(np.quantile(values, 0.5)), unit))
+        if values.size >= 2:
+            iqr = float(np.quantile(values, 0.75) - np.quantile(values, 0.25))
+            rows.append(_metric(f"impact_group_iqr[{sample}]", iqr, unit))
+        else:
+            rows.append(
+                _metric(
+                    f"impact_group_iqr[{sample}]",
+                    None,
+                    unit,
+                    "skipped",
+                    "At least two raw replicates are required for an IQR summary; the raw point is retained.",
+                )
+            )
+    if rows:
+        return rows
+    return [
+        _metric(
+            "impact_group_n",
+            None,
+            "count",
+            "skipped",
+            "The prepared impact table did not contain finite raw values.",
+        )
+    ]
+
+
 def _analysis_metric_name(semantic: dict[str, Any], fallback: str) -> str:
     analysis_plan = semantic.get("analysis_plan") or []
     if analysis_plan and isinstance(analysis_plan[0], dict):
@@ -1101,6 +1174,8 @@ def compute_analysis_metrics(
         )
     elif rule_id == "swelling_curve":
         rows = _swelling_metrics(source_path)
+    elif rule_id == "impact_metric" and processed is not None:
+        rows = _impact_metrics(processed)
     elif rule_id in {"ftir_spectrum", "uvvis_spectrum"}:
         rows = _generic_peak_metrics(
             source_path,

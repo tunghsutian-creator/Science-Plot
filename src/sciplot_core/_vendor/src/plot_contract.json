@@ -1239,6 +1239,8 @@
         "y_tick_edge_labels",
         "series_order",
         "series_include",
+        "summary_statistic",
+        "raw_point_jitter_fraction",
         "style_preset",
         "palette_preset"
       ],
@@ -1246,7 +1248,9 @@
         "size": "60x55",
         "style_preset": "nature",
         "palette_preset": "jama_editorial",
-        "visual_theme_id": "clean_light"
+        "visual_theme_id": "clean_light",
+        "summary_statistic": "median_iqr",
+        "raw_point_jitter_fraction": 0.12
       },
       "available_styles": [
         "nature",

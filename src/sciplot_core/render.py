@@ -166,6 +166,17 @@ def _veusz_layout_report(
             }
         ],
     }
+    categorical = spec.get("categorical") if isinstance(spec.get("categorical"), dict) else None
+    if categorical is not None:
+        summary["categorical_replicates"] = {
+            "presentation_kind": categorical.get("presentation_kind"),
+            "summary_statistic": categorical.get("summary_statistic"),
+            "native_veusz_boxplot": categorical.get("native_veusz_boxplot"),
+            "raw_values_preserved": categorical.get("raw_values_preserved"),
+            "raw_replicate_count": categorical.get("raw_replicate_count"),
+            "group_count": len(categorical.get("groups") or []),
+            "insufficient_replicate_groups": categorical.get("insufficient_replicate_groups") or [],
+        }
     if split_panel is not None:
         summary["split_panel"] = split_panel
     issues: list[dict[str, Any]] = [
