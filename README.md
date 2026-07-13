@@ -100,6 +100,8 @@ PROJECT/
 - `intervention_request.json`、`assisted_cleanup_request.json`、
   `cleanup_result.json` 和 `revision_brief.md` 组成的可审计辅助修复链；
 - 文件夹 batch、3D PA 真实数据 acceptance 和扭矩专项 curation。
+- 22 个 ready 规则的 Studio 生命周期 acceptance 矩阵，并把真实数据证据与
+  instrument-shaped fixture 明确分开。
 
 未验收的 pending 规则不会自动进入绘图。新增规则默认是 pending，只有加入真实 fixture 与回归测试后
 才能成为 `ready`。
@@ -144,6 +146,9 @@ skill/scripts/sciplot run plot_request.json
 skill/scripts/sciplot autoplot PATH --out outputs/autoplot_projects --json
 skill/scripts/sciplot batch INPUT_DIR --out outputs/batch --mode smoke
 skill/scripts/sciplot batch INPUT_DIR --out outputs/batch --mode all --tensile-root PATH
+skill/scripts/sciplot acceptance rules --out outputs/acceptance --json
+skill/scripts/sciplot acceptance rules --rule dsc_curve --rule tga_curve \
+  --out outputs/acceptance --json
 skill/scripts/sciplot acceptance 3dpa PATH --out outputs/acceptance --json
 
 # 扭矩事件段整理
@@ -155,6 +160,9 @@ skill/scripts/sciplot qa OUTPUT_DIR --strict-publication
 ```
 
 `autoplot`、`run`、`batch` 和 recipe/render 是专家与兼容接口；日常新任务优先走 `studio`。
+`acceptance rules` 写出 JSON、CSV 和 Markdown 矩阵，并逐规则验证语义匹配、VSZ
+重开导出、编辑保留、PDF/TIFF 配对、QA、delivery 与溯源。矩阵中的
+`instrument_shaped_fixture` 不会被描述成真实数据验收。
 
 ## 安装与开发
 

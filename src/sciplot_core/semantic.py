@@ -563,6 +563,42 @@ def _read_rheology_interval_series(
     )
 
 
+def _read_rheology_interval_series_list(
+    source: Path,
+    *,
+    y_candidates: tuple[str, ...],
+    y_label: str,
+    y_unit: str,
+) -> list[CurveSeriesPayload]:
+    candidates = _sweep_source_files(source)
+    series_list: list[CurveSeriesPayload] = []
+    errors: list[str] = []
+    for candidate in candidates:
+        try:
+            series = _read_rheology_interval_series(
+                candidate,
+                y_candidates=y_candidates,
+                y_label=y_label,
+                y_unit=y_unit,
+            )
+            series_list.append(
+                CurveSeriesPayload(
+                    sample=_source_display_sample(candidate),
+                    x_label=series.x_label,
+                    x_unit=series.x_unit,
+                    y_label=series.y_label,
+                    y_unit=series.y_unit,
+                    points=series.points,
+                )
+            )
+        except Exception as exc:
+            errors.append(f"{candidate.name}: {exc}")
+    if not series_list:
+        detail = "; ".join(errors[:3])
+        raise ValueError(f"No {y_label.casefold()} exports found under {source}. {detail}".strip())
+    return series_list
+
+
 def _sweep_source_files(source: Path) -> list[Path]:
     if not source.is_dir():
         return [source]
@@ -583,6 +619,37 @@ def _source_display_sample(source: Path) -> str:
     return stem
 
 
+def _find_rheology_sweep_header(raw: pd.DataFrame, *, x_aliases: tuple[str, ...]) -> int:
+    try:
+        return _find_interval_header(raw)
+    except ValueError:
+        storage_aliases = _RHEOLOGY_SWEEP_METRICS[0][2]
+        for row_index in range(raw.shape[0]):
+            headers = [_clean_text(value) for value in raw.iloc[row_index].tolist()]
+            try:
+                _find_column(headers, x_aliases)
+                _find_column(headers, storage_aliases)
+            except ValueError:
+                continue
+            return row_index
+    raise ValueError("Could not find rheology sweep X and storage-modulus columns.")
+
+
+def _rheology_sweep_units(
+    raw: pd.DataFrame,
+    *,
+    header_index: int,
+    columns: tuple[int, ...],
+) -> list[str]:
+    candidates = [row_index for row_index in (header_index + 1, header_index + 2) if row_index < raw.shape[0]]
+    if not candidates:
+        return []
+    best_index = max(candidates, key=lambda row_index: _unit_row_score(raw, row_index, columns))
+    if _unit_row_score(raw, best_index, columns) <= 0:
+        return []
+    return [_clean_text(value) for value in raw.iloc[best_index].tolist()]
+
+
 def _read_rheology_sweep_sample(
     source: Path,
     *,
@@ -591,21 +658,28 @@ def _read_rheology_sweep_sample(
     default_x_unit: str,
 ) -> RheologySweepSample:
     raw = read_raw_table(source).dropna(axis=1, how="all")
-    header_index = _find_interval_header(raw)
+    header_index = _find_rheology_sweep_header(raw, x_aliases=x_aliases)
     headers = [_clean_text(value) for value in raw.iloc[header_index].tolist()]
-    units = [_clean_text(value) for value in raw.iloc[min(header_index + 2, raw.shape[0] - 1)].tolist()]
     x_index = _find_column(headers, x_aliases)
     metric_indexes: dict[str, int] = {}
-    metric_units: dict[str, str] = {}
-    for key, _label, aliases, default_unit in _RHEOLOGY_SWEEP_METRICS:
+    for key, _label, aliases, _default_unit in _RHEOLOGY_SWEEP_METRICS:
         try:
             metric_index = _find_column(headers, aliases)
         except ValueError:
             continue
         metric_indexes[key] = metric_index
-        metric_units[key] = _unit_for(units, metric_index, default_unit)
     if "storage_modulus" not in metric_indexes:
         raise ValueError(f"Could not find storage modulus in rheology sweep source {source}.")
+    units = _rheology_sweep_units(
+        raw,
+        header_index=header_index,
+        columns=(x_index, *metric_indexes.values()),
+    )
+    metric_units = {
+        key: _unit_for(units, metric_index, default_unit)
+        for key, _label, _aliases, default_unit in _RHEOLOGY_SWEEP_METRICS
+        if (metric_index := metric_indexes.get(key)) is not None
+    }
     should_derive_complex_modulus = (
         "complex_modulus" not in metric_indexes
         and "storage_modulus" in metric_indexes
@@ -2046,18 +2120,24 @@ def prepare_semantic_source(
 
     if family == "rheology_creep":
         processed_source = processed_dir / f"{source.stem}_creep_curve.csv"
-        series = _read_rheology_interval_series(
+        series_list = _read_rheology_interval_series_list(
             source,
             y_candidates=("creepcompliance", "compliance", "蠕变柔量"),
             y_label="Creep compliance",
             y_unit="1/Pa",
         )
-        _write_curve_table([series], processed_source)
+        series_list = _order_curve_series(series_list, series_order)
+        _write_curve_table(series_list, processed_source)
         return _semantic_preparation_result(
             source,
             processed_source=processed_source,
             operation="extract_rheology_creep_curve",
-            parameters={"y_metric": "creep_compliance", "unit": "1/Pa"},
+            parameters={
+                "y_metric": "creep_compliance",
+                "unit": "1/Pa",
+                "source_sample_count": len(series_list),
+                "series_order": [series.sample for series in series_list],
+            },
         )
 
     if family == "rheology_stress_relaxation":

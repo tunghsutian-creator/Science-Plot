@@ -688,7 +688,17 @@ def publish_studio_export_run(
     )
     input_path = _resolve_request_input(request, base_dir=request_path.parent)
     raw_archive = _archive_studio_input(input_path, output_dir) if input_path is not None else {}
-    processed_source = _write_studio_data_snapshot(input_path, output_dir) if input_path is not None else None
+    existing_transform_ledger = (
+        request.get("transform_ledger") if isinstance(request.get("transform_ledger"), dict) else None
+    )
+    snapshot_source = _studio_snapshot_source(
+        input_path,
+        project_dir=project_dir,
+        transform_ledger=existing_transform_ledger,
+    )
+    processed_source = (
+        _write_studio_data_snapshot(snapshot_source, output_dir) if snapshot_source is not None else None
+    )
     study_model = normalize_study_model(
         request.get("study_model")
         if isinstance(request.get("study_model"), dict)
@@ -700,9 +710,6 @@ def publish_studio_export_run(
         existing=request.get("publication_intent") if isinstance(request.get("publication_intent"), dict) else None,
     )
     publication_profile = get_publication_profile(publication_intent["target_profile_id"])
-    existing_transform_ledger = (
-        request.get("transform_ledger") if isinstance(request.get("transform_ledger"), dict) else None
-    )
     transform_ledger = build_transform_ledger(
         study_model,
         request=request,
@@ -762,6 +769,7 @@ def publish_studio_export_run(
         "outputs": figures,
         "processed": processed_source is not None,
         "processed_source": str(processed_source) if processed_source is not None else None,
+        "data_snapshot_source": str(snapshot_source) if snapshot_source is not None else None,
         "template": request.get("template") or request.get("recipe") or "veusz_document",
         "operation_mode": normal_mode_payload(route="studio"),
     }
@@ -1042,6 +1050,42 @@ def _write_studio_data_snapshot(input_path: Path, output_dir: Path) -> Path:
             sheet_name = _excel_sheet_name(label, fallback=f"data_{index}", used=used_names)
             frame.to_excel(writer, sheet_name=sheet_name, index=False)
     return destination
+
+
+def _studio_snapshot_source(
+    input_path: Path | None,
+    *,
+    project_dir: Path,
+    transform_ledger: dict[str, Any] | None,
+) -> Path | None:
+    """Prefer the current plotted table while retaining raw input separately.
+
+    Instrument folders are not necessarily rectangular worksheets. Semantic
+    preparation records the exact plot-ready output in the transform ledger;
+    only project-local primary outputs are eligible for the delivery workbook.
+    """
+    if isinstance(transform_ledger, dict):
+        steps = transform_ledger.get("steps") if isinstance(transform_ledger.get("steps"), list) else []
+        for step in reversed(steps):
+            if not isinstance(step, dict):
+                continue
+            artifacts = (
+                step.get("output_artifacts") if isinstance(step.get("output_artifacts"), list) else []
+            )
+            ordered = sorted(
+                (item for item in artifacts if isinstance(item, dict)),
+                key=lambda item: 0 if item.get("role") == "output" else 1,
+            )
+            for artifact in ordered:
+                path_value = artifact.get("path")
+                if not isinstance(path_value, str) or not path_value.strip():
+                    continue
+                candidate = Path(path_value).expanduser().resolve()
+                if not candidate.is_relative_to(project_dir.resolve()):
+                    continue
+                if candidate.exists() and (candidate.is_file() or candidate.is_dir()):
+                    return candidate
+    return input_path
 
 
 def _excel_sheet_name(label: str, *, fallback: str, used: set[str]) -> str:

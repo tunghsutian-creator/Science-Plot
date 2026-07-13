@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +12,9 @@ import pandas as pd
 from sciplot_core._bootstrap import ensure_legacy_core
 from sciplot_core._utils import json_safe, slug
 from sciplot_core.curate import curate_torque_project
+from sciplot_core.materials_rules import SemanticRule, get_rule, iter_public_rules
 from sciplot_core.policy import DEFAULT_FIGURE_SIZE
+from sciplot_core.studio import export_studio_document, prepare_studio_document, publish_studio_export_run
 from sciplot_core.workflow import run_request
 
 ensure_legacy_core()
@@ -21,6 +25,17 @@ DEFAULT_3DPA_FTIR_LABELS = ("PA6", "A20", "A40", "A80", "A20-2MIN", "A30-2MIN")
 DEFAULT_3DPA_TORQUE_DIRS = ("转矩/260607", "转矩/Z", "torque/260607", "torque/Z")
 DEFAULT_DENSE_SERIES_COUNT = 44
 DEFAULT_REPRESENTATIVE_COUNT = 6
+RULE_ACCEPTANCE_VERSION = 1
+RULE_ACCEPTANCE_CHECK_IDS = (
+    "semantic_rule_selected",
+    "vsz_reopen_export",
+    "manual_edit_preserved",
+    "canonical_pdf_tiff_pair",
+    "qa_passed",
+    "delivery_complete",
+    "provenance_complete",
+)
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass(frozen=True)
@@ -28,6 +43,338 @@ class SpectrumSeries:
     label: str
     source: Path
     data: pd.DataFrame
+
+
+def _public_fixture_index(repo_root: Path) -> dict[Path, dict[str, Any]]:
+    corpus_root = repo_root / "tests" / "fixtures" / "polymer_corpus"
+    manifest_path = corpus_root / "manifest.json"
+    if not manifest_path.exists():
+        return {}
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entries = payload.get("entries") if isinstance(payload.get("entries"), list) else []
+    indexed: dict[Path, dict[str, Any]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        fixture_value = entry.get("fixture_path")
+        if not isinstance(fixture_value, str) or not fixture_value.strip():
+            continue
+        indexed[(corpus_root / fixture_value).resolve()] = entry
+    return indexed
+
+
+def _rule_fixture_evidence(rule: SemanticRule, *, repo_root: Path) -> dict[str, Any]:
+    fixture = (repo_root / str(rule.fixture_path or "")).resolve()
+    public_entry = _public_fixture_index(repo_root).get(fixture)
+    if public_entry is not None:
+        return {
+            "tier": "public_source_excerpt",
+            "real_data_evidence": True,
+            "source_url": public_entry.get("source_url"),
+            "doi": public_entry.get("doi"),
+            "license": public_entry.get("license"),
+            "description": "Reduced excerpt from a source-annotated public experimental dataset.",
+        }
+    fixture_parts = set(fixture.parts)
+    if "real_world" in fixture_parts:
+        return {
+            "tier": "user_authorized_real_excerpt",
+            "real_data_evidence": True,
+            "source_url": None,
+            "doi": None,
+            "license": None,
+            "description": "Reduced excerpt preserving a user-authorized real instrument export format.",
+        }
+    if "archived_output_raw_data" in fixture_parts:
+        return {
+            "tier": "archived_project_data",
+            "real_data_evidence": True,
+            "source_url": None,
+            "doi": None,
+            "license": None,
+            "description": "Archived project data retained as regression evidence.",
+        }
+    return {
+        "tier": "instrument_shaped_fixture",
+        "real_data_evidence": False,
+        "source_url": None,
+        "doi": None,
+        "license": None,
+        "description": "Fixture exercises the instrument-shaped contract but is not claimed as real-data evidence.",
+    }
+
+
+def _rule_matrix_row(rule: SemanticRule, *, repo_root: Path) -> dict[str, Any]:
+    fixture = (repo_root / str(rule.fixture_path or "")).resolve()
+    return {
+        "rule_id": rule.rule_id,
+        "semantic_family": rule.semantic_family,
+        "recipe": rule.recipe,
+        "template": rule.template,
+        "rule_readiness": rule.fixture_status,
+        "fixture_path": str(fixture),
+        "fixture_exists": fixture.exists(),
+        "evidence": _rule_fixture_evidence(rule, repo_root=repo_root),
+        "lifecycle_status": "not_run",
+        "checks": {check_id: None for check_id in RULE_ACCEPTANCE_CHECK_IDS},
+        "project_dir": None,
+        "manifest": None,
+        "limitations": [],
+        "error": None,
+    }
+
+
+def build_rule_acceptance_matrix(*, repo_root: Path = REPO_ROOT) -> list[dict[str, Any]]:
+    return [_rule_matrix_row(rule, repo_root=repo_root) for rule in iter_public_rules()]
+
+
+def _delivery_artifact_passed(delivery: dict[str, Any], artifact_id: str) -> bool:
+    artifacts = delivery.get("artifacts") if isinstance(delivery.get("artifacts"), list) else []
+    return any(
+        isinstance(item, dict) and item.get("id") == artifact_id and item.get("exists") is True
+        for item in artifacts
+    )
+
+
+def _manual_edit_probe(document_path: Path, *, rule_id: str) -> str:
+    marker = f"# SciPlot acceptance manual-edit preservation probe: {rule_id}"
+    with document_path.open("a", encoding="utf-8") as handle:
+        handle.write(f"\n{marker}\n")
+    return marker
+
+
+def _run_rule_lifecycle_acceptance(
+    rule: SemanticRule,
+    *,
+    projects_root: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    row = _rule_matrix_row(rule, repo_root=repo_root)
+    fixture = Path(row["fixture_path"])
+    try:
+        prepared = prepare_studio_document(
+            fixture,
+            output_root=projects_root,
+            project_name=f"{rule.rule_id} acceptance",
+        )
+        project_dir = Path(str(prepared["project_dir"]))
+        request_path = Path(str(prepared["request"]))
+        document_path = Path(str(prepared["document"]))
+        marker = _manual_edit_probe(document_path, rule_id=rule.rule_id)
+        exports = export_studio_document(document_path, formats=["pdf", "tiff_300"])["exports"]
+        studio_run = publish_studio_export_run(
+            project_dir=project_dir,
+            request_path=request_path,
+            document_path=document_path,
+            exports=exports,
+        )
+        manifest_path = Path(str(studio_run["manifest"]))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        semantic = manifest.get("semantic") if isinstance(manifest.get("semantic"), dict) else {}
+        transform = manifest.get("transform_ledger") if isinstance(manifest.get("transform_ledger"), dict) else {}
+        publication_intent = (
+            manifest.get("publication_intent") if isinstance(manifest.get("publication_intent"), dict) else {}
+        )
+        delivery = manifest.get("delivery_package") if isinstance(manifest.get("delivery_package"), dict) else {}
+        editable_vsz = delivery.get("editable_vsz") if isinstance(delivery.get("editable_vsz"), dict) else {}
+        editable_path = Path(str(editable_vsz.get("path"))) if editable_vsz.get("path") else None
+        manual_edit_preserved = bool(
+            manifest.get("manual_edit_detected") is True
+            and marker in document_path.read_text(encoding="utf-8")
+            and editable_path is not None
+            and editable_path.exists()
+            and marker in editable_path.read_text(encoding="utf-8")
+            and editable_vsz.get("hash_matches_export") is True
+        )
+        exported_formats = {str(item.get("format")) for item in exports if isinstance(item, dict)}
+        checks = {
+            "semantic_rule_selected": semantic.get("rule_id") == rule.rule_id,
+            "vsz_reopen_export": document_path.exists()
+            and prepared.get("series_count", 0) > 0
+            and {"pdf", "tiff_300"} <= exported_formats,
+            "manual_edit_preserved": manual_edit_preserved,
+            "canonical_pdf_tiff_pair": _delivery_artifact_passed(delivery, "canonical_pdf_tiff_pairs"),
+            "qa_passed": manifest.get("qa", {}).get("status") == "passed",
+            "delivery_complete": delivery.get("complete") is True,
+            "provenance_complete": bool(
+                semantic.get("rule_id") == rule.rule_id
+                and transform.get("status") == "runtime_recorded"
+                and publication_intent.get("kind") == "sciplot_publication_intent"
+                and manifest.get("raw_archive", {}).get("path")
+            ),
+        }
+        row.update(
+            {
+                "lifecycle_status": "passed" if all(checks.values()) else "failed",
+                "checks": checks,
+                "project_dir": str(project_dir),
+                "manifest": str(manifest_path),
+                "limitations": [
+                    "The manual-edit probe appends a harmless VSZ comment and proves exact-document preservation; "
+                    "arbitrary visual-edit coverage remains a separate publication-QA gate."
+                ],
+            }
+        )
+    except Exception as exc:  # keep the matrix complete when one family blocks
+        row.update(
+            {
+                "lifecycle_status": "failed",
+                "error": {"type": type(exc).__name__, "message": str(exc)},
+            }
+        )
+    return row
+
+
+def _write_rule_acceptance_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    fieldnames = [
+        "rule_id",
+        "semantic_family",
+        "template",
+        "rule_readiness",
+        "evidence_tier",
+        "real_data_evidence",
+        "lifecycle_status",
+        *RULE_ACCEPTANCE_CHECK_IDS,
+        "fixture_path",
+        "manifest",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    "rule_id": row["rule_id"],
+                    "semantic_family": row["semantic_family"],
+                    "template": row["template"],
+                    "rule_readiness": row["rule_readiness"],
+                    "evidence_tier": row["evidence"]["tier"],
+                    "real_data_evidence": row["evidence"]["real_data_evidence"],
+                    "lifecycle_status": row["lifecycle_status"],
+                    **{check_id: row["checks"].get(check_id) for check_id in RULE_ACCEPTANCE_CHECK_IDS},
+                    "fixture_path": row["fixture_path"],
+                    "manifest": row["manifest"],
+                }
+            )
+
+
+def _write_rule_acceptance_markdown(path: Path, payload: dict[str, Any]) -> None:
+    lines = [
+        "# SciPlot Ready-Rule Acceptance Matrix",
+        "",
+        f"Generated: {payload['generated_at']}",
+        "",
+        "Lifecycle status and real-data evidence are deliberately separate. A fixture-backed rule is not described "
+        "as real-data accepted unless its evidence metadata supports that claim.",
+        "",
+        "| Rule | Evidence | Real data | Lifecycle | Failed checks |",
+        "|---|---|---:|---|---|",
+    ]
+    for row in payload["matrix"]:
+        failed = [check_id for check_id, passed in row["checks"].items() if passed is False]
+        lines.append(
+            f"| `{row['rule_id']}` | `{row['evidence']['tier']}` | "
+            f"{'yes' if row['evidence']['real_data_evidence'] else 'no'} | "
+            f"`{row['lifecycle_status']}` | {', '.join(failed) or '-'} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Honest coverage boundary",
+            "",
+            "- `public_source_excerpt`, `user_authorized_real_excerpt`, and `archived_project_data` count as "
+            "real-data evidence.",
+            "- `instrument_shaped_fixture` proves a parser/render contract only; it remains a real-data gap.",
+            "- The manual-edit probe proves exact VSZ preservation, not complete arbitrary visual-object QA.",
+            "- Native 183 mm Veusz composition remains outside this acceptance suite.",
+            "",
+        ]
+    )
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def run_rule_acceptance_suite(
+    *,
+    output_root: Path,
+    project_name: str = "ready_rule_acceptance",
+    rule_ids: list[str] | tuple[str, ...] | None = None,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    ready_rules = list(iter_public_rules())
+    ready_by_id = {rule.rule_id: rule for rule in ready_rules}
+    selected_ids = list(dict.fromkeys(rule_ids or [rule.rule_id for rule in ready_rules]))
+    unknown = [rule_id for rule_id in selected_ids if rule_id not in ready_by_id]
+    if unknown:
+        for rule_id in unknown:
+            try:
+                rule = get_rule(rule_id)
+            except ValueError:
+                continue
+            if rule.fixture_status != "ready":
+                raise ValueError(f"Acceptance suite only runs ready rules; `{rule_id}` is {rule.fixture_status}.")
+        raise ValueError(f"Unknown or non-ready rule ids: {', '.join(unknown)}")
+
+    project_dir = output_root.expanduser().resolve() / slug(project_name)
+    projects_root = project_dir / "projects"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    rows_by_id = {row["rule_id"]: row for row in build_rule_acceptance_matrix(repo_root=repo_root)}
+    for rule_id in selected_ids:
+        rows_by_id[rule_id] = _run_rule_lifecycle_acceptance(
+            ready_by_id[rule_id],
+            projects_root=projects_root,
+            repo_root=repo_root,
+        )
+    rows = [rows_by_id[rule.rule_id] for rule in ready_rules]
+    selected_rows = [rows_by_id[rule_id] for rule_id in selected_ids]
+    selected_failed = [row["rule_id"] for row in selected_rows if row["lifecycle_status"] != "passed"]
+    passed_count = sum(row["lifecycle_status"] == "passed" for row in rows)
+    real_data_passed_count = sum(
+        row["lifecycle_status"] == "passed" and row["evidence"]["real_data_evidence"] for row in rows
+    )
+    coverage_complete = passed_count == len(ready_rules)
+    selected_state = "ready" if not selected_failed else "needs_rule_repair"
+    state = "needs_rule_repair" if selected_failed else ("ready" if coverage_complete else "in_progress")
+    payload = {
+        "kind": "sciplot_ready_rule_acceptance",
+        "version": RULE_ACCEPTANCE_VERSION,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "state": state,
+        "selected_state": selected_state,
+        "project_dir": str(project_dir),
+        "selected_rule_ids": selected_ids,
+        "failed_rule_ids": selected_failed,
+        "coverage": {
+            "ready_rule_count": len(ready_rules),
+            "lifecycle_passed_count": passed_count,
+            "lifecycle_complete": coverage_complete,
+            "real_data_lifecycle_passed_count": real_data_passed_count,
+            "instrument_shaped_gap_count": sum(
+                not row["evidence"]["real_data_evidence"] for row in rows
+            ),
+        },
+        "matrix": rows,
+        "limitations": [
+            "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
+            "Rendered colour-vision, semantic-label inventory, and complete arbitrary-stroke QA remain deferred.",
+            "Native 183 mm Veusz composition remains deferred in favor of exact-size standalone PDF assembly.",
+        ],
+    }
+    summary_path = project_dir / "acceptance_summary.json"
+    matrix_path = project_dir / "acceptance_matrix.json"
+    csv_path = project_dir / "acceptance_matrix.csv"
+    markdown_path = project_dir / "acceptance_matrix.md"
+    summary_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+    matrix_path.write_text(json.dumps(json_safe(rows), indent=2, ensure_ascii=False), encoding="utf-8")
+    _write_rule_acceptance_csv(csv_path, rows)
+    _write_rule_acceptance_markdown(markdown_path, payload)
+    payload["artifacts"] = {
+        "summary": str(summary_path),
+        "matrix_json": str(matrix_path),
+        "matrix_csv": str(csv_path),
+        "matrix_markdown": str(markdown_path),
+    }
+    summary_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+    return payload
 
 
 def _normalize_label(value: str) -> str:
@@ -360,5 +707,9 @@ __all__ = [
     "DEFAULT_3DPA_TORQUE_DIRS",
     "DEFAULT_DENSE_SERIES_COUNT",
     "DEFAULT_REPRESENTATIVE_COUNT",
+    "RULE_ACCEPTANCE_CHECK_IDS",
+    "RULE_ACCEPTANCE_VERSION",
+    "build_rule_acceptance_matrix",
     "run_3dpa_acceptance",
+    "run_rule_acceptance_suite",
 ]

@@ -83,6 +83,7 @@ skill/scripts/sciplot autoplot INPUT_PATH --out outputs/autoplot_projects --json
 # Folder/real-data acceptance
 skill/scripts/sciplot batch INPUT_DIR --out OUTDIR --mode smoke
 skill/scripts/sciplot batch INPUT_DIR --out OUTDIR --mode all --tensile-root PATH
+skill/scripts/sciplot acceptance rules --out outputs/acceptance --json
 skill/scripts/sciplot acceptance 3dpa INPUT_PATH --out outputs/acceptance --json
 
 # Torque event curation
@@ -97,6 +98,11 @@ skill/scripts/sciplot publication layouts --json
 skill/scripts/sciplot publication profile nature_flagship_research_2026_v1 --json
 skill/scripts/sciplot qa OUTDIR --profile sciplot_composite_183_v1
 ```
+
+`acceptance rules` runs the exact Studio/VSZ/export/delivery lifecycle for all
+ready rules and writes JSON, CSV and Markdown evidence matrices. A passed
+instrument-shaped fixture remains a real-data gap; inspect the evidence tier
+before reporting breadth.
 
 Source, Inspect, and Samples are data-confirmation stages, not plot-preview
 stages. Result Review appears only after Export or assisted repair produces

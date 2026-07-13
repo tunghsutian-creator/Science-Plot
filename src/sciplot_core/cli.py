@@ -146,6 +146,19 @@ def _build_parser() -> argparse.ArgumentParser:
     acceptance_3dpa_parser.add_argument("--representative-count", type=int, default=6)
     acceptance_3dpa_parser.add_argument("--dense-series", type=int, default=44)
     acceptance_3dpa_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    acceptance_rules_parser = acceptance_subparsers.add_parser(
+        "rules",
+        help="Run the ready-rule Studio lifecycle acceptance matrix.",
+    )
+    acceptance_rules_parser.add_argument("--out", type=Path, default=Path("outputs") / "acceptance")
+    acceptance_rules_parser.add_argument("--name", default="ready_rule_acceptance", help="Acceptance project name.")
+    acceptance_rules_parser.add_argument(
+        "--rule",
+        dest="rule_ids",
+        action="append",
+        help="Run one ready rule; repeat for a batch. Defaults to all ready rules.",
+    )
+    acceptance_rules_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
 
     quick_parser = subparsers.add_parser("quick", help=argparse.SUPPRESS)
     quick_parser.add_argument("input", type=Path)
@@ -451,6 +464,23 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     print(payload["project_dir"])
                 return 0
+            if args.acceptance_command == "rules":
+                from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+                original_argv = list(sys.argv[1:] if argv is None else argv)
+                maybe_reexec_with_qt_runtime(original_argv)
+                from sciplot_core.acceptance import run_rule_acceptance_suite
+
+                payload = run_rule_acceptance_suite(
+                    output_root=args.out.expanduser(),
+                    project_name=args.name,
+                    rule_ids=args.rule_ids,
+                )
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(payload["artifacts"]["matrix_markdown"])
+                return 0 if payload["selected_state"] == "ready" else 1
         if args.command == "quick":
             serve_intake(
                 input_path=_resolve_input(args.input),
