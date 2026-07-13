@@ -23,6 +23,8 @@ from sciplot_core.policy import (
     DEFAULT_EXPORT_FORMATS_POLICY,
     DEFAULT_RENDER_OPTIONS,
     DELIVERY_DIR,
+    RHEOLOGY_METRIC_AXIS_LABELS,
+    anchored_log_decade_ticks,
     layout_policy_for_semantic,
     layout_policy_payload,
 )
@@ -272,9 +274,7 @@ def _layout_quality_from_result(result: dict[str, Any]) -> dict[str, Any]:
     if isinstance(auto_split, dict):
         payload["auto_split"] = json_safe(auto_split)
         if auto_split.get("applied") is True:
-            payload["autofixes_applied"] = sorted(
-                set([*payload["autofixes_applied"], "split_stacked_figure_auto"])
-            )
+            payload["autofixes_applied"] = sorted(set([*payload["autofixes_applied"], "split_stacked_figure_auto"]))
     return payload
 
 
@@ -379,11 +379,7 @@ def _sweep_metric_sources(
         for block_index, x_column in enumerate(x_columns):
             next_x = x_columns[block_index + 1] if block_index + 1 < len(x_columns) else len(headers)
             y_column = next(
-                (
-                    index
-                    for index in range(x_column + 1, next_x)
-                    if _metric_token(headers[index]) == metric_token
-                ),
+                (index for index in range(x_column + 1, next_x) if _metric_token(headers[index]) == metric_token),
                 None,
             )
             if y_column is None:
@@ -411,15 +407,29 @@ def _sweep_metric_sources(
         )
         metric_source = sources_dir / f"{prefix}_{metric_key}.csv"
         metric_frame.to_csv(metric_source, header=False, index=False)
+        metric_render_options: dict[str, Any] = {
+            "x_metric": "temperature" if prefix == "temp" else "angular_frequency",
+            "y_metric": metric_key,
+            "y_label_override": (
+                RHEOLOGY_METRIC_AXIS_LABELS.get(metric_key, metric_label) if prefix == "freq" else metric_label
+            ),
+        }
+        plotted_values = pd.to_numeric(metric_frame.iloc[3:, 1::2].stack(), errors="coerce").dropna()
+        if prefix == "freq" and metric_key == "storage_modulus":
+            if not plotted_values.empty and float(plotted_values.max()) <= 5e5:
+                metric_render_options.update(
+                    {
+                        "y_max": 5e5,
+                        "y_ticks": [1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0],
+                    }
+                )
+        elif prefix == "freq" and metric_key in {"loss_factor", "complex_viscosity"}:
+            metric_render_options["y_ticks"] = list(anchored_log_decade_ticks(plotted_values))
         metric_sources.append(
             (
                 f"{prefix}_{metric_key}",
                 metric_source,
-                {
-                    "x_metric": "temperature" if prefix == "temp" else "angular_frequency",
-                    "y_metric": metric_key,
-                    "y_label_override": metric_label,
-                },
+                metric_render_options,
             )
         )
     return metric_sources
@@ -489,11 +499,6 @@ def _render_veusz_sweep_bundle(
         outputs, exports = _rename_metric_exports(payload, metric_id=metric_id, figures_dir=figures_dir)
         combined_outputs.extend(outputs)
         combined_exports.extend(exports)
-        combined_reports.extend(
-            report for report in payload.get("qa_reports", []) if isinstance(report, dict)
-        )
-        combined_documents.extend(str(item) for item in payload.get("veusz_documents", []))
-        combined_specs.extend(str(item) for item in payload.get("veusz_specs", []))
         metric_worker = figures_dir / "_veusz" / metric_id
         if metric_worker.exists():
             shutil.rmtree(metric_worker)
@@ -501,6 +506,38 @@ def _render_veusz_sweep_bundle(
         if source_worker.exists():
             metric_worker.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(source_worker, metric_worker)
+        mapped_documents: list[str] = []
+        for item in payload.get("veusz_documents", []):
+            source_path = Path(str(item))
+            try:
+                destination = metric_worker / source_path.relative_to(source_worker)
+            except ValueError:
+                continue
+            if destination.exists():
+                mapped_documents.append(str(destination))
+        mapped_specs: list[str] = []
+        for item in payload.get("veusz_specs", []):
+            source_path = Path(str(item))
+            try:
+                destination = metric_worker / source_path.relative_to(source_worker)
+            except ValueError:
+                continue
+            if destination.exists():
+                mapped_specs.append(str(destination))
+        combined_documents.extend(mapped_documents)
+        combined_specs.extend(mapped_specs)
+        for report in payload.get("qa_reports", []):
+            if not isinstance(report, dict):
+                continue
+            copied_report = dict(report)
+            summary = report.get("layout_summary")
+            if isinstance(summary, dict):
+                copied_summary = dict(summary)
+                if mapped_documents:
+                    copied_summary["document"] = mapped_documents[0]
+                copied_summary["outputs"] = list(outputs)
+                copied_report["layout_summary"] = copied_summary
+            combined_reports.append(copied_report)
         if metric_dir.exists():
             shutil.rmtree(metric_dir)
     return {
@@ -622,16 +659,12 @@ def _write_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) -> str:
     layout_quality = manifest.get("layout_quality") if isinstance(manifest.get("layout_quality"), dict) else {}
     layout_issue_ids = layout_quality.get("issue_ids") if isinstance(layout_quality.get("issue_ids"), list) else []
     layout_autofixes = (
-        layout_quality.get("autofixes_applied")
-        if isinstance(layout_quality.get("autofixes_applied"), list)
-        else []
+        layout_quality.get("autofixes_applied") if isinstance(layout_quality.get("autofixes_applied"), list) else []
     )
     quality_actions = build_quality_actions(
         issue_ids=[str(item) for item in layout_issue_ids],
         autofixes_applied=[str(item) for item in layout_autofixes],
-        layout_summaries=layout_quality.get("summaries")
-        if isinstance(layout_quality.get("summaries"), list)
-        else [],
+        layout_summaries=layout_quality.get("summaries") if isinstance(layout_quality.get("summaries"), list) else [],
     )
     quality_action_lines = [
         f"- `{action.get('status', 'suggested')}` {action.get('label', action.get('id', 'Quality action'))}: "
@@ -778,9 +811,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
     publication_intent = build_publication_intent(
         study_model,
         request=request,
-        existing=request.get("publication_intent")
-        if isinstance(request.get("publication_intent"), dict)
-        else None,
+        existing=request.get("publication_intent") if isinstance(request.get("publication_intent"), dict) else None,
     )
     publication_profile = get_publication_profile(publication_intent["target_profile_id"])
     transform_steps: list[dict[str, Any]] = []
@@ -803,9 +834,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
     layout_policy = layout_policy_for_semantic(semantic, template=request.get("template"))
     final_recipe: str | None = None
 
-    use_auto = request.get("recipe") == "auto" or (
-        not request.get("recipe") and not request.get("template")
-    )
+    use_auto = request.get("recipe") == "auto" or (not request.get("recipe") and not request.get("template"))
     pending_rule_blocked = semantic.get("rule_readiness") == "pending"
     if semantic.get("needs_ai_intervention") and (use_auto or pending_rule_blocked):
         intervention = build_intervention_request(
@@ -845,9 +874,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
             failure = f"Requested material rule `{semantic.get('rule_id')}` is pending fixture-backed acceptance."
         else:
             failure = "SciPlot could not auto-detect this input."
-        raise ValueError(
-            f"{failure} Intervention request written to {output_dir / 'intervention_request.json'}."
-        )
+        raise ValueError(f"{failure} Intervention request written to {output_dir / 'intervention_request.json'}.")
     if use_auto:
         route = "auto"
         final_recipe = semantic.get("recommended_recipe")
@@ -860,11 +887,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
             column_confirmations=request.get("column_confirmations"),
             replicate_mode=request.get("replicate_mode"),
         )
-        transform_steps.extend(
-            step
-            for step in prepared.get("transform_steps", [])
-            if isinstance(step, dict)
-        )
+        transform_steps.extend(step for step in prepared.get("transform_steps", []) if isinstance(step, dict))
         render_options = dict(semantic.get("render_options") or {})
         request_render_options = request.get("render_options")
         if isinstance(request_render_options, dict):
@@ -919,11 +942,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
             output_dir=output_dir,
             options=_request_options(request),
         )
-        transform_steps.extend(
-            step
-            for step in result.get("transform_steps", [])
-            if isinstance(step, dict)
-        )
+        transform_steps.extend(step for step in result.get("transform_steps", []) if isinstance(step, dict))
     else:
         route = "render"
         template = request.get("template")
@@ -945,9 +964,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
         request=request,
         input_path=input_path,
         steps=transform_steps,
-        existing=request.get("transform_ledger")
-        if isinstance(request.get("transform_ledger"), dict)
-        else None,
+        existing=request.get("transform_ledger") if isinstance(request.get("transform_ledger"), dict) else None,
     )
     publication_intent = link_intent_to_transform_ledger(publication_intent, transform_ledger)
     study_model["publication_intent_ref"] = "publication_intent.json"

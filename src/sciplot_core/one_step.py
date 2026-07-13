@@ -110,10 +110,11 @@ _ISSUE_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         "layout_strategy": _LEGEND_INLINE_STRATEGY,
     },
     "legend_crowded_inside": {
-        "id": "move_legend_outside",
-        "label": "Move legend outside",
-        "reason": "The visible legend is too crowded to remain inside the plotting area.",
-        "render_options_patch": {"legend_position": "outside_right", "series_label_mode": "legend"},
+        "id": "use_inside_or_inline_labels",
+        "label": "Keep labels inside",
+        "reason": "The visible legend is too crowded for the fixed publication frame.",
+        "render_options_patch": {"legend_position": "auto", "series_label_mode": "inline"},
+        "layout_strategy": _LEGEND_INLINE_STRATEGY,
     },
     "label_collision": {
         "id": "use_auto_legend",
@@ -224,11 +225,17 @@ _AUTOFIX_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         "reason": "Direct labels were selected by the automatic layout pass.",
         "render_options_patch": {"legend_position": "auto", "series_label_mode": "inline"},
     },
-    "legend_auto_outside_right": {
-        "id": "move_legend_outside",
-        "label": "Moved legend outside",
-        "reason": "A crowded legend was moved to the right-side figure margin.",
-        "render_options_patch": {"legend_position": "outside_right", "series_label_mode": "legend"},
+    "legend_auto_widened_inside": {
+        "id": "widen_for_inside_legend",
+        "label": "Widened for inside legend",
+        "reason": "The renderer widened an unlocked canvas while preserving the fixed graph margins.",
+        "render_options_patch": {"legend_position": "auto", "series_label_mode": "legend"},
+    },
+    "legend_outside_removed": {
+        "id": "keep_legend_inside",
+        "label": "Kept legend inside",
+        "reason": "A retired outside-legend request was normalized to the fixed inside-frame policy.",
+        "render_options_patch": {"legend_position": "auto", "series_label_mode": "legend"},
     },
     "legend_auto_upper_right": {
         "id": "move_legend_upper_right",

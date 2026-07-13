@@ -11,7 +11,14 @@ import pandas as pd
 
 from sciplot_core._utils import json_safe, slug
 from sciplot_core.assisted_cleanup import CLEANUP_REQUEST_FILENAME, CLEANUP_RESULT_FILENAME
-from sciplot_core.policy import DELIVERY_DIR, DELIVERY_FIGURES_DIR, DELIVERY_INTERNAL_DIR
+from sciplot_core.policy import (
+    DELIVERY_DIR,
+    DELIVERY_EDITABLE_DIR,
+    DELIVERY_FIGURES_DIR,
+    DELIVERY_INTERNAL_DIR,
+)
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 PUBLICATION_ARTIFACT_FILENAMES = (
     "publication_intent.json",
@@ -141,6 +148,205 @@ def _editable_vsz_delivery_record(manifest: dict[str, Any], internal_dir: Path) 
     }
 
 
+def _manifest_veusz_documents(manifest: dict[str, Any], output_dir: Path) -> list[Path]:
+    values: list[object] = []
+    values.extend(manifest.get("veusz_documents", []) if isinstance(manifest.get("veusz_documents"), list) else [])
+    values.append(manifest.get("veusz_document"))
+    for key in ("result", "studio"):
+        payload = manifest.get(key) if isinstance(manifest.get(key), dict) else {}
+        values.extend(payload.get("veusz_documents", []) if isinstance(payload.get("veusz_documents"), list) else [])
+        values.extend([payload.get("veusz_document"), payload.get("document")])
+
+    def existing_documents(candidates: list[object]) -> list[Path]:
+        documents: list[Path] = []
+        seen: set[Path] = set()
+        for value in candidates:
+            if not isinstance(value, str | Path) or not str(value).strip():
+                continue
+            candidate = Path(value).expanduser()
+            if not candidate.is_absolute():
+                candidate = output_dir / candidate
+            candidate = candidate.resolve()
+            if candidate in seen or not candidate.exists() or not candidate.is_file():
+                continue
+            documents.append(candidate)
+            seen.add(candidate)
+        return documents
+
+    documents = existing_documents(values)
+    if documents:
+        return documents
+
+    fallback_values: list[object] = []
+    fallback_values.extend(sorted((output_dir / "figures" / "_veusz").glob("**/studio/document.vsz")))
+    fallback_values.extend(sorted((output_dir / "studio").glob("*.vsz")))
+    return existing_documents(fallback_values)
+
+
+def _editable_project_name(document: Path, *, index: int) -> str:
+    project_root = document.parent.parent
+    candidate = project_root.parent.name if project_root.name.startswith(("single", "panel_")) else project_root.name
+    if candidate in {"", "_veusz", "figures", "studio"}:
+        candidate = f"figure_{index:02d}"
+    return slug(candidate)
+
+
+def _write_executable(path: Path, lines: list[str]) -> None:
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _write_editable_launchers(project_dir: Path) -> tuple[Path, Path, Path]:
+    open_veusz = project_dir / "Open_in_Veusz.command"
+    export_edited = project_dir / "Export_Edited_Veusz.command"
+    open_studio = project_dir / "Open_in_SciPlot_Studio.command"
+    shared = ["#!/bin/zsh", "set -euo pipefail", 'PROJECT_DIR="${0:A:h}"', f'cd "{REPO_ROOT}"']
+    _write_executable(
+        open_veusz,
+        [*shared, 'exec skill/scripts/sciplot studio "${PROJECT_DIR}/studio/document.vsz" --advanced-editor'],
+    )
+    _write_executable(
+        export_edited,
+        [*shared, 'skill/scripts/sciplot studio "${PROJECT_DIR}" --export pdf,tiff_300 --json'],
+    )
+    _write_executable(open_studio, [*shared, 'skill/scripts/sciplot studio "${PROJECT_DIR}"'])
+    return open_veusz, export_edited, open_studio
+
+
+def _copy_editable_request(
+    source_root: Path,
+    destination: Path,
+    *,
+    manifest: dict[str, Any],
+    output_dir: Path,
+) -> tuple[Path, str | None]:
+    candidates = [source_root / "plot_request.json"]
+    request_value = manifest.get("request_path")
+    if isinstance(request_value, str) and request_value.strip():
+        candidates.append(Path(request_value).expanduser())
+    candidates.append(output_dir / "request_snapshot.json")
+    request: dict[str, Any] = {}
+    for candidate in candidates:
+        payload = _read_json_object(candidate)
+        if payload is not None:
+            request = payload
+            break
+    copied_data: str | None = None
+    input_value = request.get("input")
+    if isinstance(input_value, str) and input_value.strip():
+        source = Path(input_value).expanduser()
+        if not source.is_absolute():
+            source = source_root / source
+        if source.exists() and source.is_file():
+            data_dir = destination / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            data_path = data_dir / source.name
+            shutil.copy2(source, data_path)
+            copied_data = str(data_path)
+            request["input"] = str(data_path.relative_to(destination))
+    request.setdefault("template", "curve")
+    request["output"] = "."
+    request_path = destination / "plot_request.json"
+    request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
+    return request_path, copied_data
+
+
+def _copy_editable_veusz_projects(
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    editable_dir: Path,
+) -> list[dict[str, Any]]:
+    documents = _manifest_veusz_documents(manifest, output_dir)
+    if not documents:
+        return []
+    editable_dir.mkdir(parents=True, exist_ok=True)
+    records: list[dict[str, Any]] = []
+    used_names: set[str] = set()
+    for index, source_document in enumerate(documents, start=1):
+        base_name = _editable_project_name(source_document, index=index)
+        name = base_name
+        suffix = 2
+        while name in used_names:
+            name = f"{base_name}_{suffix}"
+            suffix += 1
+        used_names.add(name)
+        destination = editable_dir / name
+        studio_dir = destination / "studio"
+        studio_dir.mkdir(parents=True, exist_ok=True)
+        document = studio_dir / "document.vsz"
+        shutil.copy2(source_document, document)
+        source_spec = source_document.parent / "spec.json"
+        spec = studio_dir / "spec.json"
+        if source_spec.exists():
+            shutil.copy2(source_spec, spec)
+        source_root = source_document.parent.parent
+        request_path, copied_data = _copy_editable_request(
+            source_root,
+            destination,
+            manifest=manifest,
+            output_dir=output_dir,
+        )
+        source_hash = _sha256(source_document)
+        delivery_hash = _sha256(document)
+        intake_manifest = {
+            "kind": "sciplot_editable_delivery_project",
+            "version": 1,
+            "project": name,
+            "request": str(request_path.relative_to(destination)),
+            "studio": {
+                "engine": "veusz",
+                "document": str(document.relative_to(destination)),
+                "spec": str(spec.relative_to(destination)) if spec.exists() else None,
+                "generated_hash": delivery_hash,
+                "export_exact_current_document": True,
+            },
+        }
+        (destination / "intake_manifest.json").write_text(
+            json.dumps(json_safe(intake_manifest), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        open_veusz, export_edited, open_studio = _write_editable_launchers(destination)
+        records.append(
+            {
+                "kind": "sciplot_delivery_editable_vsz_project",
+                "id": name,
+                "path": str(destination),
+                "relative_path": str(destination.relative_to(editable_dir.parent)),
+                "document": str(document),
+                "document_relative_path": str(document.relative_to(editable_dir.parent)),
+                "request": str(request_path),
+                "data": copied_data,
+                "open_in_veusz": str(open_veusz),
+                "export_edited": str(export_edited),
+                "open_in_sciplot_studio": str(open_studio),
+                "source_document": str(source_document),
+                "source_sha256": source_hash,
+                "delivery_sha256": delivery_hash,
+                "copy_hash_matches": bool(source_hash and source_hash == delivery_hash),
+            }
+        )
+    readme = editable_dir / "README.md"
+    readme.write_text(
+        "\n".join(
+            [
+                "# Editable Veusz projects",
+                "",
+                "Each folder is a self-contained SciPlot/Veusz project for one delivered figure.",
+                "",
+                "1. Double-click `Open_in_Veusz.command` to edit the real `.vsz` document.",
+                "2. Save inside Veusz.",
+                "3. Double-click `Export_Edited_Veusz.command` to export that exact saved document through SciPlot QA.",
+                "",
+                "The export command never regenerates the plot from Python or replaces the saved Veusz document.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return records
+
+
 def _write_excel_data(source: Path, destination: Path) -> dict[str, Any]:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if source.suffix.lower() in {".xlsx", ".xlsm", ".xls"}:
@@ -180,6 +386,7 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
     if delivery_dir.exists():
         shutil.rmtree(delivery_dir)
     figures_dir = delivery_dir / DELIVERY_FIGURES_DIR
+    editable_dir = delivery_dir / DELIVERY_EDITABLE_DIR
     internal_dir = delivery_dir / DELIVERY_INTERNAL_DIR
     figures_dir.mkdir(parents=True, exist_ok=True)
     internal_dir.mkdir(parents=True, exist_ok=True)
@@ -238,10 +445,15 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
         copied_internal.append("_veusz")
 
     editable_vsz = _editable_vsz_delivery_record(manifest, internal_dir)
+    editable_vsz_projects = _copy_editable_veusz_projects(
+        manifest,
+        output_dir=output_dir,
+        editable_dir=editable_dir,
+    )
 
     delivery_record = {
         "kind": "sciplot_minimal_delivery_package",
-        "version": 1,
+        "version": 2,
         "path": str(delivery_dir),
         "project": project,
         "project_file": str(sciplot_path),
@@ -250,6 +462,8 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
         "internal": str(internal_dir),
         "internal_artifacts": copied_internal,
         "editable_vsz": editable_vsz,
+        "editable": str(editable_dir) if editable_vsz_projects else None,
+        "editable_vsz_projects": editable_vsz_projects,
     }
     manifest_payload = json_safe({**manifest, "delivery_package": delivery_record})
     (internal_dir / "manifest.json").write_text(
@@ -316,8 +530,7 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
                     "id": f"{Path(filename).stem}_valid_contract",
                     "path": str(artifact_path),
                     "exists": bool(
-                        isinstance(parsed, dict)
-                        and parsed.get("kind") == PUBLICATION_ARTIFACT_KINDS[filename]
+                        isinstance(parsed, dict) and parsed.get("kind") == PUBLICATION_ARTIFACT_KINDS[filename]
                     ),
                 }
             )
@@ -327,8 +540,7 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
                 "id": "transform_lineage_reviewed",
                 "path": str(internal_dir / "transform_ledger.json"),
                 "exists": bool(
-                    isinstance(copied_ledger, dict)
-                    and copied_ledger.get("status") in {"runtime_recorded", "confirmed"}
+                    isinstance(copied_ledger, dict) and copied_ledger.get("status") in {"runtime_recorded", "confirmed"}
                 ),
             }
         )
@@ -388,6 +600,31 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
                     "id": "editable_vsz_hash_match",
                     "path": str(editable_vsz["path"]),
                     "exists": bool(editable_vsz["hash_matches_export"]),
+                },
+            ]
+        )
+    if editable_vsz_projects:
+        artifact_status.extend(
+            [
+                {
+                    "id": "editable_vsz_projects",
+                    "path": str(editable_dir),
+                    "exists": all(Path(str(item["document"])).exists() for item in editable_vsz_projects),
+                    "details": editable_vsz_projects,
+                },
+                {
+                    "id": "editable_vsz_project_hashes_match",
+                    "path": str(editable_dir),
+                    "exists": all(bool(item["copy_hash_matches"]) for item in editable_vsz_projects),
+                },
+                {
+                    "id": "editable_vsz_launchers",
+                    "path": str(editable_dir),
+                    "exists": all(
+                        Path(str(item[key])).exists()
+                        for item in editable_vsz_projects
+                        for key in ("open_in_veusz", "export_edited", "open_in_sciplot_studio")
+                    ),
                 },
             ]
         )

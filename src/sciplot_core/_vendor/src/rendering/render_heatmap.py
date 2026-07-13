@@ -6,7 +6,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import transforms
-
 from src.layout_policy import (
     LayoutCandidate,
     LayoutScore,
@@ -234,10 +233,11 @@ def _render_heatmap(input_path: Path, sheet: str | int, options: RenderOptions) 
         show_colorbar=options.show_colorbar,
         palette_preset=options.palette_preset,
         colorbar_layout={
+            "frame_envelope_mode": layout.frame_envelope_mode,
             "colorbar_x_offset_fraction": layout.colorbar_x_offset_fraction,
             "colorbar_width_fraction": layout.colorbar_width_fraction,
-            "colorbar_y_offset_fraction": layout.colorbar_y_offset_fraction,
             "colorbar_height_fraction": layout.colorbar_height_fraction,
+            "colorbar_main_gap_fraction": layout.colorbar_main_gap_fraction,
         },
         colorbar_tick_count=layout.colorbar_tick_count,
         colorbar_label_gap_pt=layout.label_gap_pt,
@@ -279,10 +279,11 @@ def _render_annotated_heatmap(input_path: Path, sheet: str | int, options: Rende
         show_colorbar=options.show_colorbar,
         palette_preset=options.palette_preset,
         colorbar_layout={
+            "frame_envelope_mode": layout.frame_envelope_mode,
             "colorbar_x_offset_fraction": layout.colorbar_x_offset_fraction,
             "colorbar_width_fraction": layout.colorbar_width_fraction,
-            "colorbar_y_offset_fraction": layout.colorbar_y_offset_fraction,
             "colorbar_height_fraction": layout.colorbar_height_fraction,
+            "colorbar_main_gap_fraction": layout.colorbar_main_gap_fraction,
         },
         colorbar_tick_count=layout.colorbar_tick_count,
         colorbar_label_gap_pt=layout.label_gap_pt,

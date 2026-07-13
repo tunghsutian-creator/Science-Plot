@@ -22,7 +22,21 @@ from sciplot_core._utils import decode_text, json_safe
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.intake import create_intake_project_from_session, prepare_intake_session
 from sciplot_core.operation_modes import normal_mode_payload
-from sciplot_core.policy import DEFAULT_PALETTE_PRESET, SPECTRUM_JOURNAL_COLORS
+from sciplot_core.policy import (
+    DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
+    DEFAULT_LEGEND_EDGE_PADDING_MM,
+    DEFAULT_LOG_MINOR_MULTIPLIERS,
+    DEFAULT_LOG_MINOR_TICK_COUNT,
+    DEFAULT_LOG_TICK_FORMAT,
+    DEFAULT_PALETTE_COLORS,
+    DEFAULT_PALETTE_PRESET,
+    FIXED_PUBLICATION_FRAME_POLICY,
+    RHEOLOGY_FREQUENCY_X_RENDER_LABEL,
+    anchored_log_decade_ticks,
+    is_removed_outside_legend_position,
+    normalize_legend_position,
+    rheology_metric_axis_label,
+)
 from sciplot_core.publication import (
     build_publication_intent,
     build_transform_ledger,
@@ -37,8 +51,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 VEUSZ_ROOT = REPO_ROOT / "third_party" / "veusz"
 VEUSZ_COMMIT = "264084b06eb306d860c7757c637f37b78bb2333f"
 
-DEFAULT_PALETTE = SPECTRUM_JOURNAL_COLORS
+DEFAULT_PALETTE = DEFAULT_PALETTE_COLORS
 STACKED_TEMPLATE_IDS = {"stacked_curve", "segmented_stacked_curve"}
+POINT_LINE_MARKERS = ("circle", "square", "diamond", "triangle")
 MARKER_MAP = {
     "circle": "circle",
     "diamond": "diamond",
@@ -89,6 +104,7 @@ class _VeuszStyleContract:
     line_alpha: float = 0.92
     marker_alpha: float = 0.95
     marker_size_pt: float = 3.4
+    marker_line_width_pt: float = 0.8
     axes_labelpad_pt: float = 2.0
     xtick_major_pad_pt: float = 1.4
     ytick_major_pad_pt: float = 1.4
@@ -222,16 +238,12 @@ def prepare_studio_document(
         request=request,
         input_path=source_root,
         steps=transform_steps,
-        existing=request.get("transform_ledger")
-        if isinstance(request.get("transform_ledger"), dict)
-        else None,
+        existing=request.get("transform_ledger") if isinstance(request.get("transform_ledger"), dict) else None,
     )
     publication_intent = build_publication_intent(
         study_model,
         request=request,
-        existing=request.get("publication_intent")
-        if isinstance(request.get("publication_intent"), dict)
-        else None,
+        existing=request.get("publication_intent") if isinstance(request.get("publication_intent"), dict) else None,
     )
     publication_intent = link_intent_to_transform_ledger(publication_intent, transform_ledger)
     study_model["publication_intent_ref"] = "publication_intent.json"
@@ -438,6 +450,7 @@ def _ensure_veusz_loader_compat() -> None:
     if hasattr(CommandInterface, "ImportFITSFile"):
         pass
     else:
+
         def _missing_import_fits(self: Any, *_args: Any, **_kwargs: Any) -> None:
             raise RuntimeError("Veusz FITS import support is unavailable in this SciPlot Studio runtime.")
 
@@ -496,8 +509,6 @@ def _ensure_veusz_loader_compat() -> None:
     veusz_document.isClipboardDataMime = _safe_is_clipboard_data_mime
     veusz_document.getClipboardWidgetMime = _safe_get_clipboard_widget_mime
     mime._sciplot_safe_clipboard = True
-
-
 
 
 def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
@@ -686,15 +697,11 @@ def publish_studio_export_run(
     publication_intent = build_publication_intent(
         study_model,
         request=request,
-        existing=request.get("publication_intent")
-        if isinstance(request.get("publication_intent"), dict)
-        else None,
+        existing=request.get("publication_intent") if isinstance(request.get("publication_intent"), dict) else None,
     )
     publication_profile = get_publication_profile(publication_intent["target_profile_id"])
     existing_transform_ledger = (
-        request.get("transform_ledger")
-        if isinstance(request.get("transform_ledger"), dict)
-        else None
+        request.get("transform_ledger") if isinstance(request.get("transform_ledger"), dict) else None
     )
     transform_ledger = build_transform_ledger(
         study_model,
@@ -760,11 +767,7 @@ def publish_studio_export_run(
     }
     intake_manifest_path = project_dir / "intake_manifest.json"
     intake_manifest = _read_json(intake_manifest_path) if intake_manifest_path.exists() else {}
-    recognition = (
-        intake_manifest.get("recognition")
-        if isinstance(intake_manifest.get("recognition"), dict)
-        else {}
-    )
+    recognition = intake_manifest.get("recognition") if isinstance(intake_manifest.get("recognition"), dict) else {}
     semantic = {
         **recognition,
         "semantic_family": recognition.get("semantic_family")
@@ -1335,11 +1338,7 @@ def _studio_source_for_request(
         replicate_mode=request.get("replicate_mode"),
     )
     prepared_source = prepared.get("source")
-    transform_steps = [
-        step
-        for step in prepared.get("transform_steps", [])
-        if isinstance(step, dict)
-    ]
+    transform_steps = [step for step in prepared.get("transform_steps", []) if isinstance(step, dict)]
     if isinstance(prepared_source, str) and prepared_source.strip():
         return Path(prepared_source).expanduser(), transform_steps
     return source, transform_steps
@@ -1459,7 +1458,7 @@ _METRIC_ALIASES: dict[str, tuple[str, ...]] = {
     "angular_frequency": ("angular frequency", "frequency", "omega"),
     "temperature": ("temperature", "temp"),
     "storage_modulus": ("storage modulus", "g'", "g prime"),
-    "loss_modulus": ("loss modulus", "g\"", "g double prime"),
+    "loss_modulus": ("loss modulus", 'g"', "g double prime"),
     "loss_factor": ("loss factor", "tan delta", "tan_delta"),
     "complex_modulus": ("complex modulus", "complex shear modulus", "g*"),
     "complex_viscosity": ("complex viscosity", "viscosity"),
@@ -1607,6 +1606,10 @@ def _apply_series_options(
     styles = render_options.get("series_styles") if isinstance(render_options.get("series_styles"), list) else []
     palette = _palette_for_render_options(render_options)
     default_line_width = _default_line_width(render_options)
+    marker_sequence = _string_list(render_options.get("marker_sequence"))
+    if not marker_sequence:
+        marker_sequence = list(POINT_LINE_MARKERS)
+    default_marker_size = _optional_float(render_options.get("marker_size"))
     by_label = {item.label: item for item in series}
     ordered = [by_label[label] for label in order if label in by_label]
     ordered.extend(item for item in series if item.label not in {entry.label for entry in ordered})
@@ -1624,6 +1627,9 @@ def _apply_series_options(
         style = style_by_label.get(item.label, {})
         if style.get("visible") is False or style.get("enabled") is False:
             continue
+        default_marker = (
+            marker_sequence[index % len(marker_sequence)] if _request_template(request) == "point_line" else "none"
+        )
         styled.append(
             StudioSeries(
                 label=item.label,
@@ -1633,8 +1639,8 @@ def _apply_series_options(
                 y_values=item.y_values,
                 color=str(style.get("color") or palette[index % len(palette)]),
                 line_width=_optional_float(style.get("line_width")) or default_line_width,
-                marker=style.get("marker", item.marker or "none"),
-                marker_size=_optional_float(style.get("marker_size")),
+                marker=style.get("marker", item.marker or default_marker),
+                marker_size=_optional_float(style.get("marker_size")) or default_marker_size,
             )
         )
     return styled or series
@@ -1660,6 +1666,9 @@ def _effective_render_options(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def _palette_for_render_options(render_options: dict[str, Any]) -> tuple[str, ...]:
+    explicit_palette = _string_list(render_options.get("palette_colors"))
+    if explicit_palette:
+        return tuple(explicit_palette)
     palette_id = str(render_options.get("palette_preset") or DEFAULT_PALETTE_PRESET)
     try:
         from sciplot_core.contract import load_plot_contract
@@ -1683,7 +1692,7 @@ def _veusz_style_contract(render_options: dict[str, Any]) -> _VeuszStyleContract
         if style is None:
             return _VeuszStyleContract()
         family = tuple(str(item) for item in style.typography.font_family)
-        return _VeuszStyleContract(
+        base = _VeuszStyleContract(
             font_family=family[0] if family else "Arial",
             font_size_pt=float(style.typography.font_size_pt),
             legend_font_size_pt=float(style.typography.legend_font_size_pt),
@@ -1707,7 +1716,25 @@ def _veusz_style_contract(render_options: dict[str, Any]) -> _VeuszStyleContract
             top_margin_mm=float(contract.global_frame.top_margin_mm),
         )
     except Exception:
-        return _VeuszStyleContract()
+        base = _VeuszStyleContract()
+    overrides: dict[str, float] = {}
+    for key in (
+        "font_size_pt",
+        "legend_font_size_pt",
+        "axis_linewidth_pt",
+        "tick_width_pt",
+        "tick_length_pt",
+        "minor_tick_width_pt",
+        "minor_tick_length_pt",
+        "line_width_pt",
+        "line_alpha",
+        "marker_alpha",
+        "marker_line_width_pt",
+    ):
+        value = _optional_float(render_options.get(key))
+        if value is not None:
+            overrides[key] = value
+    return replace(base, **overrides)
 
 
 def _default_line_width(render_options: dict[str, Any]) -> float:
@@ -1736,7 +1763,6 @@ def _apply_domain_render_defaults(
             "x_label_override": "Wavenumber (cm^-1)",
             "y_label_override": "Absorbance (offset)",
             "size": "120x110",
-            "palette_preset": "spectrum_journal_8",
         }
         for key, value in domain_defaults.items():
             if key not in explicit_options:
@@ -1757,7 +1783,30 @@ def _apply_domain_render_defaults(
             updated["series_label_mode"] = "legend"
     if _looks_like_frequency_axis(axis_info):
         updated.setdefault("xscale", "log")
-        updated.setdefault("x_label_override", "Angular frequency (rad/s)")
+        metric_label = next(
+            (
+                label
+                for candidate in (
+                    updated.get("y_metric"),
+                    request.get("y_metric"),
+                    updated.get("y_label_override"),
+                    axis_info.get("y_label"),
+                )
+                if (label := rheology_metric_axis_label(candidate)) is not None
+            ),
+            None,
+        )
+        rule_id = str(request.get("rule_id") or "").strip()
+        rheology_frequency = rule_id == "rheology_frequency_sweep" or metric_label is not None
+        x_axis_text = str(axis_info.get("x_label") or "").casefold()
+        if rheology_frequency or "angular" in x_axis_text or "rad" in x_axis_text:
+            updated.setdefault("x_label_override", RHEOLOGY_FREQUENCY_X_RENDER_LABEL)
+        if rheology_frequency:
+            updated.setdefault("yscale", "log")
+            updated.setdefault("x_tick_format", DEFAULT_LOG_TICK_FORMAT)
+            updated.setdefault("y_tick_format", DEFAULT_LOG_TICK_FORMAT)
+            if "y_label_override" not in explicit_options and metric_label is not None:
+                updated["y_label_override"] = metric_label
     if _looks_like_tensile_axis(axis_info):
         updated.setdefault("x_label_override", "Tensile Strain (%)")
         updated.setdefault("y_label_override", "Tensile Stress (MPa)")
@@ -1782,7 +1831,7 @@ def _label_load(series: list[StudioSeries]) -> dict[str, int]:
     }
 
 
-def _legend_needs_outside_right(series: list[StudioSeries]) -> bool:
+def _legend_is_dense(series: list[StudioSeries]) -> bool:
     load = _label_load(series)
     return (
         load["series_count"] > 8
@@ -1792,11 +1841,341 @@ def _legend_needs_outside_right(series: list[StudioSeries]) -> bool:
     )
 
 
-def _wide_size_for_legend(series: list[StudioSeries]) -> str:
+def _wide_size_for_dense_legend(series: list[StudioSeries]) -> str:
     load = _label_load(series)
     if load["series_count"] > 16 or load["total_label_length"] >= 150:
         return "180x55"
     return "120x55"
+
+
+def _legend_axis_bounds(
+    series: list[StudioSeries],
+    render_options: dict[str, Any],
+    axis: str,
+    *,
+    axis_contract: _VeuszAxisContract | None = None,
+) -> tuple[float, float, str] | None:
+    values = [
+        float(value)
+        for item in series
+        for value in (item.x_values if axis == "x" else item.y_values)
+        if math.isfinite(float(value))
+    ]
+    scale = _axis_scale(render_options, axis)
+    if scale == "log":
+        values = [value for value in values if value > 0]
+    if not values:
+        return None
+    if axis_contract is not None:
+        minimum = _optional_float(getattr(axis_contract, f"{axis}_min"))
+        maximum = _optional_float(getattr(axis_contract, f"{axis}_max"))
+        if minimum is not None and maximum is not None and not math.isclose(minimum, maximum):
+            if scale == "log":
+                if minimum <= 0.0 or maximum <= 0.0:
+                    return None
+                return math.log10(minimum), math.log10(maximum), scale
+            return minimum, maximum, scale
+    minimum = _optional_float(render_options.get(f"{axis}_min"))
+    maximum = _optional_float(render_options.get(f"{axis}_max"))
+    minimum = min(values) if minimum is None else minimum
+    maximum = max(values) if maximum is None else maximum
+    if scale == "log":
+        ticks = anchored_log_decade_ticks(values)
+        if ticks:
+            minimum = min(minimum, ticks[0])
+            maximum = max(maximum, ticks[-1])
+        if minimum <= 0 or maximum <= minimum:
+            return None
+        return math.log10(minimum), math.log10(maximum), scale
+    if maximum <= minimum:
+        return None
+    padding = (maximum - minimum) * 0.05
+    return minimum - padding, maximum + padding, scale
+
+
+def _legend_curve_samples(
+    series: list[StudioSeries],
+    render_options: dict[str, Any],
+    *,
+    axis_contract: _VeuszAxisContract | None = None,
+) -> list[tuple[float, float]]:
+    x_bounds = _legend_axis_bounds(series, render_options, "x", axis_contract=axis_contract)
+    y_bounds = _legend_axis_bounds(series, render_options, "y", axis_contract=axis_contract)
+    if x_bounds is None or y_bounds is None:
+        return []
+    x_low, x_high, x_scale = x_bounds
+    y_low, y_high, y_scale = y_bounds
+
+    def normalized(value: float, low: float, high: float, scale: str) -> float | None:
+        if scale == "log":
+            if value <= 0:
+                return None
+            value = math.log10(value)
+        return (value - low) / (high - low)
+
+    samples: list[tuple[float, float]] = []
+    for item in series:
+        points: list[tuple[float, float]] = []
+        for x_value, y_value in zip(item.x_values, item.y_values, strict=True):
+            x_norm = normalized(float(x_value), x_low, x_high, x_scale)
+            y_norm = normalized(float(y_value), y_low, y_high, y_scale)
+            if x_norm is None or y_norm is None:
+                continue
+            if math.isfinite(x_norm) and math.isfinite(y_norm) and 0.0 <= x_norm <= 1.0 and 0.0 <= y_norm <= 1.0:
+                points.append((x_norm, y_norm))
+        for index, point in enumerate(points):
+            samples.append(point)
+            if index == 0:
+                continue
+            previous = points[index - 1]
+            for step in range(1, 5):
+                fraction = step / 5.0
+                samples.append(
+                    (
+                        previous[0] + (point[0] - previous[0]) * fraction,
+                        previous[1] + (point[1] - previous[1]) * fraction,
+                    )
+                )
+    return samples
+
+
+def _legend_footprint(
+    series: list[StudioSeries],
+    render_options: dict[str, Any],
+) -> dict[str, float | int]:
+    """Estimate Veusz's graph-local key box in final physical units."""
+
+    style = _veusz_style_contract(render_options)
+    width_mm, height_mm = _size_mm(str(render_options.get("size") or "60x55"))
+    graph_width_mm = max(float(width_mm) - style.left_margin_mm - style.right_margin_mm, 1.0)
+    graph_height_mm = max(float(height_mm) - style.top_margin_mm - style.bottom_margin_mm, 1.0)
+    load = _label_load(series)
+    columns = _legend_columns(series_count=load["series_count"], mode="inside_best")
+    rows = max(1, math.ceil(load["series_count"] / columns))
+    point_to_mm = 25.4 / 72.0
+    font_height_mm = max(style.legend_font_size_pt * 1.2 * point_to_mm, 0.1)
+    max_text_width_mm = max(load["max_label_length"] * style.legend_font_size_pt * 0.56 * point_to_mm, 0.2)
+    key_length_mm = 4.0
+    box_width_mm = (max_text_width_mm + font_height_mm + key_length_mm) * columns + font_height_mm * (columns - 1)
+    box_height_mm = rows * font_height_mm
+    if style.legend_frameon:
+        margin_mm = 0.15 * font_height_mm
+        box_width_mm += 2.0 * margin_mm
+        box_height_mm += margin_mm
+    return {
+        "columns": columns,
+        "rows": rows,
+        "font_height_mm": font_height_mm,
+        "graph_width_mm": graph_width_mm,
+        "graph_height_mm": graph_height_mm,
+        "box_width_mm": min(box_width_mm, graph_width_mm * 0.92),
+        "box_height_mm": min(box_height_mm, graph_height_mm * 0.82),
+    }
+
+
+def _point_rectangle_distance_mm(
+    point: tuple[float, float],
+    rectangle: tuple[float, float, float, float],
+    *,
+    graph_width_mm: float,
+    graph_height_mm: float,
+) -> float:
+    x_value, y_value = point
+    left, right, bottom, top = rectangle
+    dx = max(left - x_value, 0.0, x_value - right) * graph_width_mm
+    dy = max(bottom - y_value, 0.0, y_value - top) * graph_height_mm
+    return math.hypot(dx, dy)
+
+
+def _auto_inside_legend_placement(
+    series: list[StudioSeries],
+    render_options: dict[str, Any],
+    *,
+    template_id: str,
+) -> dict[str, Any]:
+    axis_contract = _veusz_axis_contract(render_options, template_id=template_id, series=series)
+    samples = _legend_curve_samples(series, render_options, axis_contract=axis_contract)
+    footprint = _legend_footprint(series, render_options)
+    graph_width_mm = float(footprint["graph_width_mm"])
+    graph_height_mm = float(footprint["graph_height_mm"])
+    width = float(footprint["box_width_mm"]) / graph_width_mm
+    height = float(footprint["box_height_mm"]) / graph_height_mm
+    font_pad_x = float(footprint["font_height_mm"]) / graph_width_mm
+    font_pad_y = float(footprint["font_height_mm"]) / graph_height_mm
+    edge_padding_mm = max(
+        0.0,
+        _optional_float(render_options.get("legend_edge_padding_mm")) or DEFAULT_LEGEND_EDGE_PADDING_MM,
+    )
+    bottom_pad = min(edge_padding_mm / graph_height_mm, max(0.0, 1.0 - height))
+    candidates = {
+        "upper_right": (
+            1.0 - font_pad_x - width,
+            1.0 - font_pad_x,
+            1.0 - font_pad_y - height,
+            1.0 - font_pad_y,
+        ),
+        "lower_right": (1.0 - font_pad_x - width, 1.0 - font_pad_x, bottom_pad, bottom_pad + height),
+        "upper_left": (font_pad_x, font_pad_x + width, 1.0 - font_pad_y - height, 1.0 - font_pad_y),
+        "lower_left": (font_pad_x, font_pad_x + width, bottom_pad, bottom_pad + height),
+    }
+    clearance_mm = max(
+        0.0,
+        _optional_float(render_options.get("legend_curve_clearance_mm")) or DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
+    )
+    order = ("upper_right", "lower_right", "upper_left", "lower_left")
+    metrics: dict[str, dict[str, Any]] = {}
+    for name, rectangle in candidates.items():
+        distances = [
+            _point_rectangle_distance_mm(
+                point,
+                rectangle,
+                graph_width_mm=graph_width_mm,
+                graph_height_mm=graph_height_mm,
+            )
+            for point in samples
+        ]
+        minimum = min(distances, default=float("inf"))
+        overlaps = sum(distance <= 1e-9 for distance in distances)
+        near = sum(distance < clearance_mm for distance in distances)
+        proximity_load = sum(
+            (clearance_mm - distance) / clearance_mm
+            for distance in distances
+            if clearance_mm > 0.0 and distance < clearance_mm
+        )
+        metrics[name] = {
+            "rectangle_fraction": [round(value, 6) for value in rectangle],
+            "overlap_samples": overlaps,
+            "near_samples": near,
+            "minimum_curve_clearance_mm": None if not math.isfinite(minimum) else round(minimum, 6),
+            "clearance_deficit_mm": (0.0 if not math.isfinite(minimum) else round(max(clearance_mm - minimum, 0.0), 6)),
+            "proximity_load": round(proximity_load, 6),
+        }
+
+    def score(name: str) -> tuple[Any, ...]:
+        item = metrics[name]
+        minimum = item["minimum_curve_clearance_mm"]
+        safe = minimum is None or float(minimum) >= clearance_mm
+        return (
+            int(item["overlap_samples"] > 0),
+            int(item["overlap_samples"]),
+            int(not safe),
+            float(item["proximity_load"]),
+            float(item["clearance_deficit_mm"]),
+            -(float(minimum) if minimum is not None else float("inf")),
+            order.index(name),
+        )
+
+    selected = min(order, key=score) if samples else "lower_right"
+    selected_metrics = metrics[selected]
+    minimum = selected_metrics["minimum_curve_clearance_mm"]
+    return {
+        "position": selected,
+        "method": "final_size_physical_clearance_v1",
+        "required_curve_clearance_mm": clearance_mm,
+        "edge_padding_mm": edge_padding_mm,
+        "minimum_curve_clearance_mm": minimum,
+        "clearance_status": (
+            "safe" if minimum is None or float(minimum) >= clearance_mm else "best_available_needs_reserve"
+        ),
+        "footprint": {key: round(float(value), 6) for key, value in footprint.items()},
+        "candidates": metrics,
+    }
+
+
+def _auto_inside_legend_position(
+    series: list[StudioSeries],
+    render_options: dict[str, Any],
+) -> str:
+    """Compatibility wrapper for callers that only need the selected corner."""
+
+    return str(_auto_inside_legend_placement(series, render_options, template_id="point_line")["position"])
+
+
+def _reserve_vertical_legend_clearance(
+    render_options: dict[str, Any],
+    *,
+    request: dict[str, Any],
+    series: list[StudioSeries],
+    template_id: str,
+    placement: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    position = str(placement.get("position") or "")
+    if position not in {"lower_left", "lower_right", "upper_left", "upper_right"}:
+        return render_options, placement
+    required = _optional_float(placement.get("required_curve_clearance_mm")) or 0.0
+    initial_minimum = _optional_float(placement.get("minimum_curve_clearance_mm"))
+    if initial_minimum is None or initial_minimum >= required:
+        return render_options, placement
+    lower = position.startswith("lower")
+    bound_key = "y_min" if lower else "y_max"
+    if bound_key in _explicit_render_options(request):
+        return render_options, placement
+    graph_height_mm = max(float(placement["footprint"]["graph_height_mm"]), 1.0)
+    scale = _axis_scale(render_options, "y")
+    updated = dict(render_options)
+    revised = placement
+    original_bound: float | None = None
+    total_reserve = 0.0
+    for _attempt in range(3):
+        minimum = _optional_float(revised.get("minimum_curve_clearance_mm"))
+        if minimum is None or minimum >= required:
+            break
+        axis_contract = _veusz_axis_contract(updated, template_id=template_id, series=series)
+        y_min = axis_contract.y_min
+        y_max = axis_contract.y_max
+        if y_min is None or y_max is None or y_max <= y_min:
+            break
+        if original_bound is None:
+            original_bound = y_min if lower else y_max
+        deficit_mm = required - minimum
+        previous_bound = updated.get(bound_key)
+        if scale == "log":
+            if y_min <= 0.0:
+                break
+            span = math.log10(y_max) - math.log10(y_min)
+            increment = min(0.55 - total_reserve, max(0.005, deficit_mm / graph_height_mm * span * 1.5))
+            if increment <= 0.0:
+                break
+            if lower:
+                updated["y_min"] = 10.0 ** (math.log10(y_min) - increment)
+            else:
+                updated["y_max"] = 10.0 ** (math.log10(y_max) + increment)
+        else:
+            span = y_max - y_min
+            maximum_total = span * 0.25
+            increment = min(
+                maximum_total - total_reserve,
+                max(span * 0.005, deficit_mm / graph_height_mm * span * 1.5),
+            )
+            if increment <= 0.0:
+                break
+            if lower:
+                updated["y_min"] = y_min - increment
+            else:
+                updated["y_max"] = y_max + increment
+        candidate = _auto_inside_legend_placement(series, updated, template_id=template_id)
+        candidate_minimum = _optional_float(candidate.get("minimum_curve_clearance_mm"))
+        if candidate_minimum is None or candidate_minimum <= minimum + 1e-6:
+            if previous_bound is None:
+                updated.pop(bound_key, None)
+            else:
+                updated[bound_key] = previous_bound
+            break
+        total_reserve += increment
+        revised = candidate
+        if str(revised.get("position") or "").startswith("lower") != lower:
+            break
+    revised_minimum = _optional_float(revised.get("minimum_curve_clearance_mm"))
+    if original_bound is None or revised_minimum is None or revised_minimum <= initial_minimum + 1e-6:
+        return render_options, placement
+    revised["axis_reserve"] = {
+        "side": "bottom" if lower else "top",
+        "original_bound": original_bound,
+        "revised_bound": updated[bound_key],
+        "scale": scale,
+        **({"decades": round(total_reserve, 6)} if scale == "log" else {"axis_units": round(total_reserve, 6)}),
+    }
+    return updated, revised
 
 
 def _apply_readability_render_defaults(
@@ -1810,8 +2189,14 @@ def _apply_readability_render_defaults(
     updated = dict(render_options)
     explicit_options = _explicit_render_options(request)
     label_mode = str(updated.get("series_label_mode") or "legend").strip().casefold()
-    legend_position = str(updated.get("legend_position") or "auto").strip().casefold()
+    raw_legend_position = updated.get("legend_position")
+    legend_position = normalize_legend_position(raw_legend_position)
     autofixes = _string_list(updated.get("_autofixes_applied"))
+    if is_removed_outside_legend_position(raw_legend_position):
+        updated["legend_position"] = "auto"
+        for key in ("legend_horz_position", "legend_vert_position", "legend_horz_manual", "legend_vert_manual"):
+            updated.pop(key, None)
+        autofixes.append("legend_outside_removed")
 
     if template_id in STACKED_TEMPLATE_IDS:
         if label_mode in {"inline", "edge", "auto"} and len(series) > 1:
@@ -1823,37 +2208,40 @@ def _apply_readability_render_defaults(
         return updated
 
     if legend_position in {"", "auto"} and label_mode in {"", "auto", "legend"}:
-        if _legend_needs_outside_right(series):
-            updated["legend_position"] = "outside_right"
-            updated["series_label_mode"] = "legend"
-            if "size" not in explicit_options:
-                updated["size"] = _wide_size_for_legend(series)
-            autofixes.append("legend_auto_outside_right")
-        elif _looks_like_torque_axis(axis_info) or str(request.get("rule_id") or "").strip() == "torque_curve":
+        if _legend_is_dense(series) and "size" not in explicit_options:
+            updated["size"] = _wide_size_for_dense_legend(series)
+            autofixes.append("legend_auto_widened_inside")
+        if _looks_like_torque_axis(axis_info) or str(request.get("rule_id") or "").strip() == "torque_curve":
             updated["legend_position"] = "upper_right"
             updated["series_label_mode"] = "legend"
             autofixes.append("legend_auto_upper_right")
+        else:
+            placement = _auto_inside_legend_placement(series, updated, template_id=template_id)
+            updated, placement = _reserve_vertical_legend_clearance(
+                updated,
+                request=request,
+                series=series,
+                template_id=template_id,
+                placement=placement,
+            )
+            position = str(placement["position"])
+            updated["legend_position"] = position
+            updated["series_label_mode"] = "legend"
+            updated["_legend_placement_diagnostics"] = placement
+            if isinstance(placement.get("axis_reserve"), dict):
+                autofixes.append(f"legend_axis_reserve_{placement['axis_reserve']['side']}")
+            if position.startswith("lower"):
+                graph_height_mm = max(float(placement["footprint"]["graph_height_mm"]), 1.0)
+                edge_padding_mm = max(float(placement.get("edge_padding_mm") or 0.0), 0.0)
+                updated["legend_horz_position"] = "left" if position.endswith("left") else "right"
+                updated["legend_vert_position"] = "manual"
+                updated["legend_vert_manual"] = min(edge_padding_mm / graph_height_mm, 0.25)
+                autofixes.append("legend_lower_corner_edge_reclaimed")
+            autofixes.append(f"legend_auto_{position}")
 
     if autofixes:
         updated["_autofixes_applied"] = sorted(set(autofixes))
     return updated
-
-
-def _adapt_style_for_legend(
-    style: _VeuszStyleContract,
-    *,
-    legend_mode: str,
-    series: list[StudioSeries],
-) -> _VeuszStyleContract:
-    if legend_mode != "outside_right":
-        return style
-    load = _label_load(series)
-    required = 30.0
-    if load["series_count"] > 12 or load["max_label_length"] >= 15:
-        required = 39.0
-    if load["series_count"] > 20 or load["total_label_length"] >= 150:
-        required = 52.0
-    return replace(style, right_margin_mm=max(style.right_margin_mm, required))
 
 
 def _apply_template_series_transforms(
@@ -2048,7 +2436,6 @@ def _write_veusz_document(
     )
     legend_mode = _veusz_legend_mode(render_options, template_id=template_id)
     style = _veusz_style_contract(render_options)
-    style = _adapt_style_for_legend(style, legend_mode=legend_mode, series=series)
     axis_contract = _veusz_axis_contract(render_options, template_id=template_id, series=series)
     width, height = _size_mm(str(render_options.get("size") or "60x55"))
     show_key = _show_veusz_key(template_id=template_id, render_options=render_options, series_count=len(series))
@@ -2142,8 +2529,7 @@ def _build_veusz_plot_spec(
     if (
         show_key
         and template_id not in STACKED_TEMPLATE_IDS
-        and legend_mode != "outside_right"
-        and _legend_needs_outside_right(series)
+        and _legend_is_dense(series)
     ):
         layout_issues.append(
             {
@@ -2161,6 +2547,19 @@ def _build_veusz_plot_spec(
         "horz_manual": _optional_float(render_options.get("legend_horz_manual")),
         "vert_manual": _optional_float(render_options.get("legend_vert_manual")),
     }
+    placement_diagnostics = render_options.get("_legend_placement_diagnostics")
+    if isinstance(placement_diagnostics, dict):
+        legend_spec["placement_diagnostics"] = json_safe(placement_diagnostics)
+        if show_key and placement_diagnostics.get("clearance_status") != "safe":
+            layout_issues.append(
+                {
+                    "id": "legend_curve_clearance_below_target",
+                    "severity": "warning",
+                    "message": "No inside legend corner reached the requested curve clearance at final size.",
+                    "required_clearance_mm": placement_diagnostics.get("required_curve_clearance_mm"),
+                    "measured_clearance_mm": placement_diagnostics.get("minimum_curve_clearance_mm"),
+                }
+            )
     if show_key:
         legend_spec["label_load"] = label_load
     return {
@@ -2173,6 +2572,19 @@ def _build_veusz_plot_spec(
         "source_request": json_safe(request),
         "render_options": json_safe(render_options),
         "size_mm": [width_mm, height_mm],
+        "frame_alignment": {
+            "status": "locked",
+            "margin_mode": FIXED_PUBLICATION_FRAME_POLICY.margin_mode,
+            "outside_legend_allowed": FIXED_PUBLICATION_FRAME_POLICY.outside_legend_allowed,
+            "auxiliary_frame_envelope": FIXED_PUBLICATION_FRAME_POLICY.auxiliary_frame_envelope,
+            "auxiliary_text_envelope": FIXED_PUBLICATION_FRAME_POLICY.auxiliary_text_envelope,
+            "margins_mm": {
+                "left": style.left_margin_mm,
+                "right": style.right_margin_mm,
+                "bottom": style.bottom_margin_mm,
+                "top": style.top_margin_mm,
+            },
+        },
         "autofixes_applied": _string_list(render_options.get("_autofixes_applied")),
         "layout_issues": layout_issues,
         "provenance": {
@@ -2191,6 +2603,7 @@ def _build_veusz_plot_spec(
             "line_alpha": style.line_alpha,
             "marker_alpha": style.marker_alpha,
             "marker_size_pt": style.marker_size_pt,
+            "marker_line_width_pt": style.marker_line_width_pt,
             "axes_labelpad_pt": style.axes_labelpad_pt,
             "xtick_major_pad_pt": style.xtick_major_pad_pt,
             "ytick_major_pad_pt": style.ytick_major_pad_pt,
@@ -2206,6 +2619,20 @@ def _build_veusz_plot_spec(
             "x": {
                 "label": axis_info["x_label"],
                 "scale": _axis_scale(render_options, "x"),
+                "tick_format": str(
+                    render_options.get("x_tick_format")
+                    or (DEFAULT_LOG_TICK_FORMAT if _axis_scale(render_options, "x") == "log" else "Auto")
+                ),
+                "minor_tick_count": int(
+                    render_options.get("minor_tick_count")
+                    or (DEFAULT_LOG_MINOR_TICK_COUNT if _axis_scale(render_options, "x") == "log" else 20)
+                ),
+                "minor_ticks": _log_minor_ticks(
+                    axis_contract.x_min,
+                    axis_contract.x_max,
+                    scale=_axis_scale(render_options, "x"),
+                    major_ticks=axis_contract.x_ticks,
+                ),
                 "min": axis_contract.x_min,
                 "max": axis_contract.x_max,
                 "ticks": list(axis_contract.x_ticks),
@@ -2214,6 +2641,20 @@ def _build_veusz_plot_spec(
             "y": {
                 "label": axis_info["y_label"],
                 "scale": _axis_scale(render_options, "y"),
+                "tick_format": str(
+                    render_options.get("y_tick_format")
+                    or (DEFAULT_LOG_TICK_FORMAT if _axis_scale(render_options, "y") == "log" else "Auto")
+                ),
+                "minor_tick_count": int(
+                    render_options.get("minor_tick_count")
+                    or (DEFAULT_LOG_MINOR_TICK_COUNT if _axis_scale(render_options, "y") == "log" else 20)
+                ),
+                "minor_ticks": _log_minor_ticks(
+                    axis_contract.y_min,
+                    axis_contract.y_max,
+                    scale=_axis_scale(render_options, "y"),
+                    major_ticks=axis_contract.y_ticks,
+                ),
                 "min": axis_contract.y_min,
                 "max": axis_contract.y_max,
                 "ticks": list(axis_contract.y_ticks),
@@ -2233,6 +2674,11 @@ def _build_veusz_plot_spec(
                 "line_width_pt": item.line_width,
                 "marker": str(MARKER_MAP.get(item.marker, item.marker or "none")),
                 "marker_size_pt": item.marker_size,
+                "marker_fill_color": (
+                    "white"
+                    if str(render_options.get("marker_fill_mode") or "filled").casefold() == "open"
+                    else item.color
+                ),
             }
             for index, item in enumerate(series, start=1)
         ],
@@ -2322,8 +2768,9 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("yData", item["y_name"])
         interface.Set("key", item["label"])
         interface.Set("PlotLine/color", item["color"])
-        interface.Set("MarkerFill/color", item["color"])
+        interface.Set("MarkerFill/color", item.get("marker_fill_color") or item["color"])
         interface.Set("MarkerLine/color", item["color"])
+        interface.Set("MarkerLine/width", _pt(float(style["marker_line_width_pt"])))
         interface.Set("marker", item["marker"])
         interface.Set("PlotLine/transparency", _alpha_to_transparency(float(style["line_alpha"])))
         interface.Set("MarkerFill/transparency", _alpha_to_transparency(float(style["marker_alpha"])))
@@ -2375,11 +2822,6 @@ def _apply_key_position(
         if vert == "manual":
             interface.Set("vertManual", float(vert_manual if vert_manual is not None else 0.5))
         return
-    if normalized == "outside_right":
-        interface.Set("horzPosn", "manual")
-        interface.Set("horzManual", 1.02)
-        interface.Set("vertPosn", "top")
-        return
     if normalized in {"upper_right", "top_right"}:
         interface.Set("horzPosn", "right")
         interface.Set("vertPosn", "top")
@@ -2410,9 +2852,14 @@ def _add_veusz_axis(interface: Any, axis: str, axis_spec: dict[str, Any], style:
     interface.Set("MajorTicks/length", _pt(float(style["tick_length_pt"])))
     interface.Set("MinorTicks/width", _pt(float(style["minor_tick_width_pt"])))
     interface.Set("MinorTicks/length", _pt(float(style["minor_tick_length_pt"])))
+    interface.Set("MinorTicks/number", int(axis_spec.get("minor_tick_count") or 20))
+    minor_ticks = axis_spec.get("minor_ticks") if isinstance(axis_spec.get("minor_ticks"), list) else []
+    if minor_ticks:
+        interface.Set("MinorTicks/manualTicks", [float(value) for value in minor_ticks])
     interface.Set("Label/size", _pt(float(style["font_size_pt"])))
     interface.Set("Label/offset", _pt(float(style["axes_labelpad_pt"])))
     interface.Set("TickLabels/size", _pt(float(style["font_size_pt"])))
+    interface.Set("TickLabels/format", str(axis_spec.get("tick_format") or "Auto"))
     tick_offset = style["xtick_major_pad_pt"] if axis == "x" else style["ytick_major_pad_pt"]
     interface.Set("TickLabels/offset", _pt(float(tick_offset)))
     if axis == "y" and axis_spec.get("show_ticks") is False:
@@ -2464,12 +2911,18 @@ def _veusz_axis_contract(
     template_id: str,
     series: list[StudioSeries],
 ) -> _VeuszAxisContract:
+    explicit_x_min = _optional_float(render_options.get("x_min")) is not None
+    explicit_x_max = _optional_float(render_options.get("x_max")) is not None
+    explicit_y_min = _optional_float(render_options.get("y_min")) is not None
+    explicit_y_max = _optional_float(render_options.get("y_max")) is not None
     x_min = _optional_float(render_options.get("x_min"))
     x_max = _optional_float(render_options.get("x_max"))
     y_min = _optional_float(render_options.get("y_min"))
     y_max = _optional_float(render_options.get("y_max"))
-    x_ticks: tuple[float, ...] = ()
-    y_ticks: tuple[float, ...] = ()
+    x_ticks = _float_tuple(render_options.get("x_ticks"))
+    y_ticks = _float_tuple(render_options.get("y_ticks"))
+    explicit_x_ticks = bool(x_ticks)
+    explicit_y_ticks = bool(y_ticks)
 
     if series:
         try:
@@ -2500,12 +2953,37 @@ def _veusz_axis_contract(
                 y_min = float(limits.ylim[0])
             if y_max is None:
                 y_max = float(limits.ylim[1])
-            if limits.x_tick_policy is not None:
+            if not x_ticks and limits.x_tick_policy is not None:
                 x_ticks = tuple(float(value) for value in limits.x_tick_policy.major_ticks)
-            if limits.y_tick_policy is not None:
+            if not y_ticks and limits.y_tick_policy is not None:
                 y_ticks = tuple(float(value) for value in limits.y_tick_policy.major_ticks)
         except Exception:
             pass
+
+    if series and _axis_scale(render_options, "x") == "log" and not explicit_x_ticks:
+        x_ticks = anchored_log_decade_ticks(value for item in series for value in item.x_values)
+        if x_ticks:
+            if not explicit_x_min:
+                x_min = min(float(x_min), x_ticks[0]) if x_min is not None else x_ticks[0]
+            if not explicit_x_max:
+                x_max = max(float(x_max), x_ticks[-1]) if x_max is not None else x_ticks[-1]
+    if series and _axis_scale(render_options, "y") == "log" and not explicit_y_ticks:
+        y_ticks = anchored_log_decade_ticks(value for item in series for value in item.y_values)
+        if y_ticks:
+            if not explicit_y_min:
+                y_min = min(float(y_min), y_ticks[0]) if y_min is not None else y_ticks[0]
+            if not explicit_y_max:
+                y_max = max(float(y_max), y_ticks[-1]) if y_max is not None else y_ticks[-1]
+    if x_ticks:
+        if not explicit_x_min:
+            x_min = min(float(x_min), min(x_ticks)) if x_min is not None else min(x_ticks)
+        if not explicit_x_max:
+            x_max = max(float(x_max), max(x_ticks)) if x_max is not None else max(x_ticks)
+    if y_ticks:
+        if not explicit_y_min:
+            y_min = min(float(y_min), min(y_ticks)) if y_min is not None else min(y_ticks)
+        if not explicit_y_max:
+            y_max = max(float(y_max), max(y_ticks)) if y_max is not None else max(y_ticks)
 
     reverse_x = render_options.get("reverse_x") is True
     if reverse_x and x_min is not None and x_max is not None:
@@ -2513,7 +2991,9 @@ def _veusz_axis_contract(
     if x_ticks and x_min is not None and x_max is not None:
         low = min(x_min, x_max)
         high = max(x_min, x_max)
-        tick_values = [x_min, *x_ticks, x_max] if reverse_x else list(x_ticks)
+        tick_values = (
+            [x_min, *x_ticks, x_max] if reverse_x and _axis_scale(render_options, "x") != "log" else list(x_ticks)
+        )
         deduped: list[float] = []
         for value in tick_values:
             if value < low - 1e-9 or value > high + 1e-9:
@@ -2521,6 +3001,10 @@ def _veusz_axis_contract(
             if not any(math.isclose(value, existing) for existing in deduped):
                 deduped.append(value)
         x_ticks = tuple(sorted(deduped, reverse=x_min > x_max))
+    if y_ticks and y_min is not None and y_max is not None:
+        low = min(y_min, y_max)
+        high = max(y_min, y_max)
+        y_ticks = tuple(value for value in sorted(set(y_ticks)) if low - 1e-9 <= value <= high + 1e-9)
     return _VeuszAxisContract(
         x_min=x_min,
         x_max=x_max,
@@ -2532,10 +3016,10 @@ def _veusz_axis_contract(
 
 
 def _veusz_legend_mode(render_options: dict[str, Any], *, template_id: str) -> str:
-    legend_position = str(render_options.get("legend_position") or "auto").strip().casefold()
+    legend_position = normalize_legend_position(render_options.get("legend_position"))
     if legend_position in {"none", "hide", "hidden", "off"}:
         return "none"
-    if legend_position in {"outside_right", "upper_right", "upper_left", "lower_left", "lower_right", "manual"}:
+    if legend_position in {"upper_right", "upper_left", "lower_left", "lower_right", "manual"}:
         return legend_position
     if template_id in STACKED_TEMPLATE_IDS:
         label_mode = str(render_options.get("series_label_mode") or "").casefold()
@@ -2611,12 +3095,6 @@ def _graph_margin_lines(style: _VeuszStyleContract) -> list[str]:
 
 def _legend_columns(*, series_count: int, mode: str = "inside_best") -> int:
     if series_count <= 1:
-        return 1
-    if mode == "outside_right":
-        if series_count > 24:
-            return 3
-        if series_count > 12:
-            return 2
         return 1
     return 2
 
@@ -3045,6 +3523,44 @@ def _optional_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _float_tuple(value: Any) -> tuple[float, ...]:
+    if not isinstance(value, list | tuple):
+        return ()
+    parsed = [_optional_float(item) for item in value]
+    return tuple(item for item in parsed if item is not None and math.isfinite(item))
+
+
+def _log_minor_ticks(
+    minimum: float | None,
+    maximum: float | None,
+    *,
+    scale: str,
+    major_ticks: tuple[float, ...] = (),
+) -> list[float]:
+    if scale != "log" or minimum is None or maximum is None:
+        return []
+    low, high = sorted((float(minimum), float(maximum)))
+    if not math.isfinite(low) or not math.isfinite(high) or low <= 0 or high <= low:
+        return []
+    visible_major_ticks = sorted(
+        float(value) for value in major_ticks if math.isfinite(value) and low <= float(value) <= high
+    )
+    if len(visible_major_ticks) >= 2:
+        low, high = visible_major_ticks[0], visible_major_ticks[-1]
+    elif len(visible_major_ticks) == 1:
+        return []
+    start_exponent = math.floor(math.log10(low)) - 1
+    end_exponent = math.ceil(math.log10(high)) + 1
+    ticks: list[float] = []
+    for exponent in range(start_exponent, end_exponent + 1):
+        decade = 10.0**exponent
+        for multiplier in DEFAULT_LOG_MINOR_MULTIPLIERS:
+            value = multiplier * decade
+            if low < value < high:
+                ticks.append(value)
+    return ticks
 
 
 def _py_string(value: str) -> str:

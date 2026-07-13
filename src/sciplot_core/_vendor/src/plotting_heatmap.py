@@ -5,8 +5,6 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib import transforms
-
-from src import plot_style
 from src.data_loader import HeatmapTable
 from src.layout_policy import (
     LayoutCandidate,
@@ -21,6 +19,8 @@ from src.plotting_primitives import (
     _format_axis_label,
     _resolved_panel_geometry,
 )
+
+from src import plot_style
 
 
 def _colorbar_header_candidates(
@@ -224,33 +224,49 @@ def plot_heatmap(
     colorbar_label = None
     if show_colorbar:
         position = ax.get_position()
-        heatmap_rect, cax_rect = _compute_heatmap_cax_geometry(position, layout_overrides=colorbar_layout)
+        resolved_colorbar_layout = dict(_HEATMAP_LAYOUT)
+        if colorbar_layout:
+            resolved_colorbar_layout.update(colorbar_layout)
+        heatmap_rect, cax_rect = _compute_heatmap_cax_geometry(
+            position,
+            layout_overrides=resolved_colorbar_layout,
+        )
         ax.set_position(heatmap_rect)
         cax = fig.add_axes(cax_rect)
-        gap_fraction = (colorbar_label_gap_pt / 72.0) / max(fig.get_size_inches()[1], 1e-6)
-        colorbar_header, colorbar_decision = _choose_colorbar_header_candidate(
-            fig=fig,
-            ax=ax,
-            cax_rect=cax_rect,
-            label_text=_format_axis_label(table.z_label, table.z_unit),
-            gap_fraction=gap_fraction,
-            label_gap_pt=float(colorbar_label_gap_pt),
-            fontsize=float(_HEATMAP_LAYOUT["label_font_size_pt"]),
-        )
-        record_layout_decision(
-            fig,
-            colorbar_decision,
-            context={"path": "heatmap_colorbar_header", "phase": "candidate_selection"},
-        )
-        header_payload = colorbar_header.payload if isinstance(colorbar_header.payload, dict) else {}
-        colorbar_label = fig.text(
-            float(header_payload.get("x", cax_rect[0])),
-            float(header_payload.get("y", min(0.985, cax_rect[1] + cax_rect[3] + gap_fraction))),
-            _format_axis_label(table.z_label, table.z_unit),
-            ha=str(header_payload.get("ha", "left")),
-            va="center",
-            fontsize=float(_HEATMAP_LAYOUT["label_font_size_pt"]),
-        )
+        if str(resolved_colorbar_layout.get("frame_envelope_mode") or "") == "standard_graph":
+            colorbar_label = fig.text(
+                float(position.x0),
+                float(cax_rect[1] + cax_rect[3] / 2.0),
+                _format_axis_label(table.z_label, table.z_unit),
+                ha="left",
+                va="center",
+                fontsize=float(_HEATMAP_LAYOUT["label_font_size_pt"]),
+            )
+        else:
+            gap_fraction = (colorbar_label_gap_pt / 72.0) / max(fig.get_size_inches()[1], 1e-6)
+            colorbar_header, colorbar_decision = _choose_colorbar_header_candidate(
+                fig=fig,
+                ax=ax,
+                cax_rect=cax_rect,
+                label_text=_format_axis_label(table.z_label, table.z_unit),
+                gap_fraction=gap_fraction,
+                label_gap_pt=float(colorbar_label_gap_pt),
+                fontsize=float(_HEATMAP_LAYOUT["label_font_size_pt"]),
+            )
+            record_layout_decision(
+                fig,
+                colorbar_decision,
+                context={"path": "heatmap_colorbar_header", "phase": "candidate_selection"},
+            )
+            header_payload = colorbar_header.payload if isinstance(colorbar_header.payload, dict) else {}
+            colorbar_label = fig.text(
+                float(header_payload.get("x", cax_rect[0])),
+                float(header_payload.get("y", min(0.985, cax_rect[1] + cax_rect[3] + gap_fraction))),
+                _format_axis_label(table.z_label, table.z_unit),
+                ha=str(header_payload.get("ha", "left")),
+                va="center",
+                fontsize=float(_HEATMAP_LAYOUT["label_font_size_pt"]),
+            )
 
     heatmap = sns.heatmap(
         matrix,

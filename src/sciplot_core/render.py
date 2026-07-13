@@ -171,6 +171,63 @@ def _veusz_layout_report(
     issues: list[dict[str, Any]] = [
         item for item in spec.get("layout_issues", []) if isinstance(item, dict)
     ]
+    try:
+        from sciplot_core.contract import load_plot_contract, qa_profile
+
+        contract = load_plot_contract()
+        alignment_profile = qa_profile("alignment")
+        tolerance_mm = float(alignment_profile.get("frame_tolerance_mm", 0.05))
+        expected_margins = {
+            "left": float(contract.global_frame.left_margin_mm),
+            "right": float(contract.global_frame.right_margin_mm),
+            "bottom": float(contract.global_frame.bottom_margin_mm),
+            "top": float(contract.global_frame.top_margin_mm),
+        }
+        style = spec.get("style") if isinstance(spec.get("style"), dict) else {}
+        actual_margins = style.get("margins_mm") if isinstance(style.get("margins_mm"), dict) else {}
+        margin_errors = {
+            side: abs(float(actual_margins.get(side, float("inf"))) - expected)
+            for side, expected in expected_margins.items()
+        }
+        frame_alignment = {
+            "mode": "fixed_mm",
+            "status": (
+                "aligned" if all(error <= tolerance_mm for error in margin_errors.values()) else "misaligned"
+            ),
+            "expected_margins_mm": expected_margins,
+            "actual_margins_mm": actual_margins,
+            "margin_error_mm": margin_errors,
+            "tolerance_mm": tolerance_mm,
+            "outside_legend_allowed": False,
+        }
+        summary["frame_alignment"] = frame_alignment
+        if frame_alignment["status"] != "aligned":
+            issues.append(
+                {
+                    "id": "fixed_publication_frame_misaligned",
+                    "severity": "critical",
+                    "message": "The Veusz graph margins drifted from the fixed publication frame.",
+                    "margin_error_mm": margin_errors,
+                    "tolerance_mm": tolerance_mm,
+                }
+            )
+        legend = spec.get("legend") if isinstance(spec.get("legend"), dict) else {}
+        if str(legend.get("mode") or "").strip().casefold() in {"outside", "outside_right"}:
+            issues.append(
+                {
+                    "id": "outside_legend_forbidden",
+                    "severity": "critical",
+                    "message": "Outside legends are disabled because they break the fixed publication frame.",
+                }
+            )
+    except (TypeError, ValueError):
+        issues.append(
+            {
+                "id": "fixed_publication_frame_unverifiable",
+                "severity": "critical",
+                "message": "The generated Veusz spec did not expose verifiable physical graph margins.",
+            }
+        )
     if (
         split_panel is None
         and template in SUPPORTED_SPLIT_TEMPLATES

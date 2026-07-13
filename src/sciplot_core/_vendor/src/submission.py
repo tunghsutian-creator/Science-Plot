@@ -8,15 +8,9 @@ from src.plot_contract import template_contract, validation_rule
 from src.rendering.models import QAReport, RenderOptions, SubmissionCheck, SubmissionReport
 
 _SAFE_PALETTES = {
-    "bright",
-    "colorblind_safe",
-    "deep",
-    "materials_warm",
-    "mono",
-    "muted",
-    "okabe_ito",
-    "spectrum_journal_8",
-    "tol_muted",
+    "jama_editorial",
+    "npg_modern",
+    "tol_bright",
 }
 _CURVE_TEMPLATES = {"curve", "point_line", "scatter", "bubble_scatter"}
 _PDF_SUFFIXES = {".pdf"}

@@ -550,12 +550,9 @@ def _render_curve_candidate(
         _compact_curve_fix(options),
     )
     compact_legend = legend_variant == "compact"
-    outside_legend = legend_variant == "outside"
     strategy = (
         "compact_legend"
         if compact_legend
-        else "outside_legend"
-        if outside_legend
         else "legend"
         if direct_label_side is None
         else f"direct_{direct_label_side}"
@@ -565,13 +562,9 @@ def _render_curve_candidate(
         autofixes.append("direct_series_labels")
     if compact_legend:
         autofixes.append("compact_inside_legend")
-    if outside_legend:
-        autofixes.append("legend_auto_outside_right")
     forced_legend_mode = _legend_mode_for_position(
         cast(str | None, base_kwargs.get("legend_position", options.legend_position))
     )
-    if outside_legend:
-        forced_legend_mode = "outside"
     resolved_xscale = str(base_kwargs.get("xscale", options.xscale))
     resolved_yscale = str(base_kwargs.get("yscale", options.yscale))
     resolved_x_tick_density = cast(str | None, base_kwargs.get("x_tick_density", options.x_tick_density))
@@ -989,20 +982,6 @@ def _render_curve_like_plot(
                 scatter=scatter,
                 direct_label_side=None,
                 legend_variant="compact",
-                base_kwargs=resolved_kwargs,
-            )
-        )
-    if not forced_legend and secondary_binding is None and len(series_list) > 1:
-        candidates.append(
-            _render_curve_candidate(
-                filename=filename,
-                template=template,
-                series_list=series_list,
-                options=options,
-                show_markers=show_markers,
-                scatter=scatter,
-                direct_label_side=None,
-                legend_variant="outside",
                 base_kwargs=resolved_kwargs,
             )
         )
@@ -1467,8 +1446,6 @@ def _render_stacked_curve(input_path: Path, sheet: str | int, options: RenderOpt
     legend_mode_override: str | None = None
     rendered: RenderedPlot | None = None
     candidates: list[RenderedPlot] = []
-    forbid_outside_legend = _looks_like_wavenumber_stack(series_list)
-
     for _attempt in range(3):
         axis_kwargs = _with_manual_axis_overrides({}, attempt_options)
         label_mode = "edge" if attempt_options.series_label_mode == "inline" else "legend"
@@ -1504,18 +1481,6 @@ def _render_stacked_curve(input_path: Path, sheet: str | int, options: RenderOpt
             and attempt_options.legend_position == "auto"
             and attempt_options.series_label_mode != "inline"
         ):
-            if (
-                forbid_outside_legend
-                or {"legend_footprint", "legend_axes_too_small", "legend_outside_bounds"} & legend_issue_ids
-            ):
-                attempt_options = replace(attempt_options, series_label_mode="inline")
-                legend_mode_override = None
-                autofixes.append("legend_auto_inline_labels")
-                continue
-            if legend_mode_override is None:
-                legend_mode_override = "outside"
-                autofixes.append("legend_auto_outside_right")
-                continue
             attempt_options = replace(attempt_options, series_label_mode="inline")
             legend_mode_override = None
             autofixes.append("legend_auto_inline_labels")

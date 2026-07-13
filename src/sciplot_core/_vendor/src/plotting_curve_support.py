@@ -387,7 +387,9 @@ def _legend_kwargs(
     if legend_mode == "none":
         return {}
     if legend_mode == "outside":
-        return {"loc": "upper left", "bbox_to_anchor": (1.02, 1.0), "borderaxespad": 0.0}
+        # Compatibility-only normalization for old requests. Public SciPlot
+        # no longer permits a legend to alter the fixed physical graph frame.
+        return {"loc": "upper right"}
     if legend_mode == "inside_forced":
         return {"loc": "upper right"}
     if legend_mode.startswith("inside_"):

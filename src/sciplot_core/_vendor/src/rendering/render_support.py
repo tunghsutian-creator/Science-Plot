@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
-
 from src.plot_contract import qa_profile
 from src.rendering.models import QAReport, RenderedPlot, RenderOptions
 from src.rendering.qa import analyze_rendered_figure
@@ -22,10 +21,11 @@ class StatsRenderProfile:
 
 @dataclass(frozen=True)
 class HeatmapEditorialLayout:
+    frame_envelope_mode: str
     colorbar_x_offset_fraction: float
     colorbar_width_fraction: float
-    colorbar_y_offset_fraction: float
     colorbar_height_fraction: float
+    colorbar_main_gap_fraction: float
     colorbar_tick_count: int
     label_gap_pt: float
 
@@ -139,10 +139,11 @@ def _stats_profile(groups) -> StatsRenderProfile:
 def _heatmap_editorial_layout() -> HeatmapEditorialLayout:
     profile = qa_profile("heatmap")
     return HeatmapEditorialLayout(
-        colorbar_x_offset_fraction=float(profile.get("colorbar_x_offset_fraction", 0.29)),
+        frame_envelope_mode=str(profile.get("frame_envelope_mode", "standard_graph")),
+        colorbar_x_offset_fraction=float(profile.get("colorbar_x_offset_fraction", 0.44)),
         colorbar_width_fraction=float(profile.get("colorbar_width_fraction", 0.56)),
-        colorbar_y_offset_fraction=float(profile.get("colorbar_y_offset_fraction", 0.2)),
-        colorbar_height_fraction=float(profile.get("colorbar_height_fraction", 0.1)),
+        colorbar_height_fraction=float(profile.get("colorbar_height_fraction", 0.08)),
+        colorbar_main_gap_fraction=float(profile.get("colorbar_main_gap_fraction", 0.1)),
         colorbar_tick_count=int(profile.get("colorbar_tick_count", 4)),
-        label_gap_pt=float(profile.get("label_gap_pt", 6.0)),
+        label_gap_pt=float(profile.get("label_gap_pt", 4.0)),
     )

@@ -28,7 +28,12 @@ from sciplot_core._utils import (
 from sciplot_core._utils import (
     token as _token,
 )
-from sciplot_core.materials_rules import get_rule, match_rule, semantic_payload_from_rule
+from sciplot_core.materials_rules import (
+    format_unit_label,
+    get_rule,
+    match_rule,
+    semantic_payload_from_rule,
+)
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload
 from sciplot_core.publication import build_transform_step
 
@@ -75,7 +80,7 @@ _RHEOLOGY_FREQUENCY_OUTPUT_METRICS = (
     _RHEOLOGY_SWEEP_METRICS[0],
     _RHEOLOGY_SWEEP_METRICS[1],
     _RHEOLOGY_SWEEP_METRICS[2],
-    _RHEOLOGY_COMPLEX_MODULUS_METRIC,
+    _RHEOLOGY_SWEEP_METRICS[3],
 )
 
 
@@ -344,8 +349,8 @@ def _unit_for(units: list[str], index: int, fallback: str) -> str:
     if index < len(units):
         unit = _clean_text(units[index]).strip("[]() ")
         if unit:
-            return unit
-    return fallback
+            return format_unit_label(unit)
+    return format_unit_label(fallback)
 
 
 def _float(value: object) -> float | None:

@@ -4,8 +4,6 @@ from collections.abc import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
-
-from src import plot_style
 from src.data_loader import ReplicateGroup
 from src.plotting_primitives import (
     MAX_VISIBLE_Y_MAJOR_TICKS,
@@ -22,6 +20,8 @@ from src.plotting_primitives import (
     compute_axis_limits,
     compute_group_positions,
 )
+
+from src import plot_style
 
 
 def _compute_distribution_axis_limits(
@@ -78,7 +78,7 @@ def _overlay_group_raw_points(
 def plot_box(
     groups: Sequence[ReplicateGroup],
     *,
-    legend_mode: LegendMode = "outside",
+    legend_mode: LegendMode = "inside_best",
     axis_mode: AxisMode = "auto",
     width_mm: float | None = None,
     height_mm: float | None = None,
@@ -195,7 +195,7 @@ def plot_box(
 def plot_bar(
     groups: Sequence[ReplicateGroup],
     *,
-    legend_mode: LegendMode = "outside",
+    legend_mode: LegendMode = "inside_best",
     axis_mode: AxisMode = "auto_positive",
     width_mm: float | None = None,
     height_mm: float | None = None,
@@ -321,7 +321,7 @@ def plot_bar(
 def plot_point_error(
     groups: Sequence[ReplicateGroup],
     *,
-    legend_mode: LegendMode = "outside",
+    legend_mode: LegendMode = "inside_best",
     axis_mode: AxisMode = "auto",
     width_mm: float | None = None,
     height_mm: float | None = None,
@@ -450,7 +450,7 @@ def plot_point_error(
 def plot_violin(
     groups: Sequence[ReplicateGroup],
     *,
-    legend_mode: LegendMode = "outside",
+    legend_mode: LegendMode = "inside_best",
     axis_mode: AxisMode = "auto",
     width_mm: float | None = None,
     height_mm: float | None = None,

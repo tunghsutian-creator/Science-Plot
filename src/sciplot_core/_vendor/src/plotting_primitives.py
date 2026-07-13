@@ -471,7 +471,7 @@ def compute_axis_limits(
     *,
     kind: str,
     axis_mode: AxisMode = "auto",
-    legend_mode: LegendMode = "outside",
+    legend_mode: LegendMode = "inside_best",
     x_values: Sequence[np.ndarray] | Sequence[Sequence[float]] | None = None,
     xscale: str = "linear",
     yscale: str = "linear",
@@ -1252,6 +1252,24 @@ def _compute_heatmap_cax_geometry(
     layout = dict(_HEATMAP_LAYOUT)
     if layout_overrides:
         layout.update(layout_overrides)
+    if str(layout.get("frame_envelope_mode") or "") == "standard_graph":
+        colorbar_height = max(
+            position.height * float(layout["colorbar_height_fraction"]),
+            0.010,
+        )
+        colorbar_top = position.y0 + position.height * float(layout.get("colorbar_top_edge_fraction", 1.0))
+        colorbar_y0 = colorbar_top - colorbar_height
+        main_gap = position.height * float(layout.get("colorbar_main_gap_fraction", 0.1))
+        heatmap_top = max(colorbar_y0 - main_gap, position.y0 + position.height * 0.55)
+        colorbar_x0 = position.x0 + position.width * float(layout["colorbar_x_offset_fraction"])
+        colorbar_width = min(
+            position.width * float(layout["colorbar_width_fraction"]),
+            position.x1 - colorbar_x0,
+        )
+        heatmap_rect = [position.x0, position.y0, position.width, heatmap_top - position.y0]
+        cax_rect = [colorbar_x0, colorbar_y0, colorbar_width, colorbar_height]
+        return heatmap_rect, cax_rect
+
     available_height = max(1.0 - position.y1, 1e-6)
     cbar_y0 = position.y1 + min(
         max(

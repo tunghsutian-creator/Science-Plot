@@ -15,6 +15,8 @@ from sciplot_core._utils import token as _utils_token
 from sciplot_core.policy import (
     DEFAULT_PALETTE_PRESET,
     FTIR_SPECTRUM_RENDER_OPTIONS,
+    RHEOLOGY_FREQUENCY_RENDER_OPTIONS,
+    RHEOLOGY_FREQUENCY_X_LABEL,
     TORQUE_CURVE_RENDER_OPTIONS,
 )
 from sciplot_core.study_model import experiment_recommendation_payload
@@ -128,8 +130,6 @@ class SemanticRule:
         }
 
 
-_POINT_LINE_LOG = {**_DEFAULT_RENDER_OPTIONS, "xscale": "log", "yscale": "log", "reverse_x": False}
-
 _UNIT_RULES = {
     ("Pa", "kPa"): UnitRule("Pa", "kPa", 1e-3),
     ("Pa", "MPa"): UnitRule("Pa", "MPa", 1e-6),
@@ -234,7 +234,7 @@ def _rule(
 RHEOLOGY_X_FREQUENCY = AxisSpec(
     "Angular frequency",
     "rad/s",
-    "Angular frequency (rad/s)",
+    RHEOLOGY_FREQUENCY_X_LABEL,
     aliases=("angular frequency", "frequency", "omega", "ω"),
     scale="log",
 )
@@ -276,7 +276,7 @@ RULES: tuple[SemanticRule, ...] = (
         ),
         vendor_models=("frequency_metric_sheet",),
         experiment_families=("rheology",),
-        render_options=_POINT_LINE_LOG,
+        render_options=RHEOLOGY_FREQUENCY_RENDER_OPTIONS,
         analysis=(AnalysisSpec("terminal_modulus", "last finite G' value", ("G'",), "Pa"),),
         fixture_path="tests/fixtures/polymer_corpus/rheology_dma/rheology_frequency_excerpt.csv",
         fixture_status="ready",
@@ -688,7 +688,7 @@ RULES: tuple[SemanticRule, ...] = (
         path_keywords=("/dma_freq/", "dma frequency", "dma_frequency_sweep", "dma_frequency"),
         column_aliases=("angular frequency", "frequency", "storage modulus", "loss modulus", "tan delta"),
         experiment_families=("dma",),
-        render_options=_POINT_LINE_LOG,
+        render_options=RHEOLOGY_FREQUENCY_RENDER_OPTIONS,
         analysis=(
             AnalysisSpec(
                 "terminal_storage_modulus_frequency",

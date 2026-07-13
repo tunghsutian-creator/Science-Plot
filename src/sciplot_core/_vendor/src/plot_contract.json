@@ -2,7 +2,7 @@
   "version": 3,
   "defaults": {
     "style_preset": "nature",
-    "palette_preset": "spectrum_journal_8"
+    "palette_preset": "jama_editorial"
   },
   "aliases": {
     "style_presets": {
@@ -80,15 +80,14 @@
   },
   "special_layouts": {
     "heatmap": {
-      "colorbar_x_offset_fraction": 0.38,
-      "colorbar_width_fraction": 0.5,
-      "colorbar_y_offset_fraction": 0.18,
-      "colorbar_y_offset_min": 0.018,
-      "colorbar_y_offset_max_fraction": 0.42,
-      "colorbar_height_fraction": 0.13,
-      "colorbar_height_min": 0.013,
-      "colorbar_bottom_gap": 0.012,
-      "label_y_fraction": 0.56,
+      "frame_envelope_mode": "standard_graph",
+      "text_envelope_mode": "standard_text_safe_area",
+      "colorbar_x_offset_fraction": 0.44,
+      "colorbar_width_fraction": 0.56,
+      "colorbar_height_fraction": 0.08,
+      "colorbar_main_gap_fraction": 0.1,
+      "colorbar_top_edge_fraction": 1.0,
+      "label_position": "left_of_colorbar_inside_frame",
       "label_font_size_pt": 4.8,
       "tick_font_size_pt": 4.3,
       "tick_length_pt": 2.0
@@ -103,6 +102,12 @@
   "qa_profiles": {
     "alignment": {
       "preserve_shared_axis_frame": true,
+      "fixed_physical_margins": true,
+      "outside_legend_allowed": false,
+      "auxiliary_frame_envelope": "standard_graph_frame",
+      "auxiliary_text_envelope": "standard_text_safe_area",
+      "frame_tolerance_mm": 0.05,
+      "text_tolerance_mm": 0.2,
       "single_panel_width_mm": 60.0,
       "single_panel_height_mm": 55.0,
       "double_panel_width_mm": 120.0
@@ -180,28 +185,19 @@
     "heatmap": {
       "small_panel_width_mm": 60.0,
       "small_panel_height_mm": 55.0,
-      "colorbar_x_offset_fraction": 0.29,
+      "frame_envelope_mode": "standard_graph",
+      "text_envelope_mode": "standard_text_safe_area",
+      "colorbar_x_offset_fraction": 0.44,
       "colorbar_width_fraction": 0.56,
-      "colorbar_y_offset_fraction": 0.2,
-      "colorbar_height_fraction": 0.1,
+      "colorbar_height_fraction": 0.08,
+      "colorbar_main_gap_fraction": 0.1,
       "colorbar_tick_count": 4,
-      "label_gap_pt": 6.0,
+      "label_gap_pt": 4.0,
       "min_label_gap_px": 6.0,
       "safe_sequential_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "bright",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "okabe_ito",
-        "tol_muted",
-        "spectrum_journal_8",
-        "materials_warm",
-        "shine",
-        "vintage"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ]
     },
     "stats": {
@@ -247,7 +243,7 @@
       "description": "Nature: a compact research-figure style that prioritizes official constraints.",
       "hard_constraints": true,
       "preset_note": "Built around the current public Nature image constraints.",
-      "recommended_palette_preset": "spectrum_journal_8",
+      "recommended_palette_preset": "jama_editorial",
       "recommended_visual_theme_id": "clean_light",
       "axis_frame": {
         "left": true,
@@ -262,7 +258,7 @@
           "DejaVu Sans"
         ],
         "font_size_pt": 6.5,
-        "legend_font_size_pt": 5.8,
+        "legend_font_size_pt": 6.0,
         "panel_label_size_pt": 8.0,
         "panel_label_weight": "bold"
       },
@@ -309,7 +305,7 @@
       "description": "ACS-inspired compact publication style with Helvetica/Arial lettering and conservative line weights.",
       "hard_constraints": false,
       "preset_note": "Approximate ACS/JACS graph metrics: legible small lettering, clear symbols, and lines kept above hairline weight.",
-      "recommended_palette_preset": "spectrum_journal_8",
+      "recommended_palette_preset": "jama_editorial",
       "recommended_visual_theme_id": "clean_light",
       "axis_frame": {
         "left": true,
@@ -370,7 +366,7 @@
       "description": "Science/AAAS-inspired compact publication style with restrained strokes and minimal visual decoration.",
       "hard_constraints": false,
       "preset_note": "Conservative Science-style profile: keep figures simple, readable, and lightly colored.",
-      "recommended_palette_preset": "spectrum_journal_8",
+      "recommended_palette_preset": "jama_editorial",
       "recommended_visual_theme_id": "clean_light",
       "axis_frame": {
         "left": true,
@@ -431,7 +427,7 @@
       "description": "Wiley-inspired publication style with slightly roomier text and balanced muted colors.",
       "hard_constraints": false,
       "preset_note": "Approximate Wiley journal figure profile: prioritize readable words and symbols at final figure size.",
-      "recommended_palette_preset": "spectrum_journal_8",
+      "recommended_palette_preset": "jama_editorial",
       "recommended_visual_theme_id": "clean_light",
       "axis_frame": {
         "left": true,
@@ -492,7 +488,7 @@
       "description": "Elsevier-inspired publication style centered on 7 pt lettering and uniform artwork proportions.",
       "hard_constraints": false,
       "preset_note": "Approximate Elsevier graph profile: standard fonts, uniform sizing, and readable line/symbol hierarchy.",
-      "recommended_palette_preset": "spectrum_journal_8",
+      "recommended_palette_preset": "jama_editorial",
       "recommended_visual_theme_id": "clean_light",
       "axis_frame": {
         "left": true,
@@ -548,347 +544,56 @@
     }
   },
   "palettes": {
-    "colorblind_safe": {
-      "label": "Colorblind Safe",
+    "jama_editorial": {
+      "label": "JAMA-inspired Editorial",
       "public": true,
-      "description": "Colorblind-friendly categorical colors with cividis for sequential scales.",
+      "description": "Default SciPlot categorical palette: a restrained seven-color editorial set inspired by JAMA figures, preserving the approved four-series order.",
       "categorical": [
-        "#0173b2",
-        "#de8f05",
-        "#029e73",
-        "#d55e00",
-        "#cc78bc",
-        "#ca9161",
-        "#fbafe4",
-        "#949494",
-        "#ece133",
-        "#56b4e9"
+        "#374E55",
+        "#DF8F44",
+        "#00A1D5",
+        "#B24745",
+        "#79AF97",
+        "#6A6599",
+        "#80796B"
       ],
       "sequential": "cividis",
       "diverging": "vlag"
     },
-    "deep": {
-      "label": "Deep",
+    "npg_modern": {
+      "label": "NPG-inspired Modern",
       "public": true,
-      "description": "Seaborn deep: balanced, calm, and broadly useful.",
+      "description": "Ten-color categorical set inspired by NPG figures, reordered to preserve the approved navy, cyan, teal, and vermilion first four.",
       "categorical": [
-        "#4c72b0",
-        "#dd8452",
-        "#55a868",
-        "#c44e52",
-        "#8172b3",
-        "#937860",
-        "#da8bc3",
-        "#8c8c8c",
-        "#ccb974",
-        "#64b5cd"
-      ],
-      "sequential": "crest",
-      "diverging": "vlag"
-    },
-    "muted": {
-      "label": "Muted",
-      "public": true,
-      "description": "Seaborn muted: restrained and soft, suited to multi-group comparisons.",
-      "categorical": [
-        "#4878d0",
-        "#ee854a",
-        "#6acc64",
-        "#d65f5f",
-        "#956cb4",
-        "#8c613c",
-        "#dc7ec0",
-        "#797979",
-        "#d5bb67",
-        "#82c6e2"
-      ],
-      "sequential": "rocket",
-      "diverging": "coolwarm"
-    },
-    "bright": {
-      "label": "Bright",
-      "public": false,
-      "description": "Seaborn bright: higher saturation with stronger contrast.",
-      "categorical": [
-        "#023eff",
-        "#ff7c00",
-        "#1ac938",
-        "#e8000b",
-        "#8b2be2",
-        "#9f4800",
-        "#f14cc1",
-        "#a3a3a3",
-        "#ffc400",
-        "#00d7ff"
-      ],
-      "sequential": "mako",
-      "diverging": "icefire"
-    },
-    "mono": {
-      "label": "Mono",
-      "public": true,
-      "description": "Monochrome grayscale: good for analytical figures and black-and-white printing.",
-      "categorical": [
-        "#111827",
-        "#374151",
-        "#6b7280",
-        "#9ca3af",
-        "#d1d5db"
-      ],
-      "sequential": "Greys",
-      "diverging": "Greys"
-    },
-    "infographic": {
-      "label": "Infographic",
-      "public": true,
-      "description": "ECharts-inspired palette with brighter editorial contrast and clean category separation.",
-      "categorical": [
-        "#5470c6",
-        "#91cc75",
-        "#fac858",
-        "#ee6666",
-        "#73c0de",
-        "#3ba272",
-        "#fc8452",
-        "#9a60b4",
-        "#ea7ccc"
-      ],
-      "sequential": "viridis",
-      "diverging": "PuOr"
-    },
-    "roma": {
-      "label": "Roma",
-      "public": true,
-      "description": "Soft warm-cool palette inspired by ECharts theme galleries, suited to cleaner comparison figures.",
-      "categorical": [
-        "#e01f54",
-        "#001852",
-        "#f5e8c8",
-        "#b8d2c7",
-        "#c6b38e",
-        "#82b6e9",
-        "#ff6347",
-        "#a092f1",
-        "#0e6e55"
-      ],
-      "sequential": "magma",
-      "diverging": "BrBG"
-    },
-    "macarons": {
-      "label": "Macarons",
-      "public": true,
-      "description": "Pastel-forward ECharts-inspired palette that stays readable in scientific multi-group charts.",
-      "categorical": [
-        "#2ec7c9",
-        "#b6a2de",
-        "#5ab1ef",
-        "#ffb980",
-        "#d87a80",
-        "#8d98b3",
-        "#e5cf0d",
-        "#97b552",
-        "#95706d",
-        "#dc69aa"
+        "#3C5488",
+        "#4DBBD5",
+        "#00A087",
+        "#E64B35",
+        "#7E6148",
+        "#8491B4",
+        "#91D1C2",
+        "#B09C85",
+        "#F39B7F",
+        "#DC0000"
       ],
       "sequential": "cividis",
       "diverging": "vlag"
     },
-    "shine": {
-      "label": "Shine",
+    "tol_bright": {
+      "label": "Tol Bright",
       "public": true,
-      "description": "Official ECharts Shine palette with high-contrast warm primaries and cooler accents.",
+      "description": "Paul Tol bright categorical palette, reordered to preserve the approved blue, red, green, and purple first four.",
       "categorical": [
-        "#c12e34",
-        "#e6b600",
-        "#0098d9",
-        "#2b821d",
-        "#005eaa",
-        "#339ca8",
-        "#cda819",
-        "#32a487"
-      ],
-      "sequential": "viridis",
-      "diverging": "PuOr"
-    },
-    "vintage": {
-      "label": "Vintage",
-      "public": true,
-      "description": "Official ECharts Vintage palette with warm paper-tone neutrals and restrained contrast.",
-      "categorical": [
-        "#d87c7c",
-        "#919e8b",
-        "#d7ab82",
-        "#6e7074",
-        "#61a0a8",
-        "#efa18d",
-        "#787464",
-        "#cc7e63",
-        "#724e58",
-        "#4b565b"
+        "#4477AA",
+        "#EE6677",
+        "#228833",
+        "#AA3377",
+        "#CCBB44",
+        "#66CCEE",
+        "#BBBBBB"
       ],
       "sequential": "cividis",
       "diverging": "BrBG"
-    },
-    "okabe_ito": {
-      "label": "Okabe-Ito",
-      "public": true,
-      "description": "Okabe-Ito: a classic colorblind-friendly scientific palette.",
-      "categorical": [
-        "#000000",
-        "#e69f00",
-        "#56b4e9",
-        "#009e73",
-        "#f0e442",
-        "#0072b2",
-        "#d55e00",
-        "#cc79a7"
-      ],
-      "sequential": "cividis",
-      "diverging": "PuOr"
-    },
-    "tol_muted": {
-      "label": "Tol Muted",
-      "public": true,
-      "description": "Paul Tol muted: low-stimulation, balanced categorical colors.",
-      "categorical": [
-        "#332288",
-        "#88ccee",
-        "#44aa99",
-        "#117733",
-        "#999933",
-        "#ddcc77",
-        "#cc6677",
-        "#882255",
-        "#aa4499"
-      ],
-      "sequential": "YlGnBu",
-      "diverging": "BrBG"
-    },
-    "materials_warm": {
-      "label": "Materials Warm",
-      "public": false,
-      "description": "Warm presentation palette with a stronger materials-showcase feel.",
-      "categorical": [
-        "#355070",
-        "#6d597a",
-        "#b56576",
-        "#e56b6f",
-        "#eaac8b",
-        "#f6bd60",
-        "#84a59d"
-      ],
-      "sequential": "rocket",
-      "diverging": "Spectral"
-    },
-    "tableau_10": {
-      "label": "Tableau 10",
-      "public": true,
-      "description": "Matplotlib Tableau 10 categorical cycle for broad software compatibility.",
-      "categorical": [
-        "#1f77b4",
-        "#ff7f0e",
-        "#2ca02c",
-        "#d62728",
-        "#9467bd",
-        "#8c564b",
-        "#e377c2",
-        "#7f7f7f",
-        "#bcbd22",
-        "#17becf"
-      ],
-      "sequential": "viridis",
-      "diverging": "coolwarm"
-    },
-    "seaborn_pastel": {
-      "label": "Seaborn Pastel",
-      "public": true,
-      "description": "Soft Seaborn pastel cycle for low-contrast categorical figures.",
-      "categorical": [
-        "#a1c9f4",
-        "#ffb482",
-        "#8de5a1",
-        "#ff9f9b",
-        "#d0bbff",
-        "#debb9b",
-        "#fab0e4",
-        "#cfcfcf",
-        "#fffea3",
-        "#b9f2f0"
-      ],
-      "sequential": "crest",
-      "diverging": "vlag"
-    },
-    "seaborn_dark": {
-      "label": "Seaborn Dark",
-      "public": true,
-      "description": "Darker Seaborn categorical cycle for stronger contrast on light figure surfaces.",
-      "categorical": [
-        "#001c7f",
-        "#b1400d",
-        "#12711c",
-        "#8c0800",
-        "#591e71",
-        "#592f0d",
-        "#a23582",
-        "#3c3c3c",
-        "#b8850a",
-        "#006374"
-      ],
-      "sequential": "mako",
-      "diverging": "icefire"
-    },
-    "primer_accessible": {
-      "label": "Primer Accessible",
-      "public": true,
-      "description": "GitHub Primer-inspired accessible role colors for technical plots and dashboards.",
-      "categorical": [
-        "#0969da",
-        "#1a7f37",
-        "#bf8700",
-        "#bc4c00",
-        "#cf222e",
-        "#8250df",
-        "#bf3989",
-        "#57606a"
-      ],
-      "sequential": "Blues",
-      "diverging": "RdBu"
-    },
-    "spectrum_journal_8": {
-      "label": "SciPlot Default 8",
-      "public": true,
-      "description": "Default SciPlot categorical palette: red-orange, orange, teal, sky blue, purple, deep blue, rose, and olive green.",
-      "categorical": [
-        "#D85A2A",
-        "#F29A22",
-        "#008C86",
-        "#7BC4DF",
-        "#9A4A8A",
-        "#3F6FB5",
-        "#C24D70",
-        "#6E9F45"
-      ],
-      "sequential": "cividis",
-      "diverging": "PuOr"
-    },
-    "viridis_discrete": {
-      "label": "Viridis Discrete",
-      "public": true,
-      "description": "Discrete samples from viridis for perceptually ordered categorical sequences.",
-      "categorical": [
-        "#440154",
-        "#482878",
-        "#3e4989",
-        "#31688e",
-        "#26828e",
-        "#1f9e89",
-        "#35b779",
-        "#6ece58",
-        "#b5de2b",
-        "#fde725"
-      ],
-      "sequential": "viridis",
-      "diverging": "viridis"
     }
   },
   "templates": {
@@ -941,7 +646,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -952,23 +657,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -1022,7 +713,7 @@
         "yscale": "linear",
         "reverse_x": false,
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1033,23 +724,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -1106,7 +783,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1117,23 +794,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -1190,7 +853,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1201,23 +864,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -1274,7 +923,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1285,23 +934,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -1354,7 +989,7 @@
         "baseline": "none",
         "series_label_mode": "inline",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1365,23 +1000,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "non_blank_pdf"
@@ -1419,7 +1040,7 @@
         "reverse_x": false,
         "baseline": "none",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1430,23 +1051,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "non_blank_pdf"
@@ -1484,7 +1091,7 @@
         "reverse_x": true,
         "baseline": "linear_endpoints",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light",
         "use_sidecar": true
       },
@@ -1496,23 +1103,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "wide_nmr_horizontal_alignment",
@@ -1550,7 +1143,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1561,23 +1154,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -1615,7 +1194,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1626,23 +1205,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -1680,7 +1245,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1691,23 +1256,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -1745,7 +1296,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1756,23 +1307,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -1810,7 +1347,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1821,23 +1358,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -1875,7 +1398,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1886,23 +1409,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -1940,7 +1449,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -1951,23 +1460,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -2011,7 +1506,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2022,23 +1517,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -2082,7 +1563,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2093,23 +1574,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -2168,7 +1635,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2179,23 +1646,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -2248,7 +1701,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2259,23 +1712,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -2328,7 +1767,7 @@
         "reverse_x": false,
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2339,23 +1778,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -2404,7 +1829,7 @@
         "yscale": "linear",
         "reverse_x": false,
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2415,23 +1840,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -2442,7 +1853,7 @@
     },
     "heatmap": {
       "label": "Heatmap",
-      "description": "Heatmap with the main frame aligned to standard single-panel plots and an independent top colorbar.",
+      "description": "Heatmap whose main map, colorbar and auxiliary text stay inside the standard physical frame envelope.",
       "category": "heatmap",
       "default_size": "60x55",
       "allowed_sizes": [
@@ -2463,7 +1874,7 @@
         "size": "60x55",
         "show_colorbar": true,
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2474,23 +1885,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -2529,7 +1926,7 @@
         "size": "60x55",
         "show_colorbar": true,
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2540,23 +1937,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -2590,7 +1973,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2601,23 +1984,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "non_blank_pdf"
@@ -2646,7 +2015,7 @@
       "default_options": {
         "size": "60x55",
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2657,23 +2026,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "non_blank_pdf"
@@ -2704,7 +2059,7 @@
         "size": "60x55",
         "show_colorbar": true,
         "style_preset": "nature",
-        "palette_preset": "spectrum_journal_8",
+        "palette_preset": "jama_editorial",
         "visual_theme_id": "clean_light"
       },
       "available_styles": [
@@ -2715,23 +2070,9 @@
         "elsevier"
       ],
       "available_palettes": [
-        "colorblind_safe",
-        "deep",
-        "muted",
-        "mono",
-        "infographic",
-        "roma",
-        "macarons",
-        "shine",
-        "vintage",
-        "okabe_ito",
-        "tol_muted",
-        "tableau_10",
-        "seaborn_pastel",
-        "seaborn_dark",
-        "primer_accessible",
-        "spectrum_journal_8",
-        "viridis_discrete"
+        "jama_editorial",
+        "npg_modern",
+        "tol_bright"
       ],
       "hard_rules": [
         "single_panel_axis_frame",
@@ -2746,8 +2087,8 @@
   },
   "validation_rules": {
     "single_panel_axis_frame": {
-      "label": "Single-panel axis frame alignment",
-      "description": "Standard single-panel templates must share the same physical axis frame.",
+      "label": "Fixed single-panel publication frame",
+      "description": "Standard single-panel templates use the same absolute-millimetre margins; legends and auxiliary elements may not expand that frame.",
       "severity": "error",
       "tolerance_mm": 0.05
     },
@@ -2770,20 +2111,20 @@
       "tolerance_mm": 0.05
     },
     "heatmap_main_frame": {
-      "label": "Heatmap main-frame alignment",
-      "description": "The heatmap main frame must share the same axis frame as standard single-panel plots.",
+      "label": "Heatmap outer-frame alignment",
+      "description": "The union of the heatmap and colorbar frames must equal the standard single-panel graph envelope.",
       "severity": "error",
       "tolerance_mm": 0.05
     },
     "heatmap_horizontal_colorbar": {
-      "label": "Heatmap top horizontal colorbar",
-      "description": "Heatmaps must use a top horizontal colorbar without squeezing the main frame.",
+      "label": "Heatmap in-frame horizontal colorbar",
+      "description": "The horizontal colorbar occupies a reserved band inside the standard graph envelope.",
       "severity": "error",
       "tolerance_mm": 0.05
     },
     "heatmap_colorbar_inside_canvas": {
-      "label": "Heatmap colorbar inside canvas",
-      "description": "The heatmap colorbar and z label must stay fully inside the canvas.",
+      "label": "Heatmap auxiliary frame and text envelope",
+      "description": "The colorbar frame stays inside the standard graph envelope and all z-scale text stays inside the standard text safe area.",
       "severity": "error",
       "tolerance_mm": 0.2
     },

@@ -7,7 +7,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import transforms
-from src.plot_contract import qa_profile
+from src.plot_contract import load_plot_contract, qa_profile, validation_rule
 from src.rendering.models import QAIssue, QAReport, RenderOptions
 from src.rendering.template_lifecycle import template_family_ids
 from src.wide_nmr import WIDE_NMR_STRUCTURE_RESERVED_MM
@@ -946,9 +946,98 @@ def _analyze_heatmap_figure(
 
     if len(fig.axes) > 1:
         cbar_ax = fig.axes[-1]
+        cbar_frame_bbox = cbar_ax.get_window_extent(renderer=renderer)
         cbar_bbox = cbar_ax.get_tightbbox(renderer=renderer)
-        width_ratio = cbar_bbox.width / max(axes_bbox.width, 1.0)
-        height_ratio = cbar_bbox.height / max(fig.bbox.height, 1.0)
+        contract = load_plot_contract()
+        frame = contract.global_frame
+        figure_width_mm = fig.get_size_inches()[0] * 25.4
+        figure_height_mm = fig.get_size_inches()[1] * 25.4
+        standard_frame_bbox = transforms.Bbox.from_extents(
+            frame.left_margin_mm / figure_width_mm * fig.bbox.width,
+            frame.bottom_margin_mm / figure_height_mm * fig.bbox.height,
+            (1.0 - frame.right_margin_mm / figure_width_mm) * fig.bbox.width,
+            (1.0 - frame.top_margin_mm / figure_height_mm) * fig.bbox.height,
+        )
+        outer_frame_bbox = transforms.Bbox.union([axes_bbox, cbar_frame_bbox])
+        frame_tolerance_mm = float(validation_rule("heatmap_main_frame").tolerance_mm or 0.05)
+        tolerance_x = frame_tolerance_mm / figure_width_mm * fig.bbox.width
+        tolerance_y = frame_tolerance_mm / figure_height_mm * fig.bbox.height
+        edge_errors = {
+            "left": abs(outer_frame_bbox.x0 - standard_frame_bbox.x0),
+            "right": abs(outer_frame_bbox.x1 - standard_frame_bbox.x1),
+            "bottom": abs(outer_frame_bbox.y0 - standard_frame_bbox.y0),
+            "top": abs(outer_frame_bbox.y1 - standard_frame_bbox.y1),
+        }
+        frame_aligned = (
+            edge_errors["left"] <= tolerance_x
+            and edge_errors["right"] <= tolerance_x
+            and edge_errors["bottom"] <= tolerance_y
+            and edge_errors["top"] <= tolerance_y
+        )
+        layout_summary["frame_alignment"] = {
+            "mode": "standard_graph_envelope",
+            "status": "aligned" if frame_aligned else "misaligned",
+            "outside_legend_allowed": False,
+            "edge_error_px": {key: round(value, 3) for key, value in edge_errors.items()},
+            "tolerance_mm": frame_tolerance_mm,
+        }
+        if not frame_aligned:
+            issues.append(
+                QAIssue(
+                    id="heatmap_outer_frame_misaligned",
+                    severity="critical",
+                    metric_value=round(max(edge_errors.values()), 3),
+                    target=f"within {frame_tolerance_mm:g} mm",
+                    message="The heatmap and colorbar union no longer matches the fixed publication frame.",
+                )
+            )
+
+        figure_text_bboxes = [
+            text.get_window_extent(renderer=renderer) for text in fig.texts if text.get_visible()
+        ]
+        colorbar_x_tick_bboxes = _tick_label_bboxes(cbar_ax.xaxis, renderer)
+        colorbar_y_tick_bboxes = _tick_label_bboxes(cbar_ax.yaxis, renderer)
+        auxiliary_text_bboxes = [*figure_text_bboxes, *colorbar_x_tick_bboxes, *colorbar_y_tick_bboxes]
+        text_tolerance_mm = float(validation_rule("heatmap_colorbar_inside_canvas").tolerance_mm or 0.2)
+        text_tolerance_x = text_tolerance_mm / figure_width_mm * fig.bbox.width
+        text_tolerance_y = text_tolerance_mm / figure_height_mm * fig.bbox.height
+        auxiliary_text_inside = all(
+            bbox.x0 >= fig.bbox.x0 - text_tolerance_x
+            and bbox.x1 <= fig.bbox.x1 + text_tolerance_x
+            and bbox.y0 >= fig.bbox.y0 - text_tolerance_y
+            and bbox.y1 <= fig.bbox.y1 + text_tolerance_y
+            for bbox in auxiliary_text_bboxes
+        )
+        label_left_error = (
+            abs(figure_text_bboxes[0].x0 - standard_frame_bbox.x0) if figure_text_bboxes else 0.0
+        )
+        right_tick_anchor_error = (
+            abs((colorbar_x_tick_bboxes[-1].x0 + colorbar_x_tick_bboxes[-1].x1) / 2.0 - cbar_frame_bbox.x1)
+            if colorbar_x_tick_bboxes
+            else 0.0
+        )
+        auxiliary_text_anchored = label_left_error <= text_tolerance_x and right_tick_anchor_error <= text_tolerance_x
+        auxiliary_text_aligned = auxiliary_text_inside and auxiliary_text_anchored
+        layout_summary["auxiliary_text_alignment"] = {
+            "envelope": "standard_text_safe_area",
+            "status": "inside" if auxiliary_text_aligned else "outside",
+            "tolerance_mm": text_tolerance_mm,
+            "label_left_anchor_error_px": round(label_left_error, 3),
+            "right_tick_anchor_error_px": round(right_tick_anchor_error, 3),
+        }
+        if not auxiliary_text_aligned:
+            issues.append(
+                QAIssue(
+                    id="heatmap_auxiliary_text_outside_standard_frame",
+                    severity="critical",
+                    metric_value="outside",
+                    target="standard_text_safe_area",
+                    message="Colorbar text left the standard safe area or lost its aligned outer anchors.",
+                )
+            )
+
+        width_ratio = cbar_frame_bbox.width / max(axes_bbox.width, 1.0)
+        height_ratio = cbar_frame_bbox.height / max(fig.bbox.height, 1.0)
         if width_ratio < 0.48 or width_ratio > 0.68:
             issues.append(
                 QAIssue(
@@ -971,8 +1060,11 @@ def _analyze_heatmap_figure(
             )
         if fig.texts:
             label_bbox = fig.texts[0].get_window_extent(renderer=renderer)
-            gap_px = float(label_bbox.y0 - cbar_bbox.y1)
             min_gap = float(heatmap_profile.get("min_label_gap_px", 6.0))
+            if str(heatmap_profile.get("frame_envelope_mode") or "") == "standard_graph":
+                gap_px = float(cbar_frame_bbox.x0 - label_bbox.x1)
+            else:
+                gap_px = float(label_bbox.y0 - cbar_bbox.y1)
             if gap_px < min_gap:
                 issues.append(
                     QAIssue(
