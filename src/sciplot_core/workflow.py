@@ -978,6 +978,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
         output_dir,
         publication_profile=publication_profile,
         strict_publication=bool(request.get("publication_strict")),
+        veusz_documents=[Path(value) for value in result.get("veusz_documents", []) if isinstance(value, str)],
     )
     publication_qa = qa.get("publication") if isinstance(qa.get("publication"), dict) else {}
     publication_artifacts = write_publication_artifacts(

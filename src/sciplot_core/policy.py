@@ -44,6 +44,15 @@ TOL_BRIGHT_COLORS = (
     "#BBBBBB",
 )
 DEFAULT_PALETTE_COLORS = JAMA_EDITORIAL_COLORS
+DEFAULT_LINE_STYLE_SEQUENCE = (
+    "solid",
+    "dashed",
+    "dotted",
+    "dash-dot",
+    "dash-dot-dot",
+    "dashed-fine",
+    "dotted-fine",
+)
 FIGURE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
 
 DEFAULT_EXPORT_FORMATS_POLICY = ("pdf", "tiff_300")
@@ -81,6 +90,7 @@ RENDER_OPTION_KEYS = frozenset(
         "series_order",
         "series_include",
         "series_styles",
+        "line_style_sequence",
         "marker_sequence",
         "marker_size",
         "marker_fill_mode",

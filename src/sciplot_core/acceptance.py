@@ -211,7 +211,7 @@ def _run_rule_lifecycle_acceptance(
                 "manifest": str(manifest_path),
                 "limitations": [
                     "The manual-edit probe appends a harmless VSZ comment and proves exact-document preservation; "
-                    "arbitrary visual-edit coverage remains a separate publication-QA gate."
+                    "full visual-object inspection is exercised by the separate exact-current publication-QA suite."
                 ],
             }
         )
@@ -285,7 +285,8 @@ def _write_rule_acceptance_markdown(path: Path, payload: dict[str, Any]) -> None
             "- `public_source_excerpt`, `user_authorized_real_excerpt`, and `archived_project_data` count as "
             "real-data evidence.",
             "- `instrument_shaped_fixture` proves a parser/render contract only; it remains a real-data gap.",
-            "- The manual-edit probe proves exact VSZ preservation, not complete arbitrary visual-object QA.",
+            "- The manual-edit probe proves exact VSZ preservation; exact-current visual-object inspection belongs "
+            "to the publication-QA suite.",
             "- Native 183 mm Veusz composition remains outside this acceptance suite.",
             "",
         ]
@@ -355,7 +356,8 @@ def run_rule_acceptance_suite(
         "matrix": rows,
         "limitations": [
             "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
-            "Rendered colour-vision, semantic-label inventory, and complete arbitrary-stroke QA remain deferred.",
+            "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and "
+            "real-data breadth rather than journal compliance.",
             "Native 183 mm Veusz composition remains deferred in favor of exact-size standalone PDF assembly.",
         ],
     }

@@ -25,6 +25,7 @@ from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import (
     DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
     DEFAULT_LEGEND_EDGE_PADDING_MM,
+    DEFAULT_LINE_STYLE_SEQUENCE,
     DEFAULT_LOG_MINOR_MULTIPLIERS,
     DEFAULT_LOG_MINOR_TICK_COUNT,
     DEFAULT_LOG_TICK_FORMAT,
@@ -88,6 +89,7 @@ class StudioSeries:
     line_width: float | None = None
     marker: str | bool | None = None
     marker_size: float | None = None
+    line_style: str = "solid"
 
 
 @dataclass(frozen=True)
@@ -743,6 +745,7 @@ def publish_studio_export_run(
         output_dir,
         publication_profile=publication_profile,
         strict_publication=bool(request.get("publication_strict")),
+        veusz_documents=[document_path],
     )
     publication_qa = qa.get("publication") if isinstance(qa.get("publication"), dict) else {}
     publication_artifacts = write_publication_artifacts(
@@ -1106,12 +1109,14 @@ def _run_studio_qa(
     *,
     publication_profile: dict[str, Any] | None = None,
     strict_publication: bool = False,
+    veusz_documents: list[Path] | None = None,
 ) -> dict[str, Any]:
     try:
         return run_qa(
             output_dir,
             publication_profile=publication_profile,
             strict_publication=strict_publication,
+            veusz_documents=veusz_documents,
         )
     except ValueError as exc:
         return {
@@ -1654,6 +1659,9 @@ def _apply_series_options(
     if not marker_sequence:
         marker_sequence = list(POINT_LINE_MARKERS)
     default_marker_size = _optional_float(render_options.get("marker_size"))
+    line_style_sequence = _string_list(render_options.get("line_style_sequence"))
+    if not line_style_sequence:
+        line_style_sequence = list(DEFAULT_LINE_STYLE_SEQUENCE)
     by_label = {item.label: item for item in series}
     ordered = [by_label[label] for label in order if label in by_label]
     ordered.extend(item for item in series if item.label not in {entry.label for entry in ordered})
@@ -1667,12 +1675,18 @@ def _apply_series_options(
             if isinstance(label, str):
                 style_by_label[label] = style
     styled: list[StudioSeries] = []
+    template_id = _request_template(request)
     for index, item in enumerate(ordered):
         style = style_by_label.get(item.label, {})
         if style.get("visible") is False or style.get("enabled") is False:
             continue
         default_marker = (
-            marker_sequence[index % len(marker_sequence)] if _request_template(request) == "point_line" else "none"
+            marker_sequence[index % len(marker_sequence)] if template_id == "point_line" else "none"
+        )
+        default_line_style = (
+            line_style_sequence[index % len(line_style_sequence)]
+            if template_id != "point_line" and len(ordered) > 1
+            else "solid"
         )
         styled.append(
             StudioSeries(
@@ -1685,6 +1699,7 @@ def _apply_series_options(
                 line_width=_optional_float(style.get("line_width")) or default_line_width,
                 marker=style.get("marker", item.marker or default_marker),
                 marker_size=_optional_float(style.get("marker_size")) or default_marker_size,
+                line_style=str(style.get("line_style") or style.get("linestyle") or default_line_style),
             )
         )
     return styled or series
@@ -2716,6 +2731,7 @@ def _build_veusz_plot_spec(
                 "y_values": list(item.y_values),
                 "color": item.color,
                 "line_width_pt": item.line_width,
+                "line_style": item.line_style,
                 "marker": str(MARKER_MAP.get(item.marker, item.marker or "none")),
                 "marker_size_pt": item.marker_size,
                 "marker_fill_color": (
@@ -2812,6 +2828,7 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("yData", item["y_name"])
         interface.Set("key", item["label"])
         interface.Set("PlotLine/color", item["color"])
+        interface.Set("PlotLine/style", item.get("line_style") or "solid")
         interface.Set("MarkerFill/color", item.get("marker_fill_color") or item["color"])
         interface.Set("MarkerLine/color", item["color"])
         interface.Set("MarkerLine/width", _pt(float(style["marker_line_width_pt"])))

@@ -96,6 +96,8 @@ PROJECT/
 - 60/120/180 mm 单图尺寸以及 183 mm 组合图布局；
 - publication intent、transform ledger、研究模型和证据绑定；
 - PDF 页面/字体/尺寸/可见墨迹、TIFF 分辨率、PDF-TIFF 配对和哈希 QA；
+- 基于 exact-current VSZ 的固定画框、语义标签、完整可解析线宽审计，以及绑定
+  最终 PDF 颜色的非颜色编码、灰度和三类色觉缺陷模拟；
 - 可携带 `delivery/`，包含图、数据工作簿、项目文件与内部审计材料；
 - `intervention_request.json`、`assisted_cleanup_request.json`、
   `cleanup_result.json` 和 `revision_brief.md` 组成的可审计辅助修复链；

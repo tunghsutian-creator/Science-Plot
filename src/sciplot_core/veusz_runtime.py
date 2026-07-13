@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -11,6 +12,7 @@ def veusz_worker_environment() -> dict[str, str]:
 
     env = os.environ.copy()
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
+    env.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "sciplot-mpl"))
     framework_paths = [Path("/opt/homebrew/opt/qtbase/lib"), Path("/opt/homebrew/opt/qt/lib")]
     existing = [str(path) for path in framework_paths if path.exists()]
     if existing:

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
+import subprocess
+import sys
+import unicodedata
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -217,7 +222,16 @@ def _span_is_visible(span: dict[str, Any], page_rect: fitz.Rect) -> bool:
 def _text_object_info(document: fitz.Document) -> dict[str, Any]:
     extracted_spans: list[dict[str, Any]] = []
     visible_spans: list[dict[str, Any]] = []
-    for page in document:
+    plain_text_by_page: list[dict[str, Any]] = []
+    for page_index, page in enumerate(document):
+        page_text = page.get_text("text")
+        plain_text_by_page.append(
+            {
+                "page": page_index + 1,
+                "text": page_text,
+                "lines": [line.strip() for line in page_text.splitlines() if line.strip()],
+            }
+        )
         text = page.get_text("dict")
         for block in text.get("blocks", []):
             if block.get("type") != 0:
@@ -225,9 +239,16 @@ def _text_object_info(document: fitz.Document) -> dict[str, Any]:
             for line in block.get("lines", []):
                 for span in line.get("spans", []):
                     if str(span.get("text") or "").strip():
-                        extracted_spans.append(span)
+                        span_record = {
+                            "page": page_index + 1,
+                            "text": str(span.get("text") or ""),
+                            "font": str(span.get("font") or ""),
+                            "size": round(float(span.get("size") or 0.0), 3),
+                            "bbox": [round(float(value), 3) for value in span.get("bbox", ())],
+                        }
+                        extracted_spans.append(span_record)
                         if _span_is_visible(span, page.rect):
-                            visible_spans.append(span)
+                            visible_spans.append(span_record)
     sizes = [float(span.get("size") or 0.0) for span in visible_spans if float(span.get("size") or 0.0) > 0]
     fonts = sorted({str(span.get("font") or "") for span in visible_spans if str(span.get("font") or "")})
     return {
@@ -240,6 +261,8 @@ def _text_object_info(document: fitz.Document) -> dict[str, Any]:
         "maximum_size_pt": round(max(sizes), 3) if sizes else None,
         "sizes_pt": sorted({round(size, 3) for size in sizes}),
         "fonts": fonts,
+        "visible_spans": visible_spans,
+        "plain_text_by_page": plain_text_by_page,
     }
 
 
@@ -291,6 +314,23 @@ def _stroke_info(document: fitz.Document) -> dict[str, Any]:
     }
 
 
+def _vector_color_info(document: fitz.Document) -> dict[str, Any]:
+    colors: list[dict[str, Any]] = []
+    for page_index, page in enumerate(document):
+        for drawing in page.get_drawings():
+            for role in ("color", "fill"):
+                value = drawing.get(role)
+                if not isinstance(value, tuple | list) or len(value) < 3:
+                    continue
+                rgb = [round(float(channel), 6) for channel in value[:3]]
+                colors.append({"page": page_index + 1, "role": role, "rgb": rgb})
+    unique = sorted({tuple(item["rgb"]) for item in colors})
+    return {
+        "occurrence_count": len(colors),
+        "unique_rgb": [list(value) for value in unique],
+    }
+
+
 def _pdf_info(path: Path) -> dict[str, Any]:
     if not path.exists() or path.stat().st_size <= 0:
         raise ValueError(f"{path} is missing or empty.")
@@ -320,6 +360,7 @@ def _pdf_info(path: Path) -> dict[str, Any]:
         text_objects = _text_object_info(document)
         embedded_rasters = _embedded_raster_info(document)
         strokes = _stroke_info(document)
+        vector_colors = _vector_color_info(document)
     first_page = pages[0]
     return {
         "path": str(path),
@@ -333,6 +374,7 @@ def _pdf_info(path: Path) -> dict[str, Any]:
         "font_resources": fonts,
         "embedded_rasters": embedded_rasters,
         "strokes": strokes,
+        "vector_colors": vector_colors,
         "visual_qa": first_page["visual_qa"],
     }
 
@@ -462,14 +504,820 @@ def _matching_pdf(tiff: dict[str, Any], pdfs: list[dict[str, Any]]) -> dict[str,
     return next((pdf for pdf in pdfs if _canonical_figure_stem(pdf["path"]) == tiff_stem), None)
 
 
+def _candidate_path(value: object, *, base_dir: Path) -> Path | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        candidate = base_dir / candidate
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        return None
+    return resolved if resolved.exists() and resolved.is_file() and resolved.suffix.casefold() == ".vsz" else None
+
+
+def _discover_veusz_documents(output_dir: Path, explicit: list[Path] | None) -> list[Path]:
+    candidates: list[Path] = []
+    if explicit is not None:
+        candidates.extend(path.expanduser().resolve() for path in explicit if path.expanduser().exists())
+    manifest = _read_json_object(output_dir / "manifest.json")
+    if isinstance(manifest, dict):
+        values: list[object] = [manifest.get("veusz_document")]
+        values.extend(manifest.get("veusz_documents", []) if isinstance(manifest.get("veusz_documents"), list) else [])
+        result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
+        values.append(result.get("veusz_document"))
+        values.extend(result.get("veusz_documents", []) if isinstance(result.get("veusz_documents"), list) else [])
+        for value in values:
+            candidate = _candidate_path(value, base_dir=output_dir)
+            if candidate is not None:
+                candidates.append(candidate)
+    candidates.extend(sorted((output_dir / "studio").glob("document.vsz")))
+    candidates.extend(sorted((output_dir / "figures" / "_veusz").glob("**/studio/document.vsz")))
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen or not resolved.exists() or not resolved.is_file():
+            continue
+        seen.add(resolved)
+        unique.append(resolved)
+    return unique
+
+
+def _run_veusz_audit(paths: list[Path]) -> tuple[dict[str, Any] | None, str | None]:
+    if not paths:
+        return None, "No exact current Veusz document was available for artifact QA."
+    from sciplot_core.veusz_runtime import veusz_worker_environment
+
+    command = [
+        sys.executable,
+        "-m",
+        "sciplot_core.veusz_worker",
+        "audit-documents",
+        *(str(path) for path in paths),
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            check=True,
+            env=veusz_worker_environment(),
+        )
+        payload = json.loads(completed.stdout)
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
+        detail = str(exc)
+        if isinstance(exc, subprocess.CalledProcessError) and exc.stderr:
+            detail = exc.stderr.strip().splitlines()[-1]
+        return None, f"Veusz document audit failed: {detail}"
+    if not isinstance(payload, dict) or not isinstance(payload.get("documents"), list):
+        return None, "Veusz document audit returned an invalid payload."
+    return payload, None
+
+
+def _publication_intent(output_dir: Path) -> dict[str, Any]:
+    intent = _read_json_object(output_dir / "publication_intent.json")
+    if intent is not None:
+        return intent
+    request = _read_json_object(output_dir / "request_snapshot.json")
+    if isinstance(request, dict) and isinstance(request.get("publication_intent"), dict):
+        return request["publication_intent"]
+    manifest = _read_json_object(output_dir / "manifest.json")
+    if isinstance(manifest, dict) and isinstance(manifest.get("publication_intent"), dict):
+        return manifest["publication_intent"]
+    return {}
+
+
+def _close(left: float, right: float, tolerance: float) -> bool:
+    return abs(float(left) - float(right)) <= tolerance
+
+
+def _bounds_close(actual: object, expected: object, tolerance: float) -> bool:
+    return (
+        isinstance(actual, list)
+        and isinstance(expected, list)
+        and len(actual) == len(expected)
+        and all(_close(float(left), float(right), tolerance) for left, right in zip(actual, expected, strict=True))
+    )
+
+
+def _fixed_frame_report(audit: dict[str, Any] | None, intent: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(audit, dict):
+        return {
+            "available": False,
+            "coverage_complete": False,
+            "passed": False,
+            "reason": "exact_current_vsz_audit_unavailable",
+            "documents": [],
+        }
+    from sciplot_core.contract import load_plot_contract, qa_profile
+    from sciplot_core.publication import build_composite_layout
+
+    contract = load_plot_contract()
+    tolerance = float(qa_profile("alignment").get("frame_tolerance_mm", 0.05))
+    expected_margins = {
+        "left": float(contract.global_frame.left_margin_mm),
+        "right": float(contract.global_frame.right_margin_mm),
+        "bottom": float(contract.global_frame.bottom_margin_mm),
+        "top": float(contract.global_frame.top_margin_mm),
+    }
+    documents = [item for item in audit.get("documents", []) if isinstance(item, dict)]
+    issues: list[dict[str, Any]] = []
+    all_graphs: list[dict[str, Any]] = []
+    for document in documents:
+        graphs = [item for item in document.get("graphs", []) if isinstance(item, dict)]
+        all_graphs.extend(graphs)
+        pages = {int(item["page"]): item for item in document.get("pages", []) if isinstance(item, dict)}
+        for graph in graphs:
+            margins = graph.get("margins_mm") if isinstance(graph.get("margins_mm"), dict) else {}
+            margin_errors = {
+                side: (
+                    abs(float(margins[side]) - expected)
+                    if margins.get(side) is not None
+                    else float("inf")
+                )
+                for side, expected in expected_margins.items()
+            }
+            if any(error > tolerance for error in margin_errors.values()):
+                issues.append(
+                    {
+                        "id": "fixed_publication_frame_misaligned",
+                        "path": graph.get("path"),
+                        "margin_error_mm": margin_errors,
+                    }
+                )
+            if str(graph.get("aspect") or "Auto").casefold() != "auto":
+                issues.append({"id": "fixed_publication_frame_aspect_override", "path": graph.get("path")})
+            if graph.get("parent_type") == "page":
+                page = pages.get(int(graph.get("page") or 0))
+                if page is None or not _bounds_close(graph.get("slot_bounds_mm"), page.get("bounds_mm"), tolerance):
+                    issues.append({"id": "standalone_graph_slot_misaligned", "path": graph.get("path")})
+        graph_by_path = {str(item.get("path")): item for item in graphs}
+        for auxiliary in document.get("auxiliaries", []):
+            if not isinstance(auxiliary, dict) or auxiliary.get("type") != "colorbar":
+                continue
+            graph = graph_by_path.get(str(auxiliary.get("parent_path")))
+            bounds = auxiliary.get("bounds_mm")
+            frame = graph.get("plot_bounds_mm") if isinstance(graph, dict) else None
+            contained = (
+                isinstance(bounds, list)
+                and isinstance(frame, list)
+                and len(bounds) == len(frame) == 4
+                and bounds[0] >= frame[0] - tolerance
+                and bounds[1] >= frame[1] - tolerance
+                and bounds[2] <= frame[2] + tolerance
+                and bounds[3] <= frame[3] + tolerance
+            )
+            if not contained:
+                issues.append({"id": "colorbar_outside_standard_graph_frame", "path": auxiliary.get("path")})
+
+    layout_id = str(intent.get("layout_id") or "").strip()
+    layout_confirmed = layout_id and str(intent.get("layout_status") or "").casefold() == "confirmed"
+    layout_evidence: dict[str, Any] | None = None
+    if layout_confirmed:
+        figure_layout = intent.get("figure_layout") if isinstance(intent.get("figure_layout"), dict) else {}
+        height = float(figure_layout.get("canvas_height_mm") or 55.0)
+        layout = build_composite_layout(layout_id, canvas_height_mm=height)
+        standalone_single = (
+            layout_id == "single_180"
+            and len(documents) == 1
+            and len(documents[0].get("pages", [])) == 1
+            and _bounds_close(
+                documents[0]["pages"][0].get("size_mm"),
+                [float(layout["nominal_content_width_mm"]), float(layout["canvas_height_mm"])],
+                tolerance,
+            )
+        )
+        layout_evidence = {
+            "layout_id": layout_id,
+            "expected": layout,
+            "actual_graphs": all_graphs,
+            "assembly_state": (
+                "standalone_180_module_for_external_assembly"
+                if standalone_single
+                else "native_composite_document"
+            ),
+        }
+        if not standalone_single:
+            if len(documents) != 1 or len(documents[0].get("pages", [])) != 1:
+                issues.append({"id": "composite_requires_one_vsz_page"})
+            else:
+                page = documents[0]["pages"][0]
+                expected_page = [float(layout["canvas_width_mm"]), float(layout["canvas_height_mm"])]
+                if not _bounds_close(page.get("size_mm"), expected_page, tolerance):
+                    issues.append(
+                        {
+                            "id": "composite_page_size_mismatch",
+                            "actual": page.get("size_mm"),
+                            "expected": expected_page,
+                        }
+                    )
+            ordered_graphs = sorted(
+                all_graphs,
+                key=lambda item: float((item.get("slot_bounds_mm") or [math.inf])[0]),
+            )
+            slots = [item for item in layout.get("slots", []) if isinstance(item, dict)]
+            if len(ordered_graphs) != len(slots):
+                issues.append(
+                    {
+                        "id": "composite_slot_count_mismatch",
+                        "actual": len(ordered_graphs),
+                        "expected": len(slots),
+                    }
+                )
+            else:
+                for graph, slot in zip(ordered_graphs, slots, strict=True):
+                    expected_bounds = [
+                        float(slot["x_mm"]),
+                        0.0,
+                        float(slot["x_mm"]) + float(slot["width_mm"]),
+                        float(layout["canvas_height_mm"]),
+                    ]
+                    if not _bounds_close(graph.get("slot_bounds_mm"), expected_bounds, tolerance):
+                        issues.append(
+                            {
+                                "id": "composite_slot_geometry_mismatch",
+                                "path": graph.get("path"),
+                                "actual": graph.get("slot_bounds_mm"),
+                                "expected": expected_bounds,
+                            }
+                        )
+    else:
+        for document in documents:
+            pages = [item for item in document.get("pages", []) if isinstance(item, dict)]
+            graphs = [item for item in document.get("graphs", []) if isinstance(item, dict)]
+            graph_counts_by_page = {
+                int(page.get("page") or 0): sum(
+                    int(graph.get("page") or 0) == int(page.get("page") or 0)
+                    for graph in graphs
+                )
+                for page in pages
+            }
+            standalone_shape = (
+                len(pages) == len(graphs)
+                and all(count == 1 for count in graph_counts_by_page.values())
+                and all(graph.get("parent_type") == "page" for graph in graphs)
+            )
+            if not standalone_shape:
+                issues.append(
+                    {
+                        "id": "unconfirmed_multi_graph_layout",
+                        "document": document.get("path"),
+                        "page_count": len(pages),
+                        "graph_count": len(graphs),
+                        "graph_counts_by_page": graph_counts_by_page,
+                        "parent_types": [graph.get("parent_type") for graph in graphs],
+                    }
+                )
+    return {
+        "available": bool(documents),
+        "coverage_complete": bool(documents) and bool(all_graphs),
+        "passed": bool(documents) and bool(all_graphs) and not issues,
+        "tolerance_mm": tolerance,
+        "expected_margins_mm": expected_margins,
+        "layout": layout_evidence,
+        "issues": issues,
+        "documents": [
+            {
+                "path": item.get("path"),
+                "sha256": item.get("sha256"),
+                "pages": item.get("pages"),
+                "graphs": item.get("graphs"),
+                "grids": item.get("grids"),
+                "auxiliaries": item.get("auxiliaries"),
+            }
+            for item in documents
+        ],
+    }
+
+
+_VEUSZ_SYMBOLS = {
+    "alpha": "α",
+    "beta": "β",
+    "delta": "δ",
+    "eta": "η",
+    "gamma": "γ",
+    "mu": "μ",
+    "omega": "ω",
+    "phi": "φ",
+    "pi": "π",
+    "rho": "ρ",
+    "sigma": "σ",
+    "tau": "τ",
+    "theta": "θ",
+    "times": "×",
+}
+_SUPERSCRIPT_TRANSLATION = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻", "0123456789+-")
+
+
+def _plain_veusz_label(value: object) -> str:
+    text = str(value or "")
+    wrapper = re.compile(r"\\(?:italic|textit|emph|bold|textbf|underline)\{([^{}]*)\}")
+    while wrapper.search(text):
+        text = wrapper.sub(r"\1", text)
+    for name, symbol in _VEUSZ_SYMBOLS.items():
+        text = re.sub(rf"\\{name}(?![A-Za-z])", symbol, text)
+    text = re.sub(r"\^\{([^{}]*)\}", r"\1", text)
+    text = re.sub(r"_\{([^{}]*)\}", r"\1", text)
+    text = text.replace("{", "").replace("}", "")
+    return text
+
+
+def _normalized_label(value: object) -> str:
+    text = unicodedata.normalize("NFKC", _plain_veusz_label(value)).translate(_SUPERSCRIPT_TRANSLATION)
+    text = text.casefold().replace("−", "-").replace("–", "-").replace("’", "′")
+    return "".join(character for character in text if not character.isspace())
+
+
+def _flatten_label_values(value: object, *, source: str) -> list[dict[str, str]]:
+    if isinstance(value, str) and value.strip():
+        return [{"source": source, "text": value.strip()}]
+    if isinstance(value, dict):
+        return [
+            item
+            for key, nested in value.items()
+            for item in _flatten_label_values(nested, source=f"{source}.{key}")
+        ]
+    if isinstance(value, list):
+        return [
+            item
+            for index, nested in enumerate(value)
+            for item in _flatten_label_values(nested, source=f"{source}[{index}]")
+        ]
+    return []
+
+
+def _semantic_label_report(
+    audit: dict[str, Any] | None,
+    intent: dict[str, Any],
+    pdfs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    expected: list[dict[str, str]] = []
+    documents = audit.get("documents", []) if isinstance(audit, dict) else []
+    for document in documents:
+        if not isinstance(document, dict):
+            continue
+        for item in document.get("semantic_labels", []):
+            if isinstance(item, dict) and isinstance(item.get("text"), str) and item["text"].strip():
+                expected.append(
+                    {
+                        "source": f"current_vsz:{document.get('path')}:{item.get('role')}:{item.get('path')}",
+                        "text": item["text"].strip(),
+                    }
+                )
+    expected.extend(_flatten_label_values(intent.get("exact_labels"), source="publication_intent.exact_labels"))
+    panel_labels: list[str] = []
+    if str(intent.get("layout_status") or "").casefold() == "confirmed":
+        for index, panel in enumerate(intent.get("panels", [])):
+            if not isinstance(panel, dict):
+                continue
+            if str(panel.get("confirmation_status") or "").casefold() != "confirmed":
+                continue
+            label = str(panel.get("panel_label") or "").strip()
+            if label:
+                panel_labels.append(label)
+                expected.append({"source": f"publication_intent.panels[{index}].panel_label", "text": label})
+    deduplicated: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in expected:
+        normalized = _normalized_label(item["text"])
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            deduplicated.append({**item, "normalized": normalized})
+    observed_lines = [
+        str(line)
+        for pdf in pdfs
+        for page in pdf["text_objects"].get("plain_text_by_page", [])
+        for line in page.get("lines", [])
+    ]
+    normalized_lines = [_normalized_label(line) for line in observed_lines]
+    missing: list[dict[str, str]] = []
+    matched: list[dict[str, str]] = []
+    for item in deduplicated:
+        target = item["normalized"]
+        found = target in normalized_lines
+        (matched if found else missing).append(item)
+    return {
+        "available": bool(documents) or bool(intent.get("exact_labels")),
+        "coverage_complete": bool(documents) and bool(deduplicated),
+        "passed": not missing and bool(deduplicated),
+        "expected": deduplicated,
+        "matched": matched,
+        "missing": missing,
+        "observed_lines": observed_lines,
+        "panel_labels": panel_labels,
+    }
+
+
+def _panel_typography_report(
+    semantic: dict[str, Any],
+    pdfs: list[dict[str, Any]],
+    profile: dict[str, Any],
+) -> dict[str, Any]:
+    panel_labels = [str(value) for value in semantic.get("panel_labels", [])]
+    panel_profile = (
+        profile.get("typography", {}).get("panel_label")
+        if isinstance(profile.get("typography"), dict)
+        else None
+    )
+    if not panel_labels or not isinstance(panel_profile, dict):
+        return {
+            "applicable": False,
+            "coverage_complete": True,
+            "passed": True,
+            "panel_labels": panel_labels,
+            "matches": [],
+        }
+    spans = [span for pdf in pdfs for span in pdf["text_objects"].get("visible_spans", [])]
+    matches: list[dict[str, Any]] = []
+    expected_size = float(panel_profile.get("size_pt") or 0.0)
+    for label in panel_labels:
+        candidates = [span for span in spans if _normalized_label(span.get("text")) == _normalized_label(label)]
+        valid = [
+            span
+            for span in candidates
+            if abs(float(span.get("size") or 0.0) - expected_size) <= 0.15
+            and (panel_profile.get("weight") != "bold" or "bold" in str(span.get("font") or "").casefold())
+            and (
+                panel_profile.get("style") != "upright"
+                or all(token not in str(span.get("font") or "").casefold() for token in ("italic", "oblique"))
+            )
+        ]
+        matches.append({"label": label, "candidates": candidates, "valid": valid})
+    return {
+        "applicable": True,
+        "coverage_complete": True,
+        "passed": all(item["valid"] for item in matches),
+        "panel_labels": panel_labels,
+        "expected": panel_profile,
+        "matches": matches,
+    }
+
+
+_CVD_MATRICES: dict[str, tuple[tuple[float, float, float], ...]] = {
+    "protanopia": (
+        (0.152286, 1.052583, -0.204868),
+        (0.114503, 0.786281, 0.099216),
+        (-0.003882, -0.048116, 1.051998),
+    ),
+    "deuteranopia": (
+        (0.367322, 0.860646, -0.227968),
+        (0.280085, 0.672501, 0.047413),
+        (-0.01182, 0.04294, 0.968881),
+    ),
+    "tritanopia": (
+        (1.255528, -0.076749, -0.178779),
+        (-0.078411, 0.930809, 0.147602),
+        (0.004733, 0.691367, 0.3039),
+    ),
+}
+
+
+def _srgb_to_linear(value: float) -> float:
+    return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+
+
+def _linear_to_srgb(value: float) -> float:
+    clipped = min(max(value, 0.0), 1.0)
+    return 12.92 * clipped if clipped <= 0.0031308 else 1.055 * clipped ** (1.0 / 2.4) - 0.055
+
+
+def _simulate_cvd(rgb: list[float], matrix: tuple[tuple[float, float, float], ...]) -> list[float]:
+    linear = [_srgb_to_linear(float(value)) for value in rgb]
+    simulated = [sum(row[index] * linear[index] for index in range(3)) for row in matrix]
+    return [_linear_to_srgb(value) for value in simulated]
+
+
+def _lab(rgb: list[float]) -> tuple[float, float, float]:
+    red, green, blue = (_srgb_to_linear(float(value)) for value in rgb)
+    x = (0.4124564 * red + 0.3575761 * green + 0.1804375 * blue) / 0.95047
+    y = 0.2126729 * red + 0.7151522 * green + 0.072175 * blue
+    z = (0.0193339 * red + 0.119192 * green + 0.9503041 * blue) / 1.08883
+
+    def transform(value: float) -> float:
+        return value ** (1.0 / 3.0) if value > 0.008856 else 7.787 * value + 16.0 / 116.0
+
+    fx, fy, fz = transform(x), transform(y), transform(z)
+    return (116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz))
+
+
+def _delta_e(left: list[float], right: list[float]) -> float:
+    lab_left = _lab(left)
+    lab_right = _lab(right)
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(lab_left, lab_right, strict=True)))
+
+
+def _relative_luminance(rgb: list[float]) -> float:
+    red, green, blue = (_srgb_to_linear(float(value)) for value in rgb)
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def _rgb_matches(left: list[float], right: list[float], tolerance: float = 2.5 / 255.0) -> bool:
+    return all(abs(float(a) - float(b)) <= tolerance for a, b in zip(left, right, strict=True))
+
+
+def _sample_color_scale(control_colors: list[dict[str, Any]], count: int = 16) -> list[list[float]]:
+    controls = [item.get("rgb") for item in control_colors if isinstance(item.get("rgb"), list)]
+    if len(controls) < 2:
+        return []
+    samples: list[list[float]] = []
+    for index in range(count):
+        position = index / max(count - 1, 1) * (len(controls) - 1)
+        left_index = min(int(math.floor(position)), len(controls) - 2)
+        fraction = position - left_index
+        left = controls[left_index]
+        right = controls[left_index + 1]
+        samples.append(
+            [float(a) + (float(b) - float(a)) * fraction for a, b in zip(left, right, strict=True)]
+        )
+    return samples
+
+
+def _turn_count(values: list[float], tolerance: float = 0.005) -> int:
+    signs: list[int] = []
+    for left, right in zip(values, values[1:], strict=False):
+        delta = right - left
+        if abs(delta) <= tolerance:
+            continue
+        sign = 1 if delta > 0 else -1
+        if not signs or signs[-1] != sign:
+            signs.append(sign)
+    return max(len(signs) - 1, 0)
+
+
+def _series_accessibility_report(
+    audit: dict[str, Any] | None,
+    pdfs: list[dict[str, Any]],
+    profile: dict[str, Any],
+) -> dict[str, Any]:
+    documents = audit.get("documents", []) if isinstance(audit, dict) else []
+    series = [
+        {**item, "document": document.get("path")}
+        for document in documents
+        if isinstance(document, dict)
+        for item in document.get("series", [])
+        if isinstance(item, dict) and (item.get("plot_line_visible") or item.get("marker_visible"))
+    ]
+    color_scales = [
+        {**item, "document": document.get("path")}
+        for document in documents
+        if isinstance(document, dict)
+        for item in document.get("color_scales", [])
+        if isinstance(item, dict)
+    ]
+    if not documents:
+        return {
+            "available": False,
+            "coverage_complete": False,
+            "passed": False,
+            "reason": "exact_current_vsz_audit_unavailable",
+            "series": [],
+            "pairs": [],
+        }
+    active_color_entries = [
+        {
+            "path": item.get("path"),
+            "role": entry.get("role"),
+            "color": entry.get("color"),
+        }
+        for item in series
+        for entry in item.get("rendered_colors", [])
+        if isinstance(entry, dict)
+    ]
+    unresolved = [
+        {"path": item.get("path"), "role": item.get("role")}
+        for item in active_color_entries
+        if not isinstance(item.get("color"), dict)
+    ]
+    unresolved.extend(
+        {"path": item.get("path"), "role": "primary_series_color"}
+        for item in series
+        if not isinstance(item.get("color"), dict)
+        and not any(entry.get("path") == item.get("path") for entry in unresolved)
+    )
+    pdf_colors = [
+        color
+        for pdf in pdfs
+        for color in pdf.get("vector_colors", {}).get("unique_rgb", [])
+        if isinstance(color, list) and len(color) == 3
+    ]
+    unrendered = [
+        {"path": item.get("path"), "role": item.get("role"), "color": item.get("color")}
+        for item in active_color_entries
+        if isinstance(item.get("color"), dict)
+        and not any(_rgb_matches(item["color"]["rgb"], candidate) for candidate in pdf_colors)
+    ]
+    accessibility = profile.get("accessibility") if isinstance(profile.get("accessibility"), dict) else {}
+    minimum_delta_e = float(accessibility.get("minimum_simulated_delta_e") or 10.0)
+    minimum_luminance_delta = float(accessibility.get("minimum_grayscale_luminance_delta") or 0.08)
+    minimum_colormap_step = float(accessibility.get("minimum_colormap_step_delta_e") or 2.0)
+    minimum_colormap_range = float(accessibility.get("minimum_colormap_luminance_range") or 0.3)
+    maximum_colormap_turns = int(accessibility.get("maximum_colormap_luminance_turns") or 1)
+    groups: dict[tuple[str, str, int], list[dict[str, Any]]] = {}
+    for item in series:
+        key = (str(item.get("document")), str(item.get("graph_path")), int(item.get("page") or 0))
+        groups.setdefault(key, []).append(item)
+    pair_reports: list[dict[str, Any]] = []
+    for group_key, group in groups.items():
+        for left, right in combinations(group, 2):
+            left_signature = (
+                left.get("line_style") if left.get("plot_line_visible") else None,
+                left.get("marker") if left.get("marker_visible") else None,
+            )
+            right_signature = (
+                right.get("line_style") if right.get("plot_line_visible") else None,
+                right.get("marker") if right.get("marker_visible") else None,
+            )
+            non_color_distinct = bool(
+                (left.get("direct_labelled") and right.get("direct_labelled"))
+                or left_signature != right_signature
+            )
+            left_rgb = left.get("color", {}).get("rgb") if isinstance(left.get("color"), dict) else None
+            right_rgb = right.get("color", {}).get("rgb") if isinstance(right.get("color"), dict) else None
+            simulations = {}
+            if isinstance(left_rgb, list) and isinstance(right_rgb, list):
+                for name, matrix in _CVD_MATRICES.items():
+                    simulations[name] = round(
+                        _delta_e(_simulate_cvd(left_rgb, matrix), _simulate_cvd(right_rgb, matrix)),
+                        3,
+                    )
+                luminance_delta = round(abs(_relative_luminance(left_rgb) - _relative_luminance(right_rgb)), 6)
+            else:
+                luminance_delta = None
+            pair_reports.append(
+                {
+                    "group": list(group_key),
+                    "left": {"path": left.get("path"), "label": left.get("label"), "signature": left_signature},
+                    "right": {
+                        "path": right.get("path"),
+                        "label": right.get("label"),
+                        "signature": right_signature,
+                    },
+                    "non_color_distinct": non_color_distinct,
+                    "cvd_delta_e": simulations,
+                    "grayscale_luminance_delta": luminance_delta,
+                    "cvd_accessible": bool(simulations)
+                    and (min(simulations.values()) >= minimum_delta_e or non_color_distinct),
+                    "grayscale_accessible": luminance_delta is not None
+                    and (luminance_delta >= minimum_luminance_delta or non_color_distinct),
+                }
+            )
+    non_color_required = accessibility.get("non_color_distinction_required") is True
+    non_color_passed = not non_color_required or all(item["non_color_distinct"] for item in pair_reports)
+    cvd_passed = all(item["cvd_accessible"] for item in pair_reports)
+    grayscale_passed = all(item["grayscale_accessible"] for item in pair_reports)
+    embedded_raster_present = any(pdf.get("embedded_rasters") for pdf in pdfs)
+    color_scale_reports: list[dict[str, Any]] = []
+    forbidden_names = {"spectrum", "spectrum2", "spectrum2-step", "rainbow", "jet", "hsv"}
+    for scale in color_scales:
+        samples = _sample_color_scale(scale.get("control_colors", []))
+        binding_samples = _sample_color_scale(scale.get("control_colors", []), count=256)
+        matched_pdf_colors = [
+            color
+            for color in pdf_colors
+            if binding_samples and min(_delta_e(color, sample) for sample in binding_samples) <= 2.5
+        ]
+        rendered_output_confirmed = embedded_raster_present or len(matched_pdf_colors) >= 3
+        rendered_output_method = (
+            "embedded_pdf_raster"
+            if embedded_raster_present
+            else "pdf_vector_palette_matches"
+            if rendered_output_confirmed
+            else "unconfirmed"
+        )
+        luminances = [_relative_luminance(rgb) for rgb in samples]
+        cvd_steps = {
+            name: [
+                _delta_e(_simulate_cvd(left, matrix), _simulate_cvd(right, matrix))
+                for left, right in zip(samples, samples[1:], strict=False)
+            ]
+            for name, matrix in _CVD_MATRICES.items()
+        }
+        minimum_steps = {name: round(min(values), 3) if values else None for name, values in cvd_steps.items()}
+        luminance_range = max(luminances) - min(luminances) if luminances else 0.0
+        turns = _turn_count(luminances)
+        cvd_scale_passed = bool(samples) and all(
+            value is not None and float(value) >= minimum_colormap_step for value in minimum_steps.values()
+        )
+        grayscale_scale_passed = (
+            bool(samples) and luminance_range >= minimum_colormap_range and turns <= maximum_colormap_turns
+        )
+        rainbow_passed = not (
+            accessibility.get("avoid_rainbow_palette") is True
+            and str(scale.get("name") or "").strip().casefold() in forbidden_names
+        )
+        color_scale_reports.append(
+            {
+                "path": scale.get("path"),
+                "name": scale.get("name"),
+                "sample_count": len(samples),
+                "minimum_adjacent_cvd_delta_e": minimum_steps,
+                "luminance_range": round(luminance_range, 6),
+                "luminance_turns": turns,
+                "cvd_accessible": cvd_scale_passed,
+                "grayscale_accessible": grayscale_scale_passed,
+                "rainbow_avoidance_passed": rainbow_passed,
+                "rendered_raster_confirmed": embedded_raster_present,
+                "rendered_output_confirmed": rendered_output_confirmed,
+                "rendered_output_method": rendered_output_method,
+                "matched_pdf_colors": matched_pdf_colors,
+                "passed": (
+                    cvd_scale_passed
+                    and grayscale_scale_passed
+                    and rainbow_passed
+                    and rendered_output_confirmed
+                ),
+            }
+        )
+    colormap_passed = all(item["passed"] for item in color_scale_reports)
+    cvd_passed = cvd_passed and all(item["cvd_accessible"] for item in color_scale_reports)
+    grayscale_passed = grayscale_passed and all(item["grayscale_accessible"] for item in color_scale_reports)
+    scale_coverage = all(
+        item["sample_count"] > 0 and item["rendered_output_confirmed"]
+        for item in color_scale_reports
+    )
+    coverage_complete = not unresolved and not unrendered and scale_coverage
+    return {
+        "available": True,
+        "coverage_complete": coverage_complete,
+        "passed": coverage_complete and non_color_passed and cvd_passed and grayscale_passed and colormap_passed,
+        "series": series,
+        "color_scales": color_scale_reports,
+        "pairs": pair_reports,
+        "unresolved_color_paths": unresolved,
+        "colors_not_confirmed_in_pdf": unrendered,
+        "non_color_required": non_color_required,
+        "non_color_passed": non_color_passed,
+        "colour_vision_passed": cvd_passed,
+        "grayscale_passed": grayscale_passed,
+        "colormap_passed": colormap_passed,
+        "thresholds": {
+            "minimum_simulated_delta_e": minimum_delta_e,
+            "minimum_grayscale_luminance_delta": minimum_luminance_delta,
+            "minimum_colormap_step_delta_e": minimum_colormap_step,
+            "minimum_colormap_luminance_range": minimum_colormap_range,
+            "maximum_colormap_luminance_turns": maximum_colormap_turns,
+            "authority": accessibility.get("threshold_authority") or "sciplot_internal_operational_gate",
+        },
+    }
+
+
+def _vsz_stroke_report(audit: dict[str, Any] | None, profile: dict[str, Any]) -> dict[str, Any]:
+    stroke_profile = profile.get("strokes") if isinstance(profile.get("strokes"), dict) else {}
+    minimum = float(stroke_profile.get("minimum_width_pt") or 0.0)
+    maximum = float(stroke_profile.get("maximum_width_pt") or float("inf"))
+    documents = audit.get("documents", []) if isinstance(audit, dict) else []
+    items = [
+        {**item, "document": document.get("path")}
+        for document in documents
+        if isinstance(document, dict)
+        for item in document.get("stroke_inventory", {}).get("items", [])
+        if isinstance(item, dict) and item.get("active")
+    ]
+    unsupported = [
+        {**item, "document": document.get("path")}
+        for document in documents
+        if isinstance(document, dict)
+        for item in document.get("stroke_inventory", {}).get("unsupported", [])
+        if isinstance(item, dict)
+    ]
+    out_of_range = [
+        item
+        for item in items
+        if item.get("width_pt") is None
+        or float(item["width_pt"]) < minimum - 0.01
+        or float(item["width_pt"]) > maximum + 0.01
+    ]
+    coverage_complete = bool(documents) and not unsupported and all(item.get("width_pt") is not None for item in items)
+    return {
+        "available": bool(documents),
+        "coverage_complete": coverage_complete,
+        "passed": coverage_complete and not out_of_range,
+        "expected": {"minimum_pt": minimum, "maximum_pt": maximum},
+        "active_count": len(items),
+        "items": items,
+        "unsupported": unsupported,
+        "out_of_range": out_of_range,
+        "evidence_model": "PDF strokes plus resolved active line settings from the exact current VSZ",
+    }
+
+
 def _publication_qa(
     *,
     profile: dict[str, Any],
     pdfs: list[dict[str, Any]],
     tiffs: list[dict[str, Any]],
     required_formats: dict[str, Any],
+    veusz_audit: dict[str, Any] | None,
+    publication_intent: dict[str, Any],
 ) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
+    fixed_frame = _fixed_frame_report(veusz_audit, publication_intent)
+    semantic_labels = _semantic_label_report(veusz_audit, publication_intent, pdfs)
+    panel_typography = _panel_typography_report(semantic_labels, pdfs, profile)
+    accessibility = _series_accessibility_report(veusz_audit, pdfs, profile)
+    vsz_strokes = _vsz_stroke_report(veusz_audit, profile)
     required_format_set = set(required_formats["formats"])
     pairing = _canonical_pairing_report(pdfs, tiffs, required_formats=required_format_set)
     checks.append(
@@ -514,6 +1362,16 @@ def _publication_qa(
             actual=observed_sizes,
             expected={"allowed_widths_mm": allowed_widths, "maximum_height_mm": maximum_height},
             message="Final PDF page size must match a profile width and remain below the maximum height.",
+        )
+    )
+    checks.append(
+        _check(
+            "fixed_frame_current_vsz",
+            passed=bool(fixed_frame["passed"]),
+            actual=fixed_frame,
+            expected="Every rendered graph uses the fixed physical frame; confirmed composites match exact slots.",
+            message="The exact current Veusz document must retain the fixed graph frame and declared slot geometry.",
+            severity="error" if fixed_frame["available"] else "warning",
         )
     )
 
@@ -571,6 +1429,26 @@ def _publication_qa(
             message="Actual PDF text sizes must stay within the final-size profile range.",
         )
     )
+    checks.append(
+        _check(
+            "semantic_label_inventory",
+            passed=bool(semantic_labels["passed"]),
+            actual=semantic_labels,
+            expected="All labels required by the exact VSZ and publication intent are present as PDF text.",
+            message="Axis, key, direct, exact, and confirmed panel labels must survive into the final PDF.",
+            severity="error" if semantic_labels["available"] else "warning",
+        )
+    )
+    checks.append(
+        _check(
+            "panel_label_typography",
+            passed=bool(panel_typography["passed"]),
+            actual=panel_typography,
+            expected=panel_typography.get("expected") or "not applicable",
+            message="Multipart panel labels must use their role-specific final-size typography.",
+            severity="error" if panel_typography["applicable"] else "warning",
+        )
+    )
 
     minimum_raster_dpi = float(profile.get("raster", {}).get("minimum_effective_dpi") or 300.0)
     embedded_images = [image for pdf in pdfs for image in pdf["embedded_rasters"]]
@@ -626,6 +1504,52 @@ def _publication_qa(
             message="TIFF and PDF exports of the same figure must describe the same physical size.",
         )
     )
+    checks.extend(
+        [
+            _check(
+                "series_colors_rendered",
+                passed=bool(accessibility["coverage_complete"]),
+                actual={
+                    "unresolved_color_paths": accessibility.get("unresolved_color_paths", []),
+                    "colors_not_confirmed_in_pdf": accessibility.get("colors_not_confirmed_in_pdf", []),
+                    "series": accessibility.get("series", []),
+                    "color_scales": accessibility.get("color_scales", []),
+                },
+                expected=(
+                    "Every visible semantic series colour or colour scale resolves from the current VSZ and "
+                    "is confirmed in the PDF."
+                ),
+                message="Colour simulations must be bound to colours actually rendered in the final PDF.",
+                severity="error" if accessibility["available"] else "warning",
+            ),
+            _check(
+                "non_color_series_distinction",
+                passed=bool(accessibility.get("non_color_passed")),
+                actual=accessibility.get("pairs", []),
+                expected="Every same-graph series pair has a distinct line/marker signature or direct labels.",
+                message="Series identity must not depend on colour alone.",
+                severity="error" if accessibility["available"] else "warning",
+            ),
+            _check(
+                "colour_vision_simulation",
+                passed=bool(accessibility.get("colour_vision_passed")),
+                actual=accessibility,
+                expected=accessibility.get("thresholds", {}),
+                message=(
+                    "Protanopia, deuteranopia, and tritanopia simulations must retain colour or non-colour separation."
+                ),
+                severity="error" if accessibility["available"] else "warning",
+            ),
+            _check(
+                "grayscale_accessibility",
+                passed=bool(accessibility.get("grayscale_passed")),
+                actual=accessibility,
+                expected=accessibility.get("thresholds", {}),
+                message="Grayscale review must retain luminance or non-colour separation for every series pair.",
+                severity="error" if accessibility["available"] else "warning",
+            ),
+        ]
+    )
 
     stroke_profile = profile.get("strokes") if isinstance(profile.get("strokes"), dict) else {}
     stroke_ranges = [pdf["strokes"] for pdf in pdfs]
@@ -641,7 +1565,7 @@ def _publication_qa(
     )
     checks.append(
         _check(
-            "stroke_range_partial",
+            "stroke_range_pdf_partial",
             passed=stroke_passed,
             actual=stroke_ranges,
             expected={"minimum_pt": minimum_stroke, "maximum_pt": maximum_stroke},
@@ -649,6 +1573,16 @@ def _publication_qa(
                 "Measured PDF strokes should fit the profile; filled Veusz curve paths remain a documented limitation."
             ),
             severity="warning",
+        )
+    )
+    checks.append(
+        _check(
+            "stroke_range_current_vsz_complete",
+            passed=bool(vsz_strokes["passed"]),
+            actual=vsz_strokes,
+            expected=vsz_strokes["expected"],
+            message="All active physical stroke settings in the exact current VSZ must fit the profile range.",
+            severity="error" if vsz_strokes["available"] else "warning",
         )
     )
 
@@ -673,19 +1607,37 @@ def _publication_qa(
     )
     blocking_failures = [check for check in checks if check["status"] == "failed" and check["severity"] == "error"]
     checked_constraints_passed = not blocking_failures
-    unchecked_constraints = [
-        "rendered_colour_vision_and_grayscale_accessibility",
-        "semantic_panel_and_required_label_inventory",
-        "complete_stroke_coverage_for_filled_veusz_paths",
-    ]
+    coverage = {
+        "fixed_frame_current_vsz": bool(fixed_frame["coverage_complete"]),
+        "rendered_colour_vision_and_grayscale_accessibility": bool(accessibility["coverage_complete"]),
+        "semantic_panel_and_required_label_inventory": bool(semantic_labels["coverage_complete"])
+        and bool(panel_typography["coverage_complete"]),
+        "complete_stroke_coverage_for_filled_veusz_paths": bool(vsz_strokes["coverage_complete"]),
+    }
+    unchecked_constraints = [constraint for constraint, complete in coverage.items() if not complete]
+    coverage_complete = not unchecked_constraints
+    limitations = []
+    if not vsz_strokes["coverage_complete"]:
+        limitations.append("Complete stroke coverage requires a successfully loaded exact current VSZ document.")
+    if not accessibility["coverage_complete"]:
+        limitations.append(
+            "Rendered colour accessibility requires resolved current-VSZ colours confirmed in final PDF "
+            "vectors or embedded rasters."
+        )
+    if not semantic_labels["coverage_complete"]:
+        limitations.append("Semantic label coverage requires current-VSZ label inventory and final PDF text objects.")
+    if not fixed_frame["coverage_complete"]:
+        limitations.append("Fixed-frame coverage requires Veusz-computed bounds from the exact current VSZ document.")
     return {
         "kind": "sciplot_publication_qa",
-        "version": 1,
+        "version": 2,
         "status": "passed" if checked_constraints_passed else "needs_revision",
         "checked_constraints_passed": checked_constraints_passed,
-        "coverage_complete": False,
+        "coverage_complete": coverage_complete,
         "journal_compliance_established": False,
-        "journal_compliance_status": "not_established_incomplete_coverage",
+        "journal_compliance_status": (
+            "not_established_profile_scope" if coverage_complete else "not_established_incomplete_coverage"
+        ),
         "status_semantics": (
             "passed means only the implemented constraints passed; it is not a claim of journal compliance"
         ),
@@ -693,11 +1645,9 @@ def _publication_qa(
         "required_formats": required_formats,
         "checks": checks,
         "blocking_check_ids": [check["id"] for check in blocking_failures],
-        "limitations": [
-            "PDF stroke inspection is partial because Veusz may export data curves as filled paths.",
-            "Colour-vision simulation and semantic non-colour encoding require renderer/spec evidence in a later gate.",
-            "Expected panel labels and complete semantic text inventory are not yet reconciled against the PDF.",
-        ],
+        "coverage": coverage,
+        "veusz_document_audit": veusz_audit,
+        "limitations": limitations,
         "unchecked_constraints": unchecked_constraints,
         "invariants": {
             "scientific_outcome_agnostic": True,
@@ -714,6 +1664,7 @@ def run_qa(
     require_all_goldens: bool = False,
     publication_profile: str | Path | dict[str, Any] | None = None,
     strict_publication: bool = False,
+    veusz_documents: list[Path] | None = None,
 ) -> dict[str, Any]:
     if publication_profile is None:
         discovered_profile = output_dir / "journal_profile.json"
@@ -750,12 +1701,17 @@ def run_qa(
             golden_reports.append(golden)
     profile = resolve_publication_profile(publication_profile)
     required_formats = _required_export_formats(output_dir, profile) if profile else None
+    discovered_veusz_documents = _discover_veusz_documents(output_dir, veusz_documents)
+    veusz_audit, veusz_audit_error = _run_veusz_audit(discovered_veusz_documents) if profile else (None, None)
+    intent = _publication_intent(output_dir)
     publication = (
         _publication_qa(
             profile=profile,
             pdfs=pdf_reports,
             tiffs=tiff_reports,
             required_formats=required_formats,
+            veusz_audit=veusz_audit,
+            publication_intent=intent,
         )
         if profile and required_formats
         else None
@@ -776,6 +1732,8 @@ def run_qa(
         "scientific_outcome_agnostic": True,
     }
     if publication is not None:
+        if veusz_audit_error:
+            publication["veusz_document_audit_error"] = veusz_audit_error
         payload["publication"] = publication
         payload["publication_strict"] = bool(strict_publication)
     return payload

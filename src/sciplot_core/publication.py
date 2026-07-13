@@ -96,13 +96,19 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
         "strokes": {
             "minimum_width_pt": 0.25,
             "maximum_width_pt": 1.6,
-            "artifact_coverage": "partial",
+            "artifact_coverage": "pdf_plus_exact_current_vsz",
         },
         "raster": {"minimum_effective_dpi": 300.0},
         "accessibility": {
             "non_color_distinction_required": True,
             "grayscale_review_required": True,
             "avoid_rainbow_palette": True,
+            "minimum_simulated_delta_e": 10.0,
+            "minimum_grayscale_luminance_delta": 0.08,
+            "minimum_colormap_step_delta_e": 2.0,
+            "minimum_colormap_luminance_range": 0.3,
+            "maximum_colormap_luminance_turns": 1,
+            "threshold_authority": "sciplot_internal_operational_gate",
         },
         "integrity": {
             "scientific_outcome_agnostic": True,
@@ -140,9 +146,8 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
             "recommended_minimum_text_size_pt": 5.0,
             # Nature's final-submission guidance uses 5--7 pt for ordinary
             # figure text, but explicitly calls for 8 pt bold panel labels in
-            # multipart figures.  The current PDF inspection cannot classify
-            # a text span by semantic role, so the broad artifact envelope is
-            # 5--8 pt and the narrower ordinary-text rule remains explicit.
+            # multipart figures. Confirmed panel labels are matched to final
+            # PDF spans, while the broad artifact envelope remains 5--8 pt.
             "maximum_text_size_pt": 8.0,
             "ordinary_text_minimum_size_pt": 5.0,
             "ordinary_text_maximum_size_pt": 7.0,
@@ -154,10 +159,10 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
                 "applies_to": "multipart_figures",
             },
             "role_aware_validation": {
-                "status": "partial",
+                "status": "exact_label_inventory_required",
                 "reason": (
-                    "Current PDF inspection measures text sizes but cannot yet distinguish panel labels "
-                    "from ordinary labels. The 8 pt exception is therefore allowed but not fully role-validated."
+                    "The 8 pt exception is validated only when confirmed panel labels can be matched "
+                    "to final PDF text spans."
                 ),
             },
             "require_embedded_fonts": True,
@@ -166,7 +171,7 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
         "strokes": {
             "minimum_width_pt": 0.25,
             "maximum_width_pt": 1.0,
-            "artifact_coverage": "partial",
+            "artifact_coverage": "pdf_plus_exact_current_vsz",
         },
         "raster": {"minimum_effective_dpi": 300.0},
         "accessibility": {
@@ -174,6 +179,12 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
             "grayscale_review_required": True,
             "avoid_rainbow_palette": True,
             "avoid_colored_text": True,
+            "minimum_simulated_delta_e": 10.0,
+            "minimum_grayscale_luminance_delta": 0.08,
+            "minimum_colormap_step_delta_e": 2.0,
+            "minimum_colormap_luminance_range": 0.3,
+            "maximum_colormap_luminance_turns": 1,
+            "threshold_authority": "sciplot_internal_operational_gate_not_official_nature_threshold",
         },
         "integrity": {
             "scientific_outcome_agnostic": True,
