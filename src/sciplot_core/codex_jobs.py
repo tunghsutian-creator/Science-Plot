@@ -9,10 +9,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from sciplot_core._paths import REPO_ROOT
+from sciplot_core._utils import json_safe
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload
-from sciplot_core.render import json_safe
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
 HANDOFF_FILENAME = "sciplot_codex_handoff.json"
 STATUS_FILENAME = "status.json"
 STDOUT_FILENAME = "stdout.jsonl"
@@ -44,11 +44,14 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _default_required_checks(plot_request: Path | None, run_output: Path | None) -> list[str]:
-    checks = ["ruff check .", "pytest"]
+    checks = [
+        "python -m compileall -q src/sciplot_core src/sciplot_recipes",
+        "skill/scripts/sciplot doctor --json",
+    ]
     if plot_request is not None:
         checks.append(f"skill/scripts/sciplot run {plot_request}")
     if run_output is not None:
-        checks.append(f"skill/scripts/sciplot qa {run_output} --goldens tests/goldens")
+        checks.append(f"skill/scripts/sciplot qa {run_output}")
     return checks
 
 

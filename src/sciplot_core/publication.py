@@ -10,6 +10,8 @@ from typing import Any
 
 import pandas as pd
 
+from sciplot_core._utils import file_sha256
+
 PUBLICATION_PROFILE_KIND = "sciplot_publication_profile"
 PUBLICATION_PROFILE_VERSION = 1
 PUBLICATION_INTENT_KIND = "sciplot_publication_intent"
@@ -845,14 +847,6 @@ def build_publication_intent(
     return payload
 
 
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _table_shape(path: Path) -> list[int] | None:
     if path.stat().st_size > 20 * 1024 * 1024:
         return None
@@ -889,7 +883,7 @@ def artifact_record(path: str | Path, *, artifact_id: str, role: str) -> dict[st
             "path": str(resolved),
             "exists": True,
             "size_bytes": resolved.stat().st_size,
-            "sha256": _sha256_file(resolved),
+            "sha256": file_sha256(resolved),
             "table_shape": _table_shape(resolved),
         }
 
@@ -898,7 +892,7 @@ def artifact_record(path: str | Path, *, artifact_id: str, role: str) -> dict[st
     total_bytes = 0
     for member in sorted(path for path in resolved.rglob("*") if path.is_file()):
         relative = member.relative_to(resolved).as_posix()
-        member_hash = _sha256_file(member)
+        member_hash = file_sha256(member)
         digest.update(relative.encode("utf-8"))
         digest.update(member_hash.encode("ascii"))
         member_count += 1

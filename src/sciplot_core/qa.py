@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import re
@@ -15,15 +14,8 @@ import fitz
 import numpy as np
 from PIL import Image
 
+from sciplot_core._utils import file_sha256, read_json_object
 from sciplot_core.publication import resolve_publication_profile
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _raster_visual_qa(pixmap: fitz.Pixmap) -> dict[str, Any]:
@@ -85,16 +77,6 @@ def _canonical_artifacts(output_dir: Path, suffixes: tuple[str, ...]) -> list[Pa
     )
 
 
-def _read_json_object(path: Path) -> dict[str, Any] | None:
-    if not path.exists() or not path.is_file():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return None
-    return payload if isinstance(payload, dict) else None
-
-
 def _normalized_export_format(value: object) -> str | None:
     normalized = str(value or "").strip().casefold().replace("-", "_")
     aliases = {
@@ -122,9 +104,9 @@ def _required_export_formats(output_dir: Path, profile: dict[str, Any]) -> dict[
             normalized for value in profile_formats if (normalized := _normalized_export_format(value)) is not None
         )
 
-    request_payload = _read_json_object(output_dir / "request_snapshot.json")
+    request_payload = read_json_object(output_dir / "request_snapshot.json")
     if request_payload is None:
-        manifest = _read_json_object(output_dir / "manifest.json")
+        manifest = read_json_object(output_dir / "manifest.json")
         request_payload = manifest.get("request") if isinstance(manifest, dict) else None
     if isinstance(request_payload, dict) and isinstance(request_payload.get("exports"), list):
         sources.append("request_exports")
@@ -408,7 +390,7 @@ def _pdf_info(path: Path) -> dict[str, Any]:
     return {
         "path": str(path),
         "size_bytes": path.stat().st_size,
-        "sha256": _sha256(path),
+        "sha256": file_sha256(path),
         "page_count": page_count,
         "media_box_pt": first_page["media_box_pt"],
         "physical_size_mm": first_page["physical_size_mm"],
@@ -433,7 +415,7 @@ def _tiff_info(path: Path) -> dict[str, Any]:
     return {
         "path": str(path),
         "size_bytes": path.stat().st_size,
-        "sha256": _sha256(path),
+        "sha256": file_sha256(path),
         "pixel_size": [int(width_px), int(height_px)],
         "dpi": [round(dpi[0], 3), round(dpi[1], 3)],
         "physical_size_mm": [
@@ -564,7 +546,7 @@ def _discover_veusz_documents(output_dir: Path, explicit: list[Path] | None) -> 
     candidates: list[Path] = []
     if explicit is not None:
         candidates.extend(path.expanduser().resolve() for path in explicit if path.expanduser().exists())
-    manifest = _read_json_object(output_dir / "manifest.json")
+    manifest = read_json_object(output_dir / "manifest.json")
     if isinstance(manifest, dict):
         values: list[object] = [manifest.get("veusz_document")]
         values.extend(manifest.get("veusz_documents", []) if isinstance(manifest.get("veusz_documents"), list) else [])
@@ -620,13 +602,13 @@ def _run_veusz_audit(paths: list[Path]) -> tuple[dict[str, Any] | None, str | No
 
 
 def _publication_intent(output_dir: Path) -> dict[str, Any]:
-    intent = _read_json_object(output_dir / "publication_intent.json")
+    intent = read_json_object(output_dir / "publication_intent.json")
     if intent is not None:
         return intent
-    request = _read_json_object(output_dir / "request_snapshot.json")
+    request = read_json_object(output_dir / "request_snapshot.json")
     if isinstance(request, dict) and isinstance(request.get("publication_intent"), dict):
         return request["publication_intent"]
-    manifest = _read_json_object(output_dir / "manifest.json")
+    manifest = read_json_object(output_dir / "manifest.json")
     if isinstance(manifest, dict) and isinstance(manifest.get("publication_intent"), dict):
         return manifest["publication_intent"]
     return {}

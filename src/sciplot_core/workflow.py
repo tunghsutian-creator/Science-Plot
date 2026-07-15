@@ -9,7 +9,7 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core._utils import slug, unique_path
+from sciplot_core._utils import json_safe, slug, unique_path
 from sciplot_core.assisted_cleanup import (
     CLEANUP_REQUEST_FILENAME,
     consume_ready_cleanup_result,
@@ -39,7 +39,7 @@ from sciplot_core.publication import (
     write_publication_artifacts,
 )
 from sciplot_core.qa import run_qa
-from sciplot_core.render import json_safe, render_to_dir
+from sciplot_core.render import render_to_dir
 from sciplot_core.semantic import build_intervention_request, classify_source, prepare_semantic_source
 from sciplot_core.split import (
     DEFAULT_STACK_SPLIT_POLICY,

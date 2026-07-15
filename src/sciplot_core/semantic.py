@@ -12,20 +12,11 @@ from typing import Any
 import pandas as pd
 
 from sciplot_core._bootstrap import ensure_legacy_core
-from sciplot_core._constants import _DEFAULT_RENDER_OPTIONS
 from sciplot_core._utils import (
     clean_text as _clean_text,
-)
-from sciplot_core._utils import (
     decode_text as _decode_text,
-)
-from sciplot_core._utils import (
     json_safe as _json_safe,
-)
-from sciplot_core._utils import (
     text_preview as _text_preview,
-)
-from sciplot_core._utils import (
     token as _token,
 )
 from sciplot_core.ingest import normalized_source
@@ -37,6 +28,7 @@ from sciplot_core.materials_rules import (
     tensile_curve_metric_values,
 )
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload
+from sciplot_core.policy import DEFAULT_RENDER_OPTIONS as _DEFAULT_RENDER_OPTIONS
 from sciplot_core.publication import build_transform_step
 
 ensure_legacy_core()
@@ -385,14 +377,6 @@ def _sample_from_interval_metadata(raw: pd.DataFrame, fallback: str) -> str:
         if row and _token(row[0]) == "test" and len(row) > 1 and row[1]:
             return row[1]
     return fallback
-
-
-def _find_interval_header(raw: pd.DataFrame) -> int:
-    for row_index in range(raw.shape[0]):
-        row = [_token(value) for value in raw.iloc[row_index].tolist()]
-        if row and row[0] == "intervaldata":
-            return row_index
-    raise ValueError("Could not find `Interval data` section in rheology export.")
 
 
 def _find_column(headers: list[str], candidates: tuple[str, ...]) -> int:
@@ -1534,10 +1518,6 @@ def _sweep_comparison_frame_for_metrics(
                 row.extend([""] * (1 + len(metric_keys)))
         rows.append(row)
     return pd.DataFrame(rows)
-
-
-def _sweep_comparison_frame(samples: list[RheologySweepSample]) -> pd.DataFrame:
-    return _sweep_comparison_frame_for_metrics(samples, metrics=_RHEOLOGY_SWEEP_METRICS)
 
 
 def _sample_sweep_frame(

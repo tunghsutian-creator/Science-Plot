@@ -127,24 +127,17 @@ def inspect_payload(input_path: Path, *, sheet: str | int = 0) -> dict[str, Any]
         vendor_model = str(payload.get("model") or "")
         semantic_family = str(semantics.get("semantic_family") or "")
         rule_id = str(semantics.get("rule_id") or "")
-        override_warning: str | None = None
-        if vendor_model == "tensile_curve" and semantic_family in {
-            "rheology_creep",
-            "rheology_stress_relaxation",
-        }:
-            override_warning = (
-                "Generic inspection initially matched tensile-shaped γ/σ columns; "
-                "SciPlot overrode it with the rheology material rule."
-            )
-        elif vendor_model == "frequency_metric_sheet" and rule_id == "dma_frequency_sweep":
-            override_warning = (
-                "Generic frequency-sheet inspection labeled modulus as G′; SciPlot "
-                "overrode it with the tensile-DMA E′ material rule."
+        vendor_recommendations = (
+            payload.get("recommendations") if isinstance(payload.get("recommendations"), list) else []
         )
-        if override_warning is not None:
-            vendor_recommendations = (
-                payload.get("recommendations") if isinstance(payload.get("recommendations"), list) else []
-            )
+        vendor_template = str(vendor_recommendations[0].get("template_id") or "") if vendor_recommendations else ""
+        semantic_template = str(semantics.get("template") or "")
+        semantic_override = (
+            semantics.get("production_status") == "ready"
+            and bool(rule_id)
+            and (vendor_model != semantic_family or vendor_template != semantic_template)
+        )
+        if semantic_override:
             vendor_advanced = (
                 payload.get("advanced_templates") if isinstance(payload.get("advanced_templates"), list) else []
             )
@@ -163,7 +156,11 @@ def inspect_payload(input_path: Path, *, sheet: str | int = 0) -> dict[str, Any]
             payload["recommendation_summary"] = reason
             warnings = payload.get("warnings") if isinstance(payload.get("warnings"), list) else []
             payload["warnings"] = [
-                override_warning,
+                (
+                    f"Generic inspection proposed `{vendor_model or 'unknown'}` / "
+                    f"`{vendor_template or 'unknown'}`; ready SciPlot rule `{rule_id}` "
+                    f"is authoritative and selected `{semantic_family}` / `{semantic_template}`."
+                ),
                 *warnings,
             ]
     return payload

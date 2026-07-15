@@ -7,16 +7,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from sciplot_core._paths import REPO_ROOT, VEUSZ_ROOT, resolve_fixture_path
 from sciplot_core._utils import json_safe
 from sciplot_core.materials_rules import iter_rules
 from sciplot_core.publication import (
     get_publication_profile,
     list_composite_layouts,
 )
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-VEUSZ_ROOT = REPO_ROOT / "third_party" / "veusz"
-
 
 def _check(check_id: str, label: str, passed: bool, *, required: bool = True, detail: str = "") -> dict[str, Any]:
     return {
@@ -77,7 +74,7 @@ def _ready_rule_fixtures_exist(rules: list[Any]) -> tuple[bool, str]:
         rule.rule_id
         for rule in rules
         if rule.fixture_status == "ready"
-        and (not rule.fixture_path or not (REPO_ROOT / str(rule.fixture_path)).exists())
+        and (not rule.fixture_path or not resolve_fixture_path(str(rule.fixture_path)).exists())
     ]
     return not missing, ", ".join(missing) if missing else "all local acceptance fixtures are available"
 

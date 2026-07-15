@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 import html
 import json
 from datetime import UTC, datetime
@@ -14,7 +13,7 @@ from typing import Any
 import fitz
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-from sciplot_core._utils import json_safe
+from sciplot_core._utils import file_sha256, json_safe
 from sciplot_core.policy import DEFAULT_FIGURE_SIZE
 
 PHYSICAL_SIZE_TOLERANCE_MM = 0.25
@@ -436,14 +435,6 @@ def write_final_size_visual_review(
     }
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def record_final_size_visual_decision(
     review_json: Path,
     *,
@@ -473,7 +464,7 @@ def record_final_size_visual_decision(
         if isinstance(record, dict) and record.get("status") != "not_run"
     ]
     required_checks = list((payload.get("manual_review") or {}).get("required_checks") or [])
-    source_sha256 = _sha256(review_path)
+    source_sha256 = file_sha256(review_path)
     manual_review = {
         "status": "completed",
         "decision": normalized_decision,

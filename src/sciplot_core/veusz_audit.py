@@ -1,17 +1,9 @@
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from typing import Any
 
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
+from sciplot_core._utils import file_sha256
 
 def _rounded(value: object, digits: int = 6) -> float:
     return round(float(value), digits)
@@ -567,7 +559,7 @@ def _audit_document(path: Path) -> dict[str, Any]:
         "kind": "sciplot_veusz_document_audit",
         "version": 1,
         "path": str(resolved),
-        "sha256": _sha256(resolved),
+        "sha256": file_sha256(resolved),
         "page_count": len(pages),
         "pages": pages,
         "grids": grids,

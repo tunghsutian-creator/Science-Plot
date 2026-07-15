@@ -106,8 +106,8 @@ PROJECT/
 `impact_metric` 保留每一个原始观测值：`n=1` 只画真实散点，`n>=2` 才叠加
 Veusz 原生 median/IQR 箱线摘要；也可显式选择 `raw_only`，SciPlot 不生成伪重复样。
 
-未验收的 pending 规则不会自动进入绘图。测试、示例、验收数据和本地参考数据均不属于 GitHub
-发布内容；规则验收只在持有这些本地材料的开发工作区进行。
+未验收的 pending 规则不会自动进入绘图。完整验收语料和本地参考数据不属于 GitHub
+发布内容；规则验收只在持有相应授权材料的开发工作区进行。
 
 ## 浏览器兼容入口
 
@@ -171,6 +171,7 @@ python3 -m venv .venv
 
 代码职责：
 
+- `src/sciplot_core/_paths.py`、`_utils.py`：仓库/本地数据路径与共享 IO；
 - `src/sciplot_core/materials_rules.py`：实验族、轴/单位语义与规则 readiness；
 - `src/sciplot_core/semantic.py`：识别和预处理；
 - `src/sciplot_core/studio.py`：VSZ 生命周期、Veusz 打开/导出与 Studio 交付；
@@ -178,7 +179,8 @@ python3 -m venv .venv
 - `src/sciplot_core/qa.py`、`delivery.py`：制品 QA 与交付门禁；
 - `src/sciplot_core/publication.py`、`study_model.py`：出版与证据合同；
 - `src/sciplot_recipes/`：经过测试的实验族 recipe；
-- `third_party/veusz/`：迁移的生产渲染器黑盒。
+- `src/sciplot_core/_vendor/`：迁移兼容层，默认不直接修改；
+- `third_party/veusz/`：固定版本的上游生产渲染器与高级编辑器。
 
 第三方许可见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。GitHub 仓库只发布运行所需内容；
-测试、示例、本地参考数据、开发日志和路线文档均保留在本地工作区，不进入版本控制。
+本地参考数据、开发日志及架构/路线文档保留在开发工作区，不进入最小运行发行版。

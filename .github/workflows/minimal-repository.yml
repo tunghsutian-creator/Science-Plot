@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  reject-nonruntime-content:
+  runtime-integrity:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,7 +16,8 @@ jobs:
           forbidden="$({
             git ls-files \
               tests test examples example tmp tools outputs figures ftir_output .tmp_verify \
-              .superpowers sciplot-main .DS_Store AGENTS.md DEVELOPMENT_LOG.md Makefile
+              .superpowers sciplot-main .DS_Store AGENTS.md DEVELOPMENT_LOG.md Makefile \
+              Launch_SciPlot_App.command
             git ls-files docs | grep -v '^docs/THIRD_PARTY_NOTICES\.md$' || true
             git ls-files \
               third_party/veusz/tests \
@@ -34,3 +35,9 @@ jobs:
             printf '%s\n' "$forbidden" >&2
             exit 1
           fi
+      - name: Compile SciPlot-owned Python
+        run: python3 -m compileall -q src/sciplot_core src/sciplot_recipes
+      - name: Install local runtime
+        run: python3 -m pip install -e '.[studio]'
+      - name: Run readiness smoke
+        run: skill/scripts/sciplot doctor --json

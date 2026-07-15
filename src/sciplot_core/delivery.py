@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import shutil
@@ -9,7 +8,8 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core._utils import json_safe, slug
+from sciplot_core._paths import REPO_ROOT
+from sciplot_core._utils import existing_file_sha256, json_safe, read_json_object, slug
 from sciplot_core.assisted_cleanup import CLEANUP_REQUEST_FILENAME, CLEANUP_RESULT_FILENAME
 from sciplot_core.policy import (
     DELIVERY_DIR,
@@ -17,8 +17,6 @@ from sciplot_core.policy import (
     DELIVERY_FIGURES_DIR,
     DELIVERY_INTERNAL_DIR,
 )
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
 
 PUBLICATION_ARTIFACT_FILENAMES = (
     "publication_intent.json",
@@ -61,26 +59,6 @@ def _copy_file_if_exists(source: Path, destination: Path) -> bool:
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination)
     return True
-
-
-def _sha256(path: Path) -> str | None:
-    if not path.exists() or not path.is_file():
-        return None
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _read_json_object(path: Path) -> dict[str, Any] | None:
-    if not path.exists() or not path.is_file():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return None
-    return payload if isinstance(payload, dict) else None
 
 
 def _canonical_figure_stem(path_value: object) -> str:
@@ -134,7 +112,7 @@ def _editable_vsz_delivery_record(manifest: dict[str, Any], internal_dir: Path) 
     if not candidate.exists():
         documents = sorted((internal_dir / "studio").glob("*.vsz"))
         candidate = documents[0] if documents else candidate
-    actual_hash = _sha256(candidate)
+    actual_hash = existing_file_sha256(candidate)
     return {
         "kind": "sciplot_delivery_editable_vsz",
         "path": str(candidate),
@@ -227,7 +205,7 @@ def _copy_editable_request(
     candidates.append(output_dir / "request_snapshot.json")
     request: dict[str, Any] = {}
     for candidate in candidates:
-        payload = _read_json_object(candidate)
+        payload = read_json_object(candidate)
         if payload is not None:
             request = payload
             break
@@ -287,8 +265,8 @@ def _copy_editable_veusz_projects(
             manifest=manifest,
             output_dir=output_dir,
         )
-        source_hash = _sha256(source_document)
-        delivery_hash = _sha256(document)
+        source_hash = existing_file_sha256(source_document)
+        delivery_hash = existing_file_sha256(document)
         intake_manifest = {
             "kind": "sciplot_editable_delivery_project",
             "version": 1,
@@ -404,8 +382,8 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
             continue
         destination = figures_dir / source.name
         shutil.copy2(source, destination)
-        source_hash = _sha256(source)
-        delivery_hash = _sha256(destination)
+        source_hash = existing_file_sha256(source)
+        delivery_hash = existing_file_sha256(destination)
         figure_records.append(
             {
                 "source": str(source),
@@ -516,7 +494,7 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
     if publication_contract_present:
         for filename in PUBLICATION_ARTIFACT_FILENAMES:
             artifact_path = internal_dir / filename
-            parsed = _read_json_object(artifact_path)
+            parsed = read_json_object(artifact_path)
             parsed_publication_artifacts[filename] = parsed
             artifact_status.append(
                 {

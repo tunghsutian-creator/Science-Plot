@@ -24,6 +24,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dev = [
+  "ruff>=0.15,<1",
+]
 studio = [
   "astropy",
   "h5py",
@@ -40,7 +43,6 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 sciplot_core = [
-  "plot_contract.json",
   "intake_static/*",
   "_vendor/src/plot_contract.json",
   "_vendor/src/data_studio_templates/builtin/*.json",

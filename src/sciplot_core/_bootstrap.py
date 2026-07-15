@@ -5,9 +5,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+from sciplot_core._paths import VENDORED_CORE_ROOT
+
 
 def legacy_root() -> Path:
-    return Path(__file__).resolve().parent / "_vendor"
+    return VENDORED_CORE_ROOT
 
 
 def ensure_legacy_core() -> Path:

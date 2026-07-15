@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
@@ -63,6 +65,28 @@ def json_safe(value: Any) -> Any:
     return value
 
 
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def existing_file_sha256(path: Path) -> str | None:
+    return file_sha256(path) if path.is_file() else None
+
+
+def read_json_object(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def decode_text(path: Path) -> str:
     return decode_text_file(path)
 
@@ -97,7 +121,10 @@ def text_preview(path: Path, *, lines: int = 40) -> str:
 __all__ = [
     "clean_text",
     "decode_text",
+    "existing_file_sha256",
+    "file_sha256",
     "json_safe",
+    "read_json_object",
     "safe_filename",
     "slug",
     "suppress_decode",

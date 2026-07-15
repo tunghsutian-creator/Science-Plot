@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import pandas as pd
 
+from sciplot_core._paths import REPO_ROOT
 from sciplot_core._utils import json_safe, safe_filename, slug, unique_path
 from sciplot_core.assisted_cleanup import CLEANUP_REQUEST_FILENAME, CLEANUP_RESULT_FILENAME, write_cleanup_request
 from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex_job, start_codex_job
@@ -287,7 +288,6 @@ def _write_zip(project_dir: Path, zip_path: Path) -> None:
 
 
 def _write_project_launcher(project_dir: Path, *, project_slug: str) -> str:
-    repo_root = Path(__file__).resolve().parents[2]
     launcher = project_dir / "Open_SciPlot_Project.command"
     launcher.write_text(
         "\n".join(
@@ -296,7 +296,7 @@ def _write_project_launcher(project_dir: Path, *, project_slug: str) -> str:
                 "set -euo pipefail",
                 'PROJECT_DIR="${0:A:h}"',
                 'PROJECT_ROOT="${PROJECT_DIR:h}"',
-                f'cd "{repo_root}"',
+                f'cd "{REPO_ROOT}"',
                 (
                     'skill/scripts/sciplot workbench '
                     '--out "${PROJECT_ROOT}" '

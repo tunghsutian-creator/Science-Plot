@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import os
@@ -19,9 +18,9 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core._utils import decode_text, json_safe
+from sciplot_core._paths import REPO_ROOT, VEUSZ_ROOT, VEUSZ_UPSTREAM_COMMIT
+from sciplot_core._utils import decode_text, existing_file_sha256, json_safe
 from sciplot_core.delivery import build_delivery_package
-from sciplot_core.intake import create_intake_project_from_session, prepare_intake_session
 from sciplot_core.materials_rules import compute_analysis_metrics
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import (
@@ -71,10 +70,6 @@ from sciplot_core.study_model import (
     build_output_package_contract,
     normalize_study_model,
 )
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-VEUSZ_ROOT = REPO_ROOT / "third_party" / "veusz"
-VEUSZ_COMMIT = "264084b06eb306d860c7757c637f37b78bb2333f"
 
 DEFAULT_PALETTE = DEFAULT_PALETTE_COLORS
 STACKED_TEMPLATE_IDS = {"stacked_curve", "segmented_stacked_curve"}
@@ -160,7 +155,7 @@ def upstream_status() -> dict[str, Any]:
         "veusz": {
             "name": "Veusz",
             "path": str(VEUSZ_ROOT),
-            "commit": VEUSZ_COMMIT,
+            "commit": VEUSZ_UPSTREAM_COMMIT,
             "license": "GPL-2.0-or-later",
             "vendored": VEUSZ_ROOT.exists(),
         },
@@ -289,7 +284,7 @@ def prepare_studio_document(
     launcher = _write_studio_launcher(project_dir)
     veusz_launcher = _write_veusz_launcher(project_dir, document_path)
     export_edited_launcher = _write_export_edited_launcher(project_dir)
-    generated_hash = _hash_file(document_path)
+    generated_hash = existing_file_sha256(document_path)
     studio_block = _studio_block(
         document_path=document_path,
         spec_path=spec_path,
@@ -905,7 +900,7 @@ def publish_studio_export_run(
         "qa_target": "veusz_export",
         "veusz_document": str(document_path),
         "veusz_spec": str(_veusz_spec_path(document_path)),
-        "manual_edit_hash": _hash_file(document_path),
+        "manual_edit_hash": existing_file_sha256(document_path),
         "document_authority": document_state["authority"],
         "exported_document_hash": document_state["current_hash"],
         "manual_edit_detected": document_state["manual_edit_detected"],
@@ -923,7 +918,7 @@ def publish_studio_export_run(
             "qa_target": "veusz_export",
             "document": str(document_path),
             "spec": str(_veusz_spec_path(document_path)),
-            "manual_edit_hash": _hash_file(document_path),
+            "manual_edit_hash": existing_file_sha256(document_path),
             "document_authority": document_state["authority"],
             "exported_document_hash": document_state["current_hash"],
             "manual_edit_detected": document_state["manual_edit_detected"],
@@ -1012,6 +1007,8 @@ def _qt_first_project_from_source(
     template: str | None = None,
     project_name: str | None = None,
 ) -> dict[str, Any]:
+    from sciplot_core.intake import create_intake_project_from_session, prepare_intake_session
+
     project_root = output_root or Path("outputs") / "intake_projects"
     session = prepare_intake_session(path, output_root=project_root)
     normalized_name = _normalize_optional_string(project_name)
@@ -1114,7 +1111,7 @@ def _existing_document_payload(document_path: Path) -> dict[str, Any]:
             "qa_target": "veusz_export",
             "document": str(document_path),
             "spec": str(_veusz_spec_path(document_path)),
-            "manual_edit_hash": _hash_file(document_path),
+            "manual_edit_hash": existing_file_sha256(document_path),
             "upstream": upstream_status()["veusz"],
             "operation_mode": normal_mode_payload(route="studio"),
         },
@@ -2589,15 +2586,6 @@ def _auto_inside_legend_placement(
     }
 
 
-def _auto_inside_legend_position(
-    series: list[StudioSeries],
-    render_options: dict[str, Any],
-) -> str:
-    """Compatibility wrapper for callers that only need the selected corner."""
-
-    return str(_auto_inside_legend_placement(series, render_options, template_id="point_line")["position"])
-
-
 def _legend_placement_on_vertical_side(
     placement: dict[str, Any],
     *,
@@ -3897,11 +3885,6 @@ def _add_veusz_axis(interface: Any, axis: str, axis_spec: dict[str, Any], style:
     interface.To("..")
 
 
-def _import_string_lines(name: str, values: tuple[float, ...]) -> list[str]:
-    body = "\n".join(f"{value:.12g}" for value in values)
-    return [f"ImportString({_py_string(name + '(numeric)')},'''", body, "''')"]
-
-
 def _pt(value: float) -> str:
     return f"{float(value):g}pt"
 
@@ -4054,72 +4037,6 @@ def _veusz_legend_mode(render_options: dict[str, Any], *, template_id: str) -> s
     return "inside_best"
 
 
-def _axis_style_lines(
-    style: _VeuszStyleContract,
-    *,
-    axis: str,
-    render_options: dict[str, Any],
-) -> list[str]:
-    tick_offset = style.xtick_major_pad_pt if axis == "x" else style.ytick_major_pad_pt
-    lines = [
-        "Set('autoMirror', False)",
-        "Set('outerticks', True)",
-        "Set('Line/color', 'black')",
-        f"Set('Line/width', '{_pt(style.axis_linewidth_pt)}')",
-        f"Set('MajorTicks/width', '{_pt(style.tick_width_pt)}')",
-        f"Set('MajorTicks/length', '{_pt(style.tick_length_pt)}')",
-        f"Set('MinorTicks/width', '{_pt(style.minor_tick_width_pt)}')",
-        f"Set('MinorTicks/length', '{_pt(style.minor_tick_length_pt)}')",
-        f"Set('Label/size', '{_pt(style.font_size_pt)}')",
-        f"Set('Label/offset', '{_pt(style.axes_labelpad_pt)}')",
-        f"Set('TickLabels/size', '{_pt(style.font_size_pt)}')",
-        f"Set('TickLabels/offset', '{_pt(tick_offset)}')",
-    ]
-    if axis == "y" and render_options.get("show_y_ticks") is False:
-        lines.extend(
-            [
-                "Set('MajorTicks/hide', True)",
-                "Set('MinorTicks/hide', True)",
-                "Set('TickLabels/hide', True)",
-            ]
-        )
-    return lines
-
-
-def _axis_range_lines(
-    render_options: dict[str, Any],
-    *,
-    axis: str,
-    axis_contract: _VeuszAxisContract,
-) -> list[str]:
-    lines: list[str] = []
-    min_value = axis_contract.x_min if axis == "x" else axis_contract.y_min
-    max_value = axis_contract.x_max if axis == "x" else axis_contract.y_max
-    if min_value is not None:
-        lines.append(f"Set('min', {min_value!r})")
-    if max_value is not None:
-        lines.append(f"Set('max', {max_value!r})")
-    ticks = axis_contract.x_ticks if axis == "x" else axis_contract.y_ticks
-    if 1 < len(ticks) <= 12:
-        lines.append(f"Set('MajorTicks/manualTicks', {list(ticks)!r})")
-    if _axis_scale(render_options, axis) == "log":
-        lines.append("Set('log', True)")
-    return lines
-
-
-def _graph_margin_lines(style: _VeuszStyleContract) -> list[str]:
-    left = _cm_from_mm(style.left_margin_mm)
-    right = _cm_from_mm(style.right_margin_mm)
-    top = _cm_from_mm(style.top_margin_mm)
-    bottom = _cm_from_mm(style.bottom_margin_mm)
-    return [
-        f"Set('leftMargin', '{left}')",
-        f"Set('rightMargin', '{right}')",
-        f"Set('topMargin', '{top}')",
-        f"Set('bottomMargin', '{bottom}')",
-    ]
-
-
 def _legend_columns(
     *,
     series_count: int,
@@ -4145,45 +4062,6 @@ def _show_veusz_direct_labels(
         return False
     label_mode = str(render_options.get("series_label_mode") or "").strip().casefold()
     return label_mode in {"inline", "edge", "auto"}
-
-
-def _direct_label_lines(
-    series: list[StudioSeries],
-    *,
-    render_options: dict[str, Any],
-    style: _VeuszStyleContract,
-) -> list[str]:
-    side = str(render_options.get("series_label_side") or "auto").strip().casefold()
-    reverse_x = render_options.get("reverse_x") is True
-    if side not in {"left", "right"}:
-        side = "left" if reverse_x else "right"
-    align = "left" if side == "left" else "right"
-    label_size = max(style.legend_font_size_pt, min(style.font_size_pt, 6.2))
-    lines: list[str] = []
-    for index, item in enumerate(series, start=1):
-        anchor = _series_label_anchor(item, reverse_x=reverse_x, side=side)
-        if anchor is None:
-            continue
-        x_pos, y_pos = anchor
-        lines.extend(
-            [
-                f"Add('label', name='label_{index}', autoadd=False)",
-                f"To('label_{index}')",
-                "Set('positioning', 'axes')",
-                f"Set('xPos', [{x_pos!r}])",
-                f"Set('yPos', [{y_pos!r}])",
-                f"Set('label', {_py_string(item.label)})",
-                f"Set('alignHorz', {_py_string(align)})",
-                "Set('alignVert', 'centre')",
-                "Set('margin', '0pt')",
-                f"Set('Text/size', '{_pt(label_size)}')",
-                f"Set('Text/color', {_py_string(item.color)})",
-                "Set('Background/hide', True)",
-                "Set('Border/hide', True)",
-                "To('..')",
-            ]
-        )
-    return lines
 
 
 def _series_label_anchor(item: StudioSeries, *, reverse_x: bool, side: str) -> tuple[float, float] | None:
@@ -4304,18 +4182,8 @@ def _veusz_spec_path(document_path: Path) -> Path:
     return document_path.with_suffix(".spec.json")
 
 
-def _hash_file(path: Path) -> str | None:
-    if not path.exists() or not path.is_file():
-        return None
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _studio_document_state(document_path: Path, *, generated_hash: str | None) -> dict[str, Any]:
-    current_hash = _hash_file(document_path)
+    current_hash = existing_file_sha256(document_path)
     manual_edit_detected = bool(generated_hash and current_hash and current_hash != generated_hash)
     if manual_edit_detected:
         authority = "veusz_manual"
@@ -4354,7 +4222,7 @@ def _registered_generated_hash(project_dir: Path) -> str | None:
 def _archive_manual_document_if_needed(project_dir: Path, document_path: Path) -> None:
     if not document_path.exists():
         return
-    current_hash = _hash_file(document_path)
+    current_hash = existing_file_sha256(document_path)
     generated_hash = _registered_generated_hash(project_dir)
     if generated_hash and current_hash == generated_hash:
         return
@@ -4598,10 +4466,6 @@ def _log_minor_ticks(
             if low < value < high:
                 ticks.append(value)
     return ticks
-
-
-def _py_string(value: str) -> str:
-    return repr(value)
 
 
 __all__ = [

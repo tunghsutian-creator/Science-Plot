@@ -7,8 +7,8 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+from sciplot_core._utils import json_safe
 from sciplot_core.intake import create_intake_project_from_session, prepare_intake_session, refresh_intake_project_zip
-from sciplot_core.render import json_safe
 from sciplot_core.semantic import (
     _apply_torque_selection,
     _auto_torque_event_selection,

@@ -10,11 +10,11 @@ import numpy as np
 import pandas as pd
 
 from sciplot_core._bootstrap import ensure_legacy_core
-from sciplot_core._constants import _DEFAULT_RENDER_OPTIONS
 from sciplot_core._utils import token as _utils_token
 from sciplot_core.policy import (
     CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
     CURVE_RENDER_OPTIONS,
+    DEFAULT_RENDER_OPTIONS as _DEFAULT_RENDER_OPTIONS,
     DEFAULT_LOG_TICK_FORMAT,
     DEFAULT_PALETTE_PRESET,
     FTIR_SPECTRUM_RENDER_OPTIONS,

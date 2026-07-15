@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 
 from sciplot_core._bootstrap import ensure_legacy_core
+from sciplot_core._paths import REPO_ROOT, local_reference_root, real_world_fixture_root, resolve_fixture_path
 from sciplot_core._utils import json_safe, slug
 from sciplot_core.curate import curate_torque_project
 from sciplot_core.evidence import enrich_rule_evidence, write_evidence_status_dashboard
@@ -37,9 +38,6 @@ RULE_ACCEPTANCE_CHECK_IDS = (
     "delivery_complete",
     "provenance_complete",
 )
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
 @dataclass(frozen=True)
 class SpectrumSeries:
     label: str
@@ -50,6 +48,9 @@ class SpectrumSeries:
 def _public_fixture_index(repo_root: Path) -> dict[Path, dict[str, Any]]:
     corpus_root = repo_root / "tests" / "fixtures" / "polymer_corpus"
     manifest_path = corpus_root / "manifest.json"
+    if not manifest_path.exists():
+        corpus_root = local_reference_root(repo_root=repo_root) / "polymer_corpus"
+        manifest_path = corpus_root / "manifest.json"
     if not manifest_path.exists():
         return {}
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -66,7 +67,7 @@ def _public_fixture_index(repo_root: Path) -> dict[Path, dict[str, Any]]:
 
 
 def _real_world_fixture_index(repo_root: Path) -> dict[Path, dict[str, Any]]:
-    fixture_root = repo_root / "tests" / "fixtures" / "real_world"
+    fixture_root = real_world_fixture_root(repo_root=repo_root)
     manifest_path = fixture_root / "evidence_manifest.json"
     if not manifest_path.exists():
         return {}
@@ -84,7 +85,7 @@ def _real_world_fixture_index(repo_root: Path) -> dict[Path, dict[str, Any]]:
 
 
 def _rule_fixture_evidence(rule: SemanticRule, *, repo_root: Path) -> dict[str, Any]:
-    fixture = (repo_root / str(rule.fixture_path or "")).resolve()
+    fixture = resolve_fixture_path(str(rule.fixture_path or ""), repo_root=repo_root)
     public_entry = _public_fixture_index(repo_root).get(fixture)
     if public_entry is not None:
         return {
@@ -138,7 +139,7 @@ def _rule_fixture_evidence(rule: SemanticRule, *, repo_root: Path) -> dict[str, 
 
 
 def _rule_matrix_row(rule: SemanticRule, *, repo_root: Path) -> dict[str, Any]:
-    fixture = (repo_root / str(rule.fixture_path or "")).resolve()
+    fixture = resolve_fixture_path(str(rule.fixture_path or ""), repo_root=repo_root)
     evidence = enrich_rule_evidence(
         rule,
         _rule_fixture_evidence(rule, repo_root=repo_root),

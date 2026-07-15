@@ -12,14 +12,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sciplot_core._utils import json_safe
+from sciplot_core._paths import real_world_fixture_root
+from sciplot_core._utils import file_sha256, json_safe
 from sciplot_core.materials_rules import SemanticRule
 
 DATA_SUFFIXES = frozenset({".csv", ".tsv", ".txt", ".dat", ".tab", ".xlsx", ".xls"})
 HASH_PATTERN = re.compile(r"^[0-9a-fA-F]{32}(?:[0-9a-fA-F]{32})?$")
-REJECTION_REGISTRY = Path("tests/fixtures/real_world/candidate_rejections.json")
-
-
 def _load_json(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
@@ -28,14 +26,6 @@ def _load_json(path: Path) -> dict[str, Any]:
     except (OSError, ValueError):
         return {}
     return payload if isinstance(payload, dict) else {}
-
-
-def _hash(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def _fixture_files(fixture: Path) -> list[Path]:
@@ -56,7 +46,7 @@ def _fixture_hash_inventory(fixture: Path) -> tuple[list[dict[str, str]], str | 
     tree_digest = hashlib.sha256()
     for path in files:
         relative = path.name if fixture.is_file() else path.relative_to(fixture).as_posix()
-        sha256 = _hash(path)
+        sha256 = file_sha256(path)
         inventory.append({"path": relative, "sha256": sha256})
         tree_digest.update(relative.encode("utf-8"))
         tree_digest.update(b"\0")
@@ -69,7 +59,7 @@ def _provenance_candidates(fixture: Path, metadata: dict[str, Any], repo_root: P
     candidates: list[Path] = []
     provenance_value = metadata.get("provenance_path")
     if isinstance(provenance_value, str) and provenance_value.strip():
-        candidates.append((repo_root / "tests" / "fixtures" / "real_world" / provenance_value).resolve())
+        candidates.append((real_world_fixture_root(repo_root=repo_root) / provenance_value).resolve())
     base = fixture if fixture.is_dir() else fixture.parent
     candidates.extend(
         [
@@ -262,7 +252,7 @@ def enrich_rule_evidence(
 
 
 def load_candidate_rejections(*, repo_root: Path) -> list[dict[str, Any]]:
-    payload = _load_json(repo_root / REJECTION_REGISTRY)
+    payload = _load_json(real_world_fixture_root(repo_root=repo_root) / "candidate_rejections.json")
     entries = payload.get("entries") if isinstance(payload.get("entries"), list) else []
     return [entry for entry in entries if isinstance(entry, dict)]
 
