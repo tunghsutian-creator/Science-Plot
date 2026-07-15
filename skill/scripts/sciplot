@@ -9,5 +9,8 @@ if [[ ! -x "$PYTHON" ]]; then
   PYTHON="python3"
 fi
 
+export MPLCONFIGDIR="${MPLCONFIGDIR:-${TMPDIR:-/tmp}/sciplot-mpl}"
+mkdir -p "$MPLCONFIGDIR"
+
 cd "$REPO"
 exec "$PYTHON" -m sciplot_core.cli "$@"

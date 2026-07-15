@@ -22,8 +22,14 @@ import pandas as pd
 from sciplot_core._utils import decode_text, json_safe
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.intake import create_intake_project_from_session, prepare_intake_session
+from sciplot_core.materials_rules import compute_analysis_metrics
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import (
+    AUTO_LOG_BOUND_PADDING_FACTOR,
+    CATEGORICAL_BOX_FILL_FRACTION,
+    CATEGORICAL_BOX_FILL_TRANSPARENCY,
+    CATEGORICAL_BOX_LINE_WIDTH_PT,
+    CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
     DEFAULT_CATEGORICAL_SUMMARY,
     DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
     DEFAULT_LEGEND_EDGE_PADDING_MM,
@@ -35,9 +41,16 @@ from sciplot_core.policy import (
     DEFAULT_PALETTE_PRESET,
     DEFAULT_RAW_POINT_JITTER_FRACTION,
     FIXED_PUBLICATION_FRAME_POLICY,
+    MAX_AUTO_LOG_EMPTY_RANGE_FACTOR,
+    MAX_LEGEND_RESERVE_ITERATIONS,
+    MAX_LINEAR_LEGEND_RESERVE_FRACTION,
+    MAX_LOG_LEGEND_RESERVE_DECADES,
+    MAX_POINT_LINE_MARKERS_PER_SERIES,
     MIN_BOX_REPLICATES,
+    POINT_LINE_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_X_RENDER_LABEL,
     anchored_log_decade_ticks,
+    compact_linear_axis,
     is_removed_outside_legend_position,
     normalize_categorical_summary,
     normalize_legend_position,
@@ -47,12 +60,17 @@ from sciplot_core.policy import (
 from sciplot_core.publication import (
     build_publication_intent,
     build_transform_ledger,
+    build_transform_step,
     get_publication_profile,
     link_intent_to_transform_ledger,
     write_publication_artifacts,
 )
 from sciplot_core.qa import run_qa
-from sciplot_core.study_model import build_output_package_contract, normalize_study_model
+from sciplot_core.study_model import (
+    attach_run_artifacts_to_study_model,
+    build_output_package_contract,
+    normalize_study_model,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VEUSZ_ROOT = REPO_ROOT / "third_party" / "veusz"
@@ -176,6 +194,7 @@ def prepare_studio_document(
     output_root: Path | None = None,
     template: str | None = None,
     project_name: str | None = None,
+    regenerate_generated: bool = False,
 ) -> dict[str, Any]:
     resolved = Path(target).expanduser().resolve()
     target_info = _resolve_studio_target(
@@ -195,6 +214,7 @@ def prepare_studio_document(
         and existing_document is not None
         and template is None
         and project_name is None
+        and not regenerate_generated
     ):
         launcher = _write_studio_launcher(project_dir)
         veusz_launcher = _write_veusz_launcher(project_dir, existing_document)
@@ -613,6 +633,26 @@ def _count_veusz_series(document_path: Path) -> int:
 
 
 def export_studio_document(document_path: Path, *, formats: list[str]) -> dict[str, Any]:
+    from sciplot_core.veusz_runtime import needs_veusz_worker_process, veusz_worker_environment
+
+    if needs_veusz_worker_process():
+        command = [
+            sys.executable,
+            "-m",
+            "sciplot_core.veusz_worker",
+            "export-document",
+            str(document_path),
+            "--formats",
+            ",".join(formats),
+        ]
+        result = subprocess.run(
+            command,
+            text=True,
+            capture_output=True,
+            check=True,
+            env=veusz_worker_environment(),
+        )
+        return json.loads(result.stdout)
     stderr_log = document_path.parent / "logs" / "veusz_export_stderr.log"
     exports: list[dict[str, Any]] = []
     with _capture_process_stderr(stderr_log):
@@ -708,8 +748,30 @@ def publish_studio_export_run(
         project_dir=project_dir,
         transform_ledger=existing_transform_ledger,
     )
-    processed_source = (
-        _write_studio_data_snapshot(snapshot_source, output_dir) if snapshot_source is not None else None
+    processed_source = _write_studio_data_snapshot(snapshot_source, output_dir) if snapshot_source is not None else None
+    intake_manifest_path = project_dir / "intake_manifest.json"
+    intake_manifest = _read_json(intake_manifest_path) if intake_manifest_path.exists() else {}
+    recognition = intake_manifest.get("recognition") if isinstance(intake_manifest.get("recognition"), dict) else {}
+    semantic = {
+        **recognition,
+        "semantic_family": recognition.get("semantic_family")
+        or intake_manifest.get("experiment", {}).get("id")
+        or request.get("rule_id")
+        or "unknown",
+        "rule_id": recognition.get("rule_id") or request.get("rule_id"),
+        "reason": recognition.get("reason") or "Exported from the canonical SciPlot Veusz document.",
+        "route": "studio",
+    }
+    metric_source = _studio_metric_source(snapshot_source if snapshot_source is not None else input_path)
+    analysis_metrics = (
+        compute_analysis_metrics(
+            source_path=metric_source,
+            processed_source=metric_source,
+            semantic=semantic,
+            output_dir=output_dir,
+        )
+        if metric_source is not None and semantic.get("rule_id")
+        else []
     )
     study_model = normalize_study_model(
         request.get("study_model")
@@ -728,6 +790,25 @@ def publish_studio_export_run(
         input_path=input_path or document_path,
         existing=existing_transform_ledger,
     )
+    visual_transforms = _studio_visual_presentation_transforms(document_path)
+    if visual_transforms:
+        presentation_input = metric_source or snapshot_source or input_path or document_path
+        presentation_step = build_transform_step(
+            step_id="veusz_visual_presentation",
+            operation="apply_recorded_visual_presentation_transforms",
+            input_path=presentation_input,
+            output_path=document_path,
+            implementation_ref="sciplot_core.studio._apply_template_series_transforms",
+            parameters={
+                "transforms": visual_transforms,
+                "source_values_preserved_outside_visual_presentation": True,
+            },
+        )
+        transform_ledger["steps"] = [
+            step
+            for step in transform_ledger.get("steps", [])
+            if isinstance(step, dict) and step.get("id") != presentation_step["id"]
+        ] + [presentation_step]
     if (
         isinstance(existing_transform_ledger, dict)
         and existing_transform_ledger.get("status") == "pending_runtime"
@@ -750,7 +831,13 @@ def publish_studio_export_run(
         transform_ledger=transform_ledger,
         publication_profile=publication_profile,
     )
-    _write_studio_analysis_report(output_dir, request=request, document_path=document_path, figures=figures)
+    _write_studio_analysis_report(
+        output_dir,
+        request=request,
+        document_path=document_path,
+        figures=figures,
+        analysis_metrics=analysis_metrics,
+    )
     qa = _run_studio_qa(
         output_dir,
         publication_profile=publication_profile,
@@ -764,6 +851,13 @@ def publish_studio_export_run(
         transform_ledger=transform_ledger,
         publication_profile=publication_profile,
         publication_qa=publication_qa,
+    )
+    study_model = attach_run_artifacts_to_study_model(
+        study_model,
+        output_dir=output_dir,
+        figures=figures,
+        analysis_metrics=analysis_metrics,
+        qa=qa,
     )
     layout_quality = _studio_layout_quality_from_spec(document_path)
     result = {
@@ -783,21 +877,9 @@ def publish_studio_export_run(
         "processed": processed_source is not None,
         "processed_source": str(processed_source) if processed_source is not None else None,
         "data_snapshot_source": str(snapshot_source) if snapshot_source is not None else None,
+        "analysis_metrics": analysis_metrics,
         "template": request.get("template") or request.get("recipe") or "veusz_document",
         "operation_mode": normal_mode_payload(route="studio"),
-    }
-    intake_manifest_path = project_dir / "intake_manifest.json"
-    intake_manifest = _read_json(intake_manifest_path) if intake_manifest_path.exists() else {}
-    recognition = intake_manifest.get("recognition") if isinstance(intake_manifest.get("recognition"), dict) else {}
-    semantic = {
-        **recognition,
-        "semantic_family": recognition.get("semantic_family")
-        or intake_manifest.get("experiment", {}).get("id")
-        or request.get("rule_id")
-        or "unknown",
-        "rule_id": recognition.get("rule_id") or request.get("rule_id"),
-        "reason": recognition.get("reason") or "Exported from the canonical SciPlot Veusz document.",
-        "route": "studio",
     }
     manifest = {
         "kind": "sciplot_run",
@@ -973,6 +1055,33 @@ def _apply_studio_request_overrides(
     if request_path.exists():
         request = _read_json(request_path)
         if selected_template:
+            previous_template = str(request.get("template") or "").strip()
+            if previous_template != selected_template:
+                try:
+                    from sciplot_core.contract import load_plot_contract
+
+                    contract = load_plot_contract()
+                    previous_defaults = (
+                        contract.templates[previous_template].default_options
+                        if previous_template in contract.templates
+                        else {}
+                    )
+                    selected_defaults = (
+                        contract.templates[selected_template].default_options
+                        if selected_template in contract.templates
+                        else {}
+                    )
+                    current_options = (
+                        dict(request.get("render_options")) if isinstance(request.get("render_options"), dict) else {}
+                    )
+                    for key, value in previous_defaults.items():
+                        if current_options.get(key) == value:
+                            current_options.pop(key, None)
+                    for key, value in selected_defaults.items():
+                        current_options.setdefault(key, value)
+                    request["render_options"] = current_options
+                except Exception:
+                    pass
             request["template"] = selected_template
         request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
     for manifest_path in [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]:
@@ -1082,9 +1191,7 @@ def _studio_snapshot_source(
         for step in reversed(steps):
             if not isinstance(step, dict):
                 continue
-            artifacts = (
-                step.get("output_artifacts") if isinstance(step.get("output_artifacts"), list) else []
-            )
+            artifacts = step.get("output_artifacts") if isinstance(step.get("output_artifacts"), list) else []
             ordered = sorted(
                 (item for item in artifacts if isinstance(item, dict)),
                 key=lambda item: 0 if item.get("role") == "output" else 1,
@@ -1099,6 +1206,26 @@ def _studio_snapshot_source(
                 if candidate.exists() and (candidate.is_file() or candidate.is_dir()):
                     return candidate
     return input_path
+
+
+def _studio_metric_source(source: Path | None) -> Path | None:
+    """Resolve one canonical plotted table without guessing among raw files."""
+
+    if source is None:
+        return None
+    if source.is_file():
+        return source
+    if not source.is_dir():
+        return None
+    supported_suffixes = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
+    candidates = sorted(
+        path for path in source.rglob("*") if path.is_file() and path.suffix.casefold() in supported_suffixes
+    )
+    if len(candidates) == 1:
+        return candidates[0]
+    preferred_tokens = ("comparison", "plotting_data", "source_curves", "prepared")
+    preferred = [path for path in candidates if any(token in path.stem.casefold() for token in preferred_tokens)]
+    return preferred[0] if len(preferred) == 1 else None
 
 
 def _excel_sheet_name(label: str, *, fallback: str, used: set[str]) -> str:
@@ -1122,12 +1249,42 @@ def _run_studio_qa(
     veusz_documents: list[Path] | None = None,
 ) -> dict[str, Any]:
     try:
-        return run_qa(
+        qa = run_qa(
             output_dir,
             publication_profile=publication_profile,
             strict_publication=strict_publication,
             veusz_documents=veusz_documents,
         )
+        layout_documents: list[dict[str, Any]] = []
+        critical_issues: list[dict[str, Any]] = []
+        for document_path in veusz_documents or []:
+            spec_path = _veusz_spec_path(document_path)
+            spec = _read_json(spec_path) if spec_path.exists() else {}
+            issues = [item for item in spec.get("layout_issues", []) if isinstance(item, dict)]
+            layout_documents.append(
+                {
+                    "document": str(document_path),
+                    "spec": str(spec_path),
+                    "issues": json_safe(issues),
+                }
+            )
+            critical_issues.extend(
+                {"document": str(document_path), **item}
+                for item in issues
+                if str(item.get("severity") or "").casefold() == "critical"
+            )
+        qa["studio_layout"] = {
+            "kind": "sciplot_studio_layout_qa",
+            "status": "failed" if critical_issues else "passed",
+            "documents": layout_documents,
+            "critical_issues": json_safe(critical_issues),
+        }
+        if critical_issues:
+            qa["status"] = "failed"
+            qa["reason"] = "Critical exact-current Veusz layout issue(s): " + ", ".join(
+                sorted({str(item.get("id") or "unknown") for item in critical_issues})
+            )
+        return qa
     except ValueError as exc:
         return {
             "status": "failed",
@@ -1181,12 +1338,19 @@ def _studio_layout_quality_from_spec(document_path: Path) -> dict[str, Any]:
     }
 
 
+def _studio_visual_presentation_transforms(document_path: Path) -> list[dict[str, Any]]:
+    spec_path = _veusz_spec_path(document_path)
+    spec = _read_json(spec_path) if spec_path.exists() else {}
+    return [dict(item) for item in spec.get("visual_data_transforms", []) if isinstance(item, dict)]
+
+
 def _write_studio_analysis_report(
     output_dir: Path,
     *,
     request: dict[str, Any],
     document_path: Path,
     figures: list[str],
+    analysis_metrics: list[dict[str, Any]],
 ) -> None:
     notes = request.get("review_notes") if isinstance(request.get("review_notes"), list) else []
     lines = [
@@ -1197,10 +1361,29 @@ def _write_studio_analysis_report(
         f"- Document: `{document_path}`",
         f"- Figures: {len(figures)}",
         "",
-        "## Review Notes",
+        "## Analysis Metrics",
         "",
-        *(f"- {note}" for note in notes),
     ]
+    if analysis_metrics:
+        for item in analysis_metrics:
+            value = item.get("value", "")
+            unit = str(item.get("unit") or "").strip()
+            status = str(item.get("status") or "ok")
+            suffix = f" {unit}" if unit else ""
+            lines.append(f"- `{item.get('metric')}`: {value}{suffix} ({status})")
+            reason = str(item.get("reason") or "").strip()
+            if reason:
+                lines.append(f"  - {reason}")
+    else:
+        lines.append("- No deterministic rule metrics were registered for this export.")
+    lines.extend(
+        [
+            "",
+            "## Review Notes",
+            "",
+            *(f"- {note}" for note in notes),
+        ]
+    )
     if not notes:
         lines.append("- No review notes supplied.")
     (output_dir / "analysis_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -1319,7 +1502,6 @@ def _series_from_request(
     render_options = _effective_render_options(request)
     source, transform_steps = _studio_source_for_request(source, request=request, base_dir=base_dir)
     frames = _read_source_frames(source, request=request)
-    metric_pair = _preferred_metric_pair(request)
     raw_series: list[StudioSeries] = []
     axis_info: dict[str, Any] = {"x_label": "x", "y_label": "y"}
     if _request_template(request) in CATEGORICAL_TEMPLATE_IDS:
@@ -1345,10 +1527,7 @@ def _series_from_request(
                 x_values = tuple(float(value) for value in pair_frame[x_column].tolist())
                 y_values = tuple(float(value) for value in pair_frame[y_column].tolist())
                 fallback = source_label if len(pairs) == 1 else str(y_column)
-                if metric_pair is not None and len(pairs) == 1:
-                    label = source_label
-                else:
-                    label = _series_label_from_column(frame[y_column], fallback=fallback)
+                label = _series_label_from_column(frame[y_column], fallback=fallback)
                 raw_series.append(
                     StudioSeries(
                         label=label,
@@ -1374,9 +1553,27 @@ def _series_from_request(
         axis_info["category_positions"] = [float(index) for index in range(1, len(styled) + 1)]
         axis_info["raw_replicate_count"] = sum(len(item.y_values) for item in styled)
     styled = _apply_template_series_transforms(styled, request=request, render_options=render_options)
-    axis_info["x_label"] = str(render_options.get("x_label_override") or axis_info["x_label"])
-    axis_info["y_label"] = str(render_options.get("y_label_override") or axis_info["y_label"])
+    axis_info["x_label"] = _veusz_axis_label(render_options.get("x_label_override") or axis_info["x_label"])
+    axis_info["y_label"] = _veusz_axis_label(render_options.get("y_label_override") or axis_info["y_label"])
     return styled, axis_info, transform_steps, source_root
+
+
+def _veusz_axis_label(value: object) -> str:
+    """Translate legacy Matplotlib math delimiters to Veusz markup."""
+
+    label = str(value or "").replace("$", "")
+    # Veusz can keep an unbraced numeric subscript active for the following
+    # punctuation (for example, ``\sigma_0)`` rendered ``0)`` at script size).
+    # Group the common single-digit form so only the intended glyph is reduced.
+    return re.sub(r"_(\d)", r"_{\1}", label)
+
+
+def _veusz_literal_text(value: object) -> str:
+    """Escape sample/category text so Veusz does not treat identifiers as math markup."""
+
+    text = str(value or "").replace("\\", "\ue000")
+    text = re.sub(r"([_\^\[\]\{\}])", r"\\\1", text)
+    return text.replace("\ue000", "{\\backslash}")
 
 
 def _clean_studio_cell(value: object) -> str:
@@ -1439,8 +1636,7 @@ def _categorical_series_from_frames(
     if len(normalized_metrics) > 1:
         raise StudioPreparationBlocked(
             "mixed_categorical_metrics",
-            "Categorical replicate rendering requires one metric; found: "
-            + ", ".join(distinct_metrics),
+            "Categorical replicate rendering requires one metric; found: " + ", ".join(distinct_metrics),
         )
     if len(normalized_units) > 1:
         raise StudioPreparationBlocked(
@@ -1576,7 +1772,14 @@ def _read_table(path: Path) -> pd.DataFrame:
             header = line.split("Interval data:", maxsplit=1)[1].lstrip("\t, ")
             table_text = "\n".join([header, *lines[index + 1 :]])
             return pd.read_csv(StringIO(table_text), sep="\t", engine="python")
-    separator = "\t" if suffix == ".tsv" or "\t" in text else None
+    tab_count = text.count("\t")
+    comma_count = text.count(",")
+    if suffix == ".tsv" or tab_count > comma_count:
+        separator: str | None = "\t"
+    elif suffix == ".csv" or comma_count:
+        separator = ","
+    else:
+        separator = None
     return pd.read_csv(StringIO(text), sep=separator, engine="python")
 
 
@@ -1736,6 +1939,16 @@ def _unit_label_from_column(values: pd.Series) -> str:
 
 
 def _series_label_from_column(values: pd.Series, *, fallback: str) -> str:
+    leading = [str(value).strip() for value in values.tolist()[:4] if not pd.isna(value) and str(value).strip()]
+    if len(leading) >= 2:
+        try:
+            float(leading[0])
+        except ValueError:
+            if _is_unit_label(leading[1].casefold()):
+                # Comparison workbooks store the sample label immediately
+                # above the unit.  Preserve labels such as `PA` even though
+                # their case-folded spelling is indistinguishable from `Pa`.
+                return leading[0]
     strings: list[str] = []
     for value in values.tolist():
         if pd.isna(value):
@@ -1816,9 +2029,11 @@ def _apply_series_options(
         style = style_by_label.get(item.label, {})
         if style.get("visible") is False or style.get("enabled") is False:
             continue
-        default_marker = marker_sequence[index % len(marker_sequence)] if (
-            template_id == "point_line" or item.presentation_kind == "categorical_replicates"
-        ) else "none"
+        default_marker = (
+            marker_sequence[index % len(marker_sequence)]
+            if (template_id == "point_line" or item.presentation_kind == "categorical_replicates")
+            else "none"
+        )
         default_line_style = (
             line_style_sequence[index % len(line_style_sequence)]
             if template_id != "point_line" and len(ordered) > 1
@@ -1931,6 +2146,11 @@ def _veusz_style_contract(render_options: dict[str, Any]) -> _VeuszStyleContract
         value = _optional_float(render_options.get(key))
         if value is not None:
             overrides[key] = value
+    marker_size = _optional_float(render_options.get("marker_size_pt"))
+    if marker_size is None:
+        marker_size = _optional_float(render_options.get("marker_size"))
+    if marker_size is not None:
+        overrides["marker_size_pt"] = marker_size
     return replace(base, **overrides)
 
 
@@ -1948,7 +2168,14 @@ def _apply_domain_render_defaults(
     explicit_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
     template_id = _request_template(request)
     category_positions = axis_info.get("category_positions")
+    if template_id == "point_line":
+        for key, value in POINT_LINE_RENDER_OPTIONS.items():
+            if key not in explicit_options:
+                updated[key] = list(value) if isinstance(value, list) else value
     if template_id in CATEGORICAL_TEMPLATE_IDS and isinstance(category_positions, list) and category_positions:
+        for key, value in CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS.items():
+            if key not in explicit_options:
+                updated[key] = list(value) if isinstance(value, list) else value
         updated["summary_statistic"] = normalize_categorical_summary(
             updated.get("summary_statistic") or DEFAULT_CATEGORICAL_SUMMARY
         )
@@ -1961,6 +2188,8 @@ def _apply_domain_render_defaults(
         updated.setdefault("x_label_override", "Sample")
         updated.setdefault("legend_position", "none")
         updated.setdefault("series_label_mode", "none")
+        if str(request.get("rule_id") or "").strip() == "impact_metric" and "y_label_override" not in explicit_options:
+            updated["y_label_override"] = "Impact strength (kJ/m²)"
     if template_id in STACKED_TEMPLATE_IDS and _looks_like_wavenumber_axis(axis_info):
         label_mode = str(updated.get("series_label_mode") or "").strip().casefold()
         legend_position = str(updated.get("legend_position") or "").strip().casefold()
@@ -2019,12 +2248,14 @@ def _apply_domain_render_defaults(
             if "y_label_override" not in explicit_options and metric_label is not None:
                 updated["y_label_override"] = metric_label
     if _looks_like_tensile_axis(axis_info):
-        updated.setdefault("x_label_override", "Tensile Strain (%)")
-        updated.setdefault("y_label_override", "Tensile Stress (MPa)")
+        if "x_label_override" not in explicit_options:
+            updated["x_label_override"] = "Tensile Strain (%)"
+        if "y_label_override" not in explicit_options:
+            updated["y_label_override"] = "Tensile Stress (MPa)"
         updated.setdefault("axis_mode", "auto_positive")
     if str(request.get("rule_id") or "").strip() == "rheology_stress_relaxation":
         updated.setdefault("x_label_override", "Time (s)")
-        updated.setdefault("y_label_override", "Normalized stress ($\\sigma/\\sigma_0$)")
+        updated.setdefault("y_label_override", "Normalized stress (\\sigma/\\sigma_0)")
     return updated
 
 
@@ -2040,6 +2271,57 @@ def _label_load(series: list[StudioSeries]) -> dict[str, int]:
         "total_label_length": sum(len(label) for label in labels),
         "duplicate_count": len(labels) - len(set(labels)),
     }
+
+
+def _compact_replicate_series_labels(
+    series: list[StudioSeries],
+) -> tuple[list[StudioSeries], list[dict[str, str]]]:
+    """Drop a shared leading descriptor while retaining sample and repeat identity."""
+
+    pattern = re.compile(
+        r"^(?P<prefix>.+?)\s+(?P<kind>repeat|replicate|specimen)\s+(?P<index>\d+)$",
+        flags=re.IGNORECASE,
+    )
+    matches = [pattern.fullmatch(str(item.label).strip()) for item in series]
+    if len(series) < 5 or any(match is None for match in matches):
+        return series, []
+    parsed = [match for match in matches if match is not None]
+    prefixes = {match.group("prefix").casefold() for match in parsed}
+    kinds = {match.group("kind").casefold() for match in parsed}
+    if len(prefixes) != 1 or len(kinds) != 1:
+        return series, []
+
+    prefix = parsed[0].group("prefix").strip()
+    tokens = prefix.split()
+    acronym_index = next(
+        (
+            index
+            for index, token in enumerate(tokens)
+            if sum(character.isupper() for character in token) >= 2
+        ),
+        None,
+    )
+    compact_prefix = " ".join(tokens[acronym_index:]) if acronym_index is not None else prefix
+    if "_" in compact_prefix:
+        identifier_parts = [part for part in compact_prefix.split("_") if part]
+        if len(identifier_parts) > 1 and len(identifier_parts[-1]) <= 8:
+            compact_prefix = identifier_parts[-1]
+    if len(compact_prefix) >= len(prefix):
+        return series, []
+    compacted_labels = [
+        f"{compact_prefix} {'s' if match.group('kind').casefold() == 'specimen' else 'r'}{match.group('index')}"
+        for match in parsed
+    ]
+    if len(set(compacted_labels)) != len(compacted_labels):
+        return series, []
+    mapping = [
+        {"source_label": item.label, "display_label": display}
+        for item, display in zip(series, compacted_labels, strict=True)
+    ]
+    return [
+        replace(item, label=display)
+        for item, display in zip(series, compacted_labels, strict=True)
+    ], mapping
 
 
 def _legend_is_dense(series: list[StudioSeries]) -> bool:
@@ -2161,7 +2443,12 @@ def _legend_footprint(
     graph_width_mm = max(float(width_mm) - style.left_margin_mm - style.right_margin_mm, 1.0)
     graph_height_mm = max(float(height_mm) - style.top_margin_mm - style.bottom_margin_mm, 1.0)
     load = _label_load(series)
-    columns = _legend_columns(series_count=load["series_count"], mode="inside_best")
+    columns = _legend_columns(
+        series_count=load["series_count"],
+        mode="inside_best",
+        max_label_length=load["max_label_length"],
+        figure_width_mm=float(width_mm),
+    )
     rows = max(1, math.ceil(load["series_count"] / columns))
     point_to_mm = 25.4 / 72.0
     font_height_mm = max(style.legend_font_size_pt * 1.2 * point_to_mm, 0.1)
@@ -2211,23 +2498,32 @@ def _auto_inside_legend_placement(
     graph_height_mm = float(footprint["graph_height_mm"])
     width = float(footprint["box_width_mm"]) / graph_width_mm
     height = float(footprint["box_height_mm"]) / graph_height_mm
-    font_pad_x = float(footprint["font_height_mm"]) / graph_width_mm
-    font_pad_y = float(footprint["font_height_mm"]) / graph_height_mm
     edge_padding_mm = max(
         0.0,
         _optional_float(render_options.get("legend_edge_padding_mm")) or DEFAULT_LEGEND_EDGE_PADDING_MM,
     )
-    bottom_pad = min(edge_padding_mm / graph_height_mm, max(0.0, 1.0 - height))
+    horizontal_pad = min(edge_padding_mm / graph_width_mm, max(0.0, 1.0 - width))
+    vertical_pad = min(edge_padding_mm / graph_height_mm, max(0.0, 1.0 - height))
     candidates = {
         "upper_right": (
-            1.0 - font_pad_x - width,
-            1.0 - font_pad_x,
-            1.0 - font_pad_y - height,
-            1.0 - font_pad_y,
+            1.0 - horizontal_pad - width,
+            1.0 - horizontal_pad,
+            1.0 - vertical_pad - height,
+            1.0 - vertical_pad,
         ),
-        "lower_right": (1.0 - font_pad_x - width, 1.0 - font_pad_x, bottom_pad, bottom_pad + height),
-        "upper_left": (font_pad_x, font_pad_x + width, 1.0 - font_pad_y - height, 1.0 - font_pad_y),
-        "lower_left": (font_pad_x, font_pad_x + width, bottom_pad, bottom_pad + height),
+        "lower_right": (
+            1.0 - horizontal_pad - width,
+            1.0 - horizontal_pad,
+            vertical_pad,
+            vertical_pad + height,
+        ),
+        "upper_left": (
+            horizontal_pad,
+            horizontal_pad + width,
+            1.0 - vertical_pad - height,
+            1.0 - vertical_pad,
+        ),
+        "lower_left": (horizontal_pad, horizontal_pad + width, vertical_pad, vertical_pad + height),
     }
     clearance_mm = max(
         0.0,
@@ -2302,6 +2598,42 @@ def _auto_inside_legend_position(
     return str(_auto_inside_legend_placement(series, render_options, template_id="point_line")["position"])
 
 
+def _legend_placement_on_vertical_side(
+    placement: dict[str, Any],
+    *,
+    lower: bool,
+) -> dict[str, Any]:
+    """Keep reserve iterations on the side whose axis bound is being expanded."""
+
+    order = ("lower_right", "lower_left") if lower else ("upper_right", "upper_left")
+    metrics = placement.get("candidates") if isinstance(placement.get("candidates"), dict) else {}
+    required = _optional_float(placement.get("required_curve_clearance_mm")) or 0.0
+
+    def score(name: str) -> tuple[Any, ...]:
+        item = metrics.get(name) if isinstance(metrics.get(name), dict) else {}
+        minimum = _optional_float(item.get("minimum_curve_clearance_mm"))
+        overlap = int(item.get("overlap_samples") or 0)
+        safe = minimum is None or minimum >= required
+        return (
+            int(overlap > 0),
+            overlap,
+            int(not safe),
+            float(item.get("proximity_load") or 0.0),
+            float(item.get("clearance_deficit_mm") or 0.0),
+            -(minimum if minimum is not None else float("inf")),
+            order.index(name),
+        )
+
+    selected = min(order, key=score)
+    selected_metrics = metrics.get(selected) if isinstance(metrics.get(selected), dict) else {}
+    minimum = _optional_float(selected_metrics.get("minimum_curve_clearance_mm"))
+    revised = dict(placement)
+    revised["position"] = selected
+    revised["minimum_curve_clearance_mm"] = minimum
+    revised["clearance_status"] = "safe" if minimum is None or minimum >= required else "best_available_needs_reserve"
+    return revised
+
+
 def _reserve_vertical_legend_clearance(
     render_options: dict[str, Any],
     *,
@@ -2327,7 +2659,7 @@ def _reserve_vertical_legend_clearance(
     revised = placement
     original_bound: float | None = None
     total_reserve = 0.0
-    for _attempt in range(3):
+    for _attempt in range(MAX_LEGEND_RESERVE_ITERATIONS):
         minimum = _optional_float(revised.get("minimum_curve_clearance_mm"))
         if minimum is None or minimum >= required:
             break
@@ -2344,7 +2676,10 @@ def _reserve_vertical_legend_clearance(
             if y_min <= 0.0:
                 break
             span = math.log10(y_max) - math.log10(y_min)
-            increment = min(0.55 - total_reserve, max(0.005, deficit_mm / graph_height_mm * span * 1.5))
+            increment = min(
+                MAX_LOG_LEGEND_RESERVE_DECADES - total_reserve,
+                max(0.005, deficit_mm / graph_height_mm * span * 1.5),
+            )
             if increment <= 0.0:
                 break
             if lower:
@@ -2353,7 +2688,7 @@ def _reserve_vertical_legend_clearance(
                 updated["y_max"] = 10.0 ** (math.log10(y_max) + increment)
         else:
             span = y_max - y_min
-            maximum_total = span * 0.25
+            maximum_total = span * MAX_LINEAR_LEGEND_RESERVE_FRACTION
             increment = min(
                 maximum_total - total_reserve,
                 max(span * 0.005, deficit_mm / graph_height_mm * span * 1.5),
@@ -2364,9 +2699,23 @@ def _reserve_vertical_legend_clearance(
                 updated["y_min"] = y_min - increment
             else:
                 updated["y_max"] = y_max + increment
-        candidate = _auto_inside_legend_placement(series, updated, template_id=template_id)
+        candidate = _legend_placement_on_vertical_side(
+            _auto_inside_legend_placement(series, updated, template_id=template_id),
+            lower=lower,
+        )
         candidate_minimum = _optional_float(candidate.get("minimum_curve_clearance_mm"))
-        if candidate_minimum is None or candidate_minimum <= minimum + 1e-6:
+        current_metrics = revised.get("candidates", {}).get(str(revised.get("position") or ""), {})
+        candidate_metrics = candidate.get("candidates", {}).get(str(candidate.get("position") or ""), {})
+        current_overlap = int(current_metrics.get("overlap_samples") or 0)
+        candidate_overlap = int(candidate_metrics.get("overlap_samples") or 0)
+        current_load = float(current_metrics.get("proximity_load") or 0.0)
+        candidate_load = float(candidate_metrics.get("proximity_load") or 0.0)
+        candidate_improved = candidate_minimum is not None and (
+            candidate_minimum > minimum + 1e-6
+            or candidate_overlap < current_overlap
+            or (candidate_overlap == current_overlap and candidate_load < current_load - 1e-6)
+        )
+        if not candidate_improved:
             if previous_bound is None:
                 updated.pop(bound_key, None)
             else:
@@ -2374,8 +2723,6 @@ def _reserve_vertical_legend_clearance(
             break
         total_reserve += increment
         revised = candidate
-        if str(revised.get("position") or "").startswith("lower") != lower:
-            break
     revised_minimum = _optional_float(revised.get("minimum_curve_clearance_mm"))
     if original_bound is None or revised_minimum is None or revised_minimum <= initial_minimum + 1e-6:
         return render_options, placement
@@ -2387,6 +2734,16 @@ def _reserve_vertical_legend_clearance(
         **({"decades": round(total_reserve, 6)} if scale == "log" else {"axis_units": round(total_reserve, 6)}),
     }
     return updated, revised
+
+
+def _marker_thin_factor(item: StudioSeries, *, template_id: str) -> int:
+    """Keep point-line markers legible while preserving every line sample."""
+
+    marker = str(item.marker or "none").strip().casefold()
+    if template_id != "point_line" or marker == "none" or item.presentation_kind == "categorical_replicates":
+        return 1
+    point_count = min(len(item.x_values), len(item.y_values))
+    return max(1, math.ceil(point_count / MAX_POINT_LINE_MARKERS_PER_SERIES))
 
 
 def _apply_readability_render_defaults(
@@ -2403,6 +2760,52 @@ def _apply_readability_render_defaults(
     raw_legend_position = updated.get("legend_position")
     legend_position = normalize_legend_position(raw_legend_position)
     autofixes = _string_list(updated.get("_autofixes_applied"))
+    temperature_axis_text = " ".join(
+        str(value or "")
+        for value in (
+            request.get("rule_id"),
+            updated.get("x_metric"),
+            updated.get("x_label_override"),
+            axis_info.get("x_label"),
+        )
+    ).casefold()
+    if (
+        "temperature" in temperature_axis_text
+        and _axis_scale(updated, "x") == "linear"
+        and not {"x_min", "x_max", "x_ticks"} & explicit_options.keys()
+    ):
+        compact_axis = compact_linear_axis(value for item in series for value in item.x_values if math.isfinite(value))
+        if compact_axis is not None:
+            x_min, x_max, x_ticks = compact_axis
+            updated.update({"x_min": x_min, "x_max": x_max, "x_ticks": list(x_ticks)})
+            autofixes.append("temperature_axis_compacted")
+    if (
+        str(request.get("rule_id") or "").strip() == "tga_curve"
+        and _axis_scale(updated, "y") == "linear"
+        and not {"y_min", "y_max", "y_ticks"} & explicit_options.keys()
+    ):
+        compact_axis = compact_linear_axis(value for item in series for value in item.y_values if math.isfinite(value))
+        if compact_axis is not None:
+            y_min, y_max, y_ticks = compact_axis
+            updated.update({"y_min": y_min, "y_max": y_max, "y_ticks": list(y_ticks)})
+            autofixes.append("tga_mass_axis_compacted")
+    if str(request.get("rule_id") or "").strip() == "gpc_sec_chromatogram":
+        if _axis_scale(updated, "x") == "linear" and not {"x_min", "x_max", "x_ticks"} & explicit_options.keys():
+            compact_axis = compact_linear_axis(
+                value for item in series for value in item.x_values if math.isfinite(value)
+            )
+            if compact_axis is not None:
+                x_min, x_max, x_ticks = compact_axis
+                updated.update({"x_min": x_min, "x_max": x_max, "x_ticks": list(x_ticks)})
+                autofixes.append("gpc_elution_axis_compacted")
+        if _axis_scale(updated, "y") == "linear" and not {"y_min", "y_max", "y_ticks"} & explicit_options.keys():
+            compact_axis = compact_linear_axis(
+                value for item in series for value in item.y_values if math.isfinite(value)
+            )
+            if compact_axis is not None:
+                y_min, y_max, y_ticks = compact_axis
+                updated.update({"y_min": y_min, "y_max": y_max, "y_ticks": list(y_ticks)})
+                autofixes.append("gpc_response_axis_compacted")
     if is_removed_outside_legend_position(raw_legend_position):
         updated["legend_position"] = "auto"
         for key in ("legend_horz_position", "legend_vert_position", "legend_horz_manual", "legend_vert_manual"):
@@ -2410,6 +2813,25 @@ def _apply_readability_render_defaults(
         autofixes.append("legend_outside_removed")
 
     if template_id in STACKED_TEMPLATE_IDS:
+        if _looks_like_wavenumber_axis(axis_info):
+            y_label = str(updated.get("y_label_override") or axis_info.get("y_label") or "").strip()
+            if len(series) == 1 and str(updated.get("baseline") or "none").casefold() == "none":
+                updated["show_y_ticks"] = True
+                if not {"y_min", "y_max", "y_ticks"} & explicit_options.keys():
+                    compact_axis = compact_linear_axis(
+                        value for item in series for value in item.y_values if math.isfinite(value)
+                    )
+                    if compact_axis is not None:
+                        y_min, y_max, y_ticks = compact_axis
+                        updated.update({"y_min": y_min, "y_max": y_max, "y_ticks": list(y_ticks)})
+                        autofixes.append("single_spectrum_y_axis_compacted")
+                autofixes.append("single_spectrum_raw_y_scale")
+            elif len(series) > 1:
+                updated["show_y_ticks"] = False
+                if "transmittance" in y_label.casefold():
+                    updated["y_label_override"] = "Transmittance (offset)"
+                elif "absorbance" in y_label.casefold() and "offset" not in y_label.casefold():
+                    updated["y_label_override"] = "Absorbance (offset)"
         if label_mode in {"inline", "edge", "auto"} and len(series) > 1:
             updated.setdefault("series_label_offset_fraction", 0.018)
             updated.setdefault("series_label_vertical_align", "bottom")
@@ -2445,13 +2867,31 @@ def _apply_readability_render_defaults(
             updated["_legend_placement_diagnostics"] = placement
             if isinstance(placement.get("axis_reserve"), dict):
                 autofixes.append(f"legend_axis_reserve_{placement['axis_reserve']['side']}")
-            if position.startswith("lower"):
-                graph_height_mm = max(float(placement["footprint"]["graph_height_mm"]), 1.0)
-                edge_padding_mm = max(float(placement.get("edge_padding_mm") or 0.0), 0.0)
-                updated["legend_horz_position"] = "left" if position.endswith("left") else "right"
-                updated["legend_vert_position"] = "manual"
-                updated["legend_vert_manual"] = min(edge_padding_mm / graph_height_mm, 0.25)
-                autofixes.append("legend_lower_corner_edge_reclaimed")
+            footprint = placement["footprint"]
+            graph_width_mm = max(float(footprint["graph_width_mm"]), 1.0)
+            graph_height_mm = max(float(footprint["graph_height_mm"]), 1.0)
+            box_width_mm = min(float(footprint["box_width_mm"]), graph_width_mm)
+            box_height_mm = min(float(footprint["box_height_mm"]), graph_height_mm)
+            edge_padding_mm = max(float(placement.get("edge_padding_mm") or 0.0), 0.0)
+            horizontal_pad = min(edge_padding_mm / graph_width_mm, max(0.0, 1.0 - box_width_mm / graph_width_mm))
+            vertical_pad = min(edge_padding_mm / graph_height_mm, max(0.0, 1.0 - box_height_mm / graph_height_mm))
+            updated["legend_horz_position"] = "manual"
+            updated["legend_vert_position"] = "manual"
+            updated["legend_horz_manual"] = (
+                horizontal_pad
+                if position.endswith("left")
+                else max(0.0, 1.0 - horizontal_pad - box_width_mm / graph_width_mm)
+            )
+            updated["legend_vert_manual"] = (
+                vertical_pad
+                if position.startswith("lower")
+                else max(0.0, 1.0 - vertical_pad - box_height_mm / graph_height_mm)
+            )
+            placement["manual_anchor_fraction"] = {
+                "x": round(float(updated["legend_horz_manual"]), 6),
+                "y": round(float(updated["legend_vert_manual"]), 6),
+            }
+            autofixes.append("legend_corner_edge_reclaimed")
             autofixes.append(f"legend_auto_{position}")
 
     if autofixes:
@@ -2641,6 +3081,16 @@ def _write_veusz_document(
 ) -> Path:
     render_options = _effective_render_options(request)
     render_options = _apply_domain_render_defaults(render_options, request=request, axis_info=axis_info)
+    series, legend_label_mapping = _compact_replicate_series_labels(series)
+    if legend_label_mapping:
+        render_options = dict(render_options)
+        render_options["_legend_label_mapping"] = legend_label_mapping
+        render_options["_autofixes_applied"] = sorted(
+            {
+                *_string_list(render_options.get("_autofixes_applied")),
+                "replicate_legend_prefix_compacted",
+            }
+        )
     template_id = _request_template(request)
     render_options = _apply_readability_render_defaults(
         render_options,
@@ -2649,6 +3099,9 @@ def _write_veusz_document(
         series=series,
         template_id=template_id,
     )
+    axis_info = dict(axis_info)
+    axis_info["x_label"] = _veusz_axis_label(render_options.get("x_label_override") or axis_info["x_label"])
+    axis_info["y_label"] = _veusz_axis_label(render_options.get("y_label_override") or axis_info["y_label"])
     legend_mode = _veusz_legend_mode(render_options, template_id=template_id)
     style = _veusz_style_contract(render_options)
     axis_contract = _veusz_axis_contract(render_options, template_id=template_id, series=series)
@@ -2674,11 +3127,13 @@ def _write_veusz_document(
         show_key=show_key,
         show_direct_labels=show_direct_labels,
     )
-    _save_veusz_document_from_spec(path, spec)
+    spec_path = _veusz_spec_path(path)
+    spec_path.parent.mkdir(parents=True, exist_ok=True)
+    spec_path.write_text(json.dumps(json_safe(spec), indent=2, ensure_ascii=False), encoding="utf-8")
+    _save_veusz_document_from_spec(path, spec, spec_path=spec_path)
     generate_log = path.parent / "logs" / "veusz_generate_stderr.log"
     if generate_log.exists():
         spec["stderr_logs"] = {"generate": str(generate_log)}
-    spec_path = _veusz_spec_path(path)
     spec_path.write_text(json.dumps(json_safe(spec), indent=2, ensure_ascii=False), encoding="utf-8")
     return spec_path
 
@@ -2703,6 +3158,7 @@ def _categorical_plot_contract(
         groups.append(
             {
                 "label": item.label,
+                "color": item.color,
                 "position": position,
                 "y_name": item.y_name,
                 "raw_values": values,
@@ -2723,9 +3179,7 @@ def _categorical_plot_contract(
                     "maximum": max(values),
                 },
                 "raw_points_visible": (
-                    template_id == "box_strip"
-                    or summary_statistic == "raw_only"
-                    or len(values) < MIN_BOX_REPLICATES
+                    template_id == "box_strip" or summary_statistic == "raw_only" or len(values) < MIN_BOX_REPLICATES
                 ),
             }
         )
@@ -2737,16 +3191,152 @@ def _categorical_plot_contract(
         "minimum_box_replicates": MIN_BOX_REPLICATES,
         "box_whisker_mode": "1.5IQR",
         "mean_marker_visible": False,
-        "native_veusz_boxplot": summary_statistic == "median_iqr" and any(
-            group["boxplot_eligible"] for group in groups
-        ),
+        "native_veusz_boxplot": summary_statistic == "median_iqr"
+        and any(group["boxplot_eligible"] for group in groups),
         "raw_values_preserved": True,
         "raw_replicate_count": sum(group["replicate_count"] for group in groups),
+        "visual_style": {
+            "palette_policy": "relaxed_multi_category",
+            "palette_preset": str(render_options.get("palette_preset") or DEFAULT_PALETTE_PRESET),
+            "box_fill_mode": "series_color",
+            "box_fill_transparency": CATEGORICAL_BOX_FILL_TRANSPARENCY,
+            "box_fill_fraction": CATEGORICAL_BOX_FILL_FRACTION,
+            "box_line_mode": "series_color",
+            "box_line_width_pt": CATEGORICAL_BOX_LINE_WIDTH_PT,
+        },
         "groups": groups,
         "insufficient_replicate_groups": [
             group["label"] for group in groups if group["summary_status"] == "insufficient_replicates"
         ],
     }
+
+
+def _spectral_x_coverage_issue(
+    series: list[StudioSeries],
+    *,
+    template_id: str,
+    axis_info: dict[str, Any],
+    axis_contract: _VeuszAxisContract,
+) -> dict[str, Any] | None:
+    if template_id not in STACKED_TEMPLATE_IDS or not _looks_like_wavenumber_axis(axis_info):
+        return None
+    if axis_contract.x_min is None or axis_contract.x_max is None:
+        return None
+    axis_low, axis_high = sorted((float(axis_contract.x_min), float(axis_contract.x_max)))
+    axis_span = axis_high - axis_low
+    values = [
+        float(value)
+        for item in series
+        for value in item.x_values
+        if math.isfinite(float(value)) and axis_low <= float(value) <= axis_high
+    ]
+    if axis_span <= 0.0 or len(values) < 2:
+        return None
+    data_low = min(values)
+    data_high = max(values)
+    coverage = (data_high - data_low) / axis_span
+    if coverage >= 0.25:
+        return None
+    severity = "critical" if coverage < 0.08 else "warning"
+    return {
+        "id": "spectral_axis_data_coverage_low",
+        "severity": severity,
+        "message": (
+            "Spectral data occupy too little of the requested wavenumber axis; the curve is visually collapsed."
+            if severity == "critical"
+            else "Spectral data occupy less than one quarter of the requested wavenumber axis."
+        ),
+        "axis_domain": [axis_low, axis_high],
+        "data_domain": [data_low, data_high],
+        "coverage_fraction": round(coverage, 6),
+        "critical_threshold": 0.08,
+        "warning_threshold": 0.25,
+    }
+
+
+def _semantic_series_contract_issues(
+    series: list[StudioSeries],
+    *,
+    request: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Reject same-axis series that contradict the selected rule's metric contract."""
+
+    rule_id = str(request.get("rule_id") or "").strip()
+    labels = [str(item.label or "").casefold() for item in series]
+    issues: list[dict[str, Any]] = []
+    forbidden_by_rule = {
+        "saxs_profile": ("azimuth", "angle"),
+        "swelling_curve": ("gel fraction", "gel content"),
+    }
+    forbidden = forbidden_by_rule.get(rule_id, ())
+    incompatible_labels = [
+        item.label for item, label in zip(series, labels, strict=True) if any(token in label for token in forbidden)
+    ]
+    if incompatible_labels:
+        issues.append(
+            {
+                "id": "incompatible_series_for_axis_metric",
+                "severity": "critical",
+                "message": "A same-table metric incompatible with the selected y-axis was included as a curve.",
+                "rule_id": rule_id,
+                "incompatible_series": incompatible_labels,
+            }
+        )
+    if rule_id == "gpc_sec_chromatogram" and len(series) > 1:
+        domains: list[tuple[float, float]] = []
+        for item in series:
+            values = [float(value) for value in item.x_values if math.isfinite(float(value))]
+            if len(values) >= 2 and max(values) > min(values):
+                domains.append((min(values), max(values)))
+        if len(domains) == len(series):
+            overlap = max(0.0, min(high for _low, high in domains) - max(low for low, _high in domains))
+            minimum_span = min(high - low for low, high in domains)
+            overlap_fraction = overlap / minimum_span if minimum_span > 0.0 else 0.0
+            if overlap_fraction < 0.25:
+                issues.append(
+                    {
+                        "id": "gpc_detector_time_domains_misaligned",
+                        "severity": "critical" if overlap_fraction < 0.05 else "warning",
+                        "message": (
+                            "GPC detector traces share too little elution-time domain for a common-axis overlay."
+                        ),
+                        "series_domains": [[low, high] for low, high in domains],
+                        "minimum_span_overlap_fraction": round(overlap_fraction, 6),
+                        "critical_threshold": 0.05,
+                        "warning_threshold": 0.25,
+                    }
+                )
+    return issues
+
+
+def _visual_data_transforms(
+    *,
+    template_id: str,
+    render_options: dict[str, Any],
+    series_count: int,
+) -> list[dict[str, Any]]:
+    transforms: list[dict[str, Any]] = []
+    baseline_mode = str(render_options.get("baseline") or "none").strip().casefold()
+    if baseline_mode != "none":
+        transforms.append(
+            {
+                "id": "baseline_correction",
+                "mode": baseline_mode,
+                "implementation": "mean of up to 30 points at each endpoint with linear interpolation",
+                "scientific_values_changed_in_visual_document": True,
+            }
+        )
+    if template_id in STACKED_TEMPLATE_IDS and series_count > 1:
+        transforms.append(
+            {
+                "id": "vertical_offset_stack",
+                "mode": "q01_shift_and_auto_spacing",
+                "series_count": series_count,
+                "scientific_values_changed_in_visual_document": True,
+                "purpose": "visual separation only; processed source table retains the unshifted values",
+            }
+        )
+    return transforms
 
 
 def _build_veusz_plot_spec(
@@ -2812,11 +3402,16 @@ def _build_veusz_plot_spec(
             )
     label_load = _label_load(series)
     layout_issues: list[dict[str, Any]] = []
-    if (
-        show_key
-        and template_id not in STACKED_TEMPLATE_IDS
-        and _legend_is_dense(series)
-    ):
+    spectral_coverage_issue = _spectral_x_coverage_issue(
+        series,
+        template_id=template_id,
+        axis_info=axis_info,
+        axis_contract=axis_contract,
+    )
+    if spectral_coverage_issue is not None:
+        layout_issues.append(spectral_coverage_issue)
+    layout_issues.extend(_semantic_series_contract_issues(series, request=request))
+    if show_key and template_id not in STACKED_TEMPLATE_IDS and _legend_is_dense(series):
         layout_issues.append(
             {
                 "id": "legend_crowded_inside",
@@ -2826,7 +3421,12 @@ def _build_veusz_plot_spec(
         )
     legend_spec = {
         "show": show_key,
-        "columns": _legend_columns(series_count=len(series), mode=legend_mode),
+        "columns": _legend_columns(
+            series_count=len(series),
+            mode=legend_mode,
+            max_label_length=label_load["max_label_length"],
+            figure_width_mm=width_mm,
+        ),
         "mode": legend_mode,
         "horz_position": _normalize_optional_string(render_options.get("legend_horz_position")),
         "vert_position": _normalize_optional_string(render_options.get("legend_vert_position")),
@@ -2837,17 +3437,26 @@ def _build_veusz_plot_spec(
     if isinstance(placement_diagnostics, dict):
         legend_spec["placement_diagnostics"] = json_safe(placement_diagnostics)
         if show_key and placement_diagnostics.get("clearance_status") != "safe":
+            measured_clearance = _optional_float(placement_diagnostics.get("minimum_curve_clearance_mm"))
+            overlap_detected = measured_clearance is not None and measured_clearance <= 0.0
             layout_issues.append(
                 {
                     "id": "legend_curve_clearance_below_target",
-                    "severity": "warning",
-                    "message": "No inside legend corner reached the requested curve clearance at final size.",
+                    "severity": "critical" if overlap_detected else "warning",
+                    "message": (
+                        "The inside legend overlaps plotted data at final size."
+                        if overlap_detected
+                        else "No inside legend corner reached the requested curve clearance at final size."
+                    ),
                     "required_clearance_mm": placement_diagnostics.get("required_curve_clearance_mm"),
                     "measured_clearance_mm": placement_diagnostics.get("minimum_curve_clearance_mm"),
                 }
             )
     if show_key:
         legend_spec["label_load"] = label_load
+        label_mapping = render_options.get("_legend_label_mapping")
+        if isinstance(label_mapping, list) and label_mapping:
+            legend_spec["label_mapping"] = json_safe(label_mapping)
     return {
         "kind": "sciplot_veusz_plot_spec",
         "version": 1,
@@ -2873,6 +3482,11 @@ def _build_veusz_plot_spec(
         },
         "autofixes_applied": _string_list(render_options.get("_autofixes_applied")),
         "layout_issues": layout_issues,
+        "visual_data_transforms": _visual_data_transforms(
+            template_id=template_id,
+            render_options=render_options,
+            series_count=len(series),
+        ),
         "provenance": {
             "veusz": upstream_status()["veusz"],
         },
@@ -2965,6 +3579,7 @@ def _build_veusz_plot_spec(
                 "line_style": item.line_style,
                 "marker": str(MARKER_MAP.get(item.marker, item.marker or "none")),
                 "marker_size_pt": item.marker_size,
+                "marker_thin_factor": _marker_thin_factor(item, template_id=template_id),
                 "marker_fill_color": (
                     "white"
                     if str(render_options.get("marker_fill_mode") or "filled").casefold() == "open"
@@ -2990,7 +3605,37 @@ def _build_veusz_plot_spec(
     }
 
 
-def _save_veusz_document_from_spec(path: Path, spec: dict[str, Any]) -> None:
+def _save_veusz_document_from_spec(
+    path: Path,
+    spec: dict[str, Any],
+    *,
+    spec_path: Path | None = None,
+) -> None:
+    from sciplot_core.veusz_runtime import needs_veusz_worker_process, veusz_worker_environment
+
+    if needs_veusz_worker_process():
+        resolved_spec = spec_path or _veusz_spec_path(path)
+        if not resolved_spec.exists():
+            resolved_spec.parent.mkdir(parents=True, exist_ok=True)
+            resolved_spec.write_text(
+                json.dumps(json_safe(spec), indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "sciplot_core.veusz_worker",
+                "save-spec",
+                str(path),
+                str(resolved_spec),
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+            env=veusz_worker_environment(),
+        )
+        return
     stderr_log = path.parent / "logs" / "veusz_generate_stderr.log"
     with _capture_process_stderr(stderr_log):
         _prefer_offscreen_export_platform()
@@ -3029,16 +3674,14 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.ImportString(f"{item['y_name']}(numeric)", y_data)
     if categorical is not None:
         groups = [group for group in categorical.get("groups", []) if isinstance(group, dict)]
-        interface.SetDataText("category_axis_labels", [str(group["label"]) for group in groups])
+        interface.SetDataText("category_axis_labels", [_veusz_literal_text(group["label"]) for group in groups])
         interface.ImportString(
             "category_axis_x(numeric)",
             "\n".join(f"{float(group['position']):.12g}" for group in groups),
         )
         interface.ImportString(
             "category_axis_y(numeric)",
-            "\n".join(
-                f"{float(group['descriptive_statistics']['median']):.12g}" for group in groups
-            ),
+            "\n".join(f"{float(group['descriptive_statistics']['median']):.12g}" for group in groups),
         )
     interface.Set("StyleSheet/Font/font", style["font_family"])
     interface.Set("StyleSheet/Font/size", _pt(float(style["font_size_pt"])))
@@ -3080,34 +3723,45 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("Border/hide", not bool(style["legend_frameon"]))
         interface.To("..")
     if categorical is not None and categorical.get("native_veusz_boxplot") is True:
+        categorical_style = categorical.get("visual_style") if isinstance(categorical.get("visual_style"), dict) else {}
         box_groups = [
             group
             for group in categorical.get("groups", [])
             if isinstance(group, dict) and group.get("boxplot_eligible") is True
         ]
-        interface.Add("boxplot", name="categorical_boxplot", autoadd=False)
-        interface.To("categorical_boxplot")
-        interface.Set("values", tuple(str(group["y_name"]) for group in box_groups))
-        interface.Set("posn", [float(group["position"]) for group in box_groups])
-        interface.Set("whiskermode", str(categorical.get("box_whisker_mode") or "1.5IQR"))
-        interface.Set("fillfraction", 0.52)
-        interface.Set("meanmarker", "none")
-        interface.Set("outliersmarker", "none")
-        interface.Set("Fill/color", "#D9E2E8")
-        interface.Set("Fill/transparency", 20)
-        interface.Set("Border/color", "black")
-        interface.Set("Border/width", _pt(float(style["line_width_pt"])))
-        interface.Set("Whisker/color", "black")
-        interface.Set("Whisker/width", _pt(float(style["line_width_pt"])))
-        interface.Set("MarkersLine/hide", True)
-        interface.Set("MarkersFill/hide", True)
-        interface.To("..")
+        box_line_width = float(categorical_style.get("box_line_width_pt", CATEGORICAL_BOX_LINE_WIDTH_PT))
+        for box_index, group in enumerate(box_groups, start=1):
+            box_color = str(group.get("color") or DEFAULT_PALETTE_COLORS[(box_index - 1) % len(DEFAULT_PALETTE_COLORS)])
+            box_name = f"categorical_boxplot_{box_index}"
+            interface.Add("boxplot", name=box_name, autoadd=False)
+            interface.To(box_name)
+            interface.Set("values", (str(group["y_name"]),))
+            interface.Set("posn", [float(group["position"])])
+            interface.Set("whiskermode", str(categorical.get("box_whisker_mode") or "1.5IQR"))
+            interface.Set(
+                "fillfraction",
+                float(categorical_style.get("box_fill_fraction", CATEGORICAL_BOX_FILL_FRACTION)),
+            )
+            interface.Set("meanmarker", "none")
+            interface.Set("outliersmarker", "none")
+            interface.Set("Fill/color", box_color)
+            interface.Set(
+                "Fill/transparency",
+                int(categorical_style.get("box_fill_transparency", CATEGORICAL_BOX_FILL_TRANSPARENCY)),
+            )
+            interface.Set("Border/color", box_color)
+            interface.Set("Border/width", _pt(box_line_width))
+            interface.Set("Whisker/color", box_color)
+            interface.Set("Whisker/width", _pt(box_line_width))
+            interface.Set("MarkersLine/hide", True)
+            interface.Set("MarkersFill/hide", True)
+            interface.To("..")
     for item in spec["series"]:
         interface.Add("xy", name=item["name"], autoadd=False)
         interface.To(item["name"])
         interface.Set("xData", item["x_name"])
         interface.Set("yData", item["y_name"])
-        interface.Set("key", item["label"])
+        interface.Set("key", _veusz_literal_text(item["label"]))
         interface.Set("PlotLine/color", item["color"])
         interface.Set("PlotLine/style", item.get("line_style") or "solid")
         interface.Set("MarkerFill/color", item.get("marker_fill_color") or item["color"])
@@ -3129,6 +3783,9 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
             interface.Set("markerSize", _pt(float(item["marker_size_pt"])))
         elif marker != "none":
             interface.Set("markerSize", _pt(float(style["marker_size_pt"])))
+        marker_thin_factor = max(1, int(item.get("marker_thin_factor") or 1))
+        if marker_thin_factor > 1:
+            interface.Set("thinfactor", marker_thin_factor)
         interface.To("..")
     if categorical is not None:
         interface.Add("xy", name="category_axis_label_provider", autoadd=False)
@@ -3149,7 +3806,7 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("positioning", "axes")
         interface.Set("xPos", [float(item["x"])])
         interface.Set("yPos", [float(item["y"])])
-        interface.Set("label", item["label"])
+        interface.Set("label", _veusz_literal_text(item["label"]))
         interface.Set("alignHorz", item["align"])
         interface.Set("alignVert", item.get("valign") or "centre")
         interface.Set("margin", "1pt" if item.get("valign") == "bottom" else "0pt")
@@ -3323,19 +3980,27 @@ def _veusz_axis_contract(
             pass
 
     if series and _axis_scale(render_options, "x") == "log" and not explicit_x_ticks:
-        x_ticks = anchored_log_decade_ticks(value for item in series for value in item.x_values)
+        positive_x_values = [value for item in series for value in item.x_values if math.isfinite(value) and value > 0]
+        x_ticks = anchored_log_decade_ticks(positive_x_values)
         if x_ticks:
             if not explicit_x_min:
                 x_min = min(float(x_min), x_ticks[0]) if x_min is not None else x_ticks[0]
             if not explicit_x_max:
                 x_max = max(float(x_max), x_ticks[-1]) if x_max is not None else x_ticks[-1]
+                data_max = max(positive_x_values)
+                if x_max > data_max * MAX_AUTO_LOG_EMPTY_RANGE_FACTOR:
+                    x_max = max(x_ticks[-1], data_max * AUTO_LOG_BOUND_PADDING_FACTOR)
     if series and _axis_scale(render_options, "y") == "log" and not explicit_y_ticks:
-        y_ticks = anchored_log_decade_ticks(value for item in series for value in item.y_values)
+        positive_y_values = [value for item in series for value in item.y_values if math.isfinite(value) and value > 0]
+        y_ticks = anchored_log_decade_ticks(positive_y_values)
         if y_ticks:
             if not explicit_y_min:
                 y_min = min(float(y_min), y_ticks[0]) if y_min is not None else y_ticks[0]
             if not explicit_y_max:
                 y_max = max(float(y_max), y_ticks[-1]) if y_max is not None else y_ticks[-1]
+                data_max = max(positive_y_values)
+                if y_max > data_max * MAX_AUTO_LOG_EMPTY_RANGE_FACTOR:
+                    y_max = max(y_ticks[-1], data_max * AUTO_LOG_BOUND_PADDING_FACTOR)
     if x_ticks:
         if not explicit_x_min:
             x_min = min(float(x_min), min(x_ticks)) if x_min is not None else min(x_ticks)
@@ -3455,8 +4120,16 @@ def _graph_margin_lines(style: _VeuszStyleContract) -> list[str]:
     ]
 
 
-def _legend_columns(*, series_count: int, mode: str = "inside_best") -> int:
-    if series_count <= 1:
+def _legend_columns(
+    *,
+    series_count: int,
+    mode: str = "inside_best",
+    max_label_length: int = 0,
+    figure_width_mm: float | None = None,
+) -> int:
+    if series_count <= 4:
+        return 1
+    if figure_width_mm is not None and figure_width_mm <= 60.5 and max_label_length >= 22:
         return 1
     return 2
 

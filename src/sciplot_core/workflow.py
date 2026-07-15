@@ -20,11 +20,13 @@ from sciplot_core.materials_rules import compute_analysis_metrics
 from sciplot_core.one_step import build_one_step_project, build_quality_actions
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import (
+    CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
     DEFAULT_EXPORT_FORMATS_POLICY,
     DEFAULT_RENDER_OPTIONS,
     DELIVERY_DIR,
     RHEOLOGY_METRIC_AXIS_LABELS,
     anchored_log_decade_ticks,
+    compact_linear_axis,
     layout_policy_for_semantic,
     layout_policy_payload,
 )
@@ -323,6 +325,50 @@ _RHEOLOGY_METRIC_LABELS = {
     "complex_viscosity": "Complex Viscosity",
 }
 
+_TENSILE_SUMMARY_FIGURES: tuple[dict[str, str], ...] = (
+    {
+        "id": "tensile_strength_by_sample",
+        "metric": "strength_MPa",
+        "label": "Tensile strength (MPa)",
+        "unit": "MPa",
+    },
+    {
+        "id": "strain_at_break_by_sample",
+        "metric": "strain_at_break_percent",
+        "label": "Strain at break (%)",
+        "unit": "%",
+    },
+    {
+        "id": "tensile_modulus_by_sample",
+        "metric": "modulus_MPa",
+        "label": "Tensile modulus (MPa)",
+        "unit": "MPa",
+    },
+    {
+        "id": "toughness_by_sample",
+        "metric": "toughness_MJ_m3",
+        "label": "Toughness (MJ m⁻³)",
+        "unit": "MJ/m3",
+    },
+)
+
+_SHARED_FIGURE_STYLE_KEYS = {
+    "size",
+    "visual_theme_id",
+    "style_preset",
+    "palette_preset",
+    "font_size_pt",
+    "legend_font_size_pt",
+    "axis_linewidth_pt",
+    "tick_width_pt",
+    "tick_length_pt",
+    "minor_tick_width_pt",
+    "minor_tick_length_pt",
+    "marker_size",
+    "marker_alpha",
+    "marker_line_width_pt",
+}
+
 
 def _metric_token(value: object) -> str:
     return "".join(character for character in str(value).casefold() if character.isalnum())
@@ -365,7 +411,19 @@ def _sweep_metric_sources(
         if key != "tan_delta" and any(_metric_token(header) == _metric_token(label) for header in headers)
     ]
     if prefix == "temp":
-        metric_keys = [key for key in metric_keys if key in {"storage_modulus", "complex_viscosity"}] or metric_keys
+        study_model = request.get("study_model") if isinstance(request.get("study_model"), dict) else {}
+        figure_queue = study_model.get("figure_queue") if isinstance(study_model.get("figure_queue"), list) else []
+        queued_metrics = {
+            str(item.get("metric") or item.get("y_metric") or "").strip()
+            for item in figure_queue
+            if isinstance(item, dict)
+        }
+        requested_metrics = {
+            "loss_factor" if metric == "tan_delta" else metric
+            for metric in queued_metrics
+            if metric
+        } or {"storage_modulus", "loss_factor"}
+        metric_keys = [key for key in metric_keys if key in requested_metrics]
     sources_dir = output_dir / "processed" / "veusz_metric_sources"
     sources_dir.mkdir(parents=True, exist_ok=True)
     metric_sources: list[tuple[str, Path, dict[str, Any]]] = []
@@ -400,7 +458,7 @@ def _sweep_metric_sources(
         metric_frame.columns = list(range(metric_frame.shape[1]))
         metric_frame = pd.concat(
             [
-                pd.DataFrame([output_headers, output_units, output_samples]),
+                pd.DataFrame([output_headers, output_samples, output_units]),
                 metric_frame,
             ],
             ignore_index=True,
@@ -410,11 +468,21 @@ def _sweep_metric_sources(
         metric_render_options: dict[str, Any] = {
             "x_metric": "temperature" if prefix == "temp" else "angular_frequency",
             "y_metric": metric_key,
-            "y_label_override": (
-                RHEOLOGY_METRIC_AXIS_LABELS.get(metric_key, metric_label) if prefix == "freq" else metric_label
-            ),
+            "y_label_override": RHEOLOGY_METRIC_AXIS_LABELS.get(metric_key, metric_label),
         }
         plotted_values = pd.to_numeric(metric_frame.iloc[3:, 1::2].stack(), errors="coerce").dropna()
+        if prefix == "temp":
+            metric_render_options["yscale"] = "log"
+            if metric_key == "loss_factor":
+                positive_values = plotted_values[plotted_values > 0]
+                spans_two_decades = (
+                    not positive_values.empty
+                    and len(positive_values) == len(plotted_values)
+                    and float(positive_values.max()) / float(positive_values.min()) >= 100.0
+                )
+                metric_render_options["yscale"] = "log" if spans_two_decades else "linear"
+                if spans_two_decades:
+                    metric_render_options["y_ticks"] = list(anchored_log_decade_ticks(positive_values))
         if prefix == "freq" and metric_key == "storage_modulus":
             if not plotted_values.empty and float(plotted_values.max()) <= 5e5:
                 metric_render_options.update(
@@ -466,6 +534,208 @@ def _rename_metric_exports(
         outputs.append(str(destination))
         exports.append(record)
     return outputs, exports
+
+
+def _tensile_summary_sources(
+    input_path: Path,
+    *,
+    request: dict[str, Any],
+    output_dir: Path,
+    options: dict[str, Any],
+) -> list[tuple[str, Path, dict[str, Any]]]:
+    if str(request.get("rule_id") or "") != "tensile_curve":
+        return []
+    summary_source = input_path.with_name(f"{input_path.stem}_summary.csv")
+    if not summary_source.exists():
+        return []
+    summary = pd.read_csv(summary_source)
+    if "sample" not in summary.columns:
+        return []
+    study_model = request.get("study_model") if isinstance(request.get("study_model"), dict) else {}
+    figure_queue = study_model.get("figure_queue") if isinstance(study_model.get("figure_queue"), list) else []
+    queued_ids = {
+        str(item.get("id") or "").strip()
+        for item in figure_queue
+        if isinstance(item, dict)
+    }
+    queued_metrics = {
+        str(item.get("metric") or item.get("y_metric") or "").strip()
+        for item in figure_queue
+        if isinstance(item, dict)
+    }
+    requested = [
+        contract
+        for contract in _TENSILE_SUMMARY_FIGURES
+        if not figure_queue or contract["id"] in queued_ids or contract["metric"] in queued_metrics
+    ]
+    sample_order = [str(value) for value in study_model.get("sample_order", []) if str(value).strip()]
+    observed_order = [str(value) for value in summary["sample"].dropna().drop_duplicates().tolist()]
+    ordered_samples = [sample for sample in sample_order if sample in observed_order]
+    ordered_samples.extend(sample for sample in observed_order if sample not in ordered_samples)
+    if not ordered_samples:
+        return []
+
+    source_dir = output_dir / "processed" / "veusz_metric_sources"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    shared_style = {key: value for key, value in options.items() if key in _SHARED_FIGURE_STYLE_KEYS}
+    metric_sources: list[tuple[str, Path, dict[str, Any]]] = []
+    for contract in requested:
+        metric = contract["metric"]
+        if metric not in summary.columns:
+            continue
+        group_values = [
+            pd.to_numeric(
+                summary.loc[summary["sample"].astype(str) == sample, metric],
+                errors="coerce",
+            ).dropna().tolist()
+            for sample in ordered_samples
+        ]
+        if not any(group_values):
+            continue
+        compact_axis = compact_linear_axis(
+            value
+            for values in group_values
+            for value in values
+        )
+        rows: list[list[Any]] = [
+            [contract["label"] for _sample in ordered_samples],
+            [contract["unit"] for _sample in ordered_samples],
+            list(ordered_samples),
+        ]
+        for row_index in range(max(len(values) for values in group_values)):
+            rows.append(
+                [values[row_index] if row_index < len(values) else "" for values in group_values]
+            )
+        metric_source = source_dir / f"{contract['id']}.csv"
+        pd.DataFrame(rows).to_csv(metric_source, header=False, index=False)
+        metric_options: dict[str, Any] = {
+            **CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
+            **shared_style,
+            "legend_position": "none",
+            "series_label_mode": "none",
+            "x_label_override": "Sample",
+            "y_label_override": contract["label"],
+            "summary_statistic": "median_iqr",
+        }
+        if compact_axis is not None:
+            metric_options.update(
+                {
+                    "y_min": compact_axis[0],
+                    "y_max": compact_axis[1],
+                    "y_ticks": list(compact_axis[2]),
+                }
+            )
+        metric_sources.append(
+            (
+                contract["id"],
+                metric_source,
+                metric_options,
+            )
+        )
+    return metric_sources
+
+
+def _render_veusz_tensile_bundle(
+    input_path: Path,
+    *,
+    output_dir: Path,
+    options: dict[str, Any],
+    export_formats: object,
+    request: dict[str, Any],
+) -> dict[str, Any] | None:
+    metric_sources = _tensile_summary_sources(
+        input_path,
+        request=request,
+        output_dir=output_dir,
+        options=options,
+    )
+    if not metric_sources:
+        return None
+    figures_dir = output_dir / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    render_jobs: list[tuple[str, Path, str, dict[str, Any]]] = [
+        ("stress_vs_strain", input_path, str(request.get("template") or "curve"), dict(options))
+    ]
+    render_jobs.extend(
+        (metric_id, metric_source, "box_strip", metric_options)
+        for metric_id, metric_source, metric_options in metric_sources
+    )
+    combined_outputs: list[str] = []
+    combined_exports: list[dict[str, Any]] = []
+    combined_reports: list[dict[str, Any]] = []
+    combined_documents: list[str] = []
+    combined_specs: list[str] = []
+    for metric_id, metric_source, template, metric_options in render_jobs:
+        metric_dir = figures_dir / f"_{metric_id}_render"
+        payload = render_to_dir(
+            metric_source,
+            template=template,
+            output_dir=metric_dir,
+            options=metric_options,
+            export_formats=export_formats,
+        )
+        outputs, exports = _rename_metric_exports(payload, metric_id=metric_id, figures_dir=figures_dir)
+        combined_outputs.extend(outputs)
+        combined_exports.extend(exports)
+        metric_worker = figures_dir / "_veusz" / metric_id
+        if metric_worker.exists():
+            shutil.rmtree(metric_worker)
+        source_worker = metric_dir / "_veusz"
+        if source_worker.exists():
+            metric_worker.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(source_worker, metric_worker)
+        mapped_documents: list[str] = []
+        for item in payload.get("veusz_documents", []):
+            source_path = Path(str(item))
+            try:
+                destination = metric_worker / source_path.relative_to(source_worker)
+            except ValueError:
+                continue
+            if destination.exists():
+                mapped_documents.append(str(destination))
+        mapped_specs: list[str] = []
+        for item in payload.get("veusz_specs", []):
+            source_path = Path(str(item))
+            try:
+                destination = metric_worker / source_path.relative_to(source_worker)
+            except ValueError:
+                continue
+            if destination.exists():
+                mapped_specs.append(str(destination))
+        combined_documents.extend(mapped_documents)
+        combined_specs.extend(mapped_specs)
+        for report in payload.get("qa_reports", []):
+            if not isinstance(report, dict):
+                continue
+            copied_report = dict(report)
+            summary = report.get("layout_summary")
+            if isinstance(summary, dict):
+                copied_summary = dict(summary)
+                if mapped_documents:
+                    copied_summary["document"] = mapped_documents[0]
+                copied_summary["outputs"] = list(outputs)
+                copied_report["layout_summary"] = copied_summary
+            combined_reports.append(copied_report)
+        if metric_dir.exists():
+            shutil.rmtree(metric_dir)
+    return {
+        "kind": "sciplot_render_result",
+        "template": str(request.get("template") or "curve"),
+        "input": str(input_path),
+        "sheet": 0,
+        "render_engine": "veusz",
+        "qa_target": "veusz_export",
+        "export_formats": list(export_formats or DEFAULT_EXPORT_FORMATS_POLICY),
+        "exports": combined_exports,
+        "outputs": combined_outputs,
+        "qa_reports": combined_reports,
+        "veusz_documents": combined_documents,
+        "veusz_specs": combined_specs,
+        "multi_metric_bundle": {
+            "kind": "tensile_curve_and_summary_bundle",
+            "metric_ids": [metric_id for metric_id, _source, _template, _options in render_jobs],
+        },
+    }
 
 
 def _render_veusz_sweep_bundle(
@@ -570,6 +840,15 @@ def _render_with_auto_split(
     request: dict[str, Any],
 ) -> dict[str, Any]:
     figures_dir = output_dir / "figures"
+    tensile_bundle = _render_veusz_tensile_bundle(
+        input_path,
+        output_dir=output_dir,
+        options=options,
+        export_formats=export_formats,
+        request=request,
+    )
+    if tensile_bundle is not None:
+        return tensile_bundle
     bundle = _render_veusz_sweep_bundle(
         input_path,
         output_dir=output_dir,
@@ -878,6 +1157,12 @@ def run_request(request_path: Path) -> dict[str, Any]:
     if use_auto:
         route = "auto"
         final_recipe = semantic.get("recommended_recipe")
+        replicate_policy = (
+            study_model.get("replicate_policy")
+            if isinstance(study_model.get("replicate_policy"), dict)
+            else {}
+        )
+        effective_replicate_mode = request.get("replicate_mode") or replicate_policy.get("mode")
         prepared = prepare_semantic_source(
             input_path,
             output_dir=output_dir,
@@ -885,7 +1170,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
             curation_path=_resolve_optional_request_path(request.get("curation"), base_dir=base_dir),
             series_order=request.get("series_order"),
             column_confirmations=request.get("column_confirmations"),
-            replicate_mode=request.get("replicate_mode"),
+            replicate_mode=effective_replicate_mode,
         )
         transform_steps.extend(step for step in prepared.get("transform_steps", []) if isinstance(step, dict))
         render_options = dict(semantic.get("render_options") or {})

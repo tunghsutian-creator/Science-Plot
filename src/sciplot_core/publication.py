@@ -23,6 +23,8 @@ COMPOSITION_PLAN_VERSION = 1
 
 COMPOSITE_CANVAS_WIDTH_MM = 183.0
 COMPOSITE_NOMINAL_CONTENT_WIDTH_MM = 180.0
+DEFAULT_STANDALONE_PROFILE_ID = "sciplot_single_panel_v1"
+DEFAULT_COMPOSITE_PROFILE_ID = "sciplot_composite_183_v1"
 
 _COMPOSITE_LAYOUTS: dict[str, dict[str, Any]] = {
     "single_180": {
@@ -88,6 +90,7 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
         "typography": {
             "allowed_font_families": ["Arial", "Helvetica", "Liberation Sans"],
             "minimum_text_size_pt": 5.0,
+            "minimum_math_script_size_pt": 4.0,
             "recommended_minimum_text_size_pt": 6.0,
             "maximum_text_size_pt": 8.0,
             "require_embedded_fonts": True,
@@ -143,6 +146,7 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
         "typography": {
             "allowed_font_families": ["Arial", "Helvetica"],
             "minimum_text_size_pt": 5.0,
+            "minimum_math_script_size_pt": 4.0,
             "recommended_minimum_text_size_pt": 5.0,
             # Nature's final-submission guidance uses 5--7 pt for ordinary
             # figure text, but explicitly calls for 8 pt bold panel labels in
@@ -195,6 +199,26 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
         "composite_layout_ids": list(_COMPOSITE_LAYOUTS),
     },
 }
+
+_standalone_profile = deepcopy(_PUBLICATION_PROFILES[DEFAULT_COMPOSITE_PROFILE_ID])
+_standalone_profile.update(
+    {
+        "id": DEFAULT_STANDALONE_PROFILE_ID,
+        "label": "SciPlot ordinary single-panel figure",
+        "description": (
+            "SciPlot house profile for ordinary independent 60, 120, or 180 mm figures. "
+            "It is separate from the explicit 183 mm publication-composition contract and is not, "
+            "by itself, proof of journal compliance."
+        ),
+        "page": {
+            "allowed_widths_mm": [60.0, 120.0, 180.0],
+            "width_tolerance_mm": 0.6,
+            "maximum_height_mm": 111.0,
+        },
+        "composite_layout_ids": [],
+    }
+)
+_PUBLICATION_PROFILES[DEFAULT_STANDALONE_PROFILE_ID] = _standalone_profile
 
 
 def _rounded(value: float) -> float:
@@ -673,14 +697,6 @@ def build_publication_intent(
 ) -> dict[str, Any]:
     request = request if isinstance(request, dict) else {}
     existing = deepcopy(existing) if isinstance(existing, dict) else {}
-    profile_is_explicit, explicit_profile = _explicit_request_text(request, "publication_profile")
-    profile_id = str(
-        explicit_profile
-        if profile_is_explicit and explicit_profile
-        else existing.get("target_profile_id") or "sciplot_composite_183_v1"
-    )
-    profile = get_publication_profile(profile_id)
-
     layout_is_explicit, explicit_layout = _explicit_request_text(request, "publication_layout")
     if layout_is_explicit:
         layout_id = explicit_layout or None
@@ -689,6 +705,25 @@ def build_publication_intent(
         layout_id = str(existing.get("layout_id") or "").strip() or None
         layout_status = str(existing.get("layout_status") or ("inferred" if layout_id else "pending"))
     layout = build_composite_layout(layout_id, canvas_height_mm=_figure_height_mm(request)) if layout_id else None
+
+    profile_is_explicit, explicit_profile = _explicit_request_text(request, "publication_profile")
+    existing_profile = str(existing.get("target_profile_id") or "").strip()
+    existing_target_status = str(existing.get("target_status") or "").strip().casefold()
+    if profile_is_explicit and explicit_profile:
+        profile_id = explicit_profile
+    elif existing_profile and existing_target_status == "confirmed":
+        profile_id = existing_profile
+    elif layout_id:
+        profile_id = DEFAULT_COMPOSITE_PROFILE_ID
+    elif existing_profile and existing_profile != DEFAULT_COMPOSITE_PROFILE_ID:
+        profile_id = existing_profile
+    else:
+        # Older requests inferred the composite profile even when they had no
+        # publication layout.  Migrate that unconfirmed default to the
+        # ordinary single-panel contract; explicit or confirmed choices remain
+        # authoritative.
+        profile_id = DEFAULT_STANDALONE_PROFILE_ID
+    profile = get_publication_profile(str(profile_id))
 
     question_is_explicit, explicit_question = _explicit_request_text(request, "scientific_question")
     question = explicit_question if question_is_explicit else str(existing.get("scientific_question") or "").strip()

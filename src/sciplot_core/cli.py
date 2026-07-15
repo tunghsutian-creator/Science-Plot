@@ -492,6 +492,10 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "curate":
             if args.curate_command == "torque":
+                from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+                original_argv = list(sys.argv[1:] if argv is None else argv)
+                maybe_reexec_with_qt_runtime(original_argv)
                 from sciplot_core.curate import curate_torque_project
 
                 payload = curate_torque_project(

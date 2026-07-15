@@ -59,8 +59,17 @@ DEFAULT_EXPORT_FORMATS_POLICY = ("pdf", "tiff_300")
 DEFAULT_LOG_TICK_FORMAT = "%Ve"
 DEFAULT_LOG_MINOR_TICK_COUNT = 10
 DEFAULT_LOG_MINOR_MULTIPLIERS = (2.0, 4.0, 6.0, 8.0)
+AUTO_LOG_BOUND_PADDING_FACTOR = 1.10
+MAX_AUTO_LOG_EMPTY_RANGE_FACTOR = 2.0
+LOG_NEAR_DECADE_RATIO = 1.05
+DEFAULT_LINEAR_TARGET_MAJOR_TICKS = 5
+DEFAULT_LINEAR_AXIS_PADDING_FRACTION = 0.02
 DEFAULT_LEGEND_CURVE_CLEARANCE_MM = 2.0
 DEFAULT_LEGEND_EDGE_PADDING_MM = 1.0
+MAX_LEGEND_RESERVE_ITERATIONS = 6
+MAX_LOG_LEGEND_RESERVE_DECADES = 0.70
+MAX_LINEAR_LEGEND_RESERVE_FRACTION = 0.60
+MAX_POINT_LINE_MARKERS_PER_SERIES = 32
 INSIDE_LEGEND_POSITIONS = ("upper_right", "lower_right", "upper_left", "lower_left")
 REMOVED_OUTSIDE_LEGEND_POSITIONS = frozenset({"outside", "outside_right", "right_outside"})
 DEFAULT_CATEGORICAL_SUMMARY = "median_iqr"
@@ -68,6 +77,9 @@ CATEGORICAL_SUMMARY_OPTIONS = ("median_iqr", "raw_only")
 DEFAULT_RAW_POINT_JITTER_FRACTION = 0.12
 MAX_RAW_POINT_JITTER_FRACTION = 0.35
 MIN_BOX_REPLICATES = 2
+CATEGORICAL_BOX_FILL_FRACTION = 0.36
+CATEGORICAL_BOX_FILL_TRANSPARENCY = 72
+CATEGORICAL_BOX_LINE_WIDTH_PT = 0.8
 
 # Public request keys accepted by the compatibility intake surface.  Keep this
 # contract explicit and renderer-independent so importing intake never starts
@@ -210,11 +222,73 @@ def anchored_log_decade_ticks(values: Iterable[object]) -> tuple[float, ...]:
     if minimum / lower_decade > 5.0:
         lower_exponent += 1
     upper_exponent = math.ceil(math.log10(maximum))
+    if upper_exponent > lower_exponent:
+        preceding_decade = 10.0 ** (upper_exponent - 1)
+        if maximum / preceding_decade <= LOG_NEAR_DECADE_RATIO:
+            upper_exponent -= 1
     ticks = [10.0**exponent for exponent in range(lower_exponent, upper_exponent + 1)]
     if len(ticks) == 1 and maximum > minimum:
         only = ticks[0]
         ticks = [only / 10.0, only] if only >= maximum else [only, only * 10.0]
     return tuple(ticks)
+
+
+def compact_linear_axis(
+    values: Iterable[object],
+    *,
+    target_major_ticks: int = DEFAULT_LINEAR_TARGET_MAJOR_TICKS,
+    padding_fraction: float = DEFAULT_LINEAR_AXIS_PADDING_FRACTION,
+) -> tuple[float, float, tuple[float, ...]] | None:
+    """Build a compact linear range with four to six readable major ticks."""
+
+    finite: list[float] = []
+    for value in values:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(number):
+            finite.append(number)
+    if not finite:
+        return None
+    data_min = min(finite)
+    data_max = max(finite)
+    if math.isclose(data_min, data_max):
+        half_span = max(abs(data_min) * 0.05, 1.0)
+        data_min -= half_span
+        data_max += half_span
+    span = data_max - data_min
+    padding = span * max(float(padding_fraction), 0.0)
+    display_min = data_min - padding
+    display_max = data_max + padding
+    desired_count = max(int(target_major_ticks), 2)
+    raw_step = span / max(desired_count - 1, 1)
+    exponent = math.floor(math.log10(raw_step))
+    steps = sorted(
+        {
+            mantissa * 10.0**candidate_exponent
+            for candidate_exponent in range(exponent - 1, exponent + 2)
+            for mantissa in (1.0, 2.0, 2.5, 5.0, 10.0)
+        }
+    )
+    candidates: list[tuple[tuple[float, ...], tuple[float, ...]]] = []
+    for step in steps:
+        start_index = math.ceil(display_min / step - 1e-12)
+        end_index = math.floor(display_max / step + 1e-12)
+        if end_index < start_index:
+            continue
+        ticks = tuple(round(index * step, 12) for index in range(start_index, end_index + 1))
+        if len(ticks) < 2:
+            continue
+        count_penalty = 0.0 if 4 <= len(ticks) <= 6 else 100.0
+        score = (
+            count_penalty,
+            float(abs(len(ticks) - desired_count)),
+            abs(math.log(step / raw_step)),
+        )
+        candidates.append((score, ticks))
+    ticks = min(candidates, key=lambda item: item[0])[1] if candidates else (data_min, data_max)
+    return float(display_min), float(display_max), ticks
 
 
 def rheology_metric_axis_label(value: object) -> str | None:
@@ -242,18 +316,31 @@ def rheology_metric_axis_label(value: object) -> str | None:
     return RHEOLOGY_METRIC_AXIS_LABELS.get(token)
 
 
-RHEOLOGY_FREQUENCY_RENDER_OPTIONS: dict[str, Any] = {
+CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS: dict[str, Any] = {
     **DEFAULT_RENDER_OPTIONS,
-    "xscale": "log",
-    "yscale": "log",
-    "reverse_x": False,
-    "x_label_override": RHEOLOGY_FREQUENCY_X_RENDER_LABEL,
-    "x_tick_format": RHEOLOGY_FREQUENCY_TICK_FORMAT,
-    "y_tick_format": RHEOLOGY_FREQUENCY_TICK_FORMAT,
-    "minor_tick_count": 10,
-    "marker_sequence": ["circle", "square", "diamond", "triangle"],
+    "legend_position": "none",
+    "series_label_mode": "none",
+    "marker_sequence": ["circle"],
     "marker_size": 1.7,
     "marker_fill_mode": "filled",
+    "raw_point_jitter_fraction": 0.18,
+    "palette_preset": DEFAULT_PALETTE_PRESET,
+    "font_size_pt": 7.0,
+    "legend_font_size_pt": 6.5,
+    "axis_linewidth_pt": 0.7,
+    "tick_width_pt": 0.7,
+    "tick_length_pt": 2.8,
+    "minor_tick_width_pt": 0.45,
+    "minor_tick_length_pt": 1.5,
+    "line_width_pt": CATEGORICAL_BOX_LINE_WIDTH_PT,
+    "line_alpha": 1.0,
+    "marker_alpha": 0.78,
+    "marker_line_width_pt": 0.3,
+}
+
+
+CURVE_RENDER_OPTIONS: dict[str, Any] = {
+    **DEFAULT_RENDER_OPTIONS,
     "palette_preset": JAMA_EDITORIAL_PALETTE_ID,
     "font_size_pt": 7.0,
     "legend_font_size_pt": 6.5,
@@ -264,14 +351,34 @@ RHEOLOGY_FREQUENCY_RENDER_OPTIONS: dict[str, Any] = {
     "minor_tick_length_pt": 1.5,
     "line_width_pt": 0.9,
     "line_alpha": 1.0,
-    "marker_alpha": 1.0,
-    "marker_line_width_pt": 0.3,
     "legend_curve_clearance_mm": DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
     "legend_edge_padding_mm": DEFAULT_LEGEND_EDGE_PADDING_MM,
 }
 
+
+POINT_LINE_RENDER_OPTIONS: dict[str, Any] = {
+    **CURVE_RENDER_OPTIONS,
+    "marker_sequence": ["circle", "square", "diamond", "triangle"],
+    "marker_size": 1.7,
+    "marker_fill_mode": "filled",
+    "marker_alpha": 1.0,
+    "marker_line_width_pt": 0.3,
+}
+
+
+RHEOLOGY_FREQUENCY_RENDER_OPTIONS: dict[str, Any] = {
+    **POINT_LINE_RENDER_OPTIONS,
+    "xscale": "log",
+    "yscale": "log",
+    "reverse_x": False,
+    "x_label_override": RHEOLOGY_FREQUENCY_X_RENDER_LABEL,
+    "x_tick_format": RHEOLOGY_FREQUENCY_TICK_FORMAT,
+    "y_tick_format": RHEOLOGY_FREQUENCY_TICK_FORMAT,
+    "minor_tick_count": 10,
+}
+
 TORQUE_CURVE_RENDER_OPTIONS: dict[str, Any] = {
-    **DEFAULT_RENDER_OPTIONS,
+    **CURVE_RENDER_OPTIONS,
     "series_label_mode": "legend",
     "size": DEFAULT_FIGURE_SIZE,
 }
@@ -285,10 +392,10 @@ TORQUE_OFFSET_STACK_RENDER_OPTIONS: dict[str, Any] = {
 }
 
 SPECTRUM_STACK_RENDER_OPTIONS: dict[str, Any] = {
-    **DEFAULT_RENDER_OPTIONS,
+    **CURVE_RENDER_OPTIONS,
     "size": STACKED_SPECTRUM_FIGURE_SIZE,
     "series_label_mode": "inline",
-    "baseline": "linear_endpoints",
+    "baseline": "none",
 }
 
 FTIR_SPECTRUM_RENDER_OPTIONS: dict[str, Any] = {
@@ -464,6 +571,7 @@ def render_options_copy(options: dict[str, Any] | None = None) -> dict[str, Any]
 
 __all__ = [
     "DEFAULT_EXPORT_FORMATS_POLICY",
+    "AUTO_LOG_BOUND_PADDING_FACTOR",
     "DEFAULT_FIGURE_SIZE",
     "DEFAULT_LAYOUT_POLICY",
     "DEFAULT_LOG_MINOR_MULTIPLIERS",
@@ -472,6 +580,7 @@ __all__ = [
     "DEFAULT_PALETTE_COLORS",
     "DEFAULT_PALETTE_PRESET",
     "DEFAULT_RENDER_OPTIONS",
+    "CURVE_RENDER_OPTIONS",
     "DELIVERY_DIR",
     "DELIVERY_EDITABLE_DIR",
     "DELIVERY_FIGURES_DIR",
@@ -483,6 +592,10 @@ __all__ = [
     "JAMA_EDITORIAL_PALETTE_ID",
     "LAYOUT_POLICIES",
     "LayoutPolicy",
+    "MAX_LEGEND_RESERVE_ITERATIONS",
+    "MAX_AUTO_LOG_EMPTY_RANGE_FACTOR",
+    "MAX_LINEAR_LEGEND_RESERVE_FRACTION",
+    "MAX_LOG_LEGEND_RESERVE_DECADES",
     "NPG_MODERN_COLORS",
     "NPG_MODERN_PALETTE_ID",
     "STACKED_SPECTRUM_FIGURE_SIZE",
@@ -496,6 +609,7 @@ __all__ = [
     "TOL_BRIGHT_PALETTE_ID",
     "WIDE_FIGURE_SIZE",
     "anchored_log_decade_ticks",
+    "compact_linear_axis",
     "layout_policy_for_semantic",
     "layout_policy_payload",
     "render_options_copy",

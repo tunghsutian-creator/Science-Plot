@@ -219,6 +219,35 @@ def _span_is_visible(span: dict[str, Any], page_rect: fitz.Rect) -> bool:
     return True
 
 
+def _span_text_role(span: dict[str, Any], line_spans: list[dict[str, Any]]) -> str:
+    """Distinguish reduced mathematical scripts from ordinary final-size text."""
+
+    text = str(span.get("text") or "").strip()
+    size = float(span.get("size") or 0.0)
+    bbox = span.get("bbox")
+    if not text or size <= 0.0 or not re.fullmatch(r"[0-9A-Za-z+\-−–]+", text):
+        return "ordinary"
+    if not isinstance(bbox, tuple | list) or len(bbox) != 4:
+        return "ordinary"
+    x0, y0, x1, y1 = (float(value) for value in bbox)
+    for neighbour in line_spans:
+        neighbour_size = float(neighbour.get("size") or 0.0)
+        neighbour_bbox = neighbour.get("bbox")
+        if neighbour is span or neighbour_size < size / 0.8:
+            continue
+        if not isinstance(neighbour_bbox, tuple | list) or len(neighbour_bbox) != 4:
+            continue
+        other_x0, other_y0, other_x1, other_y1 = (float(value) for value in neighbour_bbox)
+        horizontal_gap = min(abs(x0 - other_x1), abs(other_x0 - x1))
+        if horizontal_gap <= max(1.0, neighbour_size * 0.25):
+            return "math_script"
+        horizontal_overlap = min(x1, other_x1) - max(x0, other_x0)
+        vertical_gap = min(abs(y0 - other_y1), abs(other_y0 - y1))
+        if horizontal_overlap >= -0.5 and vertical_gap <= max(1.0, neighbour_size * 0.25):
+            return "math_script"
+    return "ordinary"
+
+
 def _text_object_info(document: fitz.Document) -> dict[str, Any]:
     extracted_spans: list[dict[str, Any]] = []
     visible_spans: list[dict[str, Any]] = []
@@ -237,7 +266,8 @@ def _text_object_info(document: fitz.Document) -> dict[str, Any]:
             if block.get("type") != 0:
                 continue
             for line in block.get("lines", []):
-                for span in line.get("spans", []):
+                line_spans = [span for span in line.get("spans", []) if isinstance(span, dict)]
+                for span in line_spans:
                     if str(span.get("text") or "").strip():
                         span_record = {
                             "page": page_index + 1,
@@ -245,11 +275,22 @@ def _text_object_info(document: fitz.Document) -> dict[str, Any]:
                             "font": str(span.get("font") or ""),
                             "size": round(float(span.get("size") or 0.0), 3),
                             "bbox": [round(float(value), 3) for value in span.get("bbox", ())],
+                            "role": _span_text_role(span, line_spans),
                         }
                         extracted_spans.append(span_record)
                         if _span_is_visible(span, page.rect):
                             visible_spans.append(span_record)
     sizes = [float(span.get("size") or 0.0) for span in visible_spans if float(span.get("size") or 0.0) > 0]
+    ordinary_sizes = [
+        float(span.get("size") or 0.0)
+        for span in visible_spans
+        if span.get("role") != "math_script" and float(span.get("size") or 0.0) > 0
+    ]
+    math_script_sizes = [
+        float(span.get("size") or 0.0)
+        for span in visible_spans
+        if span.get("role") == "math_script" and float(span.get("size") or 0.0) > 0
+    ]
     fonts = sorted({str(span.get("font") or "") for span in visible_spans if str(span.get("font") or "")})
     return {
         "text_objects_preserved": bool(visible_spans),
@@ -259,6 +300,8 @@ def _text_object_info(document: fitz.Document) -> dict[str, Any]:
         "character_count": sum(len(str(span.get("text") or "")) for span in visible_spans),
         "minimum_size_pt": round(min(sizes), 3) if sizes else None,
         "maximum_size_pt": round(max(sizes), 3) if sizes else None,
+        "ordinary_minimum_size_pt": round(min(ordinary_sizes), 3) if ordinary_sizes else None,
+        "math_script_minimum_size_pt": round(min(math_script_sizes), 3) if math_script_sizes else None,
         "sizes_pt": sorted({round(size, 3) for size in sizes}),
         "fonts": fonts,
         "visible_spans": visible_spans,
@@ -1118,6 +1161,17 @@ def _series_accessibility_report(
     for item in series:
         key = (str(item.get("document")), str(item.get("graph_path")), int(item.get("page") or 0))
         groups.setdefault(key, []).append(item)
+    categorical_graph_keys = {
+        (
+            str(document.get("path")),
+            str(graph.get("graph_path")),
+            int(graph.get("page") or 0),
+        )
+        for document in documents
+        if isinstance(document, dict)
+        for graph in document.get("categorical_graphs", [])
+        if isinstance(graph, dict) and graph.get("spatial_identity_explicit") is True
+    }
     pair_reports: list[dict[str, Any]] = []
     for group_key, group in groups.items():
         for left, right in combinations(group, 2):
@@ -1129,9 +1183,11 @@ def _series_accessibility_report(
                 right.get("line_style") if right.get("plot_line_visible") else None,
                 right.get("marker") if right.get("marker_visible") else None,
             )
+            categorical_position_distinct = group_key in categorical_graph_keys
             non_color_distinct = bool(
                 (left.get("direct_labelled") and right.get("direct_labelled"))
                 or left_signature != right_signature
+                or categorical_position_distinct
             )
             left_rgb = left.get("color", {}).get("rgb") if isinstance(left.get("color"), dict) else None
             right_rgb = right.get("color", {}).get("rgb") if isinstance(right.get("color"), dict) else None
@@ -1154,6 +1210,16 @@ def _series_accessibility_report(
                         "label": right.get("label"),
                         "signature": right_signature,
                     },
+                    "categorical_position_distinct": categorical_position_distinct,
+                    "distinction_basis": (
+                        "categorical_axis_position_and_label"
+                        if categorical_position_distinct
+                        else "direct_labels"
+                        if left.get("direct_labelled") and right.get("direct_labelled")
+                        else "line_or_marker_signature"
+                        if left_signature != right_signature
+                        else "none"
+                    ),
                     "non_color_distinct": non_color_distinct,
                     "cvd_delta_e": simulations,
                     "grayscale_luminance_delta": luminance_delta,
@@ -1243,6 +1309,13 @@ def _series_accessibility_report(
         "coverage_complete": coverage_complete,
         "passed": coverage_complete and non_color_passed and cvd_passed and grayscale_passed and colormap_passed,
         "series": series,
+        "categorical_graphs": [
+            {**graph, "document": document.get("path")}
+            for document in documents
+            if isinstance(document, dict)
+            for graph in document.get("categorical_graphs", [])
+            if isinstance(graph, dict)
+        ],
         "color_scales": color_scale_reports,
         "pairs": pair_reports,
         "unresolved_color_paths": unresolved,
@@ -1410,23 +1483,39 @@ def _publication_qa(
         )
     )
     minimum_size = float(typography.get("minimum_text_size_pt") or 0.0)
+    minimum_math_script_size = float(typography.get("minimum_math_script_size_pt") or minimum_size)
     maximum_size = float(typography.get("maximum_text_size_pt") or float("inf"))
-    observed_minima = [pdf["text_objects"]["minimum_size_pt"] for pdf in pdfs]
+    observed_minima = [pdf["text_objects"]["ordinary_minimum_size_pt"] for pdf in pdfs]
+    observed_math_script_minima = [pdf["text_objects"]["math_script_minimum_size_pt"] for pdf in pdfs]
     observed_maxima = [pdf["text_objects"]["maximum_size_pt"] for pdf in pdfs]
     text_size_passed = all(
         minimum is not None
         and maximum is not None
         and float(minimum) >= minimum_size - 0.01
         and float(maximum) <= maximum_size + 0.01
-        for minimum, maximum in zip(observed_minima, observed_maxima, strict=True)
+        and (script_minimum is None or float(script_minimum) >= minimum_math_script_size - 0.01)
+        for minimum, script_minimum, maximum in zip(
+            observed_minima,
+            observed_math_script_minima,
+            observed_maxima,
+            strict=True,
+        )
     )
     checks.append(
         _check(
             "text_size_range",
             passed=text_size_passed,
-            actual={"minimum_pt": observed_minima, "maximum_pt": observed_maxima},
-            expected={"minimum_pt": minimum_size, "maximum_pt": maximum_size},
-            message="Actual PDF text sizes must stay within the final-size profile range.",
+            actual={
+                "ordinary_minimum_pt": observed_minima,
+                "math_script_minimum_pt": observed_math_script_minima,
+                "maximum_pt": observed_maxima,
+            },
+            expected={
+                "ordinary_minimum_pt": minimum_size,
+                "math_script_minimum_pt": minimum_math_script_size,
+                "maximum_pt": maximum_size,
+            },
+            message="Ordinary PDF text and reduced mathematical scripts must stay within final-size ranges.",
         )
     )
     checks.append(
@@ -1526,7 +1615,10 @@ def _publication_qa(
                 "non_color_series_distinction",
                 passed=bool(accessibility.get("non_color_passed")),
                 actual=accessibility.get("pairs", []),
-                expected="Every same-graph series pair has a distinct line/marker signature or direct labels.",
+                expected=(
+                    "Every same-graph series pair has a distinct line/marker signature, direct labels, "
+                    "or explicit labelled categorical positions."
+                ),
                 message="Series identity must not depend on colour alone.",
                 severity="error" if accessibility["available"] else "warning",
             ),

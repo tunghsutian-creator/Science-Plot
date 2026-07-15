@@ -51,6 +51,27 @@ def audit_documents(document_paths: list[Path]) -> dict[str, Any]:
             app.quit()
 
 
+def save_spec(document_path: Path, spec_path: Path) -> dict[str, Any]:
+    """Create a VSZ from an already-materialized SciPlot Veusz spec."""
+
+    from sciplot_core.studio import _save_veusz_document_from_spec
+
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    if not isinstance(spec, dict):
+        raise ValueError(f"Expected JSON object: {spec_path}")
+    resolved_document = document_path.expanduser().resolve()
+    _save_veusz_document_from_spec(
+        resolved_document,
+        spec,
+        spec_path=spec_path.expanduser().resolve(),
+    )
+    return {
+        "kind": "sciplot_veusz_save_spec",
+        "document": str(resolved_document),
+        "exists": resolved_document.exists(),
+    }
+
+
 def _split_formats(value: str) -> list[str]:
     formats = [item.strip().lower() for item in value.split(",") if item.strip()]
     return formats or ["pdf", "tiff_300"]
@@ -67,6 +88,9 @@ def _build_parser() -> argparse.ArgumentParser:
     export_document_parser.add_argument("--formats", default="pdf,tiff_300")
     audit_parser = subparsers.add_parser("audit-documents", help="Audit exact current Veusz documents.")
     audit_parser.add_argument("documents", nargs="+", type=Path)
+    save_spec_parser = subparsers.add_parser("save-spec", help="Generate a VSZ from a SciPlot Veusz spec.")
+    save_spec_parser.add_argument("document", type=Path)
+    save_spec_parser.add_argument("spec", type=Path)
     return parser
 
 
@@ -76,8 +100,10 @@ def main(argv: list[str] | None = None) -> int:
         payload = export_request(args.request, formats=_split_formats(args.formats))
     elif args.command == "export-document":
         payload = export_document(args.document, formats=_split_formats(args.formats))
-    else:
+    elif args.command == "audit-documents":
         payload = audit_documents(args.documents)
+    else:
+        payload = save_spec(args.document, args.spec)
     print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
     return 0
 
@@ -86,4 +112,4 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["audit_documents", "export_document", "export_request", "main"]
+__all__ = ["audit_documents", "export_document", "export_request", "main", "save_spec"]

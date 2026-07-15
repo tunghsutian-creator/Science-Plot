@@ -12,9 +12,11 @@ import pandas as pd
 from sciplot_core._bootstrap import ensure_legacy_core
 from sciplot_core._utils import json_safe, slug
 from sciplot_core.curate import curate_torque_project
+from sciplot_core.evidence import enrich_rule_evidence, write_evidence_status_dashboard
 from sciplot_core.materials_rules import SemanticRule, get_rule, iter_public_rules
 from sciplot_core.policy import DEFAULT_FIGURE_SIZE
 from sciplot_core.studio import export_studio_document, prepare_studio_document, publish_studio_export_run
+from sciplot_core.visual_review import write_final_size_visual_review
 from sciplot_core.workflow import run_request
 
 ensure_legacy_core()
@@ -25,7 +27,7 @@ DEFAULT_3DPA_FTIR_LABELS = ("PA6", "A20", "A40", "A80", "A20-2MIN", "A30-2MIN")
 DEFAULT_3DPA_TORQUE_DIRS = ("转矩/260607", "转矩/Z", "torque/260607", "torque/Z")
 DEFAULT_DENSE_SERIES_COUNT = 44
 DEFAULT_REPRESENTATIVE_COUNT = 6
-RULE_ACCEPTANCE_VERSION = 1
+RULE_ACCEPTANCE_VERSION = 2
 RULE_ACCEPTANCE_CHECK_IDS = (
     "semantic_rule_selected",
     "vsz_reopen_export",
@@ -63,6 +65,24 @@ def _public_fixture_index(repo_root: Path) -> dict[Path, dict[str, Any]]:
     return indexed
 
 
+def _real_world_fixture_index(repo_root: Path) -> dict[Path, dict[str, Any]]:
+    fixture_root = repo_root / "tests" / "fixtures" / "real_world"
+    manifest_path = fixture_root / "evidence_manifest.json"
+    if not manifest_path.exists():
+        return {}
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entries = payload.get("entries") if isinstance(payload.get("entries"), list) else []
+    indexed: dict[Path, dict[str, Any]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        fixture_value = entry.get("fixture_path")
+        if not isinstance(fixture_value, str) or not fixture_value.strip():
+            continue
+        indexed[(fixture_root / fixture_value).resolve()] = entry
+    return indexed
+
+
 def _rule_fixture_evidence(rule: SemanticRule, *, repo_root: Path) -> dict[str, Any]:
     fixture = (repo_root / str(rule.fixture_path or "")).resolve()
     public_entry = _public_fixture_index(repo_root).get(fixture)
@@ -74,6 +94,19 @@ def _rule_fixture_evidence(rule: SemanticRule, *, repo_root: Path) -> dict[str, 
             "doi": public_entry.get("doi"),
             "license": public_entry.get("license"),
             "description": "Reduced excerpt from a source-annotated public experimental dataset.",
+            "manifest_metadata": public_entry,
+        }
+    real_world_entry = _real_world_fixture_index(repo_root).get(fixture)
+    if real_world_entry is not None:
+        return {
+            "tier": str(real_world_entry.get("tier") or "user_authorized_real_excerpt"),
+            "real_data_evidence": bool(real_world_entry.get("real_data_evidence")),
+            "source_url": real_world_entry.get("source_url"),
+            "doi": real_world_entry.get("doi"),
+            "license": real_world_entry.get("license"),
+            "description": str(real_world_entry.get("description") or ""),
+            "source_data_status": real_world_entry.get("source_data_status"),
+            "manifest_metadata": real_world_entry,
         }
     fixture_parts = set(fixture.parts)
     if "real_world" in fixture_parts:
@@ -83,7 +116,7 @@ def _rule_fixture_evidence(rule: SemanticRule, *, repo_root: Path) -> dict[str, 
             "source_url": None,
             "doi": None,
             "license": None,
-            "description": "Reduced excerpt preserving a user-authorized real instrument export format.",
+            "description": "User-authorized real instrument export or reduced excerpt retained as regression evidence.",
         }
     if "archived_output_raw_data" in fixture_parts:
         return {
@@ -106,6 +139,12 @@ def _rule_fixture_evidence(rule: SemanticRule, *, repo_root: Path) -> dict[str, 
 
 def _rule_matrix_row(rule: SemanticRule, *, repo_root: Path) -> dict[str, Any]:
     fixture = (repo_root / str(rule.fixture_path or "")).resolve()
+    evidence = enrich_rule_evidence(
+        rule,
+        _rule_fixture_evidence(rule, repo_root=repo_root),
+        fixture=fixture,
+        repo_root=repo_root,
+    )
     return {
         "rule_id": rule.rule_id,
         "semantic_family": rule.semantic_family,
@@ -114,11 +153,12 @@ def _rule_matrix_row(rule: SemanticRule, *, repo_root: Path) -> dict[str, Any]:
         "rule_readiness": rule.fixture_status,
         "fixture_path": str(fixture),
         "fixture_exists": fixture.exists(),
-        "evidence": _rule_fixture_evidence(rule, repo_root=repo_root),
+        "evidence": evidence,
         "lifecycle_status": "not_run",
         "checks": {check_id: None for check_id in RULE_ACCEPTANCE_CHECK_IDS},
         "project_dir": None,
         "manifest": None,
+        "artifact_review": {"status": "not_run"},
         "limitations": [],
         "error": None,
     }
@@ -234,6 +274,7 @@ def _write_rule_acceptance_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "evidence_tier",
         "real_data_evidence",
         "lifecycle_status",
+        "physical_size_status",
         *RULE_ACCEPTANCE_CHECK_IDS,
         "fixture_path",
         "manifest",
@@ -251,6 +292,7 @@ def _write_rule_acceptance_csv(path: Path, rows: list[dict[str, Any]]) -> None:
                     "evidence_tier": row["evidence"]["tier"],
                     "real_data_evidence": row["evidence"]["real_data_evidence"],
                     "lifecycle_status": row["lifecycle_status"],
+                    "physical_size_status": row.get("artifact_review", {}).get("status", "not_run"),
                     **{check_id: row["checks"].get(check_id) for check_id in RULE_ACCEPTANCE_CHECK_IDS},
                     "fixture_path": row["fixture_path"],
                     "manifest": row["manifest"],
@@ -267,26 +309,27 @@ def _write_rule_acceptance_markdown(path: Path, payload: dict[str, Any]) -> None
         "Lifecycle status and real-data evidence are deliberately separate. A fixture-backed rule is not described "
         "as real-data accepted unless its evidence metadata supports that claim.",
         "",
-        "| Rule | Evidence | Real data | Lifecycle | Failed checks |",
-        "|---|---|---:|---|---|",
+        "| Rule | Evidence | Real data | Lifecycle | Final size | Failed checks |",
+        "|---|---|---:|---|---|---|",
     ]
     for row in payload["matrix"]:
         failed = [check_id for check_id, passed in row["checks"].items() if passed is False]
         lines.append(
             f"| `{row['rule_id']}` | `{row['evidence']['tier']}` | "
             f"{'yes' if row['evidence']['real_data_evidence'] else 'no'} | "
-            f"`{row['lifecycle_status']}` | {', '.join(failed) or '-'} |"
+            f"`{row['lifecycle_status']}` | `{row.get('artifact_review', {}).get('status', 'not_run')}` | "
+            f"{', '.join(failed) or '-'} |"
         )
     lines.extend(
         [
             "",
             "## Honest coverage boundary",
             "",
-            "- `public_source_excerpt`, `user_authorized_real_excerpt`, and `archived_project_data` count as "
-            "real-data evidence.",
+            "- Rows count as real-data evidence only when their explicit `real_data_evidence` field is true; "
+            "the tier records whether the source is public, user-authorized, digitized, derived, or limited.",
             "- `instrument_shaped_fixture` proves a parser/render contract only; it remains a real-data gap.",
-            "- The manual-edit probe proves exact VSZ preservation; exact-current visual-object inspection belongs "
-            "to the publication-QA suite.",
+            "- The manual-edit probe proves exact VSZ preservation. PDF/TIFF physical size is checked here, while "
+            "the generated contact sheets still require an explicit visual decision.",
             "- Native 183 mm Veusz composition remains outside this acceptance suite.",
             "",
         ]
@@ -327,18 +370,42 @@ def run_rule_acceptance_suite(
         )
     rows = [rows_by_id[rule.rule_id] for rule in ready_rules]
     selected_rows = [rows_by_id[rule_id] for rule_id in selected_ids]
-    selected_failed = [row["rule_id"] for row in selected_rows if row["lifecycle_status"] != "passed"]
+    generated_at = datetime.now(UTC).isoformat()
+    visual_review = write_final_size_visual_review(
+        output_dir=project_dir,
+        rows=rows,
+        generated_at=generated_at,
+    )
+    for row in rows:
+        row["artifact_review"] = visual_review["records_by_rule"][row["rule_id"]]
+    selected_lifecycle_failed = [
+        row["rule_id"] for row in selected_rows if row["lifecycle_status"] != "passed"
+    ]
+    selected_size_failed = [
+        row["rule_id"]
+        for row in selected_rows
+        if row.get("artifact_review", {}).get("status") == "failed"
+    ]
+    selected_failed = list(dict.fromkeys([*selected_lifecycle_failed, *selected_size_failed]))
     passed_count = sum(row["lifecycle_status"] == "passed" for row in rows)
+    physical_size_passed_count = sum(
+        row.get("artifact_review", {}).get("status") == "passed" for row in rows
+    )
     real_data_passed_count = sum(
         row["lifecycle_status"] == "passed" and row["evidence"]["real_data_evidence"] for row in rows
     )
     coverage_complete = passed_count == len(ready_rules)
+    physical_size_complete = physical_size_passed_count == len(ready_rules)
     selected_state = "ready" if not selected_failed else "needs_rule_repair"
-    state = "needs_rule_repair" if selected_failed else ("ready" if coverage_complete else "in_progress")
+    state = (
+        "needs_rule_repair"
+        if selected_failed
+        else ("ready" if coverage_complete and physical_size_complete else "in_progress")
+    )
     payload = {
         "kind": "sciplot_ready_rule_acceptance",
         "version": RULE_ACCEPTANCE_VERSION,
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": generated_at,
         "state": state,
         "selected_state": selected_state,
         "project_dir": str(project_dir),
@@ -348,16 +415,21 @@ def run_rule_acceptance_suite(
             "ready_rule_count": len(ready_rules),
             "lifecycle_passed_count": passed_count,
             "lifecycle_complete": coverage_complete,
+            "physical_size_passed_count": physical_size_passed_count,
+            "physical_size_complete": physical_size_complete,
             "real_data_lifecycle_passed_count": real_data_passed_count,
             "instrument_shaped_gap_count": sum(
                 not row["evidence"]["real_data_evidence"] for row in rows
             ),
         },
+        "visual_review": visual_review["summary"],
         "matrix": rows,
         "limitations": [
             "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
             "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and "
             "real-data breadth rather than journal compliance.",
+            "Final PDF/TIFF dimensions are machine-checked, but contact-sheet visual review remains an explicit "
+            "manual or agent decision.",
             "Native 183 mm Veusz composition remains deferred in favor of exact-size standalone PDF assembly.",
         ],
     }
@@ -369,11 +441,20 @@ def run_rule_acceptance_suite(
     matrix_path.write_text(json.dumps(json_safe(rows), indent=2, ensure_ascii=False), encoding="utf-8")
     _write_rule_acceptance_csv(csv_path, rows)
     _write_rule_acceptance_markdown(markdown_path, payload)
+    evidence_dashboard = write_evidence_status_dashboard(
+        output_dir=project_dir,
+        rows=rows,
+        repo_root=repo_root,
+        generated_at=generated_at,
+    )
+    payload["evidence_status"] = evidence_dashboard["summary"]
     payload["artifacts"] = {
         "summary": str(summary_path),
         "matrix_json": str(matrix_path),
         "matrix_csv": str(csv_path),
         "matrix_markdown": str(markdown_path),
+        **visual_review["artifacts"],
+        **evidence_dashboard["artifacts"],
     }
     summary_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
     return payload

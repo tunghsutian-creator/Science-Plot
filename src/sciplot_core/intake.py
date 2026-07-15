@@ -100,7 +100,12 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
         "label": "力学",
         "icon": "tensile",
         "experiments": (
-            {"id": "tensile_curve", "label": "拉伸曲线", "rule_id": "tensile_curve"},
+            {
+                "id": "tensile_curve",
+                "label": "拉伸曲线",
+                "rule_id": "tensile_curve",
+                "default_replicate_mode": "representative",
+            },
             {
                 "id": "tensile_strength",
                 "label": "拉伸强度",
@@ -1093,7 +1098,11 @@ def prepare_intake_session(
             rule_id = str(experiment.get("rule_id") or "") or None
         reason = str(semantic.get("reason") or "No specific material rule matched.")
         confidence = float(semantic.get("confidence") or 0.0)
-        files = _table_files(source)
+        files = (
+            _rheology_comparison_files(source)
+            if str(semantic.get("semantic_family") or "").startswith("rheology_")
+            else _table_files(source)
+        )
         groups = [_group_payload(path.stem, [path]) for path in files] if files else []
 
     warnings = _duplicate_source_warnings(groups)
@@ -1333,6 +1342,17 @@ def create_intake_project(
 
     rule_id = experiment.get("rule_id")
     recognition_payload = dict(recognition) if isinstance(recognition, dict) else {}
+    if isinstance(rule_id, str) and rule_id.strip():
+        rule_payload = get_rule(rule_id).to_payload()
+        recognition_payload = {
+            "semantic_family": rule_payload.get("semantic_family"),
+            "rule_id": rule_payload.get("rule_id"),
+            "fixture_status": rule_payload.get("fixture_status"),
+            "template": rule_payload.get("template"),
+            "render_options": dict(rule_payload.get("render_options") or {}),
+            "axis_plan": dict(rule_payload.get("axis_plan") or {}),
+            **recognition_payload,
+        }
     recognition_payload.setdefault("semantic_family", experiment_type_id)
     recognition_payload.setdefault("rule_id", rule_id)
     recognition_payload.setdefault("fixture_status", "ready" if rule_id else "unknown")
@@ -1343,16 +1363,35 @@ def create_intake_project(
     )
     selected_exports = _selected_exports(exports)
     template = _experiment_template(experiment)
+    if template is None:
+        semantic_template = recognition_payload.get("template")
+        if isinstance(semantic_template, str) and semantic_template.strip():
+            template = semantic_template.strip()
     contract_template = template
     if contract_template is None and isinstance(experiment.get("chart"), str):
         contract_template = str(experiment.get("chart") or "").strip() or None
-    selected_render_options = _selected_render_options(
+    semantic_render_options = (
+        dict(recognition_payload.get("render_options"))
+        if isinstance(recognition_payload.get("render_options"), dict)
+        else {}
+    )
+    selected_user_render_options = _selected_render_options(
         {
             **_experiment_render_options(experiment),
             **(render_options if isinstance(render_options, dict) else {}),
         },
         template=contract_template,
     )
+    selected_render_options = {
+        **semantic_render_options,
+        **selected_user_render_options,
+    }
+    axis_plan = recognition_payload.get("axis_plan") if isinstance(recognition_payload.get("axis_plan"), dict) else {}
+    for axis_name, option_name in (("x", "x_label_override"), ("y", "y_label_override")):
+        axis_payload = axis_plan.get(axis_name) if isinstance(axis_plan.get(axis_name), dict) else {}
+        display_label = axis_payload.get("display_label")
+        if isinstance(display_label, str) and display_label.strip():
+            selected_render_options.setdefault(option_name, display_label.strip())
     selected_render_options.setdefault("series_order", series_order)
     selected_column_confirmations = _selected_column_confirmations(column_confirmations)
     selected_replicate_mode = _selected_replicate_mode(

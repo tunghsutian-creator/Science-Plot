@@ -40,12 +40,132 @@ DEFAULT_EXPORT_FORMATS = DEFAULT_EXPORT_FORMATS_POLICY
 DEFAULT_RENDER_ENGINE = "veusz"
 
 
+def _material_rule_recommendation(semantics: dict[str, Any]) -> dict[str, Any]:
+    axis_plan = semantics.get("axis_plan") if isinstance(semantics.get("axis_plan"), dict) else {}
+    x_axis = axis_plan.get("x") if isinstance(axis_plan.get("x"), dict) else {}
+    y_axis = axis_plan.get("y") if isinstance(axis_plan.get("y"), dict) else {}
+    semantic_family = str(semantics.get("semantic_family") or "unknown")
+    template = str(semantics.get("template") or "curve")
+    confidence = float(semantics.get("confidence") or 0.0)
+    reason = str(semantics.get("reason") or f"Matched SciPlot material rule `{semantic_family}`.")
+    return {
+        "template_id": template,
+        "score": confidence,
+        "why_hard_match": [reason],
+        "why_soft_prior": ["SciPlot material semantics take precedence over generic table-shape inspection."],
+        "inferred_mapping": {
+            "x": x_axis.get("canonical_label") or "x",
+            "y": y_axis.get("canonical_label") or "y",
+        },
+        "optional_enhancements": [],
+        "preview_config_summary": {
+            "template": template,
+            **dict(semantics.get("render_options") or {}),
+            "experiment_family": semantics.get("recommended_recipe"),
+            "recommended_action": "add_as_plot_source",
+            "model": semantic_family,
+        },
+        "experiment_family": semantics.get("recommended_recipe"),
+        "role_hints": [
+            f"x:{x_axis.get('canonical_label') or 'x'}",
+            f"y:{y_axis.get('canonical_label') or 'y'}",
+        ],
+        "recommendation_reason": reason,
+        "recommended_action": "add_as_plot_source",
+        "default_render_overrides": dict(semantics.get("render_options") or {}),
+        "rank": 1,
+        "reason": reason,
+        "suitability_hint": "Authoritative SciPlot material-rule match.",
+        "score_gap_to_top": 0.0,
+        "canonical_id": template,
+        "role": "canonical",
+        "lifecycle_policy": "canonical",
+        "implementation_id": template,
+        "recommendation_source": "sciplot_material_rule",
+    }
+
+
+def _semantic_only_inspection_payload(
+    source: Path,
+    semantics: dict[str, Any],
+    *,
+    vendor_error: Exception,
+) -> dict[str, Any]:
+    recommendation = _material_rule_recommendation(semantics)
+    semantic_family = str(semantics.get("semantic_family") or "unknown")
+    confidence = float(semantics.get("confidence") or 0.0)
+    reason = str(semantics.get("reason") or f"Matched SciPlot material rule `{semantic_family}`.")
+    return {
+        "source": str(source),
+        "model": semantic_family,
+        "model_label": f"{semantic_family} ({semantics.get('rule_id') or semantic_family})",
+        "recommendations": [recommendation],
+        "canonical_templates": [recommendation],
+        "advanced_templates": [],
+        "recommendation_confidence": confidence,
+        "recommendation_summary": reason,
+        "warnings": [
+            "Generic table inspection could not read the raw instrument container; "
+            "SciPlot used its ready material rule."
+        ],
+        "vendor_inspection_error": str(vendor_error),
+        "sciplot_semantics": semantics,
+    }
+
+
 def inspect_payload(input_path: Path, *, sheet: str | int = 0) -> dict[str, Any]:
     with normalized_source(input_path) as source:
-        payload = json_safe(inspect_input_file(source, sheet))
-        payload["sciplot_semantics"] = json_safe(
-            classify_source(source, sheet=sheet, vendor_inspection=payload),
+        try:
+            payload = json_safe(inspect_input_file(source, sheet))
+        except (IsADirectoryError, TypeError, ValueError) as exc:
+            semantics = json_safe(classify_source(source, sheet=sheet))
+            if semantics.get("production_status") != "ready" or not semantics.get("rule_id"):
+                raise
+            return _semantic_only_inspection_payload(source, semantics, vendor_error=exc)
+        semantics = json_safe(classify_source(source, sheet=sheet, vendor_inspection=payload))
+        payload["sciplot_semantics"] = semantics
+        vendor_model = str(payload.get("model") or "")
+        semantic_family = str(semantics.get("semantic_family") or "")
+        rule_id = str(semantics.get("rule_id") or "")
+        override_warning: str | None = None
+        if vendor_model == "tensile_curve" and semantic_family in {
+            "rheology_creep",
+            "rheology_stress_relaxation",
+        }:
+            override_warning = (
+                "Generic inspection initially matched tensile-shaped γ/σ columns; "
+                "SciPlot overrode it with the rheology material rule."
+            )
+        elif vendor_model == "frequency_metric_sheet" and rule_id == "dma_frequency_sweep":
+            override_warning = (
+                "Generic frequency-sheet inspection labeled modulus as G′; SciPlot "
+                "overrode it with the tensile-DMA E′ material rule."
         )
+        if override_warning is not None:
+            vendor_recommendations = (
+                payload.get("recommendations") if isinstance(payload.get("recommendations"), list) else []
+            )
+            vendor_advanced = (
+                payload.get("advanced_templates") if isinstance(payload.get("advanced_templates"), list) else []
+            )
+            confidence = float(semantics.get("confidence") or 0.0)
+            reason = str(semantics.get("reason") or f"Matched SciPlot material rule `{semantic_family}`.")
+            recommendation = _material_rule_recommendation(semantics)
+            payload["vendor_inspection_model"] = vendor_model
+            payload["vendor_recommendations"] = vendor_recommendations
+            payload["vendor_advanced_templates"] = vendor_advanced
+            payload["model"] = semantic_family
+            payload["model_label"] = f"{semantic_family} ({semantics.get('rule_id') or semantic_family})"
+            payload["recommendations"] = [recommendation]
+            payload["canonical_templates"] = [recommendation]
+            payload["advanced_templates"] = []
+            payload["recommendation_confidence"] = confidence
+            payload["recommendation_summary"] = reason
+            warnings = payload.get("warnings") if isinstance(payload.get("warnings"), list) else []
+            payload["warnings"] = [
+                override_warning,
+                *warnings,
+            ]
     return payload
 
 

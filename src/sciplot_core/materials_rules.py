@@ -13,8 +13,12 @@ from sciplot_core._bootstrap import ensure_legacy_core
 from sciplot_core._constants import _DEFAULT_RENDER_OPTIONS
 from sciplot_core._utils import token as _utils_token
 from sciplot_core.policy import (
+    CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
+    CURVE_RENDER_OPTIONS,
+    DEFAULT_LOG_TICK_FORMAT,
     DEFAULT_PALETTE_PRESET,
     FTIR_SPECTRUM_RENDER_OPTIONS,
+    POINT_LINE_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_X_LABEL,
     TORQUE_CURVE_RENDER_OPTIONS,
@@ -209,6 +213,10 @@ def _rule(
     priority: int = 100,
     reason: str = "",
 ) -> SemanticRule:
+    default_options = {
+        "point_line": POINT_LINE_RENDER_OPTIONS,
+        "curve": CURVE_RENDER_OPTIONS,
+    }.get(template, _DEFAULT_RENDER_OPTIONS)
     return SemanticRule(
         rule_id=rule_id,
         semantic_family=semantic_family,
@@ -221,7 +229,7 @@ def _rule(
         column_aliases=column_aliases,
         vendor_models=vendor_models,
         experiment_families=experiment_families,
-        render_options=render_options or _DEFAULT_RENDER_OPTIONS,
+        render_options={**default_options, **(render_options or {})},
         analysis=analysis,
         available_metrics=available_metrics,
         fixture_path=fixture_path,
@@ -295,9 +303,10 @@ RULES: tuple[SemanticRule, ...] = (
             "Storage modulus, G′ (Pa)",
             aliases=("storage modulus", "G'", "G′", "complex modulus", "|G*|"),
             priority_labels=("G'", "Storage Modulus", "|G*|", "Complex Modulus", "G\""),
+            scale="log",
         ),
-        keywords=("temperaturesweep", "temperature", "温度"),
-        path_keywords=("/temp/", "temperature"),
+        keywords=("rheologytemperaturesweep", "temperaturesweep", "温度扫描"),
+        path_keywords=("/temp/", "rheology_temperature"),
         column_aliases=("temperature", "storage modulus", "complex modulus"),
         render_options=_DEFAULT_RENDER_OPTIONS,
         analysis=(
@@ -310,7 +319,7 @@ RULES: tuple[SemanticRule, ...] = (
             ),
         ),
         available_metrics=("tan_delta", "softening_temperature_candidate"),
-        fixture_path="tests/fixtures/materials_rules/rheology_temperature_sweep.csv",
+        fixture_path="tests/fixtures/real_world/rheology_temperature_sweep",
         fixture_status="ready",
         priority=10,
         reason="Rheology/DMA temperature sweep with modulus priority G′, |G*|, then G″.",
@@ -324,9 +333,8 @@ RULES: tuple[SemanticRule, ...] = (
         AxisSpec("Modulus", "Pa", "Modulus (Pa)", aliases=("modulus", "G'", "G\"")),
         keywords=("timesweep", "time sweep"),
         path_keywords=("rheology_time_sweep", "time_sweep"),
-        column_aliases=("time", "storage modulus", "modulus"),
         analysis=(AnalysisSpec("peak_modulus_time_s", "time at maximum modulus", ("time", "modulus"), "s"),),
-        fixture_path="tests/fixtures/materials_rules/rheology_time_sweep.csv",
+        fixture_path="tests/fixtures/real_world/rheology_time_sweep",
         fixture_status="ready",
         priority=28,
     ),
@@ -335,15 +343,14 @@ RULES: tuple[SemanticRule, ...] = (
         "rheology_strain_sweep",
         "rheology_dma",
         "point_line",
-        STRAIN_AXIS,
-        AxisSpec("Modulus", "Pa", "Modulus (Pa)", aliases=("modulus", "G'", "G\"")),
+        AxisSpec("Strain", "%", "Strain (%)", aliases=("strain", "shear strain", "γ"), scale="log"),
+        AxisSpec("Modulus", "Pa", "Modulus (Pa)", aliases=("modulus", "G'", "G\""), scale="log"),
         keywords=("strainsweep", "amplitude sweep"),
         path_keywords=("rheology_strain_sweep", "strain_sweep"),
-        column_aliases=("strain", "storage modulus", "modulus"),
         analysis=(
             AnalysisSpec("peak_modulus_strain_percent", "strain at maximum modulus", ("strain", "modulus"), "%"),
         ),
-        fixture_path="tests/fixtures/materials_rules/rheology_strain_sweep.csv",
+        fixture_path="tests/fixtures/real_world/rheology_strain_sweep",
         fixture_status="ready",
         priority=28,
     ),
@@ -352,15 +359,18 @@ RULES: tuple[SemanticRule, ...] = (
         "rheology_stress_sweep",
         "rheology_dma",
         "point_line",
-        AxisSpec("Stress", "Pa", "Stress (Pa)", aliases=("stress", "shear stress")),
-        AxisSpec("Modulus", "Pa", "Modulus (Pa)", aliases=("modulus", "G'", "G\"")),
+        AxisSpec("Stress", "Pa", "Stress (Pa)", aliases=("stress", "shear stress"), scale="log"),
+        AxisSpec("Modulus", "Pa", "Modulus (Pa)", aliases=("modulus", "G'", "G\""), scale="log"),
         keywords=("stresssweep", "stress sweep"),
         path_keywords=("rheology_stress_sweep", "stress_sweep"),
-        column_aliases=("stress", "storage modulus", "modulus"),
         analysis=(AnalysisSpec("peak_modulus_stress_Pa", "stress at maximum modulus", ("stress", "modulus"), "Pa"),),
-        fixture_path="tests/fixtures/materials_rules/rheology_stress_sweep.csv",
+        fixture_path="tests/fixtures/real_world/rheology_stress_sweep",
         fixture_status="ready",
         priority=28,
+        reason=(
+            "Shared amplitude-sweep parser using the instrument-reported measured shear-stress axis; "
+            "the evidence record does not claim a stress-controlled protocol."
+        ),
     ),
     _rule(
         "rheology_creep",
@@ -375,7 +385,7 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("final_compliance", "last finite J(t)", ("Creep compliance",), "1/Pa"),
             AnalysisSpec("recovery_ratio", "recovery segment if available", ("Creep compliance",), "fraction"),
         ),
-        fixture_path="tests/fixtures/semantic/creep_utf16.csv",
+        fixture_path="tests/fixtures/real_world/rheology_creep",
         fixture_status="ready",
         priority=30,
     ),
@@ -384,7 +394,7 @@ RULES: tuple[SemanticRule, ...] = (
         "rheology_stress_relaxation",
         "stress_relaxation",
         "curve",
-        TIME_AXIS,
+        AxisSpec("Time", "s", "Time (s)", aliases=("time", "时间"), scale="log"),
         AxisSpec(
             "Normalized stress",
             "sigma/sigma0",
@@ -397,7 +407,16 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("final_normalized_value", "last normalized stress/modulus", ("stress",), "sigma/sigma0"),
             AnalysisSpec("t50_s", "time to normalized value <= 0.5", ("stress", "time"), "s"),
         ),
-        fixture_path="tests/fixtures/semantic/stress_relaxation_utf16.csv",
+        render_options={
+            **CURVE_RENDER_OPTIONS,
+            "xscale": "log",
+            "x_tick_format": DEFAULT_LOG_TICK_FORMAT,
+            "minor_tick_count": 10,
+            "y_min": -0.05,
+            "y_max": 1.05,
+            "y_ticks": [0.0, 0.25, 0.5, 0.75, 1.0],
+        },
+        fixture_path="tests/fixtures/real_world/rheology_stress_relaxation",
         fixture_status="ready",
         priority=25,
     ),
@@ -406,8 +425,18 @@ RULES: tuple[SemanticRule, ...] = (
         "tensile_curve",
         "tensile",
         "curve",
-        STRAIN_AXIS,
-        STRESS_AXIS,
+        AxisSpec(
+            "Strain",
+            "%",
+            "Tensile Strain (%)",
+            aliases=("strain", "拉伸应变", "shear strain", "γ"),
+        ),
+        AxisSpec(
+            "Stress",
+            "MPa",
+            "Tensile Stress (MPa)",
+            aliases=("stress", "拉伸应力", "σ"),
+        ),
         keywords=("tensile", "拉伸", "结果表格2"),
         path_keywords=("tensile", ".is_tens_exports"),
         vendor_models=("tensile_curve",),
@@ -415,9 +444,14 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("modulus_MPa", "low-strain linear slope", ("strain", "stress"), "MPa"),
             AnalysisSpec("strength_MPa", "maximum stress", ("stress",), "MPa"),
             AnalysisSpec("strain_at_break_percent", "last strain", ("strain",), "%"),
-            AnalysisSpec("toughness_MPa_percent", "area under stress-strain curve", ("strain", "stress"), "MPa %"),
+            AnalysisSpec(
+                "toughness_MJ_m3",
+                "area under stress-strain curve using engineering strain as a fraction",
+                ("strain", "stress"),
+                "MJ/m3",
+            ),
         ),
-        fixture_path="tests/fixtures/semantic/Specimen.is_tens_Exports",
+        fixture_path="tests/fixtures/real_world/tensile_curve/E0 2MM.is_tens_Exports",
         fixture_status="ready",
         priority=40,
     ),
@@ -433,14 +467,14 @@ RULES: tuple[SemanticRule, ...] = (
         column_aliases=("screw torque", "转矩"),
         analysis=(
             AnalysisSpec(
-                "final_segment_mean_torque_Nm",
-                "mean torque in the processed final segment",
+                "selected_event_mean_torque_Nm_by_sample",
+                "mean torque over the recorded selected final event, reported separately for each sample",
                 ("Screw Torque",),
                 "N·m",
             ),
         ),
         render_options=dict(TORQUE_CURVE_RENDER_OPTIONS),
-        fixture_path="tests/fixtures/stress_relax/pa1010_zn10_zn15_torque_peak_aligned_1200pts.csv",
+        fixture_path="tests/fixtures/real_world/torque_curve/260607",
         fixture_status="ready",
         priority=42,
         reason="Torque rheometer export with Screw Torque over time.",
@@ -454,11 +488,10 @@ RULES: tuple[SemanticRule, ...] = (
         STRESS_AXIS,
         keywords=("compression", "compressive", "压缩"),
         path_keywords=("compression_curve", "compressive"),
-        column_aliases=("strain", "stress"),
         analysis=(
             AnalysisSpec("peak_compressive_stress_MPa", "maximum compressive stress", ("strain", "stress"), "MPa"),
         ),
-        fixture_path="tests/fixtures/materials_rules/compression_curve.csv",
+        fixture_path="tests/fixtures/real_world/compression_curve/conventional_pu_compression.csv",
         fixture_status="ready",
         priority=34,
     ),
@@ -471,9 +504,8 @@ RULES: tuple[SemanticRule, ...] = (
         STRESS_AXIS,
         keywords=("flexural", "bending", "弯曲"),
         path_keywords=("flexural_curve", "bending"),
-        column_aliases=("strain", "stress"),
         analysis=(AnalysisSpec("peak_flexural_stress_MPa", "maximum flexural stress", ("strain", "stress"), "MPa"),),
-        fixture_path="tests/fixtures/materials_rules/flexural_curve.csv",
+        fixture_path="tests/fixtures/real_world/flexural_curve/A_HA56_dry_flexural.csv",
         fixture_status="ready",
         priority=34,
     ),
@@ -483,16 +515,13 @@ RULES: tuple[SemanticRule, ...] = (
         "metrics_swelling",
         "box_strip",
         AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec("Impact strength", "kJ/m2", "Impact strength (kJ/m$^2$)", aliases=("impact strength", "冲击")),
+        AxisSpec("Impact strength", "kJ/m2", "Impact strength (kJ/m²)", aliases=("impact strength", "冲击")),
         keywords=("impact", "冲击"),
         render_options={
-            **_DEFAULT_RENDER_OPTIONS,
-            "legend_position": "none",
-            "series_label_mode": "none",
+            **CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
             "x_label_override": "Sample",
-            "y_label_override": "Impact strength (kJ/m^2)",
+            "y_label_override": "Impact strength (kJ/m²)",
             "summary_statistic": "median_iqr",
-            "raw_point_jitter_fraction": 0.12,
         },
         analysis=(
             AnalysisSpec("impact_group_n", "per-sample raw replicate count", ("impact",), "count"),
@@ -525,7 +554,7 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("tg_candidate_C", "largest heat-flow slope candidate", ("temperature", "heat flow"), "C"),
             AnalysisSpec("peak_temperature_C", "largest absolute heat-flow peak", ("temperature", "heat flow"), "C"),
         ),
-        fixture_path="tests/fixtures/materials_rules/dsc_curve.csv",
+        fixture_path="tests/fixtures/real_world/dsc_curve/udc_dsc_digitized.csv",
         fixture_status="ready",
         priority=8,
     ),
@@ -543,7 +572,7 @@ RULES: tuple[SemanticRule, ...] = (
             AnalysisSpec("t5_temperature_C", "temperature at 5% mass loss", ("temperature", "mass"), "C"),
             AnalysisSpec("t10_temperature_C", "temperature at 10% mass loss", ("temperature", "mass"), "C"),
         ),
-        fixture_path="tests/fixtures/polymer_corpus/thermal_dsc_tga/evoh_ega_excerpt.csv",
+        fixture_path="tests/fixtures/real_world/tga_curve/evoh1_tga_curve.csv",
         fixture_status="ready",
         priority=42,
     ),
@@ -558,7 +587,7 @@ RULES: tuple[SemanticRule, ...] = (
         path_keywords=("dtg_curve", "dtg"),
         column_aliases=("temperature", "dtg", "derivative"),
         analysis=(AnalysisSpec("dtg_peak_temperature_C", "maximum derivative loss", ("temperature", "dtg"), "C"),),
-        fixture_path="tests/fixtures/materials_rules/dtg_curve.csv",
+        fixture_path="tests/fixtures/real_world/dtg_curve/evoh1_dtg_curve.csv",
         fixture_status="ready",
         priority=32,
     ),
@@ -569,7 +598,7 @@ RULES: tuple[SemanticRule, ...] = (
         "point_line",
         RHEOLOGY_X_TEMPERATURE,
         AxisSpec("Storage modulus", "Pa", "Storage modulus, E′ (Pa)", aliases=("E'", "storage modulus", "tan delta")),
-        keywords=("dma", "tanδ", "tandelta"),
+        keywords=("dma", "storagemodulusmpa", "tanδ", "tandelta"),
         path_keywords=("dma_temperature_sweep", "dma_temperature"),
         column_aliases=("temperature", "storage modulus", "loss factor", "tan delta"),
         analysis=(
@@ -580,7 +609,11 @@ RULES: tuple[SemanticRule, ...] = (
                 "C",
             ),
         ),
-        fixture_path="tests/fixtures/materials_rules/dma_temperature_sweep.csv",
+        render_options={**_DEFAULT_RENDER_OPTIONS, "y_min": 0.0},
+        fixture_path=(
+            "tests/fixtures/real_world/dma_temperature_sweep/"
+            "Fig2b_storage_modulus_temperature.csv"
+        ),
         fixture_status="ready",
         priority=30,
     ),
@@ -603,7 +636,7 @@ RULES: tuple[SemanticRule, ...] = (
                 "cm^-1",
             ),
         ),
-        fixture_path="tests/fixtures/polymer_corpus/spectroscopy_ftir_uvvis/ftir_plastics_pet_excerpt.csv",
+        fixture_path="tests/fixtures/real_world/ftir_headerless/A40-20.CSV",
         fixture_status="ready",
         priority=50,
     ),
@@ -625,7 +658,7 @@ RULES: tuple[SemanticRule, ...] = (
                 "nm",
             ),
         ),
-        fixture_path="tests/fixtures/materials_rules/uvvis_spectrum.csv",
+        fixture_path="tests/fixtures/real_world/uvvis_spectrum/pda_uvvis_spectra.csv",
         fixture_status="ready",
         priority=36,
     ),
@@ -639,7 +672,7 @@ RULES: tuple[SemanticRule, ...] = (
         keywords=("2theta", "xrd"),
         column_aliases=("2theta", "intensity"),
         analysis=(AnalysisSpec("main_peak_2theta", "maximum intensity position", ("2theta", "intensity"), "degree"),),
-        fixture_path="tests/fixtures/materials_rules/xrd_pattern.csv",
+        fixture_path="tests/fixtures/real_world/xrd_pattern/pda_xrd_patterns.csv",
         fixture_status="ready",
         priority=46,
     ),
@@ -719,7 +752,10 @@ RULES: tuple[SemanticRule, ...] = (
                 "Pa",
             ),
         ),
-        fixture_path="tests/fixtures/materials_rules/dma_frequency_sweep.csv",
+        fixture_path=(
+            "tests/fixtures/real_world/dma_frequency_sweep/"
+            "benchmark_vitrimer_20C_digitized.csv"
+        ),
         fixture_status="ready",
         priority=30,
         reason="DMA frequency sweep (isothermal) with E′, E″, tanδ vs angular frequency.",
@@ -804,12 +840,16 @@ def match_rule(
         if experiment_family and experiment_family in rule.experiment_families:
             score += 40
         score += 35 * sum(1 for item in rule.keywords if _matches_rule_token(item, evidence, compact_evidence))
-        score += 45 * sum(1 for item in rule.path_keywords if item.casefold() in evidence)
+        # A rule-named source path or experiment folder is stronger evidence
+        # than a generic vendor shape classifier (for example, every
+        # strain/stress table can otherwise look like tensile data).
+        score += 120 * sum(1 for item in rule.path_keywords if item.casefold() in evidence)
         score += 30 * sum(
             1 for item in rule.column_aliases if _matches_rule_token(item, evidence, compact_evidence)
         )
-        if score:
-            candidates.append((score - rule.priority, rule))
+        adjusted_score = score - rule.priority
+        if adjusted_score > 0:
+            candidates.append((adjusted_score, rule))
     if not candidates:
         return None
     return max(candidates, key=lambda item: item[0])[1]
@@ -912,17 +952,140 @@ def _metric(
     }
 
 
-def _read_paired_curve_table(path: Path) -> list[pd.DataFrame]:
+def _read_labeled_paired_curve_table(
+    path: Path,
+    *,
+    y_tokens: tuple[str, ...] = (),
+) -> list[tuple[str, pd.DataFrame]]:
     raw = pd.read_csv(path, header=None)
     if raw.shape[0] < 4:
         return []
-    frames: list[pd.DataFrame] = []
+    series: list[tuple[str, pd.DataFrame]] = []
     for col in range(0, raw.shape[1] - 1, 2):
+        y_header = normalize_token(raw.iat[0, col + 1])
+        if y_tokens and not any(normalize_token(token) in y_header for token in y_tokens):
+            continue
         data = raw.iloc[3:, [col, col + 1]].apply(pd.to_numeric, errors="coerce").dropna()
         if not data.empty:
             data.columns = ["x", "y"]
-            frames.append(data.reset_index(drop=True))
-    return frames
+            sample = str(raw.iat[2, col]).strip()
+            if not sample or sample.casefold() == "nan":
+                sample = f"series_{col // 2 + 1}"
+            series.append((sample, data.reset_index(drop=True)))
+    return series
+
+
+def _read_paired_curve_table(path: Path) -> list[pd.DataFrame]:
+    return [frame for _sample, frame in _read_labeled_paired_curve_table(path)]
+
+
+def tensile_curve_metric_values(
+    points: list[tuple[float, float]] | tuple[tuple[float, float], ...],
+    *,
+    x_unit: str = "%",
+    reported: dict[str, float] | None = None,
+) -> dict[str, float | str]:
+    """Return publication-safe tensile metrics from one engineering curve.
+
+    Instrument-reported strength, break strain, and the programmed low-strain
+    modulus take precedence when present.  Derived modulus values convert
+    percent strain to a unitless fraction, and toughness is reported as
+    MJ/m3 rather than the intermediate MPa-percent integral.
+    """
+
+    data = pd.DataFrame(points, columns=["strain", "stress"])
+    data = data.replace([np.inf, -np.inf], np.nan).dropna()
+    if data.empty:
+        raise ValueError("A tensile metric calculation needs at least one finite stress-strain point.")
+    data = data.sort_values("strain", kind="stable").drop_duplicates(subset="strain", keep="last")
+    reported = reported or {}
+
+    reported_strength = reported.get("strength_MPa")
+    strength = (
+        float(reported_strength)
+        if reported_strength is not None and np.isfinite(float(reported_strength))
+        else float(data["stress"].max())
+    )
+    strength_source = "instrument_report" if reported_strength is not None else "curve_maximum"
+
+    reported_break = reported.get("strain_at_break_percent")
+    strain_at_break = (
+        float(reported_break)
+        if reported_break is not None and np.isfinite(float(reported_break))
+        else float(data["strain"].iloc[-1])
+    )
+    break_source = "instrument_report" if reported_break is not None else "curve_terminal_point"
+
+    unit_token = str(x_unit or "%").strip().casefold()
+    strain_is_percent = "%" in unit_token or "percent" in unit_token
+    strain_fraction_factor = 0.01 if strain_is_percent else 1.0
+    fit_low, fit_high = ((0.05, 0.25) if strain_is_percent else (0.0005, 0.0025))
+    fit = data[(data["strain"] >= fit_low) & (data["strain"] <= fit_high)]
+    if len(fit) < 2 or fit["strain"].nunique() < 2:
+        fit = data[(data["strain"] >= 0.0) & (data["strain"] <= fit_high)]
+    if len(fit) < 2 or fit["strain"].nunique() < 2:
+        fit = data.iloc[: min(25, len(data))]
+    derived_modulus = float("nan")
+    if len(fit) >= 2 and fit["strain"].nunique() >= 2:
+        try:
+            slope = float(
+                np.polyfit(
+                    fit["strain"].to_numpy(dtype=float),
+                    fit["stress"].to_numpy(dtype=float),
+                    deg=1,
+                )[0]
+            )
+            derived_modulus = slope / strain_fraction_factor
+        except (ValueError, np.linalg.LinAlgError):
+            derived_modulus = float("nan")
+    reported_modulus = reported.get("modulus_MPa")
+    modulus = (
+        float(reported_modulus)
+        if reported_modulus is not None and np.isfinite(float(reported_modulus))
+        else derived_modulus
+    )
+    modulus_source = "instrument_report_0.05_to_0.25_percent" if reported_modulus is not None else "curve_fit"
+
+    clipped = data[data["strain"] <= strain_at_break].copy()
+    after_break = data[data["strain"] > strain_at_break]
+    if not clipped.empty and not after_break.empty and float(clipped["strain"].iloc[-1]) < strain_at_break:
+        left = clipped.iloc[-1]
+        right = after_break.iloc[0]
+        x0, y0 = float(left["strain"]), float(left["stress"])
+        x1, y1 = float(right["strain"]), float(right["stress"])
+        if x1 > x0:
+            y_break = y0 + (strain_at_break - x0) * (y1 - y0) / (x1 - x0)
+            clipped = pd.concat(
+                [clipped, pd.DataFrame([{"strain": strain_at_break, "stress": y_break}])],
+                ignore_index=True,
+            )
+    if len(clipped) >= 2:
+        toughness = float(
+            np.trapezoid(
+                clipped["stress"].to_numpy(dtype=float),
+                clipped["strain"].to_numpy(dtype=float) * strain_fraction_factor,
+            )
+        )
+    else:
+        toughness = float("nan")
+
+    if reported_break is not None and float(data["strain"].iloc[-1]) >= strain_at_break:
+        toughness_source = "curve_integral_to_reported_break"
+    elif reported_break is not None:
+        toughness_source = "curve_integral_over_available_excerpt_before_reported_break"
+    else:
+        toughness_source = "curve_integral"
+
+    return {
+        "strength_MPa": strength,
+        "strength_source": strength_source,
+        "strain_at_break_percent": strain_at_break,
+        "strain_at_break_source": break_source,
+        "modulus_MPa": modulus,
+        "modulus_source": modulus_source,
+        "toughness_MJ_m3": toughness,
+        "toughness_source": toughness_source,
+    }
 
 
 def _interpolated_threshold_time(data: pd.DataFrame, threshold: float = 0.5) -> float | None:
@@ -968,50 +1131,125 @@ def _creep_metrics(processed_source: Path) -> list[dict[str, Any]]:
     ]
 
 
+def _tensile_summary_metrics(summary_source: Path) -> list[dict[str, Any]]:
+    summary = pd.read_csv(summary_source)
+    required = {
+        "sample",
+        "strength_MPa",
+        "strain_at_break_percent",
+        "modulus_MPa",
+        "toughness_MJ_m3",
+    }
+    if not required <= set(summary.columns):
+        return []
+    samples = [str(value) for value in summary["sample"].dropna().drop_duplicates().tolist()]
+    rows: list[dict[str, Any]] = []
+    metric_contract = (
+        ("strength_MPa", "MPa", "strength_iqr_MPa"),
+        ("strain_at_break_percent", "%", "strain_at_break_iqr_percent"),
+        ("modulus_MPa", "MPa", "modulus_iqr_MPa"),
+        ("toughness_MJ_m3", "MJ/m3", "toughness_iqr_MJ_m3"),
+    )
+    for sample in samples:
+        group = summary[summary["sample"].astype(str) == sample]
+        suffix = "" if len(samples) == 1 else f"[{sample}]"
+        rows.append(_metric(f"replicate_count{suffix}", int(len(group)), "count"))
+        for metric_name, unit, iqr_name in metric_contract:
+            values = pd.to_numeric(group[metric_name], errors="coerce").dropna().to_numpy(dtype=float)
+            if values.size == 0:
+                rows.append(_metric(f"{metric_name}{suffix}", None, unit, "skipped", "No finite replicate metric."))
+                rows.append(_metric(f"{iqr_name}{suffix}", None, unit, "skipped", "No finite replicate metric."))
+                continue
+            reason = f"Median of {values.size} retained raw specimen value(s)."
+            rows.append(_metric(f"{metric_name}{suffix}", float(np.median(values)), unit, reason=reason))
+            if values.size >= 2:
+                iqr = float(np.quantile(values, 0.75) - np.quantile(values, 0.25))
+                rows.append(_metric(f"{iqr_name}{suffix}", iqr, unit))
+            else:
+                rows.append(
+                    _metric(
+                        f"{iqr_name}{suffix}",
+                        None,
+                        unit,
+                        "skipped",
+                        "At least two specimens are required for an IQR.",
+                    )
+                )
+    return rows
+
+
 def _tensile_metrics(processed_source: Path) -> list[dict[str, Any]]:
+    summary_source = processed_source.with_name(f"{processed_source.stem}_summary.csv")
+    if summary_source.exists():
+        summary_rows = _tensile_summary_metrics(summary_source)
+        if summary_rows:
+            return summary_rows
     frames = _read_paired_curve_table(processed_source)
     rows: list[dict[str, Any]] = []
     if not frames:
         return [_metric("strength_MPa", None, "MPa", "skipped", "No tensile curve found.")]
     data = frames[0].replace([np.inf, -np.inf], np.nan).dropna()
-    strength = float(data["y"].max())
-    strain_at_break = float(data["x"].iloc[-1])
-    fit = data.drop_duplicates(subset="x").iloc[: min(8, len(data))]
-    if len(fit) >= 2 and fit["x"].nunique() >= 2:
-        try:
-            slope = float(np.polyfit(fit["x"].to_numpy(dtype=float), fit["y"].to_numpy(dtype=float), deg=1)[0])
-        except (ValueError, np.linalg.LinAlgError):
-            slope = float("nan")
-    else:
-        slope = float("nan")
-    toughness = float(np.trapezoid(data["y"].to_numpy(dtype=float), data["x"].to_numpy(dtype=float)))
-    modulus_status = "ok" if np.isfinite(slope) else "skipped"
+    values = tensile_curve_metric_values(
+        list(zip(data["x"].astype(float), data["y"].astype(float), strict=True)),
+        x_unit="%",
+    )
+    modulus = float(values["modulus_MPa"])
+    toughness = float(values["toughness_MJ_m3"])
+    modulus_status = "ok" if np.isfinite(modulus) else "skipped"
     modulus_reason = "" if modulus_status == "ok" else "Low-strain fit did not have enough distinct finite points."
     rows.extend(
         [
-            _metric("strength_MPa", strength, "MPa"),
-            _metric("strain_at_break_percent", strain_at_break, "%"),
+            _metric("strength_MPa", float(values["strength_MPa"]), "MPa"),
+            _metric("strain_at_break_percent", float(values["strain_at_break_percent"]), "%"),
             _metric(
                 "modulus_MPa",
-                slope if modulus_status == "ok" else None,
+                modulus if modulus_status == "ok" else None,
                 "MPa",
                 modulus_status,
                 modulus_reason,
             ),
-            _metric("toughness_MPa_percent", toughness, "MPa %"),
+            _metric(
+                "toughness_MJ_m3",
+                toughness if np.isfinite(toughness) else None,
+                "MJ/m3",
+                "ok" if np.isfinite(toughness) else "skipped",
+                "" if np.isfinite(toughness) else "Curve did not contain two points before break.",
+            ),
         ]
     )
     return rows
 
 
 def _torque_metrics(processed_source: Path) -> list[dict[str, Any]]:
-    frames = _read_paired_curve_table(processed_source)
-    values: list[float] = []
-    for frame in frames:
-        values.extend(frame["y"].dropna().astype(float).tolist())
-    if not values:
-        return [_metric("final_segment_mean_torque_Nm", None, "N·m", "skipped", "No torque segment found.")]
-    return [_metric("final_segment_mean_torque_Nm", float(np.mean(values)), "N·m")]
+    raw = pd.read_csv(processed_source, header=None)
+    rows: list[dict[str, Any]] = []
+    if raw.shape[0] < 4:
+        return [
+            _metric(
+                "selected_event_mean_torque_Nm_by_sample",
+                None,
+                "N·m",
+                "skipped",
+                "No selected torque event found.",
+            )
+        ]
+    for col in range(0, raw.shape[1] - 1, 2):
+        sample = str(raw.iat[2, col]).strip() or f"series_{col // 2 + 1}"
+        values = pd.to_numeric(raw.iloc[3:, col + 1], errors="coerce").dropna()
+        metric_name = f"selected_event_mean_torque_Nm[{sample}]"
+        if values.empty:
+            rows.append(_metric(metric_name, None, "N·m", "skipped", "No finite torque values found."))
+        else:
+            rows.append(_metric(metric_name, float(values.mean()), "N·m"))
+    return rows or [
+        _metric(
+            "selected_event_mean_torque_Nm_by_sample",
+            None,
+            "N·m",
+            "skipped",
+            "No selected torque event found.",
+        )
+    ]
 
 
 def _raw_table(path: Path) -> pd.DataFrame:
@@ -1063,6 +1301,94 @@ def _generic_peak_metrics(source_path: Path, *, metric_name: str, x_unit: str) -
     if best is None:
         return [_metric(metric_name, None, x_unit, "skipped", "No numeric peak trace found.")]
     return [_metric(metric_name, best[0], x_unit)]
+
+
+def _terminal_y_metrics(
+    source_path: Path,
+    *,
+    metric_name: str,
+    y_unit: str,
+    y_tokens: tuple[str, ...] = (),
+) -> list[dict[str, Any]]:
+    series = _read_labeled_paired_curve_table(source_path, y_tokens=y_tokens)
+    rows: list[dict[str, Any]] = []
+    for sample, data in series:
+        finite = data.replace([np.inf, -np.inf], np.nan).dropna().sort_values("x", kind="stable")
+        suffix = "" if len(series) == 1 else f"[{sample}]"
+        if finite.empty:
+            rows.append(_metric(f"{metric_name}{suffix}", None, y_unit, "skipped", "No finite curve found."))
+            continue
+        rows.append(_metric(f"{metric_name}{suffix}", float(finite["y"].iloc[-1]), y_unit))
+    return rows or [_metric(metric_name, None, y_unit, "skipped", "No finite curve found.")]
+
+
+def _peak_y_metrics(
+    source_path: Path,
+    *,
+    metric_name: str,
+    y_unit: str,
+    magnitude: bool = False,
+    y_tokens: tuple[str, ...] = (),
+) -> list[dict[str, Any]]:
+    series = _read_labeled_paired_curve_table(source_path, y_tokens=y_tokens)
+    rows: list[dict[str, Any]] = []
+    for sample, data in series:
+        finite = data.replace([np.inf, -np.inf], np.nan).dropna()
+        suffix = "" if len(series) == 1 else f"[{sample}]"
+        if finite.empty:
+            rows.append(_metric(f"{metric_name}{suffix}", None, y_unit, "skipped", "No finite curve found."))
+            continue
+        value = float(finite["y"].abs().max() if magnitude else finite["y"].max())
+        rows.append(_metric(f"{metric_name}{suffix}", value, y_unit))
+    return rows or [_metric(metric_name, None, y_unit, "skipped", "No finite curve found.")]
+
+
+def _dsc_metrics(source_path: Path) -> list[dict[str, Any]]:
+    series = _read_labeled_paired_curve_table(source_path, y_tokens=("heat flow", "dsc"))
+    rows: list[dict[str, Any]] = []
+    for sample, data in series:
+        finite = (
+            data.replace([np.inf, -np.inf], np.nan)
+            .dropna()
+            .sort_values("x", kind="stable")
+            .drop_duplicates(subset="x", keep="last")
+        )
+        suffix = "" if len(series) == 1 else f"[{sample}]"
+        if len(finite) < 3:
+            reason = "At least three finite temperature/heat-flow points are required."
+            rows.append(_metric(f"tg_candidate_C{suffix}", None, "C", "skipped", reason))
+            rows.append(_metric(f"peak_temperature_C{suffix}", None, "C", "skipped", reason))
+            continue
+        temperatures = finite["x"].to_numpy(dtype=float)
+        heat_flow = finite["y"].to_numpy(dtype=float)
+        slope = np.gradient(heat_flow, temperatures)
+        slope_index = int(np.nanargmax(np.abs(slope)))
+        peak_index = int(np.nanargmax(np.abs(heat_flow)))
+        rows.append(
+            _metric(
+                f"tg_candidate_C{suffix}",
+                float(temperatures[slope_index]),
+                "C",
+                reason=(
+                    "Largest absolute heat-flow slope; this is an algorithmic candidate, "
+                    "not a confirmed glass-transition assignment."
+                ),
+            )
+        )
+        rows.append(
+            _metric(
+                f"peak_temperature_C{suffix}",
+                float(temperatures[peak_index]),
+                "C",
+                reason="Temperature of the largest absolute recorded heat-flow excursion.",
+            )
+        )
+    if rows:
+        return rows
+    return [
+        _metric("tg_candidate_C", None, "C", "skipped", "No finite DSC curve found."),
+        _metric("peak_temperature_C", None, "C", "skipped", "No finite DSC curve found."),
+    ]
 
 
 def _swelling_metrics(source_path: Path) -> list[dict[str, Any]]:
@@ -1147,6 +1473,7 @@ def compute_analysis_metrics(
 ) -> list[dict[str, Any]]:
     rule_id = str(semantic.get("rule_id") or "")
     processed = processed_source if processed_source and processed_source.exists() else None
+    canonical_source = processed or source_path
     if rule_id == "rheology_stress_relaxation" and processed is not None:
         rows = _stress_relaxation_metrics(processed)
     elif rule_id == "rheology_creep" and processed is not None:
@@ -1156,19 +1483,40 @@ def compute_analysis_metrics(
     elif rule_id == "torque_curve" and processed is not None:
         rows = _torque_metrics(processed)
     elif rule_id == "tga_curve":
-        rows = _tga_metrics(source_path)
+        rows = _tga_metrics(canonical_source)
+    elif rule_id == "dsc_curve":
+        rows = _dsc_metrics(canonical_source)
+    elif rule_id == "dma_frequency_sweep":
+        rows = _terminal_y_metrics(
+            canonical_source,
+            metric_name="terminal_storage_modulus_frequency",
+            y_unit=semantic["axis_plan"]["y"]["canonical_unit"],
+            y_tokens=("storage modulus", "E′", "E'"),
+        )
+    elif rule_id == "compression_curve":
+        rows = _peak_y_metrics(
+            canonical_source,
+            metric_name="peak_compressive_stress_MPa",
+            y_unit=semantic["axis_plan"]["y"]["canonical_unit"],
+            magnitude=True,
+            y_tokens=("stress",),
+        )
+    elif rule_id == "flexural_curve":
+        rows = _peak_y_metrics(
+            canonical_source,
+            metric_name="peak_flexural_stress_MPa",
+            y_unit=semantic["axis_plan"]["y"]["canonical_unit"],
+            y_tokens=("stress",),
+        )
     elif rule_id in {
         "rheology_time_sweep",
         "rheology_strain_sweep",
         "rheology_stress_sweep",
         "dma_temperature_sweep",
-        "dma_frequency_sweep",
-        "compression_curve",
-        "flexural_curve",
         "dtg_curve",
     }:
         rows = _generic_peak_metrics(
-            source_path,
+            canonical_source,
             metric_name=_analysis_metric_name(semantic, "peak_response_position"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
         )
@@ -1178,13 +1526,13 @@ def compute_analysis_metrics(
         rows = _impact_metrics(processed)
     elif rule_id in {"ftir_spectrum", "uvvis_spectrum"}:
         rows = _generic_peak_metrics(
-            source_path,
+            canonical_source,
             metric_name=_analysis_metric_name(semantic, "strongest_peak_position"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
         )
     elif rule_id in {"xrd_pattern", "saxs_profile"}:
         rows = _generic_peak_metrics(
-            source_path,
+            canonical_source,
             metric_name=_analysis_metric_name(semantic, "main_scattering_peak_q"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
         )
@@ -1336,4 +1684,5 @@ __all__ = [
     "normalize_token",
     "semantic_payload_from_rule",
     "show_rule_payload",
+    "tensile_curve_metric_values",
 ]

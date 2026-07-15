@@ -301,6 +301,14 @@ def curate_torque_project(
     )
     plot_request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
 
+    # The intake project is initially generated before the event selections exist.
+    # Regenerate only the still-generated Studio document now that the request
+    # points at the curation file, so document.vsz and the eventual run consume
+    # the same authoritative event windows.
+    from sciplot_core.studio import prepare_studio_document
+
+    studio_payload = prepare_studio_document(project_dir, regenerate_generated=True)
+
     manifest_path = project_dir / "intake_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["kind"] = "sciplot_torque_curation_project"
@@ -319,6 +327,12 @@ def curate_torque_project(
         "plot_data": str(plot_data_path),
         "review_html": str(review_path),
     }
+    if isinstance(studio_payload.get("studio"), dict):
+        manifest["studio"] = studio_payload["studio"]
+    prepared_request = json.loads(plot_request_path.read_text(encoding="utf-8"))
+    for key in ("study_model", "publication_intent", "transform_ledger"):
+        if isinstance(prepared_request.get(key), dict):
+            manifest[key] = prepared_request[key]
     manifest_path.write_text(json.dumps(json_safe(manifest), indent=2, ensure_ascii=False), encoding="utf-8")
     project_file.write_text(json.dumps(json_safe(manifest), indent=2, ensure_ascii=False), encoding="utf-8")
     zip_path = refresh_intake_project_zip(project_dir)

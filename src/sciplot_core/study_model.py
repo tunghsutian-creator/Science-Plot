@@ -42,6 +42,23 @@ _DEFAULT_FIGURE_QUEUE = (
     },
 )
 
+_TENSILE_DESCRIPTIVE_STATISTICS = {
+    "kind": "sciplot_statistics_method_contract",
+    "version": 1,
+    "status": "confirmed",
+    "auto_inference_allowed": False,
+    "significance_required": False,
+    "method_id": "descriptive_median_iqr_raw_points",
+    "method_version": "1",
+    "source": "tensile_curve rule",
+    "n_definition": "one independently tested specimen",
+    "center": "median",
+    "spread_or_interval": "interquartile range",
+    "test": "none",
+    "multiple_comparisons": "none",
+    "parameters": {"raw_points_visible": True},
+}
+
 _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
     "rheology_frequency_sweep": {
         "default_replicate_mode": "mean",
@@ -128,7 +145,7 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
         ),
     },
     "tensile_curve": {
-        "default_replicate_mode": "individual",
+        "default_replicate_mode": "representative",
         "figure_queue": (
             {
                 "id": "stress_vs_strain",
@@ -139,12 +156,40 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
                 "default_template": "curve",
             },
             {
-                "id": "tensile_summary_statistics",
-                "title": "Tensile summary statistics",
-                "metric": "tensile_summary",
+                "id": "tensile_strength_by_sample",
+                "title": "Tensile strength by sample",
+                "metric": "strength_MPa",
                 "x_metric": "sample",
-                "y_metric": "strength_modulus_break",
-                "default_template": "box",
+                "y_metric": "strength_MPa",
+                "default_template": "box_strip",
+                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
+            },
+            {
+                "id": "strain_at_break_by_sample",
+                "title": "Strain at break by sample",
+                "metric": "strain_at_break_percent",
+                "x_metric": "sample",
+                "y_metric": "strain_at_break_percent",
+                "default_template": "box_strip",
+                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
+            },
+            {
+                "id": "tensile_modulus_by_sample",
+                "title": "Tensile modulus by sample",
+                "metric": "modulus_MPa",
+                "x_metric": "sample",
+                "y_metric": "modulus_MPa",
+                "default_template": "box_strip",
+                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
+            },
+            {
+                "id": "toughness_by_sample",
+                "title": "Toughness by sample",
+                "metric": "toughness_MJ_m3",
+                "x_metric": "sample",
+                "y_metric": "toughness_MJ_m3",
+                "default_template": "box_strip",
+                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
             },
         ),
     },
