@@ -155,7 +155,14 @@ def apply_request_patch(
     patched = dict(request)
     selected_exports = normalize_exports(exports if exports is not None else patched.get("exports"))
     current_render_options = patched.get("render_options") if isinstance(patched.get("render_options"), dict) else {}
+    explicit_key_payload = patched.get("explicit_render_option_keys")
+    explicit_keys = (
+        {str(key) for key in explicit_key_payload if str(key) in current_render_options}
+        if isinstance(explicit_key_payload, list | tuple | set)
+        else set(current_render_options)
+    )
     clear_keys = set(normalize_clear_render_options(clear_render_options, template=template))
+    explicit_keys -= clear_keys
     current_render_options = {
         key: value for key, value in current_render_options.items() if key not in clear_keys
     }
@@ -171,6 +178,7 @@ def apply_request_patch(
             normalized_patch["series_include"] = explicit_include
         else:
             normalized_patch["series_include"] = selected_series
+    explicit_keys.update(normalized_patch)
 
     merged_render_options = {**current_render_options, **normalized_patch}
     merged_render_options = normalize_render_options(
@@ -189,8 +197,12 @@ def apply_request_patch(
             patched["study_model"] = synced_study_model
     if merged_render_options:
         patched["render_options"] = merged_render_options
+        patched["explicit_render_option_keys"] = sorted(
+            key for key in explicit_keys if key in merged_render_options
+        )
     else:
         patched.pop("render_options", None)
+        patched["explicit_render_option_keys"] = []
     if split_policy is not None:
         normalized_split_policy = normalize_split_policy(split_policy)
         if normalized_split_policy is not None:

@@ -139,9 +139,14 @@ def doctor_payload() -> dict[str, Any]:
         "repo_root": str(REPO_ROOT),
         "normal_mode": {
             "daily_entrypoint": "sciplot studio PATH --out outputs/projects --export pdf,tiff_300 --json",
+            "explicit_intent_entrypoint": (
+                "sciplot studio PATH --rule RULE_ID --template TEMPLATE_ID "
+                "--out outputs/projects --export pdf,tiff_300 --json"
+            ),
             "frontend_default": "independent",
             "codex_required": False,
             "user_switch_required": False,
+            "automatic_recognition_required": False,
         },
         "vsz_lifecycle": {
             "canonical_artifact": "studio/document.vsz",

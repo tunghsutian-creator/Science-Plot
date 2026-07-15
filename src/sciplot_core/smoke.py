@@ -13,7 +13,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 2
+RUNTIME_SMOKE_VERSION = 4
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -124,6 +124,7 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
     import pandas as pd
 
     from sciplot_core.semantic import classify_source, prepare_semantic_source
+    from sciplot_core.studio import StudioSeries, _apply_series_options
 
     contracts = run_root / "semantic_contracts"
 
@@ -192,8 +193,85 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
     )
     impact_parameters = _transform_parameters(impact_result)
 
+    swelling_source = contracts / "explicit_rule" / "parallel_blocks.csv"
+    swelling_source.parent.mkdir(parents=True, exist_ok=True)
+    swelling_rows: list[list[object]] = [
+        [
+            "Sample Name:",
+            "Fig 3 (a): SH_DI water",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Fig 3 (b): SH_1000 mM NaCl",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "Fig 3 (c): SH_0.1 wt% PAA",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ],
+        ["Data Set N°", 1, "", 2, "", 3, "", 1, "", 2, "", 3, "", 1, "", 2, "", 3, ""],
+        ["Axis Cordinates:", *(["Time (s)", "Ai/A0 (unitless)"] * 9)],
+    ]
+    for point_index in range(5):
+        row: list[object] = [""]
+        for series_index in range(9):
+            row.extend([point_index * 100 + series_index * 5, 1.0 + point_index * 0.03 + series_index * 0.001])
+        swelling_rows.append(row)
+    swelling_rows.extend(
+        [
+            [""] * 19,
+            [""] * 19,
+            ["", "", "", "", "", "", 72000, 72.6, "", "", "", "", "", "", "", "", "", "", ""],
+            ["", "", "", "", "", "", 73000, 72.7, "", "", "", "", "", "", "", "", "", "", ""],
+        ]
+    )
+    swelling_source.write_text(
+        "\n".join(",".join(str(value) for value in row) for row in swelling_rows) + "\n",
+        encoding="utf-8",
+    )
+    swelling_semantic = classify_source(swelling_source, requested_rule_id="swelling_curve")
+    swelling_result = prepare_semantic_source(
+        swelling_source,
+        output_dir=contracts / "swelling_output",
+        semantic=swelling_semantic,
+    )
+    swelling_parameters = _transform_parameters(swelling_result)
+    styled_swelling_series = _apply_series_options(
+        [
+            StudioSeries(
+                label=label,
+                x_name=f"x_{index}",
+                y_name=f"y_{index}",
+                x_values=(0.0, 1.0),
+                y_values=(1.0, 1.1),
+                color="#000000",
+            )
+            for index, label in enumerate(swelling_parameters.get("series_order") or [], start=1)
+        ],
+        render_options=dict(swelling_semantic.get("render_options") or {}),
+        request={"template": "point_line", "rule_id": "swelling_curve"},
+    )
+    swelling_non_color_signatures = [(item.line_style, str(item.marker)) for item in styled_swelling_series]
+
     expected_saxs_order = ["HDPE", "2 wt% UDC 3"]
     expected_impact_order = ["V-PA (2 mm)", "E-PA (2 mm)", "V-PA (4 mm)", "E-PA (4 mm)"]
+    expected_swelling_order = [
+        f"{condition} replicate {replicate}"
+        for condition in ("SH DI water", "SH 1000 mM NaCl", "SH 0.1 wt% PAA")
+        for replicate in range(1, 4)
+    ]
+    swelling_selections = swelling_parameters.get("source_selections") or []
+    first_swelling_selection = swelling_selections[0] if swelling_selections else {}
+    first_swelling_block = first_swelling_selection.get("source_block") or {}
+    first_time_conversion = first_swelling_selection.get("time_conversion") or {}
     passed = (
         saxs_semantic.get("rule_id") == "saxs_profile"
         and saxs_parameters.get("series_order") == expected_saxs_order
@@ -207,6 +285,14 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         and impact_semantic.get("rule_id") == "impact_metric"
         and impact_parameters.get("sample_order") == expected_impact_order
         and impact_parameters.get("replicate_count_total") == 12
+        and swelling_semantic.get("rule_id") == "swelling_curve"
+        and swelling_semantic.get("confidence") == 100.0
+        and swelling_parameters.get("series_order") == expected_swelling_order
+        and swelling_parameters.get("source_point_counts") == [5] * 9
+        and first_swelling_block.get("selection_policy") == "contiguous_labeled_swelling_block"
+        and first_swelling_block.get("excluded_disconnected_rows") == 2
+        and math.isclose(float(first_time_conversion.get("factor") or 0.0), 1.0 / 3600.0)
+        and len(set(swelling_non_color_signatures)) == 9
     )
     return {
         "passed": passed,
@@ -227,6 +313,14 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
             "rule_id": impact_semantic.get("rule_id"),
             "sample_order": impact_parameters.get("sample_order"),
             "replicate_count_total": impact_parameters.get("replicate_count_total"),
+        },
+        "swelling": {
+            "rule_id": swelling_semantic.get("rule_id"),
+            "confidence": swelling_semantic.get("confidence"),
+            "series_order": swelling_parameters.get("series_order"),
+            "point_counts": swelling_parameters.get("source_point_counts"),
+            "first_source_selection": first_swelling_selection,
+            "non_color_signatures": swelling_non_color_signatures,
         },
     }
 
@@ -308,9 +402,97 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         checks.append(
             _check(
                 "promoted_semantic_parsers",
-                "Generated SAXS, Agilent GPC, and multi-sheet impact contracts parse deterministically",
+                "Generated SAXS, Agilent GPC, impact, and explicit-intent swelling contracts parse deterministically",
                 parser_probe.get("passed") is True,
                 detail=parser_probe,
+            )
+        )
+
+        from sciplot_core.qa import _normalized_label
+
+        qa_label_probe = {
+            "veusz_label": r"LS\_5CRW\_20W\_t1",
+            "pdf_label": "LS_5CRW_20W_t1",
+        }
+        qa_label_probe["normalized_veusz_label"] = _normalized_label(qa_label_probe["veusz_label"])
+        qa_label_probe["normalized_pdf_label"] = _normalized_label(qa_label_probe["pdf_label"])
+        checks.append(
+            _check(
+                "veusz_pdf_label_equivalence",
+                "Escaped Veusz labels match their rendered PDF text",
+                qa_label_probe["normalized_veusz_label"] == qa_label_probe["normalized_pdf_label"],
+                detail=qa_label_probe,
+            )
+        )
+
+        from sciplot_core.workbench_contract import apply_request_patch
+
+        option_provenance_probe = apply_request_patch(
+            {
+                "exports": ["pdf", "tiff_300"],
+                "render_options": {"size": "60x55", "legend_position": "auto"},
+                "explicit_render_option_keys": [],
+            },
+            render_options={"size": "120x55"},
+        )
+        checks.append(
+            _check(
+                "explicit_render_option_provenance",
+                "A user-selected render option becomes authoritative without promoting semantic defaults",
+                option_provenance_probe.get("explicit_render_option_keys") == ["size"]
+                and (option_provenance_probe.get("render_options") or {}).get("size") == "120x55"
+                and (option_provenance_probe.get("render_options") or {}).get("legend_position") == "auto",
+                detail=option_provenance_probe,
+            )
+        )
+
+        from sciplot_core.materials_rules import get_rule
+        from sciplot_core.studio import _apply_studio_request_overrides
+
+        override_project = run_root / "explicit_rule_override"
+        override_project.mkdir(parents=True, exist_ok=True)
+        override_request_path = override_project / "plot_request.json"
+        previous_rule = get_rule("swelling_curve")
+        previous_options = {
+            **previous_rule.render_options,
+            "x_label_override": previous_rule.x_axis.display_label,
+            "y_label_override": previous_rule.y_axis.display_label,
+            "size": "180x55",
+        }
+        override_request_path.write_text(
+            json.dumps(
+                {
+                    "recipe": "auto",
+                    "rule_id": previous_rule.rule_id,
+                    "template": previous_rule.template,
+                    "render_options": previous_options,
+                    "explicit_render_option_keys": ["size"],
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        _apply_studio_request_overrides(
+            override_project,
+            request_path=override_request_path,
+            rule_id="saxs_profile",
+        )
+        overridden_request = json.loads(override_request_path.read_text(encoding="utf-8"))
+        overridden_options = overridden_request.get("render_options") or {}
+        checks.append(
+            _check(
+                "existing_project_explicit_rule_override",
+                "An explicit rule replaces prior semantic defaults while preserving user render choices",
+                overridden_request.get("rule_id") == "saxs_profile"
+                and overridden_request.get("template") == "curve"
+                and overridden_request.get("explicit_render_option_keys") == ["size"]
+                and overridden_options.get("size") == "180x55"
+                and overridden_options.get("x_label_override") == r"q (nm$^{-1}$)"
+                and overridden_options.get("y_label_override") == "Intensity (a.u.)"
+                and overridden_options.get("xscale") == "log"
+                and overridden_options.get("yscale") == "log"
+                and "marker_sequence" not in overridden_options,
+                detail=overridden_request,
             )
         )
 

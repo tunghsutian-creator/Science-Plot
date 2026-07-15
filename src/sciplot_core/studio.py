@@ -21,7 +21,7 @@ import pandas as pd
 from sciplot_core._paths import REPO_ROOT, VEUSZ_ROOT, VEUSZ_UPSTREAM_COMMIT
 from sciplot_core._utils import decode_text, existing_file_sha256, json_safe
 from sciplot_core.delivery import build_delivery_package
-from sciplot_core.materials_rules import compute_analysis_metrics
+from sciplot_core.materials_rules import compute_analysis_metrics, get_rule, semantic_payload_from_rule
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import (
     AUTO_LOG_BOUND_PADDING_FACTOR,
@@ -187,6 +187,7 @@ def prepare_studio_document(
     target: str | Path,
     *,
     output_root: Path | None = None,
+    rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
     regenerate_generated: bool = False,
@@ -195,10 +196,13 @@ def prepare_studio_document(
     target_info = _resolve_studio_target(
         resolved,
         output_root=output_root,
+        rule_id=rule_id,
         template=template,
         project_name=project_name,
     )
     if target_info["mode"] == "vsz":
+        if _normalize_optional_string(rule_id):
+            raise ValueError("--rule applies to raw data, a SciPlot project, or plot_request.json; not an existing VSZ.")
         return _existing_document_payload(target_info["document"])
 
     request_path = target_info["request"]
@@ -207,6 +211,7 @@ def prepare_studio_document(
     if (
         target_info.get("mode") == "project"
         and existing_document is not None
+        and rule_id is None
         and template is None
         and project_name is None
         and not regenerate_generated
@@ -243,6 +248,7 @@ def prepare_studio_document(
     _apply_studio_request_overrides(
         project_dir,
         request_path=request_path,
+        rule_id=rule_id,
         template=template,
         project_name=project_name,
     )
@@ -315,6 +321,7 @@ def run_studio_command(
     *,
     target: Path | None = None,
     output_root: Path | None = None,
+    rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
     new: bool = False,
@@ -351,12 +358,15 @@ def run_studio_command(
         return launch_sciplot_studio(
             target,
             output_root=output_root,
+            rule_id=rule_id,
             template=template,
             project_name=project_name,
         )
 
     if json_output or prepare_only or export:
         command = ["studio", str(target)]
+        if rule_id:
+            command.extend(["--rule", rule_id])
         if template:
             command.extend(["--template", template])
         if project_name:
@@ -372,6 +382,7 @@ def run_studio_command(
     payload = prepare_studio_document(
         target,
         output_root=output_root,
+        rule_id=rule_id,
         template=template,
         project_name=project_name,
     )
@@ -440,12 +451,14 @@ def launch_sciplot_studio(
     target: Path,
     *,
     output_root: Path | None,
+    rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
 ) -> int:
     payload = prepare_studio_document(
         target.expanduser().resolve(),
         output_root=output_root,
+        rule_id=rule_id,
         template=template,
         project_name=project_name,
     )
@@ -971,6 +984,7 @@ def _resolve_studio_target(
     path: Path,
     *,
     output_root: Path | None = None,
+    rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
 ) -> dict[str, Any]:
@@ -984,6 +998,7 @@ def _resolve_studio_target(
             return _qt_first_project_from_source(
                 path,
                 output_root=output_root,
+                rule_id=rule_id,
                 template=template,
                 project_name=project_name,
             )
@@ -994,6 +1009,7 @@ def _resolve_studio_target(
         return _qt_first_project_from_source(
             path,
             output_root=output_root,
+            rule_id=rule_id,
             template=template,
             project_name=project_name,
         )
@@ -1004,13 +1020,14 @@ def _qt_first_project_from_source(
     path: Path,
     *,
     output_root: Path | None = None,
+    rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
 ) -> dict[str, Any]:
     from sciplot_core.intake import create_intake_project_from_session, prepare_intake_session
 
     project_root = output_root or Path("outputs") / "intake_projects"
-    session = prepare_intake_session(path, output_root=project_root)
+    session = prepare_intake_session(path, output_root=project_root, requested_rule_id=rule_id)
     normalized_name = _normalize_optional_string(project_name)
     if normalized_name:
         session["project_name"] = normalized_name
@@ -1026,6 +1043,7 @@ def _qt_first_project_from_source(
     _apply_studio_request_overrides(
         project_dir,
         request_path=request,
+        rule_id=rule_id,
         template=template,
         project_name=normalized_name,
     )
@@ -1042,15 +1060,47 @@ def _apply_studio_request_overrides(
     project_dir: Path,
     *,
     request_path: Path,
+    rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
 ) -> None:
-    selected_template = _normalize_optional_string(template)
+    selected_rule_id = _normalize_optional_string(rule_id)
+    selected_rule = get_rule(selected_rule_id) if selected_rule_id else None
+    if selected_rule is not None and selected_rule.fixture_status != "ready":
+        raise ValueError(f"Material rule `{selected_rule.rule_id}` is not ready for production use.")
+    selected_rule_payload = (
+        semantic_payload_from_rule(
+            selected_rule,
+            confidence=100.0,
+            reason=f"Explicit material rule `{selected_rule.rule_id}` selected by the user or Luna/Codex.",
+        )
+        if selected_rule is not None
+        else None
+    )
+    selected_template = _normalize_optional_string(template) or (selected_rule.template if selected_rule else None)
     selected_project_name = _normalize_optional_string(project_name)
-    if not selected_template and not selected_project_name:
+    if not selected_rule and not selected_template and not selected_project_name:
         return
     if request_path.exists():
         request = _read_json(request_path)
+        if selected_rule is not None:
+            request["rule_id"] = selected_rule.rule_id
+            request.setdefault("recipe", "auto")
+            current_options = (
+                dict(request.get("render_options")) if isinstance(request.get("render_options"), dict) else {}
+            )
+            explicit_key_payload = request.get("explicit_render_option_keys")
+            explicit_keys = (
+                {str(key) for key in explicit_key_payload if str(key) in current_options}
+                if isinstance(explicit_key_payload, list | tuple | set)
+                else set(current_options)
+            )
+            explicit_options = {key: current_options[key] for key in explicit_keys}
+            current_options = dict((selected_rule_payload or {}).get("render_options") or {})
+            current_options.setdefault("x_label_override", selected_rule.x_axis.display_label)
+            current_options.setdefault("y_label_override", selected_rule.y_axis.display_label)
+            current_options.update(explicit_options)
+            request["render_options"] = current_options
         if selected_template:
             previous_template = str(request.get("template") or "").strip()
             if previous_template != selected_template:
@@ -1071,8 +1121,14 @@ def _apply_studio_request_overrides(
                     current_options = (
                         dict(request.get("render_options")) if isinstance(request.get("render_options"), dict) else {}
                     )
+                    explicit_key_payload = request.get("explicit_render_option_keys")
+                    explicit_keys = (
+                        {str(key) for key in explicit_key_payload}
+                        if isinstance(explicit_key_payload, list | tuple | set)
+                        else set(current_options)
+                    )
                     for key, value in previous_defaults.items():
-                        if current_options.get(key) == value:
+                        if key not in explicit_keys and current_options.get(key) == value:
                             current_options.pop(key, None)
                     for key, value in selected_defaults.items():
                         current_options.setdefault(key, value)
@@ -1095,6 +1151,22 @@ def _apply_studio_request_overrides(
             plot_options = payload.get("plot_options") if isinstance(payload.get("plot_options"), dict) else {}
             plot_options["template"] = selected_template
             payload["plot_options"] = plot_options
+        if selected_rule is not None:
+            recognition = dict(selected_rule_payload or {})
+            recognition.update(
+                {
+                    "confidence": 100.0,
+                    "reason": f"Explicit material rule `{selected_rule.rule_id}` selected by the user or Luna/Codex.",
+                    "needs_ai_intervention": False,
+                    "production_status": "ready",
+                }
+            )
+            payload["recognition"] = recognition
+            experiment = payload.get("experiment") if isinstance(payload.get("experiment"), dict) else {}
+            experiment["rule_id"] = selected_rule.rule_id
+            experiment.setdefault("id", selected_rule.rule_id)
+            experiment.setdefault("label", selected_rule.rule_id)
+            payload["experiment"] = experiment
         manifest_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
 
 
@@ -2046,11 +2118,12 @@ def _apply_series_options(
             if (template_id == "point_line" or item.presentation_kind == "categorical_replicates")
             else "none"
         )
-        default_line_style = (
-            line_style_sequence[index % len(line_style_sequence)]
-            if template_id != "point_line" and len(ordered) > 1
-            else "solid"
-        )
+        if template_id == "point_line" and len(ordered) > len(marker_sequence):
+            default_line_style = line_style_sequence[(index // len(marker_sequence)) % len(line_style_sequence)]
+        elif template_id != "point_line" and len(ordered) > 1:
+            default_line_style = line_style_sequence[index % len(line_style_sequence)]
+        else:
+            default_line_style = "solid"
         styled.append(
             StudioSeries(
                 label=item.label,
@@ -2286,7 +2359,11 @@ def _apply_domain_render_defaults(
 
 
 def _explicit_render_options(request: dict[str, Any]) -> dict[str, Any]:
-    return request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
+    options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
+    explicit_keys = request.get("explicit_render_option_keys")
+    if not isinstance(explicit_keys, list | tuple | set):
+        return options
+    return {str(key): options[str(key)] for key in explicit_keys if str(key) in options}
 
 
 def _label_load(series: list[StudioSeries]) -> dict[str, int]:

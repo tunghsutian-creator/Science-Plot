@@ -39,6 +39,39 @@ def _round_pair(values: tuple[float, float], *, digits: int = 3) -> list[float]:
     return [round(value, digits) for value in values]
 
 
+def _size_pair(value: object) -> tuple[float, float] | None:
+    if not isinstance(value, list | tuple) or len(value) != 2:
+        return None
+    try:
+        pair = float(value[0]), float(value[1])
+    except (TypeError, ValueError):
+        return None
+    return pair if min(pair) > 0 else None
+
+
+def _expected_size_from_manifest(manifest: dict[str, Any]) -> tuple[float, float]:
+    layout_quality = manifest.get("layout_quality") if isinstance(manifest.get("layout_quality"), dict) else {}
+    summaries = layout_quality.get("summaries") if isinstance(layout_quality.get("summaries"), list) else []
+    for summary in summaries:
+        if not isinstance(summary, dict):
+            continue
+        size = _size_pair(summary.get("figure_size_mm") or summary.get("requested_size_mm"))
+        if size is not None:
+            return size
+    spec_value = manifest.get("veusz_spec")
+    if isinstance(spec_value, str) and spec_value.strip():
+        try:
+            spec = json.loads(Path(spec_value).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            spec = {}
+        size = _size_pair(spec.get("size_mm")) if isinstance(spec, dict) else None
+        if size is not None:
+            return size
+    request = manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
+    render_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
+    return _parse_size_mm(render_options.get("size") or DEFAULT_FIGURE_SIZE)
+
+
 def _within_tolerance(actual: tuple[float, float], expected: tuple[float, float]) -> bool:
     return all(
         abs(observed - target) <= PHYSICAL_SIZE_TOLERANCE_MM
@@ -117,9 +150,7 @@ def _record_for_row(row: dict[str, Any]) -> dict[str, Any]:
         errors.append(f"manifest_unreadable: {exc}")
         return record
 
-    request = manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
-    render_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
-    expected = _parse_size_mm(render_options.get("size") or DEFAULT_FIGURE_SIZE)
+    expected = _expected_size_from_manifest(manifest)
     record["expected_size_mm"] = _round_pair(expected)
 
     pdf_item = _delivery_figure(manifest, "pdf")

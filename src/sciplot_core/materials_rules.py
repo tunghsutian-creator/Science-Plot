@@ -726,13 +726,29 @@ RULES: tuple[SemanticRule, ...] = (
         "metrics_swelling",
         "point_line",
         AxisSpec("Time", "h", "Time (h)", aliases=("time",)),
-        AxisSpec("Swelling ratio", "1", "Swelling ratio", aliases=("swelling ratio",)),
-        keywords=("swelling", "gel fraction"),
-        column_aliases=("swelling ratio", "gel fraction"),
-        analysis=(AnalysisSpec("equilibrium_swelling_ratio", "last finite swelling ratio", ("swelling ratio",), "1"),),
-        fixture_path="tests/fixtures/polymer_corpus/swelling_gel/hydrogel_swelling_excerpt.csv",
+        AxisSpec(
+            "Swelling ratio",
+            "1",
+            "Swelling ratio",
+            aliases=("swelling ratio", "Ai/A0", "normalized projected area"),
+        ),
+        keywords=("swelling ratio",),
+        column_aliases=("swelling ratio",),
+        analysis=(
+            AnalysisSpec(
+                "terminal_swelling_ratio",
+                "last finite reported swelling ratio per curve; not inferred as equilibrium",
+                ("swelling ratio",),
+                "1",
+            ),
+        ),
+        fixture_path="tests/fixtures/real_world/swelling_curve/Data_Core_Shell_Hydrogels.xlsx",
         fixture_status="ready",
         priority=55,
+        reason=(
+            "Use explicit swelling-curve intent for labeled time/Ai-A0 observations; gel fraction alone is not "
+            "treated as swelling kinetics."
+        ),
     ),
     _rule(
         "dma_frequency_sweep",
@@ -1401,16 +1417,22 @@ def _dsc_metrics(source_path: Path) -> list[dict[str, Any]]:
 
 
 def _swelling_metrics(source_path: Path) -> list[dict[str, Any]]:
-    raw = _raw_table(source_path)
-    header = [normalize_token(value) for value in raw.iloc[0].tolist()]
-    try:
-        index = next(i for i, token in enumerate(header) if "swelling" in token)
-    except StopIteration:
-        return [_metric("equilibrium_swelling_ratio", None, "1", "skipped", "Swelling column not found.")]
-    values = pd.to_numeric(raw.iloc[1:, index], errors="coerce").dropna()
-    if values.empty:
-        return [_metric("equilibrium_swelling_ratio", None, "1", "skipped", "No numeric swelling values found.")]
-    return [_metric("equilibrium_swelling_ratio", float(values.iloc[-1]), "1")]
+    series = _read_labeled_paired_curve_table(source_path, y_tokens=("swelling ratio",))
+    if not series:
+        return [_metric("terminal_swelling_ratio", None, "1", "skipped", "No prepared swelling curves found.")]
+    multiple = len(series) > 1
+    rows: list[dict[str, Any]] = []
+    for sample, data in series:
+        metric_name = f"terminal_swelling_ratio[{sample}]" if multiple else "terminal_swelling_ratio"
+        rows.append(
+            _metric(
+                metric_name,
+                float(data["y"].iloc[-1]),
+                "1",
+                reason="Last finite reported observation; no equilibrium plateau is inferred.",
+            )
+        )
+    return rows
 
 
 def _impact_metrics(processed_source: Path) -> list[dict[str, Any]]:
@@ -1530,7 +1552,7 @@ def compute_analysis_metrics(
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
         )
     elif rule_id == "swelling_curve":
-        rows = _swelling_metrics(source_path)
+        rows = _swelling_metrics(canonical_source)
     elif rule_id == "impact_metric" and processed is not None:
         rows = _impact_metrics(processed)
     elif rule_id in {"ftir_spectrum", "uvvis_spectrum"}:

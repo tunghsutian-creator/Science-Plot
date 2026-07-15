@@ -25,7 +25,7 @@ skill/scripts/sciplot studio PATH \
 
 这是 Luna 应优先使用的入口。成功的科研交付必须同时满足：
 
-- 识别命中本地规则注册表中的 `ready` 规则；
+- 用户/Luna 显式选择或程序识别命中本地注册表中的 `ready` 规则；
 - `studio/document.vsz` 已生成且是视觉权威；
 - PDF 与 300 dpi TIFF 成对存在；
 - `qa.status=passed`；
@@ -39,6 +39,20 @@ skill/scripts/sciplot studio PATH \
 - `needs_rule_repair`：解析、规则、转换或 QA 阻断，此时才让 Luna/Codex 修规则或数据。
 
 程序不会用占位曲线或假数据工作簿伪造成功。
+
+用户已经选好实验类型或直接告诉 Luna/Codex 要画什么时，不必强行依赖自动识别：
+
+```bash
+skill/scripts/sciplot studio PATH \
+  --rule swelling_curve \
+  --template point_line \
+  --out outputs/projects \
+  --export pdf,tiff_300 \
+  --json
+```
+
+`--rule` 是明确的科学语义选择，会绕过自动猜测；`--template` 是明确的呈现选择，可单独使用，
+也可省略并采用该规则的默认模板。Luna/Codex 可以根据用户自然语言直接填写这两个参数。
 
 ## 高级修图
 
@@ -163,9 +177,9 @@ skill/scripts/sciplot qa OUTPUT_DIR --strict-publication
 ```
 
 `autoplot`、`run`、`batch` 和 recipe/render 是专家与兼容接口；日常新任务优先走 `studio`。
-`smoke` 在运行时生成明确标记的合成 FTIR 合同表，检查语义选择、VSZ 重开与人工编辑保留、
-精确导出、PDF/TIFF 配对、交付哈希及哈希失败门禁；它不属于真实数据证据。完整规则矩阵依赖
-本地验收数据，因此不属于 GitHub 最小运行发行版。
+`smoke` 在运行时生成明确标记的合成 FTIR 合同表以及显式意图 swelling 等解析合同，检查
+语义选择、VSZ 重开与人工编辑保留、精确导出、PDF/TIFF 配对、交付哈希及哈希失败门禁；
+它不属于真实数据证据。完整规则矩阵依赖本地验收数据，因此不属于 GitHub 最小运行发行版。
 
 ## 安装
 

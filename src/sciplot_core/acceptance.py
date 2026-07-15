@@ -197,6 +197,7 @@ def _run_rule_lifecycle_acceptance(
             fixture,
             output_root=projects_root,
             project_name=f"{rule.rule_id} acceptance",
+            rule_id=rule.rule_id,
         )
         project_dir = Path(str(prepared["project_dir"]))
         request_path = Path(str(prepared["request"]))

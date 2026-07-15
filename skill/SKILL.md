@@ -28,6 +28,21 @@ only production renderer; `studio/document.vsz` is the advanced-editing truth.
      --json
    ```
 
+   When the user or Luna/Codex already knows the experiment and presentation,
+   pass explicit intent instead of forcing recognition:
+
+   ```bash
+   skill/scripts/sciplot studio INPUT_PATH \
+     --rule RULE_ID \
+     --template TEMPLATE_ID \
+     --out outputs/projects \
+     --export pdf,tiff_300 \
+     --json
+   ```
+
+   `--rule` bypasses automatic recognition and must name a ready rule.
+   `--template` remains optional and independently user-selectable.
+
 3. If advanced correction is needed, open `PROJECT/Open_in_Veusz.command`,
    save the VSZ, then export the exact current document:
 
@@ -66,6 +81,8 @@ skill/scripts/sciplot rules show RULE_ID --json
 `src/sciplot_core/materials_rules.py` owns experiment families, axes, aliases,
 units and deterministic metrics. Automatic matching uses fixture-backed ready
 rules only; new and pending rules require fixture coverage before production.
+Do not expand keyword recognition when the user or Luna/Codex can supply
+explicit `--rule` intent reliably.
 
 Use existing recipe families before adding code: `tensile`,
 `stress_relaxation`, `rheology_dma`, `thermal`, `spectroscopy`, `scattering`,

@@ -284,6 +284,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Raw data path, SciPlot project, plot_request.json, or .vsz file.",
     )
     studio_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
+    studio_parser.add_argument(
+        "--rule",
+        help="Explicit ready material rule selected by the user or Luna/Codex; bypass automatic recognition.",
+    )
     studio_parser.add_argument("--template", help="Preselect the SciPlot plot template, e.g. curve or stacked_curve.")
     studio_parser.add_argument("--name", help="Preselect the SciPlot project/figure name.")
     studio_parser.add_argument("--new", action="store_true", help="Open an empty embedded Veusz Studio window.")
@@ -632,6 +636,7 @@ def main(argv: list[str] | None = None) -> int:
             return run_studio_command(
                 target=args.target.expanduser() if args.target else None,
                 output_root=args.out.expanduser(),
+                rule_id=args.rule,
                 template=args.template,
                 project_name=args.name,
                 new=args.new,
