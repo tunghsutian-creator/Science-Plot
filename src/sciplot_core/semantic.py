@@ -514,7 +514,11 @@ def _sample_from_row(raw: pd.DataFrame, row_index: int | None, *, start: int, st
         return fallback
     for column in range(start, min(stop, raw.shape[1])):
         value = _clean_text(raw.iat[row_index, column])
-        if value and not _looks_like_unit(value) and not _axis_match(value, ("time", "strain", "stress", "σ")):
+        if (
+            value
+            and (not _looks_like_unit(value) or len(_token(value)) > 5)
+            and not _axis_match(value, ("time", "strain", "stress", "σ"))
+        ):
             return value
     return fallback
 
@@ -558,7 +562,21 @@ def _scan_curve_series_table(
                 for x_index, y_index in pairs
                 if first_extra < raw.shape[0]
             )
-            sample_index = None if first_row_is_numeric_data else header_index + 1
+            preceding_sample_index = header_index - 1
+            preceding_row_has_samples = header_index > 0 and all(
+                any(
+                    (label := _clean_text(raw.iat[preceding_sample_index, column]))
+                    and _float(label) is None
+                    and (not _looks_like_unit(label) or len(_token(label)) > 5)
+                    and not _axis_match(label, (*x_aliases, *y_aliases))
+                    for column in range(x_index, min(y_index + 1, raw.shape[1]))
+                )
+                for x_index, y_index in pairs
+            )
+            if first_row_is_numeric_data:
+                sample_index = preceding_sample_index if preceding_row_has_samples else None
+            else:
+                sample_index = header_index + 1
             data_start = header_index + 1 if first_row_is_numeric_data else header_index + 2
         else:
             data_start = max(header_index + 1, unit_index + 1, sample_index + 1)
@@ -623,8 +641,138 @@ def _scan_curve_series_source(
             sample_prefix=sheet_name or sample_prefix,
         )
         if sum(len(item.points) for item in series) > sum(len(item.points) for item in best):
-            best = series
+            best = [
+                CurveSeriesPayload(
+                    sample=item.sample,
+                    x_label=item.x_label,
+                    x_unit=item.x_unit,
+                    y_label=item.y_label,
+                    y_unit=item.y_unit,
+                    points=item.points,
+                    diagnostics={**(item.diagnostics or {}), "source_table": sheet_name},
+                )
+                for item in series
+            ]
     return best
+
+
+def _read_agilent_gpc_series(source: Path) -> CurveSeriesPayload | None:
+    """Read the analysed RT/RI slice from an Agilent GPC/SEC workbook."""
+
+    tables = _read_candidate_tables(source)
+    sample = source.stem
+    detector_unit = "a.u."
+    for _table_name, raw in tables:
+        for row_index in range(min(raw.shape[0], 80)):
+            first = _token(raw.iat[row_index, 0]) if raw.shape[1] else ""
+            if first == "samplename" and raw.shape[1] > 1:
+                sample = _clean_text(raw.iat[row_index, 1]) or sample
+            headers = [_token(value) for value in raw.iloc[row_index].tolist()]
+            if "detectortype" not in headers or "detectorunits" not in headers:
+                continue
+            detector_column = headers.index("detectortype")
+            unit_column = headers.index("detectorunits")
+            for data_index in range(row_index + 1, min(raw.shape[0], row_index + 16)):
+                if _token(raw.iat[data_index, detector_column]) != "ri":
+                    continue
+                detector_unit = _clean_text(raw.iat[data_index, unit_column]) or detector_unit
+                break
+
+    best_points: list[tuple[float, float]] = []
+    best_table = ""
+    for table_name, raw in tables:
+        for header_index in range(max(0, raw.shape[0] - 1)):
+            headers = [_token(value) for value in raw.iloc[header_index].tolist()]
+            x_index = next((index for index, value in enumerate(headers) if value in {"rt", "rtmin", "rtmins"}), None)
+            y_index = next((index for index, value in enumerate(headers) if value == "ri"), None)
+            if x_index is None or y_index is None:
+                continue
+            points: list[tuple[float, float]] = []
+            for row_index in range(header_index + 1, raw.shape[0]):
+                x_value = _float(raw.iat[row_index, x_index])
+                y_value = _float(raw.iat[row_index, y_index])
+                if x_value is not None and y_value is not None:
+                    points.append((x_value, y_value))
+            if len(points) > len(best_points):
+                best_points = points
+                best_table = table_name
+    if not best_points:
+        return None
+    if _float(sample) is not None:
+        sample = f"Sample {sample}"
+    return CurveSeriesPayload(
+        sample=sample,
+        x_label="Elution time",
+        x_unit="min",
+        y_label="Detector response",
+        y_unit=detector_unit,
+        points=tuple(best_points),
+        diagnostics={
+            "source_table": best_table,
+            "source_file": source.name,
+            "detector": "RI",
+            "detector_unit": detector_unit,
+        },
+    )
+
+
+def _read_gpc_series_list(source: Path) -> list[CurveSeriesPayload]:
+    """Extract one or more RI chromatograms from Agilent or canonical GPC tables."""
+
+    paths = (
+        [
+            path
+            for path in sorted(source.rglob("*"))
+            if path.is_file() and path.suffix.lower() in {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
+        ]
+        if source.is_dir()
+        else [source]
+    )
+    result: list[CurveSeriesPayload] = []
+    for path in paths:
+        agilent_series = _read_agilent_gpc_series(path)
+        if agilent_series is not None:
+            candidate = [agilent_series]
+        else:
+            candidate = _scan_curve_series_source(
+                path,
+                x_aliases=("elution time", "time", "rt"),
+                y_aliases=("detector response", "rayleigh ratio", "dri", "ri"),
+                x_label="Elution time",
+                y_label="Detector response",
+                default_x_unit="min",
+                default_y_unit="a.u.",
+                sample_prefix=path.stem,
+            )
+        if len(candidate) == 1:
+            item = candidate[0]
+            sample = item.sample if agilent_series is not None else path.stem
+            candidate = [
+                CurveSeriesPayload(
+                    sample=sample,
+                    x_label=item.x_label,
+                    x_unit=item.x_unit,
+                    y_label=item.y_label,
+                    y_unit=item.y_unit,
+                    points=item.points,
+                    diagnostics={**(item.diagnostics or {}), "source_file": path.name},
+                )
+            ]
+        else:
+            candidate = [
+                CurveSeriesPayload(
+                    sample=item.sample,
+                    x_label=item.x_label,
+                    x_unit=item.x_unit,
+                    y_label=item.y_label,
+                    y_unit=item.y_unit,
+                    points=item.points,
+                    diagnostics={**(item.diagnostics or {}), "source_file": path.name},
+                )
+                for item in candidate
+            ]
+        result.extend(candidate)
+    return result
 
 
 def _read_swelling_series_list(source: Path) -> list[CurveSeriesPayload]:
@@ -1899,6 +2047,46 @@ def _impact_payload(groups: dict[str, list[float]], *, unit: str) -> ImpactRepli
     )
 
 
+def _read_impact_canonical_tables(source: Path) -> ImpactReplicatePayload:
+    """Read three-label-row impact tables, preserving every workbook sheet."""
+
+    parsed: list[tuple[str, str, list[float]]] = []
+    unit_candidates: list[object] = []
+    for table_name, raw in _read_candidate_tables(source):
+        raw = raw.dropna(axis=1, how="all")
+        if raw.shape[0] < 4:
+            continue
+        sheet_label = table_name.split(":", 1)[-1] if ":" in table_name else ""
+        for column in range(raw.shape[1]):
+            metric_token = _token(raw.iat[0, column])
+            if not (metric_token == "re" or "impact" in metric_token or "冲击" in metric_token):
+                continue
+            sample = _clean_text(raw.iat[2, column])
+            if not sample:
+                continue
+            values = [
+                value
+                for row_index in range(3, raw.shape[0])
+                if (value := _float(raw.iat[row_index, column])) is not None
+            ]
+            if not values:
+                continue
+            parsed.append((sheet_label, sample, values))
+            unit_candidates.append(raw.iat[1, column])
+    if not parsed:
+        raise ValueError("Could not find a three-label-row impact table.")
+
+    sample_counts = {
+        sample: sum(1 for _sheet, candidate, _values in parsed if candidate == sample)
+        for _sheet, sample, _values in parsed
+    }
+    groups: dict[str, list[float]] = {}
+    for sheet_label, sample, values in parsed:
+        label = f"{sample} ({sheet_label})" if sample_counts[sample] > 1 and sheet_label else sample
+        groups.setdefault(label, []).extend(values)
+    return _impact_payload(groups, unit=_validated_impact_unit(unit_candidates))
+
+
 def _read_impact_block_table(source: Path) -> ImpactReplicatePayload:
     raw = read_raw_table(source).dropna(axis=1, how="all")
     if raw.shape[0] < 3:
@@ -1975,11 +2163,16 @@ def _read_impact_source(source: Path) -> ImpactReplicatePayload:
     for path in sources:
         try:
             try:
-                payload = _read_impact_block_table(path)
+                payload = _read_impact_canonical_tables(path)
             except _ImpactDataValidationError:
                 raise
             except ValueError:
-                payload = _read_impact_compact_table(path)
+                try:
+                    payload = _read_impact_block_table(path)
+                except _ImpactDataValidationError:
+                    raise
+                except ValueError:
+                    payload = _read_impact_compact_table(path)
         except _ImpactDataValidationError:
             raise
         except ValueError as exc:
@@ -3143,16 +3336,7 @@ def prepare_semantic_source(
                 ]
         else:
             processed_source = processed_dir / f"{source.stem}_gpc_chromatogram.csv"
-            series_list = _scan_curve_series_source(
-                source,
-                x_aliases=("elution time", "time"),
-                y_aliases=("detector response", "rayleigh ratio", "dri"),
-                x_label="Elution time",
-                y_label="Detector response",
-                default_x_unit="min",
-                default_y_unit="a.u.",
-                sample_prefix=source.stem,
-            )
+            series_list = _read_gpc_series_list(source)
             operation = "extract_gpc_detector_chromatograms"
             selected_columns = {"x": "elution time", "y": "detector response"}
         if not series_list:
@@ -3167,6 +3351,9 @@ def prepare_semantic_source(
                 "series_order": [series.sample for series in series_list],
                 "selected_axis_columns": selected_columns,
                 "source_point_counts": [len(series.points) for series in series_list],
+                "source_selections": [
+                    {"sample": series.sample, **(series.diagnostics or {})} for series in series_list
+                ],
             },
         )
 

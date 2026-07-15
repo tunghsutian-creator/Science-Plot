@@ -1546,7 +1546,7 @@ def _series_from_request(
     styled = _apply_series_options(raw_series, render_options=render_options, request=request)
     if axis_info.get("presentation_kind") == "categorical_replicates":
         styled = _reindex_categorical_series(styled, render_options=render_options)
-        axis_info["category_labels"] = [item.label for item in styled]
+        axis_info["category_labels"] = [_category_axis_label(item.label) for item in styled]
         axis_info["category_positions"] = [float(index) for index in range(1, len(styled) + 1)]
         axis_info["raw_replicate_count"] = sum(len(item.y_values) for item in styled)
     styled = _apply_template_series_transforms(styled, request=request, render_options=render_options)
@@ -1571,6 +1571,20 @@ def _veusz_literal_text(value: object) -> str:
     text = str(value or "").replace("\\", "\ue000")
     text = re.sub(r"([_\^\[\]\{\}])", r"\\\1", text)
     return text.replace("\ue000", "{\\backslash}")
+
+
+def _category_axis_label(value: object) -> str:
+    """Compact a trailing millimetre qualifier while preserving its meaning."""
+
+    text = str(value or "").strip()
+    match = re.fullmatch(r"(.+?)\s+(\([^()]+\))", text)
+    if match is None or len(text) < 10:
+        return text
+    qualifier = match.group(2).strip("()")
+    millimetre = re.fullmatch(r"(\d+(?:\.\d+)?)\s*mm", qualifier, flags=re.IGNORECASE)
+    if millimetre is not None:
+        return f"{match.group(1)}/{millimetre.group(1)}"
+    return text
 
 
 def _clean_studio_cell(value: object) -> str:
@@ -1973,6 +1987,7 @@ def _is_unit_label(label: str) -> bool:
         "c",
         "degc",
         "hz",
+        "mv",
         "mn·m",
         "mpa",
         "mpa·s",
@@ -2185,8 +2200,17 @@ def _apply_domain_render_defaults(
         updated.setdefault("x_label_override", "Sample")
         updated.setdefault("legend_position", "none")
         updated.setdefault("series_label_mode", "none")
-        if str(request.get("rule_id") or "").strip() == "impact_metric" and "y_label_override" not in explicit_options:
-            updated["y_label_override"] = "Impact strength (kJ/m²)"
+        if str(request.get("rule_id") or "").strip() == "impact_metric":
+            category_labels = [str(value) for value in axis_info.get("category_labels") or []]
+            thickness_labels = bool(category_labels) and all(
+                re.fullmatch(r".+?\s+\(\d+(?:\.\d+)?\s*mm\)", label, flags=re.IGNORECASE)
+                or re.fullmatch(r".+?/\d+(?:\.\d+)?", label)
+                for label in category_labels
+            )
+            if thickness_labels:
+                updated["x_label_override"] = "Sample / thickness (mm)"
+            if "y_label_override" not in explicit_options:
+                updated["y_label_override"] = "Impact strength (kJ/m²)"
     if template_id in STACKED_TEMPLATE_IDS and _looks_like_wavenumber_axis(axis_info):
         label_mode = str(updated.get("series_label_mode") or "").strip().casefold()
         legend_position = str(updated.get("legend_position") or "").strip().casefold()
@@ -2253,6 +2277,11 @@ def _apply_domain_render_defaults(
     if str(request.get("rule_id") or "").strip() == "rheology_stress_relaxation":
         updated.setdefault("x_label_override", "Time (s)")
         updated.setdefault("y_label_override", "Normalized stress (\\sigma/\\sigma_0)")
+    if str(request.get("rule_id") or "").strip() == "gpc_sec_chromatogram":
+        detected_y_label = str(axis_info.get("y_label") or "").strip()
+        requested_y_label = str(updated.get("y_label_override") or "").strip().casefold()
+        if detected_y_label and requested_y_label in {"", "detector response", "detector response (a.u.)"}:
+            updated["y_label_override"] = detected_y_label
     return updated
 
 
@@ -3662,7 +3691,15 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.ImportString(f"{item['y_name']}(numeric)", y_data)
     if categorical is not None:
         groups = [group for group in categorical.get("groups", []) if isinstance(group, dict)]
-        interface.SetDataText("category_axis_labels", [_veusz_literal_text(group["label"]) for group in groups])
+        x_axis = axes.get("x") if isinstance(axes.get("x"), dict) else {}
+        category_labels = x_axis.get("category_labels") if isinstance(x_axis.get("category_labels"), list) else []
+        interface.SetDataText(
+            "category_axis_labels",
+            [
+                _veusz_literal_text(category_labels[index] if index < len(category_labels) else group["label"])
+                for index, group in enumerate(groups)
+            ],
+        )
         interface.ImportString(
             "category_axis_x(numeric)",
             "\n".join(f"{float(group['position']):.12g}" for group in groups),

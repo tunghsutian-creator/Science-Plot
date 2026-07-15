@@ -13,7 +13,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 1
+RUNTIME_SMOKE_VERSION = 2
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -111,6 +111,126 @@ def _write_synthetic_ftir(path: Path) -> dict[str, Any]:
     }
 
 
+def _transform_parameters(result: dict[str, Any]) -> dict[str, Any]:
+    steps = result.get("transform_steps") if isinstance(result.get("transform_steps"), list) else []
+    first = steps[0] if steps and isinstance(steps[0], dict) else {}
+    parameters = first.get("parameters")
+    return parameters if isinstance(parameters, dict) else {}
+
+
+def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
+    """Exercise promoted real-data table shapes with generated contract data."""
+
+    import pandas as pd
+
+    from sciplot_core.semantic import classify_source, prepare_semantic_source
+
+    contracts = run_root / "semantic_contracts"
+
+    saxs_source = contracts / "saxs_profile" / "paired_q_intensity.csv"
+    saxs_source.parent.mkdir(parents=True, exist_ok=True)
+    saxs_source.write_text(
+        "HDPE,,2 wt% UDC 3,\n"
+        "q (nm-1),Log intensity (a.u.),q (nm-1),Log intensity (a.u.)\n"
+        "0.01,1000,0.01,100000\n"
+        "0.02,500,0.02,50000\n"
+        "0.05,100,0.05,10000\n"
+        "0.10,25,0.10,2500\n",
+        encoding="utf-8",
+    )
+    saxs_semantic = classify_source(saxs_source)
+    saxs_result = prepare_semantic_source(
+        saxs_source,
+        output_dir=contracts / "saxs_output",
+        semantic=saxs_semantic,
+    )
+    saxs_parameters = _transform_parameters(saxs_result)
+
+    gpc_dir = contracts / "gpc_sec_chromatogram"
+    gpc_dir.mkdir(parents=True, exist_ok=True)
+    gpc_source = gpc_dir / "8.xlsx"
+    pd.DataFrame(
+        [
+            ["SampleName", "8"],
+            ["DetectorType", "DetectorUnits"],
+            ["RI", "mV"],
+            ["RT (mins)", "RI"],
+            [1.0, 10.0],
+            [1.5, 25.0],
+            [2.0, 12.0],
+            [2.5, 4.0],
+        ]
+    ).to_excel(gpc_source, sheet_name="Slice Table", header=False, index=False)
+    gpc_semantic = classify_source(gpc_dir)
+    gpc_result = prepare_semantic_source(
+        gpc_dir,
+        output_dir=contracts / "gpc_output",
+        semantic=gpc_semantic,
+    )
+    gpc_parameters = _transform_parameters(gpc_result)
+
+    impact_dir = contracts / "impact_metric"
+    impact_dir.mkdir(parents=True, exist_ok=True)
+    impact_source = impact_dir / "impact strength.xlsx"
+    with pd.ExcelWriter(impact_source) as writer:
+        for thickness, offset in (("2 mm", 0.0), ("4 mm", 10.0)):
+            pd.DataFrame(
+                [
+                    ["Re", "Re"],
+                    ["kJ/m2", "kJ/m2"],
+                    ["V-PA", "E-PA"],
+                    [1.0 + offset, 2.0 + offset],
+                    [1.2 + offset, 2.2 + offset],
+                    [1.4 + offset, 2.4 + offset],
+                ]
+            ).to_excel(writer, sheet_name=thickness, header=False, index=False)
+    impact_semantic = classify_source(impact_source)
+    impact_result = prepare_semantic_source(
+        impact_source,
+        output_dir=contracts / "impact_output",
+        semantic=impact_semantic,
+    )
+    impact_parameters = _transform_parameters(impact_result)
+
+    expected_saxs_order = ["HDPE", "2 wt% UDC 3"]
+    expected_impact_order = ["V-PA (2 mm)", "E-PA (2 mm)", "V-PA (4 mm)", "E-PA (4 mm)"]
+    passed = (
+        saxs_semantic.get("rule_id") == "saxs_profile"
+        and saxs_parameters.get("series_order") == expected_saxs_order
+        and saxs_parameters.get("source_point_counts") == [4, 4]
+        and (saxs_semantic.get("axis_plan") or {}).get("x", {}).get("scale") == "log"
+        and (saxs_semantic.get("axis_plan") or {}).get("y", {}).get("scale") == "log"
+        and gpc_semantic.get("rule_id") == "gpc_sec_chromatogram"
+        and gpc_parameters.get("series_order") == ["Sample 8"]
+        and gpc_parameters.get("source_point_counts") == [4]
+        and (gpc_parameters.get("source_selections") or [{}])[0].get("detector_unit") == "mV"
+        and impact_semantic.get("rule_id") == "impact_metric"
+        and impact_parameters.get("sample_order") == expected_impact_order
+        and impact_parameters.get("replicate_count_total") == 12
+    )
+    return {
+        "passed": passed,
+        "saxs": {
+            "rule_id": saxs_semantic.get("rule_id"),
+            "series_order": saxs_parameters.get("series_order"),
+            "point_counts": saxs_parameters.get("source_point_counts"),
+            "xscale": (saxs_semantic.get("axis_plan") or {}).get("x", {}).get("scale"),
+            "yscale": (saxs_semantic.get("axis_plan") or {}).get("y", {}).get("scale"),
+        },
+        "gpc": {
+            "rule_id": gpc_semantic.get("rule_id"),
+            "series_order": gpc_parameters.get("series_order"),
+            "point_counts": gpc_parameters.get("source_point_counts"),
+            "source_selections": gpc_parameters.get("source_selections"),
+        },
+        "impact": {
+            "rule_id": impact_semantic.get("rule_id"),
+            "sample_order": impact_parameters.get("sample_order"),
+            "replicate_count_total": impact_parameters.get("replicate_count_total"),
+        },
+    }
+
+
 def _run_hash_failure_probe(output_dir: Path, manifest: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
     from sciplot_core.delivery import build_delivery_package
 
@@ -181,6 +301,16 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 and normal_mode.get("codex_required") is False
                 and normal_mode.get("user_switch_required") is False,
                 detail=normal_mode,
+            )
+        )
+
+        parser_probe = _semantic_parser_probe(run_root)
+        checks.append(
+            _check(
+                "promoted_semantic_parsers",
+                "Generated SAXS, Agilent GPC, and multi-sheet impact contracts parse deterministically",
+                parser_probe.get("passed") is True,
+                detail=parser_probe,
             )
         )
 
