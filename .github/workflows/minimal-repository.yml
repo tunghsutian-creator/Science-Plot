@@ -1,0 +1,36 @@
+name: Minimal repository policy
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  reject-nonruntime-content:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enforce minimal runtime distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden="$({
+            git ls-files \
+              tests test examples example tmp tools outputs figures ftir_output .tmp_verify \
+              .superpowers sciplot-main .DS_Store AGENTS.md DEVELOPMENT_LOG.md Makefile
+            git ls-files docs | grep -v '^docs/THIRD_PARTY_NOTICES\.md$' || true
+            git ls-files \
+              third_party/veusz/tests \
+              third_party/veusz/examples \
+              third_party/veusz/Documents \
+              third_party/veusz/.github \
+              third_party/veusz/support \
+              third_party/veusz/ChangeLog \
+              third_party/veusz/INSTALL.md \
+              third_party/veusz/README.md \
+              third_party/labplot_reference
+          } | sed '/^$/d')"
+          if [[ -n "$forbidden" ]]; then
+            echo "Non-runtime files are tracked but GitHub must contain only the minimal runnable distribution:" >&2
+            printf '%s\n' "$forbidden" >&2
+            exit 1
+          fi

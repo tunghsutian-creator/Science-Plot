@@ -79,7 +79,7 @@ def _ready_rule_fixtures_exist(rules: list[Any]) -> tuple[bool, str]:
         if rule.fixture_status == "ready"
         and (not rule.fixture_path or not (REPO_ROOT / str(rule.fixture_path)).exists())
     ]
-    return not missing, ", ".join(missing) if missing else "all ready rules are fixture-backed"
+    return not missing, ", ".join(missing) if missing else "all local acceptance fixtures are available"
 
 
 def doctor_payload() -> dict[str, Any]:
@@ -122,7 +122,17 @@ def doctor_payload() -> dict[str, Any]:
             detail=str(REPO_ROOT / "skill" / "scripts" / "sciplot"),
         ),
         _check("ready_rules", "Ready material rules", len(ready_rules) >= 5, detail=str(len(ready_rules))),
-        _check("ready_rule_fixtures", "Ready-rule fixtures", fixtures_ok, detail=fixture_detail),
+        _check(
+            "ready_rule_fixtures",
+            "Optional local acceptance fixtures",
+            fixtures_ok,
+            required=False,
+            detail=(
+                fixture_detail
+                if fixtures_ok
+                else f"not distributed on GitHub by policy; missing locally: {fixture_detail}"
+            ),
+        ),
     ]
     required_failures = [check for check in checks if check["required"] and check["status"] != "passed"]
     layouts = list_composite_layouts()

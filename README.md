@@ -25,7 +25,7 @@ skill/scripts/sciplot studio PATH \
 
 这是 Luna 应优先使用的入口。成功的科研交付必须同时满足：
 
-- 识别命中 fixture-backed `ready` 规则；
+- 识别命中本地规则注册表中的 `ready` 规则；
 - `studio/document.vsz` 已生成且是视觉权威；
 - PDF 与 300 dpi TIFF 成对存在；
 - `qa.status=passed`；
@@ -90,7 +90,7 @@ PROJECT/
 - CSV、TSV、TXT、XLS/XLSX 与常见仪器文件夹的本地检查和读取；
 - 材料实验语义识别、单位/轴别名、样品顺序和 recipe 自动选择；
 - 拉伸、冲击强度、流变/DMA、DSC/TGA/DTG、FTIR/UV-Vis、XRD/SAXS、
-  GPC/SEC、扭矩和溶胀等 fixture-backed 生产规则；
+  GPC/SEC、扭矩和溶胀等生产规则；
 - 同指标多样品比较、谱图堆叠、replicate 处理和事件段选择；
 - Veusz `.vsz` 生成、完整 Veusz 高级编辑和 exact-current export；
 - 60/120/180 mm 单图尺寸以及 183 mm 组合图布局；
@@ -101,15 +101,13 @@ PROJECT/
 - 可携带 `delivery/`，包含图、数据工作簿、项目文件与内部审计材料；
 - `intervention_request.json`、`assisted_cleanup_request.json`、
   `cleanup_result.json` 和 `revision_brief.md` 组成的可审计辅助修复链；
-- 文件夹 batch、3D PA 真实数据 acceptance 和扭矩专项 curation。
-- 23 个 ready 规则的 Studio 生命周期 acceptance 矩阵，并把真实数据证据与
-  instrument-shaped fixture 明确分开。
+- 文件夹 batch、用户本地数据 acceptance 和扭矩专项 curation。
 
 `impact_metric` 保留每一个原始观测值：`n=1` 只画真实散点，`n>=2` 才叠加
 Veusz 原生 median/IQR 箱线摘要；也可显式选择 `raw_only`，SciPlot 不生成伪重复样。
 
-未验收的 pending 规则不会自动进入绘图。新增规则默认是 pending，只有加入真实 fixture 与回归测试后
-才能成为 `ready`。
+未验收的 pending 规则不会自动进入绘图。测试、示例、验收数据和本地参考数据均不属于 GitHub
+发布内容；规则验收只在持有这些本地材料的开发工作区进行。
 
 ## 浏览器兼容入口
 
@@ -131,7 +129,7 @@ Do not use an empty plot preview as a placeholder during import, inspection, or 
 - `intervention_request.json` 或 `assisted_cleanup_request.json` 出现；
 - 用户明确要求 Luna/Codex 修改规则、清洗数据或调整 recipe。
 
-助手必须先保存原始输入，写出可验证的 `cleanup_result.json` 或 recipe/rule 补丁，增加 fixture 和测试，
+助手必须先保存原始输入，写出可验证的 `cleanup_result.json` 或 recipe/rule 补丁，在本地完成验证，
 再回到同一确定性工作流重跑。不得要求用户“切换模式”，也不得静默改变科学含义。
 
 ## 专家与验收命令
@@ -147,13 +145,10 @@ skill/scripts/sciplot rules show rheology_temperature_sweep --json
 # 已确认 request 的可复现运行
 skill/scripts/sciplot run plot_request.json
 
-# 稳定脚本包与批量验收
+# 稳定脚本包与批量处理
 skill/scripts/sciplot autoplot PATH --out outputs/autoplot_projects --json
 skill/scripts/sciplot batch INPUT_DIR --out outputs/batch --mode smoke
 skill/scripts/sciplot batch INPUT_DIR --out outputs/batch --mode all --tensile-root PATH
-skill/scripts/sciplot acceptance rules --out outputs/acceptance --json
-skill/scripts/sciplot acceptance rules --rule dsc_curve --rule tga_curve \
-  --out outputs/acceptance --json
 skill/scripts/sciplot acceptance 3dpa PATH --out outputs/acceptance --json
 
 # 扭矩事件段整理
@@ -165,24 +160,18 @@ skill/scripts/sciplot qa OUTPUT_DIR --strict-publication
 ```
 
 `autoplot`、`run`、`batch` 和 recipe/render 是专家与兼容接口；日常新任务优先走 `studio`。
-`acceptance rules` 写出 JSON、CSV 和 Markdown 矩阵，并逐规则验证语义匹配、VSZ
-重开导出、编辑保留、PDF/TIFF 配对、QA、delivery 与溯源。矩阵中的
-`instrument_shaped_fixture` 不会被描述成真实数据验收。
+完整规则矩阵依赖本地验收数据，因此不属于 GitHub 最小运行发行版。
 
-## 安装与开发
+## 安装
 
 ```bash
-make setup       # 安装开发与 Veusz Studio 所需依赖
-make test
-make lint
-make clean       # 只清缓存，保留 outputs/ 科研交付
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[studio]'
 ```
-
-`make clean-all` 会删除 `outputs/`，只在明确不需要其中成果时使用。
 
 代码职责：
 
-- `src/sciplot_core/materials_rules.py`：实验族、轴/单位语义与 fixture readiness；
+- `src/sciplot_core/materials_rules.py`：实验族、轴/单位语义与规则 readiness；
 - `src/sciplot_core/semantic.py`：识别和预处理；
 - `src/sciplot_core/studio.py`：VSZ 生命周期、Veusz 打开/导出与 Studio 交付；
 - `src/sciplot_core/workflow.py`：request 编排和辅助修复闭环；
@@ -191,13 +180,5 @@ make clean       # 只清缓存，保留 outputs/ 科研交付
 - `src/sciplot_recipes/`：经过测试的实验族 recipe；
 - `third_party/veusz/`：迁移的生产渲染器黑盒。
 
-## 当前文档
-
-- [Alpha 使用指南](docs/ALPHA_USER_GUIDE.md)
-- [Luna / SciPlot 操作流](docs/SCIPLOT_OPERATION_FLOW_PLAN.md)
-- [VSZ-first Veusz 集成路线](docs/VSZ_FIRST_VEUSZ_INTEGRATION_PLAN.md)
-- [出版级科研绘图路线](docs/SCIPLOT_PUBLICATION_FIGURE_ULTIMATE_ROADMAP.md)
-- [稳定 autoplot 合同](docs/STABLE_AUTOPLOT_CONTRACT.md)
-- [第三方许可](docs/THIRD_PARTY_NOTICES.md)
-
-历史 UI、Swift sidecar、WebAgg 和旧版路线文档已移除；Git 历史保留其开发记录。
+第三方许可见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。GitHub 仓库只发布运行所需内容；
+测试、示例、本地参考数据、开发日志和路线文档均保留在本地工作区，不进入版本控制。

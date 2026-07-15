@@ -14,3 +14,37 @@ figures/
 outputs/
 ftir_output/
 *.pyc
+
+# GitHub carries only the minimal runnable SciPlot distribution. Keep all
+# research data, tests, examples, temporary audits and local project-management
+# material on the workstation.
+/tests/
+/test/
+/examples/
+/example/
+/tmp/
+/tools/
+/AGENTS.md
+/DEVELOPMENT_LOG.md
+/Makefile
+/.local/
+/local_reference_data/
+/reference_data/
+/private_data/
+/.superpowers/
+/sciplot-main/
+/third_party/labplot_reference/
+
+# Design/development documents are local-only. Retain the legal notice.
+/docs/*
+!/docs/THIRD_PARTY_NOTICES.md
+
+# Vendored Veusz runtime only; upstream development material is local-only.
+/third_party/veusz/tests/
+/third_party/veusz/examples/
+/third_party/veusz/Documents/
+/third_party/veusz/.github/
+/third_party/veusz/support/
+/third_party/veusz/ChangeLog
+/third_party/veusz/INSTALL.md
+/third_party/veusz/README.md
