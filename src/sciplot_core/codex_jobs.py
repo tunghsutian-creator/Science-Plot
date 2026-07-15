@@ -47,6 +47,7 @@ def _default_required_checks(plot_request: Path | None, run_output: Path | None)
     checks = [
         "python -m compileall -q src/sciplot_core src/sciplot_recipes",
         "skill/scripts/sciplot doctor --json",
+        "skill/scripts/sciplot smoke --out .tmp_verify/codex_runtime_smoke --json",
     ]
     if plot_request is not None:
         checks.append(f"skill/scripts/sciplot run {plot_request}")

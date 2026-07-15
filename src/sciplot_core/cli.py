@@ -94,6 +94,13 @@ def _build_parser() -> argparse.ArgumentParser:
     doctor_parser = subparsers.add_parser("doctor", help="Check whether this SciPlot install is ready for alpha use.")
     doctor_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
 
+    smoke_parser = subparsers.add_parser(
+        "smoke",
+        help="Run the fixture-free Studio lifecycle and delivery change gate.",
+    )
+    smoke_parser.add_argument("--out", type=Path, default=Path(".tmp_verify") / "runtime_smoke")
+    smoke_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
     render_parser = subparsers.add_parser("render", help="Render a source through the SciPlot renderer.")
     render_parser.add_argument("input", type=Path)
     render_parser.add_argument("--template", help="Template id. Optional when --auto is given.")
@@ -378,6 +385,20 @@ def main(argv: list[str] | None = None) -> int:
                     marker = "ok" if check["status"] == "passed" else "failed"
                     print(f"{marker}  {check['label']}: {check.get('detail') or check['status']}")
             return 0 if payload["status"] == "ready" else 1
+        if args.command == "smoke":
+            from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+            original_argv = list(sys.argv[1:] if argv is None else argv)
+            maybe_reexec_with_qt_runtime(original_argv)
+            from sciplot_core.smoke import run_runtime_smoke
+
+            payload = run_runtime_smoke(output_root=args.out)
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot runtime smoke: {payload['status']}")
+                print(payload["artifacts"]["summary"])
+            return 0 if payload["status"] == "passed" else 1
         if args.command == "render":
             from sciplot_core.render import inspect_payload, render_to_dir
 

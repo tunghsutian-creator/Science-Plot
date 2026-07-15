@@ -145,6 +145,9 @@ skill/scripts/sciplot rules show rheology_temperature_sweep --json
 # 已确认 request 的可复现运行
 skill/scripts/sciplot run plot_request.json
 
+# 不依赖私有验收语料的运行时生命周期门禁
+skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json
+
 # 稳定脚本包与批量处理
 skill/scripts/sciplot autoplot PATH --out outputs/autoplot_projects --json
 skill/scripts/sciplot batch INPUT_DIR --out outputs/batch --mode smoke
@@ -160,7 +163,9 @@ skill/scripts/sciplot qa OUTPUT_DIR --strict-publication
 ```
 
 `autoplot`、`run`、`batch` 和 recipe/render 是专家与兼容接口；日常新任务优先走 `studio`。
-完整规则矩阵依赖本地验收数据，因此不属于 GitHub 最小运行发行版。
+`smoke` 在运行时生成明确标记的合成 FTIR 合同表，检查语义选择、VSZ 重开与人工编辑保留、
+精确导出、PDF/TIFF 配对、交付哈希及哈希失败门禁；它不属于真实数据证据。完整规则矩阵依赖
+本地验收数据，因此不属于 GitHub 最小运行发行版。
 
 ## 安装
 
