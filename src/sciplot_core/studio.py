@@ -39,6 +39,8 @@ from sciplot_core.policy import (
     DEFAULT_PALETTE_COLORS,
     DEFAULT_PALETTE_PRESET,
     DEFAULT_RAW_POINT_JITTER_FRACTION,
+    DEFAULT_SCALAR_FIELD_COLORMAP_ID,
+    DEFAULT_SCALAR_FIELD_COLORS,
     FIXED_PUBLICATION_FRAME_POLICY,
     MAX_AUTO_LOG_EMPTY_RANGE_FACTOR,
     MAX_LEGEND_RESERVE_ITERATIONS,
@@ -74,6 +76,7 @@ from sciplot_core.study_model import (
 DEFAULT_PALETTE = DEFAULT_PALETTE_COLORS
 STACKED_TEMPLATE_IDS = {"stacked_curve", "segmented_stacked_curve"}
 CATEGORICAL_TEMPLATE_IDS = {"box", "box_strip"}
+SCALAR_FIELD_TEMPLATE_IDS = {"heatmap", "contour_field", "annotated_heatmap"}
 POINT_LINE_MARKERS = ("circle", "square", "diamond", "triangle")
 MARKER_MAP = {
     "circle": "circle",
@@ -1556,6 +1559,147 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _scalar_field_role_columns(
+    frame: pd.DataFrame,
+    *,
+    render_options: dict[str, Any],
+) -> tuple[object, object, object]:
+    numeric = _coerced_numeric_frame(frame)
+    numeric_columns = [column for column in numeric.columns if numeric[column].notna().any()]
+    if len(numeric_columns) < 3:
+        raise StudioPreparationBlocked(
+            "scalar_field_needs_xyz_columns",
+            "Scalar-field rendering needs three numeric X/Y/Z columns.",
+        )
+    requested = render_options.get("data_variables")
+    requested = requested if isinstance(requested, dict) else {}
+    resolved: list[object] = []
+    available_by_text = {str(column).strip().casefold(): column for column in frame.columns}
+    for role in ("x", "y", "z"):
+        value = requested.get(role)
+        if isinstance(value, str) and value.strip():
+            column = available_by_text.get(value.strip().casefold())
+            if column is None:
+                raise StudioPreparationBlocked(
+                    "scalar_field_role_column_missing",
+                    f"Scalar-field role `{role}` refers to missing column `{value}`.",
+                )
+            resolved.append(column)
+            continue
+        alias = next(
+            (
+                column
+                for column in numeric_columns
+                if str(column).strip().casefold() in {role, role.upper().casefold()}
+            ),
+            None,
+        )
+        if alias is not None and alias not in resolved:
+            resolved.append(alias)
+            continue
+        fallback = next((column for column in numeric_columns if column not in resolved), None)
+        if fallback is None:
+            raise StudioPreparationBlocked(
+                "scalar_field_role_column_missing",
+                f"Scalar-field role `{role}` could not be resolved.",
+            )
+        resolved.append(fallback)
+    return resolved[0], resolved[1], resolved[2]
+
+
+def _scalar_field_from_frames(
+    frames: list[tuple[str, pd.DataFrame]],
+    *,
+    render_options: dict[str, Any],
+) -> tuple[list[StudioSeries], dict[str, Any]]:
+    if len(frames) != 1:
+        raise StudioPreparationBlocked(
+            "scalar_field_needs_one_table",
+            "Scalar-field rendering currently accepts one plot-ready X/Y/Z table per figure.",
+        )
+    _source_label, frame = frames[0]
+    x_column, y_column, z_column = _scalar_field_role_columns(frame, render_options=render_options)
+    numeric = _coerced_numeric_frame(frame)
+    field = numeric[[x_column, y_column, z_column]].dropna().copy()
+    if field.empty:
+        raise StudioPreparationBlocked(
+            "scalar_field_has_no_finite_rows",
+            "Scalar-field X/Y/Z columns contain no complete numeric rows.",
+        )
+    if field.duplicated([x_column, y_column]).any():
+        raise StudioPreparationBlocked(
+            "scalar_field_duplicate_xy",
+            "Scalar-field X/Y pairs must be unique; aggregate duplicates explicitly before rendering.",
+        )
+    x_values = sorted(float(value) for value in field[x_column].unique())
+    y_values = sorted(float(value) for value in field[y_column].unique())
+    if len(x_values) < 2 or len(y_values) < 2:
+        raise StudioPreparationBlocked(
+            "scalar_field_grid_too_small",
+            "Scalar-field rendering needs at least two unique X and two unique Y coordinates.",
+        )
+    expected_rows = len(x_values) * len(y_values)
+    if len(field) != expected_rows:
+        raise StudioPreparationBlocked(
+            "scalar_field_incomplete_grid",
+            f"Scalar-field grid is incomplete: expected {expected_rows} unique X/Y cells, found {len(field)}.",
+        )
+    pivot = field.pivot(index=y_column, columns=x_column, values=z_column).reindex(
+        index=y_values,
+        columns=x_values,
+    )
+    if pivot.isna().any().any():
+        raise StudioPreparationBlocked(
+            "scalar_field_incomplete_grid",
+            "Scalar-field grid contains missing cells after X/Y pivoting.",
+        )
+    z_values = [[float(value) for value in row] for row in pivot.to_numpy(dtype=float)]
+    if not all(math.isfinite(value) for row in z_values for value in row):
+        raise StudioPreparationBlocked(
+            "scalar_field_non_finite_z",
+            "Scalar-field Z values must all be finite.",
+        )
+    zscale = str(render_options.get("zscale") or "linear").strip().casefold()
+    if zscale not in {"linear", "sqrt", "log", "squared"}:
+        raise ValueError("Scalar-field zscale must be linear, sqrt, log, or squared.")
+    if zscale == "log" and any(value <= 0.0 for row in z_values for value in row):
+        raise StudioPreparationBlocked(
+            "scalar_field_log_requires_positive_z",
+            "Scalar-field logarithmic color scaling requires strictly positive Z values.",
+        )
+    x_label = _veusz_axis_label(render_options.get("x_label_override") or str(x_column))
+    y_label = _veusz_axis_label(render_options.get("y_label_override") or str(y_column))
+    z_label = _veusz_axis_label(render_options.get("z_label_override") or str(z_column))
+    scalar_field = {
+        "data_name": "scalar_field_z",
+        "x_column": str(x_column),
+        "y_column": str(y_column),
+        "z_column": str(z_column),
+        "x_values": x_values,
+        "y_values": y_values,
+        "z_values": z_values,
+        "z_label": z_label,
+        "z_data_min": min(value for row in z_values for value in row),
+        "z_data_max": max(value for row in z_values for value in row),
+        "grid_shape": [len(y_values), len(x_values)],
+    }
+    surrogate = StudioSeries(
+        label=z_label,
+        x_name="scalar_field_extent_x",
+        y_name="scalar_field_extent_y",
+        x_values=(x_values[0], x_values[-1]),
+        y_values=(y_values[0], y_values[-1]),
+        color=DEFAULT_PALETTE[0],
+        marker="none",
+        presentation_kind="scalar_field",
+    )
+    return [surrogate], {
+        "x_label": x_label,
+        "y_label": y_label,
+        "scalar_field": scalar_field,
+    }
+
+
 def _series_from_request(
     request: dict[str, Any],
     *,
@@ -1573,7 +1717,12 @@ def _series_from_request(
     frames = _read_source_frames(source, request=request)
     raw_series: list[StudioSeries] = []
     axis_info: dict[str, Any] = {"x_label": "x", "y_label": "y"}
-    if _request_template(request) in CATEGORICAL_TEMPLATE_IDS:
+    if _request_template(request) in SCALAR_FIELD_TEMPLATE_IDS:
+        raw_series, axis_info = _scalar_field_from_frames(
+            frames,
+            render_options=render_options,
+        )
+    elif _request_template(request) in CATEGORICAL_TEMPLATE_IDS:
         raw_series, axis_info = _categorical_series_from_frames(
             frames,
             render_options=render_options,
@@ -3433,6 +3582,114 @@ def _visual_data_transforms(
     return transforms
 
 
+def _scalar_field_plot_contract(
+    axis_info: dict[str, Any],
+    *,
+    render_options: dict[str, Any],
+    template_id: str,
+) -> dict[str, Any] | None:
+    source = axis_info.get("scalar_field")
+    if template_id not in SCALAR_FIELD_TEMPLATE_IDS or not isinstance(source, dict):
+        return None
+    data_min = float(source["z_data_min"])
+    data_max = float(source["z_data_max"])
+    z_min = _optional_float(render_options.get("z_min"))
+    z_max = _optional_float(render_options.get("z_max"))
+    z_min = data_min if z_min is None else z_min
+    z_max = data_max if z_max is None else z_max
+    if not math.isfinite(z_min) or not math.isfinite(z_max) or z_min >= z_max:
+        raise ValueError("Scalar-field z_min and z_max must be finite and strictly increasing.")
+    zscale = str(render_options.get("zscale") or "linear").strip().casefold()
+    if zscale == "log" and z_min <= 0.0:
+        raise ValueError("Scalar-field logarithmic color scaling requires z_min > 0.")
+    colors_value = render_options.get("colormap_colors")
+    colors = [str(value) for value in colors_value] if isinstance(colors_value, list | tuple) else []
+    colors = [value for value in colors if re.fullmatch(r"#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?", value)]
+    if len(colors) < 2:
+        colors = list(DEFAULT_SCALAR_FIELD_COLORS)
+    contour_levels = [
+        value for value in _float_tuple(render_options.get("contour_levels")) if z_min <= value <= z_max
+    ]
+    highlight_levels = [
+        value
+        for value in _float_tuple(render_options.get("highlight_contour_levels"))
+        if z_min <= value <= z_max
+    ]
+    show_contours = bool(contour_levels) or template_id == "contour_field"
+    return {
+        **json_safe(source),
+        "z_min": z_min,
+        "z_max": z_max,
+        "zscale": zscale,
+        "z_ticks": list(_float_tuple(render_options.get("z_ticks"))),
+        "z_tick_format": str(
+            render_options.get("z_tick_format")
+            or (DEFAULT_LOG_TICK_FORMAT if zscale == "log" else "Auto")
+        ),
+        "show_colorbar": render_options.get("show_colorbar") is not False,
+        "colormap_name": str(render_options.get("colormap_name") or DEFAULT_SCALAR_FIELD_COLORMAP_ID),
+        "colormap_colors": colors,
+        "color_invert": render_options.get("color_invert") is True,
+        "field_mapping": str(render_options.get("field_mapping") or "bounds"),
+        "field_draw_mode": str(render_options.get("field_draw_mode") or "rectangles"),
+        "show_contours": show_contours,
+        "contour_levels": contour_levels,
+        "contour_color": str(render_options.get("contour_color") or "#FFFFFF"),
+        "contour_line_style": str(render_options.get("contour_line_style") or "solid"),
+        "contour_line_width_pt": float(render_options.get("contour_line_width_pt") or 0.45),
+        "contour_labels": render_options.get("contour_labels") is True,
+        "highlight_contour_levels": highlight_levels,
+        "highlight_contour_color": str(render_options.get("highlight_contour_color") or "#111111"),
+        "highlight_contour_line_style": str(
+            render_options.get("highlight_contour_line_style") or "dashed"
+        ),
+        "highlight_contour_line_width_pt": float(
+            render_options.get("highlight_contour_line_width_pt") or 0.9
+        ),
+        "colorbar_direction": str(render_options.get("colorbar_direction") or "horizontal"),
+        "colorbar_width_mm": float(render_options.get("colorbar_width_mm") or 31.0),
+        "colorbar_height_mm": float(render_options.get("colorbar_height_mm") or 2.4),
+        "colorbar_horz_manual": float(render_options.get("colorbar_horz_manual") or 0.86),
+        "colorbar_vert_manual": float(render_options.get("colorbar_vert_manual") or 0.18),
+    }
+
+
+def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str, Any]]:
+    value = render_options.get("reference_guides")
+    if not isinstance(value, list | tuple):
+        return []
+    guides: list[dict[str, Any]] = []
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "band").strip().casefold()
+        axis = str(item.get("axis_target") or item.get("axis") or "x").strip().casefold()
+        if kind not in {"band", "line"} or axis not in {"x", "y"}:
+            continue
+        start = _optional_float(item.get("start"))
+        end = _optional_float(item.get("end"))
+        value_number = _optional_float(item.get("value"))
+        if kind == "line" and value_number is not None:
+            start = value_number
+            end = value_number
+        if start is None or end is None:
+            continue
+        guides.append(
+            {
+                "id": str(item.get("id") or f"guide_{index}"),
+                "kind": kind,
+                "axis": axis,
+                "start": min(start, end),
+                "end": max(start, end),
+                "color": str(item.get("color") or "#6B7280"),
+                "transparency": int(item.get("transparency") or (86 if kind == "band" else 35)),
+                "line_width_pt": float(item.get("line_width_pt") or 0.7),
+                "line_style": str(item.get("line_style") or "dashed"),
+            }
+        )
+    return guides
+
+
 def _build_veusz_plot_spec(
     *,
     request: dict[str, Any],
@@ -3448,6 +3705,11 @@ def _build_veusz_plot_spec(
     show_key: bool,
     show_direct_labels: bool,
 ) -> dict[str, Any]:
+    scalar_field_contract = _scalar_field_plot_contract(
+        axis_info,
+        render_options=render_options,
+        template_id=template_id,
+    )
     categorical_contract = _categorical_plot_contract(
         series,
         template_id=template_id,
@@ -3660,6 +3922,8 @@ def _build_veusz_plot_spec(
         },
         "legend": legend_spec,
         "categorical": categorical_contract,
+        "scalar_field": scalar_field_contract,
+        "reference_guides": _reference_guides_contract(render_options),
         "series": [
             {
                 "name": f"series_{index}",
@@ -3694,6 +3958,7 @@ def _build_veusz_plot_spec(
                 ),
             }
             for index, item in enumerate(series, start=1)
+            if item.presentation_kind != "scalar_field"
         ],
         "direct_labels": label_specs,
     }
@@ -3756,6 +4021,193 @@ def _save_veusz_document_from_spec(
                 app.quit()
 
 
+def _hex_to_veusz_rgba(value: str) -> tuple[int, int, int, int]:
+    text = str(value).strip().lstrip("#")
+    if len(text) not in {6, 8} or not re.fullmatch(r"[0-9A-Fa-f]+", text):
+        raise ValueError(f"Invalid scalar-field colormap color: {value}")
+    alpha = int(text[6:8], 16) if len(text) == 8 else 255
+    return int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16), alpha
+
+
+def _add_veusz_contour(
+    interface: Any,
+    *,
+    name: str,
+    data_name: str,
+    levels: list[float],
+    color: str,
+    line_style: str,
+    line_width_pt: float,
+    show_labels: bool,
+) -> None:
+    if not levels:
+        return
+    interface.Add("contour", name=name, autoadd=False)
+    interface.To(name)
+    interface.Set("data", data_name)
+    interface.Set("scaling", "manual")
+    interface.Set("manualLevels", [float(value) for value in levels])
+    interface.Set("numLevels", len(levels))
+    interface.Set("Lines/lines", [(line_style, _pt(line_width_pt), color, False)])
+    interface.Set("Fills/hide", True)
+    interface.Set("SubLines/hide", True)
+    interface.Set("ContourLabels/hide", not show_labels)
+    interface.Set("keyLevels", False)
+    interface.To("..")
+
+
+def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any], style: dict[str, Any]) -> None:
+    data_name = str(scalar["data_name"])
+    interface.SetData2D(
+        data_name,
+        scalar["z_values"],
+        xcent=[float(value) for value in scalar["x_values"]],
+        ycent=[float(value) for value in scalar["y_values"]],
+    )
+    colormap_name = str(scalar["colormap_name"])
+    colormap = [_hex_to_veusz_rgba(value) for value in scalar["colormap_colors"]]
+    interface.AddCustom("colormap", colormap_name, colormap, mode="replace")
+    interface.Add("image", name="field_image", autoadd=False)
+    interface.To("field_image")
+    interface.Set("data", data_name)
+    interface.Set("min", float(scalar["z_min"]))
+    interface.Set("max", float(scalar["z_max"]))
+    interface.Set("colorScaling", str(scalar["zscale"]))
+    interface.Set("colorMap", colormap_name)
+    interface.Set("colorInvert", bool(scalar.get("color_invert")))
+    interface.Set("mapping", str(scalar.get("field_mapping") or "bounds"))
+    interface.Set("drawMode", str(scalar.get("field_draw_mode") or "rectangles"))
+    interface.To("..")
+    if scalar.get("show_contours") is True:
+        _add_veusz_contour(
+            interface,
+            name="field_contours",
+            data_name=data_name,
+            levels=[float(value) for value in scalar.get("contour_levels") or []],
+            color=str(scalar.get("contour_color") or "#FFFFFF"),
+            line_style=str(scalar.get("contour_line_style") or "solid"),
+            line_width_pt=float(scalar.get("contour_line_width_pt") or 0.45),
+            show_labels=bool(scalar.get("contour_labels")),
+        )
+    _add_veusz_contour(
+        interface,
+        name="field_highlight_contours",
+        data_name=data_name,
+        levels=[float(value) for value in scalar.get("highlight_contour_levels") or []],
+        color=str(scalar.get("highlight_contour_color") or "#111111"),
+        line_style=str(scalar.get("highlight_contour_line_style") or "dashed"),
+        line_width_pt=float(scalar.get("highlight_contour_line_width_pt") or 0.9),
+        show_labels=False,
+    )
+    if scalar.get("show_colorbar") is True:
+        interface.Add("colorbar", name="field_colorbar", autoadd=False)
+        interface.To("field_colorbar")
+        interface.Set("widgetName", "/page1/graph1/field_image")
+        direction = str(scalar.get("colorbar_direction") or "horizontal").strip().casefold()
+        if direction not in {"horizontal", "vertical"}:
+            direction = "horizontal"
+        interface.Set("direction", direction)
+        if direction == "horizontal":
+            interface.Set("horzPosn", "right")
+            interface.Set("vertPosn", "top")
+        else:
+            interface.Set("horzPosn", "manual")
+            interface.Set("vertPosn", "manual")
+            interface.Set("horzManual", float(scalar.get("colorbar_horz_manual") or 0.86))
+            interface.Set("vertManual", float(scalar.get("colorbar_vert_manual") or 0.18))
+        interface.Set("width", _cm_from_mm(float(scalar.get("colorbar_width_mm") or 2.4)))
+        interface.Set("height", _cm_from_mm(float(scalar.get("colorbar_height_mm") or 24.0)))
+        interface.Set("label", str(scalar.get("z_label") or "Z"))
+        interface.Set("autoMirror", False)
+        interface.Set("outerticks", True)
+        interface.Set("Line/color", "black")
+        interface.Set("Line/width", _pt(float(style["axis_linewidth_pt"])))
+        interface.Set("Border/color", "black")
+        interface.Set("Border/width", _pt(float(style["axis_linewidth_pt"])))
+        interface.Set("MajorTicks/width", _pt(float(style["tick_width_pt"])))
+        interface.Set("MajorTicks/length", _pt(float(style["tick_length_pt"])))
+        interface.Set("MinorTicks/width", _pt(float(style["minor_tick_width_pt"])))
+        interface.Set("MinorTicks/length", _pt(float(style["minor_tick_length_pt"])))
+        interface.Set("Label/size", _pt(float(style["font_size_pt"])))
+        interface.Set("TickLabels/size", _pt(float(style["font_size_pt"])))
+        interface.Set("TickLabels/format", str(scalar.get("z_tick_format") or "Auto"))
+        z_ticks = scalar.get("z_ticks") if isinstance(scalar.get("z_ticks"), list) else []
+        if 1 < len(z_ticks) <= 12:
+            interface.Set("MajorTicks/manualTicks", [float(value) for value in z_ticks])
+        interface.To("..")
+
+
+def _axis_midpoint(axis_spec: dict[str, Any]) -> float:
+    minimum = float(axis_spec["min"])
+    maximum = float(axis_spec["max"])
+    if str(axis_spec.get("scale") or "linear") == "log" and minimum > 0.0 and maximum > 0.0:
+        return math.sqrt(minimum * maximum)
+    return 0.5 * (minimum + maximum)
+
+
+def _add_veusz_reference_guides(interface: Any, spec: dict[str, Any]) -> None:
+    guides = spec.get("reference_guides")
+    if not isinstance(guides, list):
+        return
+    axes = spec["axes"]
+    x_axis = axes["x"]
+    y_axis = axes["y"]
+    if any(x_axis.get(key) is None for key in ("min", "max")) or any(
+        y_axis.get(key) is None for key in ("min", "max")
+    ):
+        return
+    x_min, x_max = float(x_axis["min"]), float(x_axis["max"])
+    y_min, y_max = float(y_axis["min"]), float(y_axis["max"])
+    for index, guide in enumerate(guides, start=1):
+        if not isinstance(guide, dict):
+            continue
+        axis = str(guide.get("axis") or "x")
+        kind = str(guide.get("kind") or "band")
+        start = float(guide["start"])
+        end = float(guide["end"])
+        if axis == "x":
+            clipped_start = max(start, x_min)
+            clipped_end = min(end, x_max)
+            if clipped_end < clipped_start:
+                continue
+            center_x = 0.5 * (clipped_start + clipped_end)
+            width_fraction = (clipped_end - clipped_start) / max(x_max - x_min, sys.float_info.epsilon)
+            if kind == "line" or math.isclose(width_fraction, 0.0):
+                width_fraction = max(width_fraction, 0.0025)
+            center_y = _axis_midpoint(y_axis)
+            height_fraction = 1.0
+        else:
+            clipped_start = max(start, y_min)
+            clipped_end = min(end, y_max)
+            if clipped_end < clipped_start:
+                continue
+            if str(y_axis.get("scale") or "linear") == "log" and clipped_start > 0.0 and clipped_end > 0.0:
+                center_y = math.sqrt(clipped_start * clipped_end)
+                height_fraction = math.log(clipped_end / clipped_start) / max(
+                    math.log(y_max / y_min),
+                    sys.float_info.epsilon,
+                )
+            else:
+                center_y = 0.5 * (clipped_start + clipped_end)
+                height_fraction = (clipped_end - clipped_start) / max(y_max - y_min, sys.float_info.epsilon)
+            if kind == "line" or math.isclose(height_fraction, 0.0):
+                height_fraction = max(height_fraction, 0.0025)
+            center_x = _axis_midpoint(x_axis)
+            width_fraction = 1.0
+        interface.Add("rect", name=f"reference_guide_{index}", autoadd=False)
+        interface.To(f"reference_guide_{index}")
+        interface.Set("positioning", "axes")
+        interface.Set("xPos", [center_x])
+        interface.Set("yPos", [center_y])
+        interface.Set("width", [min(max(width_fraction, 0.0), 1.0)])
+        interface.Set("height", [min(max(height_fraction, 0.0), 1.0)])
+        interface.Set("clip", True)
+        interface.Set("Fill/color", str(guide.get("color") or "#6B7280"))
+        interface.Set("Fill/transparency", min(max(int(guide.get("transparency") or 86), 0), 100))
+        interface.Set("Border/hide", True)
+        interface.To("..")
+
+
 def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     style = spec["style"]
     axes = spec["axes"]
@@ -3794,6 +4246,8 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     interface.To("page1")
     interface.Set("width", f"{float(size_mm[0]):g}mm")
     interface.Set("height", f"{float(size_mm[1]):g}mm")
+    interface.Set("Background/color", "white")
+    interface.Set("Background/hide", False)
     interface.Add("graph", name="graph1", autoadd=False)
     interface.To("graph1")
     interface.Set("Border/hide", True)
@@ -3804,6 +4258,10 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     interface.Set("bottomMargin", _cm_from_mm(float(margins["bottom"])))
     _add_veusz_axis(interface, "x", axes["x"], style)
     _add_veusz_axis(interface, "y", axes["y"], style)
+    scalar = spec.get("scalar_field") if isinstance(spec.get("scalar_field"), dict) else None
+    if scalar is not None:
+        _add_veusz_scalar_field(interface, scalar, style)
+    _add_veusz_reference_guides(interface, spec)
     legend = spec["legend"]
     if legend["show"]:
         interface.Add("key", name="key1", autoadd=False)
@@ -4204,6 +4662,8 @@ def _series_label_anchor(item: StudioSeries, *, reverse_x: bool, side: str) -> t
 
 
 def _show_veusz_key(*, template_id: str, render_options: dict[str, Any], series_count: int) -> bool:
+    if template_id in SCALAR_FIELD_TEMPLATE_IDS:
+        return False
     if series_count <= 1:
         return False
     if template_id in CATEGORICAL_TEMPLATE_IDS:
