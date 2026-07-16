@@ -32,7 +32,7 @@ def launch_canvas_application(
     application.setApplicationName("SciPlot Canvas")
     application.setOrganizationName("SciPlot")
     application.setQuitOnLastWindowClosed(True)
-    QtCore.QCoreApplication.setApplicationVersion("0.1.0-m1")
+    QtCore.QCoreApplication.setApplicationVersion("0.1.0-m2-dev")
     window = SciPlotCanvasWindow(workspace)
     window.show()
     if not owns_application:

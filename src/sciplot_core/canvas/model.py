@@ -17,7 +17,8 @@ from sciplot_core.canvas._validation import (
 )
 
 CANVAS_SESSION_KIND = "sciplot_canvas_session"
-CANVAS_SESSION_VERSION = 1
+CANVAS_SESSION_VERSION = 2
+CANVAS_SESSION_COMPATIBLE_VERSIONS = {1, CANVAS_SESSION_VERSION}
 CANVAS_SESSION_STATES = {
     "preparing",
     "canvas_ready",
@@ -290,6 +291,59 @@ class CanvasViewport:
 
 
 @dataclass
+class CanvasInterfaceState:
+    """Document-local workbench preferences that do not alter visual authority."""
+
+    inspector_visible: bool = True
+    inspector_width: int = 340
+    high_contrast: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.inspector_visible, bool):
+            raise ValueError("inspector_visible must be a boolean.")
+        if not isinstance(self.inspector_width, int) or isinstance(
+            self.inspector_width, bool
+        ):
+            raise ValueError("inspector_width must be an integer.")
+        if not 280 <= self.inspector_width <= 720:
+            raise ValueError("inspector_width must be between 280 and 720 pixels.")
+        if not isinstance(self.high_contrast, bool):
+            raise ValueError("high_contrast must be a boolean.")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "inspector_visible": self.inspector_visible,
+            "inspector_width": self.inspector_width,
+            "high_contrast": self.high_contrast,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any] | None) -> CanvasInterfaceState:
+        if payload is None:
+            return cls()
+        value = require_json_object(payload, label="interface")
+        reject_unknown_keys(
+            value,
+            {"inspector_visible", "inspector_width", "high_contrast"},
+            label="interface",
+        )
+        return cls(
+            inspector_visible=require_json_bool(
+                value.get("inspector_visible", True),
+                label="interface.inspector_visible",
+            ),
+            inspector_width=require_json_int(
+                value.get("inspector_width", 340),
+                label="interface.inspector_width",
+            ),
+            high_contrast=require_json_bool(
+                value.get("high_contrast", False),
+                label="interface.high_contrast",
+            ),
+        )
+
+
+@dataclass
 class CanvasTransaction:
     transaction_id: str
     provider: str
@@ -361,6 +415,7 @@ class CanvasSession:
     current_page: int = 0
     selection: CanvasSelection = field(default_factory=CanvasSelection)
     viewport: CanvasViewport = field(default_factory=CanvasViewport)
+    interface: CanvasInterfaceState = field(default_factory=CanvasInterfaceState)
     active_inspector: str | None = None
     active_transaction: CanvasTransaction | None = None
     saved_revision: int = 0
@@ -451,6 +506,7 @@ class CanvasSession:
             "current_page": self.current_page,
             "selection": self.selection.to_dict(),
             "viewport": self.viewport.to_dict(),
+            "interface": self.interface.to_dict(),
             "active_inspector": self.active_inspector,
             "active_transaction": (
                 self.active_transaction.to_dict() if self.active_transaction else None
@@ -485,6 +541,7 @@ class CanvasSession:
                 "current_page",
                 "selection",
                 "viewport",
+                "interface",
                 "active_inspector",
                 "active_transaction",
                 "saved_revision",
@@ -505,7 +562,7 @@ class CanvasSession:
         if payload.get("kind") != CANVAS_SESSION_KIND:
             raise ValueError("Not a SciPlot CanvasSession payload.")
         version = require_json_int(payload.get("version", 0), label="version")
-        if version != CANVAS_SESSION_VERSION:
+        if version not in CANVAS_SESSION_COMPATIBLE_VERSIONS:
             raise ValueError(
                 f"Unsupported CanvasSession version: {payload.get('version')!r}"
             )
@@ -539,6 +596,7 @@ class CanvasSession:
             ),
             selection=CanvasSelection.from_dict(payload.get("selection")),
             viewport=CanvasViewport.from_dict(payload.get("viewport")),
+            interface=CanvasInterfaceState.from_dict(payload.get("interface")),
             active_inspector=active_inspector or None,
             active_transaction=CanvasTransaction.from_dict(
                 payload.get("active_transaction")
@@ -591,9 +649,11 @@ class CanvasSession:
 
 __all__ = [
     "CANVAS_SESSION_KIND",
+    "CANVAS_SESSION_COMPATIBLE_VERSIONS",
     "CANVAS_SESSION_STATES",
     "CANVAS_SESSION_VERSION",
     "CANVAS_TRANSACTION_STATES",
+    "CanvasInterfaceState",
     "CanvasObjectRecord",
     "CanvasSelection",
     "CanvasSession",

@@ -1,7 +1,8 @@
 # SciPlot Operation Flow and Visual System
 
-Status: active frontend source of truth, 2026-07-17. M1 is complete; M2 is the
-next implementation milestone.
+Status: active frontend source of truth, 2026-07-17. M1 is complete; M2 is in
+progress. The adaptive visual foundation is implemented, while contextual
+scientific editing and review tools remain active work.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -189,7 +190,7 @@ or menu route so the toolbar can adapt or be hidden.
 - smooth pan and zoom;
 - visible selection and direct-manipulation affordances;
 - no fake placeholder canvas during import;
-- optional canvas-only shortcut, planned for M2.
+- `Tab` Canvas-only mode with `Esc` recovery.
 
 ### Contextual inspector
 
@@ -224,14 +225,15 @@ developer diagnostics.
 - **Narrow, below 980 px:** inspector becomes on-demand overlay or separate
   contextual view; status-bar details may move into a popover; the canvas
   remains the primary readable region.
-- **Canvas only:** `Tab` is reserved for a future distraction-free canvas
-  view, inspired by Krita, while `F9` toggles the inspector.
+- **Canvas only:** `Tab` hides toolbar, menu, status, and inspector without
+  changing the exact-current figure; `Esc` restores chrome and `F9` toggles
+  the inspector.
 
 Test full screen, half-screen, two-thirds, and minimum supported window sizes.
 
 ## Visual tokens for M2
 
-M2 must move the current prototype QSS toward a palette-backed token layer:
+The M2 foundation now uses a palette-backed token layer:
 
 - system UI font; ordinary interface text at or above the platform minimum;
 - spacing scale: 4, 8, 12, 16, and 24 px;
@@ -246,19 +248,41 @@ M2 must move the current prototype QSS toward a palette-backed token layer:
 The scientific figure's own colors remain governed by SciPlot publication and
 accessibility QA, not by application chrome tokens.
 
+## M2 foundation delivered
+
+- application chrome is generated from the active `QPalette`, including real
+  dark-palette and increased-contrast variants;
+- the inspector is a native dock that floats below 980 px and returns to its
+  dock on wider windows;
+- inspector visibility, bounded width, contrast preference, and active
+  inspector persist in `CanvasSession` version 2, with safe version-1
+  migration;
+- `Tab`, `Esc`, `F9`, menus, shortcuts, focus indication, and accessible
+  control names are covered by the native application probe;
+- normal, dark, increased-contrast, and recovery screenshots are generated
+  from the actual Qt workbench;
+- the representative native app gate now passes `21/21`, and runtime smoke v10
+  passes `26/26`.
+
 ## M2 implementation order
 
-1. Extract palette, typography, spacing, and icon tokens from the M1 shell.
-2. Add adaptive inspector collapse/overlay and canvas-only mode.
-3. Replace the visible-text prototype with selection-driven page, axis,
+Completed foundation:
+
+1. Extract palette, typography, spacing, focus, and semantic-state tokens.
+2. Add adaptive inspector docking/floating and Canvas-only mode.
+3. Persist interface state and verify keyboard/accessibility parity.
+
+Remaining M2 work:
+
+1. Replace the visible-text prototype with selection-driven page, axis,
    series, legend, appearance, and annotation inspectors.
-4. Add structural breadcrumbs, selection highlighting, and data-point
+2. Add structural breadcrumbs, selection highlighting, and data-point
    selection.
-5. Add preview/apply/revert interaction and debounced structural QA.
-6. Add non-exported review overlay and persistent annotation coordinates.
-7. Promote review marks into native Veusz annotations.
-8. Run at least ten representative real sessions across five figure families.
-9. Only then migrate the normal `studio` entrypoint from Veusz MainWindow to
+3. Add preview/apply/revert interaction and debounced structural QA.
+4. Add non-exported review overlay and persistent annotation coordinates.
+5. Promote review marks into native Veusz annotations.
+6. Run at least ten representative real sessions across five figure families.
+7. Only then migrate the normal `studio` entrypoint from Veusz MainWindow to
    SciPlot Canvas.
 
 ## Design acceptance

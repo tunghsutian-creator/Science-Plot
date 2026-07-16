@@ -29,11 +29,12 @@ fixture、策略或 QA，使下一次能够少用或不用 AI。
 项目的目标不是提高 AI 占比，而是让 AI 只处理未知性。对于已验收的数据和绘图规则，
 程序应直接返回 `ready_to_use=true`，无需 AI 看图；不确定时必须停在确认或修复状态。
 
-当前完成到 M1：统一 Canvas 会话、类型化操作、审阅批注和数据映射合同已经建立；用户可见
-的原生 Qt Canvas shell 已能嵌入 `PlotWindow`，处理选择、可见文字编辑、撤销/重做、保存、
-恢复、精确导出、QA 和项目交付。50 次连续实时操作门禁以及授权真实曲线、人工编辑 VSZ 和
-真实四面板云图回归均已通过。M2 将扩展为日常页面/轴/曲线/图例检查器、批注和直接操作，
-因此当前 `studio` 默认入口暂不切换。
+当前完成到 M2 的基础层：统一 Canvas 会话、类型化操作、审阅批注和数据映射合同已经建立；
+原生 Qt Canvas shell 已能嵌入 `PlotWindow`，处理选择、可见文字编辑、撤销/重做、保存、
+恢复、精确导出、QA 和项目交付。界面现已支持系统 palette 驱动的明暗/高对比主题、窄窗口
+浮动检查器、`Tab` Canvas-only、菜单/快捷键对等、可访问名称和跨重开界面状态持久化。
+50 次连续实时操作门禁以及多类真实/代表性工程回归均已通过。M2 仍需补齐日常页面/轴/曲线/
+图例检查器、审阅覆盖层、批注晋升和直接操作，因此当前 `studio` 默认入口暂不切换。
 
 ## 日常主流程
 
@@ -83,7 +84,7 @@ skill/scripts/sciplot studio PATH \
 `--rule` 是明确的科学语义选择，会绕过自动猜测；`--template` 是明确的呈现选择，可单独使用，
 也可省略并采用该规则的默认模板。Luna/Codex 可以根据用户自然语言直接填写这两个参数。
 
-## 原生 Canvas（M1 实验入口）
+## 原生 Canvas（M2 基础实验入口）
 
 对已有 SciPlot project、`plot_request.json` 或独立 VSZ 进行实时编辑：
 
@@ -102,10 +103,14 @@ SciPlot 窗口中显示实时画布和从属检查器。当前高频能力包括
 - QA/export revision 状态；
 - 显式未保存恢复；
 - `F9` 收起检查器；
+- `Tab` 进入 Canvas-only，`Esc` 恢复界面；
+- 系统 palette 驱动的明暗与高对比应用 chrome；
+- 窄窗口检查器自动浮动，保持画布宽度；
+- 界面状态、菜单/快捷键和可访问名称门禁；
 - `More` 中的 Advanced Editor 恢复入口。
 
-这是 M1 内核，不代表 M2 的完整日常编辑器。页面、轴、曲线、图例、外观、批注、数据点选择
-和直接操作仍在下一阶段。日常自动绘图与交付目前仍优先使用 `studio`。
+这是 M2 基础层，不代表 M2 的完整日常编辑器。页面、轴、曲线、图例、外观、批注、数据点
+选择和直接操作仍在下一批。日常自动绘图与交付目前仍优先使用 `studio`。
 
 ## 高级修图（过渡期恢复入口）
 
@@ -187,6 +192,7 @@ PROJECT/
 - Veusz `.vsz` 生成、完整 Veusz 高级编辑和 exact-current export；
 - M0 Canvas 内核合同、稳定对象 ID、恢复快照和冲突门禁；
 - M1 原生 Qt Canvas shell、实时选择/文字编辑、50 次连续操作门禁、精确导出和显式恢复；
+- M2 palette-backed 明暗/高对比主题、适应式检查器、Canvas-only、可访问性和界面状态持久化；
 - 60/120/180 mm 单图尺寸以及 183 mm 组合图布局；
 - publication intent、transform ledger、研究模型和证据绑定；
 - PDF 页面/字体/尺寸/可见墨迹、TIFF 分辨率、PDF-TIFF 配对和哈希 QA；
@@ -257,9 +263,10 @@ skill/scripts/sciplot qa OUTPUT_DIR --strict-publication
 ```
 
 `autoplot`、`run`、`batch` 和 recipe/render 是专家与兼容接口；日常新任务优先走 `studio`。
-`smoke` 在运行时生成明确标记的合成 FTIR 合同表以及显式意图 swelling 等解析合同，检查
-语义选择、VSZ 重开与人工编辑保留、精确导出、PDF/TIFF 配对、交付哈希及哈希失败门禁；
-它不属于真实数据证据。完整规则矩阵依赖本地验收数据，因此不属于 GitHub 最小运行发行版。
+`smoke` 在运行时生成明确标记的合成 FTIR 合同表以及 SAXS、GPC、多工作表 Impact 和显式
+意图 swelling 等解析合同，检查语义选择、原生 Canvas 21 项应用合同、VSZ 重开与人工编辑
+保留、精确导出、PDF/TIFF 配对、交付哈希及哈希失败门禁；它不属于真实数据证据。完整规则
+矩阵依赖本地验收数据，因此不属于 GitHub 最小运行发行版。
 
 ## 安装
 
@@ -290,4 +297,6 @@ python3 -m venv .venv
 
 `skill/scripts/sciplot` 会把当前 checkout 的 `src/` 加入 Python 导入路径，因此普通
 Git worktree 即使没有自己的 `.venv`，也能使用系统 Python 或 `SCIPLOT_PYTHON`
-直接运行本分支代码。高级开发环境可用 `SCIPLOT_SOURCE_ROOT` 显式指定源码树。
+直接运行本分支代码。高级开发环境可用 `SCIPLOT_SOURCE_ROOT` 显式指定源码树。在 macOS
+上，包装器还会从已编译 Veusz helper 的链接信息推导匹配的 Qt framework；`doctor` 会实际
+导入该 helper，避免只检查到 PyQt 包存在却无法启动 GUI。

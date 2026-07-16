@@ -9,147 +9,16 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 
 from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 from sciplot_gui.document_controller import DocumentController
+from sciplot_gui.theme import (
+    CanvasThemeTokens,
+    build_canvas_stylesheet,
+    build_canvas_theme,
+)
 from sciplot_gui.workspace import CanvasWorkspace, export_canvas_workspace
 
 
-_STYLE = """
-QMainWindow {
-    background: #edf1f5;
-    color: #18212b;
-}
-QToolBar#sciplotToolbar {
-    background: #ffffff;
-    border: 0;
-    border-bottom: 1px solid #d9e0e7;
-    spacing: 5px;
-    padding: 7px 10px;
-}
-QToolBar#sciplotToolbar QToolButton {
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 7px;
-    padding: 6px 9px;
-    color: #273442;
-}
-QToolBar#sciplotToolbar QToolButton:hover {
-    background: #f0f4f8;
-    border-color: #dce4eb;
-}
-QToolBar#sciplotToolbar QToolButton:pressed {
-    background: #e3ebf2;
-}
-QToolBar#sciplotToolbar QToolButton:disabled {
-    color: #a7b1bb;
-}
-QLabel#documentTitle {
-    font-size: 15px;
-    font-weight: 700;
-    color: #15202b;
-    padding-left: 4px;
-}
-QLabel#toolbarMeta {
-    color: #667482;
-    padding: 0 5px;
-}
-QFrame#canvasWell {
-    background: #343a42;
-    border: 1px solid #252a30;
-}
-QFrame#recoveryBanner {
-    background: #fff3d6;
-    border: 0;
-    border-bottom: 1px solid #f0d496;
-}
-QLabel#recoveryText {
-    color: #76541b;
-    padding: 8px 12px;
-    font-weight: 600;
-}
-QFrame#inspector {
-    background: #ffffff;
-    border-left: 1px solid #d9e0e7;
-}
-QLabel#inspectorTitle {
-    color: #17212b;
-    font-size: 18px;
-    font-weight: 750;
-}
-QLabel#sectionTitle {
-    color: #667482;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.7px;
-}
-QLabel#stateChip {
-    background: #e7f4ee;
-    color: #1e6a4c;
-    border-radius: 8px;
-    padding: 4px 8px;
-    font-weight: 700;
-}
-QLabel#stateChip[canvasState="canvas_ready"] {
-    background: #e7eff7;
-    color: #315f82;
-}
-QLabel#stateChip[canvasState="editing"] {
-    background: #fff0d2;
-    color: #805713;
-}
-QLabel#stateChip[canvasState="needs_rule_repair"],
-QLabel#stateChip[canvasState="conflict"] {
-    background: #fde8e7;
-    color: #9c352f;
-}
-QLabel#muted {
-    color: #697785;
-}
-QLabel#value {
-    color: #22303d;
-}
-QLineEdit, QComboBox {
-    background: #f8fafc;
-    color: #1d2a36;
-    border: 1px solid #d6dee6;
-    border-radius: 7px;
-    padding: 7px 9px;
-    min-height: 20px;
-}
-QLineEdit:focus, QComboBox:focus {
-    border-color: #5d88b3;
-    background: #ffffff;
-}
-QPushButton {
-    background: #246b9f;
-    color: #ffffff;
-    border: 0;
-    border-radius: 7px;
-    padding: 8px 12px;
-    font-weight: 650;
-}
-QPushButton:hover {
-    background: #1e5f8f;
-}
-QPushButton:disabled {
-    background: #b8c6d1;
-}
-QFrame#divider {
-    background: #e6ebef;
-    min-height: 1px;
-    max-height: 1px;
-}
-QStatusBar {
-    background: #ffffff;
-    border-top: 1px solid #d9e0e7;
-    color: #5f6d79;
-}
-QStatusBar QLabel {
-    padding: 2px 8px;
-}
-"""
-
-
 class SciPlotCanvasWindow(QtWidgets.QMainWindow):
-    """Focused M1 shell around the exact-current Veusz document."""
+    """Adaptive SciPlot shell around the exact-current Veusz document."""
 
     def __init__(
         self,
@@ -163,15 +32,21 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.last_export: dict[str, Any] | None = None
         self._close_policy_override: str | None = None
         self._closed = False
+        self._closing = False
         self._fit_scheduled = False
+        self._canvas_only = False
+        self._adaptive_floating = False
+        self._applying_theme = False
+        self._restoring_interface = False
+        self._narrow_threshold = 980
+        self.theme_tokens: CanvasThemeTokens | None = None
         self.setObjectName("sciplotCanvasWindow")
         self.setAttribute(
             QtCore.Qt.WidgetAttribute.WA_DeleteOnClose,
             self.interactive,
         )
         self.resize(1380, 860)
-        self.setMinimumSize(980, 640)
-        self.setStyleSheet(_STYLE)
+        self.setMinimumSize(760, 560)
 
         self.controller = DocumentController(
             document_path=workspace.document_path,
@@ -186,6 +61,9 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._build_toolbar()
         self._build_central_workspace()
         self._build_status_bar()
+        self._build_menus()
+        self._apply_theme()
+        self._restore_interface_state()
         self._connect_canvas_signals()
         self._populate_text_targets()
         self._sync_ui()
@@ -198,6 +76,12 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._view_state_timer.setInterval(350)
         self._view_state_timer.timeout.connect(self._poll_view_state)
         self._view_state_timer.start()
+        style_hints = QtGui.QGuiApplication.styleHints()
+        if hasattr(style_hints, "colorSchemeChanged"):
+            style_hints.colorSchemeChanged.connect(self._system_color_scheme_changed)
+        application = QtWidgets.QApplication.instance()
+        if application is not None:
+            application.installEventFilter(self)
 
     def _action(
         self,
@@ -206,13 +90,26 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         callback: Any,
         *,
         tooltip: str,
+        object_name: str | None = None,
+        accessible_name: str | None = None,
     ) -> QtGui.QAction:
         action = QtGui.QAction(text, self)
+        action.setObjectName(object_name or "")
         if shortcut:
             action.setShortcut(QtGui.QKeySequence(shortcut))
         action.setToolTip(tooltip)
+        action.setStatusTip(tooltip)
+        action.setProperty("sciplotAccessibleName", accessible_name or tooltip)
         action.triggered.connect(callback)
         return action
+
+    def _bind_toolbar_accessibility(self, action: QtGui.QAction) -> None:
+        widget = self.toolbar.widgetForAction(action)
+        if widget is None:
+            return
+        name = str(action.property("sciplotAccessibleName") or action.toolTip())
+        widget.setAccessibleName(name)
+        widget.setAccessibleDescription(action.toolTip())
 
     def _build_toolbar(self) -> None:
         toolbar = QtWidgets.QToolBar("SciPlot Canvas", self)
@@ -248,20 +145,25 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             "Ctrl+S",
             self._save_triggered,
             tooltip="Save the exact current VSZ",
+            object_name="saveAction",
         )
         self.undo_action = self._action(
             "Undo",
             "Ctrl+Z",
             self._undo_triggered,
             tooltip="Undo one accepted Canvas batch",
+            object_name="undoAction",
         )
         self.redo_action = self._action(
             "Redo",
             "Ctrl+Shift+Z",
             self._redo_triggered,
             tooltip="Redo one accepted Canvas batch",
+            object_name="redoAction",
         )
         toolbar.addActions([self.save_action, self.undo_action, self.redo_action])
+        for action in (self.save_action, self.undo_action, self.redo_action):
+            self._bind_toolbar_accessibility(action)
         toolbar.addSeparator()
 
         self.previous_page_action = self._action(
@@ -269,18 +171,24 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             "Ctrl+PgUp",
             lambda: self._change_page(-1),
             tooltip="Previous page",
+            object_name="previousPageAction",
+            accessible_name="Previous page",
         )
         self.next_page_action = self._action(
             "›",
             "Ctrl+PgDown",
             lambda: self._change_page(1),
             tooltip="Next page",
+            object_name="nextPageAction",
+            accessible_name="Next page",
         )
         self.page_label = QtWidgets.QLabel()
         self.page_label.setObjectName("toolbarMeta")
         toolbar.addAction(self.previous_page_action)
+        self._bind_toolbar_accessibility(self.previous_page_action)
         toolbar.addWidget(self.page_label)
         toolbar.addAction(self.next_page_action)
+        self._bind_toolbar_accessibility(self.next_page_action)
         toolbar.addSeparator()
 
         self.zoom_out_action = self._action(
@@ -288,24 +196,30 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             "Ctrl+-",
             lambda: self._set_zoom(self.controller.adapter.zoom_factor / 1.25),
             tooltip="Zoom out",
+            object_name="zoomOutAction",
+            accessible_name="Zoom out",
         )
         self.zoom_in_action = self._action(
             "+",
             "Ctrl++",
             lambda: self._set_zoom(self.controller.adapter.zoom_factor * 1.25),
             tooltip="Zoom in",
+            object_name="zoomInAction",
+            accessible_name="Zoom in",
         )
         self.zoom_page_action = self._action(
             "Fit",
             "Ctrl+0",
             self._zoom_to_page,
             tooltip="Fit the complete page",
+            object_name="zoomFitAction",
         )
         self.zoom_100_action = self._action(
             "100%",
             "Ctrl+1",
             lambda: self._set_zoom(1.0),
             tooltip="Show the page at 1:1",
+            object_name="zoomActualSizeAction",
         )
         self.zoom_label = QtWidgets.QLabel()
         self.zoom_label.setObjectName("toolbarMeta")
@@ -317,6 +231,13 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 self.zoom_100_action,
             ]
         )
+        for action in (
+            self.zoom_out_action,
+            self.zoom_in_action,
+            self.zoom_page_action,
+            self.zoom_100_action,
+        ):
+            self._bind_toolbar_accessibility(action)
         toolbar.addWidget(self.zoom_label)
 
         spacer = QtWidgets.QWidget()
@@ -331,30 +252,62 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             "Ctrl+E",
             self._export_triggered,
             tooltip="Save and export the exact current PDF/TIFF pair",
+            object_name="exportAction",
         )
         self.advanced_action = self._action(
             "Advanced Editor",
             None,
             self._advanced_editor_triggered,
             tooltip="Open the canonical VSZ in the full Veusz recovery editor",
+            object_name="advancedEditorAction",
         )
         self.inspector_action = self._action(
             "Show Inspector",
             "F9",
             self._toggle_inspector,
             tooltip="Show or hide the contextual inspector",
+            object_name="inspectorAction",
         )
         self.inspector_action.setCheckable(True)
-        self.inspector_action.setChecked(True)
+        self.canvas_only_action = self._action(
+            "Canvas Only",
+            None,
+            self._toggle_canvas_only,
+            tooltip="Hide application chrome and focus on the exact-current figure (Tab)",
+            object_name="canvasOnlyAction",
+        )
+        self.canvas_only_action.setCheckable(True)
+        self.high_contrast_action = self._action(
+            "Increase Contrast",
+            "Ctrl+Shift+H",
+            self._toggle_high_contrast,
+            tooltip="Increase contrast for SciPlot application chrome",
+            object_name="highContrastAction",
+        )
+        self.high_contrast_action.setCheckable(True)
+        self.close_action = self._action(
+            "Close",
+            "Ctrl+W",
+            self.close,
+            tooltip="Close the current SciPlot Canvas",
+            object_name="closeAction",
+        )
         toolbar.addAction(self.export_action)
+        self._bind_toolbar_accessibility(self.export_action)
 
         more_menu = QtWidgets.QMenu(self)
         more_menu.addAction(self.inspector_action)
+        more_menu.addAction(self.canvas_only_action)
+        more_menu.addAction(self.high_contrast_action)
         more_menu.addSeparator()
         more_menu.addAction(self.advanced_action)
         more_button = QtWidgets.QToolButton(toolbar)
         more_button.setText("More")
         more_button.setToolTip("Additional Canvas and recovery actions")
+        more_button.setAccessibleName("More Canvas actions")
+        more_button.setAccessibleDescription(
+            "Open inspector, Canvas-only, contrast, and recovery commands"
+        )
         more_button.setPopupMode(QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup)
         more_button.setMenu(more_menu)
         toolbar.addWidget(more_button)
@@ -362,10 +315,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.more_button = more_button
 
     def _build_central_workspace(self) -> None:
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal, self)
-        splitter.setChildrenCollapsible(False)
-
-        canvas_well = QtWidgets.QFrame(splitter)
+        canvas_well = QtWidgets.QFrame(self)
         canvas_well.setObjectName("canvasWell")
         canvas_layout = QtWidgets.QVBoxLayout(canvas_well)
         canvas_layout.setContentsMargins(0, 0, 0, 0)
@@ -379,21 +329,26 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             "Recovered unsaved Canvas work. Save to make this state canonical."
         )
         recovery_text.setObjectName("recoveryText")
+        recovery_text.setAccessibleName("Recovered unsaved Canvas work")
+        recovery_text.setAccessibleDescription(
+            "Save to make the recovered state canonical."
+        )
         recovery_layout.addWidget(recovery_text)
         recovery_layout.addStretch(1)
         canvas_layout.addWidget(self.recovery_banner)
         canvas_layout.addWidget(self.plot_window, 1)
 
-        inspector = QtWidgets.QFrame(splitter)
+        inspector = QtWidgets.QFrame()
         inspector.setObjectName("inspector")
-        inspector.setMinimumWidth(300)
-        inspector.setMaximumWidth(390)
+        inspector.setMinimumWidth(280)
+        inspector.setMaximumWidth(720)
         inspector_layout = QtWidgets.QVBoxLayout(inspector)
         inspector_layout.setContentsMargins(22, 20, 22, 20)
         inspector_layout.setSpacing(10)
 
         inspector_title = QtWidgets.QLabel("Figure")
         inspector_title.setObjectName("inspectorTitle")
+        inspector_title.setAccessibleName("Figure inspector")
         inspector_layout.addWidget(inspector_title)
         context = (
             "SciPlot project"
@@ -423,14 +378,23 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
 
         inspector_layout.addWidget(self._section_label("VISIBLE TEXT"))
         self.text_target_combo = QtWidgets.QComboBox()
+        self.text_target_combo.setAccessibleName("Visible figure text target")
+        self.text_target_combo.setAccessibleDescription(
+            "Choose a bounded visible label from the exact-current figure."
+        )
         self.text_target_combo.setToolTip(
             "Bounded list of visible labels; this is not the Veusz object tree."
         )
         self.text_target_combo.currentIndexChanged.connect(self._text_target_changed)
         self.text_value_edit = QtWidgets.QLineEdit()
+        self.text_value_edit.setAccessibleName("Selected figure text")
+        self.text_value_edit.setAccessibleDescription(
+            "Edit the selected visible label before applying it to the live canvas."
+        )
         self.text_value_edit.setPlaceholderText("Select a visible label")
         self.text_value_edit.returnPressed.connect(self._apply_text_triggered)
         self.apply_text_button = QtWidgets.QPushButton("Apply to live canvas")
+        self.apply_text_button.setAccessibleName("Apply text to live canvas")
         self.apply_text_button.clicked.connect(self._apply_text_triggered)
         inspector_layout.addWidget(self.text_target_combo)
         inspector_layout.addWidget(self.text_value_edit)
@@ -452,13 +416,38 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         contract_note.setWordWrap(True)
         inspector_layout.addWidget(contract_note)
 
-        splitter.addWidget(canvas_well)
-        splitter.addWidget(inspector)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 0)
-        splitter.setSizes([1040, 340])
-        self.setCentralWidget(splitter)
-        self.splitter = splitter
+        inspector_dock = QtWidgets.QDockWidget("Inspector", self)
+        inspector_dock.setObjectName("inspectorDock")
+        inspector_dock.setAllowedAreas(
+            QtCore.Qt.DockWidgetArea.LeftDockWidgetArea
+            | QtCore.Qt.DockWidgetArea.RightDockWidgetArea
+        )
+        inspector_dock.setFeatures(
+            QtWidgets.QDockWidget.DockWidgetFeature.DockWidgetClosable
+            | QtWidgets.QDockWidget.DockWidgetFeature.DockWidgetMovable
+            | QtWidgets.QDockWidget.DockWidgetFeature.DockWidgetFloatable
+        )
+        inspector_dock.setMinimumWidth(280)
+        inspector_dock.setMaximumWidth(720)
+        inspector_dock.setWidget(inspector)
+        inspector_dock.setAccessibleName("Contextual figure inspector")
+        docked_title_bar = QtWidgets.QWidget(inspector_dock)
+        docked_title_bar.setFixedHeight(0)
+        inspector_dock.setTitleBarWidget(docked_title_bar)
+        inspector_dock.visibilityChanged.connect(self._inspector_visibility_changed)
+        inspector_dock.topLevelChanged.connect(self._inspector_top_level_changed)
+
+        self.setCentralWidget(canvas_well)
+        self.addDockWidget(
+            QtCore.Qt.DockWidgetArea.RightDockWidgetArea,
+            inspector_dock,
+        )
+        inspector_dock.resize(
+            self.controller.session.interface.inspector_width,
+            self.height(),
+        )
+        self.canvas_well = canvas_well
+        self.inspector_dock = inspector_dock
         self.inspector = inspector
 
     def _build_status_bar(self) -> None:
@@ -467,9 +456,45 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.status_message = QtWidgets.QLabel("Canvas ready")
         self.selection_status = QtWidgets.QLabel("Selection: none")
         self.coordinate_status = QtWidgets.QLabel("Coordinates: —")
+        self.status_message.setAccessibleName("Canvas status")
+        self.selection_status.setAccessibleName("Current Canvas selection")
+        self.coordinate_status.setAccessibleName("Current plot coordinates")
         status.addWidget(self.status_message, 1)
         status.addPermanentWidget(self.selection_status)
         status.addPermanentWidget(self.coordinate_status)
+
+    def _build_menus(self) -> None:
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("File")
+        file_menu.addAction(self.save_action)
+        file_menu.addAction(self.export_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.close_action)
+
+        edit_menu = menu_bar.addMenu("Edit")
+        edit_menu.addAction(self.undo_action)
+        edit_menu.addAction(self.redo_action)
+
+        view_menu = menu_bar.addMenu("View")
+        view_menu.addAction(self.previous_page_action)
+        view_menu.addAction(self.next_page_action)
+        view_menu.addSeparator()
+        view_menu.addAction(self.zoom_out_action)
+        view_menu.addAction(self.zoom_in_action)
+        view_menu.addAction(self.zoom_page_action)
+        view_menu.addAction(self.zoom_100_action)
+        view_menu.addSeparator()
+        view_menu.addAction(self.inspector_action)
+        view_menu.addAction(self.canvas_only_action)
+        view_menu.addAction(self.high_contrast_action)
+
+        document_menu = menu_bar.addMenu("Document")
+        document_menu.addAction(self.advanced_action)
+
+        self.file_menu = file_menu
+        self.edit_menu = edit_menu
+        self.view_menu = view_menu
+        self.document_menu = document_menu
 
     def _divider(self) -> QtWidgets.QFrame:
         divider = QtWidgets.QFrame()
@@ -480,6 +505,159 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         label = QtWidgets.QLabel(text)
         label.setObjectName("sectionTitle")
         return label
+
+    def _apply_theme(self) -> None:
+        if self._applying_theme:
+            return
+        self._applying_theme = True
+        try:
+            application = QtWidgets.QApplication.instance()
+            palette = application.palette() if application is not None else self.palette()
+            self.theme_tokens = build_canvas_theme(
+                palette,
+                high_contrast=self.controller.session.interface.high_contrast,
+            )
+            self.setStyleSheet(build_canvas_stylesheet(self.theme_tokens))
+            if hasattr(self, "state_chip"):
+                style = self.state_chip.style()
+                style.unpolish(self.state_chip)
+                style.polish(self.state_chip)
+        finally:
+            self._applying_theme = False
+
+    def _system_color_scheme_changed(self, *_: Any) -> None:
+        self._apply_theme()
+
+    def _restore_interface_state(self) -> None:
+        interface = self.controller.session.interface
+        self._restoring_interface = True
+        try:
+            self.high_contrast_action.setChecked(interface.high_contrast)
+            self.inspector_action.setChecked(interface.inspector_visible)
+            self.inspector_dock.resize(interface.inspector_width, self.height())
+            self.inspector_dock.setVisible(interface.inspector_visible)
+            self.canvas_only_action.setChecked(False)
+        finally:
+            self._restoring_interface = False
+        QtCore.QTimer.singleShot(0, self._apply_adaptive_layout)
+
+    def _toggle_high_contrast(self, checked: bool) -> None:
+        self.controller.update_interface_state(high_contrast=bool(checked))
+        self._apply_theme()
+        self.status_message.setText(
+            "Increased contrast enabled"
+            if checked
+            else "Using system contrast"
+        )
+
+    def _inspector_visibility_changed(self, visible: bool) -> None:
+        if (
+            self._restoring_interface
+            or self._canvas_only
+            or self._closing
+            or self._closed
+        ):
+            return
+        blocker = QtCore.QSignalBlocker(self.inspector_action)
+        self.inspector_action.setChecked(bool(visible))
+        del blocker
+        self.controller.update_interface_state(inspector_visible=bool(visible))
+
+    def _inspector_top_level_changed(self, floating: bool) -> None:
+        if floating:
+            self.inspector_dock.setTitleBarWidget(None)
+        else:
+            title_bar = QtWidgets.QWidget(self.inspector_dock)
+            title_bar.setFixedHeight(0)
+            self.inspector_dock.setTitleBarWidget(title_bar)
+        if not floating:
+            self._adaptive_floating = False
+        elif self.width() >= self._narrow_threshold:
+            self._adaptive_floating = False
+        if floating and self.width() < self._narrow_threshold:
+            QtCore.QTimer.singleShot(0, self._place_floating_inspector)
+
+    def _place_floating_inspector(self) -> None:
+        if (
+            self._closed
+            or not self.inspector_dock.isVisible()
+            or not self.inspector_dock.isFloating()
+        ):
+            return
+        preferred = self.controller.session.interface.inspector_width
+        width = min(max(preferred, 300), max(self.width() - 80, 300))
+        toolbar_height = self.toolbar.height() if self.toolbar.isVisible() else 0
+        status_height = self.statusBar().height() if self.statusBar().isVisible() else 0
+        height = max(self.height() - toolbar_height - status_height - 24, 420)
+        top_left = self.mapToGlobal(
+            QtCore.QPoint(
+                max(self.width() - width - 18, 12),
+                toolbar_height + 8,
+            )
+        )
+        self.inspector_dock.resize(width, height)
+        self.inspector_dock.move(top_left)
+        self.inspector_dock.raise_()
+
+    def _apply_adaptive_layout(self) -> None:
+        if self._closed:
+            return
+        narrow = self.width() < self._narrow_threshold
+        self.document_title.setMaximumWidth(220 if narrow else 280)
+        self.selection_status.setVisible(not narrow and not self._canvas_only)
+        self.coordinate_status.setVisible(not narrow and not self._canvas_only)
+        if self._canvas_only:
+            return
+        should_show = self.controller.session.interface.inspector_visible
+        if not should_show:
+            self.inspector_dock.hide()
+            return
+        if narrow:
+            if not self.inspector_dock.isFloating():
+                self._adaptive_floating = True
+                self.inspector_dock.setFloating(True)
+            self.inspector_dock.show()
+            self._place_floating_inspector()
+            return
+        if self.inspector_dock.isFloating() and self._adaptive_floating:
+            self.inspector_dock.setFloating(False)
+            self.addDockWidget(
+                QtCore.Qt.DockWidgetArea.RightDockWidgetArea,
+                self.inspector_dock,
+            )
+        self.inspector_dock.show()
+        self.inspector_dock.resize(
+            self.controller.session.interface.inspector_width,
+            self.height(),
+        )
+
+    def _toggle_canvas_only(self, checked: bool) -> None:
+        self._set_canvas_only(bool(checked))
+
+    def _set_canvas_only(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        if self._canvas_only == enabled:
+            return
+        self._canvas_only = enabled
+        blocker = QtCore.QSignalBlocker(self.canvas_only_action)
+        self.canvas_only_action.setChecked(enabled)
+        del blocker
+        self.toolbar.setVisible(not enabled)
+        self.menuBar().setVisible(not enabled)
+        self.statusBar().setVisible(not enabled)
+        dock_blocker = QtCore.QSignalBlocker(self.inspector_dock)
+        if enabled:
+            self.inspector_dock.hide()
+        else:
+            self.inspector_dock.setVisible(
+                self.controller.session.interface.inspector_visible
+            )
+        del dock_blocker
+        if enabled:
+            self.plot_window.setFocus(QtCore.Qt.FocusReason.ShortcutFocusReason)
+        else:
+            self.status_message.setText("Canvas-only mode exited")
+            self._apply_adaptive_layout()
 
     def _connect_canvas_signals(self) -> None:
         self.plot_window.sigWidgetClicked.connect(self._on_widget_clicked)
@@ -522,6 +700,8 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             str(target["setting_path"])
         )
         self.text_value_edit.setText(str(current_value))
+        if self.controller.session.active_inspector != "visible_text":
+            self.controller.update_interface_state(active_inspector="visible_text")
         self._sync_selection_ui()
 
     def select_text_target(self, object_id: str) -> dict[str, Any]:
@@ -679,7 +859,13 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._run_ui_action("Could not open Advanced Editor", launch)
 
     def _toggle_inspector(self, checked: bool) -> None:
-        self.inspector.setVisible(bool(checked))
+        checked = bool(checked)
+        self.controller.update_interface_state(inspector_visible=checked)
+        if self._canvas_only:
+            self._set_canvas_only(False)
+        self.inspector_dock.setVisible(checked)
+        if checked:
+            self._apply_adaptive_layout()
         self.status_message.setText(
             "Inspector shown" if checked else "Inspector hidden · F9 to restore"
         )
@@ -755,6 +941,17 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         ):
             self.controller.sync_view_state()
             self._sync_page_ui()
+        if (
+            not self._canvas_only
+            and self.inspector_dock.isVisible()
+            and not self.inspector_dock.isFloating()
+        ):
+            width = self.inspector_dock.width()
+            if (
+                280 <= width <= 720
+                and abs(session.interface.inspector_width - width) >= 3
+            ):
+                self.controller.update_interface_state(inspector_width=width)
 
     def _sync_selection_ui(self) -> None:
         selected = self.controller.selected_object
@@ -786,6 +983,10 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         session = self.controller.session
         state_text = session.state.replace("_", " ")
         self.state_chip.setText(state_text)
+        self.state_chip.setAccessibleName(f"Document state: {state_text}")
+        self.state_chip.setAccessibleDescription(
+            "Current exact-current Canvas lifecycle state"
+        )
         if self.state_chip.property("canvasState") != session.state:
             self.state_chip.setProperty("canvasState", session.state)
             style = self.state_chip.style()
@@ -815,11 +1016,83 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._sync_page_ui()
         self._sync_selection_ui()
 
+    def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        super().resizeEvent(event)
+        if hasattr(self, "inspector_dock"):
+            QtCore.QTimer.singleShot(0, self._apply_adaptive_layout)
+
+    def changeEvent(self, event: QtCore.QEvent) -> None:
+        super().changeEvent(event)
+        if event.type() in {
+            QtCore.QEvent.Type.ApplicationPaletteChange,
+            QtCore.QEvent.Type.PaletteChange,
+        }:
+            self._apply_theme()
+
+    def _tab_preserves_focus_navigation(self, watched: Any) -> bool:
+        return isinstance(
+            watched,
+            (
+                QtWidgets.QAbstractButton,
+                QtWidgets.QAbstractItemView,
+                QtWidgets.QAbstractSlider,
+                QtWidgets.QAbstractSpinBox,
+                QtWidgets.QComboBox,
+                QtWidgets.QLineEdit,
+                QtWidgets.QMenuBar,
+            ),
+        )
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:
+        if (
+            event.key() == QtCore.Qt.Key.Key_Tab
+            and event.modifiers() == QtCore.Qt.KeyboardModifier.NoModifier
+        ):
+            self._set_canvas_only(not self._canvas_only)
+            event.accept()
+            return
+        if event.key() == QtCore.Qt.Key.Key_Escape and self._canvas_only:
+            self._set_canvas_only(False)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def eventFilter(self, watched: Any, event: QtCore.QEvent) -> bool:
+        if (
+            not self._closed
+            and event.type() == QtCore.QEvent.Type.KeyPress
+            and isinstance(event, QtGui.QKeyEvent)
+            and (
+                watched is self
+                or (
+                    isinstance(watched, QtWidgets.QWidget)
+                    and self.isAncestorOf(watched)
+                )
+            )
+        ):
+            if (
+                event.key() == QtCore.Qt.Key.Key_Tab
+                and event.modifiers() == QtCore.Qt.KeyboardModifier.NoModifier
+            ):
+                if self._tab_preserves_focus_navigation(watched):
+                    watched.focusNextPrevChild(True)
+                    event.accept()
+                    return True
+                self._set_canvas_only(not self._canvas_only)
+                event.accept()
+                return True
+            if event.key() == QtCore.Qt.Key.Key_Escape and self._canvas_only:
+                self._set_canvas_only(False)
+                event.accept()
+                return True
+        return super().eventFilter(watched, event)
+
     def showEvent(self, event: QtGui.QShowEvent) -> None:
         super().showEvent(event)
         if not self._fit_scheduled:
             self._fit_scheduled = True
             QtCore.QTimer.singleShot(0, self._initial_fit)
+        QtCore.QTimer.singleShot(0, self._apply_adaptive_layout)
 
     def _initial_fit(self) -> None:
         if not self._closed and self.controller.adapter.zoom_factor == 1.0:
@@ -882,7 +1155,14 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                     event.ignore()
                     return
                 raise
+        self._closing = True
         self._view_state_timer.stop()
+        inspector_width = self.inspector_dock.width()
+        if 280 <= inspector_width <= 720:
+            self.controller.update_interface_state(inspector_width=inspector_width)
+        application = QtWidgets.QApplication.instance()
+        if application is not None:
+            application.removeEventFilter(self)
         self.controller.close()
         self._closed = True
         event.accept()

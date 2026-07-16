@@ -80,7 +80,7 @@ retirement gate passes.
    This route proves exact-current export only; it does not establish source
    provenance, transform lineage, or a complete SciPlot project delivery.
 
-   For the experimental M1 native editor, use:
+   For the experimental M2-foundation native editor, use:
 
    ```bash
    skill/scripts/sciplot canvas PROJECT_OR_VSZ
@@ -88,9 +88,11 @@ retirement gate passes.
 
    It embeds the exact-current Veusz PlotWindow in the SciPlot Qt shell and
    provides selection, bounded visible-text editing, Save/Undo/Redo,
-   Export + QA, explicit recovery, and an `F9` inspector toggle. Advanced
-   Editor is under `More` as a recovery route. Do not describe this M1 shell as
-   the complete M2 daily editor or switch the normal `studio` entrypoint yet.
+   Export + QA, explicit recovery, palette-backed light/dark/high-contrast
+   chrome, adaptive inspector docking, `F9` inspector toggle, and `Tab`
+   Canvas-only mode. Advanced Editor is under `More` as a recovery route. Do
+   not describe this foundation as the complete M2 daily editor or switch the
+   normal `studio` entrypoint yet.
 
 4. Before reporting success, read the returned state, current VSZ hash,
    `manifest.json`, `review.html`, figures, `tables/analysis_metrics.csv`, QA and
@@ -102,7 +104,9 @@ Veusz load check. They resolve SciPlot through `SCIPLOT_REPO`, an enclosing
 checkout, the generation-time fallback, or an installed `sciplot` command.
 For an isolated development worktree, keep `SCIPLOT_REPO`/`SCIPLOT_SOURCE_ROOT`
 on the development source and set `SCIPLOT_RUNTIME_REPO` to the trusted
-checkout that owns the compiled Veusz helpers and virtual environment.
+checkout that owns the compiled Veusz helpers and virtual environment. On
+macOS, use the wrapper rather than a bare Python invocation so its Qt framework
+bootstrap runs; require the `veusz_qt_runtime` doctor check to pass.
 
 ## State handling
 

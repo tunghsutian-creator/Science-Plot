@@ -15,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 9
+RUNTIME_SMOKE_VERSION = 10
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -377,6 +377,7 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
 
     import pandas as pd
 
+    from sciplot_core.materials_rules import compute_analysis_metrics
     from sciplot_core.semantic import classify_source, prepare_semantic_source
     from sciplot_core.studio import StudioSeries, _apply_series_options
 
@@ -446,6 +447,12 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         semantic=impact_semantic,
     )
     impact_parameters = _transform_parameters(impact_result)
+    impact_metric_rows = compute_analysis_metrics(
+        source_path=impact_source,
+        processed_source=impact_source,
+        semantic=impact_semantic,
+        output_dir=contracts / "impact_metrics",
+    )
 
     swelling_source = contracts / "explicit_rule" / "parallel_blocks.csv"
     swelling_source.parent.mkdir(parents=True, exist_ok=True)
@@ -517,6 +524,12 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
 
     expected_saxs_order = ["HDPE", "2 wt% UDC 3"]
     expected_impact_order = ["V-PA (2 mm)", "E-PA (2 mm)", "V-PA (4 mm)", "E-PA (4 mm)"]
+    expected_impact_metric_names = {
+        f"impact_group_{metric}[{sample}]"
+        for sample in expected_impact_order
+        for metric in ("n", "median", "iqr")
+    }
+    impact_metric_names = {str(row.get("metric") or "") for row in impact_metric_rows}
     expected_swelling_order = [
         f"{condition} replicate {replicate}"
         for condition in ("SH DI water", "SH 1000 mM NaCl", "SH 0.1 wt% PAA")
@@ -539,6 +552,8 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         and impact_semantic.get("rule_id") == "impact_metric"
         and impact_parameters.get("sample_order") == expected_impact_order
         and impact_parameters.get("replicate_count_total") == 12
+        and impact_metric_names == expected_impact_metric_names
+        and all(row.get("status") == "ok" for row in impact_metric_rows)
         and swelling_semantic.get("rule_id") == "swelling_curve"
         and swelling_semantic.get("confidence") == 100.0
         and swelling_parameters.get("series_order") == expected_swelling_order
@@ -567,6 +582,8 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
             "rule_id": impact_semantic.get("rule_id"),
             "sample_order": impact_parameters.get("sample_order"),
             "replicate_count_total": impact_parameters.get("replicate_count_total"),
+            "analysis_metric_names": sorted(impact_metric_names),
+            "analysis_metric_count": len(impact_metric_rows),
         },
         "swelling": {
             "rule_id": swelling_semantic.get("rule_id"),
@@ -674,6 +691,7 @@ def _run_hash_failure_probe(output_dir: Path, manifest: dict[str, Any]) -> tuple
 def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
     """Run a fixture-free end-to-end Studio lifecycle and delivery failure probe."""
 
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
     resolved_output = output_root.expanduser().resolve()
     resolved_output.mkdir(parents=True, exist_ok=True)
     run_root = Path(tempfile.mkdtemp(prefix="runtime_smoke_", dir=resolved_output))
@@ -710,7 +728,7 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         )
         checks.append(
             _check(
-                "canvas_contract_v1",
+                "canvas_contract_v2",
                 "CanvasSession, typed operations, review annotations, and mapping proposals roundtrip without Qt",
                 canvas_contract_probe.get("status") == "passed",
                 detail=canvas_contract_probe,

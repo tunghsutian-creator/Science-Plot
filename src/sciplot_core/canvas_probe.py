@@ -74,6 +74,9 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         document_path=str(root / "document.vsz"),
         state="canvas_ready",
     )
+    session.interface.inspector_visible = False
+    session.interface.inspector_width = 412
+    session.interface.high_contrast = True
     axis = session.object_registry.bind(
         structural_key="root/page[0]/graph[0]/axis[0]",
         current_path="/page/graph/x",
@@ -188,11 +191,35 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             }
         )
     )
+    legacy_payload = session.to_dict()
+    legacy_payload["version"] = 1
+    legacy_payload.pop("interface")
+    migrated_legacy_session = CanvasSession.from_dict(legacy_payload)
+    invalid_interface_rejected = _raises_value_error(
+        lambda: CanvasSession.from_dict(
+            {
+                **session.to_dict(),
+                "interface": {
+                    **session.interface.to_dict(),
+                    "inspector_width": 40,
+                },
+            }
+        )
+    )
     checks = [
         _check(
             "session_roundtrip",
-            "CanvasSession version 1 persists and reloads without Qt",
-            loaded.session_id == session.session_id and loaded.state == "canvas_ready",
+            "CanvasSession version 2 persists workbench state without Qt",
+            loaded.session_id == session.session_id
+            and loaded.state == "canvas_ready"
+            and loaded.interface.to_dict() == session.interface.to_dict(),
+        ),
+        _check(
+            "session_v1_migration",
+            "CanvasSession version 1 payloads migrate to safe M2 interface defaults",
+            migrated_legacy_session.interface.inspector_visible is True
+            and migrated_legacy_session.interface.inspector_width == 340
+            and migrated_legacy_session.interface.high_contrast is False,
         ),
         _check(
             "stable_object_identity",
@@ -252,6 +279,11 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             "session_computed_state_is_verified",
             "CanvasSession rejects persisted dirty state that conflicts with revisions",
             session_integrity_rejected,
+        ),
+        _check(
+            "interface_state_schema_is_bounded",
+            "Canvas interface state rejects unsafe persisted geometry",
+            invalid_interface_rejected,
         ),
     ]
     return {
@@ -772,7 +804,7 @@ def run_canvas_characterization(
         "error": error,
         "limitations": [
             "This probe characterizes the pinned Veusz adapter and typed setting path; "
-            "it is not the M1 user-facing Canvas shell.",
+            "it is not the user-facing native Canvas shell.",
             "The probe works on a copied VSZ and does not count as real-data acceptance "
             "unless the supplied source VSZ itself came from authorized real data.",
         ],

@@ -11,6 +11,29 @@ if [[ ! -x "$PYTHON" ]]; then
   PYTHON="python3"
 fi
 
+if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v otool >/dev/null 2>&1; then
+  VEUSZ_RUNTIME_ROOT="${SCIPLOT_VEUSZ_ROOT:-$RUNTIME_REPO/third_party/veusz}"
+  QTLOOPS_EXTENSION=""
+  for candidate in "$VEUSZ_RUNTIME_ROOT"/veusz/helpers/qtloops*.so; do
+    if [[ -f "$candidate" ]]; then
+      QTLOOPS_EXTENSION="$candidate"
+      break
+    fi
+  done
+  if [[ -n "$QTLOOPS_EXTENSION" ]]; then
+    QT_FRAMEWORK_ROOT="$(
+      otool -L "$QTLOOPS_EXTENSION" |
+        awk '/QtCore[.]framework/ { path=$1; sub("/QtCore[.]framework.*", "", path); print path; exit }'
+    )"
+    if [[ -n "$QT_FRAMEWORK_ROOT" && -d "$QT_FRAMEWORK_ROOT" ]]; then
+      case ":${DYLD_FRAMEWORK_PATH:-}:" in
+        *":$QT_FRAMEWORK_ROOT:"*) ;;
+        *) export DYLD_FRAMEWORK_PATH="$QT_FRAMEWORK_ROOT${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}" ;;
+      esac
+    fi
+  fi
+fi
+
 if [[ -d "$SOURCE_ROOT" ]]; then
   export PYTHONPATH="$SOURCE_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 fi

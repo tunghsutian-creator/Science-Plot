@@ -1,6 +1,7 @@
 # SciPlot AI-Enhanced Canvas Development Roadmap
 
-Status: active product roadmap, 2026-07-17. M0 and M1 complete; M2 is next.
+Status: active product roadmap, 2026-07-17. M0 and M1 complete; M2 is in
+progress, with its adaptive visual foundation complete.
 
 This roadmap supersedes the former assumption that native canvas work and
 multi-panel composition should remain deferred. Distribution to other users is
@@ -440,6 +441,44 @@ Deliverables:
 - fast structural QA after an editing debounce and full artifact QA on export;
 - migration of the normal `studio` entrypoint to the SciPlot canvas after the
   exit gate passes.
+
+M2 foundation progress, 2026-07-17:
+
+- replaced the fixed M1 stylesheet with palette-derived light, dark, and
+  increased-contrast tokens while keeping scientific figure colors under the
+  renderer and publication QA contracts;
+- replaced the fixed splitter with a native contextual dock: it stays docked
+  on wide windows, becomes a floating utility below 980 px, remembers a
+  bounded width and visibility, and never consumes the narrow canvas width;
+- added `Tab` Canvas-only mode, `Esc` recovery, `F9` inspector toggle, complete
+  menu/shortcut parity, visible keyboard focus, and accessible names and
+  descriptions for symbol-only and inspector controls;
+- promoted `CanvasSession` to version 2 with backward migration for persisted
+  inspector visibility, width, increased-contrast preference, and active
+  inspector state;
+- expanded the source-controlled native application probe from `15/15` to
+  `21/21`, including palette-backed theming, real dark-palette rendering,
+  increased contrast, adaptive narrow layout, Canvas-only mode, accessibility,
+  menu parity, persistence, recovery, and exact-current delivery;
+- runtime smoke v10 passes `26/26`, containing Canvas contract `14/14`,
+  native application `21/21`, 50 sequential live redraws, save/reopen,
+  recovery, exact-current PDF/TIFF, QA, and complete delivery;
+- authorized real FTIR and TEMP3 multi-panel probes, plus representative
+  rheology, tensile, and impact acceptance projects, pass the native
+  application lifecycle without modifying their source projects;
+- the impact regression exposed a shared export bug that decoded an Excel
+  workbook as CSV. Deterministic analysis now reads every workbook sheet,
+  preserves thickness-qualified sample labels, and emits all per-group
+  count/median/IQR metrics;
+- the macOS launcher now derives the Qt framework root from the compiled Veusz
+  helper, while `doctor` verifies that the actual Veusz Qt helper imports.
+  Runtime smoke also selects the offscreen platform before any in-process
+  QApplication is constructed;
+- no upstream `third_party/veusz` or migrated `_vendor` source was changed.
+
+This is not M2 completion. Contextual scientific inspectors, persistent
+selection/direct manipulation, review overlays, annotation promotion, and ten
+real editing/review sessions remain required by the exit gate.
 
 Exit gate:
 

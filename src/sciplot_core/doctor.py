@@ -15,6 +15,7 @@ from sciplot_core.publication import (
     list_composite_layouts,
 )
 
+
 def _check(check_id: str, label: str, passed: bool, *, required: bool = True, detail: str = "") -> dict[str, Any]:
     return {
         "id": check_id,
@@ -27,6 +28,23 @@ def _check(check_id: str, label: str, passed: bool, *, required: bool = True, de
 
 def _module_available(module_name: str) -> bool:
     return importlib.util.find_spec(module_name) is not None
+
+
+def _veusz_qt_runtime_status() -> tuple[bool, str]:
+    if not _module_available("PyQt6"):
+        return False, "PyQt6 is not importable."
+    veusz_root = str(VEUSZ_ROOT)
+    if veusz_root not in sys.path:
+        sys.path.insert(0, veusz_root)
+    try:
+        from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: F401
+        from veusz.helpers import qtloops  # noqa: F401
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+    return (
+        True,
+        f"PyQt {QtCore.PYQT_VERSION_STR}; Qt runtime {QtCore.qVersion()}; Veusz qtloops loaded",
+    )
 
 
 def _top_level_symbols(path: Path) -> set[str]:
@@ -84,6 +102,7 @@ def doctor_payload() -> dict[str, Any]:
     ready_rules = [rule for rule in rules if rule.fixture_status == "ready"]
     pending_rules = [rule for rule in rules if rule.fixture_status != "ready"]
     fixtures_ok, fixture_detail = _ready_rule_fixtures_exist(rules)
+    veusz_qt_ok, veusz_qt_detail = _veusz_qt_runtime_status()
 
     checks = [
         _check(
@@ -100,6 +119,12 @@ def doctor_payload() -> dict[str, Any]:
             detail=str(VEUSZ_ROOT),
         ),
         _check("pyqt6", "PyQt6 available", _module_available("PyQt6")),
+        _check(
+            "veusz_qt_runtime",
+            "Veusz Qt helper runtime",
+            veusz_qt_ok,
+            detail=veusz_qt_detail,
+        ),
         _check(
             "vsz_lifecycle",
             "VSZ authority, history, exact export, and delivery hash gate",
@@ -187,7 +212,7 @@ def _next_actions(required_failures: list[dict[str, Any]]) -> list[str]:
         ]
     actions: list[str] = []
     failed_ids = {str(check["id"]) for check in required_failures}
-    if {"pyqt6", "veusz_vendor"} & failed_ids:
+    if {"pyqt6", "veusz_vendor", "veusz_qt_runtime"} & failed_ids:
         actions.append("Install the Studio dependencies and verify the vendored Veusz runtime.")
     if "python_version" in failed_ids:
         actions.append("Use Python 3.11 or newer.")

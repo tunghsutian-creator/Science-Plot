@@ -243,6 +243,33 @@ class DocumentController:
         self.session.last_render_sha256 = self.adapter.render_fingerprint()
         self.persist()
 
+    def update_interface_state(
+        self,
+        *,
+        inspector_visible: bool | None = None,
+        inspector_width: int | None = None,
+        high_contrast: bool | None = None,
+        active_inspector: str | None = None,
+    ) -> None:
+        interface = self.session.interface
+        if inspector_visible is not None:
+            interface.inspector_visible = bool(inspector_visible)
+        if inspector_width is not None:
+            width = int(inspector_width)
+            if not 280 <= width <= 720:
+                raise ValueError(
+                    "Canvas inspector width must be between 280 and 720 pixels."
+                )
+            interface.inspector_width = width
+        if high_contrast is not None:
+            interface.high_contrast = bool(high_contrast)
+        if active_inspector is not None:
+            text = str(active_inspector).strip()
+            if not text:
+                raise ValueError("active_inspector must be a non-empty string.")
+            self.session.active_inspector = text
+        self.persist()
+
     def _create_recovery_snapshot(self, *, revision: int, event: str) -> Path:
         snapshot = (
             self.session_path.parent

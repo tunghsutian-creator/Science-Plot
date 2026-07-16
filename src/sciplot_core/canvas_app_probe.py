@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 import tempfile
+import traceback
 from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,7 +17,7 @@ from sciplot_core._utils import file_sha256, json_safe
 from sciplot_core.canvas.persistence import read_operation_journal
 
 CANVAS_APP_PROBE_KIND = "sciplot_canvas_app_probe"
-CANVAS_APP_PROBE_VERSION = 1
+CANVAS_APP_PROBE_VERSION = 2
 
 
 def _now() -> str:
@@ -97,6 +98,7 @@ def _capture_window(
     path: Path,
     *,
     application: Any,
+    expected_mode: str = "light",
 ) -> dict[str, Any]:
     from PyQt6 import QtCore, QtGui, QtTest, QtWidgets
 
@@ -143,7 +145,12 @@ def _capture_window(
         "canvas_mean_luminance": round(canvas_mean_luminance, 3),
         "canvas_surface_ready": canvas_mean_luminance >= 90.0,
         "inspector_mean_luminance": round(inspector_mean_luminance, 3),
-        "inspector_surface_ready": inspector_mean_luminance >= 160.0,
+        "inspector_surface_ready": (
+            inspector_mean_luminance <= 110.0
+            if expected_mode == "dark"
+            else inspector_mean_luminance >= 160.0
+        ),
+        "expected_mode": expected_mode,
     }
 
 
@@ -215,6 +222,8 @@ def run_canvas_app_probe(
     copied_target = _copy_probe_target(source, run_root)
     summary_path = run_root / "canvas_app_probe.json"
     screenshot_path = run_root / "canvas_window.png"
+    dark_screenshot_path = run_root / "canvas_dark.png"
+    high_contrast_screenshot_path = run_root / "canvas_high_contrast.png"
     recovery_screenshot_path = run_root / "canvas_recovered.png"
     stderr_log = run_root / "logs" / "canvas_app_stderr.log"
     checks: list[dict[str, Any]] = []
@@ -225,10 +234,11 @@ def run_canvas_app_probe(
 
     try:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-        from PyQt6 import QtWidgets
+        from PyQt6 import QtCore, QtGui, QtTest, QtWidgets
 
         from sciplot_core.studio import _capture_process_stderr
         from sciplot_gui.main_window import SciPlotCanvasWindow
+        from sciplot_gui.theme import build_canvas_theme
         from sciplot_gui.workspace import resolve_canvas_workspace
 
         stderr_stack.enter_context(_capture_process_stderr(stderr_log))
@@ -251,6 +261,200 @@ def run_canvas_app_probe(
         application.processEvents()
         clicked_selection = window.controller.selected_object
 
+        baseline_theme = (
+            window.theme_tokens.to_dict() if window.theme_tokens is not None else {}
+        )
+        original_palette = QtGui.QPalette(application.palette())
+        dark_palette = QtGui.QPalette(original_palette)
+        dark_palette.setColor(
+            QtGui.QPalette.ColorRole.Window, QtGui.QColor("#202327")
+        )
+        dark_palette.setColor(
+            QtGui.QPalette.ColorRole.WindowText, QtGui.QColor("#f4f6f8")
+        )
+        dark_palette.setColor(
+            QtGui.QPalette.ColorRole.Base, QtGui.QColor("#151719")
+        )
+        dark_palette.setColor(
+            QtGui.QPalette.ColorRole.Text, QtGui.QColor("#f4f6f8")
+        )
+        dark_palette.setColor(
+            QtGui.QPalette.ColorRole.Highlight, QtGui.QColor("#74b9ff")
+        )
+        dark_palette.setColor(
+            QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor("#101214")
+        )
+        dark_theme = build_canvas_theme(dark_palette)
+        high_contrast_theme = build_canvas_theme(
+            application.palette(), high_contrast=True
+        )
+        theme_contract = {
+            "baseline": baseline_theme,
+            "dark": dark_theme.to_dict(),
+            "high_contrast": high_contrast_theme.to_dict(),
+        }
+
+        accessibility_actions = (
+            window.save_action,
+            window.undo_action,
+            window.redo_action,
+            window.previous_page_action,
+            window.next_page_action,
+            window.zoom_out_action,
+            window.zoom_in_action,
+            window.zoom_page_action,
+            window.zoom_100_action,
+            window.export_action,
+        )
+        toolbar_accessibility = {
+            action.objectName(): (
+                window.toolbar.widgetForAction(action).accessibleName()
+                if window.toolbar.widgetForAction(action) is not None
+                else ""
+            )
+            for action in accessibility_actions
+        }
+        control_accessibility = {
+            "more": window.more_button.accessibleName(),
+            "text_target": window.text_target_combo.accessibleName(),
+            "text_value": window.text_value_edit.accessibleName(),
+            "apply_text": window.apply_text_button.accessibleName(),
+            "inspector": window.inspector_dock.accessibleName(),
+        }
+        menu_actions = {
+            action
+            for menu in (
+                window.file_menu,
+                window.edit_menu,
+                window.view_menu,
+                window.document_menu,
+                window.more_menu,
+            )
+            for action in menu.actions()
+        }
+        primary_actions = (
+            *accessibility_actions,
+            window.inspector_action,
+            window.canvas_only_action,
+            window.high_contrast_action,
+            window.advanced_action,
+            window.close_action,
+        )
+        action_routes = {
+            action.objectName(): {
+                "shortcut": action.shortcut().toString(),
+                "menu_route": action in menu_actions,
+            }
+            for action in primary_actions
+        }
+
+        window.resize(900, 700)
+        window._apply_adaptive_layout()
+        QtTest.QTest.qWait(30)
+        application.processEvents()
+        adaptive_narrow = {
+            "window_width": window.width(),
+            "inspector_visible": window.inspector_dock.isVisible(),
+            "inspector_floating": window.inspector_dock.isFloating(),
+            "canvas_width": window.plot_window.width(),
+            "status_detail_hidden": not window.selection_status.isVisible()
+            and not window.coordinate_status.isVisible(),
+        }
+        window.resize(1380, 860)
+        window._apply_adaptive_layout()
+        QtTest.QTest.qWait(30)
+        application.processEvents()
+        adaptive_wide = {
+            "window_width": window.width(),
+            "inspector_visible": window.inspector_dock.isVisible(),
+            "inspector_floating": window.inspector_dock.isFloating(),
+            "status_detail_visible": window.selection_status.isVisible()
+            and window.coordinate_status.isVisible(),
+        }
+
+        window.text_value_edit.setFocus(QtCore.Qt.FocusReason.TabFocusReason)
+        application.processEvents()
+        focus_before_tab = application.focusWidget()
+        navigation_event = QtGui.QKeyEvent(
+            QtCore.QEvent.Type.KeyPress,
+            QtCore.Qt.Key.Key_Tab,
+            QtCore.Qt.KeyboardModifier.NoModifier,
+        )
+        tab_navigation_handled = window.eventFilter(
+            window.text_value_edit,
+            navigation_event,
+        )
+        application.processEvents()
+        focus_after_tab = application.focusWidget()
+        tab_focus_navigation = (
+            tab_navigation_handled is True
+            and window._canvas_only is False
+            and (
+                focus_before_tab is None
+                or focus_after_tab is not focus_before_tab
+            )
+        )
+        window.plot_window.setFocus(QtCore.Qt.FocusReason.ShortcutFocusReason)
+        application.processEvents()
+        QtTest.QTest.keyClick(window.plot_window, QtCore.Qt.Key.Key_Tab)
+        application.processEvents()
+        canvas_only_enabled = {
+            "active": window._canvas_only,
+            "toolbar_hidden": not window.toolbar.isVisible(),
+            "menu_hidden": not window.menuBar().isVisible(),
+            "status_hidden": not window.statusBar().isVisible(),
+            "inspector_hidden": not window.inspector_dock.isVisible(),
+            "canvas_visible": window.plot_window.isVisible(),
+        }
+        QtTest.QTest.keyClick(window, QtCore.Qt.Key.Key_Tab)
+        application.processEvents()
+        canvas_only_restored = {
+            "active": window._canvas_only,
+            "toolbar_visible": window.toolbar.isVisible(),
+            "menu_visible": window.menuBar().isVisible(),
+            "status_visible": window.statusBar().isVisible(),
+            "inspector_visible": window.inspector_dock.isVisible(),
+        }
+
+        window.high_contrast_action.trigger()
+        application.processEvents()
+        high_contrast_enabled = (
+            window.controller.session.interface.high_contrast is True
+            and window.theme_tokens is not None
+            and window.theme_tokens.high_contrast is True
+        )
+        high_contrast_screenshot = _capture_window(
+            window,
+            high_contrast_screenshot_path,
+            application=application,
+        )
+        window.high_contrast_action.trigger()
+        application.processEvents()
+        high_contrast_restored = (
+            window.controller.session.interface.high_contrast is False
+            and window.theme_tokens is not None
+            and window.theme_tokens.high_contrast is False
+        )
+        application.setPalette(dark_palette)
+        application.processEvents()
+        window._apply_theme()
+        dark_runtime_enabled = (
+            window.theme_tokens is not None and window.theme_tokens.mode == "dark"
+        )
+        dark_screenshot = _capture_window(
+            window,
+            dark_screenshot_path,
+            application=application,
+            expected_mode="dark",
+        )
+        application.setPalette(original_palette)
+        application.processEvents()
+        window._apply_theme()
+        system_theme_restored = (
+            window.theme_tokens is not None
+            and window.theme_tokens.mode == baseline_theme.get("mode")
+        )
+
         target_info = window.controller.visible_text_targets()[0]
         selected_target = window.select_text_target(str(target_info["object_id"]))
         text_target_count = window.text_target_combo.count()
@@ -268,8 +472,8 @@ def run_canvas_app_probe(
         original_value = window.controller.adapter.setting_value(
             str(selected_target["setting_path"])
         )
-        value_a = f"{original_value} [M1 A]"
-        value_b = f"{original_value} [M1 B]"
+        value_a = f"{original_value} [Canvas A]"
+        value_b = f"{original_value} [Canvas B]"
         render_hashes = [window.controller.adapter.render_fingerprint()]
         applied_values: list[str] = []
         for index in range(operation_count):
@@ -296,8 +500,16 @@ def run_canvas_app_probe(
             screenshot_path,
             application=application,
         )
+        window.high_contrast_action.trigger()
+        application.processEvents()
+        high_contrast_persisted_before_close = (
+            window.controller.session.interface.high_contrast is True
+            and window.theme_tokens is not None
+            and window.theme_tokens.high_contrast is True
+        )
         window_class = type(window).__name__
         exported_revision = window.controller.session.exported_revision
+        interface_before_close = window.controller.session.interface.to_dict()
         saved_hash = file_sha256(workspace.document_path)
         window.close()
         application.processEvents()
@@ -314,8 +526,13 @@ def run_canvas_app_probe(
         reopened_revision = reopened.controller.session.revision
         reopened_exported_revision = reopened.controller.session.exported_revision
         reopened_state = reopened.controller.session.state
+        reopened_interface = reopened.controller.session.interface.to_dict()
+        reopened_theme_high_contrast = (
+            reopened.theme_tokens is not None
+            and reopened.theme_tokens.high_contrast is True
+        )
 
-        recovery_value = f"{original_value} [M1 Recovery]"
+        recovery_value = f"{original_value} [Canvas Recovery]"
         reopened.apply_selected_text(recovery_value)
         application.processEvents()
         recovery_revision = reopened.controller.session.revision
@@ -357,15 +574,25 @@ def run_canvas_app_probe(
         screenshot_ready = (
             screenshot_path.is_file()
             and screenshot_path.stat().st_size > 0
+            and dark_screenshot_path.is_file()
+            and dark_screenshot_path.stat().st_size > 0
+            and high_contrast_screenshot_path.is_file()
+            and high_contrast_screenshot_path.stat().st_size > 0
             and recovery_screenshot_path.is_file()
             and recovery_screenshot_path.stat().st_size > 0
             and normal_screenshot["width"] >= 900
             and normal_screenshot["height"] >= 600
             and normal_screenshot["has_tonal_range"] is True
+            and dark_screenshot["has_tonal_range"] is True
+            and high_contrast_screenshot["has_tonal_range"] is True
             and recovery_screenshot["has_tonal_range"] is True
             and normal_screenshot["canvas_surface_ready"] is True
+            and dark_screenshot["canvas_surface_ready"] is True
+            and high_contrast_screenshot["canvas_surface_ready"] is True
             and recovery_screenshot["canvas_surface_ready"] is True
             and normal_screenshot["inspector_surface_ready"] is True
+            and dark_screenshot["inspector_surface_ready"] is True
+            and high_contrast_screenshot["inspector_surface_ready"] is True
             and recovery_screenshot["inspector_surface_ready"] is True
         )
         exports = export_payload.get("exports")
@@ -409,6 +636,27 @@ def run_canvas_app_probe(
             "initial_render": initial_render,
             "interaction": interaction,
             "clicked_selection": clicked_selection,
+            "theme_contract": theme_contract,
+            "toolbar_accessibility": toolbar_accessibility,
+            "control_accessibility": control_accessibility,
+            "action_routes": action_routes,
+            "adaptive_layout": {
+                "narrow": adaptive_narrow,
+                "wide": adaptive_wide,
+            },
+            "canvas_only": {
+                "enabled": canvas_only_enabled,
+                "restored": canvas_only_restored,
+                "tab_focus_navigation": tab_focus_navigation,
+            },
+            "high_contrast_enabled": high_contrast_enabled,
+            "high_contrast_restored": high_contrast_restored,
+            "high_contrast_persisted_before_close": (
+                high_contrast_persisted_before_close
+            ),
+            "reopened_theme_high_contrast": reopened_theme_high_contrast,
+            "dark_runtime_enabled": dark_runtime_enabled,
+            "system_theme_restored": system_theme_restored,
             "text_target": target_info,
             "inspector_toggle": {
                 "initially_visible": inspector_initially_visible,
@@ -425,6 +673,8 @@ def run_canvas_app_probe(
             "revision_after_operations": revision_after_operations,
             "reopened_revision": reopened_revision,
             "reopened_state": reopened_state,
+            "interface_before_close": interface_before_close,
+            "reopened_interface": reopened_interface,
             "recovery_revision": recovery_revision,
             "recovered_state": recovered_state,
             "render_changes": render_changes,
@@ -444,13 +694,15 @@ def run_canvas_app_probe(
             "source_immutable": source_immutable,
             "owns_application": owns_application,
             "normal_screenshot": normal_screenshot,
+            "dark_screenshot": dark_screenshot,
+            "high_contrast_screenshot": high_contrast_screenshot,
             "recovery_screenshot": recovery_screenshot,
         }
         checks.extend(
             [
                 _check(
                     "native_sciplot_window",
-                    "The M1 shell is SciPlot-owned and never imports Veusz MainWindow",
+                    "The SciPlot shell is native-owned and never imports Veusz MainWindow",
                     no_veusz_mainwindow,
                     {
                         "window_class": window_class,
@@ -463,6 +715,93 @@ def run_canvas_app_probe(
                     "The native shell renders the exact-current VSZ in its embedded PlotWindow",
                     bool(initial_render),
                     {"render_sha256": initial_render},
+                ),
+                _check(
+                    "palette_backed_theme",
+                    "System, dark, and increased-contrast themes meet the M2 token contract",
+                    baseline_theme.get("mode") in {"light", "dark"}
+                    and float(baseline_theme.get("text_contrast") or 0.0) >= 4.5
+                    and float(baseline_theme.get("accent_contrast") or 0.0) >= 4.5
+                    and dark_theme.mode == "dark"
+                    and dark_theme.text_contrast >= 4.5
+                    and dark_theme.accent_contrast >= 4.5
+                    and high_contrast_theme.high_contrast is True
+                    and high_contrast_theme.text_contrast >= 7.0
+                    and high_contrast_theme.accent_contrast >= 7.0
+                    and high_contrast_enabled
+                    and high_contrast_restored
+                    and dark_runtime_enabled
+                    and system_theme_restored,
+                    {
+                        **theme_contract,
+                        "dark_runtime_enabled": dark_runtime_enabled,
+                        "system_theme_restored": system_theme_restored,
+                    },
+                ),
+                _check(
+                    "adaptive_canvas_layout",
+                    "The inspector floats at narrow width and redocks without squeezing the Canvas",
+                    adaptive_narrow["inspector_visible"] is True
+                    and adaptive_narrow["inspector_floating"] is True
+                    and int(adaptive_narrow["canvas_width"]) >= 700
+                    and adaptive_narrow["status_detail_hidden"] is True
+                    and adaptive_wide["inspector_visible"] is True
+                    and adaptive_wide["inspector_floating"] is False
+                    and adaptive_wide["status_detail_visible"] is True,
+                    {
+                        "narrow": adaptive_narrow,
+                        "wide": adaptive_wide,
+                    },
+                ),
+                _check(
+                    "canvas_only_mode",
+                    "Tab enters and exits a trustworthy Canvas-only view",
+                    all(
+                        canvas_only_enabled.get(key) is True
+                        for key in (
+                            "active",
+                            "toolbar_hidden",
+                            "menu_hidden",
+                            "status_hidden",
+                            "inspector_hidden",
+                            "canvas_visible",
+                        )
+                    )
+                    and tab_focus_navigation
+                    and canvas_only_restored.get("active") is False
+                    and all(
+                        canvas_only_restored.get(key) is True
+                        for key in (
+                            "toolbar_visible",
+                            "menu_visible",
+                            "status_visible",
+                            "inspector_visible",
+                        )
+                    ),
+                    {
+                        "enabled": canvas_only_enabled,
+                        "restored": canvas_only_restored,
+                        "tab_focus_navigation": tab_focus_navigation,
+                    },
+                ),
+                _check(
+                    "accessible_control_names",
+                    "Toolbar symbols and primary inspector controls expose accessible names",
+                    all(toolbar_accessibility.values())
+                    and all(control_accessibility.values()),
+                    {
+                        "toolbar": toolbar_accessibility,
+                        "controls": control_accessibility,
+                    },
+                ),
+                _check(
+                    "menu_shortcut_parity",
+                    "Every primary Canvas command has a shortcut or menu route",
+                    all(
+                        bool(item["shortcut"]) or item["menu_route"] is True
+                        for item in action_routes.values()
+                    ),
+                    action_routes,
                 ),
                 _check(
                     "canvas_click_updates_selection",
@@ -528,6 +867,28 @@ def run_canvas_app_probe(
                     },
                 ),
                 _check(
+                    "interface_state_reopens",
+                    "Inspector geometry and contrast preferences survive close and reopen",
+                    reopened_interface.get("inspector_visible")
+                    == interface_before_close.get("inspector_visible")
+                    and abs(
+                        int(reopened_interface.get("inspector_width") or 0)
+                        - int(interface_before_close.get("inspector_width") or 0)
+                    )
+                    <= 3
+                    and reopened_interface.get("high_contrast")
+                    == interface_before_close.get("high_contrast")
+                    and reopened_interface.get("inspector_visible") is True
+                    and reopened_interface.get("high_contrast") is True
+                    and high_contrast_persisted_before_close
+                    and reopened_theme_high_contrast,
+                    {
+                        "before_close": interface_before_close,
+                        "reopened": reopened_interface,
+                        "theme_high_contrast": reopened_theme_high_contrast,
+                    },
+                ),
+                _check(
                     "exact_current_export_and_qa",
                     "The saved document exports a non-empty PDF/TIFF pair through deterministic QA",
                     {"pdf", "tiff_300"} <= exported_formats
@@ -585,12 +946,14 @@ def run_canvas_app_probe(
                     screenshot_ready,
                     {
                         "normal": normal_screenshot,
+                        "dark": dark_screenshot,
+                        "high_contrast": high_contrast_screenshot,
                         "recovered": recovery_screenshot,
                     },
                 ),
                 _check(
                     "source_document_immutable",
-                    "The M1 probe mutates only its copied project or VSZ",
+                    "The native Canvas probe mutates only its copied project or VSZ",
                     source_immutable,
                     {
                         "source_document": str(source_document)
@@ -604,11 +967,15 @@ def run_canvas_app_probe(
         if owns_application:
             application.quit()
     except Exception as exc:
-        error = {"type": type(exc).__name__, "message": str(exc)}
+        error = {
+            "type": type(exc).__name__,
+            "message": str(exc),
+            "traceback": traceback.format_exc(),
+        }
         checks.append(
             _check(
                 "canvas_app_probe_exception",
-                "The M1 Canvas application probe completes without an exception",
+                "The native Canvas application probe completes without an exception",
                 False,
                 error,
             )
@@ -646,6 +1013,14 @@ def run_canvas_app_probe(
             "run_root": str(run_root),
             "summary": str(summary_path),
             "screenshot": str(screenshot_path) if screenshot_path.is_file() else None,
+            "dark_screenshot": (
+                str(dark_screenshot_path) if dark_screenshot_path.is_file() else None
+            ),
+            "high_contrast_screenshot": (
+                str(high_contrast_screenshot_path)
+                if high_contrast_screenshot_path.is_file()
+                else None
+            ),
             "recovery_screenshot": str(recovery_screenshot_path)
             if recovery_screenshot_path.is_file()
             else None,
@@ -653,8 +1028,8 @@ def run_canvas_app_probe(
         },
         "error": error,
         "limitations": [
-            "This is the M1 live Canvas kernel, not the M2 review overlay or "
-            "bounded scientific inspector suite.",
+            "This probe covers the M2 workbench foundation, not the complete "
+            "scientific inspector or review-overlay suite.",
             "Cross-process recovery restores the exact accepted visual state "
             "but intentionally starts a new Veusz in-memory undo boundary.",
         ],
