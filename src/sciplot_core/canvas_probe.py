@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core._utils import file_sha256, json_safe
-from sciplot_core.canvas.annotations import ReviewAnnotation
+from sciplot_core.canvas.annotations import (
+    REVIEW_ANNOTATION_VERSION,
+    ReviewAnnotation,
+    ReviewAnnotationStyle,
+)
 from sciplot_core.canvas.assistant_contract import (
     DataMappingProposal,
     DeclarativeTransformation,
@@ -88,6 +92,12 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         object_type="axis",
         revision=session.revision,
     )
+    page = session.object_registry.bind(
+        structural_key="root/page[0]",
+        current_path="/page",
+        object_type="page",
+        revision=session.revision,
+    )
     session.selection = CanvasSelection(
         object_ids=[axis.object_id],
         primary_object_id=axis.object_id,
@@ -129,6 +139,20 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         text="Review only",
         target_object_id=axis.object_id,
     )
+    native_annotation_operation = CanvasOperation.add_widget(
+        target_id=page.object_id,
+        widget_type="label",
+        name="review_contract",
+        index=0,
+        settings={
+            "positioning": "relative",
+            "xPos": [0.1],
+            "yPos": [0.9],
+            "label": "Promoted review",
+            "Text__color": "#ff9f0a",
+            "Text__size": "12pt",
+        },
+    )
     proposal = DataMappingProposal(
         source_hashes={"raw/example.csv": "a" * 64},
         column_roles={"Frequency": "x", "Storage modulus": "y"},
@@ -165,8 +189,39 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         object_type="axis",
         revision=1,
     )
+    registry_before_insertion = CanvasSession.from_dict(session.to_dict())
+    existing_label = registry_before_insertion.object_registry.bind(
+        structural_key="root/page[0]/label[0]",
+        current_path="/page/title",
+        object_type="label",
+        revision=0,
+    )
+    reconciled_records = registry_before_insertion.object_registry.reconcile(
+        [
+            ("root/page[0]", "/page", "page"),
+            (
+                "root/page[0]/label[0]",
+                "/page/review_contract",
+                "label",
+            ),
+            ("root/page[0]/label[1]", "/page/title", "label"),
+        ],
+        revision=1,
+    )
+    reconciled_by_path = {
+        record.current_path: record for record in reconciled_records
+    }
     restored_batch = CanvasOperationBatch.from_dict(batch.to_dict())
+    restored_native_annotation_operation = CanvasOperation.from_dict(
+        native_annotation_operation.to_dict()
+    )
     restored_proposal = DataMappingProposal.from_dict(proposal.to_dict())
+    legacy_annotation_payload = annotation.to_dict()
+    legacy_annotation_payload["version"] = 1
+    legacy_annotation_payload.pop("style")
+    migrated_legacy_annotation = ReviewAnnotation.from_dict(
+        legacy_annotation_payload
+    )
     operation_schema_rejected = _raises_value_error(
         lambda: CanvasOperation(
             operation_type="set_setting",
@@ -304,6 +359,45 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             ),
         )
     )
+    native_annotation_index_rejected = _raises_value_error(
+        lambda: CanvasOperation.add_widget(
+            target_id=page.object_id,
+            widget_type="label",
+            name="review_contract",
+            index=4,
+            settings={
+                "positioning": "relative",
+                "xPos": [0.1],
+                "yPos": [0.9],
+                "label": "Unsafe placement",
+            },
+        )
+    )
+    native_annotation_setting_rejected = _raises_value_error(
+        lambda: CanvasOperation.add_widget(
+            target_id=page.object_id,
+            widget_type="label",
+            name="review_contract",
+            settings={
+                "positioning": "relative",
+                "xPos": [0.1],
+                "yPos": [0.9],
+                "label": "Unsafe setting",
+                "python": "print('unsafe')",
+            },
+        )
+    )
+    invalid_annotation_geometry_rejected = _raises_value_error(
+        lambda: ReviewAnnotation(
+            page_index=0,
+            shape="arrow",
+            coordinate_space="normalized_page",
+            geometry={"start": [0.2, 0.2], "end": [1.2, 0.5]},
+        )
+    )
+    invalid_annotation_style_rejected = _raises_value_error(
+        lambda: ReviewAnnotationStyle(color="orange")
+    )
     checks = [
         _check(
             "session_roundtrip",
@@ -338,15 +432,51 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             and rebound.current_path == "/renamed_page/renamed_graph/renamed_axis",
         ),
         _check(
+            "stable_object_identity_survives_sibling_insertion",
+            "Existing object IDs survive insertion of a same-type native annotation",
+            reconciled_by_path["/page/title"].object_id
+            == existing_label.object_id
+            and reconciled_by_path["/page/review_contract"].object_id
+            != existing_label.object_id,
+        ),
+        _check(
             "typed_operation_roundtrip",
             "CanvasOperationBatch version 1 roundtrips with its base revision",
             restored_batch.to_dict() == batch.to_dict(),
         ),
         _check(
             "review_annotation_is_non_exported",
-            "ReviewAnnotation defaults to review-only state",
+            "ReviewAnnotation version 2 persists as a review-only sidecar object",
             len(loaded_annotations) == 1
-            and loaded_annotations[0].state == "review_only",
+            and loaded_annotations[0].state == "review_only"
+            and loaded_annotations[0].to_dict()["version"]
+            == REVIEW_ANNOTATION_VERSION,
+        ),
+        _check(
+            "review_annotation_v1_migration",
+            "ReviewAnnotation version 1 payloads migrate to bounded default style",
+            migrated_legacy_annotation.style == ReviewAnnotationStyle()
+            and migrated_legacy_annotation.to_dict()["version"]
+            == REVIEW_ANNOTATION_VERSION,
+        ),
+        _check(
+            "native_annotation_operation_roundtrip",
+            "Typed native annotation operations preserve widget type, draw index, and bounded settings",
+            restored_native_annotation_operation.to_dict()
+            == native_annotation_operation.to_dict()
+            and restored_native_annotation_operation.arguments["index"] == 0,
+        ),
+        _check(
+            "native_annotation_schema_is_closed",
+            "Native annotation operations reject unsafe draw positions and renderer settings",
+            native_annotation_index_rejected
+            and native_annotation_setting_rejected,
+        ),
+        _check(
+            "review_annotation_geometry_is_bounded",
+            "Normalized review coordinates and style colors reject invalid values",
+            invalid_annotation_geometry_rejected
+            and invalid_annotation_style_rejected,
         ),
         _check(
             "mapping_proposal_is_declarative",

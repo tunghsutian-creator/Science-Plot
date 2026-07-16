@@ -22,6 +22,7 @@ class CanvasWorkspace:
     document_path: Path
     session_root: Path
     session_path: Path
+    annotations_path: Path
     journal_path: Path
     project_dir: Path | None = None
     request_path: Path | None = None
@@ -40,6 +41,7 @@ class CanvasWorkspace:
             "document": str(self.document_path),
             "session_root": str(self.session_root),
             "session": str(self.session_path),
+            "review_annotations": str(self.annotations_path),
             "journal": str(self.journal_path),
             "project_dir": str(self.project_dir) if self.project_dir else None,
             "request": str(self.request_path) if self.request_path else None,
@@ -93,6 +95,7 @@ def resolve_canvas_workspace(
         document_path=document_path,
         session_root=session_root.resolve(),
         session_path=(session_root / "canvas_session.json").resolve(),
+        annotations_path=(session_root / "review_annotations.json").resolve(),
         journal_path=(session_root / "operation_journal.jsonl").resolve(),
         project_dir=project_dir,
         request_path=request_path,

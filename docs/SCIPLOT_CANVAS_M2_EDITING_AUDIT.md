@@ -2,6 +2,11 @@
 
 Date: 2026-07-17
 
+Update: the review items that were open when this editing-kernel audit was
+written are now implemented and verified. See
+`docs/SCIPLOT_CANVAS_M2_REVIEW_AUDIT.md`. The real-session and default
+`studio` cutover gates remain open.
+
 ## Audit conclusion
 
 The bounded contextual editing kernel is ready for controlled daily use through
@@ -9,10 +14,9 @@ the experimental `sciplot canvas` route. It no longer depends on Veusz
 MainWindow for the covered object edits, point inspection, label movement,
 save/reopen, recovery, structural QA, or exact-current export.
 
-This is not approval to retire the Veusz frontend. M2 still requires the
-non-exported review layer, review-to-native annotation promotion, at least ten
-real editing/review sessions with zero accepted-change loss, and default
-`studio` migration.
+This is not approval to retire the Veusz frontend. The review layer and typed
+promotion now exist, but M2 still requires at least ten real editing/review
+sessions with zero accepted-change loss and default `studio` migration.
 
 ## Product boundary
 
@@ -120,13 +124,7 @@ or text.
 
 ## Remaining M2 gates
 
-1. Build the non-exported review layer with text, arrow, rectangle, ellipse,
-   and freehand marks.
-2. Persist review coordinates against page, graph, data, or selected-object
-   anchors.
-3. Promote an accepted review mark into a native Veusz annotation and verify
-   VSZ reopen plus PDF/TIFF export.
-4. Complete at least ten real editing/review sessions across five task
+1. Complete at least ten real editing/review sessions across five task
    families with zero accepted-change loss.
-5. Move `studio` to SciPlot Canvas only after those gates pass; keep Advanced
+2. Move `studio` to SciPlot Canvas only after those gates pass; keep Advanced
    Editor as explicit recovery until the user approves retirement.

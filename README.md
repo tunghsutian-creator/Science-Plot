@@ -29,12 +29,15 @@ fixture、策略或 QA，使下一次能够少用或不用 AI。
 项目的目标不是提高 AI 占比，而是让 AI 只处理未知性。对于已验收的数据和绘图规则，
 程序应直接返回 `ready_to_use=true`，无需 AI 看图；不确定时必须停在确认或修复状态。
 
-当前完成到 M2 的基础层：统一 Canvas 会话、类型化操作、审阅批注和数据映射合同已经建立；
-原生 Qt Canvas shell 已能嵌入 `PlotWindow`，处理选择、可见文字编辑、撤销/重做、保存、
-恢复、精确导出、QA 和项目交付。界面现已支持系统 palette 驱动的明暗/高对比主题、窄窗口
-浮动检查器、`Tab` Canvas-only、菜单/快捷键对等、可访问名称和跨重开界面状态持久化。
-50 次连续实时操作门禁以及多类真实/代表性工程回归均已通过。M2 仍需补齐日常页面/轴/曲线/
-图例检查器、审阅覆盖层、批注晋升和直接操作，因此当前 `studio` 默认入口暂不切换。
+当前完成到 M2 的工程内核：统一 Canvas 会话、封闭的类型化操作、选择驱动的页面/图区/轴/
+曲线/箱线/图例/标量场/标注检查器、数据点选择、直接标注拖动、结构 QA、审阅批注和数据
+映射合同已经建立。原生 Qt Canvas 直接嵌入 `PlotWindow`，处理选择、编辑、撤销/重做、
+保存、恢复、精确导出、QA 和项目交付。界面支持系统 palette 驱动的明暗/高对比主题、
+窄窗口浮动检查器、`Tab` Canvas-only、菜单/快捷键对等、可访问名称和跨重开状态持久化。
+
+M2 的非导出审阅层也已实现：五种工具、五类坐标锚点、独立 sidecar、关闭重开、审阅到
+Veusz 原生标注的类型化晋升，以及撤销/重做和精确导出门禁均已通过。当前仍需至少十次
+真实日常编辑/审阅会话和用户批准的 `studio` 默认入口切换，因此不把自动探针冒充真人验收。
 
 ## 日常主流程
 
@@ -84,7 +87,7 @@ skill/scripts/sciplot studio PATH \
 `--rule` 是明确的科学语义选择，会绕过自动猜测；`--template` 是明确的呈现选择，可单独使用，
 也可省略并采用该规则的默认模板。Luna/Codex 可以根据用户自然语言直接填写这两个参数。
 
-## 原生 Canvas（M2 基础实验入口）
+## 原生 Canvas（M2 受控日常入口）
 
 对已有 SciPlot project、`plot_request.json` 或独立 VSZ 进行实时编辑：
 
@@ -97,20 +100,28 @@ skill/scripts/sciplot canvas PROJECT_OR_VSZ
 SciPlot 窗口中显示实时画布和从属检查器。当前高频能力包括：
 
 - 页面与缩放导航；
-- PlotWindow 点击选择和可见文本编辑；
+- PlotWindow 点击选择、数据点选择和选择边界；
+- 页面、图区、轴、XY、箱线、图例、image、contour、colorbar 和原生 label 的封闭检查器；
+- 安全字段即时应用，其余字段明确 Apply/Revert；
+- 原生 label 直接拖动并写入类型化操作日志；
+- Review 工作区：Note、Arrow、Box、Oval、Pen，以及 page、normalized page、graph、data、
+  selected object 五类锚点；
+- 未晋升审阅只写入 `.sciplot_canvas/review_annotations.json`，不会改变 VSZ 或 PDF/TIFF；
+- 文字、箭头、矩形和椭圆可晋升为原生 Veusz 对象；freehand 保持 review-only；
 - Save、Undo、Redo；
 - PDF/TIFF exact-current Export + QA；
 - QA/export revision 状态；
 - 显式未保存恢复；
 - `F9` 收起检查器；
+- `Ctrl+Shift+R` 打开 Review 工作区；
 - `Tab` 进入 Canvas-only，`Esc` 恢复界面；
 - 系统 palette 驱动的明暗与高对比应用 chrome；
 - 窄窗口检查器自动浮动，保持画布宽度；
 - 界面状态、菜单/快捷键和可访问名称门禁；
 - `More` 中的 Advanced Editor 恢复入口。
 
-这是 M2 基础层，不代表 M2 的完整日常编辑器。页面、轴、曲线、图例、外观、批注、数据点
-选择和直接操作仍在下一批。日常自动绘图与交付目前仍优先使用 `studio`。
+技术功能已进入 M2 受控日常使用阶段，但默认前端切换仍由真实会话零丢失门禁控制。日常
+自动绘图与交付目前仍优先使用 `studio`；`canvas` 用于积累真实编辑/审阅证据。
 
 ## 高级修图（过渡期恢复入口）
 
@@ -193,6 +204,8 @@ PROJECT/
 - M0 Canvas 内核合同、稳定对象 ID、恢复快照和冲突门禁；
 - M1 原生 Qt Canvas shell、实时选择/文字编辑、50 次连续操作门禁、精确导出和显式恢复；
 - M2 palette-backed 明暗/高对比主题、适应式检查器、Canvas-only、可访问性和界面状态持久化；
+- M2 选择驱动的十类对象检查器、数据点选择、原生 label 拖动、结构 QA、五工具审阅层、
+  五类锚点和四类原生标注晋升；
 - 60/120/180 mm 单图尺寸以及 183 mm 组合图布局；
 - publication intent、transform ledger、研究模型和证据绑定；
 - PDF 页面/字体/尺寸/可见墨迹、TIFF 分辨率、PDF-TIFF 配对和哈希 QA；

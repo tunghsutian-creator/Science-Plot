@@ -2,7 +2,8 @@
 
 Status: active product roadmap, 2026-07-17. M0 and M1 complete; M2 is in
 progress. Its adaptive visual foundation and bounded contextual editing kernel
-are complete; review annotations and the real-session retirement gate remain.
+and its non-exported review/promotion kernel are complete. The real-session
+retirement gate and default `studio` migration remain.
 
 This roadmap supersedes the former assumption that native canvas work and
 multi-panel composition should remain deferred. Distribution to other users is
@@ -513,12 +514,43 @@ M2 implementation progress, 2026-07-17:
   live edits, fixed-zoom theme invariance, save/reopen, recovery,
   exact-current PDF/TIFF, passing QA, matching delivery hashes, and complete
   delivery;
+- added a persistent `ReviewAnnotation` version-2 sidecar with closed geometry
+  and style schemas for text, arrow, rectangle, ellipse, and freehand marks;
+- added page, normalized-page, graph, data, and selected-object anchors.
+  Review geometry resolves from stable object IDs after zoom and reopen, and
+  graph-bound data anchors now cover XY, box-plot, image, and contour objects;
+- added a dedicated Review workspace, `Ctrl+Shift+R`, selection/movement,
+  drawing tools, text/style editing, removal, and a display-only
+  `QGraphicsScene` overlay. Review-only work does not increment the document
+  revision, mutate VSZ, or enter PDF/TIFF exports;
+- added typed promotion of review text, arrows, rectangles, and ellipses into
+  native Veusz label, line, rect, and ellipse widgets. Freehand remains
+  honestly review-only because there is no equivalent bounded native object;
+- made promotion one reversible Canvas transaction with a recovery snapshot,
+  stable promoted-object ID, sidecar transition, operation journal, live
+  redraw, save/reopen, and exact-current export;
+- corrected Veusz page-child draw ordering by inserting page annotations at
+  draw index `0`, preventing promoted labels and arrows from being covered by
+  the graph while preserving page-anchor semantics;
+- separated PDF visual equivalence from byte equivalence in the review gate:
+  unpromoted reviews must preserve PDF page pixels and TIFF bytes, avoiding
+  false failures from generated PDF metadata;
+- tuned promoted review defaults to the publication scale (`7 pt` text,
+  `1 pt` lines, translucent fills) after visual inspection showed that UI-size
+  defaults were too dominant on a `60x55 mm` figure;
+- expanded the pure Canvas contract to `26/26` and runtime smoke to version 11,
+  `27/27`, with a nested review lifecycle gate of `20/20`;
+- final review lifecycle probes pass `20/20` independently on FTIR, rheology
+  frequency sweep, tensile, impact, torque, and TEMP3 scalar-field documents:
+  `120/120` checks total, with source immutability, protected workspace
+  switching, five anchors, stable existing object IDs, four typed promotions,
+  undo/redo, reopen, QA, exact-current export, and audit evidence;
 - no upstream `third_party/veusz` or migrated `_vendor` source was changed.
 
 This is not M2 completion. The contextual editing kernel is complete, but the
-non-exported review overlay, review-to-native annotation promotion, at least
-ten real daily editing/review sessions, and default `studio` migration remain
-required by the exit gate.
+at least ten real daily editing/review sessions and default `studio` migration
+remain required by the exit gate. Automated lifecycle probes are engineering
+evidence and do not count as human daily-use sessions.
 
 Exit gate:
 
@@ -530,6 +562,14 @@ Exit gate:
 - at least ten representative real project sessions complete with zero lost
   document changes;
 - Advanced Editor is no longer presented as the normal workflow.
+
+Current gate status:
+
+- representative editing, review persistence/export isolation, typed
+  promotion, exact-current export, and manual-edit preservation pass automated
+  gates;
+- the ten real-session zero-loss gate and user-approved default `studio`
+  cutover remain open.
 
 ### M3 — AI-Enhanced Live Operation Loop
 

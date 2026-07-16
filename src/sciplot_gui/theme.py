@@ -325,7 +325,31 @@ QDockWidget#inspectorDock::title {{
     border-bottom: {border_width}px solid {tokens.border};
     padding: 6px 10px;
 }}
+QTabWidget#inspectorTabs::pane {{
+    border: 0;
+    background: {tokens.inspector};
+}}
+QTabBar::tab {{
+    background: {tokens.toolbar};
+    color: {tokens.muted_text};
+    border: 0;
+    border-bottom: {border_width}px solid {tokens.border};
+    padding: 9px 18px;
+    font-weight: 650;
+}}
+QTabBar::tab:selected {{
+    background: {tokens.inspector};
+    color: {tokens.text};
+    border-bottom: {focus_width}px solid {tokens.accent};
+}}
+QTabBar::tab:focus {{
+    outline: {focus_width}px solid {tokens.focus};
+}}
 QFrame#inspector {{
+    background: {tokens.inspector};
+    border-left: {border_width}px solid {tokens.border};
+}}
+QFrame#reviewInspector {{
     background: {tokens.inspector};
     border-left: {border_width}px solid {tokens.border};
 }}
@@ -388,6 +412,15 @@ QLabel#validationMessage {{
     color: {tokens.negative_text};
     border-radius: 7px;
     padding: 8px 10px;
+}}
+QLabel#reviewSafetyBadge {{
+    background: {tokens.warning_background};
+    color: {tokens.warning_text};
+    border-radius: 7px;
+    padding: 6px 9px;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.8px;
 }}
 QLabel#readOnlyValue {{
     background: {tokens.input};
@@ -478,6 +511,25 @@ QToolButton#secondaryToolButton:hover {{
 QToolButton#secondaryToolButton:disabled {{
     color: {tokens.disabled_text};
 }}
+QToolButton#reviewToolButton {{
+    background: transparent;
+    color: {tokens.text};
+    border: {border_width}px solid {tokens.border};
+    border-radius: 7px;
+    padding: 7px 8px;
+    min-width: 64px;
+}}
+QToolButton#reviewToolButton:hover {{
+    background: {tokens.hover};
+}}
+QToolButton#reviewToolButton:checked {{
+    background: {tokens.accent};
+    color: {tokens.accent_text};
+    border-color: {tokens.accent};
+}}
+QToolButton#reviewToolButton:focus {{
+    border: {focus_width}px solid {tokens.focus};
+}}
 QToolButton#colorSwatch {{
     background: {tokens.input};
     border: {border_width}px solid {tokens.border};
@@ -487,6 +539,25 @@ QToolButton#colorSwatch {{
 }}
 QToolButton#colorSwatch:hover {{
     background: {tokens.hover};
+}}
+QListWidget#reviewAnnotationList {{
+    background: {tokens.input};
+    color: {tokens.text};
+    border: {border_width}px solid {tokens.border};
+    border-radius: 7px;
+    padding: 4px;
+    min-height: 92px;
+}}
+QListWidget#reviewAnnotationList::item {{
+    border-radius: 5px;
+    padding: 7px 8px;
+}}
+QListWidget#reviewAnnotationList::item:hover {{
+    background: {tokens.hover};
+}}
+QListWidget#reviewAnnotationList::item:selected {{
+    background: {tokens.accent};
+    color: {tokens.accent_text};
 }}
 QScrollBar:vertical {{
     background: transparent;

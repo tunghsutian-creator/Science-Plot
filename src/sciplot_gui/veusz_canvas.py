@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core._paths import VEUSZ_ROOT
+from sciplot_core.canvas.annotations import (
+    ReviewAnnotation,
+    annotation_geometry_from_points,
+    annotation_geometry_points,
+)
 from sciplot_core.canvas.inspector import (
     SUPPORTED_INSPECTOR_TYPES,
     CanvasInspectorField,
@@ -28,7 +33,11 @@ def _load_qt_veusz() -> dict[str, Any]:
     ensure_veusz_qsettings_compat()
     from PyQt6 import QtCore, QtGui, QtWidgets
     from veusz import dataimport, document, widgets
-    from veusz.document.operations import OperationMultiple, OperationSettingSet
+    from veusz.document.operations import (
+        OperationMultiple,
+        OperationSettingSet,
+        OperationWidgetAdd,
+    )
     from veusz.windows.plotwindow import PlotWindow
 
     _ = dataimport, widgets
@@ -39,6 +48,7 @@ def _load_qt_veusz() -> dict[str, Any]:
         "Document": document.Document,
         "OperationMultiple": OperationMultiple,
         "OperationSettingSet": OperationSettingSet,
+        "OperationWidgetAdd": OperationWidgetAdd,
         "PlotWindow": PlotWindow,
     }
 
@@ -59,6 +69,7 @@ class VeuszCanvasAdapter:
         self._QtWidgets = runtime["QtWidgets"]
         self._OperationMultiple = runtime["OperationMultiple"]
         self._OperationSettingSet = runtime["OperationSettingSet"]
+        self._OperationWidgetAdd = runtime["OperationWidgetAdd"]
 
         self.document_path = document_path.expanduser().resolve()
         if not self.document_path.is_file():
@@ -157,7 +168,7 @@ class VeuszCanvasAdapter:
     def bind_object_registry(self, session: CanvasSession) -> list[dict[str, Any]]:
         self.assert_gui_thread()
         self._active_session = session
-        inventory: list[dict[str, Any]] = []
+        objects: list[tuple[str, str, str, str]] = []
 
         def walk(parent: Any, parent_key: str) -> None:
             type_counts: dict[str, int] = {}
@@ -166,25 +177,39 @@ class VeuszCanvasAdapter:
                 type_index = type_counts.get(object_type, 0)
                 type_counts[object_type] = type_index + 1
                 structural_key = f"{parent_key}/{object_type}[{type_index}]"
-                record = session.object_registry.bind(
-                    structural_key=structural_key,
-                    current_path=str(child.path),
-                    object_type=object_type,
-                    revision=session.revision,
-                )
-                inventory.append(
-                    {
-                        "object_id": record.object_id,
-                        "structural_key": structural_key,
-                        "path": str(child.path),
-                        "object_type": object_type,
-                        "display_name": str(child.name),
-                    }
+                objects.append(
+                    (
+                        structural_key,
+                        str(child.path),
+                        object_type,
+                        str(child.name),
+                    )
                 )
                 walk(child, structural_key)
 
         walk(self.document.basewidget, "root")
-        return inventory
+        records = session.object_registry.reconcile(
+            [
+                (structural_key, path, object_type)
+                for structural_key, path, object_type, _ in objects
+            ],
+            revision=session.revision,
+        )
+        return [
+            {
+                "object_id": record.object_id,
+                "structural_key": structural_key,
+                "path": path,
+                "object_type": object_type,
+                "display_name": display_name,
+            }
+            for (
+                structural_key,
+                path,
+                object_type,
+                display_name,
+            ), record in zip(objects, records, strict=True)
+        ]
 
     def _widget(self, widget_path: str) -> Any:
         self.assert_gui_thread()
@@ -207,6 +232,514 @@ class VeuszCanvasAdapter:
         if item is None:
             raise ValueError(f"Unknown Canvas object: {object_id}")
         return item
+
+    def _object_record_path(
+        self,
+        session: CanvasSession,
+        object_id: str,
+    ) -> str:
+        record = session.object_registry.by_id(object_id)
+        if record is None:
+            self.bind_object_registry(session)
+            record = session.object_registry.by_id(object_id)
+        if record is None:
+            raise ValueError(f"Unknown Canvas object: {object_id}")
+        return str(record.current_path)
+
+    def _page_scene_rect(self) -> Any:
+        rect = self.plot_window.pixmapitem.boundingRect()
+        if rect.width() <= 0 or rect.height() <= 0:
+            raise RuntimeError("The live Canvas page has no drawable bounds.")
+        return rect
+
+    def _widget_scene_rect(self, widget: Any) -> Any:
+        helper = self.plot_window.painthelper
+        if helper is None:
+            raise RuntimeError("The live Canvas has no rendered geometry.")
+        bounds = helper.widgetBounds(widget)
+        scale = float(helper.cgscale)
+        return self._QtCore.QRectF(
+            self._QtCore.QPointF(
+                float(bounds[0]) * scale,
+                float(bounds[1]) * scale,
+            ),
+            self._QtCore.QPointF(
+                float(bounds[2]) * scale,
+                float(bounds[3]) * scale,
+            ),
+        ).normalized()
+
+    def _graph_widget_for(self, widget: Any) -> Any | None:
+        candidate = widget
+        while candidate is not None:
+            if str(getattr(candidate, "typename", "")) == "graph":
+                return candidate
+            candidate = getattr(candidate, "parent", None)
+        return None
+
+    def _first_graph_on_current_page(self) -> Any | None:
+        page = self._widget(self.current_page_path)
+        stack = list(page.children)
+        while stack:
+            candidate = stack.pop(0)
+            if str(candidate.typename) == "graph":
+                return candidate
+            stack[0:0] = list(candidate.children)
+        return None
+
+    def _annotation_target_widget(
+        self,
+        annotation: ReviewAnnotation,
+        session: CanvasSession,
+    ) -> Any:
+        if annotation.target_object_id is None:
+            raise ValueError(
+                f"{annotation.coordinate_space}-space annotation has no target."
+            )
+        return self._widget(
+            self._object_record_path(session, annotation.target_object_id)
+        )
+
+    def _data_axes_context(
+        self,
+        *,
+        target_object_id: str,
+        session: CanvasSession,
+    ) -> tuple[Any, tuple[Any, Any], Any]:
+        widget = self._widget(
+            self._object_record_path(session, target_object_id)
+        )
+        graph = self._graph_widget_for(widget)
+        if graph is None:
+            raise ValueError("Data-space review marks require a graph-bound target.")
+        axes: tuple[Any, Any] | None = None
+        if hasattr(widget, "fetchAxes"):
+            fetched = widget.fetchAxes()
+            if (
+                isinstance(fetched, (tuple, list))
+                and len(fetched) >= 2
+                and fetched[0] is not None
+                and fetched[1] is not None
+            ):
+                axes = (fetched[0], fetched[1])
+        if axes is None and hasattr(graph, "getAxes"):
+            fetched = graph.getAxes(("x", "y"))
+            if (
+                isinstance(fetched, (tuple, list))
+                and len(fetched) >= 2
+                and fetched[0] is not None
+                and fetched[1] is not None
+            ):
+                axes = (fetched[0], fetched[1])
+        if axes is None:
+            raise ValueError(
+                "The selected target does not expose a complete X/Y axis pair."
+            )
+        helper = self.plot_window.painthelper
+        if helper is None:
+            raise RuntimeError("The live Canvas has no rendered geometry.")
+        bounds = helper.widgetBounds(graph)
+        return graph, axes, bounds
+
+    def review_anchor_target_id(
+        self,
+        session: CanvasSession,
+        coordinate_space: str,
+    ) -> str | None:
+        """Resolve the current selection to a valid review-anchor target."""
+
+        if coordinate_space in {"page", "normalized_page"}:
+            return None
+        selected_id = session.selection.primary_object_id
+        if coordinate_space == "object":
+            if selected_id is None:
+                raise ValueError("Select a Canvas object before using an object anchor.")
+            return selected_id
+        inventory = self.bind_object_registry(session)
+        selected_item = next(
+            (
+                item
+                for item in inventory
+                if item.get("object_id") == selected_id
+            ),
+            None,
+        )
+        selected_widget = (
+            self._widget(str(selected_item["path"]))
+            if selected_item is not None
+            else None
+        )
+        if coordinate_space == "graph":
+            graph = (
+                self._graph_widget_for(selected_widget)
+                if selected_widget is not None
+                else None
+            ) or self._first_graph_on_current_page()
+            if graph is None:
+                raise ValueError("The current page does not contain a graph anchor.")
+            item = next(
+                (value for value in inventory if value.get("path") == str(graph.path)),
+                None,
+            )
+            if item is None:
+                raise RuntimeError("The graph anchor is outside the object registry.")
+            return str(item["object_id"])
+        if coordinate_space == "data":
+            candidates: list[str] = []
+            if session.selection.data_point is not None:
+                candidates.append(session.selection.data_point.target_object_id)
+            if selected_id is not None:
+                candidates.append(selected_id)
+            candidates.extend(
+                str(item["object_id"])
+                for item in inventory
+                if item.get("object_type")
+                in {"xy", "boxplot", "image", "contour"}
+                and (
+                    str(item.get("path")) == self.current_page_path
+                    or str(item.get("path")).startswith(
+                        f"{self.current_page_path}/"
+                    )
+                )
+            )
+            for object_id in dict.fromkeys(candidates):
+                try:
+                    self._data_axes_context(
+                        target_object_id=object_id,
+                        session=session,
+                    )
+                except (RuntimeError, ValueError):
+                    continue
+                return object_id
+            raise ValueError(
+                "Select a graph series or data point before using a data anchor."
+            )
+        raise ValueError(f"Unsupported review coordinate space: {coordinate_space!r}")
+
+    def review_geometry_to_scene(
+        self,
+        annotation: ReviewAnnotation,
+        session: CanvasSession,
+    ) -> dict[str, Any]:
+        if annotation.page_index != self.current_page:
+            raise ValueError("Review annotation is not on the current page.")
+        points = annotation_geometry_points(annotation.shape, annotation.geometry)
+        page_rect = self._page_scene_rect()
+
+        if annotation.coordinate_space == "page":
+            scale = float(self.plot_window.painthelper.cgscale)
+            transformed = [
+                (
+                    page_rect.left() + x * scale,
+                    page_rect.top() + y * scale,
+                )
+                for x, y in points
+            ]
+        elif annotation.coordinate_space == "normalized_page":
+            transformed = [
+                (
+                    page_rect.left() + x * page_rect.width(),
+                    page_rect.top() + y * page_rect.height(),
+                )
+                for x, y in points
+            ]
+        elif annotation.coordinate_space in {"graph", "object"}:
+            target = self._annotation_target_widget(annotation, session)
+            if annotation.coordinate_space == "graph":
+                target = self._graph_widget_for(target)
+                if target is None:
+                    raise ValueError("The review graph anchor no longer resolves.")
+            rect = self._widget_scene_rect(target)
+            transformed = [
+                (
+                    rect.left() + x * rect.width(),
+                    rect.top() + y * rect.height(),
+                )
+                for x, y in points
+            ]
+        elif annotation.coordinate_space == "data":
+            if annotation.target_object_id is None:
+                raise ValueError("Data-space review annotation has no target.")
+            import numpy as np
+
+            _, axes, bounds = self._data_axes_context(
+                target_object_id=annotation.target_object_id,
+                session=session,
+            )
+            scale = float(self.plot_window.painthelper.cgscale)
+            transformed = [
+                (
+                    float(
+                        axes[0].dataToPlotterCoords(
+                            bounds,
+                            np.asarray([x], dtype=float),
+                        )[0]
+                    )
+                    * scale,
+                    float(
+                        axes[1].dataToPlotterCoords(
+                            bounds,
+                            np.asarray([y], dtype=float),
+                        )[0]
+                    )
+                    * scale,
+                )
+                for x, y in points
+            ]
+        else:
+            raise ValueError(
+                f"Unsupported review coordinate space: {annotation.coordinate_space!r}"
+            )
+        return annotation_geometry_from_points(annotation.shape, transformed)
+
+    def review_geometry_from_scene(
+        self,
+        *,
+        shape: str,
+        scene_geometry: dict[str, Any],
+        coordinate_space: str,
+        target_object_id: str | None,
+        page_index: int,
+        session: CanvasSession,
+    ) -> dict[str, Any]:
+        if int(page_index) != self.current_page:
+            raise ValueError("Review annotations can only be created on the active page.")
+        points = annotation_geometry_points(shape, scene_geometry)
+        page_rect = self._page_scene_rect()
+
+        if coordinate_space == "page":
+            scale = float(self.plot_window.painthelper.cgscale)
+            transformed = [
+                (
+                    (x - page_rect.left()) / scale,
+                    (y - page_rect.top()) / scale,
+                )
+                for x, y in points
+            ]
+        elif coordinate_space == "normalized_page":
+            transformed = [
+                (
+                    min(max((x - page_rect.left()) / page_rect.width(), 0.0), 1.0),
+                    min(max((y - page_rect.top()) / page_rect.height(), 0.0), 1.0),
+                )
+                for x, y in points
+            ]
+        elif coordinate_space in {"graph", "object"}:
+            if target_object_id is None:
+                raise ValueError(
+                    f"{coordinate_space}-space review marks require a target."
+                )
+            target = self._widget(
+                self._object_record_path(session, target_object_id)
+            )
+            if coordinate_space == "graph":
+                target = self._graph_widget_for(target)
+                if target is None:
+                    raise ValueError("The graph review target no longer resolves.")
+            rect = self._widget_scene_rect(target)
+            transformed = [
+                (
+                    min(max((x - rect.left()) / rect.width(), 0.0), 1.0),
+                    min(max((y - rect.top()) / rect.height(), 0.0), 1.0),
+                )
+                for x, y in points
+            ]
+        elif coordinate_space == "data":
+            if target_object_id is None:
+                raise ValueError("Data-space review marks require a target.")
+            import numpy as np
+
+            _, axes, bounds = self._data_axes_context(
+                target_object_id=target_object_id,
+                session=session,
+            )
+            scale = float(self.plot_window.painthelper.cgscale)
+            transformed = [
+                (
+                    float(
+                        axes[0].plotterToDataCoords(
+                            bounds,
+                            np.asarray([x / scale], dtype=float),
+                        )[0]
+                    ),
+                    float(
+                        axes[1].plotterToDataCoords(
+                            bounds,
+                            np.asarray([y / scale], dtype=float),
+                        )[0]
+                    ),
+                )
+                for x, y in points
+            ]
+        else:
+            raise ValueError(f"Unsupported review coordinate space: {coordinate_space!r}")
+        return annotation_geometry_from_points(shape, transformed)
+
+    def native_annotation_spec(
+        self,
+        annotation: ReviewAnnotation,
+        session: CanvasSession,
+    ) -> dict[str, Any]:
+        """Compile one review mark into a bounded native Veusz widget spec."""
+
+        if not annotation.promotable:
+            raise ValueError(
+                f"{annotation.shape!r} review annotation cannot be promoted."
+            )
+        inventory = self.bind_object_registry(session)
+        page_widget = self._widget(self.current_page_path)
+        target_widget = (
+            self._annotation_target_widget(annotation, session)
+            if annotation.target_object_id is not None
+            else page_widget
+        )
+        parent_widget = self._graph_widget_for(target_widget) or page_widget
+        if str(parent_widget.typename) not in {"page", "graph"}:
+            raise ValueError("Native annotations require a page or graph parent.")
+        parent_item = next(
+            (
+                item
+                for item in inventory
+                if str(item.get("path")) == str(parent_widget.path)
+            ),
+            None,
+        )
+        if parent_item is None:
+            raise RuntimeError("Native annotation parent is outside the object registry.")
+
+        scene_geometry = self.review_geometry_to_scene(annotation, session)
+        scene_points = annotation_geometry_points(
+            annotation.shape,
+            scene_geometry,
+        )
+        parent_rect = self._widget_scene_rect(parent_widget)
+
+        def relative(point: tuple[float, float]) -> tuple[float, float]:
+            return (
+                min(
+                    max(
+                        (point[0] - parent_rect.left()) / parent_rect.width(),
+                        0.0,
+                    ),
+                    1.0,
+                ),
+                min(
+                    max(
+                        (parent_rect.bottom() - point[1]) / parent_rect.height(),
+                        0.0,
+                    ),
+                    1.0,
+                ),
+            )
+
+        positioning = "relative"
+        native_points = [relative(point) for point in scene_points]
+        x_axis_name = "x"
+        y_axis_name = "y"
+        if (
+            annotation.coordinate_space == "data"
+            and annotation.target_object_id is not None
+            and str(parent_widget.typename) == "graph"
+        ):
+            _, axes, _ = self._data_axes_context(
+                target_object_id=annotation.target_object_id,
+                session=session,
+            )
+            positioning = "axes"
+            x_axis_name = str(getattr(axes[0], "name", "x") or "x")
+            y_axis_name = str(getattr(axes[1], "name", "y") or "y")
+            native_points = annotation_geometry_points(
+                annotation.shape,
+                annotation.geometry,
+            )
+
+        style = annotation.style
+        common: dict[str, Any] = {
+            "positioning": positioning,
+            "xAxis": x_axis_name,
+            "yAxis": y_axis_name,
+            "clip": False,
+        }
+        name = f"review_{annotation.annotation_id.replace('-', '')[:12]}"
+        if annotation.shape == "text":
+            point = native_points[0]
+            settings = {
+                **common,
+                "xPos": [point[0]],
+                "yPos": [point[1]],
+                "label": annotation.text,
+                "alignHorz": "left",
+                "alignVert": "top",
+                "Text__color": style.color,
+                "Text__size": f"{style.font_size:g}pt",
+            }
+            widget_type = "label"
+        elif annotation.shape == "arrow":
+            start, end = native_points
+            settings = {
+                **common,
+                "mode": "point-to-point",
+                "xPos": [start[0]],
+                "yPos": [start[1]],
+                "xPos2": [end[0]],
+                "yPos2": [end[1]],
+                "arrowright": "arrow",
+                "arrowleft": "none",
+                "arrowSize": f"{max(style.line_width * 3.0, 5.0):g}pt",
+                "Line__color": style.color,
+                "Line__width": f"{style.line_width:g}pt",
+                "Fill__color": style.color,
+            }
+            widget_type = "line"
+        else:
+            first_scene, second_scene = scene_points
+            center_scene = (
+                (first_scene[0] + second_scene[0]) / 2.0,
+                (first_scene[1] + second_scene[1]) / 2.0,
+            )
+            if positioning == "axes" and annotation.target_object_id is not None:
+                center_geometry = self.review_geometry_from_scene(
+                    shape="text",
+                    scene_geometry={"position": list(center_scene)},
+                    coordinate_space="data",
+                    target_object_id=annotation.target_object_id,
+                    page_index=annotation.page_index,
+                    session=session,
+                )
+                center = annotation_geometry_points(
+                    "text",
+                    center_geometry,
+                )[0]
+            else:
+                center = relative(center_scene)
+            width = abs(second_scene[0] - first_scene[0]) / parent_rect.width()
+            height = abs(second_scene[1] - first_scene[1]) / parent_rect.height()
+            settings = {
+                **common,
+                "xPos": [center[0]],
+                "yPos": [center[1]],
+                "width": [width],
+                "height": [height],
+                "Border__color": style.color,
+                "Border__width": f"{style.line_width:g}pt",
+                "Fill__color": style.fill_color,
+                "Fill__transparency": round(
+                    (1.0 - min(style.opacity * 0.34, 0.42)) * 100.0
+                ),
+                "Fill__hide": False,
+            }
+            widget_type = "rect" if annotation.shape == "rectangle" else "ellipse"
+
+        return {
+            "target_id": str(parent_item["object_id"]),
+            "parent_path": str(parent_widget.path),
+            "widget_type": widget_type,
+            "name": name,
+            # Page children are drawn in reverse order by Veusz. Insert native
+            # page annotations at the front so the graph cannot cover them.
+            "index": 0 if str(parent_widget.typename) == "page" else -1,
+            "settings": settings,
+        }
 
     def _object_role(self, item: dict[str, Any]) -> str:
         object_type = str(item["object_type"])
@@ -1001,26 +1534,83 @@ class VeuszCanvasAdapter:
         *,
         description: str,
     ) -> list[dict[str, Any]]:
+        prepared = [
+            {
+                **change,
+                "operation_type": "set_setting",
+            }
+            for change in changes
+        ]
+        return self.apply_operation_batch(prepared, description=description)
+
+    def apply_operation_batch(
+        self,
+        operations_payload: list[dict[str, Any]],
+        *,
+        description: str,
+    ) -> list[dict[str, Any]]:
         self.assert_gui_thread()
         prepared: list[dict[str, Any]] = []
         operations: list[Any] = []
-        for change in changes:
-            setting_path = str(change["setting_path"])
-            normalized = self.validate_setting_value(setting_path, change["value"])
-            old_value = self.setting_value(setting_path)
-            prepared.append(
-                {
-                    "setting_path": setting_path,
-                    "old_value": old_value,
-                    "new_value": normalized,
+        widget_operations: list[tuple[dict[str, Any], Any]] = []
+        for payload in operations_payload:
+            operation_type = str(payload.get("operation_type") or "set_setting")
+            if operation_type == "set_setting":
+                setting_path = str(payload["setting_path"])
+                normalized = self.validate_setting_value(
+                    setting_path,
+                    payload["value"],
+                )
+                old_value = self.setting_value(setting_path)
+                prepared.append(
+                    {
+                        "operation_type": operation_type,
+                        "operation_id": payload.get("operation_id"),
+                        "target_id": payload.get("target_id"),
+                        "setting_path": setting_path,
+                        "old_value": old_value,
+                        "new_value": normalized,
+                    }
+                )
+                operations.append(
+                    self._OperationSettingSet(setting_path, normalized)
+                )
+                continue
+            if operation_type == "add_widget":
+                parent_path = str(payload["parent_path"])
+                parent = self._widget(parent_path)
+                index = int(payload.get("index", -1))
+                widget_operation = self._OperationWidgetAdd(
+                    parent,
+                    str(payload["widget_type"]),
+                    name=str(payload["name"]),
+                    index=index,
+                    **dict(payload["settings"]),
+                )
+                record = {
+                    "operation_type": operation_type,
+                    "operation_id": payload.get("operation_id"),
+                    "target_id": payload.get("target_id"),
+                    "parent_path": parent_path,
+                    "widget_type": str(payload["widget_type"]),
+                    "name": str(payload["name"]),
+                    "index": index,
+                    "settings": dict(payload["settings"]),
                 }
-            )
-            operations.append(self._OperationSettingSet(setting_path, normalized))
+                prepared.append(record)
+                operations.append(widget_operation)
+                widget_operations.append((record, widget_operation))
+                continue
+            raise ValueError(f"Unsupported Canvas operation: {operation_type!r}")
         self.document.applyOperation(
             self._OperationMultiple(
                 operations, descr=description or "SciPlot canvas edit"
             )
         )
+        for record, widget_operation in widget_operations:
+            created_name = str(widget_operation.createdname)
+            parent_path = str(record["parent_path"]).rstrip("/")
+            record["created_path"] = f"{parent_path}/{created_name}"
         self.force_redraw()
         return prepared
 

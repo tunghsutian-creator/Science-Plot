@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from sciplot_core._utils import file_sha256, json_safe
+from sciplot_core.canvas.annotations import (
+    ReviewAnnotation,
+    ReviewAnnotationStyle,
+)
 from sciplot_core.canvas.inspector import CanvasInspectorModel
 from sciplot_core.canvas.model import CanvasSelection, CanvasSession
 from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 from sciplot_core.canvas.persistence import (
     append_operation_journal,
     load_canvas_session,
+    load_review_annotations,
     save_canvas_session,
+    save_review_annotations,
 )
 from sciplot_gui.veusz_canvas import VeuszCanvasAdapter
 
@@ -29,6 +36,7 @@ class DocumentController:
         *,
         document_path: Path,
         session_path: Path,
+        annotations_path: Path | None = None,
         journal_path: Path,
         project_id: str,
         parent: Any = None,
@@ -36,7 +44,14 @@ class DocumentController:
     ) -> None:
         self.document_path = document_path.expanduser().resolve()
         self.session_path = session_path.expanduser().resolve()
+        self.annotations_path = (
+            annotations_path.expanduser().resolve()
+            if annotations_path is not None
+            else (self.session_path.parent / "review_annotations.json").resolve()
+        )
         self.journal_path = journal_path.expanduser().resolve()
+        self._history_side_effects_undo: list[dict[str, Any] | None] = []
+        self._history_side_effects_redo: list[dict[str, Any] | None] = []
         if not self.document_path.is_file():
             raise FileNotFoundError(self.document_path)
         self.recovered_from_snapshot: str | None = None
@@ -96,6 +111,30 @@ class DocumentController:
                 document_sha256=file_sha256(self.document_path),
             )
             load_path = self.document_path
+        if self.annotations_path.is_file():
+            self.review_annotations = load_review_annotations(self.annotations_path)
+        else:
+            self.review_annotations = []
+            if self.session.review_annotation_ids:
+                self.session.set_state("conflict")
+                self.persist()
+                raise RuntimeError(
+                    "CanvasSession references review annotations, but the "
+                    "non-exported review sidecar is missing."
+                )
+        annotation_ids = [
+            annotation.annotation_id for annotation in self.review_annotations
+        ]
+        if self.session.review_annotation_ids:
+            if self.session.review_annotation_ids != annotation_ids:
+                self.session.set_state("conflict")
+                self.persist()
+                raise RuntimeError(
+                    "CanvasSession and review_annotations.json disagree about "
+                    "the persisted review layer."
+                )
+        elif annotation_ids:
+            self.session.review_annotation_ids = annotation_ids
         self.adapter = VeuszCanvasAdapter(load_path, parent=parent, visible=visible)
         self.inventory = self.adapter.bind_object_registry(self.session)
         selected_id = self.session.selection.primary_object_id
@@ -161,6 +200,276 @@ class DocumentController:
 
     def persist(self) -> Path:
         return save_canvas_session(self.session_path, self.session)
+
+    def review_annotation(self, annotation_id: str) -> ReviewAnnotation:
+        annotation = next(
+            (
+                value
+                for value in self.review_annotations
+                if value.annotation_id == annotation_id
+            ),
+            None,
+        )
+        if annotation is None:
+            raise ValueError(f"Unknown review annotation: {annotation_id}")
+        return annotation
+
+    def active_review_annotations(
+        self,
+        *,
+        page_index: int | None = None,
+    ) -> list[ReviewAnnotation]:
+        page = self.session.current_page if page_index is None else int(page_index)
+        return [
+            annotation
+            for annotation in self.review_annotations
+            if annotation.page_index == page and annotation.state == "review_only"
+        ]
+
+    def _save_review_state(
+        self,
+        annotations: list[ReviewAnnotation],
+    ) -> None:
+        previous_annotations = list(self.review_annotations)
+        previous_ids = list(self.session.review_annotation_ids)
+        self.review_annotations = list(annotations)
+        self.session.review_annotation_ids = [
+            annotation.annotation_id for annotation in self.review_annotations
+        ]
+        try:
+            save_review_annotations(
+                self.annotations_path,
+                self.review_annotations,
+            )
+            self.persist()
+        except Exception:
+            self.review_annotations = previous_annotations
+            self.session.review_annotation_ids = previous_ids
+            save_review_annotations(
+                self.annotations_path,
+                self.review_annotations,
+            )
+            self.persist()
+            raise
+
+    def add_review_annotation(
+        self,
+        annotation: ReviewAnnotation,
+        *,
+        provider: str = "user_review",
+    ) -> ReviewAnnotation:
+        if any(
+            value.annotation_id == annotation.annotation_id
+            for value in self.review_annotations
+        ):
+            raise ValueError(
+                f"Duplicate review annotation ID: {annotation.annotation_id}"
+            )
+        self._save_review_state([*self.review_annotations, annotation])
+        append_operation_journal(
+            self.journal_path,
+            {
+                "kind": "sciplot_canvas_journal_entry",
+                "version": 1,
+                "event": "review_annotation_added",
+                "provider": provider,
+                "recorded_at": _now(),
+                "revision": self.session.revision,
+                "annotation": annotation.to_dict(),
+                "publication_document_changed": False,
+            },
+        )
+        return annotation
+
+    def create_review_annotation_from_scene(
+        self,
+        *,
+        shape: str,
+        scene_geometry: dict[str, Any],
+        coordinate_space: str = "normalized_page",
+        target_object_id: str | None = None,
+        text: str = "",
+        style: ReviewAnnotationStyle | dict[str, Any] | None = None,
+        provider: str = "user_review",
+    ) -> ReviewAnnotation:
+        resolved_target = (
+            target_object_id
+            if target_object_id is not None
+            else self.adapter.review_anchor_target_id(
+                self.session,
+                coordinate_space,
+            )
+        )
+        geometry = self.adapter.review_geometry_from_scene(
+            shape=shape,
+            scene_geometry=scene_geometry,
+            coordinate_space=coordinate_space,
+            target_object_id=resolved_target,
+            page_index=self.session.current_page,
+            session=self.session,
+        )
+        annotation_style = (
+            style
+            if isinstance(style, ReviewAnnotationStyle)
+            else ReviewAnnotationStyle.from_dict(style)
+        )
+        annotation = ReviewAnnotation(
+            page_index=self.session.current_page,
+            shape=shape,
+            coordinate_space=coordinate_space,
+            geometry=geometry,
+            text=(
+                str(text).strip()
+                or ("Review note" if shape == "text" else "")
+            ),
+            target_object_id=resolved_target,
+            style=annotation_style,
+        )
+        return self.add_review_annotation(annotation, provider=provider)
+
+    def update_review_annotation(
+        self,
+        annotation_id: str,
+        *,
+        geometry: dict[str, Any] | None = None,
+        text: str | None = None,
+        style: ReviewAnnotationStyle | dict[str, Any] | None = None,
+        provider: str = "user_review",
+    ) -> ReviewAnnotation:
+        current = self.review_annotation(annotation_id)
+        if current.state != "review_only":
+            raise ValueError("Only active review-only annotations can be edited.")
+        updated = replace(
+            current,
+            geometry=dict(geometry) if geometry is not None else current.geometry,
+            text=str(text) if text is not None else current.text,
+            style=(
+                style
+                if isinstance(style, ReviewAnnotationStyle)
+                else (
+                    ReviewAnnotationStyle.from_dict(style)
+                    if style is not None
+                    else current.style
+                )
+            ),
+            updated_at=_now(),
+        )
+        annotations = [
+            updated if value.annotation_id == annotation_id else value
+            for value in self.review_annotations
+        ]
+        self._save_review_state(annotations)
+        append_operation_journal(
+            self.journal_path,
+            {
+                "kind": "sciplot_canvas_journal_entry",
+                "version": 1,
+                "event": "review_annotation_updated",
+                "provider": provider,
+                "recorded_at": _now(),
+                "revision": self.session.revision,
+                "annotation_id": annotation_id,
+                "before": current.to_dict(),
+                "after": updated.to_dict(),
+                "publication_document_changed": False,
+            },
+        )
+        return updated
+
+    def move_review_annotation_from_scene(
+        self,
+        annotation_id: str,
+        scene_geometry: dict[str, Any],
+        *,
+        provider: str = "user_review_direct_manipulation",
+    ) -> ReviewAnnotation:
+        annotation = self.review_annotation(annotation_id)
+        geometry = self.adapter.review_geometry_from_scene(
+            shape=annotation.shape,
+            scene_geometry=scene_geometry,
+            coordinate_space=annotation.coordinate_space,
+            target_object_id=annotation.target_object_id,
+            page_index=annotation.page_index,
+            session=self.session,
+        )
+        return self.update_review_annotation(
+            annotation_id,
+            geometry=geometry,
+            provider=provider,
+        )
+
+    def remove_review_annotation(
+        self,
+        annotation_id: str,
+        *,
+        provider: str = "user_review",
+    ) -> ReviewAnnotation:
+        current = self.review_annotation(annotation_id)
+        if current.state != "review_only":
+            raise ValueError(
+                "Only an active review-only annotation can be removed."
+            )
+        removed = replace(
+            current,
+            state="removed",
+            updated_at=_now(),
+        )
+        annotations = [
+            removed if value.annotation_id == annotation_id else value
+            for value in self.review_annotations
+        ]
+        self._save_review_state(annotations)
+        append_operation_journal(
+            self.journal_path,
+            {
+                "kind": "sciplot_canvas_journal_entry",
+                "version": 1,
+                "event": "review_annotation_removed",
+                "provider": provider,
+                "recorded_at": _now(),
+                "revision": self.session.revision,
+                "annotation_id": annotation_id,
+                "before": current.to_dict(),
+                "after": removed.to_dict(),
+                "publication_document_changed": False,
+            },
+        )
+        return removed
+
+    def _record_history_side_effect(
+        self,
+        side_effect: dict[str, Any] | None,
+    ) -> None:
+        self._history_side_effects_undo.append(side_effect)
+        self._history_side_effects_undo = self._history_side_effects_undo[-10:]
+        self._history_side_effects_redo.clear()
+
+    def _apply_history_side_effect(
+        self,
+        side_effect: dict[str, Any] | None,
+        *,
+        direction: str,
+    ) -> dict[str, Any] | None:
+        if side_effect is None:
+            return None
+        if direction not in {"undo", "redo"}:
+            raise ValueError(f"Unsupported history direction: {direction!r}")
+        payload = side_effect["before" if direction == "undo" else "after"]
+        replacement = ReviewAnnotation.from_dict(dict(payload))
+        annotations = [
+            (
+                replacement
+                if value.annotation_id == replacement.annotation_id
+                else value
+            )
+            for value in self.review_annotations
+        ]
+        self._save_review_state(annotations)
+        return {
+            "annotation_id": replacement.annotation_id,
+            "state": replacement.state,
+            "direction": direction,
+        }
 
     @property
     def selected_object(self) -> dict[str, Any] | None:
@@ -391,34 +700,57 @@ class DocumentController:
             target = self.session.object_registry.by_id(operation.target_id)
             if target is None:
                 raise ValueError(f"Unknown Canvas target: {operation.target_id}")
-            if operation.operation_type != "set_setting":
-                raise ValueError(
-                    f"Unsupported controller operation: {operation.operation_type}"
+            if operation.operation_type == "set_setting":
+                setting_path = str(operation.arguments["setting_path"])
+                if not setting_path.startswith(f"{target.current_path}/"):
+                    raise ValueError(
+                        f"Setting path {setting_path!r} is outside target "
+                        f"{target.current_path!r}."
+                    )
+                current_value = self.adapter.setting_value(setting_path)
+                if (
+                    "expected_value" in operation.arguments
+                    and json_safe(current_value)
+                    != operation.arguments["expected_value"]
+                ):
+                    raise ValueError(
+                        f"Expected value conflict at {setting_path}: "
+                        f"{operation.arguments['expected_value']!r} "
+                        f"!= {current_value!r}"
+                    )
+                self.adapter.validate_setting_value(
+                    setting_path, operation.arguments["value"]
                 )
-            setting_path = str(operation.arguments["setting_path"])
-            if not setting_path.startswith(f"{target.current_path}/"):
-                raise ValueError(
-                    f"Setting path {setting_path!r} is outside target {target.current_path!r}."
+                changes.append(
+                    {
+                        "operation_type": "set_setting",
+                        "operation_id": operation.operation_id,
+                        "target_id": operation.target_id,
+                        "setting_path": setting_path,
+                        "value": operation.arguments["value"],
+                    }
                 )
-            current_value = self.adapter.setting_value(setting_path)
-            if (
-                "expected_value" in operation.arguments
-                and json_safe(current_value) != operation.arguments["expected_value"]
-            ):
-                raise ValueError(
-                    f"Expected value conflict at {setting_path}: "
-                    f"{operation.arguments['expected_value']!r} != {current_value!r}"
+                continue
+            if operation.operation_type == "add_widget":
+                if target.object_type not in {"page", "graph"}:
+                    raise ValueError(
+                        "Native annotations can only be added to a page or graph."
+                    )
+                changes.append(
+                    {
+                        "operation_type": "add_widget",
+                        "operation_id": operation.operation_id,
+                        "target_id": operation.target_id,
+                        "parent_path": target.current_path,
+                        "widget_type": operation.arguments["widget_type"],
+                        "name": operation.arguments["name"],
+                        "index": operation.arguments.get("index", -1),
+                        "settings": dict(operation.arguments["settings"]),
+                    }
                 )
-            self.adapter.validate_setting_value(
-                setting_path, operation.arguments["value"]
-            )
-            changes.append(
-                {
-                    "operation_id": operation.operation_id,
-                    "target_id": operation.target_id,
-                    "setting_path": setting_path,
-                    "value": operation.arguments["value"],
-                }
+                continue
+            raise ValueError(
+                f"Unsupported controller operation: {operation.operation_type}"
             )
         return changes
 
@@ -435,7 +767,10 @@ class DocumentController:
             )
         changes = self._resolve_operation_targets(batch)
         before_render = self.adapter.render_fingerprint()
-        applied = self.adapter.apply_setting_batch(changes, description=batch.rationale)
+        applied = self.adapter.apply_operation_batch(
+            changes,
+            description=batch.rationale,
+        )
         after_render = self.adapter.render_fingerprint()
         next_revision = self.session.revision + 1
         try:
@@ -465,6 +800,7 @@ class DocumentController:
             "recovery_snapshot_sha256": snapshot_hash,
         }
         append_operation_journal(self.journal_path, entry)
+        self._record_history_side_effect(None)
         return entry
 
     def apply_setting_changes(
@@ -501,8 +837,228 @@ class DocumentController:
             )
         )
 
+    def promote_review_annotation(
+        self,
+        annotation_id: str,
+        *,
+        provider: str = "user_review_promotion",
+    ) -> dict[str, Any]:
+        """Atomically promote a sidecar mark into one native Veusz widget."""
+
+        self.adapter.assert_gui_thread()
+        self._sync_view_state()
+        annotation = self.review_annotation(annotation_id)
+        if annotation.page_index != self.session.current_page:
+            raise ValueError(
+                "Open the review annotation's page before promoting it."
+            )
+        spec = self.adapter.native_annotation_spec(annotation, self.session)
+        operation = CanvasOperation.add_widget(
+            target_id=str(spec["target_id"]),
+            widget_type=str(spec["widget_type"]),
+            name=str(spec["name"]),
+            settings=dict(spec["settings"]),
+            index=int(spec.get("index", -1)),
+        )
+        batch = CanvasOperationBatch(
+            base_revision=self.session.revision,
+            provider=provider,
+            rationale=(
+                f"Promote review {annotation.shape} into a native Veusz "
+                "annotation."
+            ),
+            operations=(operation,),
+        )
+        batch = CanvasOperationBatch.from_dict(batch.to_dict())
+        prepared = self._resolve_operation_targets(batch)
+        session_before = self.session.to_dict()
+        annotations_before = list(self.review_annotations)
+        before_render = self.adapter.render_fingerprint()
+        snapshot: Path | None = None
+        applied_document = False
+        try:
+            applied = self.adapter.apply_operation_batch(
+                prepared,
+                description=batch.rationale,
+            )
+            applied_document = True
+            after_render = self.adapter.render_fingerprint()
+            next_revision = self.session.revision + 1
+            snapshot = self._create_recovery_snapshot(
+                revision=next_revision,
+                event="review_promotion",
+            )
+            revision = self.session.advance_revision(state="editing")
+            snapshot_reference, snapshot_hash = self._record_recovery_snapshot(
+                snapshot
+            )
+            self.session.last_render_sha256 = after_render
+            self.inventory = self.adapter.bind_object_registry(self.session)
+            created_path = str(applied[0].get("created_path") or "")
+            created_item = next(
+                (
+                    item
+                    for item in self.inventory
+                    if str(item.get("path")) == created_path
+                ),
+                None,
+            )
+            if created_item is None:
+                raise RuntimeError(
+                    "The promoted native annotation did not enter the "
+                    "stable-object registry."
+                )
+            promoted = replace(
+                annotation,
+                state="promoted",
+                promoted_object_id=str(created_item["object_id"]),
+                updated_at=_now(),
+            )
+            promoted_annotations = [
+                (
+                    promoted
+                    if value.annotation_id == annotation.annotation_id
+                    else value
+                )
+                for value in self.review_annotations
+            ]
+            self._save_review_state(promoted_annotations)
+            entry = {
+                "kind": "sciplot_canvas_journal_entry",
+                "version": 1,
+                "event": "review_annotation_promoted",
+                "provider": provider,
+                "recorded_at": _now(),
+                "revision": revision,
+                "annotation_id": annotation.annotation_id,
+                "before": annotation.to_dict(),
+                "after": promoted.to_dict(),
+                "batch": batch.to_dict(),
+                "changes": json_safe(applied),
+                "render_before": before_render,
+                "render_after": after_render,
+                "recovery_snapshot": snapshot_reference,
+                "recovery_snapshot_sha256": snapshot_hash,
+                "publication_document_changed": True,
+            }
+            append_operation_journal(self.journal_path, entry)
+            self._record_history_side_effect(
+                {
+                    "kind": "review_annotation_transition",
+                    "annotation_id": annotation.annotation_id,
+                    "before": annotation.to_dict(),
+                    "after": promoted.to_dict(),
+                }
+            )
+            return entry
+        except Exception:
+            if applied_document:
+                try:
+                    self.adapter.undo()
+                except Exception:
+                    pass
+            if snapshot is not None and snapshot.exists():
+                snapshot.unlink()
+            self.session = CanvasSession.from_dict(session_before)
+            self.review_annotations = annotations_before
+            self.session.review_annotation_ids = [
+                value.annotation_id for value in annotations_before
+            ]
+            save_review_annotations(self.annotations_path, annotations_before)
+            self.persist()
+            self.inventory = self.adapter.bind_object_registry(self.session)
+            self.adapter.force_redraw()
+            raise
+
     def run_structural_qa(self) -> dict[str, Any]:
         report = self.adapter.structural_qa(self.session)
+        checks = list(report.get("checks") or [])
+        annotation_ids = [
+            annotation.annotation_id for annotation in self.review_annotations
+        ]
+        ids_consistent = annotation_ids == self.session.review_annotation_ids
+        checks.append(
+            {
+                "id": "review_sidecar_consistent",
+                "label": (
+                    "CanvasSession and the non-exported review sidecar "
+                    "reference the same annotations"
+                ),
+                "status": "passed" if ids_consistent else "failed",
+                "detail": {
+                    "session_ids": list(self.session.review_annotation_ids),
+                    "sidecar_ids": annotation_ids,
+                },
+            }
+        )
+        active = self.active_review_annotations()
+        unresolved: list[dict[str, str]] = []
+        for annotation in active:
+            try:
+                self.adapter.review_geometry_to_scene(annotation, self.session)
+            except Exception as exc:
+                unresolved.append(
+                    {
+                        "annotation_id": annotation.annotation_id,
+                        "error": str(exc),
+                    }
+                )
+        checks.append(
+            {
+                "id": "review_anchors_resolve",
+                "label": (
+                    "Active review marks resolve from persisted page, graph, "
+                    "data, or object coordinates"
+                ),
+                "status": "passed" if not unresolved else "failed",
+                "detail": {
+                    "active_count": len(active),
+                    "unresolved": unresolved,
+                },
+            }
+        )
+        sidecar_only = all(
+            annotation.state != "review_only"
+            or annotation.promoted_object_id is None
+            for annotation in self.review_annotations
+        )
+        checks.append(
+            {
+                "id": "review_marks_sidecar_only",
+                "label": (
+                    "Unpromoted review marks remain outside the publication "
+                    "document"
+                ),
+                "status": "passed" if sidecar_only else "failed",
+                "detail": {
+                    "active_count": len(active),
+                    "annotations_path": str(self.annotations_path),
+                },
+            }
+        )
+        failed_ids = [
+            str(check["id"])
+            for check in checks
+            if check.get("status") == "failed"
+        ]
+        warning_ids = [
+            str(check["id"])
+            for check in checks
+            if check.get("status") == "warning"
+        ]
+        report["checks"] = checks
+        report["status"] = (
+            "failed" if failed_ids else ("warning" if warning_ids else "passed")
+        )
+        report["ready_for_artifact_qa"] = not failed_ids
+        report["summary"] = {
+            "check_count": len(checks),
+            "passed_count": sum(
+                check.get("status") == "passed" for check in checks
+            ),
+            "failed_ids": failed_ids,
+            "warning_ids": warning_ids,
+        }
         self.session.structural_qa_summary = json_safe(report)
         self.session.last_render_sha256 = self.adapter.render_fingerprint()
         self.persist()
@@ -511,13 +1067,26 @@ class DocumentController:
     def undo(self, *, provider: str = "user") -> dict[str, Any]:
         self._sync_view_state()
         before_render = self.adapter.render_fingerprint()
+        has_side_effect = bool(self._history_side_effects_undo)
+        side_effect = (
+            self._history_side_effects_undo[-1]
+            if has_side_effect
+            else None
+        )
         after_render = self.adapter.undo()
         next_revision = self.session.revision + 1
+        review_transition: dict[str, Any] | None = None
         try:
+            review_transition = self._apply_history_side_effect(
+                side_effect,
+                direction="undo",
+            )
             snapshot = self._create_recovery_snapshot(
                 revision=next_revision, event="undo"
             )
         except Exception:
+            if review_transition is not None:
+                self._apply_history_side_effect(side_effect, direction="redo")
             self.adapter.redo()
             raise
         revision = self.session.advance_revision(state="editing")
@@ -535,20 +1104,37 @@ class DocumentController:
             "render_after": after_render,
             "recovery_snapshot": snapshot_reference,
             "recovery_snapshot_sha256": snapshot_hash,
+            "review_transition": review_transition,
         }
         append_operation_journal(self.journal_path, entry)
+        if has_side_effect:
+            self._history_side_effects_undo.pop()
+            self._history_side_effects_redo.append(side_effect)
         return entry
 
     def redo(self, *, provider: str = "user") -> dict[str, Any]:
         self._sync_view_state()
         before_render = self.adapter.render_fingerprint()
+        has_side_effect = bool(self._history_side_effects_redo)
+        side_effect = (
+            self._history_side_effects_redo[-1]
+            if has_side_effect
+            else None
+        )
         after_render = self.adapter.redo()
         next_revision = self.session.revision + 1
+        review_transition: dict[str, Any] | None = None
         try:
+            review_transition = self._apply_history_side_effect(
+                side_effect,
+                direction="redo",
+            )
             snapshot = self._create_recovery_snapshot(
                 revision=next_revision, event="redo"
             )
         except Exception:
+            if review_transition is not None:
+                self._apply_history_side_effect(side_effect, direction="undo")
             self.adapter.undo()
             raise
         revision = self.session.advance_revision(state="editing")
@@ -566,8 +1152,12 @@ class DocumentController:
             "render_after": after_render,
             "recovery_snapshot": snapshot_reference,
             "recovery_snapshot_sha256": snapshot_hash,
+            "review_transition": review_transition,
         }
         append_operation_journal(self.journal_path, entry)
+        if has_side_effect:
+            self._history_side_effects_redo.pop()
+            self._history_side_effects_undo.append(side_effect)
         return entry
 
     def save(self) -> Path:

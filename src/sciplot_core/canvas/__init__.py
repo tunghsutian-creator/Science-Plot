@@ -1,6 +1,9 @@
 """Pure, renderer-independent contracts for the SciPlot live canvas."""
 
-from sciplot_core.canvas.annotations import ReviewAnnotation
+from sciplot_core.canvas.annotations import (
+    ReviewAnnotation,
+    ReviewAnnotationStyle,
+)
 from sciplot_core.canvas.assistant_contract import (
     DataMappingProposal,
     DeclarativeTransformation,
@@ -29,4 +32,5 @@ __all__ = [
     "DeclarativeTransformation",
     "ObjectIdentityRegistry",
     "ReviewAnnotation",
+    "ReviewAnnotationStyle",
 ]

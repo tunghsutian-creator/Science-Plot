@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -17,7 +18,71 @@ from sciplot_core.canvas._validation import (
 CANVAS_OPERATION_KIND = "sciplot_canvas_operation"
 CANVAS_OPERATION_BATCH_KIND = "sciplot_canvas_operation_batch"
 CANVAS_OPERATION_VERSION = 1
-SUPPORTED_CANVAS_OPERATIONS = {"set_setting"}
+SUPPORTED_CANVAS_OPERATIONS = {"set_setting", "add_widget"}
+SUPPORTED_NATIVE_ANNOTATION_WIDGETS = {"label", "line", "rect", "ellipse"}
+NATIVE_ANNOTATION_WIDGET_SETTINGS = {
+    "label": {
+        "xPos",
+        "yPos",
+        "positioning",
+        "xAxis",
+        "yAxis",
+        "label",
+        "alignHorz",
+        "alignVert",
+        "clip",
+        "Text__color",
+        "Text__size",
+    },
+    "line": {
+        "xPos",
+        "yPos",
+        "xPos2",
+        "yPos2",
+        "positioning",
+        "xAxis",
+        "yAxis",
+        "mode",
+        "clip",
+        "arrowright",
+        "arrowleft",
+        "arrowSize",
+        "Line__color",
+        "Line__width",
+        "Fill__color",
+    },
+    "rect": {
+        "xPos",
+        "yPos",
+        "positioning",
+        "xAxis",
+        "yAxis",
+        "width",
+        "height",
+        "clip",
+        "Border__color",
+        "Border__width",
+        "Fill__color",
+        "Fill__transparency",
+        "Fill__hide",
+    },
+    "ellipse": {
+        "xPos",
+        "yPos",
+        "positioning",
+        "xAxis",
+        "yAxis",
+        "width",
+        "height",
+        "clip",
+        "Border__color",
+        "Border__width",
+        "Fill__color",
+        "Fill__transparency",
+        "Fill__hide",
+    },
+}
+_SAFE_WIDGET_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_-]{0,63}")
 
 
 def _now() -> str:
@@ -84,6 +149,52 @@ class CanvasOperation:
                 raise ValueError("set_setting requires an absolute Veusz setting_path.")
             if "value" not in self.arguments:
                 raise ValueError("set_setting requires a value.")
+        elif self.operation_type == "add_widget":
+            unexpected = set(self.arguments) - {
+                "widget_type",
+                "name",
+                "index",
+                "settings",
+            }
+            if unexpected:
+                raise ValueError(
+                    f"add_widget contains unsupported arguments: {sorted(unexpected)!r}"
+                )
+            widget_type = _required_text(
+                self.arguments.get("widget_type"),
+                "widget_type",
+            )
+            if widget_type not in SUPPORTED_NATIVE_ANNOTATION_WIDGETS:
+                raise ValueError(
+                    f"Unsupported native annotation widget: {widget_type!r}"
+                )
+            name = _required_text(self.arguments.get("name"), "name")
+            if _SAFE_WIDGET_NAME.fullmatch(name) is None:
+                raise ValueError(
+                    "add_widget name must be a safe renderer object name."
+                )
+            index = require_json_int(
+                self.arguments.get("index", -1),
+                label="add_widget index",
+            )
+            if index not in {-1, 0}:
+                raise ValueError(
+                    "add_widget index must be -1 (append) or 0 (front)."
+                )
+            settings = require_json_object(
+                self.arguments.get("settings"),
+                label="add_widget settings",
+            )
+            unsupported_settings = (
+                set(settings) - NATIVE_ANNOTATION_WIDGET_SETTINGS[widget_type]
+            )
+            if unsupported_settings:
+                raise ValueError(
+                    f"{widget_type} promotion contains unsupported settings: "
+                    f"{sorted(unsupported_settings)!r}"
+                )
+            if not settings:
+                raise ValueError("add_widget requires bounded initial settings.")
 
     @classmethod
     def set_setting(
@@ -105,6 +216,27 @@ class CanvasOperation:
             operation_type="set_setting",
             target_id=target_id,
             arguments=arguments,
+        )
+
+    @classmethod
+    def add_widget(
+        cls,
+        *,
+        target_id: str,
+        widget_type: str,
+        name: str,
+        settings: dict[str, Any],
+        index: int = -1,
+    ) -> CanvasOperation:
+        return cls(
+            operation_type="add_widget",
+            target_id=target_id,
+            arguments={
+                "widget_type": widget_type,
+                "name": name,
+                "index": index,
+                "settings": dict(settings),
+            },
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -253,5 +385,7 @@ __all__ = [
     "CANVAS_OPERATION_VERSION",
     "CanvasOperation",
     "CanvasOperationBatch",
+    "NATIVE_ANNOTATION_WIDGET_SETTINGS",
     "SUPPORTED_CANVAS_OPERATIONS",
+    "SUPPORTED_NATIVE_ANNOTATION_WIDGETS",
 ]

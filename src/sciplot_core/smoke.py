@@ -15,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 10
+RUNTIME_SMOKE_VERSION = 11
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -728,8 +728,8 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         )
         checks.append(
             _check(
-                "canvas_contract_v3",
-                "CanvasSession, contextual inspector, typed operations, point selection, review annotations, and mapping proposals roundtrip without Qt",
+                "canvas_contract_v4",
+                "CanvasSession, contextual inspector, typed edits, native review promotion, point selection, and mapping proposals roundtrip without Qt",
                 canvas_contract_probe.get("status") == "passed",
                 detail=canvas_contract_probe,
             )
@@ -948,6 +948,27 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     "export": canvas_app_evidence.get("export"),
                     "source_immutable": canvas_app_evidence.get("source_immutable"),
                     "artifacts": canvas_app_probe.get("artifacts"),
+                },
+            )
+        )
+        from sciplot_core.canvas_review_probe import run_canvas_review_probe
+
+        canvas_review_probe = run_canvas_review_probe(
+            project_dir,
+            output_root=run_root / "canvas_review",
+        )
+        checks.append(
+            _check(
+                "native_canvas_review_lifecycle",
+                "The SciPlot-owned Canvas persists five review tools outside "
+                "publication exports, promotes four typed native annotations, "
+                "and preserves undo, reopen, QA, and audit semantics",
+                canvas_review_probe.get("status") == "passed",
+                detail={
+                    "status": canvas_review_probe.get("status"),
+                    "summary": canvas_review_probe.get("summary"),
+                    "evidence": canvas_review_probe.get("evidence"),
+                    "artifacts": canvas_review_probe.get("artifacts"),
                 },
             )
         )

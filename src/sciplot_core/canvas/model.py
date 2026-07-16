@@ -165,6 +165,84 @@ class ObjectIdentityRegistry:
             None,
         )
 
+    def reconcile(
+        self,
+        objects: list[tuple[str, str, str]],
+        *,
+        revision: int,
+    ) -> list[CanvasObjectRecord]:
+        """Reconcile a complete object tree without losing IDs on insertion.
+
+        Exact persisted paths win first so sibling insertion or reordering
+        cannot transfer an existing object's ID to a newly inserted object.
+        Structural keys remain the fallback for legitimate path renames.
+        """
+
+        if revision < 0:
+            raise ValueError("Object registry revision must be non-negative.")
+        structural_keys = [str(item[0]) for item in objects]
+        current_paths = [str(item[1]) for item in objects]
+        if len(set(structural_keys)) != len(structural_keys):
+            raise ValueError("Object reconciliation structural keys must be unique.")
+        if len(set(current_paths)) != len(current_paths):
+            raise ValueError("Object reconciliation paths must be unique.")
+
+        old_records = list(self.records.values())
+        assigned: list[CanvasObjectRecord | None] = [None] * len(objects)
+        used_ids: set[str] = set()
+        by_path = {
+            (record.current_path, record.object_type): record
+            for record in old_records
+        }
+
+        for index, (_, current_path, object_type) in enumerate(objects):
+            record = by_path.get((str(current_path), str(object_type)))
+            if record is not None and record.object_id not in used_ids:
+                assigned[index] = record
+                used_ids.add(record.object_id)
+
+        for index, (structural_key, _, object_type) in enumerate(objects):
+            if assigned[index] is not None:
+                continue
+            record = self.records.get(str(structural_key))
+            if (
+                record is not None
+                and record.object_type == str(object_type)
+                and record.object_id not in used_ids
+            ):
+                assigned[index] = record
+                used_ids.add(record.object_id)
+
+        reconciled: dict[str, CanvasObjectRecord] = {}
+        ordered: list[CanvasObjectRecord] = []
+        for index, (structural_key, current_path, object_type) in enumerate(objects):
+            key = _required_text(structural_key, "structural_key")
+            path = _required_text(current_path, "current_path")
+            kind = _required_text(object_type, "object_type")
+            record = assigned[index]
+            if record is None:
+                record = CanvasObjectRecord(
+                    object_id=str(uuid4()),
+                    structural_key=key,
+                    current_path=path,
+                    object_type=kind,
+                    first_seen_revision=revision,
+                    last_seen_revision=revision,
+                )
+            else:
+                if revision < record.first_seen_revision:
+                    raise ValueError(
+                        "Object registry revision predates first_seen_revision."
+                    )
+                record.structural_key = key
+                record.current_path = path
+                record.object_type = kind
+                record.last_seen_revision = revision
+            reconciled[key] = record
+            ordered.append(record)
+        self.records = reconciled
+        return ordered
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "strategy": "typed_sibling_index_v1",

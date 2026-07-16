@@ -2,8 +2,8 @@
 
 Status: active frontend source of truth, 2026-07-17. M1 is complete; M2 is in
 progress. The adaptive visual foundation and bounded contextual editing kernel
-are implemented; non-exported review tooling and the real-session retirement
-gate remain active work.
+and non-exported review/promotion kernel are implemented. The real-session
+retirement gate and default `studio` migration remain active work.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -133,9 +133,15 @@ The Canvas is the normal document surface:
 
 ### Review
 
-M2 adds a non-exported review layer. Review marks are separate from the Veusz
-publication document until the user explicitly promotes one to a native
-annotation.
+M2 provides a non-exported review layer. `Ctrl+Shift+R` opens the Review
+workspace with Select, Note, Arrow, Box, Oval, and Pen tools. Marks bind to the
+page, normalized page, graph, data coordinates, or a selected stable object.
+
+Review-only marks persist in `.sciplot_canvas/review_annotations.json`; they
+do not advance the publication revision, mutate VSZ, or appear in PDF/TIFF.
+Text, arrow, rectangle, and ellipse marks can be promoted through one typed,
+undoable Canvas transaction into native Veusz objects. Freehand remains
+review-only because no equivalent bounded native Veusz object exists.
 
 ### AI transaction
 
@@ -290,6 +296,19 @@ accessibility QA, not by application chrome tokens.
 - runtime smoke v10 passes `26/26` with 50 accepted live edits, clean reopen,
   exact-current PDF/TIFF, structural and artifact QA, recovery, hash-matched
   delivery, and the theme-render invariance gate.
+- the Review workspace supplies five tools and five anchor spaces through a
+  display-only overlay backed by a versioned sidecar;
+- review-only edits remain outside the publication revision, VSZ, and exports;
+- text, arrow, rectangle, and ellipse promotion creates native Veusz objects
+  through the same typed, recoverable, journaled operation gateway as other
+  Canvas edits; freehand stays honestly review-only;
+- promoted defaults use publication-scale text, line, and translucent fill
+  values rather than application-UI sizing;
+- the pure Canvas contract now passes `26/26`; runtime smoke v11 passes
+  `27/27`, including the review lifecycle `20/20`;
+- FTIR, rheology, tensile, impact, torque, and TEMP3 scalar-field review
+  lifecycles pass `120/120` aggregate checks without mutating their source
+  projects or transferring stable IDs away from existing objects.
 
 ## M2 implementation order
 
@@ -304,13 +323,15 @@ Completed M2 increments:
    data-point selection.
 6. Add immediate/staged Apply/Revert semantics, save/navigation protection,
    native label drag, and debounced structural QA.
+7. Add the non-exported review overlay and persistent page, graph, data, and
+   object coordinate anchors.
+8. Add typed review-to-native promotion, undo/redo sidecar recovery, reopen,
+   export-isolation, and audit gates.
 
 Remaining M2 work:
 
-1. Add non-exported review overlay and persistent annotation coordinates.
-2. Promote review marks into native Veusz annotations.
-3. Run at least ten representative real sessions across five figure families.
-4. Only then migrate the normal `studio` entrypoint from Veusz MainWindow to
+1. Run at least ten representative real sessions across five figure families.
+2. Only then migrate the normal `studio` entrypoint from Veusz MainWindow to
    SciPlot Canvas.
 
 ## Design acceptance

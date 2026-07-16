@@ -11,7 +11,10 @@ from sciplot_core.canvas._validation import (
     require_json_int,
     require_json_list,
 )
-from sciplot_core.canvas.annotations import ReviewAnnotation
+from sciplot_core.canvas.annotations import (
+    REVIEW_ANNOTATION_VERSION,
+    ReviewAnnotation,
+)
 from sciplot_core.canvas.model import CanvasSession
 
 CANVAS_SESSION_FILENAME = "canvas_session.json"
@@ -62,11 +65,14 @@ def load_canvas_session(path: Path) -> CanvasSession:
 
 
 def save_review_annotations(path: Path, annotations: list[ReviewAnnotation]) -> Path:
+    annotation_ids = [annotation.annotation_id for annotation in annotations]
+    if len(set(annotation_ids)) != len(annotation_ids):
+        raise ValueError("Review annotation IDs must be unique.")
     return atomic_write_json(
         path,
         {
             "kind": "sciplot_review_annotations",
-            "version": 1,
+            "version": REVIEW_ANNOTATION_VERSION,
             "annotations": [annotation.to_dict() for annotation in annotations],
         },
     )
@@ -83,7 +89,8 @@ def load_review_annotations(path: Path) -> list[ReviewAnnotation]:
     )
     if payload.get("kind") != "sciplot_review_annotations":
         raise ValueError("Not a SciPlot review annotations payload.")
-    if require_json_int(payload.get("version", 0), label="version") != 1:
+    version = require_json_int(payload.get("version", 0), label="version")
+    if version not in {1, REVIEW_ANNOTATION_VERSION}:
         raise ValueError(
             f"Unsupported review annotations version: {payload.get('version')!r}"
         )
@@ -92,7 +99,11 @@ def load_review_annotations(path: Path) -> list[ReviewAnnotation]:
     )
     if not all(isinstance(item, dict) for item in raw_annotations):
         raise ValueError("Every review annotation must be an object.")
-    return [ReviewAnnotation.from_dict(item) for item in raw_annotations]
+    annotations = [ReviewAnnotation.from_dict(item) for item in raw_annotations]
+    annotation_ids = [annotation.annotation_id for annotation in annotations]
+    if len(set(annotation_ids)) != len(annotation_ids):
+        raise ValueError("Review annotation IDs must be unique.")
+    return annotations
 
 
 def append_operation_journal(path: Path, entry: dict[str, Any]) -> Path:
