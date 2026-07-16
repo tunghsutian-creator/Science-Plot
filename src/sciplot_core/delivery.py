@@ -8,9 +8,9 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core._paths import REPO_ROOT
 from sciplot_core._utils import existing_file_sha256, json_safe, read_json_object, slug
 from sciplot_core.assisted_cleanup import CLEANUP_REQUEST_FILENAME, CLEANUP_RESULT_FILENAME
+from sciplot_core.launchers import portable_sciplot_prelude, portable_vsz_finder
 from sciplot_core.policy import (
     DELIVERY_DIR,
     DELIVERY_EDITABLE_DIR,
@@ -223,14 +223,17 @@ def build_minimal_user_delivery(
     _write_executable(
         launcher,
         [
-            "#!/bin/zsh",
-            "set -euo pipefail",
-            'DELIVERY_DIR="${0:A:h}"',
-            "unset QT_QPA_PLATFORM || true",
+            *portable_sciplot_prelude(directory_var="DELIVERY_DIR"),
+            "",
             'documents=("${DELIVERY_DIR}"/veusz/*.vsz(N))',
             'if (( ${#documents[@]} == 0 )); then',
-            '  print -u2 "No Veusz documents found in ${DELIVERY_DIR}/veusz"',
-            "  exit 1",
+            '  die "No Veusz documents found in ${DELIVERY_DIR}/veusz"',
+            "fi",
+            'if [[ "${1:-}" == "--check" ]]; then',
+            '  for DOCUMENT in "${documents[@]}"; do',
+            '    "${SCIPLOT_CMD}" studio "${DOCUMENT}" --qt-smoke',
+            "  done",
+            "  exit 0",
             "fi",
             'if (( $# > 0 )); then',
             '  DOCUMENT="$1"',
@@ -250,15 +253,13 @@ def build_minimal_user_delivery(
             "  done",
             "fi",
             'if [[ ! -f "${DOCUMENT}" ]]; then',
-            '  print -u2 "Veusz document not found: ${DOCUMENT}"',
-            "  exit 1",
+            '  die "Veusz document not found: ${DOCUMENT}"',
             "fi",
             'if [[ "${SCIPLOT_LAUNCH_DRY_RUN:-0}" == "1" ]]; then',
             '  print -r -- "${DOCUMENT}"',
             "  exit 0",
             "fi",
-            f'cd "{REPO_ROOT}"',
-            'exec skill/scripts/sciplot studio "${DOCUMENT}" --advanced-editor',
+            'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --advanced-editor',
         ],
     )
     return {
@@ -276,22 +277,26 @@ def _write_editable_launchers(project_dir: Path) -> tuple[Path, Path, Path]:
     open_veusz = project_dir / "Open_in_Veusz.command"
     export_edited = project_dir / "Export_Edited_Veusz.command"
     open_studio = project_dir / "Open_in_SciPlot_Studio.command"
-    shared = [
-        "#!/bin/zsh",
-        "set -euo pipefail",
-        'PROJECT_DIR="${0:A:h}"',
-        "unset QT_QPA_PLATFORM || true",
-        f'cd "{REPO_ROOT}"',
+    shared = [*portable_sciplot_prelude(), *portable_vsz_finder()]
+    document = [
+        "",
+        'DOCUMENT="$(find_vsz document.vsz)" || die "Cannot locate studio/document.vsz."',
+        'if [[ "${1:-}" == "--check" ]]; then',
+        '  exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --qt-smoke',
+        "fi",
     ]
     _write_executable(
         open_veusz,
-        [*shared, 'exec skill/scripts/sciplot studio "${PROJECT_DIR}/studio/document.vsz" --advanced-editor'],
+        [*shared, *document, 'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --advanced-editor'],
     )
     _write_executable(
         export_edited,
-        [*shared, 'skill/scripts/sciplot studio "${PROJECT_DIR}" --export pdf,tiff_300 --json'],
+        [*shared, *document, 'exec "${SCIPLOT_CMD}" studio "${PROJECT_DIR}" --export pdf,tiff_300 --json'],
     )
-    _write_executable(open_studio, [*shared, 'skill/scripts/sciplot studio "${PROJECT_DIR}"'])
+    _write_executable(
+        open_studio,
+        [*shared, *document, 'exec "${SCIPLOT_CMD}" studio "${PROJECT_DIR}"'],
+    )
     return open_veusz, export_edited, open_studio
 
 

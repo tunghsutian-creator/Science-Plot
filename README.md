@@ -70,6 +70,25 @@ skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
 
 这一步不会重新生成 VSZ。手工保存的 `.vsz` 是视觉权威；显式再生成前会先归档旧文档。
 
+对于不带 SciPlot project/request 的独立 Veusz master，可直接导出到指定目录：
+
+```bash
+skill/scripts/sciplot studio FIGURE.vsz \
+  --out outputs/standalone_export \
+  --export pdf,tiff_300 \
+  --json
+```
+
+成功时命令返回 `0`，并写出 `standalone_export_receipt.json`、`qa_report.json` 和
+`figures/`。receipt 会记录 exact-current VSZ 哈希、请求格式、制品 QA，以及缺失
+`.spec.json` 时的真实状态。spec sidecar 只用于 SciPlot 再生成，不是 Veusz 重开或
+精确导出的前提。standalone receipt 不宣称原始数据 provenance、transform ledger
+或完整 project delivery 已建立。
+
+生成的 `Open_in_*.command` 和 `Export_Edited_Veusz.command` 可在 delivery 移动后
+通过 `SCIPLOT_REPO`、上级目录或已安装的 `sciplot` 自动定位运行时；给启动器传
+`--check` 可使用真实 Veusz Qt 加载路径完成无交互检查。
+
 ## 输出结构
 
 典型项目包含：
@@ -194,6 +213,7 @@ python3 -m venv .venv
 - `src/sciplot_core/materials_rules.py`：实验族、轴/单位语义与规则 readiness；
 - `src/sciplot_core/semantic.py`：识别和预处理；
 - `src/sciplot_core/studio.py`：VSZ 生命周期、Veusz 打开/导出与 Studio 交付；
+- `src/sciplot_core/launchers.py`：可移动项目和 delivery 的启动器发现合同；
 - `src/sciplot_core/workflow.py`：request 编排和辅助修复闭环；
 - `src/sciplot_core/qa.py`、`delivery.py`：制品 QA 与交付门禁；
 - `src/sciplot_core/publication.py`、`study_model.py`：出版与证据合同；
@@ -203,3 +223,7 @@ python3 -m venv .venv
 
 第三方许可见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。GitHub 仓库只发布运行所需内容；
 本地参考数据、开发日志及架构/路线文档保留在开发工作区，不进入最小运行发行版。
+
+`skill/scripts/sciplot` 会把当前 checkout 的 `src/` 加入 Python 导入路径，因此普通
+Git worktree 即使没有自己的 `.venv`，也能使用系统 Python 或 `SCIPLOT_PYTHON`
+直接运行本分支代码。高级开发环境可用 `SCIPLOT_SOURCE_ROOT` 显式指定源码树。

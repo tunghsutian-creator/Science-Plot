@@ -3,10 +3,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${SCIPLOT_REPO:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+SOURCE_ROOT="${SCIPLOT_SOURCE_ROOT:-$REPO/src}"
 PYTHON="${SCIPLOT_PYTHON:-$REPO/.venv/bin/python}"
 
 if [[ ! -x "$PYTHON" ]]; then
   PYTHON="python3"
+fi
+
+if [[ -d "$SOURCE_ROOT" ]]; then
+  export PYTHONPATH="$SOURCE_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 fi
 
 export MPLCONFIGDIR="${MPLCONFIGDIR:-${TMPDIR:-/tmp}/sciplot-mpl}"

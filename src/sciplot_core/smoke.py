@@ -4,6 +4,7 @@ import copy
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -14,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 6
+RUNTIME_SMOKE_VERSION = 7
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -83,6 +84,44 @@ def _package_import_probe() -> dict[str, Any]:
     }
 
 
+def _source_checkout_wrapper_probe() -> dict[str, Any]:
+    """Prove a checkout wrapper or installed CLI starts without import leakage."""
+
+    source_root = Path(__file__).resolve().parents[2]
+    wrapper = source_root / "skill" / "scripts" / "sciplot"
+    installed_cli = shutil.which("sciplot")
+    command = str(wrapper) if wrapper.is_file() else installed_cli
+    if command is None:
+        return {
+            "passed": False,
+            "mode": "unavailable",
+            "wrapper": str(wrapper),
+            "installed_cli": installed_cli,
+        }
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    env["SCIPLOT_PYTHON"] = sys.executable
+    env["SCIPLOT_REPO"] = str(source_root)
+    env["SCIPLOT_SOURCE_ROOT"] = str(source_root / "src")
+    completed = subprocess.run(
+        [command, "--help"],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+        timeout=30,
+    )
+    return {
+        "passed": completed.returncode == 0 and "Local SciPlot plotting" in completed.stdout,
+        "mode": "source_checkout_wrapper" if wrapper.is_file() else "installed_cli",
+        "wrapper": str(wrapper),
+        "installed_cli": installed_cli,
+        "returncode": completed.returncode,
+        "source_root": str(source_root / "src"),
+        "stderr": completed.stderr.strip(),
+    }
+
+
 def _qt_mainwindow_probe(document_path: Path | None = None) -> dict[str, Any]:
     """Construct the complete Veusz editor without requiring an Aqua session."""
     env = os.environ.copy()
@@ -128,6 +167,165 @@ def _qt_mainwindow_probe(document_path: Path | None = None) -> dict[str, Any]:
         "datasets": payload.get("datasets"),
         "pages": payload.get("pages"),
         "settings_noise": settings_noise,
+        "stderr": completed.stderr.strip(),
+    }
+
+
+def _portable_launcher_probe(
+    project_dir: Path,
+    *,
+    ignore_runtime_overrides: bool = False,
+) -> dict[str, Any]:
+    """Exercise generated launcher discovery without starting an interactive GUI."""
+
+    results: list[dict[str, Any]] = []
+    env = os.environ.copy()
+    if ignore_runtime_overrides:
+        for key in ("SCIPLOT_REPO", "SCIPLOT_SOURCE_ROOT", "SCIPLOT_PYTHON"):
+            env.pop(key, None)
+    for name in (
+        "Open_in_SciPlot_Studio.command",
+        "Open_in_Veusz.command",
+        "Export_Edited_Veusz.command",
+    ):
+        launcher = project_dir / name
+        completed = subprocess.run(
+            [str(launcher), "--check"],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=env,
+            timeout=30,
+        )
+        settings_noise = "Error interpreting item" in completed.stderr
+        results.append(
+            {
+                "launcher": str(launcher),
+                "exists": launcher.is_file(),
+                "returncode": completed.returncode,
+                "qt_smoke_passed": '"status": "passed"' in completed.stdout,
+                "settings_noise": settings_noise,
+                "stderr": completed.stderr.strip(),
+            }
+        )
+    return {
+        "passed": bool(results)
+        and all(
+            item["exists"]
+            and item["returncode"] == 0
+            and item["qt_smoke_passed"]
+            and not item["settings_noise"]
+            for item in results
+        ),
+        "launchers": results,
+    }
+
+
+def _relocated_delivery_launcher_probe(run_root: Path, delivery: dict[str, Any]) -> dict[str, Any]:
+    """Copy an editable delivery elsewhere and prove its launchers still load the VSZ."""
+
+    projects = (
+        delivery.get("editable_vsz_projects")
+        if isinstance(delivery.get("editable_vsz_projects"), list)
+        else []
+    )
+    project = projects[0] if projects and isinstance(projects[0], dict) else {}
+    source_value = project.get("path")
+    if not source_value:
+        return {
+            "passed": False,
+            "reason": "Delivery did not publish an editable VSZ project.",
+        }
+    source = Path(str(source_value)).expanduser().resolve()
+    relocated = run_root / "relocated_delivery" / source.name
+    if relocated.exists():
+        shutil.rmtree(relocated)
+    relocated.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source, relocated)
+    probe = _portable_launcher_probe(relocated, ignore_runtime_overrides=True)
+    probe.update(
+        {
+            "source": str(source),
+            "relocated": str(relocated),
+            "runtime_overrides_ignored": True,
+        }
+    )
+    return probe
+
+
+def _standalone_export_probe(run_root: Path, document_path: Path) -> dict[str, Any]:
+    """Reproduce the real-world standalone-VSZ export path without a spec sidecar."""
+
+    probe_root = run_root / "standalone_vsz_export"
+    source_dir = probe_root / "source"
+    artifact_root = probe_root / "artifacts"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    standalone_document = source_dir / "standalone_exact_current.vsz"
+    shutil.copy2(document_path, standalone_document)
+    expected_spec = standalone_document.with_suffix(".spec.json")
+    if expected_spec.exists():
+        expected_spec.unlink()
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "sciplot_core.cli",
+            "studio",
+            str(standalone_document),
+            "--out",
+            str(artifact_root),
+            "--export",
+            "pdf,tiff_300",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=os.environ.copy(),
+        timeout=60,
+    )
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        payload = {}
+    receipt = payload.get("standalone_export") if isinstance(payload.get("standalone_export"), dict) else {}
+    spec_reference = (
+        receipt.get("spec_reference") if isinstance(receipt.get("spec_reference"), dict) else {}
+    )
+    exports = receipt.get("exports") if isinstance(receipt.get("exports"), list) else []
+    export_paths = [
+        Path(str(item.get("path"))).expanduser().resolve()
+        for item in exports
+        if isinstance(item, dict) and item.get("path")
+    ]
+    receipt_path = Path(str(receipt.get("receipt_path") or ""))
+    qa_path = Path(str(receipt.get("artifact_qa_path") or ""))
+    passed = (
+        completed.returncode == 0
+        and receipt.get("status") == "passed"
+        and receipt.get("state") == "exported_exact_current"
+        and receipt.get("export_ready") is True
+        and receipt.get("requested_exports_complete") is True
+        and (receipt.get("artifact_qa") or {}).get("status") == "passed"
+        and receipt.get("project_delivery_complete") is False
+        and spec_reference.get("exists") is False
+        and spec_reference.get("path") is None
+        and spec_reference.get("required_for_exact_current_export") is False
+        and len(export_paths) == 2
+        and all(path.is_file() and path.parent == (artifact_root / "figures").resolve() for path in export_paths)
+        and receipt_path.is_file()
+        and qa_path.is_file()
+    )
+    return {
+        "passed": bool(passed),
+        "returncode": completed.returncode,
+        "document": str(standalone_document),
+        "document_sha256": file_sha256(standalone_document),
+        "spec_reference": spec_reference,
+        "artifact_root": str(artifact_root),
+        "exports": [str(path) for path in export_paths],
+        "receipt": str(receipt_path),
+        "qa_report": str(qa_path),
         "stderr": completed.stderr.strip(),
     }
 
@@ -490,6 +688,15 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 detail=import_probe,
             )
         )
+        wrapper_probe = _source_checkout_wrapper_probe()
+        checks.append(
+            _check(
+                "source_checkout_wrapper_bootstraps",
+                "The source wrapper or installed CLI starts without relying on an editable import leak",
+                wrapper_probe.get("passed") is True,
+                detail=wrapper_probe,
+            )
+        )
 
         from sciplot_core.doctor import doctor_payload
         from sciplot_core.studio import (
@@ -659,6 +866,15 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         project_dir = Path(str(prepared["project_dir"]))
         request_path = Path(str(prepared["request"]))
         document_path = Path(str(prepared["document"]))
+        launcher_probe = _portable_launcher_probe(project_dir)
+        checks.append(
+            _check(
+                "portable_project_launchers",
+                "Generated Studio, Veusz, and exact-export launchers locate and load the moved project",
+                launcher_probe.get("passed") is True,
+                detail=launcher_probe,
+            )
+        )
         with document_path.open("a", encoding="utf-8") as handle:
             handle.write(f"\n{MANUAL_EDIT_MARKER}\n")
 
@@ -678,6 +894,7 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             manifest.get("publication_intent") if isinstance(manifest.get("publication_intent"), dict) else {}
         )
         delivery = manifest.get("delivery_package") if isinstance(manifest.get("delivery_package"), dict) else {}
+        relocated_delivery_probe = _relocated_delivery_launcher_probe(run_root, delivery)
         editable_vsz = delivery.get("editable_vsz") if isinstance(delivery.get("editable_vsz"), dict) else {}
         editable_path = Path(str(editable_vsz["path"])) if editable_vsz.get("path") else None
         raw_archive_value = (manifest.get("raw_archive") or {}).get("path")
@@ -756,6 +973,12 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     detail={"path": delivery.get("path"), "complete": delivery.get("complete")},
                 ),
                 _check(
+                    "relocated_delivery_launchers",
+                    "A copied editable delivery locates SciPlot and loads its exact VSZ without runtime overrides",
+                    relocated_delivery_probe.get("passed") is True,
+                    detail=relocated_delivery_probe,
+                ),
+                _check(
                     "runtime_lineage_recorded",
                     "Runtime transform and publication contracts are recorded",
                     transform.get("status") == "runtime_recorded"
@@ -769,6 +992,16 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     },
                 ),
             ]
+        )
+
+        standalone_probe = _standalone_export_probe(run_root, document_path)
+        checks.append(
+            _check(
+                "standalone_vsz_exact_export",
+                "A standalone VSZ without a spec sidecar exports to --out, passes artifact QA, and exits zero",
+                standalone_probe.get("passed") is True,
+                detail=standalone_probe,
+            )
         )
 
         failure_probe_passed, failure_probe = _run_hash_failure_probe(
@@ -818,7 +1051,8 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         "limitations": [
             "The generated FTIR and scalar-field tables are synthetic contract fixtures, "
             "not real-data evidence.",
-            "This smoke proves one representative Studio lifecycle and a delivery hash failure path; "
+            "This smoke proves one representative Studio lifecycle, project and relocated-delivery "
+            "launcher checks, a standalone exact-current export, and a delivery hash failure path; "
             "it does not replace the complete ready-rule acceptance matrix.",
             "Lifecycle success and artifact QA do not establish blanket journal compliance.",
         ],

@@ -20,12 +20,21 @@ def export_request(request_path: Path, *, formats: list[str]) -> dict[str, Any]:
     return payload
 
 
-def export_document(document_path: Path, *, formats: list[str]) -> dict[str, Any]:
+def export_document(
+    document_path: Path,
+    *,
+    formats: list[str],
+    output_dir: Path | None = None,
+) -> dict[str, Any]:
     """Export the exact current VSZ without regenerating it."""
 
     from sciplot_core.studio import export_studio_document
 
-    return export_studio_document(document_path.expanduser().resolve(), formats=formats)
+    return export_studio_document(
+        document_path.expanduser().resolve(),
+        formats=formats,
+        output_dir=output_dir.expanduser().resolve() if output_dir is not None else None,
+    )
 
 
 def audit_documents(document_paths: list[Path]) -> dict[str, Any]:
@@ -86,6 +95,7 @@ def _build_parser() -> argparse.ArgumentParser:
     export_document_parser = subparsers.add_parser("export-document", help="Export an existing Veusz document.")
     export_document_parser.add_argument("document", type=Path)
     export_document_parser.add_argument("--formats", default="pdf,tiff_300")
+    export_document_parser.add_argument("--out", type=Path)
     audit_parser = subparsers.add_parser("audit-documents", help="Audit exact current Veusz documents.")
     audit_parser.add_argument("documents", nargs="+", type=Path)
     save_spec_parser = subparsers.add_parser("save-spec", help="Generate a VSZ from a SciPlot Veusz spec.")
@@ -99,7 +109,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "export":
         payload = export_request(args.request, formats=_split_formats(args.formats))
     elif args.command == "export-document":
-        payload = export_document(args.document, formats=_split_formats(args.formats))
+        payload = export_document(
+            args.document,
+            formats=_split_formats(args.formats),
+            output_dir=args.out,
+        )
     elif args.command == "audit-documents":
         payload = audit_documents(args.documents)
     else:

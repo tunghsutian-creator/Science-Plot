@@ -50,10 +50,29 @@ only production renderer; `studio/document.vsz` is the advanced-editing truth.
    skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
    ```
 
+   For a standalone Veusz master without a SciPlot request, use:
+
+   ```bash
+   skill/scripts/sciplot studio FIGURE.vsz \
+     --out outputs/standalone_export \
+     --export pdf,tiff_300 \
+     --json
+   ```
+
+   Require `standalone_export.status=passed` and `export_ready=true`. Read
+   `standalone_export_receipt.json` and `qa_report.json`. A missing optional
+   `.spec.json` must be reported as absent, not treated as an export failure.
+   This route proves exact-current export only; it does not establish source
+   provenance, transform lineage, or a complete SciPlot project delivery.
+
 4. Before reporting success, read the returned state, current VSZ hash,
    `manifest.json`, `review.html`, figures, `tables/analysis_metrics.csv`, QA and
    `delivery/`. Require `state=ready`, `qa.status=passed` and
    `delivery.complete=true`.
+
+Generated `.command` launchers support `--check` for a non-interactive real
+Veusz load check. They resolve SciPlot through `SCIPLOT_REPO`, an enclosing
+checkout, the generation-time fallback, or an installed `sciplot` command.
 
 ## State handling
 

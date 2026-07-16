@@ -283,7 +283,15 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Raw data path, SciPlot project, plot_request.json, or .vsz file.",
     )
-    studio_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
+    studio_parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help=(
+            "Project root for raw input, or artifact root for standalone VSZ export. "
+            "Raw input defaults to outputs/intake_projects; standalone VSZ defaults beside the document."
+        ),
+    )
     studio_parser.add_argument(
         "--rule",
         help="Explicit ready material rule selected by the user or Luna/Codex; bypass automatic recognition.",
@@ -635,7 +643,7 @@ def main(argv: list[str] | None = None) -> int:
             original_argv = list(sys.argv[1:] if argv is None else argv)
             return run_studio_command(
                 target=args.target.expanduser() if args.target else None,
-                output_root=args.out.expanduser(),
+                output_root=args.out.expanduser() if args.out else None,
                 rule_id=args.rule,
                 template=args.template,
                 project_name=args.name,
