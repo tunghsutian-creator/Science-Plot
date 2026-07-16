@@ -421,7 +421,7 @@ def run_studio_command(
             payload["studio_run"] = studio_run
             _register_studio_exports(Path(payload["project_dir"]), payload["exports"], studio_run=studio_run)
         elif standalone_export:
-            receipt = _publish_standalone_export_receipt(
+            receipt = publish_standalone_export_receipt(
                 document_path=document_path,
                 requested_formats=requested_formats,
                 exports=payload["exports"],
@@ -527,7 +527,7 @@ def launch_sciplot_studio(
 
 
 def _create_veusz_window(document_path: Path | None) -> Any:
-    _ensure_veusz_qsettings_compat()
+    ensure_veusz_qsettings_compat()
     from veusz.windows.mainwindow import MainWindow
 
     _ensure_veusz_loader_compat()
@@ -543,7 +543,7 @@ def _create_veusz_window(document_path: Path | None) -> Any:
     return window
 
 
-def _ensure_veusz_qsettings_compat() -> None:
+def ensure_veusz_qsettings_compat() -> None:
     """Keep Veusz settings scoped to Veusz on macOS.
 
     Native QSettings includes the macOS global preference domain as a fallback.
@@ -842,7 +842,7 @@ def export_studio_document(
     return payload
 
 
-def _publish_standalone_export_receipt(
+def publish_standalone_export_receipt(
     *,
     document_path: Path,
     requested_formats: list[str],
@@ -5372,9 +5372,12 @@ def _log_minor_ticks(
 
 
 __all__ = [
+    "ensure_veusz_qsettings_compat",
     "export_studio_document",
     "maybe_reexec_with_qt_runtime",
     "prepare_studio_document",
+    "publish_standalone_export_receipt",
+    "publish_studio_export_run",
     "qt_smoke_payload",
     "run_studio_command",
     "upstream_status",

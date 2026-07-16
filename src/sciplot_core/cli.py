@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -100,6 +101,43 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     smoke_parser.add_argument("--out", type=Path, default=Path(".tmp_verify") / "runtime_smoke")
     smoke_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+    canvas_parser = subparsers.add_parser(
+        "canvas",
+        help="Open the experimental native SciPlot live Canvas.",
+    )
+    canvas_parser.add_argument(
+        "target",
+        type=Path,
+        help="Existing SciPlot project, plot_request.json, VSZ, or raw data path.",
+    )
+    canvas_parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Project root when TARGET is raw data.",
+    )
+    canvas_parser.add_argument("--rule")
+    canvas_parser.add_argument("--template")
+    canvas_parser.add_argument("--name")
+    canvas_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Resolve and print the Canvas workspace without opening the GUI.",
+    )
+    canvas_parser.add_argument("--probe", action="store_true", help=argparse.SUPPRESS)
+    canvas_parser.add_argument(
+        "--probe-out",
+        type=Path,
+        default=Path(".tmp_verify") / "canvas_app",
+        help=argparse.SUPPRESS,
+    )
+    canvas_parser.add_argument(
+        "--operations",
+        type=int,
+        default=50,
+        help=argparse.SUPPRESS,
+    )
 
     canvas_probe_parser = subparsers.add_parser("canvas-probe", help=argparse.SUPPRESS)
     canvas_probe_parser.add_argument("document", type=Path)
@@ -427,6 +465,49 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"SciPlot runtime smoke: {payload['status']}")
                 print(payload["artifacts"]["summary"])
             return 0 if payload["status"] == "passed" else 1
+        if args.command == "canvas":
+            target = _resolve_input(args.target)
+            if args.json and not args.probe:
+                from sciplot_gui.workspace import resolve_canvas_workspace
+
+                workspace = resolve_canvas_workspace(
+                    target,
+                    output_root=args.out,
+                    rule_id=args.rule,
+                    template=args.template,
+                    project_name=args.name,
+                )
+                _print_json(workspace.to_dict())
+                return 0
+            if args.probe:
+                os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+            from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+            original_argv = list(sys.argv[1:] if argv is None else argv)
+            maybe_reexec_with_qt_runtime(original_argv)
+            if args.probe:
+                from sciplot_core.canvas_app_probe import run_canvas_app_probe
+
+                payload = run_canvas_app_probe(
+                    target,
+                    output_root=args.probe_out,
+                    operation_count=args.operations,
+                )
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(f"SciPlot Canvas app probe: {payload['status']}")
+                    print(payload["artifacts"]["summary"])
+                return 0 if payload["status"] == "passed" else 1
+            from sciplot_gui.app import launch_canvas_application
+
+            return launch_canvas_application(
+                target,
+                output_root=args.out,
+                rule_id=args.rule,
+                template=args.template,
+                project_name=args.name,
+            )
         if args.command == "canvas-probe":
             from sciplot_core.studio import maybe_reexec_with_qt_runtime
 

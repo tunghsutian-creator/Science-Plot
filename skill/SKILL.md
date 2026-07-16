@@ -11,10 +11,11 @@ only production renderer; `studio/document.vsz` is the advanced-editing truth.
 
 ## Active development direction
 
-For product-development work, read `DEVELOPMENT_ROADMAP.md` before changing the
-GUI, AI integration, annotations, composition, or Studio ownership. The current
-Veusz MainWindow and browser Result Review are protected transition baselines,
-not the final frontend.
+For product-development work, read `DEVELOPMENT_ROADMAP.md` and
+`docs/SCIPLOT_OPERATION_FLOW_PLAN.md` before changing the GUI, AI integration,
+annotations, composition, or Studio ownership. The current Veusz MainWindow
+and browser Result Review are protected transition baselines, not the final
+frontend.
 
 The target is a focused native SciPlot Canvas that embeds Veusz `Document` and
 `PlotWindow`, sends both user and AI edits through typed operations, and keeps
@@ -78,6 +79,18 @@ retirement gate passes.
    `.spec.json` must be reported as absent, not treated as an export failure.
    This route proves exact-current export only; it does not establish source
    provenance, transform lineage, or a complete SciPlot project delivery.
+
+   For the experimental M1 native editor, use:
+
+   ```bash
+   skill/scripts/sciplot canvas PROJECT_OR_VSZ
+   ```
+
+   It embeds the exact-current Veusz PlotWindow in the SciPlot Qt shell and
+   provides selection, bounded visible-text editing, Save/Undo/Redo,
+   Export + QA, explicit recovery, and an `F9` inspector toggle. Advanced
+   Editor is under `More` as a recovery route. Do not describe this M1 shell as
+   the complete M2 daily editor or switch the normal `studio` entrypoint yet.
 
 4. Before reporting success, read the returned state, current VSZ hash,
    `manifest.json`, `review.html`, figures, `tables/analysis_metrics.csv`, QA and

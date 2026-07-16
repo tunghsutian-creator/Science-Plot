@@ -6,7 +6,7 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core._utils import file_sha256, json_safe
-from sciplot_core.canvas.model import CanvasSession
+from sciplot_core.canvas.model import CanvasSelection, CanvasSession
 from sciplot_core.canvas.operations import CanvasOperationBatch
 from sciplot_core.canvas.persistence import (
     append_operation_journal,
@@ -30,6 +30,8 @@ class DocumentController:
         session_path: Path,
         journal_path: Path,
         project_id: str,
+        parent: Any = None,
+        visible: bool = False,
     ) -> None:
         self.document_path = document_path.expanduser().resolve()
         self.session_path = session_path.expanduser().resolve()
@@ -93,8 +95,12 @@ class DocumentController:
                 document_sha256=file_sha256(self.document_path),
             )
             load_path = self.document_path
-        self.adapter = VeuszCanvasAdapter(load_path)
+        self.adapter = VeuszCanvasAdapter(load_path, parent=parent, visible=visible)
         self.inventory = self.adapter.bind_object_registry(self.session)
+        self.session.current_page = self.adapter.set_page(self.session.current_page)
+        self.session.viewport.zoom = self.adapter.set_zoom_factor(
+            self.session.viewport.zoom
+        )
         loaded_render = self.adapter.render_fingerprint()
         if (
             expected_recovery_render is not None
@@ -107,7 +113,21 @@ class DocumentController:
                 "Canvas recovery snapshot rendered differently from the accepted state."
             )
         self.session.last_render_sha256 = loaded_render
-        self.session.set_state("editing" if self.session.dirty else "canvas_ready")
+        if self.session.dirty:
+            restored_state = "editing"
+        elif (
+            self.session.exported_revision == self.session.revision
+            and self.session.qa_summary.get("ready_to_use") is True
+        ):
+            restored_state = "ready"
+        elif (
+            self.session.exported_revision == self.session.revision
+            and self.session.qa_summary
+        ):
+            restored_state = "needs_rule_repair"
+        else:
+            restored_state = "canvas_ready"
+        self.session.set_state(restored_state)
         self.persist()
         if self.recovered_from_snapshot is not None:
             append_operation_journal(
@@ -124,6 +144,104 @@ class DocumentController:
 
     def persist(self) -> Path:
         return save_canvas_session(self.session_path, self.session)
+
+    @property
+    def selected_object(self) -> dict[str, Any] | None:
+        selected_id = self.session.selection.primary_object_id
+        if selected_id is None:
+            return None
+        return next(
+            (item for item in self.inventory if item.get("object_id") == selected_id),
+            None,
+        )
+
+    def select_object_id(
+        self,
+        object_id: str,
+        *,
+        mode: str = "new",
+    ) -> dict[str, Any]:
+        item = next(
+            (
+                candidate
+                for candidate in self.inventory
+                if candidate.get("object_id") == object_id
+            ),
+            None,
+        )
+        if item is None:
+            raise ValueError(f"Unknown Canvas object: {object_id}")
+        current = list(self.session.selection.object_ids)
+        if mode == "toggle":
+            if object_id in current:
+                current.remove(object_id)
+            else:
+                current.append(object_id)
+        elif mode == "add":
+            if object_id not in current:
+                current.append(object_id)
+        else:
+            current = [object_id]
+        primary = (
+            object_id if object_id in current else (current[-1] if current else None)
+        )
+        self.session.selection = CanvasSelection(
+            object_ids=current,
+            primary_object_id=primary,
+        )
+        self.persist()
+        return item
+
+    def select_widget_path(
+        self,
+        widget_path: str,
+        *,
+        mode: str = "new",
+    ) -> dict[str, Any] | None:
+        item = next(
+            (
+                candidate
+                for candidate in self.inventory
+                if candidate.get("path") == widget_path
+            ),
+            None,
+        )
+        if item is None:
+            return None
+        return self.select_object_id(str(item["object_id"]), mode=mode)
+
+    def visible_text_targets(self) -> list[dict[str, Any]]:
+        return self.adapter.visible_text_targets(self.session)
+
+    def set_page(self, page_index: int) -> int:
+        page = self.adapter.set_page(page_index)
+        self.session.current_page = page
+        self.session.last_render_sha256 = self.adapter.render_fingerprint()
+        self.persist()
+        return page
+
+    def set_zoom_factor(self, zoom: float) -> float:
+        applied = self.adapter.set_zoom_factor(zoom)
+        self.session.viewport.zoom = applied
+        self.session.last_render_sha256 = self.adapter.render_fingerprint()
+        self.persist()
+        return applied
+
+    def zoom_to_page(self) -> float:
+        applied = self.adapter.zoom_to_page()
+        self.session.viewport.zoom = applied
+        self.session.last_render_sha256 = self.adapter.render_fingerprint()
+        self.persist()
+        return applied
+
+    def _sync_view_state(self) -> None:
+        self.session.current_page = self.adapter.current_page
+        self.session.viewport.zoom = self.adapter.zoom_factor
+
+    def sync_view_state(self) -> None:
+        self._sync_view_state()
+        self.session.last_render_sha256 = self.adapter.render_fingerprint()
+        self.persist()
 
     def _create_recovery_snapshot(self, *, revision: int, event: str) -> Path:
         snapshot = (
@@ -205,6 +323,7 @@ class DocumentController:
 
     def apply_batch(self, batch: CanvasOperationBatch) -> dict[str, Any]:
         self.adapter.assert_gui_thread()
+        self._sync_view_state()
         batch = CanvasOperationBatch.from_dict(batch.to_dict())
         if batch.base_revision != self.session.revision:
             self.session.set_state("conflict")
@@ -248,6 +367,7 @@ class DocumentController:
         return entry
 
     def undo(self, *, provider: str = "user") -> dict[str, Any]:
+        self._sync_view_state()
         before_render = self.adapter.render_fingerprint()
         after_render = self.adapter.undo()
         next_revision = self.session.revision + 1
@@ -278,6 +398,7 @@ class DocumentController:
         return entry
 
     def redo(self, *, provider: str = "user") -> dict[str, Any]:
+        self._sync_view_state()
         before_render = self.adapter.render_fingerprint()
         after_render = self.adapter.redo()
         next_revision = self.session.revision + 1
@@ -311,6 +432,7 @@ class DocumentController:
         target = self.adapter.save(self.document_path)
         self.session.document_path = str(target)
         self.session.mark_saved(document_sha256=file_sha256(target))
+        self.session.set_state("canvas_ready")
         self.persist()
         append_operation_journal(
             self.journal_path,
@@ -354,6 +476,40 @@ class DocumentController:
                 "exports": json_safe(exports),
             },
         )
+
+    def record_export_result(self, payload: dict[str, Any]) -> None:
+        exports = payload.get("exports")
+        if not isinstance(exports, list):
+            raise ValueError("Canvas export result must contain an exports list.")
+        self.mark_exported(exports)
+        self.session.qa_summary = {
+            "status": payload.get("status"),
+            "state": payload.get("state"),
+            "ready_to_use": payload.get("ready_to_use") is True,
+            "scope": payload.get("scope"),
+        }
+        self.session.set_state(
+            "ready" if payload.get("ready_to_use") is True else "needs_rule_repair"
+        )
+        self.persist()
+
+    def keep_recovery_on_close(self, *, provider: str = "user") -> dict[str, Any]:
+        if not self.session.dirty:
+            raise ValueError("A clean CanvasSession does not need recovery retention.")
+        if not self.session.recovery_snapshots:
+            raise RuntimeError("No Canvas recovery snapshot is available.")
+        entry = {
+            "kind": "sciplot_canvas_journal_entry",
+            "version": 1,
+            "event": "close_with_recovery",
+            "provider": provider,
+            "recorded_at": _now(),
+            "revision": self.session.revision,
+            "snapshot": self.session.recovery_snapshots[-1],
+        }
+        self.persist()
+        append_operation_journal(self.journal_path, entry)
+        return entry
 
     def close(self) -> None:
         self.persist()

@@ -14,6 +14,9 @@ def _load_qt_veusz() -> dict[str, Any]:
     if runtime not in sys.path:
         sys.path.insert(0, runtime)
 
+    from sciplot_core.studio import ensure_veusz_qsettings_compat
+
+    ensure_veusz_qsettings_compat()
     from PyQt6 import QtCore, QtWidgets
     from veusz import dataimport, document, widgets
     from veusz.document.operations import OperationMultiple, OperationSettingSet
@@ -129,10 +132,10 @@ class VeuszCanvasAdapter:
         walk(self.document.basewidget, "root")
         return inventory
 
-    def first_visible_text_target(
+    def visible_text_targets(
         self,
         session: CanvasSession,
-    ) -> dict[str, Any]:
+    ) -> list[dict[str, Any]]:
         candidates: list[tuple[tuple[int, int, int, int], dict[str, Any]]] = []
         for item in self.bind_object_registry(session):
             object_type = item["object_type"]
@@ -175,16 +178,20 @@ class VeuszCanvasAdapter:
                 )
             )
         if not candidates:
-            raise RuntimeError(
-                "The document does not contain an editable text setting."
-            )
+            return []
         candidates.sort(key=lambda item: item[0])
-        target = candidates[0][1]
-        if target["visible"] is not True:
+        return [target for _, target in candidates if target["visible"] is True]
+
+    def first_visible_text_target(
+        self,
+        session: CanvasSession,
+    ) -> dict[str, Any]:
+        targets = self.visible_text_targets(session)
+        if not targets:
             raise RuntimeError(
-                "The document has text settings, but none are visible on the canvas."
+                "The document does not contain a visible editable text setting."
             )
-        return target
+        return targets[0]
 
     def first_axis_label_target(
         self,
@@ -203,6 +210,36 @@ class VeuszCanvasAdapter:
     def setting_value(self, setting_path: str) -> Any:
         self.assert_gui_thread()
         return self.document.resolveSettingPath(None, setting_path).get()
+
+    @property
+    def page_count(self) -> int:
+        return int(self.document.getNumberPages())
+
+    @property
+    def current_page(self) -> int:
+        return int(self.plot_window.getPageNumber())
+
+    def set_page(self, page_index: int) -> int:
+        self.assert_gui_thread()
+        self.plot_window.setPageNumber(int(page_index))
+        self.application.processEvents()
+        return self.current_page
+
+    @property
+    def zoom_factor(self) -> float:
+        return float(self.plot_window.zoomfactor)
+
+    def set_zoom_factor(self, zoom: float) -> float:
+        self.assert_gui_thread()
+        self.plot_window.setZoomFactor(float(zoom))
+        self.application.processEvents()
+        return self.zoom_factor
+
+    def zoom_to_page(self) -> float:
+        self.assert_gui_thread()
+        self.plot_window.slotViewZoomPage()
+        self.application.processEvents()
+        return self.zoom_factor
 
     def validate_setting_value(self, setting_path: str, value: Any) -> Any:
         self.assert_gui_thread()

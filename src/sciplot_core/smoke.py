@@ -15,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 8
+RUNTIME_SMOKE_VERSION = 9
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -897,6 +897,39 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 "Embedded PlotWindow supports live typed redraw, interaction, history, recovery, conflict detection, save/reopen, and exact export",
                 canvas_characterization.get("status") == "passed",
                 detail=canvas_characterization,
+            )
+        )
+        from sciplot_core.canvas_app_probe import run_canvas_app_probe
+
+        canvas_app_probe = run_canvas_app_probe(
+            project_dir,
+            output_root=run_root / "canvas_app",
+            operation_count=50,
+        )
+        canvas_app_evidence = canvas_app_probe.get("evidence")
+        canvas_app_evidence = (
+            canvas_app_evidence if isinstance(canvas_app_evidence, dict) else {}
+        )
+        checks.append(
+            _check(
+                "native_canvas_app_lifecycle",
+                "The SciPlot-owned Canvas completes 50 live edits, save/reopen, "
+                "exact export, project delivery, and explicit recovery",
+                canvas_app_probe.get("status") == "passed",
+                detail={
+                    "status": canvas_app_probe.get("status"),
+                    "summary": canvas_app_probe.get("summary"),
+                    "operation_count": canvas_app_evidence.get("operation_count"),
+                    "revision": canvas_app_evidence.get(
+                        "revision_after_operations"
+                    ),
+                    "render_changes": canvas_app_evidence.get("render_changes"),
+                    "reopened_state": canvas_app_evidence.get("reopened_state"),
+                    "recovered_state": canvas_app_evidence.get("recovered_state"),
+                    "export": canvas_app_evidence.get("export"),
+                    "source_immutable": canvas_app_evidence.get("source_immutable"),
+                    "artifacts": canvas_app_probe.get("artifacts"),
+                },
             )
         )
         launcher_probe = _portable_launcher_probe(project_dir)

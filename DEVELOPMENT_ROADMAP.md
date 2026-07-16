@@ -1,6 +1,6 @@
 # SciPlot AI-Enhanced Canvas Development Roadmap
 
-Status: active product roadmap, 2026-07-16. M0 complete; M1 is next.
+Status: active product roadmap, 2026-07-17. M0 and M1 complete; M2 is next.
 
 This roadmap supersedes the former assumption that native canvas work and
 multi-panel composition should remain deferred. Distribution to other users is
@@ -361,7 +361,66 @@ Exit gate:
 - exact-current PDF/TIFF export, QA, and delivery still pass;
 - closing with unsaved changes has an explicit recovery path.
 
+M1 completion evidence, 2026-07-17:
+
+- added the public experimental
+  `sciplot canvas PROJECT_OR_VSZ` entrypoint for projects, requests,
+  standalone VSZ documents, and raw inputs accepted by Studio preparation;
+- added a SciPlot-owned `QMainWindow` with embedded Veusz `PlotWindow`; the
+  source-controlled application probe confirms that
+  `veusz.windows.mainwindow` is never imported or constructed;
+- the shell provides exact-current page navigation, zoom, PlotWindow click
+  selection, a bounded visible-text inspector, Save, Undo, Redo, Export + QA,
+  an `F9` inspector toggle, and Advanced Editor inside the low-frequency
+  `More` recovery menu;
+- all user-visible document mutations pass through typed
+  `CanvasOperationBatch` objects and `DocumentController`;
+- saved Canvas sessions retain selection, page, zoom, revision, exported
+  revision, QA summary, object identities, recovery snapshots, and the
+  append-only operation journal;
+- clean passing revisions reopen as `ready`; recovered unsaved revisions
+  reopen as `editing`; stale export state names both revisions; dirty close
+  offers Save, Keep Recovery, or Cancel and has no silent discard path;
+- runtime smoke v9 passes `26/26` top-level checks at
+  `.tmp_verify/m1_final_acceptance_v2/runtime_smoke_4f5yloas/runtime_smoke.json`;
+- its project-backed native Canvas probe passes `15/15`, performs `50/50`
+  sequential typed operations with `50/50` visible render changes, saves and
+  reopens revision 50, exports exact-current PDF/TIFF, passes QA, produces
+  complete delivery, then restores revision 51 through explicit recovery;
+- the probe report is intentionally summarized instead of embedding the full
+  QA tree, reducing the final smoke JSON to about 57 KB while retaining paths
+  to the complete manifest, review, QA, delivery, screenshots, and probe
+  report;
+- final authorized real-VSZ application probes pass `15/15` for a generated
+  FTIR document, a manually edited FTIR document, and the real TEMP3
+  four-panel cloud-map master; each probe mutates only its copied target and
+  preserves the source hash; standalone probes explicitly confirm that
+  exact-current artifact QA does not overclaim project delivery or provenance;
+- screenshot gates now inspect both the main Canvas and inspector regions,
+  after the M1 design audit caught a transient black-canvas capture that the
+  earlier whole-image tonal-range check could miss;
+- the M1 design audit is recorded in
+  `docs/SCIPLOT_CANVAS_M1_DESIGN_AUDIT.md`; the durable operation flow and
+  visual direction are now owned by
+  `docs/SCIPLOT_OPERATION_FLOW_PLAN.md`;
+- the local scalar-field regression remains green (`2 passed`), `doctor`
+  reports `status=ready` with `23/23` ready rules, and no upstream Veusz or
+  migrated renderer files changed.
+
 Not included yet: conversational AI, freehand review marks, or composition.
+
+Known limits carried into M2:
+
+- the M1 inspector intentionally covers visible text only; page, axis,
+  series, legend, appearance, annotation, and QA inspectors are M2;
+- PlotWindow click selection still resolves the topmost Veusz widget and does
+  not yet expose SciPlot data-point selection or direct manipulation;
+- cross-process recovery restores the exact accepted visual state but starts
+  a new in-memory undo boundary;
+- the current light QSS is an M1 prototype; M2 must introduce palette-backed
+  light, dark, increased-contrast, focus, spacing, and icon tokens;
+- normal `studio` still uses the transition route until ten representative
+  real M2 sessions prove the daily editing and review gate.
 
 ### M2 — Daily Editing and Review Canvas
 
