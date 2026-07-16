@@ -890,7 +890,8 @@ def run_canvas_assistant_probe(
         "limitations": [
             "This probe uses a typed provider stub and does not call a model.",
             "It proves the CanvasOperationBatch transaction loop; deterministic "
-            "DataMappingProposal execution remains separate M3 work.",
+            "DataMappingProposal execution is validated by a separate probe; "
+            "provider and Canvas UI wiring remain M3 work.",
             "Automated probes do not count as real human daily-use sessions.",
         ],
     }

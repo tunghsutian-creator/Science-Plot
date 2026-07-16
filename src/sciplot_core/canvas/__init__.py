@@ -5,7 +5,10 @@ from sciplot_core.canvas.annotations import (
     ReviewAnnotationStyle,
 )
 from sciplot_core.canvas.assistant_contract import (
+    DataColumnMapping,
+    DataMappingConfirmation,
     DataMappingProposal,
+    DataSourceReference,
     DeclarativeTransformation,
 )
 from sciplot_core.canvas.model import (
@@ -28,7 +31,10 @@ __all__ = [
     "CanvasSession",
     "CanvasTransaction",
     "CanvasViewport",
+    "DataColumnMapping",
+    "DataMappingConfirmation",
     "DataMappingProposal",
+    "DataSourceReference",
     "DeclarativeTransformation",
     "ObjectIdentityRegistry",
     "ReviewAnnotation",

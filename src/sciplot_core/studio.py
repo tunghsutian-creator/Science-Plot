@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from html import escape
@@ -21,6 +22,7 @@ import pandas as pd
 
 from sciplot_core._paths import VEUSZ_ROOT, VEUSZ_UPSTREAM_COMMIT
 from sciplot_core._utils import decode_text, existing_file_sha256, json_safe
+from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.launchers import portable_sciplot_prelude, portable_vsz_finder
 from sciplot_core.materials_rules import compute_analysis_metrics, get_rule, semantic_payload_from_rule
@@ -258,6 +260,14 @@ def prepare_studio_document(
         project_name=project_name,
     )
     request = _read_json(request_path)
+    effective_request, data_mapping_application = resolve_data_mapping_request(
+        request,
+        base_dir=request_path.parent,
+    )
+    if data_mapping_application is not None:
+        request["transform_ledger"] = deepcopy(
+            effective_request["transform_ledger"]
+        )
     document_path = project_dir / "studio" / "document.vsz"
     document_path.parent.mkdir(parents=True, exist_ok=True)
     _archive_manual_document_if_needed(project_dir, document_path)
@@ -265,6 +275,10 @@ def prepare_studio_document(
         request,
         base_dir=request_path.parent,
     )
+    if isinstance(axis_info.get("data_mapping_coverage"), dict):
+        request["data_mapping_coverage"] = json_safe(
+            axis_info["data_mapping_coverage"]
+        )
     study_model = normalize_study_model(
         request.get("study_model")
         if isinstance(request.get("study_model"), dict)
@@ -935,6 +949,10 @@ def publish_studio_export_run(
     exports: list[dict[str, Any]],
 ) -> dict[str, Any]:
     request = _read_json(request_path)
+    effective_request, data_mapping_application = resolve_data_mapping_request(
+        request,
+        base_dir=request_path.parent,
+    )
     document_state = _studio_document_state(
         document_path,
         generated_hash=_registered_generated_hash(project_dir),
@@ -970,8 +988,11 @@ def publish_studio_export_run(
     )
     input_path = _resolve_request_input(request, base_dir=request_path.parent)
     raw_archive = _archive_studio_input(input_path, output_dir) if input_path is not None else {}
-    existing_transform_ledger = (
-        request.get("transform_ledger") if isinstance(request.get("transform_ledger"), dict) else None
+    existing_transform_ledger = _verified_mapping_ledger_extension(
+        request.get("transform_ledger"),
+        effective_request.get("transform_ledger")
+        if data_mapping_application is not None
+        else None,
     )
     snapshot_source = _studio_snapshot_source(
         input_path,
@@ -981,17 +1002,10 @@ def publish_studio_export_run(
     processed_source = _write_studio_data_snapshot(snapshot_source, output_dir) if snapshot_source is not None else None
     intake_manifest_path = project_dir / "intake_manifest.json"
     intake_manifest = _read_json(intake_manifest_path) if intake_manifest_path.exists() else {}
-    recognition = intake_manifest.get("recognition") if isinstance(intake_manifest.get("recognition"), dict) else {}
-    semantic = {
-        **recognition,
-        "semantic_family": recognition.get("semantic_family")
-        or intake_manifest.get("experiment", {}).get("id")
-        or request.get("rule_id")
-        or "unknown",
-        "rule_id": recognition.get("rule_id") or request.get("rule_id"),
-        "reason": recognition.get("reason") or "Exported from the canonical SciPlot Veusz document.",
-        "route": "studio",
-    }
+    semantic = _studio_export_semantic_payload(
+        request=request,
+        intake_manifest=intake_manifest,
+    )
     metric_source = _studio_metric_source(snapshot_source if snapshot_source is not None else input_path)
     analysis_metrics = (
         compute_analysis_metrics(
@@ -1110,6 +1124,10 @@ def publish_studio_export_run(
         "analysis_metrics": analysis_metrics,
         "template": request.get("template") or request.get("recipe") or "veusz_document",
         "operation_mode": normal_mode_payload(route="studio"),
+        "data_mapping_application": json_safe(data_mapping_application),
+        "data_mapping_coverage": json_safe(
+            request.get("data_mapping_coverage")
+        ),
     }
     manifest = {
         "kind": "sciplot_run",
@@ -1147,6 +1165,10 @@ def publish_studio_export_run(
         },
         "layout_quality": layout_quality,
         "operation_mode": normal_mode_payload(route="studio"),
+        "data_mapping_application": json_safe(data_mapping_application),
+        "data_mapping_coverage": json_safe(
+            request.get("data_mapping_coverage")
+        ),
         "studio": {
             "engine": "veusz",
             "render_engine": "veusz",
@@ -1199,6 +1221,83 @@ def publish_studio_export_run(
         "delivery_package": manifest["delivery_package"],
         "state": manifest["state"],
         "ready_to_use": ready_to_use,
+    }
+
+
+def _verified_mapping_ledger_extension(
+    current: object,
+    verified_base: object,
+) -> dict[str, Any] | None:
+    if not isinstance(verified_base, dict):
+        return deepcopy(current) if isinstance(current, dict) else None
+    if not isinstance(current, dict):
+        return deepcopy(verified_base)
+    base_steps = (
+        verified_base.get("steps")
+        if isinstance(verified_base.get("steps"), list)
+        else []
+    )
+    current_steps = (
+        current.get("steps")
+        if isinstance(current.get("steps"), list)
+        else []
+    )
+    if current_steps[: len(base_steps)] != base_steps:
+        raise ValueError(
+            "Studio transform lineage no longer extends the verified "
+            "DataMappingProposal ledger."
+        )
+    return deepcopy(current)
+
+
+def _studio_export_semantic_payload(
+    *,
+    request: dict[str, Any],
+    intake_manifest: dict[str, Any],
+) -> dict[str, Any]:
+    recognition = (
+        intake_manifest.get("recognition")
+        if isinstance(intake_manifest.get("recognition"), dict)
+        else {}
+    )
+    rule_id = str(
+        recognition.get("rule_id") or request.get("rule_id") or ""
+    ).strip()
+    rule = get_rule(rule_id) if rule_id else None
+    rule_payload = (
+        semantic_payload_from_rule(
+            rule,
+            confidence=100.0,
+            reason=(
+                recognition.get("reason")
+                or "Resolved from the persisted request rule for Studio export."
+            ),
+        )
+        if rule is not None
+        else {}
+    )
+    experiment = (
+        intake_manifest.get("experiment")
+        if isinstance(intake_manifest.get("experiment"), dict)
+        else {}
+    )
+    return {
+        **rule_payload,
+        **recognition,
+        "semantic_family": (
+            recognition.get("semantic_family")
+            or rule_payload.get("semantic_family")
+            or experiment.get("id")
+            or rule_id
+            or "unknown"
+        ),
+        "rule_id": recognition.get("rule_id") or rule_id or None,
+        "reason": (
+            recognition.get("reason")
+            or rule_payload.get("reason")
+            or "Exported from the canonical SciPlot Veusz document."
+        ),
+        "route": "studio",
     }
 
 
@@ -1933,8 +2032,35 @@ def _series_from_request(
     if not source.is_absolute():
         source = (base_dir / source).resolve()
     source_root = source
+    effective_request, mapping_application = resolve_data_mapping_request(
+        request,
+        base_dir=base_dir,
+    )
+    effective_input = effective_request.get("input")
+    if not isinstance(effective_input, str) or not effective_input.strip():
+        raise ValueError(
+            "Resolved data mapping request has no effective input path."
+        )
+    source = Path(effective_input).expanduser()
+    if not source.is_absolute():
+        source = (base_dir / source).resolve()
+    request = effective_request
     render_options = _effective_render_options(request)
-    source, transform_steps = _studio_source_for_request(source, request=request, base_dir=base_dir)
+    transform_steps = [
+        dict(step)
+        for step in (
+            mapping_application.get("transform_steps", [])
+            if mapping_application is not None
+            else []
+        )
+        if isinstance(step, dict)
+    ]
+    source, semantic_steps = _studio_source_for_request(
+        source,
+        request=request,
+        base_dir=base_dir,
+    )
+    transform_steps.extend(semantic_steps)
     frames = _read_source_frames(source, request=request)
     raw_series: list[StudioSeries] = []
     axis_info: dict[str, Any] = {"x_label": "x", "y_label": "y"}
@@ -1992,9 +2118,77 @@ def _series_from_request(
         axis_info["category_positions"] = [float(index) for index in range(1, len(styled) + 1)]
         axis_info["raw_replicate_count"] = sum(len(item.y_values) for item in styled)
     styled = _apply_template_series_transforms(styled, request=request, render_options=render_options)
+    if mapping_application is not None:
+        axis_info["data_mapping_coverage"] = _mapping_series_coverage(
+            styled,
+            mapping_application=mapping_application,
+            request=request,
+        )
     axis_info["x_label"] = _veusz_axis_label(render_options.get("x_label_override") or axis_info["x_label"])
     axis_info["y_label"] = _veusz_axis_label(render_options.get("y_label_override") or axis_info["y_label"])
     return styled, axis_info, transform_steps, source_root
+
+
+def _mapping_series_coverage(
+    series: list[StudioSeries],
+    *,
+    mapping_application: dict[str, Any],
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    expected_labels = [
+        str(label).strip()
+        for label in mapping_application.get("expected_sample_labels", [])
+        if str(label).strip()
+    ]
+    expected_count = int(
+        mapping_application.get("expected_series_count_min")
+        or len(expected_labels)
+    )
+    actual_labels = [str(item.label).strip() for item in series]
+    missing_labels = [
+        expected
+        for expected in expected_labels
+        if not any(
+            _mapping_label_matches(actual, expected)
+            for actual in actual_labels
+        )
+    ]
+    passed = len(series) >= expected_count and not missing_labels
+    coverage = {
+        "kind": "sciplot_data_mapping_series_coverage",
+        "version": 1,
+        "status": "passed" if passed else "failed",
+        "proposal_id": mapping_application.get("proposal_id"),
+        "template": _request_template(request),
+        "expected_sample_labels": expected_labels,
+        "actual_series_labels": actual_labels,
+        "expected_series_count_min": expected_count,
+        "actual_series_count": len(series),
+        "missing_sample_labels": missing_labels,
+        "silent_omission_detected": not passed,
+    }
+    if not passed:
+        missing = ", ".join(missing_labels) or "unknown mapped source"
+        raise StudioPreparationBlocked(
+            "mapped_source_coverage_incomplete",
+            "Studio would omit confirmed mapped sources "
+            f"({missing}); expected at least {expected_count} series but "
+            f"prepared {len(series)}.",
+        )
+    return coverage
+
+
+def _mapping_label_matches(actual: str, expected: str) -> bool:
+    actual_key = " ".join(actual.casefold().split())
+    expected_key = " ".join(expected.casefold().split())
+    if actual_key == expected_key:
+        return True
+    separators = (" ", " (", " [", " /", " -", " —", ":")
+    return any(
+        actual_key.startswith(expected_key + separator)
+        or actual_key.endswith(separator + expected_key)
+        for separator in separators
+    )
 
 
 def _veusz_axis_label(value: object) -> str:
@@ -2237,9 +2431,45 @@ def _read_table(path: Path) -> pd.DataFrame:
 
 
 def _coerced_numeric_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    numeric = frame.apply(pd.to_numeric, errors="coerce")
+    metadata_rows = _structured_metadata_prefix_rows(frame)
+    numeric = frame.iloc[metadata_rows:].apply(
+        pd.to_numeric,
+        errors="coerce",
+    )
     useful_columns = [column for column in numeric.columns if numeric[column].notna().sum() >= 2]
     return numeric[useful_columns].dropna(how="all")
+
+
+def _structured_metadata_prefix_rows(frame: pd.DataFrame) -> int:
+    if frame.shape[0] < 3:
+        return 0
+    for row_index in range(min(2, frame.shape[0])):
+        values = [
+            str(value).strip().casefold()
+            for value in frame.iloc[row_index].tolist()
+            if not pd.isna(value) and str(value).strip()
+        ]
+        if not values:
+            continue
+        unit_values = [value for value in values if _is_unit_label(value)]
+        nonnumeric_units = [
+            value
+            for value in unit_values
+            if not _is_finite_numeric_text(value)
+        ]
+        if (
+            len(unit_values) >= max(1, math.ceil(len(values) * 0.5))
+            and nonnumeric_units
+        ):
+            return min(2, frame.shape[0])
+    return 0
+
+
+def _is_finite_numeric_text(value: str) -> bool:
+    try:
+        return math.isfinite(float(value))
+    except ValueError:
+        return False
 
 
 def _xy_pairs_for_request(numeric: pd.DataFrame, *, request: dict[str, Any]) -> list[tuple[Any, Any]]:
@@ -2394,14 +2624,16 @@ def _unit_label_from_column(values: pd.Series) -> str:
 def _series_label_from_column(values: pd.Series, *, fallback: str) -> str:
     leading = [str(value).strip() for value in values.tolist()[:4] if not pd.isna(value) and str(value).strip()]
     if len(leading) >= 2:
-        try:
-            float(leading[0])
-        except ValueError:
-            if _is_unit_label(leading[1].casefold()):
-                # Comparison workbooks store the sample label immediately
-                # above the unit.  Preserve labels such as `PA` even though
-                # their case-folded spelling is indistinguishable from `Pa`.
-                return leading[0]
+        first_is_unit = _is_unit_label(leading[0].casefold())
+        second_is_unit = _is_unit_label(leading[1].casefold())
+        if second_is_unit:
+            # Comparison workbooks may store the sample label immediately
+            # above the unit. Preserve numeric sample IDs and labels such as
+            # `PA`, whose case-folded spelling is also the unit `Pa`.
+            return leading[0]
+        if first_is_unit and not second_is_unit:
+            # Semantic tables may store unit first and sample second.
+            return leading[1]
     strings: list[str] = []
     for value in values.tolist():
         if pd.isna(value):
@@ -2426,14 +2658,23 @@ def _is_unit_label(label: str) -> bool:
     return unit in {
         "1",
         "%",
+        "a.u.",
+        "au",
         "c",
+        "cm^-1",
+        "count",
+        "degree",
         "degc",
         "hz",
+        "kj/m2",
+        "min",
+        "mins",
         "mv",
         "mn·m",
         "mpa",
         "mpa·s",
         "nm",
+        "nm^-1",
         "pa",
         "pa·s",
         "rad/s",
@@ -2444,6 +2685,7 @@ def _is_unit_label(label: str) -> bool:
         "µm",
         "μm",
         "°c",
+        "w/g",
     }
 
 

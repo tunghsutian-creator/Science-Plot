@@ -17,7 +17,9 @@ from sciplot_core.canvas.annotations import (
     ReviewAnnotationStyle,
 )
 from sciplot_core.canvas.assistant_contract import (
+    DataColumnMapping,
     DataMappingProposal,
+    DataSourceReference,
     DeclarativeTransformation,
 )
 from sciplot_core.canvas.inspector import CanvasInspectorField
@@ -158,17 +160,42 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         },
     )
     proposal = DataMappingProposal(
-        source_hashes={"raw/example.csv": "a" * 64},
-        column_roles={"Frequency": "x", "Storage modulus": "y"},
+        base_request_sha256="b" * 64,
+        provider="contract_probe",
+        sources=(
+            DataSourceReference(
+                source_id="example",
+                relative_path="raw/example.csv",
+                sha256="a" * 64,
+            ),
+        ),
+        columns=(
+            DataColumnMapping(
+                source_id="example",
+                source_column_index=0,
+                expected_header="Frequency",
+                output_column="Frequency",
+                role="x",
+            ),
+            DataColumnMapping(
+                source_id="example",
+                source_column_index=1,
+                expected_header="Storage modulus",
+                output_column="Storage modulus",
+                role="y",
+            ),
+        ),
         transformations=(
             DeclarativeTransformation(
                 transformation_type="unit_convert",
-                parameters={"column": "Frequency", "from": "rad/s", "to": "Hz"},
+                parameters={
+                    "column": "Frequency",
+                    "from_unit": "rad/s",
+                    "to_unit": "Hz",
+                },
             ),
         ),
         confidence=0.91,
-        requires_confirmation=True,
-        human_confirmed=False,
         rationale="Contract-only proposal; no data are executed.",
     )
     transaction = CanvasTransaction(
@@ -308,7 +335,10 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
     executable_mapping_rejected = _raises_value_error(
         lambda: DeclarativeTransformation(
             transformation_type="rename",
-            parameters={"mapping": {"x": "Frequency"}, "nested": {"script": "unsafe"}},
+            parameters={
+                "columns": {"x": "Frequency"},
+                "nested": {"script": "unsafe"},
+            },
         )
     )
     operation_top_level_rejected = _raises_value_error(

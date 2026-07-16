@@ -28,8 +28,9 @@ document and rendering kernel:
 - Veusz `Document` and `PlotWindow` remain the exact-current visual engine;
 - arbitrary Veusz properties, raw VSZ text editing, and dataset remapping are
   not exposed through the visual inspector;
-- datasets are visible but read-only until a validated
-  `DataMappingProposal` path is implemented.
+- datasets remain read-only in the visual inspector. Validated remapping now
+  occurs through a separately confirmed `DataMappingProposal` transaction,
+  never through arbitrary inspector edits.
 
 ## Bounded object matrix
 

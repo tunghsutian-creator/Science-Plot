@@ -3,9 +3,9 @@
 Status: active frontend source of truth, 2026-07-17. M1 is complete; M2 and M3
 are in progress. The adaptive visual, contextual editing, and non-exported
 review/promotion kernels are implemented. The first provider-neutral M3
-Assistant transaction kernel is also implemented. Real-session cutover,
-deterministic data-mapping execution, provider integration, composition, and
-the default `studio` migration remain active work.
+Assistant transaction kernel and deterministic M3 data-mapping executor are
+also implemented. Real-session cutover, provider/UI integration, composition,
+and the default `studio` migration remain active work.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -186,10 +186,12 @@ preserve whole-turn rollback. Cross-process rollback reloads the verified
 baseline into the existing `Document` and `PlotWindow`, restores the baseline
 page and zoom, and verifies the exact render before closing the transaction.
 
-AI is a participant in the document, not a separate hidden renderer. A real
-model/provider connection and deterministic `DataMappingProposal` execution
-remain later M3 increments; the current UI intentionally does not imitate a
-working chat box before those contracts exist.
+AI is a participant in the document, not a separate hidden renderer.
+Deterministic `DataMappingProposal` execution now exists behind the CLI and
+typed contract, but the real model/provider connection and Canvas
+request/confirmation UI remain later M3 increments. The current UI
+intentionally does not imitate a working chat box before that lifecycle is
+real.
 
 ### Compose
 
@@ -370,6 +372,46 @@ accessibility QA, not by application chrome tokens.
   task families pass independently; runtime smoke version 12 passes `28/28`;
 - automated probes use a typed provider stub and do not count as human
   sessions or prove real model quality.
+
+## M3 deterministic data-mapping executor delivered
+
+- `DataMappingProposal` version 2 declares exact source hashes, relative
+  paths, workbook sheet/header choices, source-column indices, expected
+  headers, output roles, sample labels, units, request routing, and only a
+  closed set of deterministic transformations;
+- proposal payloads cannot authorize themselves. A separate confirmation
+  receipt binds the exact proposal, request, and sources before execution;
+- preview is zero-write and excludes raw values; execution is atomic,
+  idempotent, source-hash verified, and leaves raw files unchanged;
+- consumption deterministically reproduces the confirmed outputs and rejects
+  changed request patches, effective-input redirection, output metadata or
+  bytes, and active or archived lineage tampering;
+- every execution creates an isolated standard SciPlot project with
+  `plot_request.json`, the exact confirmed base-request snapshot, immutable
+  request seed, mapped tables, proposal, confirmation, preview, execution
+  manifest, and transform ledger;
+- old branch lineage remains available as hash-verified superseded evidence,
+  while active lineage starts `confirmed mapping -> regenerated semantic
+  preparation`;
+- Studio blocks VSZ creation if a confirmed mapped sample would silently
+  disappear. Numeric sample IDs remain legend labels and unit/sample metadata
+  rows are excluded from curve values;
+- external transformations require stable IDs; declared comma-decimal numeric
+  roles are normalized deterministically, and numeric sort columns use numeric
+  rather than lexicographic order;
+- text fields reject boolean/number coercion, while the confirmed request
+  snapshot anchors raw authority and lineage even if an adjacent manifest hash
+  is changed together with the artifact;
+- mapping confirmation is blocked when a source becomes category-only, empty,
+  nonnumeric, or lacks finite values in an explicit x/y/z/value role;
+- registered headerless FTIR and two-workbook Agilent GPC/SEC sources complete
+  VSZ, PDF/TIFF, artifact QA, publication QA, and delivery with
+  `ready_to_use=true`;
+- the adversarial mapping probe passes `50/50`; runtime smoke version 13
+  passes `30/30`, including the mapped-project Studio lifecycle;
+- these non-interactive engineering receipts do not count as user confirmation
+  or human daily-use sessions. Provider wiring, natural-language request UI,
+  visible confirmation cards, and cancellation remain active M3 work.
 
 ## M2 implementation order
 

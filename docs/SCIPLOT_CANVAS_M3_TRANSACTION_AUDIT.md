@@ -201,11 +201,10 @@ engineering evidence, not source-controlled test data or real-data acceptance.
 
 ## Honest limitations and next M3 increments
 
-This increment does not:
+This visual-transaction increment does not itself:
 
 - call OpenAI, Codex, Luna, or another model;
 - provide a user-facing natural-language prompt workflow;
-- execute a `DataMappingProposal`;
 - prove scientific interpretation quality;
 - complete the six canonical natural-language acceptance tasks;
 - count toward M2's required human daily-use sessions;
@@ -216,8 +215,10 @@ Next M3 work:
 
 1. define the provider request/response boundary without coupling it to one
    model vendor;
-2. implement deterministic, source-hash-verified `DataMappingProposal`
-   execution and transform-ledger output;
+2. connect the separately implemented, source-hash-verified
+   `DataMappingProposal` executor documented in
+   `SCIPLOT_DATA_MAPPING_M3_AUDIT.md` to visible Canvas proposal and
+   confirmation cards;
 3. expose natural-language request and cancellation only after the provider
    lifecycle is real;
 4. run the canonical axis, series, legend, review-promotion, QA-repair, and

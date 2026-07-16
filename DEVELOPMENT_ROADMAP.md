@@ -4,9 +4,10 @@ Status: active product roadmap, 2026-07-17. M0 and M1 are complete; M2 and M3
 are in progress. M2's adaptive visual, contextual editing, and
 review/promotion kernels are complete, but its real-session retirement gate
 and default `studio` migration remain. M3's provider-neutral reversible
-`CanvasOperationBatch` transaction kernel is implemented; deterministic
-`DataMappingProposal` execution, a real assistant provider, and canonical
-natural-language acceptance tasks remain.
+`CanvasOperationBatch` transaction kernel and deterministic
+`DataMappingProposal` executor are implemented; a real assistant provider,
+Canvas request/confirmation UI, and canonical natural-language acceptance
+tasks remain.
 
 This roadmap supersedes the former assumption that native canvas work and
 multi-panel composition should remain deferred. Distribution to other users is
@@ -592,7 +593,7 @@ Deliverables:
   before/after values, and verification;
 - clear separation between canvas assistance and developer source repair.
 
-Implemented first increment, 2026-07-17:
+Implemented visual-transaction increment, 2026-07-17:
 
 - added an Assistant tab to the existing adaptive trailing utility pane rather
   than creating a second sidebar or a fake chat surface;
@@ -621,9 +622,72 @@ Implemented first increment, 2026-07-17:
   FTIR, rheology-temperature, flexural, TGA, and impact projects pass the
   lifecycle independently; runtime smoke version 12 passes `28/28`.
 
-This increment uses a typed provider stub. It does not call a model, does not
-execute `DataMappingProposal`, and does not count as a real human editing
-session. M3 therefore remains in progress.
+That visual increment uses a typed provider stub. It does not call a model and
+does not count as a real human editing session.
+
+Implemented deterministic data-mapping increment, 2026-07-17:
+
+- froze `DataMappingProposal` version 2 as a closed schema with explicit
+  relative source paths, source SHA-256 values, sheet/header declarations,
+  column indices, expected headers, output roles, units, sample labels,
+  rationale, and timezone-aware creation time;
+- separated proposal from authorization. The provider-visible proposal always
+  has `requires_confirmation=true` and `executable=false`; a separate
+  `DataMappingConfirmation` binds the exact proposal SHA, base-request SHA,
+  source hashes, operator, and immutable confirmation timestamp;
+- added a zero-write, raw-value-free preview and rejected path traversal,
+  stale requests, changed sources, forged receipts, executable content, and
+  unknown transformation fields;
+- required stable external transformation IDs so parsing cannot silently
+  change proposal identity;
+- made every textual field strictly typed instead of coercing booleans or
+  numbers into IDs, labels, units, options, or comparator values;
+- implemented only the closed deterministic transformations `rename`,
+  `select`, `exclude`, `drop_missing`, `sort`, `unit_convert`,
+  `derive_ratio`, `normalize_baseline`, and `aggregate_replicates`;
+- normalized declared comma-decimal numeric roles without changing text
+  labels, and made fully numeric sort keys use numeric rather than
+  lexicographic order;
+- moved data-readiness QA before confirmation: every source must remain
+  non-empty, retain an explicit x/y/z/value role, and contain finite numeric
+  values; category-only, empty, and nonnumeric outputs are rejected;
+- made execution atomic and idempotent, preserved raw-source hashes, wrote a
+  verified mapped-data package, exact confirmed base-request snapshot,
+  immutable request seed, mutable standard `plot_request.json`, proposal,
+  receipt, preview, execution manifest, and transform ledger without
+  replacing the source project or exact-current VSZ;
+- made every later consumer deterministically replay the confirmed mapping and
+  reject changed output bytes, output metadata, request patches, effective
+  input redirection, active/superseded ledger tampering, or non-canonical
+  transaction paths;
+- anchored raw authority and active/superseded lineage to the confirmed base
+  request and proposal, so coordinated changes to an artifact plus all of its
+  adjacent manifest hashes are also rejected;
+- archived any prior branch transform ledger as hash-verified superseded
+  evidence. The new active lineage starts with confirmed mapping and only then
+  records regenerated semantic preparation;
+- integrated verified mapped input with both deterministic run and Studio
+  preparation/export while keeping the original request `input` as raw-data
+  authority;
+- made request-only mapping projects recover complete rule axis/analysis
+  semantics without requiring an intake manifest;
+- added a mapped-series coverage gate so every confirmed sample label must
+  appear in the prepared Canvas series; numeric sample IDs are preserved as
+  labels, unit-like labels such as `PA` remain labels, and structured
+  unit/sample metadata rows cannot become data points;
+- validated complete Studio lifecycles on a registered 480-row headerless
+  FTIR source and two registered Agilent GPC/SEC workbooks (544 and 496
+  mapped rows). Both produce exact-current VSZ, PDF/TIFF, passed artifact and
+  publication QA, complete delivery, and `ready_to_use=true`; GPC preserves
+  both `8` and `9` series;
+- validated the ordinary deterministic `run` route on the mapped FTIR
+  candidate, with mapping then semantic-preparation lineage, passed QA, and a
+  complete delivery package;
+- the adversarial mapping probe passes `50/50`; runtime smoke version 13
+  passes `30/30`, including a full mapped-project Studio lifecycle;
+- the non-interactive receipts used for this engineering acceptance are
+  explicitly not user confirmations and do not count as human sessions or
+  prove model interpretation quality.
 
 Canonical acceptance tasks:
 
@@ -650,8 +714,11 @@ Current gate status:
 - exact rollback, stale/invalid target rejection, provider-disabled operation,
   raw-input immutability, save/reopen, QA, PDF/TIFF, and delivery pass
   automated gates;
-- deterministic `DataMappingProposal` execution, real provider integration,
-  and the canonical natural-language tasks remain open;
+- deterministic `DataMappingProposal` preview, confirmation, execution,
+  lineage, Studio coverage, QA, and delivery pass automated and two-family
+  authorized-real-data gates;
+- real provider integration, Canvas request/confirmation UI, and the canonical
+  natural-language tasks remain open;
 - automated probes do not satisfy M2's real-session cutover gate or the final
   user decision to retire the Veusz frontend.
 

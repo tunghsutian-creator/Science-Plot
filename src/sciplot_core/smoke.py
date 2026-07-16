@@ -15,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 12
+RUNTIME_SMOKE_VERSION = 13
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -362,6 +362,161 @@ def _write_synthetic_ftir(path: Path) -> dict[str, Any]:
         "point_count": len(rows),
         "real_data_evidence": False,
         "evidence_tier": "generated_synthetic_contract_fixture",
+    }
+
+
+def _data_mapping_studio_lifecycle_probe(
+    *,
+    run_root: Path,
+    source_path: Path,
+    base_request_path: Path,
+) -> dict[str, Any]:
+    from sciplot_core.canvas import (
+        DataColumnMapping,
+        DataMappingProposal,
+        DataSourceReference,
+    )
+    from sciplot_core.data_mapping import (
+        create_data_mapping_confirmation,
+        execute_data_mapping_proposal,
+        preview_data_mapping_proposal,
+    )
+    from sciplot_core.studio import (
+        export_studio_document,
+        prepare_studio_document,
+        publish_studio_export_run,
+    )
+
+    raw_hash_before = file_sha256(source_path)
+    proposal = DataMappingProposal(
+        proposal_id="runtime-smoke-mapping",
+        base_request_sha256=file_sha256(base_request_path),
+        provider="runtime_smoke_typed_provider",
+        sources=(
+            DataSourceReference(
+                source_id="runtime_ftir",
+                relative_path=source_path.name,
+                sha256=raw_hash_before,
+                header_row=None,
+                delimiter=",",
+            ),
+        ),
+        columns=(
+            DataColumnMapping(
+                source_id="runtime_ftir",
+                source_column_index=0,
+                output_column="wavenumber",
+                role="x",
+            ),
+            DataColumnMapping(
+                source_id="runtime_ftir",
+                source_column_index=1,
+                output_column="transmittance",
+                role="y",
+            ),
+        ),
+        sample_labels={"runtime_ftir": "runtime_ftir"},
+        unit_overrides={
+            "wavenumber": "cm^-1",
+            "transmittance": "%",
+        },
+        request_patch={
+            "recipe": "auto",
+            "rule_id": "ftir_spectrum",
+            "template": "stacked_curve",
+            "series_order": ["runtime_ftir"],
+        },
+        confidence=1.0,
+        rationale="Synthetic runtime mapping lifecycle fixture.",
+    )
+    preview = preview_data_mapping_proposal(
+        proposal,
+        source_root=source_path.parent,
+        request_path=base_request_path,
+    )
+    confirmation = create_data_mapping_confirmation(
+        proposal,
+        source_root=source_path.parent,
+        request_path=base_request_path,
+        confirmed_by="runtime_smoke_noninteractive_operator",
+    )
+    execution = execute_data_mapping_proposal(
+        proposal,
+        confirmation,
+        source_root=source_path.parent,
+        request_path=base_request_path,
+        output_root=run_root / "mapped_projects",
+    )
+    project_dir = Path(str(execution["output_root"]))
+    prepared = prepare_studio_document(project_dir)
+    document_path = Path(str(prepared["document"]))
+    exported = export_studio_document(
+        document_path,
+        formats=["pdf", "tiff_300"],
+    )
+    published = publish_studio_export_run(
+        project_dir=project_dir,
+        request_path=Path(str(prepared["request"])),
+        document_path=document_path,
+        exports=list(exported.get("exports") or []),
+    )
+    manifest_path = Path(str(published["manifest"]))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    coverage = (
+        manifest.get("data_mapping_coverage")
+        if isinstance(manifest.get("data_mapping_coverage"), dict)
+        else {}
+    )
+    transform = (
+        manifest.get("transform_ledger")
+        if isinstance(manifest.get("transform_ledger"), dict)
+        else {}
+    )
+    operations = [
+        str(step.get("operation") or "")
+        for step in transform.get("steps", [])
+        if isinstance(step, dict)
+    ]
+    raw_hash_after = file_sha256(source_path)
+    passed = bool(
+        preview.get("writes_performed") is False
+        and execution.get("raw_inputs_unchanged") is True
+        and raw_hash_before == raw_hash_after
+        and Path(str(execution["request_candidate"])).name
+        == "plot_request.json"
+        and int(prepared.get("series_count") or 0) == 1
+        and coverage.get("status") == "passed"
+        and coverage.get("actual_series_labels") == ["runtime_ftir"]
+        and operations[:2]
+        == [
+            "execute_confirmed_data_mapping_proposal",
+            "reformat_and_order_ftir_spectra",
+        ]
+        and manifest.get("ready_to_use") is True
+        and (manifest.get("qa") or {}).get("status") == "passed"
+        and (manifest.get("delivery_package") or {}).get("complete") is True
+    )
+    return {
+        "passed": passed,
+        "preview_status": preview.get("status"),
+        "execution": str(project_dir / "execution.json"),
+        "request_candidate": execution.get("request_candidate"),
+        "document": str(document_path),
+        "manifest": str(manifest_path),
+        "raw_hash_before": raw_hash_before,
+        "raw_hash_after": raw_hash_after,
+        "series_count": prepared.get("series_count"),
+        "coverage": coverage,
+        "operations": operations,
+        "qa_status": (manifest.get("qa") or {}).get("status"),
+        "publication_status": (
+            (manifest.get("qa") or {}).get("publication") or {}
+        ).get("status"),
+        "delivery_complete": (
+            manifest.get("delivery_package") or {}
+        ).get("complete"),
+        "ready_to_use": manifest.get("ready_to_use"),
+        "real_data_evidence": False,
     }
 
 
@@ -728,10 +883,26 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         )
         checks.append(
             _check(
-                "canvas_contract_v5",
+                "canvas_contract_v6",
                 "CanvasSession, active Assistant transactions, journal outbox, contextual inspector, typed edits, native review promotion, point selection, and mapping proposals roundtrip without Qt",
                 canvas_contract_probe.get("status") == "passed",
                 detail=canvas_contract_probe,
+            )
+        )
+        from sciplot_core.data_mapping_probe import run_data_mapping_probe
+
+        data_mapping_probe = run_data_mapping_probe(
+            output_root=run_root / "data_mapping"
+        )
+        checks.append(
+            _check(
+                "deterministic_data_mapping_lifecycle",
+                "DataMappingProposal v2 previews without writes, requires an "
+                "external confirmation receipt, executes atomically, preserves "
+                "raw sources, records transform lineage, and rejects stale or "
+                "tampered state",
+                data_mapping_probe.get("status") == "passed",
+                detail=data_mapping_probe,
             )
         )
 
@@ -903,6 +1074,21 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         project_dir = Path(str(prepared["project_dir"]))
         request_path = Path(str(prepared["request"]))
         document_path = Path(str(prepared["document"]))
+        mapped_studio_probe = _data_mapping_studio_lifecycle_probe(
+            run_root=run_root,
+            source_path=fixture_path,
+            base_request_path=request_path,
+        )
+        checks.append(
+            _check(
+                "mapped_project_studio_lifecycle",
+                "A confirmed mapping candidate uses the standard project "
+                "entrypoint, preserves raw input, retains every mapped sample, "
+                "records causal lineage, and completes VSZ, QA, and delivery",
+                mapped_studio_probe.get("passed") is True,
+                detail=mapped_studio_probe,
+            )
+        )
         from sciplot_core.canvas_probe import run_canvas_characterization
 
         canvas_characterization = run_canvas_characterization(

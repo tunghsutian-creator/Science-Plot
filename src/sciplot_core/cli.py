@@ -192,6 +192,16 @@ def _build_parser() -> argparse.ArgumentParser:
         default=Path(".tmp_verify") / "canvas_assistant",
     )
     canvas_assistant_probe_parser.add_argument("--json", action="store_true")
+    data_mapping_probe_parser = subparsers.add_parser(
+        "data-mapping-probe",
+        help=argparse.SUPPRESS,
+    )
+    data_mapping_probe_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(".tmp_verify") / "data_mapping",
+    )
+    data_mapping_probe_parser.add_argument("--json", action="store_true")
 
     render_parser = subparsers.add_parser("render", help="Render a source through the SciPlot renderer.")
     render_parser.add_argument("input", type=Path)
@@ -323,6 +333,49 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     cleanup_show_parser.add_argument("target", type=Path)
     cleanup_show_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+
+    mapping_parser = subparsers.add_parser(
+        "mapping",
+        help="Preview, confirm, execute, or inspect a typed DataMappingProposal.",
+    )
+    mapping_subparsers = mapping_parser.add_subparsers(
+        dest="mapping_command",
+        required=True,
+    )
+    mapping_preview_parser = mapping_subparsers.add_parser(
+        "preview",
+        help="Validate a proposal and compute metadata-only output changes without writing data.",
+    )
+    mapping_preview_parser.add_argument("proposal", type=Path)
+    mapping_preview_parser.add_argument("--source-root", type=Path, required=True)
+    mapping_preview_parser.add_argument("--request", type=Path, required=True)
+    mapping_preview_parser.add_argument("--json", action="store_true")
+    mapping_confirm_parser = mapping_subparsers.add_parser(
+        "confirm",
+        help="Create a user confirmation receipt bound to the exact proposal, request, and source hashes.",
+    )
+    mapping_confirm_parser.add_argument("proposal", type=Path)
+    mapping_confirm_parser.add_argument("--source-root", type=Path, required=True)
+    mapping_confirm_parser.add_argument("--request", type=Path, required=True)
+    mapping_confirm_parser.add_argument("--by", required=True)
+    mapping_confirm_parser.add_argument("--out", type=Path)
+    mapping_confirm_parser.add_argument("--json", action="store_true")
+    mapping_execute_parser = mapping_subparsers.add_parser(
+        "execute",
+        help="Execute a confirmed proposal atomically and write a mapped request candidate.",
+    )
+    mapping_execute_parser.add_argument("proposal", type=Path)
+    mapping_execute_parser.add_argument("--confirmation", type=Path, required=True)
+    mapping_execute_parser.add_argument("--source-root", type=Path, required=True)
+    mapping_execute_parser.add_argument("--request", type=Path, required=True)
+    mapping_execute_parser.add_argument("--out", type=Path, required=True)
+    mapping_execute_parser.add_argument("--json", action="store_true")
+    mapping_show_parser = mapping_subparsers.add_parser(
+        "show",
+        help="Verify and show a completed data mapping execution.",
+    )
+    mapping_show_parser.add_argument("target", type=Path)
+    mapping_show_parser.add_argument("--json", action="store_true")
 
     batch_parser = subparsers.add_parser("batch", help="Run a batch over a data folder.")
     batch_parser.add_argument("input_dir", type=Path)
@@ -457,6 +510,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "workbench",
         "canvas-probe",
         "canvas-assistant-probe",
+        "data-mapping-probe",
     }
     subparsers._choices_actions[:] = [  # type: ignore[attr-defined]
         action for action in subparsers._choices_actions if action.dest not in hidden_compatibility_commands
@@ -630,6 +684,18 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(f"SciPlot Canvas Assistant probe: {payload['status']}")
+                print(payload["artifacts"]["summary"])
+            return 0 if payload["status"] == "passed" else 1
+        if args.command == "data-mapping-probe":
+            from sciplot_core.data_mapping_probe import (
+                run_data_mapping_probe,
+            )
+
+            payload = run_data_mapping_probe(output_root=args.out)
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot data mapping probe: {payload['status']}")
                 print(payload["artifacts"]["summary"])
             return 0 if payload["status"] == "passed" else 1
         if args.command == "render":
@@ -820,6 +886,109 @@ def main(argv: list[str] | None = None) -> int:
                     print(
                         f"{payload.get('cleaned_data', {}).get('path', '')} "
                         f"ready={payload.get('ready_for_normal_mode', False)}"
+                    )
+                return 0
+        if args.command == "mapping":
+            from sciplot_core.data_mapping import (
+                create_data_mapping_confirmation,
+                execute_data_mapping_proposal,
+                load_data_mapping_execution,
+                preview_data_mapping_proposal,
+                write_data_mapping_confirmation,
+            )
+
+            proposal_path = _resolve_input(
+                args.proposal,
+                kind="DataMappingProposal",
+            ) if hasattr(args, "proposal") else None
+            if args.mapping_command == "preview":
+                payload = preview_data_mapping_proposal(
+                    proposal_path,
+                    source_root=_resolve_input(
+                        args.source_root,
+                        kind="Data mapping source root",
+                    ),
+                    request_path=_resolve_input(
+                        args.request,
+                        kind="Plot request",
+                    ),
+                )
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(
+                        f"{payload['status']}: "
+                        f"{len(payload['sources'])} source(s), "
+                        "no writes performed"
+                    )
+                return 0
+            if args.mapping_command == "confirm":
+                confirmation = create_data_mapping_confirmation(
+                    proposal_path,
+                    source_root=_resolve_input(
+                        args.source_root,
+                        kind="Data mapping source root",
+                    ),
+                    request_path=_resolve_input(
+                        args.request,
+                        kind="Plot request",
+                    ),
+                    confirmed_by=args.by,
+                )
+                destination = (
+                    args.out.expanduser()
+                    if args.out is not None
+                    else proposal_path.parent / "confirmation.json"
+                )
+                written = write_data_mapping_confirmation(
+                    destination,
+                    confirmation,
+                )
+                payload = {
+                    **confirmation.to_dict(),
+                    "path": str(written),
+                }
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(written)
+                return 0
+            if args.mapping_command == "execute":
+                payload = execute_data_mapping_proposal(
+                    proposal_path,
+                    _resolve_input(
+                        args.confirmation,
+                        kind="Data mapping confirmation",
+                    ),
+                    source_root=_resolve_input(
+                        args.source_root,
+                        kind="Data mapping source root",
+                    ),
+                    request_path=_resolve_input(
+                        args.request,
+                        kind="Plot request",
+                    ),
+                    output_root=args.out.expanduser(),
+                )
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(payload["request_candidate"])
+                return 0
+            if args.mapping_command == "show":
+                payload = load_data_mapping_execution(
+                    _resolve_input(
+                        args.target,
+                        kind="Data mapping execution",
+                    )
+                )
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(
+                        f"{payload['status']}: "
+                        f"{payload['proposal_id']} -> "
+                        f"{payload['request_candidate']}"
                     )
                 return 0
         if args.command == "batch":
