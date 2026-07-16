@@ -20,7 +20,12 @@ def portable_sciplot_prelude(*, directory_var: str = "PROJECT_DIR") -> list[str]
     """Return a zsh prelude that survives moved projects and installed CLIs."""
 
     directory_name = _shell_name(directory_var)
-    runtime_repo = Path(os.environ.get("SCIPLOT_REPO") or REPO_ROOT).expanduser().resolve()
+    source_repo = REPO_ROOT
+    runtime_repo = Path(
+        os.environ.get("SCIPLOT_RUNTIME_REPO")
+        or os.environ.get("SCIPLOT_REPO")
+        or REPO_ROOT
+    ).expanduser().resolve()
     source_root = Path(
         os.environ.get("SCIPLOT_SOURCE_ROOT") or Path(__file__).resolve().parents[1]
     ).expanduser().resolve()
@@ -36,7 +41,8 @@ def portable_sciplot_prelude(*, directory_var: str = "PROJECT_DIR") -> list[str]
         Path(sys.executable).absolute(),
     )
     source_wrapper = source_root.parent / "skill" / "scripts" / "sciplot"
-    fallback_repo = shlex.quote(str(runtime_repo))
+    fallback_repo = shlex.quote(str(source_repo))
+    fallback_runtime_repo = shlex.quote(str(runtime_repo))
     fallback_source_root = shlex.quote(str(source_root))
     fallback_python = shlex.quote(str(runtime_python))
     fallback_wrapper = shlex.quote(str(source_wrapper))
@@ -45,6 +51,7 @@ def portable_sciplot_prelude(*, directory_var: str = "PROJECT_DIR") -> list[str]
         "set -euo pipefail",
         f'{directory_name}="${{0:A:h}}"',
         f"FALLBACK_REPO={fallback_repo}",
+        f"FALLBACK_RUNTIME_REPO={fallback_runtime_repo}",
         f"FALLBACK_SOURCE_ROOT={fallback_source_root}",
         f"FALLBACK_PYTHON={fallback_python}",
         f"FALLBACK_WRAPPER={fallback_wrapper}",
@@ -97,6 +104,7 @@ def portable_sciplot_prelude(*, directory_var: str = "PROJECT_DIR") -> list[str]
         '|| "${SCIPLOT_CMD}" == "${FALLBACK_REPO}/skill/scripts/sciplot" '
         "]]; then",
         '  export SCIPLOT_REPO="${FALLBACK_REPO}"',
+        '  export SCIPLOT_RUNTIME_REPO="${FALLBACK_RUNTIME_REPO}"',
         '  if [[ ! -d "${SCIPLOT_SOURCE_ROOT:-}" && -d "${FALLBACK_SOURCE_ROOT}" ]]; then',
         '    export SCIPLOT_SOURCE_ROOT="${FALLBACK_SOURCE_ROOT}"',
         "  fi",

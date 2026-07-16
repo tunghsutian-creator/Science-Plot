@@ -9,6 +9,20 @@ Use the repository CLI. Do not make one-off Matplotlib figures or copy style,
 axis, legend, unit or extraction constants into ad-hoc scripts. Veusz is the
 only production renderer; `studio/document.vsz` is the advanced-editing truth.
 
+## Active development direction
+
+For product-development work, read `DEVELOPMENT_ROADMAP.md` before changing the
+GUI, AI integration, annotations, composition, or Studio ownership. The current
+Veusz MainWindow and browser Result Review are protected transition baselines,
+not the final frontend.
+
+The target is a focused native SciPlot Canvas that embeds Veusz `Document` and
+`PlotWindow`, sends both user and AI edits through typed operations, and keeps
+the current VSZ as visual authority. Do not rebuild every arbitrary Veusz
+property, add a second renderer, automate the Veusz GUI with mouse clicks, or
+remove the Advanced Editor recovery route before the roadmap's real-use
+retirement gate passes.
+
 ## Daily route
 
 1. Check readiness:
@@ -73,6 +87,9 @@ only production renderer; `studio/document.vsz` is the advanced-editing truth.
 Generated `.command` launchers support `--check` for a non-interactive real
 Veusz load check. They resolve SciPlot through `SCIPLOT_REPO`, an enclosing
 checkout, the generation-time fallback, or an installed `sciplot` command.
+For an isolated development worktree, keep `SCIPLOT_REPO`/`SCIPLOT_SOURCE_ROOT`
+on the development source and set `SCIPLOT_RUNTIME_REPO` to the trusted
+checkout that owns the compiled Veusz helpers and virtual environment.
 
 ## State handling
 

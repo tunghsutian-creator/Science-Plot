@@ -101,6 +101,15 @@ def _build_parser() -> argparse.ArgumentParser:
     smoke_parser.add_argument("--out", type=Path, default=Path(".tmp_verify") / "runtime_smoke")
     smoke_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
 
+    canvas_probe_parser = subparsers.add_parser("canvas-probe", help=argparse.SUPPRESS)
+    canvas_probe_parser.add_argument("document", type=Path)
+    canvas_probe_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(".tmp_verify") / "canvas_characterization",
+    )
+    canvas_probe_parser.add_argument("--json", action="store_true")
+
     render_parser = subparsers.add_parser("render", help="Render a source through the SciPlot renderer.")
     render_parser.add_argument("input", type=Path)
     render_parser.add_argument("--template", help="Template id. Optional when --auto is given.")
@@ -357,7 +366,14 @@ def _build_parser() -> argparse.ArgumentParser:
     publication_layout_parser.add_argument("--height-mm", type=float, default=55.0)
     publication_layout_parser.add_argument("--json", action="store_true")
 
-    hidden_compatibility_commands = {"one-step", "quick", "prepare", "intake", "workbench"}
+    hidden_compatibility_commands = {
+        "one-step",
+        "quick",
+        "prepare",
+        "intake",
+        "workbench",
+        "canvas-probe",
+    }
     subparsers._choices_actions[:] = [  # type: ignore[attr-defined]
         action for action in subparsers._choices_actions if action.dest not in hidden_compatibility_commands
     ]
@@ -409,6 +425,23 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(f"SciPlot runtime smoke: {payload['status']}")
+                print(payload["artifacts"]["summary"])
+            return 0 if payload["status"] == "passed" else 1
+        if args.command == "canvas-probe":
+            from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+            original_argv = list(sys.argv[1:] if argv is None else argv)
+            maybe_reexec_with_qt_runtime(original_argv)
+            from sciplot_core.canvas_probe import run_canvas_characterization
+
+            payload = run_canvas_characterization(
+                _resolve_input(args.document, kind="VSZ document"),
+                output_root=args.out,
+            )
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot Canvas characterization: {payload['status']}")
                 print(payload["artifacts"]["summary"])
             return 0 if payload["status"] == "passed" else 1
         if args.command == "render":

@@ -15,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 7
+RUNTIME_SMOKE_VERSION = 8
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -181,7 +181,13 @@ def _portable_launcher_probe(
     results: list[dict[str, Any]] = []
     env = os.environ.copy()
     if ignore_runtime_overrides:
-        for key in ("SCIPLOT_REPO", "SCIPLOT_SOURCE_ROOT", "SCIPLOT_PYTHON"):
+        for key in (
+            "SCIPLOT_REPO",
+            "SCIPLOT_RUNTIME_REPO",
+            "SCIPLOT_VEUSZ_ROOT",
+            "SCIPLOT_SOURCE_ROOT",
+            "SCIPLOT_PYTHON",
+        ):
             env.pop(key, None)
     for name in (
         "Open_in_SciPlot_Studio.command",
@@ -697,6 +703,19 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 detail=wrapper_probe,
             )
         )
+        from sciplot_core.canvas_probe import run_canvas_contract_probe
+
+        canvas_contract_probe = run_canvas_contract_probe(
+            output_root=run_root / "canvas_contract"
+        )
+        checks.append(
+            _check(
+                "canvas_contract_v1",
+                "CanvasSession, typed operations, review annotations, and mapping proposals roundtrip without Qt",
+                canvas_contract_probe.get("status") == "passed",
+                detail=canvas_contract_probe,
+            )
+        )
 
         from sciplot_core.doctor import doctor_payload
         from sciplot_core.studio import (
@@ -866,6 +885,20 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         project_dir = Path(str(prepared["project_dir"]))
         request_path = Path(str(prepared["request"]))
         document_path = Path(str(prepared["document"]))
+        from sciplot_core.canvas_probe import run_canvas_characterization
+
+        canvas_characterization = run_canvas_characterization(
+            document_path,
+            output_root=run_root / "canvas_characterization",
+        )
+        checks.append(
+            _check(
+                "embedded_canvas_characterization",
+                "Embedded PlotWindow supports live typed redraw, interaction, history, recovery, conflict detection, save/reopen, and exact export",
+                canvas_characterization.get("status") == "passed",
+                detail=canvas_characterization,
+            )
+        )
         launcher_probe = _portable_launcher_probe(project_dir)
         checks.append(
             _check(

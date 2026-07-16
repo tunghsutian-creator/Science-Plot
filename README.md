@@ -1,10 +1,37 @@
 # SciPlot
 
-SciPlot 是面向材料科研日常出图的本地、可复现工作流。它把原始仪器数据变成可继续编辑的
-`studio/document.vsz`，由 Veusz 完成生产渲染，并交付 PDF、300 dpi TIFF、数据工作簿、
-分析记录和机器可读 QA。Luna/Codex 只在确定性程序无法识别数据或表达规则时介入。
+SciPlot 是面向材料科研日常出图的本地、可复现、AI-enhanced 工作流。它把原始仪器数据变成
+可继续编辑的 `studio/document.vsz`，由 Veusz 完成生产渲染，并交付 PDF、300 dpi TIFF、
+数据工作簿、分析记录和机器可读 QA。Luna/Codex 用于理解新的科学意图、长尾数据和复杂
+视觉修改；已覆盖路径必须在没有 AI 时独立工作。
 
-正式渲染器只有 Veusz。Matplotlib 公共回退和自研高级图形编辑器均不属于产品路线。
+正式渲染器只有 Veusz。当前完整 Veusz GUI 仍是高级编辑和恢复入口，但产品路线已经确定：
+SciPlot 将用聚焦科研任务的原生实时 Canvas 取代 Veusz `MainWindow` 作为默认前端，同时保留
+Veusz `Document`、`PlotWindow`、命令接口、VSZ 和导出内核。SciPlot 不开发第二个渲染器，
+也不重造覆盖任意 Veusz 属性的通用高级编辑器。
+
+完整阶段、架构边界和验收门见
+[DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)。
+
+## 产品方向：AI-enhanced Canvas
+
+未来的日常工作台遵循三个分工：
+
+- 用户在实时画布上选择、拖动、对齐、圈选、批注和拼图；
+- AI 把自然语言、选择上下文和批注转换为经过验证的结构化数据映射或画布操作；
+- 确定性程序执行数据变换、Veusz 文档修改、撤销/恢复、QA、导出和交付。
+
+AI 和用户必须经过同一套操作接口。AI 不通过鼠标点击 Veusz GUI，不直接把 VSZ 当任意文本
+改写，也不把不可追溯的“最终清洗数据”作为交付结果。重复成功的 AI 决策应固化为规则、
+fixture、策略或 QA，使下一次能够少用或不用 AI。
+
+项目的目标不是提高 AI 占比，而是让 AI 只处理未知性。对于已验收的数据和绘图规则，
+程序应直接返回 `ready_to_use=true`，无需 AI 看图；不确定时必须停在确认或修复状态。
+
+当前完成到 M0：统一 Canvas 会话、类型化操作、审阅批注和数据映射合同已经建立，并已在
+授权真实曲线、人工编辑 VSZ 和真实四面板云图上证明嵌入式 `PlotWindow` 的实时重绘、
+撤销/重做、恢复快照、保存重开和精确导出。用户可见的 SciPlot Canvas shell 属于下一阶段
+M1，因此当前日常入口仍保持不变。
 
 ## 日常主流程
 
@@ -54,7 +81,7 @@ skill/scripts/sciplot studio PATH \
 `--rule` 是明确的科学语义选择，会绕过自动猜测；`--template` 是明确的呈现选择，可单独使用，
 也可省略并采用该规则的默认模板。Luna/Codex 可以根据用户自然语言直接填写这两个参数。
 
-## 高级修图
+## 高级修图（过渡期恢复入口）
 
 需要高级修正时，打开项目内的 `Open_in_Veusz.command`，或运行：
 
@@ -69,6 +96,8 @@ skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
 ```
 
 这一步不会重新生成 VSZ。手工保存的 `.vsz` 是视觉权威；显式再生成前会先归档旧文档。
+该入口将在 SciPlot Canvas 覆盖实时编辑、批注、AI 操作和拼图并通过真实日常使用验收后，
+退为隐藏的恢复/开发入口。
 
 对于不带 SciPlot project/request 的独立 Veusz master，可直接导出到指定目录：
 
@@ -88,6 +117,10 @@ skill/scripts/sciplot studio FIGURE.vsz \
 生成的 `Open_in_*.command` 和 `Export_Edited_Veusz.command` 可在 delivery 移动后
 通过 `SCIPLOT_REPO`、上级目录或已安装的 `sciplot` 自动定位运行时；给启动器传
 `--check` 可使用真实 Veusz Qt 加载路径完成无交互检查。
+
+开发 worktree 可以用 `SCIPLOT_RUNTIME_REPO` 指向另一个持有已编译 Veusz helper 和
+`.venv` 的可信 checkout，同时通过 `SCIPLOT_SOURCE_ROOT` 执行当前分支源码。源码根、
+Veusz/Python 运行时根和交付项目路径因此不再混为一个概念。
 
 ## 输出结构
 
@@ -126,6 +159,7 @@ PROJECT/
   GPC/SEC、扭矩和溶胀等生产规则；
 - 同指标多样品比较、谱图堆叠、replicate 处理和事件段选择；
 - Veusz `.vsz` 生成、完整 Veusz 高级编辑和 exact-current export；
+- M0 Canvas 内核合同、嵌入式 PlotWindow 生命周期探针、稳定对象 ID、恢复快照和冲突门禁；
 - 60/120/180 mm 单图尺寸以及 183 mm 组合图布局；
 - publication intent、transform ledger、研究模型和证据绑定；
 - PDF 页面/字体/尺寸/可见墨迹、TIFF 分辨率、PDF-TIFF 配对和哈希 QA；
@@ -221,8 +255,9 @@ python3 -m venv .venv
 - `src/sciplot_core/_vendor/`：迁移兼容层，默认不直接修改；
 - `third_party/veusz/`：固定版本的上游生产渲染器与高级编辑器。
 
-第三方许可见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。GitHub 仓库只发布运行所需内容；
-本地参考数据、开发日志及架构/路线文档保留在开发工作区，不进入最小运行发行版。
+第三方许可见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。GitHub 仓库只发布运行所需内容
+和产品方向合同；本地参考数据、详细开发日志及私有验收材料保留在开发工作区，不进入最小运行
+发行版。
 
 `skill/scripts/sciplot` 会把当前 checkout 的 `src/` 加入 Python 导入路径，因此普通
 Git worktree 即使没有自己的 `.venv`，也能使用系统 Python 或 `SCIPLOT_PYTHON`
