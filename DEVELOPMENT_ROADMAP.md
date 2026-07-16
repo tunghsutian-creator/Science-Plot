@@ -5,8 +5,10 @@ are in progress. M2's adaptive visual, contextual editing, and
 review/promotion kernels are complete, but its real-session retirement gate
 and default `studio` migration remain. M3's provider-neutral reversible
 `CanvasOperationBatch` transaction kernel and deterministic
-`DataMappingProposal` executor are implemented; a real assistant provider,
-Canvas request/confirmation UI, and canonical natural-language acceptance
+`DataMappingProposal` executor are implemented. Its provider-neutral,
+hash-bound request lifecycle and injected-provider Canvas UI are also
+implemented; a production model-provider adapter, Canvas execution of a
+confirmed data-mapping proposal, and canonical natural-language acceptance
 tasks remain.
 
 This roadmap supersedes the former assumption that native canvas work and
@@ -689,6 +691,48 @@ Implemented deterministic data-mapping increment, 2026-07-17:
   explicitly not user confirmations and do not count as human sessions or
   prove model interpretation quality.
 
+Implemented provider lifecycle and visible request UI increment, 2026-07-17:
+
+- froze closed, provider-neutral descriptors, requests, progress events,
+  responses, and persisted request records. Each response is bound to the
+  canonical SHA-256 of the complete request, provider, transaction, and base
+  document revision;
+- promoted `CanvasSession` to version 5 and persisted the request record with
+  the active transaction while retaining safe loading of versions 1-4;
+- made the provider context a bounded zero-trust schema containing only the
+  current selection, aggregate document inventory, bounded review summaries,
+  and sanitized QA state. Unknown nested fields, inconsistent selection,
+  declared or embedded raw arrays, and payloads above 256 KB are rejected;
+- added an injected `AssistantProvider` protocol and Qt worker lifecycle so a
+  provider never executes on the GUI thread. Progress is contiguous and
+  identity-checked; cooperative cancellation discards a late proposal rather
+  than letting it mutate the document;
+- added a real request composer, shared-context disclosure, in-place progress
+  and Stop, provider understanding and warnings, complete Before/After cards,
+  and state-driven Accept, Reject, Commit, Undo, and whole-turn rollback inside
+  the existing trailing utility pane;
+- kept one primary action per state, removed horizontal overflow, demoted
+  provider/model diagnostics, and prioritized the complete proposal over
+  repeated context while a decision is pending;
+- made request, progress, cancellation, completion, and failure persistence
+  atomic. A persistence or preview failure restores the previous session
+  instead of leaving a request record and pending batch out of sync;
+- reconciled an in-flight persisted request as interrupted on reopen, ignored
+  late queued progress after cancellation, and processed the final queued
+  cancellation result during bounded window shutdown;
+- retained an honest provider-disabled state. Ordinary Canvas editing, review,
+  save, exact export, QA, and delivery remain available with no provider;
+- made window shutdown bounded even for providers that do not advertise a
+  user-facing Stop action; an internal cancellation token and persisted
+  cancellation state still reject any late result;
+- the cumulative pure Canvas contract passes `32/32`; the threaded Assistant
+  lifecycle and fault-injection probe passes `29/29`; runtime smoke version 14
+  passes `30/30`.
+
+This increment is verified with an injected deterministic provider. It proves
+the integration boundary and UI lifecycle, not the scientific quality of a
+production model.
+
 Canonical acceptance tasks:
 
 - rename and format an axis from natural language;
@@ -717,7 +761,11 @@ Current gate status:
 - deterministic `DataMappingProposal` preview, confirmation, execution,
   lineage, Studio coverage, QA, and delivery pass automated and two-family
   authorized-real-data gates;
-- real provider integration, Canvas request/confirmation UI, and the canonical
+- provider-neutral request, progress, cancellation, response, persistence,
+  and `CanvasOperationBatch` preview, accept/reject, and rollback UI pass with
+  an injected deterministic provider;
+- a production model-provider adapter, deterministic execution of a confirmed
+  `DataMappingProposal` from the Canvas decision card, and the canonical
   natural-language tasks remain open;
 - automated probes do not satisfy M2's real-session cutover gate or the final
   user decision to retire the Veusz frontend.

@@ -8,9 +8,15 @@ from typing import Any
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from sciplot_core.canvas.operations import CanvasOperationBatch
+from sciplot_core.canvas.provider import (
+    AssistantProgressEvent,
+    AssistantProvider,
+    AssistantResponse,
+)
 from sciplot_gui.annotation_overlay import AnnotationOverlayController
 from sciplot_gui.assistant_controller import AssistantTransactionCoordinator
 from sciplot_gui.assistant_panel import AssistantTransactionPanel
+from sciplot_gui.assistant_runtime import AssistantRequestRunner
 from sciplot_gui.document_controller import DocumentController
 from sciplot_gui.inspectors import ContextualInspectorPanel, ReviewInspectorPanel
 from sciplot_gui.theme import (
@@ -29,6 +35,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         workspace: CanvasWorkspace,
         *,
         interactive: bool = True,
+        assistant_provider: AssistantProvider | None = None,
     ) -> None:
         super().__init__()
         self.workspace = workspace
@@ -63,6 +70,10 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             parent=self,
         )
         self.assistant = AssistantTransactionCoordinator(self.controller)
+        self.assistant_runner = AssistantRequestRunner(
+            assistant_provider,
+            parent=self,
+        )
         self.plot_window = self.controller.adapter.plot_window
         self.plot_window.viewtoolbar.hide()
         self._structural_qa_timer = QtCore.QTimer(self)
@@ -72,6 +83,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
 
         self._build_toolbar()
         self._build_central_workspace()
+        self._connect_assistant_runner()
         self._build_status_bar()
         self._build_menus()
         self._apply_theme()
@@ -456,6 +468,13 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         review_panel.removeRequested.connect(self._remove_review_annotation)
 
         assistant_panel = AssistantTransactionPanel()
+        assistant_panel.set_provider(self.assistant_runner.descriptor)
+        assistant_panel.requestSubmitted.connect(
+            self._assistant_request_submitted
+        )
+        assistant_panel.cancelRequestRequested.connect(
+            self._assistant_cancel_request_triggered
+        )
         assistant_panel.pauseRequested.connect(self._assistant_pause_triggered)
         assistant_panel.resumeRequested.connect(self._assistant_pause_triggered)
         assistant_panel.acceptRequested.connect(self._assistant_accept_triggered)
@@ -914,6 +933,14 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.plot_window.sigUpdatePage.connect(self._on_page_updated)
         self.plot_window.sigPointPicked.connect(self._on_point_picked)
 
+    def _connect_assistant_runner(self) -> None:
+        self.assistant_runner.progress.connect(self._assistant_provider_progress)
+        self.assistant_runner.response.connect(self._assistant_provider_response)
+        self.assistant_runner.failed.connect(self._assistant_provider_failed)
+        self.assistant_runner.activeChanged.connect(
+            self._assistant_provider_active_changed
+        )
+
     def _refresh_contextual_inspector(self) -> None:
         model = self.controller.contextual_inspector()
         self.inspector_panel.set_model(model)
@@ -1024,11 +1051,166 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
     def _refresh_assistant_panel(self) -> None:
         if not hasattr(self, "assistant_panel"):
             return
+        self.assistant_panel.set_provider(self.assistant_runner.descriptor)
         self.assistant_panel.set_transaction(
             self.assistant.transaction,
             context=self.assistant.context_summary(),
             can_undo=self.assistant.can_undo_batch,
         )
+
+    def submit_assistant_request(self, intent: str) -> dict[str, Any]:
+        descriptor = self.assistant_runner.descriptor
+        if descriptor is None:
+            raise RuntimeError("No Assistant provider is connected.")
+        if not self._resolve_staged_fields("ask the Assistant"):
+            raise RuntimeError(
+                "Resolve staged inspector or review fields before Assistant use."
+            )
+        request = self.assistant.start_request(
+            descriptor=descriptor,
+            intent=intent,
+        )
+        try:
+            self.assistant_runner.submit(request)
+        except Exception as exc:
+            self.assistant.fail_request(f"{type(exc).__name__}: {exc}")
+            raise
+        self.assistant_panel.mark_request_submitted()
+        self._open_assistant_workspace()
+        self.status_message.setText("Assistant is interpreting the figure request")
+        self._sync_ui()
+        return request.to_dict()
+
+    def cancel_assistant_request(self) -> dict[str, Any]:
+        entry = self.assistant.request_cancel()
+        try:
+            self.assistant_runner.cancel()
+        except Exception as exc:
+            self.assistant.fail_request(f"Cancellation failed: {exc}")
+            raise
+        self.status_message.setText(
+            "Stopping Assistant; late proposals will be discarded"
+        )
+        self._sync_ui()
+        return entry
+
+    @QtCore.pyqtSlot(str)
+    def _assistant_request_submitted(self, intent: str) -> None:
+        self._run_ui_action(
+            "Assistant request failed",
+            lambda: self.submit_assistant_request(intent),
+        )
+
+    @QtCore.pyqtSlot()
+    def _assistant_cancel_request_triggered(self) -> None:
+        self._run_ui_action(
+            "Assistant stop failed",
+            self.cancel_assistant_request,
+        )
+
+    @QtCore.pyqtSlot(object)
+    def _assistant_provider_progress(self, event: object) -> None:
+        if self._closed:
+            return
+        try:
+            restored = (
+                event
+                if isinstance(event, AssistantProgressEvent)
+                else AssistantProgressEvent.from_dict(dict(event))
+            )
+            record = self.assistant.request_record
+            if record is None:
+                return
+            request = record.parsed_request
+            if (
+                restored.request_id != request.request_id
+                or restored.provider_id != request.provider_id
+            ):
+                raise ValueError(
+                    "Provider progress does not match the active request."
+                )
+            if record.status == "cancel_requested" or not record.provider_running:
+                return
+            self.assistant.record_progress(restored)
+            self.status_message.setText(restored.message)
+        except Exception as exc:
+            error = f"Invalid provider progress: {type(exc).__name__}: {exc}"
+            if self.assistant_runner.active:
+                try:
+                    self.assistant_runner.cancel()
+                except Exception:
+                    pass
+            self._run_ui_action(
+                "Assistant progress failed",
+                lambda: self.assistant.fail_request(error),
+            )
+        self._sync_ui()
+
+    @QtCore.pyqtSlot(object)
+    def _assistant_provider_response(self, response: object) -> None:
+        try:
+            restored = (
+                response
+                if isinstance(response, AssistantResponse)
+                else AssistantResponse.from_dict(dict(response))
+            )
+            result = self.assistant.complete_request(restored)
+            payload = result.get("response") if isinstance(result, dict) else {}
+            status = payload.get("status") if isinstance(payload, dict) else None
+            if status == "proposal":
+                self.status_message.setText("Typed proposal ready for review")
+            elif status == "cancelled":
+                self.status_message.setText(
+                    "Assistant stopped without accepting a proposal"
+                )
+            elif status == "needs_rule_repair":
+                self.status_message.setText(
+                    "Request stopped outside the safe operation contract"
+                )
+            else:
+                self.status_message.setText(
+                    "Assistant needs scientific confirmation before proceeding"
+                )
+        except Exception as exc:
+            error = f"Invalid provider response: {type(exc).__name__}: {exc}"
+            self._run_ui_action(
+                "Assistant response failed",
+                lambda: self.assistant.fail_request(error),
+            )
+        self._open_assistant_workspace()
+        self._sync_ui()
+
+    @QtCore.pyqtSlot(object)
+    def _assistant_provider_failed(self, payload: object) -> None:
+        value = dict(payload) if isinstance(payload, dict) else {}
+        error = str(value.get("error") or "Assistant provider failed.")
+        record = self.assistant.request_record
+        request_id = str(value.get("request_id") or "")
+        if (
+            record is None
+            or record.parsed_request.request_id != request_id
+            or not record.provider_running
+        ):
+            return
+        self._run_ui_action(
+            "Assistant provider failed",
+            lambda: self.assistant.fail_request(error),
+        )
+        self.status_message.setText("Assistant stopped without changing the figure")
+        self._sync_ui()
+
+    @QtCore.pyqtSlot(bool)
+    def _assistant_provider_active_changed(self, active: bool) -> None:
+        if not active:
+            record = self.assistant.request_record
+            if record is not None and record.provider_running:
+                self._run_ui_action(
+                    "Assistant provider stopped unexpectedly",
+                    lambda: self.assistant.fail_request(
+                        "Provider thread ended without a typed response."
+                    ),
+                )
+        self._sync_ui()
 
     def _execute_assistant_action(
         self,
@@ -1914,8 +2096,11 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.assistant_action.setText(
             "Assist · Active" if assistant_active else "Assist"
         )
-        self.assistant_pause_action.setEnabled(assistant_active)
         transaction = self.assistant.transaction
+        request_record = self.assistant.request_record
+        provider_running = bool(
+            request_record is not None and request_record.provider_running
+        )
         pending = bool(
             transaction is not None and transaction.pending_batch is not None
         )
@@ -1932,20 +2117,29 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.assistant_pause_action.setText(
             "Resume Assistant" if paused_status else "Pause Assistant"
         )
+        self.assistant_pause_action.setEnabled(
+            assistant_active and not provider_running and not applying
+        )
         self.assistant_accept_action.setEnabled(
-            active_status and pending and not applying
+            active_status and pending and not applying and not provider_running
         )
         self.assistant_reject_action.setEnabled(
-            (active_status or paused_status) and pending and not applying
+            (active_status or paused_status)
+            and pending
+            and not applying
+            and not provider_running
         )
         self.assistant_undo_action.setEnabled(
-            self.assistant.can_undo_batch
+            self.assistant.can_undo_batch and not provider_running
         )
         self.assistant_commit_action.setEnabled(
-            (active_status or paused_status) and not pending and not applying
+            (active_status or paused_status)
+            and not pending
+            and not applying
+            and not provider_running
         )
         self.assistant_rollback_action.setEnabled(
-            assistant_active and not applying
+            assistant_active and not applying and not provider_running
         )
         if assistant_active:
             self.undo_action.setToolTip(
@@ -2161,6 +2355,32 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 self.review_panel.revert_staged()
         policy = self._close_policy_override
         self._close_policy_override = None
+        if self.assistant_runner.active:
+            record = self.assistant.request_record
+            try:
+                if record is not None and record.status in {"queued", "running"}:
+                    self.assistant.request_cancel()
+                # Window shutdown must remain bounded even when a provider does
+                # not expose user-facing cancellation. shutdown() always raises
+                # the internal token, waits for the worker, and rejects any late
+                # result through the persisted cancel_requested state.
+                if not self.assistant_runner.shutdown(wait_ms=3000):
+                    raise RuntimeError(
+                        "The Assistant provider did not stop within three seconds."
+                    )
+                application = QtWidgets.QApplication.instance()
+                if application is not None:
+                    application.processEvents()
+            except Exception as exc:
+                if self.interactive:
+                    QtWidgets.QMessageBox.critical(
+                        self,
+                        "Could not stop Assistant",
+                        str(exc),
+                    )
+                    event.ignore()
+                    return
+                raise
         if self.assistant.active:
             assistant_policy = (
                 self._prompt_assistant_close_policy()

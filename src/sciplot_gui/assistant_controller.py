@@ -10,6 +10,14 @@ from sciplot_core.canvas.model import (
     CanvasTransaction,
 )
 from sciplot_core.canvas.operations import CanvasOperationBatch
+from sciplot_core.canvas.provider import (
+    ASSISTANT_MAX_INTENT_LENGTH,
+    AssistantProgressEvent,
+    AssistantProviderDescriptor,
+    AssistantRequest,
+    AssistantRequestRecord,
+    AssistantResponse,
+)
 from sciplot_gui.document_controller import DocumentController
 
 
@@ -39,6 +47,11 @@ class AssistantTransactionCoordinator:
             and self.controller.adapter.can_undo
         )
 
+    @property
+    def request_record(self) -> AssistantRequestRecord | None:
+        transaction = self.transaction
+        return transaction.parsed_request_record if transaction is not None else None
+
     def _require_transaction(self) -> CanvasTransaction:
         transaction = self.transaction
         if transaction is None:
@@ -64,7 +77,7 @@ class AssistantTransactionCoordinator:
             raise
 
     def context_summary(self) -> dict[str, Any]:
-        """Return bounded structured context, never arbitrary raw data."""
+        """Return provider-safe structured context without raw dataset arrays."""
 
         session = self.controller.session
         selected = self.controller.selected_object
@@ -73,22 +86,36 @@ class AssistantTransactionCoordinator:
             for item in self.controller.inventory
         )
         active_reviews = self.controller.active_review_annotations()
+        selection = session.selection.to_dict()
+        structural = (
+            session.structural_qa_summary
+            if isinstance(session.structural_qa_summary, dict)
+            else {}
+        )
+        structural_summary = (
+            structural.get("summary")
+            if isinstance(structural.get("summary"), dict)
+            else {}
+        )
+        artifact = session.qa_summary if isinstance(session.qa_summary, dict) else {}
         return {
             "kind": "sciplot_canvas_assistant_context",
-            "version": 1,
+            "version": 2,
             "project_id": session.project_id,
             "document_id": session.document_id,
-            "document_path": session.document_path,
             "revision": session.revision,
             "state": session.state,
             "page": session.current_page,
-            "selection": session.selection.to_dict(),
+            "selection": selection,
             "selected_object": (
                 {
                     "object_id": selected.get("object_id"),
                     "object_type": selected.get("object_type"),
-                    "path": selected.get("path"),
-                    "display_name": selected.get("display_name"),
+                    "display_name": (
+                        selected.get("display_name")
+                        or selected.get("path")
+                        or "Unnamed"
+                    ),
                 }
                 if selected is not None
                 else None
@@ -110,9 +137,23 @@ class AssistantTransactionCoordinator:
                     for annotation in active_reviews
                 ],
             },
-            "structural_qa": json_safe(session.structural_qa_summary),
-            "artifact_qa": json_safe(session.qa_summary),
-            "raw_dataset_values_included": False,
+            "qa": {
+                "structural_status": structural.get("status") or "not_run",
+                "structural_failed_ids": list(
+                    structural_summary.get("failed_ids") or []
+                ),
+                "structural_warning_ids": list(
+                    structural_summary.get("warning_ids") or []
+                ),
+                "ready_for_artifact_qa": bool(
+                    structural.get("ready_for_artifact_qa", False)
+                ),
+                "artifact_status": artifact.get("status") or "not_run",
+                "ready_to_use": artifact.get("ready_to_use"),
+            },
+            "raw_dataset_arrays_included": False,
+            "explicit_selected_point_included": selection.get("data_point")
+            is not None,
         }
 
     def begin(
@@ -196,6 +237,261 @@ class AssistantTransactionCoordinator:
             "journal": entry,
             "context": self.context_summary(),
         }
+
+    def start_request(
+        self,
+        *,
+        descriptor: AssistantProviderDescriptor,
+        intent: str,
+    ) -> AssistantRequest:
+        restored_descriptor = AssistantProviderDescriptor.from_dict(
+            descriptor.to_dict()
+        )
+        intent_text = str(intent or "").strip()
+        if not intent_text:
+            raise ValueError("Describe the figure change before submitting.")
+        if len(intent_text) > ASSISTANT_MAX_INTENT_LENGTH:
+            raise ValueError(
+                f"Assistant requests are limited to {ASSISTANT_MAX_INTENT_LENGTH} "
+                "characters."
+            )
+        if self.transaction is None:
+            self.begin(
+                provider=restored_descriptor.provider_id,
+                rationale=intent_text,
+            )
+        transaction = self._require_transaction()
+        if transaction.provider != restored_descriptor.provider_id:
+            raise ValueError(
+                "The connected provider does not own the active Assistant turn."
+            )
+        if transaction.status != "active":
+            raise RuntimeError("Resume the Assistant turn before asking again.")
+        if transaction.pending_batch is not None:
+            raise RuntimeError(
+                "Accept or reject the current proposal before asking again."
+            )
+        if transaction.applying_batch_id is not None:
+            raise RuntimeError("Wait for the current proposal to finish applying.")
+        existing = transaction.parsed_request_record
+        if existing is not None and existing.status not in {
+            "applied",
+            "rejected",
+            "cancelled",
+            "failed",
+            "interrupted",
+        }:
+            raise RuntimeError("Resolve the current Assistant request first.")
+        context = self.context_summary()
+        request = AssistantRequest(
+            transaction_id=transaction.transaction_id,
+            provider_id=restored_descriptor.provider_id,
+            intent=intent_text,
+            base_revision=int(transaction.current_revision),
+            context=context,
+            allowed_proposal_kinds=restored_descriptor.proposal_kinds,
+        )
+        record = AssistantRequestRecord(request=request.to_dict())
+        session_before = self.controller.session.to_dict()
+        try:
+            transaction.set_request_record(record)
+            self.controller.session.set_state("ai_proposing")
+            self.controller.record_journal_entry(
+                {
+                    "event": "assistant_request_submitted",
+                    "provider": transaction.provider,
+                    "transaction_id": transaction.transaction_id,
+                    "request_id": request.request_id,
+                    "revision": self.controller.session.revision,
+                    "descriptor": restored_descriptor.to_dict(),
+                    "request": request.to_dict(),
+                    "publication_document_changed": False,
+                }
+            )
+        except Exception:
+            self._restore_session(session_before)
+            raise
+        return request
+
+    def record_progress(
+        self,
+        event: AssistantProgressEvent,
+    ) -> dict[str, Any]:
+        restored = AssistantProgressEvent.from_dict(event.to_dict())
+        transaction = self._require_transaction()
+        record = transaction.parsed_request_record
+        if record is None:
+            raise RuntimeError("No Assistant request is active.")
+        session_before = self.controller.session.to_dict()
+        try:
+            record.append_event(restored)
+            transaction.set_request_record(record)
+            self.controller.session.set_state("ai_proposing")
+            return self.controller.record_journal_entry(
+                {
+                    "event": "assistant_request_progress",
+                    "provider": transaction.provider,
+                    "transaction_id": transaction.transaction_id,
+                    "request_id": restored.request_id,
+                    "revision": self.controller.session.revision,
+                    "progress": restored.to_dict(),
+                    "publication_document_changed": False,
+                }
+            )
+        except Exception:
+            self._restore_session(session_before)
+            raise
+
+    def request_cancel(self) -> dict[str, Any]:
+        transaction = self._require_transaction()
+        record = transaction.parsed_request_record
+        if record is None:
+            raise RuntimeError("No Assistant request is active.")
+        session_before = self.controller.session.to_dict()
+        try:
+            record.request_cancel()
+            transaction.set_request_record(record)
+            return self.controller.record_journal_entry(
+                {
+                    "event": "assistant_request_cancel_requested",
+                    "provider": transaction.provider,
+                    "transaction_id": transaction.transaction_id,
+                    "request_id": record.parsed_request.request_id,
+                    "revision": self.controller.session.revision,
+                    "publication_document_changed": False,
+                }
+            )
+        except Exception:
+            self._restore_session(session_before)
+            raise
+
+    def complete_request(self, response: AssistantResponse) -> dict[str, Any]:
+        restored = AssistantResponse.from_dict(response.to_dict())
+        transaction = self._require_transaction()
+        record = transaction.parsed_request_record
+        if record is None:
+            raise RuntimeError("No Assistant request is active.")
+        request = record.parsed_request
+        restored.validate_for_request(request)
+        late_response_discarded = False
+        if record.status == "cancel_requested" and restored.status != "cancelled":
+            late_response_discarded = True
+            restored = AssistantResponse(
+                request_id=request.request_id,
+                transaction_id=request.transaction_id,
+                provider_id=request.provider_id,
+                request_sha256=request.payload_sha256,
+                status="cancelled",
+                understanding=(
+                    "Stopped before a provider proposal could be accepted."
+                ),
+                warnings=("A late provider response was discarded after cancellation.",),
+            )
+        session_before = self.controller.session.to_dict()
+        try:
+            preview: dict[str, Any] | None = None
+            if restored.status == "proposal" and restored.proposal_kind == (
+                "canvas_operation_batch"
+            ):
+                batch = CanvasOperationBatch.from_dict(
+                    dict(restored.proposal or {})
+                )
+                preview = self.controller.preview_batch(batch)
+                record.complete(restored)
+                transaction.set_request_record(record)
+                transaction.set_pending_batch(batch, preview)
+                self.controller.session.set_state("ai_proposing")
+                journal = self.controller.record_journal_entry(
+                    {
+                        "event": "assistant_batch_proposed",
+                        "provider": transaction.provider,
+                        "transaction_id": transaction.transaction_id,
+                        "request_id": request.request_id,
+                        "revision": self.controller.session.revision,
+                        "request_sha256": record.request_sha256,
+                        "response": restored.to_dict(),
+                        "batch": batch.to_dict(),
+                        "preview": preview,
+                        "publication_document_changed": False,
+                    }
+                )
+                return {
+                    "response": restored.to_dict(),
+                    "preview": preview,
+                    "journal": journal,
+                    "late_response_discarded": False,
+                }
+
+            record.complete(restored)
+            transaction.set_request_record(record)
+            if transaction.status == "active":
+                transaction.set_paused(True)
+            if restored.status == "needs_human_confirmation" or (
+                restored.status == "proposal"
+                and restored.proposal_kind == "data_mapping_proposal"
+            ):
+                self.controller.session.set_state("needs_human_confirmation")
+            elif restored.status == "needs_rule_repair":
+                self.controller.session.set_state("needs_rule_repair")
+            else:
+                self.controller.session.set_state("ai_proposing")
+            event_name = (
+                "assistant_response_discarded_after_cancel"
+                if late_response_discarded
+                else (
+                    "assistant_data_mapping_proposed"
+                    if restored.status == "proposal"
+                    else "assistant_response_received"
+                )
+            )
+            journal = self.controller.record_journal_entry(
+                {
+                    "event": event_name,
+                    "provider": transaction.provider,
+                    "transaction_id": transaction.transaction_id,
+                    "request_id": request.request_id,
+                    "revision": self.controller.session.revision,
+                    "request_sha256": record.request_sha256,
+                    "response": restored.to_dict(),
+                    "publication_document_changed": False,
+                }
+            )
+            return {
+                "response": restored.to_dict(),
+                "preview": None,
+                "journal": journal,
+                "late_response_discarded": late_response_discarded,
+            }
+        except Exception:
+            self._restore_session(session_before)
+            raise
+
+    def fail_request(self, error: str) -> dict[str, Any]:
+        transaction = self._require_transaction()
+        record = transaction.parsed_request_record
+        if record is None:
+            raise RuntimeError("No Assistant request is active.")
+        session_before = self.controller.session.to_dict()
+        try:
+            record.fail(str(error or "Assistant provider failed."))
+            transaction.set_request_record(record)
+            if transaction.status == "active":
+                transaction.set_paused(True)
+            self.controller.session.set_state("needs_human_confirmation")
+            return self.controller.record_journal_entry(
+                {
+                    "event": "assistant_request_failed",
+                    "provider": transaction.provider,
+                    "transaction_id": transaction.transaction_id,
+                    "request_id": record.parsed_request.request_id,
+                    "revision": self.controller.session.revision,
+                    "error": record.error,
+                    "publication_document_changed": False,
+                }
+            )
+        except Exception:
+            self._restore_session(session_before)
+            raise
 
     def propose(self, batch: CanvasOperationBatch) -> dict[str, Any]:
         transaction = self._require_transaction()
@@ -521,6 +817,31 @@ class AssistantTransactionCoordinator:
             self._mark_conflict(
                 "The persisted assistant transaction revision does not match "
                 "the recovered document."
+            )
+            return
+        request_record = transaction.parsed_request_record
+        if request_record is not None and request_record.provider_running:
+            session_before = self.controller.session.to_dict()
+            request_id = request_record.parsed_request.request_id
+            request_record.interrupt(
+                "The provider process was not active when the Canvas reopened."
+            )
+            transaction.set_request_record(request_record)
+            transaction.status = "paused"
+            transaction.updated_at = self._now()
+            self.controller.session.set_state("ai_proposing")
+            self._record_with_session_rollback(
+                session_before,
+                {
+                    "event": "assistant_request_interrupted",
+                    "provider": transaction.provider,
+                    "transaction_id": transaction.transaction_id,
+                    "request_id": request_id,
+                    "revision": self.controller.session.revision,
+                    "error": request_record.error,
+                    "paused_for_review": True,
+                    "publication_document_changed": False,
+                },
             )
             return
         if transaction.applying_batch_id is not None:

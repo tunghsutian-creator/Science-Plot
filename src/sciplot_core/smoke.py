@@ -15,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 13
+RUNTIME_SMOKE_VERSION = 14
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -883,8 +883,11 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         )
         checks.append(
             _check(
-                "canvas_contract_v6",
-                "CanvasSession, active Assistant transactions, journal outbox, contextual inspector, typed edits, native review promotion, point selection, and mapping proposals roundtrip without Qt",
+                "canvas_contract_v7",
+                "CanvasSession, hash-bound provider requests and responses, "
+                "active Assistant transactions, journal outbox, contextual "
+                "inspector, typed edits, native review promotion, point "
+                "selection, and mapping proposals roundtrip without Qt",
                 canvas_contract_probe.get("status") == "passed",
                 detail=canvas_contract_probe,
             )
@@ -1175,10 +1178,11 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         checks.append(
             _check(
                 "native_canvas_assistant_transaction",
-                "The SciPlot-owned Canvas previews typed Assistant diffs "
-                "without mutation, applies them live, pauses, rejects, undoes, "
-                "reopens, commits, rolls back exactly, and survives an "
-                "interrupted apply marker",
+                "The SciPlot-owned Canvas accepts a bounded provider request "
+                "off the GUI thread, shows progress, previews hash-bound typed "
+                "diffs without mutation, discards late cancelled results, "
+                "applies live, undoes, commits, rolls back exactly, and "
+                "recovers interrupted work",
                 canvas_assistant_probe.get("status") == "passed",
                 detail={
                     "status": canvas_assistant_probe.get("status"),
@@ -1188,6 +1192,17 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     ),
                     "journal_event_count": canvas_assistant_evidence.get(
                         "journal_event_count"
+                    ),
+                    "provider_request_count": canvas_assistant_evidence.get(
+                        "provider_request_count"
+                    ),
+                    "provider_contract_guards": canvas_assistant_evidence.get(
+                        "provider_contract_guards"
+                    ),
+                    "provider_late_result_discarded": (
+                        canvas_assistant_evidence.get(
+                            "provider_late_result_discarded"
+                        )
                     ),
                     "source_hash_before": canvas_assistant_evidence.get(
                         "source_hash_before"

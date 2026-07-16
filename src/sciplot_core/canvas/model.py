@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import math
 import re
 from dataclasses import dataclass, field
@@ -17,8 +18,8 @@ from sciplot_core.canvas._validation import (
 )
 
 CANVAS_SESSION_KIND = "sciplot_canvas_session"
-CANVAS_SESSION_VERSION = 4
-CANVAS_SESSION_COMPATIBLE_VERSIONS = {1, 2, 3, CANVAS_SESSION_VERSION}
+CANVAS_SESSION_VERSION = 5
+CANVAS_SESSION_COMPATIBLE_VERSIONS = {1, 2, 3, 4, CANVAS_SESSION_VERSION}
 CANVAS_SESSION_STATES = {
     "preparing",
     "canvas_ready",
@@ -610,6 +611,7 @@ class CanvasTransaction:
     )
     current_revision: int | None = None
     rationale: str = ""
+    request_record: dict[str, Any] | None = None
     pending_batch: dict[str, Any] | None = None
     pending_preview: dict[str, Any] | None = None
     applying_batch_id: str | None = None
@@ -716,6 +718,34 @@ class CanvasTransaction:
                 "transaction current_revision cannot precede base_revision."
             )
         self.rationale = str(self.rationale or "").strip()
+        restored_request_record = None
+        if self.request_record is not None:
+            if not isinstance(self.request_record, dict):
+                raise ValueError("transaction request_record must be an object.")
+            from sciplot_core.canvas.provider import AssistantRequestRecord
+
+            restored_request_record = AssistantRequestRecord.from_dict(
+                self.request_record
+            )
+            request = restored_request_record.parsed_request
+            if request.transaction_id != self.transaction_id:
+                raise ValueError(
+                    "transaction request_record transaction_id must match the "
+                    "Canvas transaction."
+                )
+            if request.provider_id != self.provider:
+                raise ValueError(
+                    "transaction request_record provider must match the Canvas "
+                    "transaction."
+                )
+            if not self.base_revision <= request.base_revision <= int(
+                self.current_revision
+            ):
+                raise ValueError(
+                    "transaction request_record revision must remain inside the "
+                    "Canvas transaction revision range."
+                )
+            self.request_record = restored_request_record.to_dict()
         restored_batch = None
         if self.pending_batch is not None:
             if not isinstance(self.pending_batch, dict):
@@ -742,6 +772,40 @@ class CanvasTransaction:
                 restored_batch,
                 self.pending_preview,
             )
+        if restored_request_record is not None:
+            response = restored_request_record.parsed_response
+            if (
+                response is not None
+                and response.proposal_kind == "canvas_operation_batch"
+            ):
+                from sciplot_core.canvas.operations import CanvasOperationBatch
+
+                response_batch = CanvasOperationBatch.from_dict(
+                    dict(response.proposal or {})
+                )
+                if restored_request_record.status == "proposal_ready":
+                    if restored_batch is None:
+                        raise ValueError(
+                            "A proposal-ready Assistant request must persist its "
+                            "CanvasOperationBatch and preview."
+                        )
+                    if response_batch.batch_id != restored_batch.batch_id:
+                        raise ValueError(
+                            "Assistant request response does not match the pending "
+                            "Canvas batch."
+                        )
+                elif restored_request_record.status == "applied":
+                    if response_batch.batch_id not in self.accepted_batch_ids:
+                        raise ValueError(
+                            "Applied Assistant request response is absent from the "
+                            "accepted batch ledger."
+                        )
+                elif restored_request_record.status == "rejected":
+                    if response_batch.batch_id not in self.rejected_batch_ids:
+                        raise ValueError(
+                            "Rejected Assistant request response is absent from the "
+                            "rejected batch ledger."
+                        )
         if self.applying_batch_id is not None:
             self.applying_batch_id = _required_text(
                 self.applying_batch_id,
@@ -1074,6 +1138,16 @@ class CanvasTransaction:
         self.accepted_batch_ids.append(batch_id)
         self.accepted_revisions.append(revision)
         self.current_revision = revision
+        request_record = self.parsed_request_record
+        if request_record is not None and request_record.status == "proposal_ready":
+            response = request_record.parsed_response
+            if (
+                response is not None
+                and response.proposal_kind == "canvas_operation_batch"
+                and str((response.proposal or {}).get("batch_id")) == batch_id
+            ):
+                request_record.mark_proposal_outcome(accepted=True)
+                self.set_request_record(request_record)
         self.pending_batch = None
         self.pending_preview = None
         self.applying_batch_id = None
@@ -1088,6 +1162,16 @@ class CanvasTransaction:
         if self.applying_batch_id is not None:
             raise ValueError("An applying proposal cannot be rejected.")
         self.rejected_batch_ids.append(batch_id)
+        request_record = self.parsed_request_record
+        if request_record is not None and request_record.status == "proposal_ready":
+            response = request_record.parsed_response
+            if (
+                response is not None
+                and response.proposal_kind == "canvas_operation_batch"
+                and str((response.proposal or {}).get("batch_id")) == batch_id
+            ):
+                request_record.mark_proposal_outcome(accepted=False)
+                self.set_request_record(request_record)
         self.pending_batch = None
         self.pending_preview = None
         self.updated_at = _now()
@@ -1113,6 +1197,41 @@ class CanvasTransaction:
         self.status = "paused" if paused else "active"
         self.updated_at = _now()
 
+    @property
+    def parsed_request_record(self) -> Any | None:
+        if self.request_record is None:
+            return None
+        from sciplot_core.canvas.provider import AssistantRequestRecord
+
+        return AssistantRequestRecord.from_dict(self.request_record)
+
+    def set_request_record(self, record: Any | None) -> None:
+        if record is None:
+            self.request_record = None
+            self.updated_at = _now()
+            return
+        from sciplot_core.canvas.provider import AssistantRequestRecord
+
+        restored = AssistantRequestRecord.from_dict(record.to_dict())
+        request = restored.parsed_request
+        if request.transaction_id != self.transaction_id:
+            raise ValueError(
+                "Assistant request transaction_id must match the Canvas transaction."
+            )
+        if request.provider_id != self.provider:
+            raise ValueError(
+                "Assistant request provider must match the Canvas transaction."
+            )
+        if not self.base_revision <= request.base_revision <= int(
+            self.current_revision
+        ):
+            raise ValueError(
+                "Assistant request revision must remain inside the Canvas "
+                "transaction revision range."
+            )
+        self.request_record = restored.to_dict()
+        self.updated_at = _now()
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "transaction_id": self.transaction_id,
@@ -1128,19 +1247,26 @@ class CanvasTransaction:
             "baseline_exported_revision": self.baseline_exported_revision,
             "baseline_state": self.baseline_state,
             "baseline_document_sha256": self.baseline_document_sha256,
-            "baseline_qa_summary": dict(self.baseline_qa_summary),
-            "baseline_structural_qa_summary": dict(
+            "baseline_qa_summary": copy.deepcopy(self.baseline_qa_summary),
+            "baseline_structural_qa_summary": copy.deepcopy(
                 self.baseline_structural_qa_summary
             ),
             "baseline_page": self.baseline_page,
-            "baseline_viewport": dict(self.baseline_viewport),
+            "baseline_viewport": copy.deepcopy(self.baseline_viewport),
             "current_revision": self.current_revision,
             "rationale": self.rationale,
+            "request_record": (
+                copy.deepcopy(self.request_record)
+                if self.request_record is not None
+                else None
+            ),
             "pending_batch": (
-                dict(self.pending_batch) if self.pending_batch is not None else None
+                copy.deepcopy(self.pending_batch)
+                if self.pending_batch is not None
+                else None
             ),
             "pending_preview": (
-                dict(self.pending_preview)
+                copy.deepcopy(self.pending_preview)
                 if self.pending_preview is not None
                 else None
             ),
@@ -1180,6 +1306,7 @@ class CanvasTransaction:
                 "baseline_viewport",
                 "current_revision",
                 "rationale",
+                "request_record",
                 "pending_batch",
                 "pending_preview",
                 "applying_batch_id",
@@ -1198,6 +1325,9 @@ class CanvasTransaction:
         pending_preview = payload.get("pending_preview")
         if pending_preview is not None and not isinstance(pending_preview, dict):
             raise ValueError("active_transaction.pending_preview must be an object.")
+        request_record = payload.get("request_record")
+        if request_record is not None and not isinstance(request_record, dict):
+            raise ValueError("active_transaction.request_record must be an object.")
         baseline_qa_summary = require_json_object(
             payload.get("baseline_qa_summary", {}),
             label="active_transaction.baseline_qa_summary",
@@ -1282,6 +1412,9 @@ class CanvasTransaction:
                 label="active_transaction.current_revision",
             ),
             rationale=str(payload.get("rationale") or ""),
+            request_record=(
+                dict(request_record) if request_record is not None else None
+            ),
             pending_batch=dict(pending_batch) if pending_batch is not None else None,
             pending_preview=(
                 dict(pending_preview) if pending_preview is not None else None
@@ -1459,9 +1592,11 @@ class CanvasSession:
             "document_sha256": self.document_sha256,
             "last_render_sha256": self.last_render_sha256,
             "review_annotation_ids": list(self.review_annotation_ids),
-            "structural_qa_summary": dict(self.structural_qa_summary),
-            "qa_summary": dict(self.qa_summary),
-            "journal_outbox": [dict(entry) for entry in self.journal_outbox],
+            "structural_qa_summary": copy.deepcopy(
+                self.structural_qa_summary
+            ),
+            "qa_summary": copy.deepcopy(self.qa_summary),
+            "journal_outbox": copy.deepcopy(self.journal_outbox),
             "recovery_snapshots": list(self.recovery_snapshots),
             "recovery_snapshot_hashes": dict(self.recovery_snapshot_hashes),
             "object_registry": self.object_registry.to_dict(),

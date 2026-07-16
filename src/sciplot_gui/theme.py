@@ -364,6 +364,8 @@ QScrollArea#assistantScroll QWidget#qt_scrollarea_viewport {{
 }}
 QFrame#assistantCard,
 QFrame#assistantEmptyCard,
+QFrame#assistantComposerCard,
+QFrame#assistantProgressCard,
 QFrame#assistantProposalCard {{
     background: {tokens.input};
     border: {border_width}px solid {tokens.border};
@@ -387,6 +389,35 @@ QLabel#assistantMeta {{
 QLabel#assistantStatusCopy {{
     color: {tokens.muted_text};
     padding: 2px 3px;
+}}
+QLabel#assistantWarningCopy {{
+    color: {tokens.warning_text};
+    background: {tokens.warning_background};
+    border-radius: 6px;
+    padding: 7px 8px;
+}}
+QPlainTextEdit#assistantRequestEditor {{
+    background: {tokens.inspector};
+    color: {tokens.text};
+    border: {border_width}px solid {tokens.border};
+    border-radius: 7px;
+    padding: 8px;
+    selection-background-color: {tokens.accent};
+    selection-color: {tokens.accent_text};
+}}
+QPlainTextEdit#assistantRequestEditor:focus {{
+    border: {focus_width}px solid {tokens.focus};
+}}
+QProgressBar#assistantProgressBar {{
+    background: {tokens.input};
+    border: 0;
+    border-radius: 3px;
+    min-height: 5px;
+    max-height: 5px;
+}}
+QProgressBar#assistantProgressBar::chunk {{
+    background: {tokens.accent};
+    border-radius: 3px;
 }}
 QLabel#assistantStateChip {{
     background: {tokens.neutral_background};

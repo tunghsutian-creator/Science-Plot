@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
 import shutil
 import tempfile
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,6 +15,14 @@ from typing import Any
 from sciplot_core._utils import file_sha256, json_safe
 from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 from sciplot_core.canvas.persistence import read_operation_journal
+from sciplot_core.canvas.provider import (
+    AssistantCancellationToken,
+    AssistantProgressEvent,
+    AssistantProviderDescriptor,
+    AssistantRequest,
+    AssistantRequestRecord,
+    AssistantResponse,
+)
 
 CANVAS_ASSISTANT_PROBE_KIND = "sciplot_canvas_assistant_probe"
 CANVAS_ASSISTANT_PROBE_VERSION = 1
@@ -97,6 +107,176 @@ def _setting_batch(
     )
 
 
+class _DeterministicCanvasProvider:
+    """Controllable typed provider used to exercise the real threaded UI path."""
+
+    def __init__(self) -> None:
+        self.descriptor = AssistantProviderDescriptor(
+            provider_id="assistant_probe_threaded_provider",
+            display_name="SciPlot Probe Assistant",
+            model_label="deterministic",
+            capabilities=("canvas_operation_batch", "cancellation"),
+        )
+        self.first_started = threading.Event()
+        self.first_release = threading.Event()
+        self.cancel_started = threading.Event()
+        self.cancellation_observed = threading.Event()
+        self.worker_thread_ids: list[int] = []
+        self.request_count = 0
+        self.target_id: str | None = None
+        self.setting_path: str | None = None
+        self.before_value: Any = None
+        self.after_value: Any = None
+
+    def configure(
+        self,
+        *,
+        target_id: str,
+        setting_path: str,
+        before_value: Any,
+        after_value: Any,
+    ) -> None:
+        self.target_id = target_id
+        self.setting_path = setting_path
+        self.before_value = before_value
+        self.after_value = after_value
+
+    def _configured(self) -> tuple[str, str]:
+        if self.target_id is None or self.setting_path is None:
+            raise RuntimeError("Deterministic provider target is not configured.")
+        return self.target_id, self.setting_path
+
+    def generate(
+        self,
+        request: AssistantRequest,
+        *,
+        emit_progress: Any,
+        cancellation: AssistantCancellationToken,
+    ) -> AssistantResponse:
+        target_id, setting_path = self._configured()
+        self.request_count += 1
+        ordinal = self.request_count
+        self.worker_thread_ids.append(threading.get_ident())
+        if ordinal == 1:
+            emit_progress(
+                AssistantProgressEvent(
+                    request_id=request.request_id,
+                    provider_id=request.provider_id,
+                    sequence=1,
+                    stage="understanding",
+                    message="Reading the selected object and exact-current version.",
+                    cancellable=self.descriptor.supports_cancellation,
+                    progress=0.25,
+                )
+            )
+            self.first_started.set()
+            while not self.first_release.wait(0.01):
+                cancellation.raise_if_cancelled()
+            emit_progress(
+                AssistantProgressEvent(
+                    request_id=request.request_id,
+                    provider_id=request.provider_id,
+                    sequence=2,
+                    stage="validating",
+                    message="Validating one typed Canvas operation.",
+                    cancellable=self.descriptor.supports_cancellation,
+                    progress=0.85,
+                )
+            )
+            batch = _setting_batch(
+                revision=request.base_revision,
+                provider=request.provider_id,
+                target_id=target_id,
+                setting_path=setting_path,
+                before=self.before_value,
+                after=self.after_value,
+                rationale=(
+                    "Apply the requested visible text refinement to the selected "
+                    "object."
+                ),
+            )
+            return AssistantResponse(
+                request_id=request.request_id,
+                transaction_id=request.transaction_id,
+                provider_id=request.provider_id,
+                request_sha256=request.payload_sha256,
+                status="proposal",
+                understanding=(
+                    "Change one visible text setting on the selected object and "
+                    "leave data, layout, and export settings unchanged."
+                ),
+                proposal_kind="canvas_operation_batch",
+                proposal=batch.to_dict(),
+            )
+
+        emit_progress(
+            AssistantProgressEvent(
+                request_id=request.request_id,
+                provider_id=request.provider_id,
+                sequence=1,
+                stage="planning",
+                message="Preparing a second typed refinement.",
+                cancellable=True,
+                progress=None,
+            )
+        )
+        self.cancel_started.set()
+        while not cancellation.cancelled:
+            time.sleep(0.005)
+        self.cancellation_observed.set()
+        late_batch = _setting_batch(
+            revision=request.base_revision,
+            provider=request.provider_id,
+            target_id=target_id,
+            setting_path=setting_path,
+            before=self.after_value,
+            after=_edited_value(self.after_value, "[Late Result]"),
+            rationale="This late proposal must be discarded after cancellation.",
+        )
+        return AssistantResponse(
+            request_id=request.request_id,
+            transaction_id=request.transaction_id,
+            provider_id=request.provider_id,
+            request_sha256=request.payload_sha256,
+            status="proposal",
+            understanding=(
+                "A deliberately late proposal returned after cancellation."
+            ),
+            proposal_kind="canvas_operation_batch",
+            proposal=late_batch.to_dict(),
+        )
+
+
+def _wait_until(
+    application: Any,
+    predicate: Any,
+    *,
+    timeout_seconds: float = 5.0,
+) -> bool:
+    from PyQt6 import QtCore, QtTest
+
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        application.sendPostedEvents()
+        application.processEvents(
+            QtCore.QEventLoop.ProcessEventsFlag.AllEvents,
+            25,
+        )
+        if bool(predicate()):
+            return True
+        QtTest.QTest.qWait(10)
+    application.processEvents()
+    return bool(predicate())
+
+
+def _rejects(callback: Any) -> bool:
+    try:
+        callback()
+    except (TypeError, ValueError):
+        return True
+    return False
+
+
 def _capture_window(
     window: Any,
     path: Path,
@@ -165,6 +345,9 @@ def run_canvas_assistant_probe(
     summary_path = run_root / "canvas_assistant_probe.json"
     proposal_screenshot = run_root / "assistant_proposal.png"
     applied_screenshot = run_root / "assistant_applied.png"
+    provider_working_screenshot = run_root / "assistant_provider_working.png"
+    provider_proposal_screenshot = run_root / "assistant_provider_proposal.png"
+    provider_applied_screenshot = run_root / "assistant_provider_applied.png"
     stderr_log = run_root / "logs" / "canvas_assistant_stderr.log"
     progress_path = run_root / "progress.log"
     checks: list[dict[str, Any]] = []
@@ -616,6 +799,469 @@ def run_canvas_assistant_probe(
                 is True
             )
 
+            interrupted.set_close_policy_for_test("keep_recovery")
+            interrupted.close()
+            application.processEvents()
+            windows.remove(interrupted)
+
+            provider = _DeterministicCanvasProvider()
+            provider_window = SciPlotCanvasWindow(
+                workspace,
+                interactive=False,
+                assistant_provider=provider,
+            )
+            windows.append(provider_window)
+            provider_window.resize(1380, 860)
+            provider_window.show()
+            application.processEvents()
+            provider_target = (
+                provider_window.controller.adapter.first_visible_text_target(
+                    provider_window.controller.session
+                )
+            )
+            provider_target_id = str(provider_target["object_id"])
+            provider_setting_path = str(provider_target["setting_path"])
+            provider_before = provider_window.controller.adapter.setting_value(
+                provider_setting_path
+            )
+            provider_after = _edited_value(
+                provider_before,
+                "[Threaded Provider]",
+            )
+            provider.configure(
+                target_id=provider_target_id,
+                setting_path=provider_setting_path,
+                before_value=provider_before,
+                after_value=provider_after,
+            )
+            provider_baseline_render = (
+                provider_window.controller.adapter.render_fingerprint()
+            )
+            provider_baseline_revision = (
+                provider_window.controller.session.revision
+            )
+            provider_document_hash_before = file_sha256(
+                provider_window.controller.document_path
+            )
+            provider_composer_ready = bool(
+                provider_window.assistant_panel.composer_card.isVisible()
+                and provider_window.assistant_panel.request_editor.isEnabled()
+                and provider_window.assistant_panel.state_chip.text() == "Ready"
+                and not provider_window.assistant.active
+            )
+            main_thread_id = threading.get_ident()
+            provider_window.assistant_panel.request_editor.setPlainText(
+                "Append [Threaded Provider] to the selected visible text."
+            )
+            provider_window.assistant_panel.send_button.click()
+            provider_working = _wait_until(
+                application,
+                lambda: (
+                    provider.first_started.is_set()
+                    and provider_window.assistant.request_record is not None
+                    and provider_window.assistant.request_record.status == "running"
+                    and len(
+                        provider_window.assistant.request_record.events
+                    )
+                    == 1
+                ),
+            )
+            if not provider_working:
+                raise RuntimeError(
+                    "Threaded provider did not reach the visible progress state."
+                )
+            provider_progress_capture = _capture_window(
+                provider_window,
+                provider_working_screenshot,
+                application=application,
+            )
+            provider_progress_ui = bool(
+                provider_window.assistant_panel.state_chip.text() == "Working"
+                and provider_window.assistant_panel.progress_card.isVisible()
+                and provider_window.assistant_panel.cancel_request_button.isEnabled()
+                and not provider_window.assistant_panel.composer_card.isVisible()
+                and provider_window.controller.session.revision
+                == provider_baseline_revision
+                and provider_window.controller.adapter.render_fingerprint()
+                == provider_baseline_render
+                and provider.worker_thread_ids
+                and provider.worker_thread_ids[0] != main_thread_id
+            )
+            exposed_runner_request = provider_window.assistant_runner.request
+            runner_request_isolated = False
+            if exposed_runner_request is not None:
+                original_structural_status = str(
+                    exposed_runner_request.context["qa"]["structural_status"]
+                )
+                exposed_runner_request.context["qa"][
+                    "structural_status"
+                ] = "tampered"
+                second_runner_request = provider_window.assistant_runner.request
+                persisted_running_record = (
+                    provider_window.assistant.request_record
+                )
+                runner_request_isolated = bool(
+                    second_runner_request is not None
+                    and second_runner_request.context["qa"][
+                        "structural_status"
+                    ]
+                    == original_structural_status
+                    and persisted_running_record is not None
+                    and persisted_running_record.parsed_request.context["qa"][
+                        "structural_status"
+                    ]
+                    == original_structural_status
+                )
+            provider.first_release.set()
+            provider_proposal_ready = _wait_until(
+                application,
+                lambda: (
+                    not provider_window.assistant_runner.active
+                    and provider_window.assistant.transaction is not None
+                    and provider_window.assistant.transaction.pending_batch
+                    is not None
+                ),
+            )
+            if not provider_proposal_ready:
+                raise RuntimeError(
+                    "Threaded provider did not deliver a reviewable proposal."
+                )
+            provider_record = provider_window.assistant.request_record
+            if provider_record is None:
+                raise RuntimeError("Provider request record was not persisted.")
+            provider_request = provider_record.parsed_request
+            provider_response = provider_record.parsed_response
+            if provider_response is None:
+                raise RuntimeError("Provider response was not persisted.")
+            provider_response.validate_for_request(provider_request)
+            provider_preview_zero_mutation = bool(
+                provider_record.status == "proposal_ready"
+                and provider_window.controller.session.revision
+                == provider_baseline_revision
+                and provider_window.controller.adapter.setting_value(
+                    provider_setting_path
+                )
+                == provider_before
+                and provider_window.controller.adapter.render_fingerprint()
+                == provider_baseline_render
+            )
+            provider_proposal_capture = _capture_window(
+                provider_window,
+                provider_proposal_screenshot,
+                application=application,
+            )
+            provider_proposal_ui = {
+                "state_chip": provider_window.assistant_panel.state_chip.text(),
+                "change_rows": provider_window.assistant_panel.change_count,
+                "accept_enabled": (
+                    provider_window.assistant_panel.accept_button.isEnabled()
+                ),
+            }
+
+            def request_with_context(context: dict[str, Any]) -> AssistantRequest:
+                return AssistantRequest(
+                    transaction_id=provider_request.transaction_id,
+                    provider_id=provider_request.provider_id,
+                    intent=provider_request.intent,
+                    base_revision=provider_request.base_revision,
+                    context=context,
+                    allowed_proposal_kinds=(
+                        provider_request.allowed_proposal_kinds
+                    ),
+                )
+
+            hidden_array_context = copy.deepcopy(provider_request.context)
+            hidden_array_context["selection"]["raw_values"] = [1.0, 2.0]
+            declared_raw_context = copy.deepcopy(provider_request.context)
+            declared_raw_context["raw_dataset_arrays_included"] = True
+            tampered_record_payload = provider_record.to_dict()
+            tampered_record_payload["request"]["intent"] += " tampered"
+            wrong_hash_response = AssistantResponse(
+                request_id=provider_request.request_id,
+                transaction_id=provider_request.transaction_id,
+                provider_id=provider_request.provider_id,
+                request_sha256="0" * 64,
+                status="cancelled",
+                understanding="This response is intentionally misbound.",
+            )
+            wrong_revision_batch = _setting_batch(
+                revision=provider_request.base_revision + 1,
+                provider=provider_request.provider_id,
+                target_id=provider_target_id,
+                setting_path=provider_setting_path,
+                before=provider_before,
+                after=provider_after,
+                rationale="Intentionally stale provider response.",
+            )
+            wrong_revision_response = AssistantResponse(
+                request_id=provider_request.request_id,
+                transaction_id=provider_request.transaction_id,
+                provider_id=provider_request.provider_id,
+                request_sha256=provider_request.payload_sha256,
+                status="proposal",
+                understanding="This response has the wrong base revision.",
+                proposal_kind="canvas_operation_batch",
+                proposal=wrong_revision_batch.to_dict(),
+            )
+
+            def append_noncontiguous_progress() -> None:
+                empty_record = AssistantRequestRecord(
+                    request=provider_request.to_dict()
+                )
+                empty_record.append_event(
+                    AssistantProgressEvent(
+                        request_id=provider_request.request_id,
+                        provider_id=provider_request.provider_id,
+                        sequence=2,
+                        stage="planning",
+                        message="Intentionally skipped sequence one.",
+                        cancellable=True,
+                    )
+                )
+
+            provider_contract_guards = {
+                "runner_request_copy_isolated": runner_request_isolated,
+                "nested_raw_array_rejected": _rejects(
+                    lambda: request_with_context(hidden_array_context)
+                ),
+                "declared_raw_array_rejected": _rejects(
+                    lambda: request_with_context(declared_raw_context)
+                ),
+                "request_record_tamper_rejected": _rejects(
+                    lambda: AssistantRequestRecord.from_dict(
+                        tampered_record_payload
+                    )
+                ),
+                "wrong_request_hash_rejected": _rejects(
+                    lambda: wrong_hash_response.validate_for_request(
+                        provider_request
+                    )
+                ),
+                "wrong_base_revision_rejected": _rejects(
+                    lambda: wrong_revision_response.validate_for_request(
+                        provider_request
+                    )
+                ),
+                "noncontiguous_progress_rejected": _rejects(
+                    append_noncontiguous_progress
+                ),
+                "untyped_output_rejected": _rejects(
+                    lambda: AssistantResponse(
+                        request_id=provider_request.request_id,
+                        transaction_id=provider_request.transaction_id,
+                        provider_id=provider_request.provider_id,
+                        request_sha256=provider_request.payload_sha256,
+                        status="proposal",
+                        understanding="Executable output must be rejected.",
+                        proposal_kind="python",
+                        proposal={"code": "pass"},
+                    )
+                ),
+            }
+
+            provider_window.assistant_panel.accept_button.click()
+            provider_applied = _wait_until(
+                application,
+                lambda: (
+                    provider_window.assistant.request_record is not None
+                    and provider_window.assistant.request_record.status
+                    == "applied"
+                    and provider_window.controller.session.revision
+                    == provider_baseline_revision + 1
+                ),
+            )
+            provider_applied_render = (
+                provider_window.controller.adapter.render_fingerprint()
+            )
+            provider_live_apply = bool(
+                provider_applied
+                and provider_window.controller.adapter.setting_value(
+                    provider_setting_path
+                )
+                == provider_after
+                and provider_applied_render != provider_baseline_render
+                and provider_window.assistant_panel.composer_card.isVisible()
+            )
+            provider_applied_capture = _capture_window(
+                provider_window,
+                provider_applied_screenshot,
+                application=application,
+            )
+
+            provider_window.assistant_panel.request_editor.setPlainText(
+                "Try a second refinement, then stop before accepting anything."
+            )
+            provider_window.assistant_panel.send_button.click()
+            cancel_request_running = _wait_until(
+                application,
+                lambda: (
+                    provider.cancel_started.is_set()
+                    and provider_window.assistant.request_record is not None
+                    and provider_window.assistant.request_record.status == "running"
+                ),
+            )
+            if not cancel_request_running:
+                raise RuntimeError(
+                    "The cancellable provider request did not start."
+                )
+            cancel_revision = provider_window.controller.session.revision
+            cancel_render = (
+                provider_window.controller.adapter.render_fingerprint()
+            )
+            provider_window.assistant_panel.cancel_request_button.click()
+            cancellation_completed = _wait_until(
+                application,
+                lambda: (
+                    provider.cancellation_observed.is_set()
+                    and not provider_window.assistant_runner.active
+                    and provider_window.assistant.request_record is not None
+                    and provider_window.assistant.request_record.status
+                    == "cancelled"
+                ),
+            )
+            cancelled_record = provider_window.assistant.request_record
+            cancelled_response = (
+                cancelled_record.parsed_response
+                if cancelled_record is not None
+                else None
+            )
+            late_result_discarded = bool(
+                cancellation_completed
+                and cancelled_response is not None
+                and cancelled_response.status == "cancelled"
+                and any(
+                    "discarded" in warning.casefold()
+                    for warning in cancelled_response.warnings
+                )
+                and provider_window.assistant.transaction is not None
+                and provider_window.assistant.transaction.pending_batch is None
+                and provider_window.controller.session.revision
+                == cancel_revision
+                and provider_window.controller.adapter.render_fingerprint()
+                == cancel_render
+                and provider_window.controller.adapter.setting_value(
+                    provider_setting_path
+                )
+                == provider_after
+            )
+            provider_rollback = provider_window.rollback_assistant_transaction(
+                reason="Restore the threaded-provider turn baseline."
+            )
+            provider_rollback_exact = bool(
+                provider_window.assistant.transaction is None
+                and provider_window.controller.adapter.setting_value(
+                    provider_setting_path
+                )
+                == provider_before
+                and provider_window.controller.adapter.render_fingerprint()
+                == provider_baseline_render
+                and file_sha256(provider_window.controller.document_path)
+                == provider_document_hash_before
+                and provider_rollback.get("verification", {}).get(
+                    "exact_baseline_render"
+                )
+                is True
+            )
+            provider_window.close()
+            application.processEvents()
+            windows.remove(provider_window)
+
+            noncancellable_provider = _DeterministicCanvasProvider()
+            noncancellable_provider.descriptor = AssistantProviderDescriptor(
+                provider_id="assistant_probe_noncancellable_provider",
+                display_name="Non-cancellable Probe Assistant",
+                model_label="deterministic",
+                capabilities=("canvas_operation_batch",),
+            )
+            noncancellable_window = SciPlotCanvasWindow(
+                workspace,
+                interactive=False,
+                assistant_provider=noncancellable_provider,
+            )
+            windows.append(noncancellable_window)
+            noncancellable_window.show()
+            application.processEvents()
+            noncancellable_target = (
+                noncancellable_window.controller.adapter.first_visible_text_target(
+                    noncancellable_window.controller.session
+                )
+            )
+            noncancellable_path = str(noncancellable_target["setting_path"])
+            noncancellable_before = (
+                noncancellable_window.controller.adapter.setting_value(
+                    noncancellable_path
+                )
+            )
+            noncancellable_provider.configure(
+                target_id=str(noncancellable_target["object_id"]),
+                setting_path=noncancellable_path,
+                before_value=noncancellable_before,
+                after_value=_edited_value(
+                    noncancellable_before,
+                    "[Must Not Apply]",
+                ),
+            )
+            noncancellable_window.assistant_panel.request_editor.setPlainText(
+                "Exercise bounded close while this provider is still working."
+            )
+            noncancellable_window.assistant_panel.send_button.click()
+            noncancellable_running = _wait_until(
+                application,
+                lambda: (
+                    noncancellable_provider.first_started.is_set()
+                    and noncancellable_window.assistant.request_record is not None
+                    and noncancellable_window.assistant.request_record.status
+                    == "running"
+                ),
+            )
+            noncancellable_stop_disabled = bool(
+                noncancellable_running
+                and not noncancellable_window.assistant_panel.cancel_request_button.isEnabled()
+            )
+            noncancellable_closed = noncancellable_window.close()
+            application.processEvents()
+            noncancellable_shutdown_safe = bool(
+                noncancellable_closed
+                and noncancellable_window._closed
+                and not noncancellable_window.assistant_runner.active
+            )
+            windows.remove(noncancellable_window)
+
+            noncancellable_recovery = SciPlotCanvasWindow(
+                workspace,
+                interactive=False,
+            )
+            windows.append(noncancellable_recovery)
+            noncancellable_recovery.show()
+            application.processEvents()
+            noncancellable_record = (
+                noncancellable_recovery.assistant.request_record
+            )
+            noncancellable_cancelled = bool(
+                noncancellable_record is not None
+                and noncancellable_record.status == "cancelled"
+            )
+            noncancellable_rollback = (
+                noncancellable_recovery.rollback_assistant_transaction(
+                    reason="Clean up the non-cancellable close probe."
+                )
+            )
+            noncancellable_recovered_exact = bool(
+                noncancellable_cancelled
+                and noncancellable_recovery.assistant.transaction is None
+                and noncancellable_recovery.controller.adapter.setting_value(
+                    noncancellable_path
+                )
+                == noncancellable_before
+                and noncancellable_rollback.get("verification", {}).get(
+                    "exact_baseline_render"
+                )
+                is True
+            )
+            noncancellable_recovery.close()
+            application.processEvents()
+            windows.remove(noncancellable_recovery)
+
             journal = read_operation_journal(workspace.journal_path)
             journal_events = {
                 str(entry.get("event") or "") for entry in journal
@@ -633,6 +1279,10 @@ def run_canvas_assistant_probe(
                 "assistant_transaction_committed",
                 "assistant_transaction_interrupted",
                 "assistant_transaction_conflict",
+                "assistant_request_submitted",
+                "assistant_request_progress",
+                "assistant_request_cancel_requested",
+                "assistant_response_received",
             }
             journal_event_ids = [
                 str(entry.get("event_id"))
@@ -654,7 +1304,10 @@ def run_canvas_assistant_probe(
                     _check(
                         "bounded_context_excludes_raw_values",
                         "Assistant context is structured and excludes raw dataset values",
-                        context.get("raw_dataset_values_included") is False
+                        context.get("kind")
+                        == "sciplot_canvas_assistant_context"
+                        and context.get("version") == 2
+                        and context.get("raw_dataset_arrays_included") is False
                         and isinstance(context.get("document_inventory"), dict)
                         and isinstance(context.get("review"), dict),
                         context,
@@ -684,6 +1337,112 @@ def run_canvas_assistant_probe(
                         and proposal_ui["save_locked"]
                         and proposal_ui["edit_locked"],
                         proposal_ui,
+                    ),
+                    _check(
+                        "provider_composer_ready",
+                        "A connected provider exposes one bounded natural-language composer",
+                        provider_composer_ready,
+                    ),
+                    _check(
+                        "provider_progress_visible_off_gui_thread",
+                        "Provider progress is visible while generation stays off the GUI thread",
+                        provider_progress_ui,
+                        {
+                            "main_thread_id": main_thread_id,
+                            "worker_thread_ids": provider.worker_thread_ids,
+                            "capture": {
+                                "path": str(provider_working_screenshot),
+                                **provider_progress_capture,
+                            },
+                        },
+                    ),
+                    _check(
+                        "provider_zero_trust_contract",
+                        "Provider requests and responses reject hidden data, tampering, stale revisions, gaps, and untyped output",
+                        all(provider_contract_guards.values()),
+                        provider_contract_guards,
+                    ),
+                    _check(
+                        "provider_typed_proposal_preview",
+                        "The exact request hash yields one reviewable zero-mutation CanvasOperationBatch",
+                        provider_preview_zero_mutation
+                        and provider_response.request_sha256
+                        == provider_request.payload_sha256
+                        and provider_record.request_sha256
+                        == provider_request.payload_sha256
+                        and provider_proposal_ui["state_chip"] == "Proposal"
+                        and provider_proposal_ui["change_rows"] == 1
+                        and provider_proposal_ui["accept_enabled"]
+                        and provider_proposal_capture["visually_plausible"],
+                        {
+                            "request_id": provider_request.request_id,
+                            "request_sha256": provider_request.payload_sha256,
+                            "response_id": provider_response.response_id,
+                            "ui": provider_proposal_ui,
+                            "capture": {
+                                "path": str(provider_proposal_screenshot),
+                                **provider_proposal_capture,
+                            },
+                        },
+                    ),
+                    _check(
+                        "provider_accept_redraws_live",
+                        "Accepting the threaded provider proposal redraws the live Canvas",
+                        provider_live_apply,
+                        {
+                            "revision": provider_baseline_revision + 1,
+                            "render_before": provider_baseline_render,
+                            "render_after": provider_applied_render,
+                        },
+                    ),
+                    _check(
+                        "provider_cancel_discards_late_result",
+                        "Stopping a provider request rejects its deliberately late proposal without mutation",
+                        late_result_discarded,
+                        (
+                            cancelled_response.to_dict()
+                            if cancelled_response is not None
+                            else None
+                        ),
+                    ),
+                    _check(
+                        "provider_close_without_cancel_capability",
+                        "Window close safely stops a provider that does not expose a Stop action",
+                        noncancellable_stop_disabled
+                        and noncancellable_shutdown_safe
+                        and noncancellable_recovered_exact,
+                        {
+                            "stop_disabled": noncancellable_stop_disabled,
+                            "window_closed": noncancellable_shutdown_safe,
+                            "recovered_exact": noncancellable_recovered_exact,
+                        },
+                    ),
+                    _check(
+                        "provider_whole_turn_rollback_exact",
+                        "The full threaded-provider turn restores its hashed starting document",
+                        provider_rollback_exact,
+                        provider_rollback,
+                    ),
+                    _check(
+                        "provider_ui_screenshots",
+                        "Working, proposal, and accepted provider states render as stable screenshots",
+                        provider_progress_capture["visually_plausible"]
+                        and provider_proposal_capture["visually_plausible"]
+                        and provider_applied_capture["visually_plausible"],
+                        {
+                            "working": {
+                                "path": str(provider_working_screenshot),
+                                **provider_progress_capture,
+                            },
+                            "proposal": {
+                                "path": str(provider_proposal_screenshot),
+                                **provider_proposal_capture,
+                            },
+                            "applied": {
+                                "path": str(provider_applied_screenshot),
+                                **provider_applied_capture,
+                            },
+                        },
                     ),
                     _check(
                         "pause_blocks_apply",
@@ -836,6 +1595,11 @@ def run_canvas_assistant_probe(
                 "first_apply_latency_ms": round(first_latency_ms, 3),
                 "journal_event_count": len(journal),
                 "journal_events": sorted(journal_events),
+                "provider_request_count": provider.request_count,
+                "provider_worker_thread_ids": provider.worker_thread_ids,
+                "provider_contract_guards": provider_contract_guards,
+                "provider_late_result_discarded": late_result_discarded,
+                "provider_rollback_exact": provider_rollback_exact,
                 "export": json_safe(export_payload),
                 "source_hash_before": source_hash_before,
                 "source_hash_after": source_hash_after,
@@ -883,15 +1647,25 @@ def run_canvas_assistant_probe(
             "summary": str(summary_path),
             "proposal_screenshot": str(proposal_screenshot),
             "applied_screenshot": str(applied_screenshot),
+            "provider_working_screenshot": str(
+                provider_working_screenshot
+            ),
+            "provider_proposal_screenshot": str(
+                provider_proposal_screenshot
+            ),
+            "provider_applied_screenshot": str(
+                provider_applied_screenshot
+            ),
             "stderr_log": str(stderr_log),
             "progress_log": str(progress_path),
         },
         "error": error,
         "limitations": [
-            "This probe uses a typed provider stub and does not call a model.",
-            "It proves the CanvasOperationBatch transaction loop; deterministic "
-            "DataMappingProposal execution is validated by a separate probe; "
-            "provider and Canvas UI wiring remain M3 work.",
+            "This probe uses an injected deterministic provider and does not call "
+            "a production model endpoint.",
+            "It proves the threaded CanvasOperationBatch provider UI loop. "
+            "Deterministic DataMappingProposal execution is validated separately; "
+            "its Canvas confirmation UI remains follow-on work.",
             "Automated probes do not count as real human daily-use sessions.",
         ],
     }

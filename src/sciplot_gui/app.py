@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sciplot_gui.workspace import resolve_canvas_workspace
+
+if TYPE_CHECKING:
+    from sciplot_core.canvas.provider import AssistantProvider
 
 
 def launch_canvas_application(
@@ -13,6 +17,7 @@ def launch_canvas_application(
     rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
+    assistant_provider: AssistantProvider | None = None,
 ) -> int:
     from PyQt6 import QtCore, QtWidgets
 
@@ -33,7 +38,10 @@ def launch_canvas_application(
     application.setOrganizationName("SciPlot")
     application.setQuitOnLastWindowClosed(True)
     QtCore.QCoreApplication.setApplicationVersion("0.1.0-m3-dev")
-    window = SciPlotCanvasWindow(workspace)
+    window = SciPlotCanvasWindow(
+        workspace,
+        assistant_provider=assistant_provider,
+    )
     window.show()
     if not owns_application:
         return 0

@@ -4,8 +4,10 @@ Status: active frontend source of truth, 2026-07-17. M1 is complete; M2 and M3
 are in progress. The adaptive visual, contextual editing, and non-exported
 review/promotion kernels are implemented. The first provider-neutral M3
 Assistant transaction kernel and deterministic M3 data-mapping executor are
-also implemented. Real-session cutover, provider/UI integration, composition,
-and the default `studio` migration remain active work.
+also implemented. The provider-neutral request/progress/cancellation boundary
+and injected-provider request UI are now implemented. Real-session cutover, a
+production model adapter, Canvas execution of confirmed data mappings,
+composition, and the default `studio` migration remain active work.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -73,6 +75,9 @@ The direction is informed by official platform and open-source guidance:
 - [Apple undo and redo](https://developer.apple.com/design/human-interface-guidelines/undo-and-redo):
   reversible actions need predictable outcomes and visible confirmation of
   what changed.
+- [Apple progress indicators](https://developer.apple.com/design/human-interface-guidelines/progress-indicators):
+  progress belongs next to the work it describes and cancellation should be
+  explicit when interruption is supported.
 - [Apple accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility/):
   use system colors, support contrast and text scaling, and never communicate
   state with color alone.
@@ -87,6 +92,9 @@ The direction is informed by official platform and open-source guidance:
   keep contextual actions with their view, limit permanent view count, show
   progress in context, and reserve modal interruption for decisions that
   truly require it.
+- [Zed Agent Panel](https://zed.dev/docs/ai/agent-panel): keep model-assisted
+  work in a bounded utility surface while preserving the primary editor as the
+  place where accepted changes become visible.
 - [KDE layout and navigation](https://develop.kde.org/hig/layout_and_nav/):
   group related actions through spacing, keep toolbars contextual, and adapt
   side panes and status bars to window size.
@@ -313,7 +321,7 @@ accessibility QA, not by application chrome tokens.
   dock on wider windows;
 - inspector visibility, bounded width, contrast preference, active inspector,
   stable-object selection, XY point selection, and structural-QA state persist
-  in `CanvasSession` version 4, with safe version-1, version-2, and version-3
+  in `CanvasSession` version 5, with safe version-1 through version-4
   migration;
 - `Tab`, `Esc`, `F9`, menus, shortcuts, focus indication, and accessible
   control names are covered by the native application probe;
@@ -355,7 +363,7 @@ accessibility QA, not by application chrome tokens.
   provider-optional empty state, current-turn summary, bounded context,
   complete wrapping Before/After cards, and pause, accept, reject, undo,
   commit, and whole-turn rollback actions;
-- `CanvasSession` version 4 persists a closed transaction state machine,
+- `CanvasSession` version 5 persists a closed transaction state machine,
   verified baseline artifacts, baseline page/viewport, durable journal
   outbox, apply marker, and complete batch history;
 - pending previews are identity-bound to the exact typed batch and cannot be
@@ -410,8 +418,42 @@ accessibility QA, not by application chrome tokens.
 - the adversarial mapping probe passes `50/50`; runtime smoke version 13
   passes `30/30`, including the mapped-project Studio lifecycle;
 - these non-interactive engineering receipts do not count as user confirmation
-  or human daily-use sessions. Provider wiring, natural-language request UI,
-  visible confirmation cards, and cancellation remain active M3 work.
+  or human daily-use sessions.
+
+## M3 provider lifecycle and visible request UI delivered
+
+- closed provider descriptors advertise typed proposal and cancellation
+  capabilities without coupling SciPlot to a model vendor;
+- every request carries an exact transaction and base revision, a bounded
+  intent, a closed context payload, and an allowed proposal-kind set; every
+  response is bound to the canonical request SHA-256;
+- the context disclosure includes selection, aggregate object inventory,
+  bounded review summaries, and sanitized QA only. It excludes raw dataset
+  arrays and rejects unknown nested keys or inconsistent selection state;
+- the provider runs on a Qt worker thread. Ordered progress is shown in place,
+  Stop is cooperative, and a result arriving after cancellation is discarded;
+- the Assistant pane now has a real request composer, keyboard submit,
+  progress/cancel state, provider understanding and warnings, complete
+  Before/After proposal cards, and explicit Accept/Reject decisions;
+- action hierarchy follows the transaction state: Ask before a turn, Stop
+  while generating, Accept or Reject for a proposal, then Commit, Undo, or
+  exact whole-turn rollback after accepted changes;
+- only one primary action is shown at a time; proposal content wraps without
+  horizontal scrolling, provider/model diagnostics are secondary, and the
+  proposal displaces repeated context while the decision is pending;
+- request lifecycle persistence is atomic with pending proposal state and
+  survives close/reopen without pretending an abandoned provider call is
+  still running;
+- window close remains bounded when a provider does not expose Stop, and the
+  persisted cancellation state prevents a late result from being accepted;
+- the provider-disabled Canvas remains fully usable;
+- the pure Canvas contract passes `32/32`, the threaded Assistant lifecycle
+  and adversarial probe passes `29/29`, and runtime smoke version 14 passes
+  `30/30`.
+
+The current engineering provider is deterministic and injected. A production
+model adapter, Canvas execution of the `DataMappingProposal` decision card,
+and canonical natural-language acceptance tasks remain M3 work.
 
 ## M2 implementation order
 

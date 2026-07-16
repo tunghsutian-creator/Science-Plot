@@ -21,6 +21,17 @@ from sciplot_core.canvas.model import (
     ObjectIdentityRegistry,
 )
 from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
+from sciplot_core.canvas.provider import (
+    ASSISTANT_MAX_INTENT_LENGTH,
+    AssistantCancellationToken,
+    AssistantCancelled,
+    AssistantProgressEvent,
+    AssistantProvider,
+    AssistantProviderDescriptor,
+    AssistantRequest,
+    AssistantRequestRecord,
+    AssistantResponse,
+)
 
 __all__ = [
     "CanvasObjectRecord",
@@ -31,6 +42,15 @@ __all__ = [
     "CanvasSession",
     "CanvasTransaction",
     "CanvasViewport",
+    "ASSISTANT_MAX_INTENT_LENGTH",
+    "AssistantCancellationToken",
+    "AssistantCancelled",
+    "AssistantProgressEvent",
+    "AssistantProvider",
+    "AssistantProviderDescriptor",
+    "AssistantRequest",
+    "AssistantRequestRecord",
+    "AssistantResponse",
     "DataColumnMapping",
     "DataMappingConfirmation",
     "DataMappingProposal",

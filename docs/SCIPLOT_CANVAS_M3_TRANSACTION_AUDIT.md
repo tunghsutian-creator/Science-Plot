@@ -1,8 +1,10 @@
 # SciPlot Canvas M3 Transaction Audit
 
-Status: first M3 increment implemented and verified, 2026-07-17. This is an
-engineering audit of the provider-neutral visual-operation transaction kernel.
-It is not evidence that a real model is connected or that M3 is complete.
+Status: first M3 increment implemented and verified, 2026-07-17. This document
+audits the provider-neutral visual-operation transaction kernel. The later
+request/progress/cancellation and visible-request increment is audited in
+`SCIPLOT_CANVAS_M3_PROVIDER_UI_AUDIT.md`. Neither document is evidence that a
+production model is connected or that M3 is complete.
 
 ## Decision
 
@@ -32,7 +34,7 @@ The transaction never becomes a second document model.
 | raw inputs | immutable source truth |
 | `studio/document.vsz` | canonical saved visual authority |
 | live Veusz `Document` | exact-current in-memory visual state |
-| `CanvasSession` v4 | revision, transaction, recovery, and UI state |
+| `CanvasSession` v5 | revision, transaction, provider request, recovery, and UI state |
 | transaction `baseline.vsz` | hashed exact start-of-turn recovery state |
 | transaction review snapshot | hashed start-of-turn review sidecar |
 | `operation_journal.jsonl` | append-only audit |
@@ -201,27 +203,25 @@ engineering evidence, not source-controlled test data or real-data acceptance.
 
 ## Honest limitations and next M3 increments
 
-This visual-transaction increment does not itself:
+The cumulative M3 implementation still does not:
 
-- call OpenAI, Codex, Luna, or another model;
-- provide a user-facing natural-language prompt workflow;
+- connect OpenAI, Codex, Luna, or another production model adapter;
 - prove scientific interpretation quality;
 - complete the six canonical natural-language acceptance tasks;
+- execute a confirmed `DataMappingProposal` from the Canvas decision card;
 - count toward M2's required human daily-use sessions;
 - authorize the default `studio` cutover;
 - implement the M4 native composition board.
 
 Next M3 work:
 
-1. define the provider request/response boundary without coupling it to one
-   model vendor;
-2. connect the separately implemented, source-hash-verified
+1. connect the separately implemented, source-hash-verified
    `DataMappingProposal` executor documented in
    `SCIPLOT_DATA_MAPPING_M3_AUDIT.md` to visible Canvas proposal and
    confirmation cards;
-3. expose natural-language request and cancellation only after the provider
-   lifecycle is real;
-4. run the canonical axis, series, legend, review-promotion, QA-repair, and
+2. add a production provider adapter behind the frozen provider-neutral
+   boundary without changing Canvas transaction semantics;
+3. run the canonical axis, series, legend, review-promotion, QA-repair, and
    stop/rollback tasks;
-5. promote repeated accepted mappings and visual decisions into deterministic
+4. promote repeated accepted mappings and visual decisions into deterministic
    rules and tests.

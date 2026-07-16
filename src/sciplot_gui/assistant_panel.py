@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt6 import QtCore, QtWidgets
+from PyQt6 import QtCore, QtGui, QtWidgets
 
 from sciplot_core.canvas.model import CanvasTransaction
+from sciplot_core.canvas.provider import (
+    ASSISTANT_MAX_INTENT_LENGTH,
+    AssistantProviderDescriptor,
+    AssistantRequestRecord,
+)
+
+_MAX_REQUEST_LENGTH = ASSISTANT_MAX_INTENT_LENGTH
 
 
 def _display_value(value: Any) -> str:
@@ -23,9 +30,18 @@ def _display_value(value: Any) -> str:
     return text if len(text) <= 72 else f"{text[:69]}…"
 
 
-class AssistantTransactionPanel(QtWidgets.QWidget):
-    """Compact review surface for provider-neutral Canvas transactions."""
+def _allow_horizontal_shrink(widget: QtWidgets.QWidget) -> None:
+    widget.setMinimumWidth(0)
+    policy = widget.sizePolicy()
+    policy.setHorizontalPolicy(QtWidgets.QSizePolicy.Policy.Ignored)
+    widget.setSizePolicy(policy)
 
+
+class AssistantTransactionPanel(QtWidgets.QWidget):
+    """State-driven request, progress, and typed-proposal review surface."""
+
+    requestSubmitted = QtCore.pyqtSignal(str)
+    cancelRequestRequested = QtCore.pyqtSignal()
     pauseRequested = QtCore.pyqtSignal()
     resumeRequested = QtCore.pyqtSignal()
     acceptRequested = QtCore.pyqtSignal()
@@ -39,11 +55,15 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         self.setObjectName("assistantPanel")
         self.setAccessibleName("Assistant transaction inspector")
         self.setAccessibleDescription(
-            "Review typed AI proposals, pause, accept, reject, undo, commit, "
-            "or roll back the complete turn."
+            "Ask for a scientific figure change, inspect provider progress, "
+            "review typed proposals, and recover the exact starting document."
         )
+        self._provider: AssistantProviderDescriptor | None = None
         self._transaction: CanvasTransaction | None = None
+        self._request_record: AssistantRequestRecord | None = None
+        self._can_undo = False
         self._busy = False
+        self._trimming_request = False
         self._build()
         self.set_transaction(None, context={}, can_undo=False)
 
@@ -56,8 +76,12 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         scroll.setObjectName("assistantScroll")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(
+            QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         content = QtWidgets.QWidget(scroll)
         content.setObjectName("assistantContent")
+        _allow_horizontal_shrink(content)
         layout = QtWidgets.QVBoxLayout(content)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
@@ -67,9 +91,7 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         title_box.setSpacing(2)
         title = QtWidgets.QLabel("Assistant")
         title.setObjectName("inspectorTitle")
-        subtitle = QtWidgets.QLabel(
-            "Typed proposals on the exact-current Canvas"
-        )
+        subtitle = QtWidgets.QLabel("Typed help on the exact-current Canvas")
         subtitle.setObjectName("inspectorContext")
         subtitle.setWordWrap(True)
         title_box.addWidget(title)
@@ -78,6 +100,7 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         self.state_chip = QtWidgets.QLabel("Idle")
         self.state_chip.setObjectName("assistantStateChip")
         self.state_chip.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.state_chip.setMinimumWidth(68)
         header.addWidget(self.state_chip, 0, QtCore.Qt.AlignmentFlag.AlignTop)
         layout.addLayout(header)
 
@@ -90,8 +113,8 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         empty_title.setObjectName("assistantCardTitle")
         empty_copy = QtWidgets.QLabel(
             "Canvas editing, review, QA, save, and export remain available "
-            "without a provider. When connected, an assistant can submit only "
-            "a validated DataMappingProposal or CanvasOperationBatch."
+            "without a provider. A connected provider can return only a typed "
+            "DataMappingProposal or CanvasOperationBatch."
         )
         empty_copy.setObjectName("assistantBody")
         empty_copy.setWordWrap(True)
@@ -100,21 +123,77 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         self.empty_card = empty
         layout.addWidget(empty)
 
+        composer = QtWidgets.QFrame()
+        composer.setObjectName("assistantComposerCard")
+        composer_layout = QtWidgets.QVBoxLayout(composer)
+        composer_layout.setContentsMargins(14, 12, 14, 12)
+        composer_layout.setSpacing(8)
+        composer_header = QtWidgets.QHBoxLayout()
+        composer_title = QtWidgets.QLabel("Ask about this figure")
+        composer_title.setObjectName("assistantCardTitle")
+        self.connected_provider_label = QtWidgets.QLabel()
+        self.connected_provider_label.setObjectName("assistantMeta")
+        self.connected_provider_label.setMaximumWidth(140)
+        self.connected_provider_label.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignRight
+            | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        composer_header.addWidget(composer_title)
+        composer_header.addStretch(1)
+        composer_header.addWidget(self.connected_provider_label)
+        composer_layout.addLayout(composer_header)
+        self.request_editor = QtWidgets.QPlainTextEdit()
+        self.request_editor.setObjectName("assistantRequestEditor")
+        self.request_editor.setAccessibleName("Assistant request")
+        self.request_editor.setAccessibleDescription(
+            "Describe one scientific figure change. Press Command or Control "
+            "and Return to submit."
+        )
+        self.request_editor.setPlaceholderText(
+            "For example: Rename the selected x-axis to frequency, use ω, and "
+            "keep the current logarithmic scale."
+        )
+        self.request_editor.setTabChangesFocus(True)
+        self.request_editor.setMinimumWidth(0)
+        self.request_editor.setMinimumHeight(76)
+        self.request_editor.setMaximumHeight(112)
+        composer_layout.addWidget(self.request_editor)
+        self.request_scope_label = QtWidgets.QLabel()
+        self.request_scope_label.setObjectName("assistantMeta")
+        self.request_scope_label.setWordWrap(True)
+        composer_layout.addWidget(self.request_scope_label)
+        composer_footer = QtWidgets.QHBoxLayout()
+        self.request_count_label = QtWidgets.QLabel(f"0 / {_MAX_REQUEST_LENGTH}")
+        self.request_count_label.setObjectName("assistantMeta")
+        self.send_button = QtWidgets.QPushButton("Ask Assistant")
+        self.send_button.setObjectName("assistantPrimaryButton")
+        self.send_button.setAccessibleDescription(
+            "Submit this intent with bounded Canvas context."
+        )
+        composer_footer.addWidget(self.request_count_label)
+        composer_footer.addStretch(1)
+        composer_footer.addWidget(self.send_button)
+        composer_layout.addLayout(composer_footer)
+        self.composer_card = composer
+        layout.addWidget(composer)
+
         summary = QtWidgets.QFrame()
         summary.setObjectName("assistantCard")
         summary_layout = QtWidgets.QVBoxLayout(summary)
         summary_layout.setContentsMargins(14, 12, 14, 12)
-        summary_layout.setSpacing(8)
+        summary_layout.setSpacing(7)
         summary_title = QtWidgets.QLabel("Current turn")
         summary_title.setObjectName("assistantCardTitle")
         summary_layout.addWidget(summary_title)
         self.provider_label = QtWidgets.QLabel()
         self.provider_label.setObjectName("assistantMeta")
+        self.provider_label.setWordWrap(True)
         self.provider_label.setTextInteractionFlags(
             QtCore.Qt.TextInteractionFlag.TextSelectableByMouse
         )
         self.revision_label = QtWidgets.QLabel()
         self.revision_label.setObjectName("assistantMeta")
+        self.revision_label.setWordWrap(True)
         self.rationale_label = QtWidgets.QLabel()
         self.rationale_label.setObjectName("assistantBody")
         self.rationale_label.setWordWrap(True)
@@ -129,7 +208,7 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         context_layout = QtWidgets.QVBoxLayout(context_card)
         context_layout.setContentsMargins(14, 12, 14, 12)
         context_layout.setSpacing(6)
-        context_title = QtWidgets.QLabel("Bounded context")
+        context_title = QtWidgets.QLabel("Shared context")
         context_title.setObjectName("assistantCardTitle")
         self.selection_label = QtWidgets.QLabel()
         self.selection_label.setObjectName("assistantBody")
@@ -143,17 +222,64 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         self.context_card = context_card
         layout.addWidget(context_card)
 
+        progress_card = QtWidgets.QFrame()
+        progress_card.setObjectName("assistantProgressCard")
+        progress_layout = QtWidgets.QVBoxLayout(progress_card)
+        progress_layout.setContentsMargins(14, 12, 14, 12)
+        progress_layout.setSpacing(8)
+        progress_header = QtWidgets.QHBoxLayout()
+        self.progress_stage_label = QtWidgets.QLabel("Working")
+        self.progress_stage_label.setObjectName("assistantCardTitle")
+        self.cancel_request_button = QtWidgets.QPushButton("Stop")
+        self.cancel_request_button.setObjectName("assistantSecondaryButton")
+        self.cancel_request_button.setAccessibleDescription(
+            "Ask the provider to stop. No proposal will be accepted automatically."
+        )
+        progress_header.addWidget(self.progress_stage_label)
+        progress_header.addStretch(1)
+        progress_header.addWidget(self.cancel_request_button)
+        self.progress_message = QtWidgets.QLabel()
+        self.progress_message.setObjectName("assistantBody")
+        self.progress_message.setWordWrap(True)
+        self.progress_bar = QtWidgets.QProgressBar()
+        self.progress_bar.setObjectName("assistantProgressBar")
+        self.progress_bar.setTextVisible(False)
+        progress_layout.addLayout(progress_header)
+        progress_layout.addWidget(self.progress_message)
+        progress_layout.addWidget(self.progress_bar)
+        self.progress_card = progress_card
+        layout.addWidget(progress_card)
+
+        understanding_card = QtWidgets.QFrame()
+        understanding_card.setObjectName("assistantCard")
+        understanding_layout = QtWidgets.QVBoxLayout(understanding_card)
+        understanding_layout.setContentsMargins(14, 12, 14, 12)
+        understanding_layout.setSpacing(6)
+        understanding_title = QtWidgets.QLabel("What I understood")
+        understanding_title.setObjectName("assistantCardTitle")
+        self.understanding_label = QtWidgets.QLabel()
+        self.understanding_label.setObjectName("assistantBody")
+        self.understanding_label.setWordWrap(True)
+        self.warning_label = QtWidgets.QLabel()
+        self.warning_label.setObjectName("assistantWarningCopy")
+        self.warning_label.setWordWrap(True)
+        understanding_layout.addWidget(understanding_title)
+        understanding_layout.addWidget(self.understanding_label)
+        understanding_layout.addWidget(self.warning_label)
+        self.understanding_card = understanding_card
+        layout.addWidget(understanding_card)
+
         proposal = QtWidgets.QFrame()
         proposal.setObjectName("assistantProposalCard")
         proposal_layout = QtWidgets.QVBoxLayout(proposal)
         proposal_layout.setContentsMargins(14, 12, 14, 12)
         proposal_layout.setSpacing(8)
         proposal_header = QtWidgets.QHBoxLayout()
-        proposal_title = QtWidgets.QLabel("Proposed changes")
-        proposal_title.setObjectName("assistantCardTitle")
+        self.proposal_title = QtWidgets.QLabel("Review proposal")
+        self.proposal_title.setObjectName("assistantCardTitle")
         self.operation_count = QtWidgets.QLabel()
         self.operation_count.setObjectName("assistantMeta")
-        proposal_header.addWidget(proposal_title)
+        proposal_header.addWidget(self.proposal_title)
         proposal_header.addStretch(1)
         proposal_header.addWidget(self.operation_count)
         proposal_layout.addLayout(proposal_header)
@@ -180,7 +306,10 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         action_layout = QtWidgets.QVBoxLayout(actions)
         action_layout.setContentsMargins(12, 10, 12, 12)
         action_layout.setSpacing(8)
-        proposal_actions = QtWidgets.QHBoxLayout()
+
+        self.proposal_action_widget = QtWidgets.QWidget(actions)
+        proposal_actions = QtWidgets.QHBoxLayout(self.proposal_action_widget)
+        proposal_actions.setContentsMargins(0, 0, 0, 0)
         proposal_actions.setSpacing(8)
         self.reject_button = QtWidgets.QPushButton("Reject Proposal")
         self.reject_button.setObjectName("assistantSecondaryButton")
@@ -188,33 +317,118 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         self.accept_button.setObjectName("assistantPrimaryButton")
         proposal_actions.addWidget(self.reject_button)
         proposal_actions.addWidget(self.accept_button, 1)
-        action_layout.addLayout(proposal_actions)
+        action_layout.addWidget(self.proposal_action_widget)
 
-        turn_actions = QtWidgets.QHBoxLayout()
+        self.turn_action_widget = QtWidgets.QWidget(actions)
+        turn_actions = QtWidgets.QHBoxLayout(self.turn_action_widget)
+        turn_actions.setContentsMargins(0, 0, 0, 0)
         turn_actions.setSpacing(8)
-        self.pause_button = QtWidgets.QPushButton("Pause")
-        self.pause_button.setObjectName("assistantSecondaryButton")
-        self.undo_button = QtWidgets.QPushButton("Undo Batch")
+        self.undo_button = QtWidgets.QPushButton("Undo Last Batch")
         self.undo_button.setObjectName("assistantSecondaryButton")
         self.commit_button = QtWidgets.QPushButton("Commit Turn")
         self.commit_button.setObjectName("assistantPrimaryButton")
-        turn_actions.addWidget(self.pause_button)
         turn_actions.addWidget(self.undo_button)
         turn_actions.addWidget(self.commit_button, 1)
-        action_layout.addLayout(turn_actions)
+        action_layout.addWidget(self.turn_action_widget)
 
+        self.safety_action_widget = QtWidgets.QWidget(actions)
+        safety_actions = QtWidgets.QHBoxLayout(self.safety_action_widget)
+        safety_actions.setContentsMargins(0, 0, 0, 0)
+        safety_actions.setSpacing(8)
+        self.pause_button = QtWidgets.QPushButton("Pause Turn")
+        self.pause_button.setObjectName("assistantSecondaryButton")
         self.rollback_button = QtWidgets.QPushButton("Roll Back Entire Turn")
         self.rollback_button.setObjectName("assistantDangerButton")
-        action_layout.addWidget(self.rollback_button)
+        safety_actions.addWidget(self.pause_button)
+        safety_actions.addWidget(self.rollback_button, 1)
+        action_layout.addWidget(self.safety_action_widget)
         root.addWidget(actions)
         self.action_bar = actions
 
+        for widget in (
+            subtitle,
+            empty_copy,
+            self.connected_provider_label,
+            self.request_scope_label,
+            self.provider_label,
+            self.revision_label,
+            self.rationale_label,
+            self.selection_label,
+            self.context_label,
+            self.progress_message,
+            self.understanding_label,
+            self.warning_label,
+            self.status_copy,
+        ):
+            _allow_horizontal_shrink(widget)
+        for button in (
+            self.send_button,
+            self.cancel_request_button,
+            self.reject_button,
+            self.accept_button,
+            self.undo_button,
+            self.commit_button,
+            self.pause_button,
+            self.rollback_button,
+        ):
+            button.setMinimumWidth(0)
+
+        self.send_button.clicked.connect(self._submit_request)
+        self.request_editor.textChanged.connect(self._request_text_changed)
+        self.cancel_request_button.clicked.connect(self.cancelRequestRequested)
         self.pause_button.clicked.connect(self._pause_or_resume)
         self.accept_button.clicked.connect(self.acceptRequested)
         self.reject_button.clicked.connect(self.rejectProposalRequested)
         self.undo_button.clicked.connect(self.undoBatchRequested)
         self.commit_button.clicked.connect(self.commitRequested)
         self.rollback_button.clicked.connect(self.rollbackRequested)
+        self._submit_shortcuts = [
+            QtGui.QShortcut(QtGui.QKeySequence("Ctrl+Return"), self.request_editor),
+            QtGui.QShortcut(QtGui.QKeySequence("Meta+Return"), self.request_editor),
+        ]
+        for shortcut in self._submit_shortcuts:
+            shortcut.activated.connect(self._submit_request)
+
+    def set_provider(
+        self,
+        descriptor: AssistantProviderDescriptor | None,
+    ) -> None:
+        self._provider = (
+            AssistantProviderDescriptor.from_dict(descriptor.to_dict())
+            if descriptor is not None
+            else None
+        )
+        self._sync_actions()
+
+    def set_busy(self, busy: bool) -> None:
+        self._busy = bool(busy)
+        self._sync_actions()
+
+    def mark_request_submitted(self) -> None:
+        self.request_editor.clear()
+        self._sync_actions()
+
+    def _request_text_changed(self) -> None:
+        if self._trimming_request:
+            return
+        text = self.request_editor.toPlainText()
+        if len(text) > _MAX_REQUEST_LENGTH:
+            self._trimming_request = True
+            cursor = self.request_editor.textCursor()
+            position = min(cursor.position(), _MAX_REQUEST_LENGTH)
+            self.request_editor.setPlainText(text[:_MAX_REQUEST_LENGTH])
+            cursor = self.request_editor.textCursor()
+            cursor.setPosition(position)
+            self.request_editor.setTextCursor(cursor)
+            self._trimming_request = False
+            text = self.request_editor.toPlainText()
+        self.request_count_label.setText(f"{len(text)} / {_MAX_REQUEST_LENGTH}")
+        self._sync_actions()
+
+    def _submit_request(self) -> None:
+        intent = self.request_editor.toPlainText().strip()
+        if self.send_button.isEnabled() and intent:
+            self.requestSubmitted.emit(intent)
 
     def _pause_or_resume(self) -> None:
         transaction = self._transaction
@@ -225,10 +439,6 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         else:
             self.pauseRequested.emit()
 
-    def set_busy(self, busy: bool) -> None:
-        self._busy = bool(busy)
-        self._sync_actions()
-
     def set_transaction(
         self,
         transaction: CanvasTransaction | None,
@@ -238,63 +448,110 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
     ) -> None:
         self._transaction = transaction
         self._can_undo = bool(can_undo)
-        active = transaction is not None
-        self.empty_card.setVisible(not active)
-        self.summary_card.setVisible(active)
-        self.context_card.setVisible(active)
-        self.proposal_card.setVisible(
-            active and transaction.pending_preview is not None
+        self._request_record = (
+            transaction.parsed_request_record if transaction is not None else None
         )
-        self.action_bar.setVisible(active)
-        if transaction is None:
-            self.state_chip.setText("Idle")
-            self.state_chip.setProperty("assistantState", "idle")
-            self.status_copy.setText(
-                "No provider is connected and no transaction is active."
-            )
+        active = transaction is not None
+        provider_connected = self._provider is not None
+        self.empty_card.setVisible(not active and not provider_connected)
+        self.summary_card.setVisible(active)
+        self._sync_context(context)
+        self._sync_request_response()
+
+        pending_preview = transaction.pending_preview if transaction is not None else None
+        response = (
+            self._request_record.parsed_response
+            if self._request_record is not None
+            else None
+        )
+        mapping_proposal = (
+            response.proposal
+            if response is not None
+            and response.status == "proposal"
+            and response.proposal_kind == "data_mapping_proposal"
+            else None
+        )
+        if pending_preview is not None:
+            self.proposal_title.setText("Review proposal")
+            self._set_preview(pending_preview)
+        elif mapping_proposal is not None:
+            self.proposal_title.setText("Data mapping proposal")
+            self._set_mapping_proposal(mapping_proposal)
+        else:
             self._clear_preview_cards()
+            self.operation_count.clear()
+        has_proposal = (
+            pending_preview is not None or mapping_proposal is not None
+        )
+        self.proposal_card.setVisible(has_proposal)
+        self.context_card.setVisible(active and not has_proposal)
+
+        if transaction is None:
+            self.state_chip.setText("Ready" if provider_connected else "Idle")
+            self.state_chip.setProperty(
+                "assistantState", "active" if provider_connected else "idle"
+            )
+            self.status_copy.setText(
+                "Describe one change. SciPlot sends bounded structure, selection, "
+                "review notes, and QA — never raw dataset arrays."
+                if provider_connected
+                else "No provider is connected and no transaction is active."
+            )
             self._refresh_chip_style()
             self._sync_actions()
             return
 
-        status = transaction.status
-        if transaction.applying_batch_id:
-            state_text = "Applying"
-            state_key = "applying"
-        elif status == "paused":
-            state_text = "Paused"
-            state_key = "paused"
-        elif status == "conflict":
-            state_text = "Conflict"
-            state_key = "conflict"
+        record_status = self._request_record.status if self._request_record else None
+        if record_status in {"queued", "running"}:
+            state_text, state_key = "Working", "applying"
+        elif record_status == "cancel_requested":
+            state_text, state_key = "Stopping", "paused"
+        elif transaction.applying_batch_id:
+            state_text, state_key = "Applying", "applying"
+        elif transaction.status == "conflict":
+            state_text, state_key = "Conflict", "conflict"
         elif transaction.pending_batch is not None:
-            state_text = "Proposal"
-            state_key = "proposal"
+            state_text, state_key = "Proposal", "proposal"
+        elif transaction.status == "paused":
+            state_text, state_key = "Paused", "paused"
         else:
-            state_text = "Ready"
-            state_key = "active"
+            state_text, state_key = "Ready", "active"
         self.state_chip.setText(state_text)
         self.state_chip.setProperty("assistantState", state_key)
-        self.provider_label.setText(f"Provider · {transaction.provider}")
+        provider_name = (
+            self._provider.display_name
+            if self._provider is not None
+            and self._provider.provider_id == transaction.provider
+            else transaction.provider
+        )
+        self.provider_label.setText(provider_name)
+        provider_tooltip = f"Provider ID: {transaction.provider}"
+        if self._provider is not None and self._provider.model_label:
+            provider_tooltip += f"\nModel: {self._provider.model_label}"
+        self.provider_label.setToolTip(provider_tooltip)
+        count = len(transaction.active_batch_ids)
         self.revision_label.setText(
-            f"Baseline r{transaction.base_revision} · "
-            f"Current r{transaction.current_revision} · "
-            f"{len(transaction.active_batch_ids)} active batch"
-            + ("" if len(transaction.active_batch_ids) == 1 else "es")
+            f"Started at version {transaction.base_revision} · "
+            f"Now version {transaction.current_revision} · "
+            f"{count} accepted change" + ("" if count == 1 else "s")
         )
         self.rationale_label.setText(transaction.rationale)
+        self._set_status_copy(transaction, response)
+        self._refresh_chip_style()
+        self._sync_actions()
 
+    def _sync_context(self, context: dict[str, Any]) -> None:
         selected = context.get("selected_object")
         if isinstance(selected, dict):
             self.selection_label.setText(
                 f"Selection · {selected.get('object_type', 'object')} · "
-                f"{selected.get('display_name') or selected.get('path') or 'Unnamed'}"
+                f"{selected.get('display_name') or 'Unnamed'}"
             )
         else:
             self.selection_label.setText("Selection · none")
         inventory = context.get("document_inventory")
         review = context.get("review")
-        structural = context.get("structural_qa")
+        qa = context.get("qa")
         object_count = (
             int(inventory.get("object_count") or 0)
             if isinstance(inventory, dict)
@@ -306,38 +563,130 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
             else 0
         )
         qa_status = (
-            str(structural.get("status") or "not run")
-            if isinstance(structural, dict)
+            str(qa.get("structural_status") or "not run")
+            if isinstance(qa, dict)
             else "not run"
         )
+        selected_point = bool(context.get("explicit_selected_point_included"))
         self.context_label.setText(
             f"{object_count} document objects · {review_count} review marks · "
-            f"structural QA {qa_status} · raw dataset values excluded"
+            f"structural QA {qa_status} · raw dataset arrays excluded"
+            + (" · selected point included" if selected_point else "")
         )
-        self._set_preview(transaction.pending_preview)
-
-        if status == "paused":
-            self.status_copy.setText(
-                "The assistant is paused. The document is locked against "
-                "untracked edits until you resume, commit, or roll back."
+        if self._provider is not None:
+            scope = (
+                self.selection_label.text()
+                + " · structure, review notes, and QA only"
             )
-        elif status == "conflict":
+            self.request_scope_label.setText(scope)
+        else:
+            self.request_scope_label.clear()
+
+    def _sync_request_response(self) -> None:
+        record = self._request_record
+        running = record is not None and record.provider_running
+        self.progress_card.setVisible(running)
+        response = record.parsed_response if record is not None else None
+        self.understanding_card.setVisible(response is not None)
+        if response is not None:
+            self.understanding_label.setText(response.understanding)
+            warnings = "\n".join(f"• {item}" for item in response.warnings)
+            self.warning_label.setText(warnings)
+            self.warning_label.setVisible(bool(warnings))
+        else:
+            self.understanding_label.clear()
+            self.warning_label.clear()
+            self.warning_label.hide()
+        if not running:
+            return
+        latest = record.latest_event
+        if record.status == "cancel_requested":
+            self.progress_stage_label.setText("Stopping safely")
+            self.progress_message.setText(
+                "Waiting for the provider to acknowledge cancellation. No late "
+                "proposal will be accepted."
+            )
+        elif latest is None:
+            self.progress_stage_label.setText("Starting")
+            self.progress_message.setText("Preparing bounded Canvas context…")
+        else:
+            self.progress_stage_label.setText(latest.stage.replace("_", " ").title())
+            self.progress_message.setText(latest.message)
+        if latest is not None and latest.progress is not None:
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(round(latest.progress * 100))
+        else:
+            self.progress_bar.setRange(0, 0)
+        cancellable = bool(
+            record.status != "cancel_requested"
+            and self._provider is not None
+            and self._provider.supports_cancellation
+            and (latest is None or latest.cancellable)
+        )
+        self.cancel_request_button.setEnabled(cancellable and not self._busy)
+        self.cancel_request_button.setText(
+            "Stopping…" if record.status == "cancel_requested" else "Stop"
+        )
+
+    def _set_status_copy(
+        self,
+        transaction: CanvasTransaction,
+        response: Any,
+    ) -> None:
+        record = self._request_record
+        if record is not None and record.status in {"queued", "running"}:
             self.status_copy.setText(
-                "The transaction no longer matches the exact-current revision. "
-                "Inspect the evidence and roll back to the verified baseline."
+                "The provider is working in place. The Canvas remains unchanged "
+                "until you accept a typed proposal."
+            )
+        elif record is not None and record.status == "cancel_requested":
+            self.status_copy.setText(
+                "Stopping the provider. After it stops, you can resume, commit "
+                "accepted work, or restore the exact starting document."
+            )
+        elif transaction.status == "conflict":
+            self.status_copy.setText(
+                "This turn no longer matches the exact-current version. Inspect "
+                "the evidence and restore the verified starting document."
             )
         elif transaction.pending_batch is not None:
             self.status_copy.setText(
-                "Review this closed-schema proposal. Nothing changes until "
-                "you choose Accept & Apply."
+                "Review the complete Before/After proposal. The figure changes "
+                "only after you choose Accept & Apply."
+            )
+        elif (
+            response is not None
+            and response.proposal_kind == "data_mapping_proposal"
+        ):
+            self.status_copy.setText(
+                "This changes data meaning, so it remains paused until SciPlot "
+                "can run the deterministic mapping preview and obtain a separate "
+                "user confirmation."
+            )
+        elif record is not None and record.status == "needs_human_confirmation":
+            self.status_copy.setText(
+                "The provider found scientific ambiguity. No figure change was "
+                "made; clarify the intent or restore the starting document."
+            )
+        elif record is not None and record.status == "needs_rule_repair":
+            self.status_copy.setText(
+                "The request is outside the safe operation contract. No figure "
+                "change was made."
+            )
+        elif record is not None and record.status in {"failed", "interrupted"}:
+            self.status_copy.setText(
+                f"Provider work stopped without changing the figure. {record.error or ''}"
+            )
+        elif transaction.status == "paused":
+            self.status_copy.setText(
+                "This turn is paused. Resume to continue, or restore the exact "
+                "starting document."
             )
         else:
             self.status_copy.setText(
-                "Accepted batches are visible on the live Canvas. Commit keeps "
-                "them; whole-turn rollback restores the exact baseline."
+                "Accepted changes are visible on the live Canvas. Commit keeps "
+                "them; whole-turn rollback restores the exact starting document."
             )
-        self._refresh_chip_style()
-        self._sync_actions()
 
     def _set_preview(self, preview: dict[str, Any] | None) -> None:
         self._clear_preview_cards()
@@ -369,19 +718,81 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
                 before = "Not present"
                 after = _display_value(change.get("settings"))
                 tooltip = str(change.get("proposed_path") or "")
-            card = QtWidgets.QFrame(self.change_list)
-            card.setObjectName("assistantChangeCard")
-            card_layout = QtWidgets.QVBoxLayout(card)
-            card_layout.setContentsMargins(10, 9, 10, 10)
-            card_layout.setSpacing(5)
-            target_label = QtWidgets.QLabel(target)
-            target_label.setObjectName("assistantChangeTarget")
-            target_label.setWordWrap(True)
-            target_label.setToolTip(tooltip)
-            card_layout.addWidget(target_label)
-            self._add_diff_value(card_layout, "Before", before, after=False)
-            self._add_diff_value(card_layout, "After", after, after=True)
-            self.change_list_layout.addWidget(card)
+            self._add_change_card(
+                target=target,
+                before=before,
+                after=after,
+                tooltip=tooltip,
+            )
+
+    def _set_mapping_proposal(self, proposal: dict[str, Any]) -> None:
+        self._clear_preview_cards()
+        sources = proposal.get("sources")
+        columns = proposal.get("columns")
+        transformations = proposal.get("transformations")
+        if not isinstance(sources, list):
+            sources = []
+        if not isinstance(columns, list):
+            columns = []
+        if not isinstance(transformations, list):
+            transformations = []
+        self.change_count = len(sources)
+        self.operation_count.setText(
+            f"{len(sources)} source" + ("" if len(sources) == 1 else "s")
+        )
+        labels = proposal.get("sample_labels")
+        if not isinstance(labels, dict):
+            labels = {}
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            source_id = str(source.get("source_id") or "source")
+            mapped = [
+                item
+                for item in columns
+                if isinstance(item, dict) and item.get("source_id") == source_id
+            ]
+            before = ", ".join(
+                f"column {item.get('source_column_index')}"
+                for item in mapped
+            ) or "No columns"
+            after = ", ".join(
+                f"{item.get('role')} → {item.get('output_column')}"
+                for item in mapped
+            ) or "No mapped roles"
+            sample = str(labels.get(source_id) or source_id)
+            self._add_change_card(
+                target=f"{sample} · {source.get('relative_path', '')}",
+                before=before,
+                after=after,
+                tooltip=(
+                    f"{len(transformations)} declared transformation"
+                    + ("" if len(transformations) == 1 else "s")
+                ),
+            )
+
+    def _add_change_card(
+        self,
+        *,
+        target: str,
+        before: str,
+        after: str,
+        tooltip: str,
+    ) -> None:
+        card = QtWidgets.QFrame(self.change_list)
+        card.setObjectName("assistantChangeCard")
+        card_layout = QtWidgets.QVBoxLayout(card)
+        card_layout.setContentsMargins(10, 9, 10, 10)
+        card_layout.setSpacing(5)
+        target_label = QtWidgets.QLabel(target)
+        target_label.setObjectName("assistantChangeTarget")
+        target_label.setWordWrap(True)
+        target_label.setToolTip(tooltip)
+        _allow_horizontal_shrink(target_label)
+        card_layout.addWidget(target_label)
+        self._add_diff_value(card_layout, "Before", before, after=False)
+        self._add_diff_value(card_layout, "After", after, after=True)
+        self.change_list_layout.addWidget(card)
 
     def _clear_preview_cards(self) -> None:
         self.change_count = 0
@@ -411,6 +822,7 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
             QtCore.Qt.TextInteractionFlag.TextSelectableByMouse
         )
         value_label.setToolTip(value)
+        _allow_horizontal_shrink(value_label)
         layout.addWidget(value_label)
 
     def _refresh_chip_style(self) -> None:
@@ -420,17 +832,69 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
 
     def _sync_actions(self) -> None:
         transaction = self._transaction
-        if transaction is None:
-            return
-        applying = transaction.applying_batch_id is not None
-        active = transaction.status == "active"
-        paused = transaction.status == "paused"
-        pending = transaction.pending_batch is not None
-        enabled = not self._busy and transaction.status != "conflict"
-        self.pause_button.setText("Resume" if paused else "Pause")
-        self.pause_button.setEnabled(
-            enabled and not applying and (active or paused)
+        record = self._request_record
+        running = record is not None and record.provider_running
+        pending = transaction is not None and transaction.pending_batch is not None
+        active = transaction is not None and transaction.status == "active"
+        paused = transaction is not None and transaction.status == "paused"
+        applying = bool(
+            transaction is not None and transaction.applying_batch_id is not None
         )
+        unresolved_non_canvas = bool(
+            record is not None
+            and record.status
+            in {"proposal_ready", "needs_human_confirmation", "needs_rule_repair"}
+            and not pending
+        )
+        request_resolved = record is None or record.status in {
+            "applied",
+            "rejected",
+            "cancelled",
+            "failed",
+            "interrupted",
+        }
+        can_compose = bool(
+            self._provider is not None
+            and not self._busy
+            and not running
+            and not pending
+            and not unresolved_non_canvas
+            and (transaction is None or active)
+            and request_resolved
+        )
+        self.composer_card.setVisible(can_compose)
+        if self._provider is not None:
+            self.connected_provider_label.setText(self._provider.display_name)
+            provider_tooltip = f"Provider ID: {self._provider.provider_id}"
+            if self._provider.model_label:
+                provider_tooltip += f"\nModel: {self._provider.model_label}"
+            self.connected_provider_label.setToolTip(provider_tooltip)
+        else:
+            self.connected_provider_label.clear()
+            self.connected_provider_label.setToolTip("")
+        send_role = (
+            "assistantPrimaryButton"
+            if transaction is None
+            else "assistantSecondaryButton"
+        )
+        if self.send_button.objectName() != send_role:
+            self.send_button.setObjectName(send_role)
+            style = self.send_button.style()
+            style.unpolish(self.send_button)
+            style.polish(self.send_button)
+        self.request_editor.setEnabled(can_compose)
+        self.send_button.setEnabled(
+            can_compose and bool(self.request_editor.toPlainText().strip())
+        )
+
+        has_transaction_actions = transaction is not None and not running
+        self.action_bar.setVisible(has_transaction_actions)
+        self.proposal_action_widget.setVisible(bool(pending))
+        self.turn_action_widget.setVisible(
+            bool(not pending and not unresolved_non_canvas)
+        )
+        self.safety_action_widget.setVisible(has_transaction_actions)
+        enabled = not self._busy and transaction is not None
         self.accept_button.setEnabled(enabled and active and pending and not applying)
         self.reject_button.setEnabled(
             enabled and (active or paused) and pending and not applying
@@ -441,11 +905,22 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
             and not pending
             and not applying
             and self._can_undo
+            and not unresolved_non_canvas
         )
         self.commit_button.setEnabled(
-            enabled and (active or paused) and not pending and not applying
+            enabled
+            and (active or paused)
+            and not pending
+            and not applying
+            and not unresolved_non_canvas
         )
-        self.rollback_button.setEnabled(not self._busy and not applying)
+        conflict = transaction is not None and transaction.status == "conflict"
+        self.pause_button.setVisible(not conflict and not unresolved_non_canvas)
+        self.pause_button.setText("Resume Turn" if paused else "Pause Turn")
+        self.pause_button.setEnabled(
+            enabled and not applying and (active or paused) and not unresolved_non_canvas
+        )
+        self.rollback_button.setEnabled(enabled and not applying)
 
 
 __all__ = ["AssistantTransactionPanel"]

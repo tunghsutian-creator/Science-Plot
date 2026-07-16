@@ -39,6 +39,12 @@ from sciplot_core.canvas.persistence import (
     save_canvas_session,
     save_review_annotations,
 )
+from sciplot_core.canvas.provider import (
+    AssistantProgressEvent,
+    AssistantRequest,
+    AssistantRequestRecord,
+    AssistantResponse,
+)
 
 CANVAS_CHARACTERIZATION_KIND = "sciplot_canvas_characterization"
 CANVAS_CHARACTERIZATION_VERSION = 1
@@ -85,7 +91,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
 
     session = CanvasSession(
         project_id="canvas_contract_probe",
-        document_id="document-contract-probe",
+        document_id="11111111-1111-4111-8111-111111111111",
         document_path=str(root / "document.vsz"),
         state="canvas_ready",
     )
@@ -198,8 +204,72 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         confidence=0.91,
         rationale="Contract-only proposal; no data are executed.",
     )
+    transaction_id = "22222222-2222-4222-8222-222222222222"
+    assistant_request = AssistantRequest(
+        transaction_id=transaction_id,
+        provider_id="contract_probe",
+        intent="Rename the selected x-axis without changing its data mapping.",
+        base_revision=0,
+        context={
+            "kind": "sciplot_canvas_assistant_context",
+            "version": 2,
+            "project_id": session.project_id,
+            "document_id": session.document_id,
+            "revision": 0,
+            "state": "ai_proposing",
+            "page": 0,
+            "selection": session.selection.to_dict(),
+            "selected_object": {
+                "object_id": axis.object_id,
+                "object_type": "axis",
+                "display_name": "x",
+            },
+            "document_inventory": {
+                "object_count": 2,
+                "object_types": {"axis": 1, "page": 1},
+            },
+            "review": {"active_count": 0, "annotations": []},
+            "qa": {
+                "structural_status": "warning",
+                "structural_failed_ids": [],
+                "structural_warning_ids": ["artifact_qa_current"],
+                "ready_for_artifact_qa": True,
+                "artifact_status": "not_run",
+                "ready_to_use": None,
+            },
+            "raw_dataset_arrays_included": False,
+            "explicit_selected_point_included": True,
+        },
+        allowed_proposal_kinds=("canvas_operation_batch",),
+    )
+    assistant_record = AssistantRequestRecord(
+        request=assistant_request.to_dict()
+    )
+    assistant_record.append_event(
+        AssistantProgressEvent(
+            request_id=assistant_request.request_id,
+            provider_id=assistant_request.provider_id,
+            sequence=1,
+            stage="validating",
+            message="Validating one typed setting operation.",
+            cancellable=True,
+            progress=0.8,
+        )
+    )
+    assistant_record.complete(
+        AssistantResponse(
+            request_id=assistant_request.request_id,
+            transaction_id=assistant_request.transaction_id,
+            provider_id=assistant_request.provider_id,
+            request_sha256=assistant_request.payload_sha256,
+            status="proposal",
+            understanding="Rename only the selected axis label.",
+            proposal_kind="canvas_operation_batch",
+            proposal=batch.to_dict(),
+        )
+    )
     transaction = CanvasTransaction(
-        transaction_id="transaction-contract-probe",
+        transaction_id=transaction_id,
         provider="contract_probe",
         base_revision=0,
         status="active",
@@ -218,6 +288,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         baseline_viewport=session.viewport.to_dict(),
         current_revision=0,
         rationale="Contract-only active Assistant transaction.",
+        request_record=assistant_record.to_dict(),
         pending_batch=batch.to_dict(),
         pending_preview={
             "kind": "sciplot_canvas_operation_preview",
@@ -255,6 +326,19 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
     transaction_session.active_inspector = "assistant"
     transaction_session.active_transaction = transaction
     transaction_session.journal_outbox = [dict(outbox_event)]
+    original_request_structural_status = (
+        transaction_session.active_transaction.parsed_request_record
+        .parsed_request.context["qa"]["structural_status"]
+    )
+    detached_session_payload = transaction_session.to_dict()
+    detached_session_payload["active_transaction"]["request_record"][
+        "request"
+    ]["context"]["qa"]["structural_status"] = "tampered"
+    transaction_payload_is_detached = bool(
+        transaction_session.active_transaction.parsed_request_record
+        .parsed_request.context["qa"]["structural_status"]
+        == original_request_structural_status
+    )
 
     save_canvas_session(session_path, session)
     save_canvas_session(transaction_session_path, transaction_session)
@@ -384,6 +468,12 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
     version_two_payload.pop("structural_qa_summary")
     version_two_payload["selection"].pop("data_point")
     migrated_version_two_session = CanvasSession.from_dict(version_two_payload)
+    version_four_payload = transaction_session.to_dict()
+    version_four_payload["version"] = 4
+    version_four_payload["active_transaction"].pop("request_record")
+    migrated_version_four_session = CanvasSession.from_dict(
+        version_four_payload
+    )
     invalid_interface_rejected = _raises_value_error(
         lambda: CanvasSession.from_dict(
             {
@@ -441,6 +531,11 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
                 "status": "committed",
             }
         )
+    )
+    tampered_request_record = assistant_record.to_dict()
+    tampered_request_record["response"]["request_sha256"] = "0" * 64
+    assistant_response_hash_rejected = _raises_value_error(
+        lambda: AssistantRequestRecord.from_dict(tampered_request_record)
     )
     duplicate_outbox_event_rejected = _raises_value_error(
         lambda: CanvasSession.from_dict(
@@ -561,7 +656,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
     checks = [
         _check(
             "session_roundtrip",
-            "CanvasSession version 3 persists workbench, point-selection, and structural-QA state without Qt",
+            "CanvasSession version 5 persists workbench, point-selection, and structural-QA state without Qt",
             loaded.session_id == session.session_id
             and loaded.state == "canvas_ready"
             and loaded.interface.to_dict() == session.interface.to_dict()
@@ -587,14 +682,40 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         ),
         _check(
             "assistant_transaction_session_roundtrip",
-            "CanvasSession version 4 persists a bounded active Assistant transaction and durable journal outbox",
+            "CanvasSession version 5 persists a hash-bound Assistant request, response, transaction, and journal outbox",
             loaded_transaction_session.active_transaction is not None
             and loaded_transaction_session.active_transaction.to_dict()
             == transaction.to_dict()
+            and loaded_transaction_session.active_transaction.parsed_request_record
+            is not None
+            and (
+                loaded_transaction_session.active_transaction.parsed_request_record
+                .parsed_response.request_sha256
+                == assistant_request.payload_sha256
+            )
             and loaded_transaction_session.journal_outbox
             == transaction_session.journal_outbox
             and loaded_transaction_session.active_inspector == "assistant"
-            and loaded_transaction_session.state == "ai_proposing",
+            and loaded_transaction_session.state == "ai_proposing"
+            and transaction_payload_is_detached,
+        ),
+        _check(
+            "session_v4_assistant_migration",
+            "CanvasSession version 4 Assistant turns migrate without inventing provider request state",
+            migrated_version_four_session.active_transaction is not None
+            and (
+                migrated_version_four_session.active_transaction.request_record
+                is None
+            )
+            and (
+                migrated_version_four_session.active_transaction.pending_batch_id
+                == batch.batch_id
+            ),
+        ),
+        _check(
+            "assistant_response_hash_is_bound",
+            "Persisted Assistant responses reject a request-hash mismatch",
+            assistant_response_hash_rejected,
         ),
         _check(
             "assistant_pending_pair_is_atomic",
