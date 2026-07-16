@@ -17,8 +17,8 @@ from sciplot_core.canvas._validation import (
 )
 
 CANVAS_SESSION_KIND = "sciplot_canvas_session"
-CANVAS_SESSION_VERSION = 3
-CANVAS_SESSION_COMPATIBLE_VERSIONS = {1, 2, CANVAS_SESSION_VERSION}
+CANVAS_SESSION_VERSION = 4
+CANVAS_SESSION_COMPATIBLE_VERSIONS = {1, 2, 3, CANVAS_SESSION_VERSION}
 CANVAS_SESSION_STATES = {
     "preparing",
     "canvas_ready",
@@ -31,7 +31,14 @@ CANVAS_SESSION_STATES = {
     "needs_rule_repair",
     "conflict",
 }
-CANVAS_TRANSACTION_STATES = {"active", "paused", "committed", "rejected", "rolled_back"}
+CANVAS_TRANSACTION_STATES = {
+    "active",
+    "paused",
+    "committed",
+    "rejected",
+    "rolled_back",
+    "conflict",
+}
 
 
 def _now() -> str:
@@ -52,6 +59,28 @@ def _optional_sha256(value: str | None, label: str) -> str | None:
     if re.fullmatch(r"[0-9a-fA-F]{64}", text) is None:
         raise ValueError(f"{label} must be a SHA-256 digest.")
     return text
+
+
+def _validate_json_tree(value: Any, *, path: str) -> None:
+    if value is None or isinstance(value, str | bool | int):
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"{path} must be finite.")
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _validate_json_tree(item, path=f"{path}[{index}]")
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError(f"{path} keys must be strings.")
+            _validate_json_tree(item, path=f"{path}.{key}")
+        return
+    raise ValueError(
+        f"{path} must contain JSON values, not {type(value).__name__}."
+    )
 
 
 @dataclass
@@ -565,15 +594,524 @@ class CanvasTransaction:
     base_revision: int
     status: str = "active"
     snapshot_path: str | None = None
+    snapshot_sha256: str | None = None
+    review_snapshot_path: str | None = None
+    review_snapshot_sha256: str | None = None
+    baseline_render_sha256: str | None = None
+    baseline_saved_revision: int | None = None
+    baseline_exported_revision: int | None = None
+    baseline_state: str | None = None
+    baseline_document_sha256: str | None = None
+    baseline_qa_summary: dict[str, Any] = field(default_factory=dict)
+    baseline_structural_qa_summary: dict[str, Any] = field(default_factory=dict)
+    baseline_page: int = 0
+    baseline_viewport: dict[str, Any] = field(
+        default_factory=lambda: CanvasViewport().to_dict()
+    )
+    current_revision: int | None = None
+    rationale: str = ""
+    pending_batch: dict[str, Any] | None = None
+    pending_preview: dict[str, Any] | None = None
+    applying_batch_id: str | None = None
+    accepted_batch_ids: list[str] = field(default_factory=list)
+    accepted_revisions: list[int] = field(default_factory=list)
+    undone_batch_ids: list[str] = field(default_factory=list)
+    rejected_batch_ids: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=_now)
+    updated_at: str = field(default_factory=_now)
 
     def __post_init__(self) -> None:
         self.transaction_id = _required_text(self.transaction_id, "transaction_id")
         self.provider = _required_text(self.provider, "provider")
+        if isinstance(self.base_revision, bool) or not isinstance(
+            self.base_revision, int
+        ):
+            raise ValueError("CanvasTransaction base_revision must be an integer.")
         if self.base_revision < 0:
             raise ValueError("CanvasTransaction base_revision must be non-negative.")
         if self.status not in CANVAS_TRANSACTION_STATES:
             raise ValueError(f"Unsupported CanvasTransaction state: {self.status!r}")
+        if self.snapshot_path is not None:
+            self.snapshot_path = _required_text(
+                self.snapshot_path, "transaction snapshot_path"
+            )
+        self.snapshot_sha256 = _optional_sha256(
+            self.snapshot_sha256, "transaction snapshot_sha256"
+        )
+        if self.review_snapshot_path is not None:
+            self.review_snapshot_path = _required_text(
+                self.review_snapshot_path, "transaction review_snapshot_path"
+            )
+        self.review_snapshot_sha256 = _optional_sha256(
+            self.review_snapshot_sha256,
+            "transaction review_snapshot_sha256",
+        )
+        self.baseline_render_sha256 = _optional_sha256(
+            self.baseline_render_sha256,
+            "transaction baseline_render_sha256",
+        )
+        self.baseline_document_sha256 = _optional_sha256(
+            self.baseline_document_sha256,
+            "transaction baseline_document_sha256",
+        )
+        if self.baseline_saved_revision is None:
+            self.baseline_saved_revision = self.base_revision
+        if (
+            isinstance(self.baseline_saved_revision, bool)
+            or not isinstance(self.baseline_saved_revision, int)
+            or not 0 <= self.baseline_saved_revision <= self.base_revision
+        ):
+            raise ValueError(
+                "transaction baseline_saved_revision must be between zero "
+                "and base_revision."
+            )
+        if self.baseline_exported_revision is not None and (
+            isinstance(self.baseline_exported_revision, bool)
+            or not isinstance(self.baseline_exported_revision, int)
+            or not 0 <= self.baseline_exported_revision <= self.base_revision
+        ):
+            raise ValueError(
+                "transaction baseline_exported_revision must be between zero "
+                "and base_revision."
+            )
+        if self.baseline_state is not None and self.baseline_state not in (
+            CANVAS_SESSION_STATES
+        ):
+            raise ValueError(
+                f"Unsupported transaction baseline state: {self.baseline_state!r}"
+            )
+        if not isinstance(self.baseline_qa_summary, dict):
+            raise ValueError("transaction baseline_qa_summary must be an object.")
+        if not isinstance(self.baseline_structural_qa_summary, dict):
+            raise ValueError(
+                "transaction baseline_structural_qa_summary must be an object."
+            )
+        _validate_json_tree(
+            self.baseline_qa_summary,
+            path="transaction.baseline_qa_summary",
+        )
+        _validate_json_tree(
+            self.baseline_structural_qa_summary,
+            path="transaction.baseline_structural_qa_summary",
+        )
+        if isinstance(self.baseline_page, bool) or not isinstance(
+            self.baseline_page, int
+        ):
+            raise ValueError("transaction baseline_page must be an integer.")
+        if self.baseline_page < 0:
+            raise ValueError("transaction baseline_page must be non-negative.")
+        if not isinstance(self.baseline_viewport, dict):
+            raise ValueError("transaction baseline_viewport must be an object.")
+        self.baseline_viewport = CanvasViewport.from_dict(
+            self.baseline_viewport
+        ).to_dict()
+        if self.current_revision is None:
+            self.current_revision = self.base_revision
+        if (
+            isinstance(self.current_revision, bool)
+            or not isinstance(self.current_revision, int)
+            or self.current_revision < self.base_revision
+        ):
+            raise ValueError(
+                "transaction current_revision cannot precede base_revision."
+            )
+        self.rationale = str(self.rationale or "").strip()
+        restored_batch = None
+        if self.pending_batch is not None:
+            if not isinstance(self.pending_batch, dict):
+                raise ValueError("transaction pending_batch must be an object.")
+            from sciplot_core.canvas.operations import CanvasOperationBatch
+
+            restored_batch = CanvasOperationBatch.from_dict(self.pending_batch)
+            self.pending_batch = restored_batch.to_dict()
+            if restored_batch.provider != self.provider:
+                raise ValueError(
+                    "transaction pending batch provider must match the "
+                    "transaction provider."
+                )
+            if restored_batch.base_revision != self.current_revision:
+                raise ValueError(
+                    "transaction pending batch must target current_revision."
+                )
+        if (self.pending_batch is None) != (self.pending_preview is None):
+            raise ValueError(
+                "transaction pending batch and preview must be stored together."
+            )
+        if restored_batch is not None and self.pending_preview is not None:
+            self.pending_preview = self._normalize_pending_preview(
+                restored_batch,
+                self.pending_preview,
+            )
+        if self.applying_batch_id is not None:
+            self.applying_batch_id = _required_text(
+                self.applying_batch_id,
+                "transaction applying_batch_id",
+            )
+            if (
+                self.pending_batch is None
+                or self.pending_batch.get("batch_id") != self.applying_batch_id
+            ):
+                raise ValueError(
+                    "transaction applying_batch_id must reference the pending batch."
+                )
+        for label, values in (
+            ("accepted_batch_ids", self.accepted_batch_ids),
+            ("undone_batch_ids", self.undone_batch_ids),
+            ("rejected_batch_ids", self.rejected_batch_ids),
+        ):
+            if not isinstance(values, list):
+                raise ValueError(f"transaction {label} must be a list.")
+            normalized = [_required_text(value, f"transaction {label}") for value in values]
+            if len(set(normalized)) != len(normalized):
+                raise ValueError(f"transaction {label} must be unique.")
+            setattr(self, label, normalized)
+        if not isinstance(self.accepted_revisions, list) or any(
+            isinstance(value, bool) or not isinstance(value, int)
+            for value in self.accepted_revisions
+        ):
+            raise ValueError("transaction accepted_revisions must contain integers.")
+        if len(self.accepted_revisions) != len(self.accepted_batch_ids):
+            raise ValueError(
+                "transaction accepted batch IDs and revisions must align."
+            )
+        if any(
+            revision <= self.base_revision
+            for revision in self.accepted_revisions
+        ) or any(
+            later <= earlier
+            for earlier, later in zip(
+                self.accepted_revisions,
+                self.accepted_revisions[1:],
+            )
+        ):
+            raise ValueError(
+                "transaction accepted revisions must increase after base_revision."
+            )
+        if not set(self.undone_batch_ids) <= set(self.accepted_batch_ids):
+            raise ValueError(
+                "transaction undone batches must have been accepted first."
+            )
+        if set(self.accepted_batch_ids) & set(self.rejected_batch_ids):
+            raise ValueError(
+                "transaction batch IDs cannot be both accepted and rejected."
+            )
+        if self.pending_batch_id in (
+            set(self.accepted_batch_ids) | set(self.rejected_batch_ids)
+        ):
+            raise ValueError(
+                "transaction pending batch cannot already be accepted or rejected."
+            )
+        if (
+            self.accepted_revisions
+            and int(self.current_revision) < self.accepted_revisions[-1]
+        ):
+            raise ValueError(
+                "transaction current_revision cannot precede an accepted revision."
+            )
+        if self.status in {"committed", "rejected", "rolled_back"} and (
+            self.pending_batch is not None or self.applying_batch_id is not None
+        ):
+            raise ValueError(
+                "terminal transactions cannot retain a pending or applying batch."
+            )
+        self.created_at = _required_text(self.created_at, "transaction created_at")
+        self.updated_at = _required_text(self.updated_at, "transaction updated_at")
+
+    @property
+    def pending_batch_id(self) -> str | None:
+        if self.pending_batch is None:
+            return None
+        return str(self.pending_batch["batch_id"])
+
+    @staticmethod
+    def _normalize_pending_preview(
+        batch: Any,
+        preview: dict[str, Any],
+    ) -> dict[str, Any]:
+        value = require_json_object(
+            preview,
+            label="transaction.pending_preview",
+        )
+        reject_unknown_keys(
+            value,
+            {
+                "kind",
+                "version",
+                "batch_id",
+                "base_revision",
+                "provider",
+                "rationale",
+                "operation_count",
+                "affected_target_ids",
+                "changes",
+                "render_before",
+                "publication_document_changed",
+            },
+            label="transaction.pending_preview",
+        )
+        if value.get("kind") != "sciplot_canvas_operation_preview":
+            raise ValueError("transaction pending preview kind is invalid.")
+        version = require_json_int(
+            value.get("version", 0),
+            label="transaction.pending_preview.version",
+        )
+        if version != 1:
+            raise ValueError(
+                f"Unsupported transaction pending preview version: {version!r}"
+            )
+        batch_id = _required_text(
+            value.get("batch_id"),
+            "transaction pending preview batch_id",
+        )
+        base_revision = require_json_int(
+            value.get("base_revision"),
+            label="transaction.pending_preview.base_revision",
+        )
+        provider = _required_text(
+            value.get("provider"),
+            "transaction pending preview provider",
+        )
+        rationale = _required_text(
+            value.get("rationale"),
+            "transaction pending preview rationale",
+        )
+        operation_count = require_json_int(
+            value.get("operation_count"),
+            label="transaction.pending_preview.operation_count",
+        )
+        target_ids = require_json_list(
+            value.get("affected_target_ids"),
+            label="transaction.pending_preview.affected_target_ids",
+        )
+        normalized_target_ids = [
+            _required_text(
+                target_id,
+                "transaction pending preview affected_target_id",
+            )
+            for target_id in target_ids
+        ]
+        if len(set(normalized_target_ids)) != len(normalized_target_ids):
+            raise ValueError(
+                "transaction pending preview target IDs must be unique."
+            )
+        changes = require_json_list(
+            value.get("changes"),
+            label="transaction.pending_preview.changes",
+        )
+        if not all(isinstance(change, dict) for change in changes):
+            raise ValueError(
+                "transaction pending preview changes must contain objects."
+            )
+        _validate_json_tree(
+            changes,
+            path="transaction.pending_preview.changes",
+        )
+        render_before = _optional_sha256(
+            str(value.get("render_before") or "") or None,
+            "transaction pending preview render_before",
+        )
+        if render_before is None:
+            raise ValueError(
+                "transaction pending preview requires a render_before hash."
+            )
+        publication_changed = require_json_bool(
+            value.get("publication_document_changed"),
+            label=(
+                "transaction.pending_preview.publication_document_changed"
+            ),
+        )
+        if publication_changed:
+            raise ValueError(
+                "transaction pending preview cannot claim a document mutation."
+            )
+        if (
+            batch_id != batch.batch_id
+            or base_revision != batch.base_revision
+            or provider != batch.provider
+            or rationale != batch.rationale
+            or operation_count != len(batch.operations)
+            or len(changes) != len(batch.operations)
+        ):
+            raise ValueError(
+                "transaction pending preview does not describe its pending batch."
+            )
+        expected_target_ids = list(
+            dict.fromkeys(operation.target_id for operation in batch.operations)
+        )
+        if normalized_target_ids != expected_target_ids:
+            raise ValueError(
+                "transaction pending preview target list does not match its batch."
+            )
+        for operation, change in zip(batch.operations, changes):
+            if (
+                change.get("operation_type") != operation.operation_type
+                or change.get("operation_id") != operation.operation_id
+                or change.get("target_id") != operation.target_id
+            ):
+                raise ValueError(
+                    "transaction pending preview change identity does not "
+                    "match its operation."
+                )
+            if operation.operation_type == "set_setting":
+                if (
+                    change.get("setting_path")
+                    != operation.arguments["setting_path"]
+                    or change.get("value") != operation.arguments["value"]
+                ):
+                    raise ValueError(
+                        "transaction pending preview setting change does not "
+                        "match its operation."
+                    )
+                if (
+                    "expected_value" in operation.arguments
+                    and change.get("old_value")
+                    != operation.arguments.get("expected_value")
+                ):
+                    raise ValueError(
+                        "transaction pending preview before value does not "
+                        "match its operation precondition."
+                    )
+                continue
+            if operation.operation_type == "add_widget" and (
+                change.get("widget_type")
+                != operation.arguments["widget_type"]
+                or change.get("name") != operation.arguments["name"]
+                or change.get("index", -1)
+                != operation.arguments.get("index", -1)
+                or change.get("settings") != operation.arguments["settings"]
+            ):
+                raise ValueError(
+                    "transaction pending preview widget change does not "
+                    "match its operation."
+                )
+        return {
+            **value,
+            "version": version,
+            "batch_id": batch_id,
+            "base_revision": base_revision,
+            "provider": provider,
+            "rationale": rationale,
+            "operation_count": operation_count,
+            "affected_target_ids": normalized_target_ids,
+            "changes": [dict(change) for change in changes],
+            "render_before": render_before,
+            "publication_document_changed": False,
+        }
+
+    @property
+    def active_batch_ids(self) -> list[str]:
+        undone = set(self.undone_batch_ids)
+        return [
+            batch_id
+            for batch_id in self.accepted_batch_ids
+            if batch_id not in undone
+        ]
+
+    @property
+    def baseline_complete(self) -> bool:
+        return bool(
+            self.snapshot_path
+            and self.snapshot_sha256
+            and self.review_snapshot_path
+            and self.review_snapshot_sha256
+            and self.baseline_render_sha256
+            and self.baseline_state
+        )
+
+    def set_pending_batch(
+        self,
+        batch: Any,
+        preview: dict[str, Any],
+    ) -> None:
+        from sciplot_core.canvas.operations import CanvasOperationBatch
+
+        if self.status != "active":
+            raise ValueError("Only an active transaction can accept a proposal.")
+        if self.pending_batch is not None or self.applying_batch_id is not None:
+            raise ValueError(
+                "Resolve the current transaction proposal before adding another."
+            )
+        restored = CanvasOperationBatch.from_dict(batch.to_dict())
+        if restored.provider != self.provider:
+            raise ValueError(
+                "CanvasOperationBatch provider must match the transaction provider."
+            )
+        if restored.base_revision != self.current_revision:
+            raise ValueError(
+                "CanvasOperationBatch base_revision is stale for this transaction."
+            )
+        if not str(restored.rationale).strip():
+            raise ValueError(
+                "Assistant CanvasOperationBatch requires an auditable rationale."
+            )
+        normalized_preview = self._normalize_pending_preview(
+            restored,
+            preview,
+        )
+        self.pending_batch = restored.to_dict()
+        self.pending_preview = normalized_preview
+        self.updated_at = _now()
+
+    def begin_applying(self) -> str:
+        if self.status != "active":
+            raise ValueError("Resume the transaction before accepting a proposal.")
+        batch_id = self.pending_batch_id
+        if batch_id is None:
+            raise ValueError("The transaction has no pending proposal.")
+        if self.applying_batch_id is not None:
+            raise ValueError("The transaction is already applying a proposal.")
+        self.applying_batch_id = batch_id
+        self.updated_at = _now()
+        return batch_id
+
+    def record_applied(self, *, batch_id: str, revision: int) -> None:
+        if self.applying_batch_id != batch_id or self.pending_batch_id != batch_id:
+            raise ValueError("Applied batch does not match the transaction proposal.")
+        if revision <= int(self.current_revision):
+            raise ValueError("Applied transaction revision must increase.")
+        if batch_id in self.accepted_batch_ids:
+            raise ValueError("The transaction batch was already accepted.")
+        self.accepted_batch_ids.append(batch_id)
+        self.accepted_revisions.append(revision)
+        self.current_revision = revision
+        self.pending_batch = None
+        self.pending_preview = None
+        self.applying_batch_id = None
+        self.updated_at = _now()
+
+    def reject_pending(self) -> str:
+        if self.status not in {"active", "paused"}:
+            raise ValueError("The transaction cannot reject a proposal now.")
+        batch_id = self.pending_batch_id
+        if batch_id is None:
+            raise ValueError("The transaction has no pending proposal.")
+        if self.applying_batch_id is not None:
+            raise ValueError("An applying proposal cannot be rejected.")
+        self.rejected_batch_ids.append(batch_id)
+        self.pending_batch = None
+        self.pending_preview = None
+        self.updated_at = _now()
+        return batch_id
+
+    def record_undo(self, *, batch_id: str, revision: int) -> None:
+        active = self.active_batch_ids
+        if not active or active[-1] != batch_id:
+            raise ValueError(
+                "Only the most recent active transaction batch can be undone."
+            )
+        if revision <= int(self.current_revision):
+            raise ValueError("Transaction undo revision must increase.")
+        self.undone_batch_ids.append(batch_id)
+        self.current_revision = revision
+        self.updated_at = _now()
+
+    def set_paused(self, paused: bool) -> None:
+        if self.status not in {"active", "paused"}:
+            raise ValueError("The transaction can no longer be paused or resumed.")
+        if self.applying_batch_id is not None:
+            raise ValueError("An applying proposal cannot be paused.")
+        self.status = "paused" if paused else "active"
+        self.updated_at = _now()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -582,7 +1120,37 @@ class CanvasTransaction:
             "base_revision": self.base_revision,
             "status": self.status,
             "snapshot_path": self.snapshot_path,
+            "snapshot_sha256": self.snapshot_sha256,
+            "review_snapshot_path": self.review_snapshot_path,
+            "review_snapshot_sha256": self.review_snapshot_sha256,
+            "baseline_render_sha256": self.baseline_render_sha256,
+            "baseline_saved_revision": self.baseline_saved_revision,
+            "baseline_exported_revision": self.baseline_exported_revision,
+            "baseline_state": self.baseline_state,
+            "baseline_document_sha256": self.baseline_document_sha256,
+            "baseline_qa_summary": dict(self.baseline_qa_summary),
+            "baseline_structural_qa_summary": dict(
+                self.baseline_structural_qa_summary
+            ),
+            "baseline_page": self.baseline_page,
+            "baseline_viewport": dict(self.baseline_viewport),
+            "current_revision": self.current_revision,
+            "rationale": self.rationale,
+            "pending_batch": (
+                dict(self.pending_batch) if self.pending_batch is not None else None
+            ),
+            "pending_preview": (
+                dict(self.pending_preview)
+                if self.pending_preview is not None
+                else None
+            ),
+            "applying_batch_id": self.applying_batch_id,
+            "accepted_batch_ids": list(self.accepted_batch_ids),
+            "accepted_revisions": list(self.accepted_revisions),
+            "undone_batch_ids": list(self.undone_batch_ids),
+            "rejected_batch_ids": list(self.rejected_batch_ids),
             "created_at": self.created_at,
+            "updated_at": self.updated_at,
         }
 
     @classmethod
@@ -598,9 +1166,49 @@ class CanvasTransaction:
                 "base_revision",
                 "status",
                 "snapshot_path",
+                "snapshot_sha256",
+                "review_snapshot_path",
+                "review_snapshot_sha256",
+                "baseline_render_sha256",
+                "baseline_saved_revision",
+                "baseline_exported_revision",
+                "baseline_state",
+                "baseline_document_sha256",
+                "baseline_qa_summary",
+                "baseline_structural_qa_summary",
+                "baseline_page",
+                "baseline_viewport",
+                "current_revision",
+                "rationale",
+                "pending_batch",
+                "pending_preview",
+                "applying_batch_id",
+                "accepted_batch_ids",
+                "accepted_revisions",
+                "undone_batch_ids",
+                "rejected_batch_ids",
                 "created_at",
+                "updated_at",
             },
             label="active_transaction",
+        )
+        pending_batch = payload.get("pending_batch")
+        if pending_batch is not None and not isinstance(pending_batch, dict):
+            raise ValueError("active_transaction.pending_batch must be an object.")
+        pending_preview = payload.get("pending_preview")
+        if pending_preview is not None and not isinstance(pending_preview, dict):
+            raise ValueError("active_transaction.pending_preview must be an object.")
+        baseline_qa_summary = require_json_object(
+            payload.get("baseline_qa_summary", {}),
+            label="active_transaction.baseline_qa_summary",
+        )
+        baseline_structural_qa_summary = require_json_object(
+            payload.get("baseline_structural_qa_summary", {}),
+            label="active_transaction.baseline_structural_qa_summary",
+        )
+        baseline_viewport = require_json_object(
+            payload.get("baseline_viewport", {}),
+            label="active_transaction.baseline_viewport",
         )
         return cls(
             transaction_id=_required_text(
@@ -615,7 +1223,107 @@ class CanvasTransaction:
             snapshot_path=str(payload["snapshot_path"])
             if payload.get("snapshot_path")
             else None,
+            snapshot_sha256=(
+                str(payload["snapshot_sha256"])
+                if payload.get("snapshot_sha256")
+                else None
+            ),
+            review_snapshot_path=(
+                str(payload["review_snapshot_path"])
+                if payload.get("review_snapshot_path")
+                else None
+            ),
+            review_snapshot_sha256=(
+                str(payload["review_snapshot_sha256"])
+                if payload.get("review_snapshot_sha256")
+                else None
+            ),
+            baseline_render_sha256=(
+                str(payload["baseline_render_sha256"])
+                if payload.get("baseline_render_sha256")
+                else None
+            ),
+            baseline_saved_revision=require_json_int(
+                payload.get(
+                    "baseline_saved_revision",
+                    payload.get("base_revision", 0),
+                ),
+                label="active_transaction.baseline_saved_revision",
+            ),
+            baseline_exported_revision=(
+                require_json_int(
+                    payload["baseline_exported_revision"],
+                    label="active_transaction.baseline_exported_revision",
+                )
+                if payload.get("baseline_exported_revision") is not None
+                else None
+            ),
+            baseline_state=(
+                str(payload["baseline_state"])
+                if payload.get("baseline_state")
+                else None
+            ),
+            baseline_document_sha256=(
+                str(payload["baseline_document_sha256"])
+                if payload.get("baseline_document_sha256")
+                else None
+            ),
+            baseline_qa_summary=dict(baseline_qa_summary),
+            baseline_structural_qa_summary=dict(
+                baseline_structural_qa_summary
+            ),
+            baseline_page=require_json_int(
+                payload.get("baseline_page", 0),
+                label="active_transaction.baseline_page",
+            ),
+            baseline_viewport=dict(baseline_viewport),
+            current_revision=require_json_int(
+                payload.get("current_revision", payload.get("base_revision", 0)),
+                label="active_transaction.current_revision",
+            ),
+            rationale=str(payload.get("rationale") or ""),
+            pending_batch=dict(pending_batch) if pending_batch is not None else None,
+            pending_preview=(
+                dict(pending_preview) if pending_preview is not None else None
+            ),
+            applying_batch_id=(
+                str(payload["applying_batch_id"])
+                if payload.get("applying_batch_id")
+                else None
+            ),
+            accepted_batch_ids=[
+                _required_text(item, "active_transaction.accepted_batch_id")
+                for item in require_json_list(
+                    payload.get("accepted_batch_ids", []),
+                    label="active_transaction.accepted_batch_ids",
+                )
+            ],
+            accepted_revisions=[
+                require_json_int(
+                    item,
+                    label="active_transaction.accepted_revision",
+                )
+                for item in require_json_list(
+                    payload.get("accepted_revisions", []),
+                    label="active_transaction.accepted_revisions",
+                )
+            ],
+            undone_batch_ids=[
+                _required_text(item, "active_transaction.undone_batch_id")
+                for item in require_json_list(
+                    payload.get("undone_batch_ids", []),
+                    label="active_transaction.undone_batch_ids",
+                )
+            ],
+            rejected_batch_ids=[
+                _required_text(item, "active_transaction.rejected_batch_id")
+                for item in require_json_list(
+                    payload.get("rejected_batch_ids", []),
+                    label="active_transaction.rejected_batch_ids",
+                )
+            ],
             created_at=str(payload.get("created_at") or _now()),
+            updated_at=str(payload.get("updated_at") or payload.get("created_at") or _now()),
         )
 
 
@@ -640,6 +1348,7 @@ class CanvasSession:
     review_annotation_ids: list[str] = field(default_factory=list)
     structural_qa_summary: dict[str, Any] = field(default_factory=dict)
     qa_summary: dict[str, Any] = field(default_factory=dict)
+    journal_outbox: list[dict[str, Any]] = field(default_factory=list)
     recovery_snapshots: list[str] = field(default_factory=list)
     recovery_snapshot_hashes: dict[str, str] = field(default_factory=dict)
     object_registry: ObjectIdentityRegistry = field(
@@ -676,6 +1385,21 @@ class CanvasSession:
             raise ValueError("structural_qa_summary must be an object.")
         if not isinstance(self.qa_summary, dict):
             raise ValueError("qa_summary must be an object.")
+        if not isinstance(self.journal_outbox, list) or not all(
+            isinstance(entry, dict) for entry in self.journal_outbox
+        ):
+            raise ValueError("journal_outbox must contain JSON objects.")
+        event_ids: list[str] = []
+        for index, entry in enumerate(self.journal_outbox):
+            _validate_json_tree(entry, path=f"journal_outbox[{index}]")
+            event_ids.append(
+                _required_text(
+                    entry.get("event_id"),
+                    f"journal_outbox[{index}].event_id",
+                )
+            )
+        if len(set(event_ids)) != len(event_ids):
+            raise ValueError("journal_outbox event IDs must be unique.")
         if not isinstance(self.recovery_snapshot_hashes, dict):
             raise ValueError("recovery_snapshot_hashes must be an object.")
         for reference, digest in self.recovery_snapshot_hashes.items():
@@ -737,6 +1461,7 @@ class CanvasSession:
             "review_annotation_ids": list(self.review_annotation_ids),
             "structural_qa_summary": dict(self.structural_qa_summary),
             "qa_summary": dict(self.qa_summary),
+            "journal_outbox": [dict(entry) for entry in self.journal_outbox],
             "recovery_snapshots": list(self.recovery_snapshots),
             "recovery_snapshot_hashes": dict(self.recovery_snapshot_hashes),
             "object_registry": self.object_registry.to_dict(),
@@ -771,6 +1496,7 @@ class CanvasSession:
                 "review_annotation_ids",
                 "structural_qa_summary",
                 "qa_summary",
+                "journal_outbox",
                 "recovery_snapshots",
                 "recovery_snapshot_hashes",
                 "object_registry",
@@ -801,6 +1527,12 @@ class CanvasSession:
         qa_summary = require_json_object(
             payload.get("qa_summary", {}), label="qa_summary"
         )
+        journal_outbox = require_json_list(
+            payload.get("journal_outbox", []),
+            label="journal_outbox",
+        )
+        if not all(isinstance(entry, dict) for entry in journal_outbox):
+            raise ValueError("Every journal_outbox entry must be an object.")
         structural_qa_summary = require_json_object(
             payload.get("structural_qa_summary", {}),
             label="structural_qa_summary",
@@ -851,6 +1583,7 @@ class CanvasSession:
             ],
             structural_qa_summary=dict(structural_qa_summary),
             qa_summary=dict(qa_summary),
+            journal_outbox=[dict(entry) for entry in journal_outbox],
             recovery_snapshots=[
                 _required_text(item, "recovery snapshot") for item in recovery_snapshots
             ],

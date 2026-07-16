@@ -1659,6 +1659,43 @@ class VeuszCanvasAdapter:
             self.document.modified = was_modified
         return target
 
+    def restore_snapshot(
+        self,
+        path: Path,
+        *,
+        mark_modified: bool,
+        page_index: int | None = None,
+        zoom_factor: float | None = None,
+    ) -> str:
+        """Restore a verified VSZ into the existing embedded canvas.
+
+        This deliberately keeps the canonical document path and the existing
+        PlotWindow. Veusz starts a new in-memory undo boundary after loading,
+        which is the correct behavior for a cross-process transaction rollback.
+        """
+
+        self.assert_gui_thread()
+        source = path.expanduser().resolve()
+        if not source.is_file():
+            raise FileNotFoundError(source)
+        canonical_filename = self.document.filename
+        target_page = self.current_page if page_index is None else int(page_index)
+        target_zoom = (
+            self.zoom_factor if zoom_factor is None else float(zoom_factor)
+        )
+        self.clear_selection_visual()
+        self._data_point_selection = None
+        self._data_point_session = None
+        self.plot_window.pickeritem.hide()
+        self.document.load(str(source))
+        self.document.filename = canonical_filename
+        self.document.modified = bool(mark_modified)
+        self.plot_window.setPageNumber(
+            min(max(target_page, 0), max(self.page_count - 1, 0))
+        )
+        self.plot_window.setZoomFactor(target_zoom)
+        return self.force_redraw()
+
     def interaction_characterization(self) -> dict[str, Any]:
         """Exercise PlotWindow's selection and axis-coordinate seams."""
 

@@ -1,9 +1,12 @@
 # SciPlot AI-Enhanced Canvas Development Roadmap
 
-Status: active product roadmap, 2026-07-17. M0 and M1 complete; M2 is in
-progress. Its adaptive visual foundation and bounded contextual editing kernel
-and its non-exported review/promotion kernel are complete. The real-session
-retirement gate and default `studio` migration remain.
+Status: active product roadmap, 2026-07-17. M0 and M1 are complete; M2 and M3
+are in progress. M2's adaptive visual, contextual editing, and
+review/promotion kernels are complete, but its real-session retirement gate
+and default `studio` migration remain. M3's provider-neutral reversible
+`CanvasOperationBatch` transaction kernel is implemented; deterministic
+`DataMappingProposal` execution, a real assistant provider, and canonical
+natural-language acceptance tasks remain.
 
 This roadmap supersedes the former assumption that native canvas work and
 multi-panel composition should remain deferred. Distribution to other users is
@@ -589,6 +592,39 @@ Deliverables:
   before/after values, and verification;
 - clear separation between canvas assistance and developer source repair.
 
+Implemented first increment, 2026-07-17:
+
+- added an Assistant tab to the existing adaptive trailing utility pane rather
+  than creating a second sidebar or a fake chat surface;
+- promoted `CanvasSession` to version 4 and persisted a closed
+  `CanvasTransaction` state machine with hashed VSZ/review baselines,
+  baseline page/viewport, monotonic revisions, pending preview, apply marker,
+  accepted/undone/rejected batch IDs, and conflict state;
+- added a bounded context summary that includes selection, object inventory,
+  review marks, and QA but explicitly excludes raw dataset values;
+- added zero-mutation proposal preview, pause/resume, accept/apply, proposal
+  rejection, latest-batch undo, commit, exact whole-turn rollback, and
+  close/reopen recovery;
+- made the same `DocumentController.apply_batch` gateway enforce both manual
+  and assistant mutations, with active-transaction locks around ordinary
+  editing, review promotion, save, export, and Advanced Editor launch;
+- added a durable journal outbox and idempotent event append so accepted state
+  is not rolled back merely because journal flushing is interrupted;
+- made persisted pending previews identity-bound to the exact batch, provider,
+  revision, rationale, operation count, target list, and pre-apply render;
+- made rollback restore and verify the baseline page and viewport as well as
+  the exact document and review sidecar, preventing navigation-only false
+  conflicts;
+- added interrupted-apply and applying-conflict recovery so no stale apply
+  marker can deadlock whole-turn rollback;
+- the pure contract passes `30/30`; the Assistant lifecycle passes `20/20`;
+  FTIR, rheology-temperature, flexural, TGA, and impact projects pass the
+  lifecycle independently; runtime smoke version 12 passes `28/28`.
+
+This increment uses a typed provider stub. It does not call a model, does not
+execute `DataMappingProposal`, and does not count as a real human editing
+session. M3 therefore remains in progress.
+
 Canonical acceptance tasks:
 
 - rename and format an axis from natural language;
@@ -606,6 +642,18 @@ Exit gate:
 - raw inputs remain unchanged;
 - AI-disabled mode completes all M2 workflows;
 - accepted AI output passes the same QA and delivery gates as manual output.
+
+Current gate status:
+
+- typed visual proposals are visible before acceptance and accepted batches
+  redraw the live Canvas;
+- exact rollback, stale/invalid target rejection, provider-disabled operation,
+  raw-input immutability, save/reopen, QA, PDF/TIFF, and delivery pass
+  automated gates;
+- deterministic `DataMappingProposal` execution, real provider integration,
+  and the canonical natural-language tasks remain open;
+- automated probes do not satisfy M2's real-session cutover gate or the final
+  user decision to retire the Veusz frontend.
 
 ### M4 — Native Composition Board
 

@@ -353,6 +353,120 @@ QFrame#reviewInspector {{
     background: {tokens.inspector};
     border-left: {border_width}px solid {tokens.border};
 }}
+QWidget#assistantPanel,
+QWidget#assistantContent {{
+    background: {tokens.inspector};
+}}
+QScrollArea#assistantScroll,
+QScrollArea#assistantScroll QWidget#qt_scrollarea_viewport {{
+    background: transparent;
+    border: 0;
+}}
+QFrame#assistantCard,
+QFrame#assistantEmptyCard,
+QFrame#assistantProposalCard {{
+    background: {tokens.input};
+    border: {border_width}px solid {tokens.border};
+    border-radius: 10px;
+}}
+QFrame#assistantProposalCard {{
+    border-color: {tokens.accent};
+}}
+QLabel#assistantCardTitle {{
+    color: {tokens.text};
+    font-size: 13px;
+    font-weight: 750;
+}}
+QLabel#assistantBody {{
+    color: {tokens.text};
+}}
+QLabel#assistantMeta {{
+    color: {tokens.muted_text};
+    font-size: 11px;
+}}
+QLabel#assistantStatusCopy {{
+    color: {tokens.muted_text};
+    padding: 2px 3px;
+}}
+QLabel#assistantStateChip {{
+    background: {tokens.neutral_background};
+    color: {tokens.neutral_text};
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.5px;
+}}
+QLabel#assistantStateChip[assistantState="active"] {{
+    background: {tokens.positive_background};
+    color: {tokens.positive_text};
+}}
+QLabel#assistantStateChip[assistantState="proposal"],
+QLabel#assistantStateChip[assistantState="paused"] {{
+    background: {tokens.warning_background};
+    color: {tokens.warning_text};
+}}
+QLabel#assistantStateChip[assistantState="applying"] {{
+    background: {tokens.neutral_background};
+    color: {tokens.neutral_text};
+}}
+QLabel#assistantStateChip[assistantState="conflict"] {{
+    background: {tokens.negative_background};
+    color: {tokens.negative_text};
+}}
+QWidget#assistantChangeList {{
+    background: transparent;
+}}
+QFrame#assistantChangeCard {{
+    background: {tokens.inspector};
+    border: {border_width}px solid {tokens.border};
+    border-radius: 7px;
+}}
+QLabel#assistantChangeTarget {{
+    color: {tokens.text};
+    font-weight: 750;
+}}
+QLabel#assistantDiffLabel {{
+    color: {tokens.muted_text};
+    font-size: 10px;
+    font-weight: 700;
+}}
+QLabel#assistantDiffValue,
+QLabel#assistantDiffAfter {{
+    background: {tokens.input};
+    color: {tokens.text};
+    border-radius: 5px;
+    padding: 6px 7px;
+}}
+QLabel#assistantDiffAfter {{
+    background: {tokens.neutral_background};
+    color: {tokens.text};
+}}
+QFrame#assistantActionBar {{
+    background: {tokens.toolbar};
+    border-top: {border_width}px solid {tokens.border};
+}}
+QPushButton#assistantPrimaryButton {{
+    background: {tokens.accent};
+    color: {tokens.accent_text};
+    border-color: {tokens.accent};
+}}
+QPushButton#assistantSecondaryButton {{
+    background: transparent;
+    color: {tokens.text};
+    border-color: {tokens.border};
+}}
+QPushButton#assistantSecondaryButton:hover {{
+    background: {tokens.hover};
+}}
+QPushButton#assistantDangerButton {{
+    background: transparent;
+    color: {tokens.negative_text};
+    border-color: {tokens.negative_text};
+}}
+QPushButton#assistantDangerButton:hover {{
+    background: {tokens.negative_background};
+}}
 QScrollArea#inspectorScroll,
 QScrollArea#inspectorScroll QWidget#qt_scrollarea_viewport {{
     background: transparent;

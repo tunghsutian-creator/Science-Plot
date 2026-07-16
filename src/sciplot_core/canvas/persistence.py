@@ -123,6 +123,24 @@ def append_operation_journal(path: Path, entry: dict[str, Any]) -> Path:
     return target
 
 
+def append_operation_journal_once(
+    path: Path,
+    entry: dict[str, Any],
+) -> tuple[Path, bool]:
+    """Append one durable event, deduplicated by its persisted event ID."""
+
+    event_id = str(entry.get("event_id") or "").strip()
+    if not event_id:
+        raise ValueError("Idempotent journal entries require an event_id.")
+    target = path.expanduser().resolve()
+    if target.is_file():
+        for existing in read_operation_journal(target):
+            if str(existing.get("event_id") or "") == event_id:
+                return target, False
+    append_operation_journal(target, entry)
+    return target, True
+
+
 def read_operation_journal(path: Path) -> list[dict[str, Any]]:
     target = path.expanduser()
     if not target.is_file():
@@ -145,6 +163,7 @@ __all__ = [
     "OPERATION_JOURNAL_FILENAME",
     "REVIEW_ANNOTATIONS_FILENAME",
     "append_operation_journal",
+    "append_operation_journal_once",
     "atomic_write_json",
     "load_canvas_session",
     "load_review_annotations",

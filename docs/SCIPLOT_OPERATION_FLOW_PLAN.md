@@ -1,9 +1,11 @@
 # SciPlot Operation Flow and Visual System
 
-Status: active frontend source of truth, 2026-07-17. M1 is complete; M2 is in
-progress. The adaptive visual foundation and bounded contextual editing kernel
-and non-exported review/promotion kernel are implemented. The real-session
-retirement gate and default `studio` migration remain active work.
+Status: active frontend source of truth, 2026-07-17. M1 is complete; M2 and M3
+are in progress. The adaptive visual, contextual editing, and non-exported
+review/promotion kernels are implemented. The first provider-neutral M3
+Assistant transaction kernel is also implemented. Real-session cutover,
+deterministic data-mapping execution, provider integration, composition, and
+the default `studio` migration remain active work.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -65,12 +67,26 @@ The direction is informed by official platform and open-source guidance:
 - [Apple split views](https://developer.apple.com/design/human-interface-guidelines/split-views):
   a canvas and contextual inspector are a natural split-view relationship,
   with resizable panes and persistent selection.
+- [Apple sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars):
+  utility navigation should be showable, hideable, hierarchical only where
+  needed, and subordinate to the primary content.
+- [Apple undo and redo](https://developer.apple.com/design/human-interface-guidelines/undo-and-redo):
+  reversible actions need predictable outcomes and visible confirmation of
+  what changed.
 - [Apple accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility/):
   use system colors, support contrast and text scaling, and never communicate
   state with color alone.
 - [GNOME utility panes](https://developer.gnome.org/hig/patterns/containers/utility-panes.html):
   subordinate controls belong in a trailing utility pane that can become
   transient or overlay the main view when width is limited.
+- [GNOME libadwaita adaptive layouts](https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/adaptive-layouts.html):
+  split views and utility panes should adapt structurally instead of merely
+  shrinking their contents.
+- [VS Code views](https://code.visualstudio.com/api/ux-guidelines/views) and
+  [notifications](https://code.visualstudio.com/api/ux-guidelines/notifications):
+  keep contextual actions with their view, limit permanent view count, show
+  progress in context, and reserve modal interruption for decisions that
+  truly require it.
 - [KDE layout and navigation](https://develop.kde.org/hig/layout_and_nav/):
   group related actions through spacing, keep toolbars contextual, and adapt
   side panes and status bars to window size.
@@ -145,7 +161,8 @@ review-only because no equivalent bounded native Veusz object exists.
 
 ### AI transaction
 
-M3 adds an optional assistant drawer. It must show:
+M3 uses a third tab in the existing adaptive Inspector utility pane. This
+keeps the figure dominant and avoids a second sidebar. The panel shows:
 
 - what the assistant understood;
 - affected stable object IDs;
@@ -154,7 +171,25 @@ M3 adds an optional assistant drawer. It must show:
 - pause, accept, reject, undo, and whole-turn rollback;
 - verification and journal outcome.
 
-AI is a participant in the document, not a separate hidden renderer.
+The first transaction increment is provider-neutral. With no provider, the
+panel states that AI is optional and every M2 workflow remains available.
+When a typed provider submits a `CanvasOperationBatch`, the panel presents a
+complete wrapping Before/After card before mutation. Save, export, Advanced
+Editor, direct manipulation, and review promotion remain locked until the
+turn is committed or rolled back.
+
+Each turn persists a hashed exact-current VSZ baseline, review-sidecar
+baseline, starting page and viewport, base revision, pending preview, apply
+marker, accepted/undone/rejected batch IDs, and a durable journal outbox.
+Interrupted apply markers reopen paused. Conflicts clear the apply marker and
+preserve whole-turn rollback. Cross-process rollback reloads the verified
+baseline into the existing `Document` and `PlotWindow`, restores the baseline
+page and zoom, and verifies the exact render before closing the transaction.
+
+AI is a participant in the document, not a separate hidden renderer. A real
+model/provider connection and deterministic `DataMappingProposal` execution
+remain later M3 increments; the current UI intentionally does not imitate a
+working chat box before those contracts exist.
 
 ### Compose
 
@@ -183,6 +218,7 @@ Keep visible:
 - Save, Undo, Redo;
 - page navigation;
 - zoom out, zoom in, Fit, and 100%;
+- Review and Assist workspace entry;
 - Export + QA;
 - More.
 
@@ -275,7 +311,8 @@ accessibility QA, not by application chrome tokens.
   dock on wider windows;
 - inspector visibility, bounded width, contrast preference, active inspector,
   stable-object selection, XY point selection, and structural-QA state persist
-  in `CanvasSession` version 3, with safe version-1 and version-2 migration;
+  in `CanvasSession` version 4, with safe version-1, version-2, and version-3
+  migration;
 - `Tab`, `Esc`, `F9`, menus, shortcuts, focus indication, and accessible
   control names are covered by the native application probe;
 - the selection-driven inspector exposes only the ten bounded scientific
@@ -309,6 +346,30 @@ accessibility QA, not by application chrome tokens.
 - FTIR, rheology, tensile, impact, torque, and TEMP3 scalar-field review
   lifecycles pass `120/120` aggregate checks without mutating their source
   projects or transferring stable IDs away from existing objects.
+
+## M3 reversible Assistant transaction kernel delivered
+
+- the Assistant is a compact third Inspector tab with an explicit
+  provider-optional empty state, current-turn summary, bounded context,
+  complete wrapping Before/After cards, and pause, accept, reject, undo,
+  commit, and whole-turn rollback actions;
+- `CanvasSession` version 4 persists a closed transaction state machine,
+  verified baseline artifacts, baseline page/viewport, durable journal
+  outbox, apply marker, and complete batch history;
+- pending previews are identity-bound to the exact typed batch and cannot be
+  swapped independently of the operation that acceptance will execute;
+- proposals validate without document mutation; accepted batches redraw the
+  live Canvas through the same controller gateway used by manual edits;
+- ordinary visual edits, review promotion, save, exact export, and Advanced
+  Editor launch are blocked while a transaction owns the document;
+- same-process latest-batch undo and cross-process exact whole-turn rollback
+  are distinct, explicit recovery paths;
+- interrupted apply and conflict markers reopen in a reviewable state and
+  cannot deadlock rollback;
+- pure contracts pass `30/30`; the Assistant lifecycle passes `20/20`; five
+  task families pass independently; runtime smoke version 12 passes `28/28`;
+- automated probes use a typed provider stub and do not count as human
+  sessions or prove real model quality.
 
 ## M2 implementation order
 

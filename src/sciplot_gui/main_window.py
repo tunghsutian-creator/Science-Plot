@@ -7,7 +7,10 @@ from typing import Any
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from sciplot_core.canvas.operations import CanvasOperationBatch
 from sciplot_gui.annotation_overlay import AnnotationOverlayController
+from sciplot_gui.assistant_controller import AssistantTransactionCoordinator
+from sciplot_gui.assistant_panel import AssistantTransactionPanel
 from sciplot_gui.document_controller import DocumentController
 from sciplot_gui.inspectors import ContextualInspectorPanel, ReviewInspectorPanel
 from sciplot_gui.theme import (
@@ -59,6 +62,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             project_id=workspace.project_id,
             parent=self,
         )
+        self.assistant = AssistantTransactionCoordinator(self.controller)
         self.plot_window = self.controller.adapter.plot_window
         self.plot_window.viewtoolbar.hide()
         self._structural_qa_timer = QtCore.QTimer(self)
@@ -75,6 +79,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._connect_canvas_signals()
         self._refresh_contextual_inspector()
         self._refresh_review_layer()
+        self._refresh_assistant_panel()
         self._sync_ui()
         self._schedule_structural_qa(delay_ms=0)
         if self.controller.recovered_from_snapshot is not None:
@@ -262,6 +267,60 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         toolbar.addAction(self.review_action)
         self._bind_toolbar_accessibility(self.review_action)
 
+        self.assistant_action = self._action(
+            "Assist",
+            "Ctrl+Shift+A",
+            self._assistant_action_triggered,
+            tooltip="Open the typed, reversible Assistant transaction pane",
+            object_name="assistantAction",
+        )
+        self.assistant_action.setCheckable(True)
+        toolbar.addAction(self.assistant_action)
+        self._bind_toolbar_accessibility(self.assistant_action)
+
+        self.assistant_pause_action = self._action(
+            "Pause Assistant",
+            None,
+            self._assistant_pause_triggered,
+            tooltip="Pause or resume the current Assistant transaction",
+            object_name="assistantPauseAction",
+        )
+        self.assistant_accept_action = self._action(
+            "Accept Proposal",
+            None,
+            self._assistant_accept_triggered,
+            tooltip="Apply the pending typed Assistant proposal",
+            object_name="assistantAcceptAction",
+        )
+        self.assistant_reject_action = self._action(
+            "Reject Proposal",
+            None,
+            self._assistant_reject_triggered,
+            tooltip="Reject the pending proposal without changing the document",
+            object_name="assistantRejectAction",
+        )
+        self.assistant_undo_action = self._action(
+            "Undo Assistant Batch",
+            None,
+            self._assistant_undo_triggered,
+            tooltip="Undo the latest accepted batch in the current turn",
+            object_name="assistantUndoAction",
+        )
+        self.assistant_commit_action = self._action(
+            "Commit Assistant Turn",
+            None,
+            self._assistant_commit_triggered,
+            tooltip="Keep the accepted batches and close the current turn",
+            object_name="assistantCommitAction",
+        )
+        self.assistant_rollback_action = self._action(
+            "Roll Back Entire Assistant Turn",
+            None,
+            self._assistant_rollback_triggered,
+            tooltip="Restore the exact verified document baseline",
+            object_name="assistantRollbackAction",
+        )
+
         spacer = QtWidgets.QWidget()
         spacer.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
@@ -329,6 +388,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         more_menu.addAction(self.inspector_action)
         more_menu.addAction(self.point_pick_action)
         more_menu.addAction(self.review_action)
+        more_menu.addAction(self.assistant_action)
         more_menu.addAction(self.canvas_only_action)
         more_menu.addAction(self.high_contrast_action)
         more_menu.addSeparator()
@@ -395,12 +455,32 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         review_panel.promoteRequested.connect(self._promote_review_annotation)
         review_panel.removeRequested.connect(self._remove_review_annotation)
 
+        assistant_panel = AssistantTransactionPanel()
+        assistant_panel.pauseRequested.connect(self._assistant_pause_triggered)
+        assistant_panel.resumeRequested.connect(self._assistant_pause_triggered)
+        assistant_panel.acceptRequested.connect(self._assistant_accept_triggered)
+        assistant_panel.rejectProposalRequested.connect(
+            self._assistant_reject_triggered
+        )
+        assistant_panel.undoBatchRequested.connect(
+            self._assistant_undo_triggered
+        )
+        assistant_panel.commitRequested.connect(
+            self._assistant_commit_triggered
+        )
+        assistant_panel.rollbackRequested.connect(
+            self._assistant_rollback_triggered
+        )
+
         inspector_tabs = QtWidgets.QTabWidget(self)
         inspector_tabs.setObjectName("inspectorTabs")
         inspector_tabs.setDocumentMode(True)
         inspector_tabs.addTab(inspector, "Edit")
         inspector_tabs.addTab(review_panel, "Review")
-        inspector_tabs.setAccessibleName("Figure editing and review workspaces")
+        inspector_tabs.addTab(assistant_panel, "Assistant")
+        inspector_tabs.setAccessibleName(
+            "Figure editing, review, and Assistant workspaces"
+        )
         inspector_tabs.currentChanged.connect(self._inspector_tab_changed)
 
         inspector_dock = QtWidgets.QDockWidget("Inspector", self)
@@ -438,6 +518,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.inspector = inspector
         self.inspector_panel = inspector
         self.review_panel = review_panel
+        self.assistant_panel = assistant_panel
         self.inspector_tabs = inspector_tabs
         self.review_overlay = AnnotationOverlayController(
             self.plot_window,
@@ -494,6 +575,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         view_menu.addSeparator()
         view_menu.addAction(self.inspector_action)
         view_menu.addAction(self.review_action)
+        view_menu.addAction(self.assistant_action)
         view_menu.addAction(self.canvas_only_action)
         view_menu.addAction(self.high_contrast_action)
 
@@ -538,6 +620,17 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         review_menu.addAction(self.promote_review_action)
         review_menu.addAction(self.remove_review_action)
 
+        assistant_menu = menu_bar.addMenu("Assistant")
+        assistant_menu.addAction(self.assistant_action)
+        assistant_menu.addSeparator()
+        assistant_menu.addAction(self.assistant_pause_action)
+        assistant_menu.addAction(self.assistant_accept_action)
+        assistant_menu.addAction(self.assistant_reject_action)
+        assistant_menu.addAction(self.assistant_undo_action)
+        assistant_menu.addSeparator()
+        assistant_menu.addAction(self.assistant_commit_action)
+        assistant_menu.addAction(self.assistant_rollback_action)
+
         document_menu = menu_bar.addMenu("Document")
         document_menu.addAction(self.advanced_action)
 
@@ -545,6 +638,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.edit_menu = edit_menu
         self.view_menu = view_menu
         self.review_menu = review_menu
+        self.assistant_menu = assistant_menu
         self.document_menu = document_menu
 
     def _apply_theme(self) -> None:
@@ -586,17 +680,21 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             self.inspector_dock.resize(interface.inspector_width, self.height())
             self.inspector_dock.setVisible(interface.inspector_visible)
             self.canvas_only_action.setChecked(False)
-            active_index = (
-                1
-                if self.controller.session.active_inspector == "review"
-                else 0
-            )
+            active_name = self.controller.session.active_inspector or "contextual"
+            if self.assistant.active:
+                active_name = "assistant"
+            active_index = {
+                "contextual": 0,
+                "review": 1,
+                "assistant": 2,
+            }.get(active_name, 0)
             self.inspector_tabs.setCurrentIndex(active_index)
             self.review_action.setChecked(active_index == 1)
+            self.assistant_action.setChecked(active_index == 2)
         finally:
             self._restoring_interface = False
-        if self.controller.session.active_inspector is None:
-            self.controller.update_interface_state(active_inspector="contextual")
+        if self.controller.session.active_inspector != active_name:
+            self.controller.update_interface_state(active_inspector=active_name)
         QtCore.QTimer.singleShot(0, self._apply_adaptive_layout)
 
     def _review_action_triggered(self, checked: bool) -> None:
@@ -618,10 +716,30 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._apply_adaptive_layout()
         return self.inspector_tabs.currentIndex() == 1
 
+    def _assistant_action_triggered(self, checked: bool) -> None:
+        if checked:
+            if not self._open_assistant_workspace():
+                blocker = QtCore.QSignalBlocker(self.assistant_action)
+                self.assistant_action.setChecked(False)
+                del blocker
+        else:
+            self.inspector_tabs.setCurrentIndex(0)
+
+    def _open_assistant_workspace(self) -> bool:
+        if self._canvas_only:
+            self._set_canvas_only(False)
+        if not self.inspector_dock.isVisible():
+            self.controller.update_interface_state(inspector_visible=True)
+            self.inspector_dock.show()
+        self.inspector_tabs.setCurrentIndex(2)
+        self._apply_adaptive_layout()
+        return self.inspector_tabs.currentIndex() == 2
+
     def _inspector_tab_changed(self, index: int) -> None:
         if self._restoring_interface:
             return
-        next_name = "review" if index == 1 else "contextual"
+        names = {0: "contextual", 1: "review", 2: "assistant"}
+        next_name = names.get(index, "contextual")
         previous_name = self.controller.session.active_inspector or "contextual"
         if (
             previous_name != next_name
@@ -631,7 +749,11 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         ):
             blocker = QtCore.QSignalBlocker(self.inspector_tabs)
             self.inspector_tabs.setCurrentIndex(
-                1 if previous_name == "review" else 0
+                {
+                    "contextual": 0,
+                    "review": 1,
+                    "assistant": 2,
+                }.get(previous_name, 0)
             )
             del blocker
             return
@@ -639,10 +761,18 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         blocker = QtCore.QSignalBlocker(self.review_action)
         self.review_action.setChecked(next_name == "review")
         del blocker
+        blocker = QtCore.QSignalBlocker(self.assistant_action)
+        self.assistant_action.setChecked(next_name == "assistant")
+        del blocker
         if next_name == "review":
             self.controller.adapter.clear_selection_visual()
             self.status_message.setText(
                 "Review layer active · marks do not export until promoted"
+            )
+        elif next_name == "assistant":
+            self._sync_selection_visual()
+            self.status_message.setText(
+                "Assistant proposals are typed, visible, and reversible"
             )
         else:
             self._sync_selection_visual()
@@ -890,6 +1020,189 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         if clicked is cancel_button:
             return False
         return False
+
+    def _refresh_assistant_panel(self) -> None:
+        if not hasattr(self, "assistant_panel"):
+            return
+        self.assistant_panel.set_transaction(
+            self.assistant.transaction,
+            context=self.assistant.context_summary(),
+            can_undo=self.assistant.can_undo_batch,
+        )
+
+    def _execute_assistant_action(
+        self,
+        callback: Any,
+        *,
+        status: str,
+        refresh_document: bool = False,
+    ) -> Any:
+        self.assistant_panel.set_busy(True)
+        QtWidgets.QApplication.setOverrideCursor(
+            QtCore.Qt.CursorShape.WaitCursor
+        )
+        try:
+            result = callback()
+            if refresh_document:
+                self._refresh_contextual_inspector()
+                self._refresh_review_layer()
+                self._schedule_structural_qa()
+            self.status_message.setText(status)
+            return result
+        finally:
+            QtWidgets.QApplication.restoreOverrideCursor()
+            self.assistant_panel.set_busy(False)
+            self._refresh_assistant_panel()
+            self._sync_ui()
+
+    def begin_assistant_transaction(
+        self,
+        *,
+        provider: str,
+        rationale: str,
+    ) -> dict[str, Any]:
+        if not self._resolve_staged_fields("start an Assistant turn"):
+            raise RuntimeError(
+                "Resolve staged inspector or review fields before Assistant use."
+            )
+        result = self._execute_assistant_action(
+            lambda: self.assistant.begin(
+                provider=provider,
+                rationale=rationale,
+            ),
+            status="Assistant turn started from a verified baseline",
+        )
+        self._open_assistant_workspace()
+        return result
+
+    def propose_assistant_batch(
+        self,
+        batch: CanvasOperationBatch,
+    ) -> dict[str, Any]:
+        result = self._execute_assistant_action(
+            lambda: self.assistant.propose(batch),
+            status="Typed Assistant proposal ready for review",
+        )
+        self._open_assistant_workspace()
+        return result
+
+    def pause_assistant_transaction(self) -> dict[str, Any]:
+        return self._execute_assistant_action(
+            self.assistant.pause,
+            status="Assistant transaction paused",
+        )
+
+    def resume_assistant_transaction(self) -> dict[str, Any]:
+        return self._execute_assistant_action(
+            self.assistant.resume,
+            status="Assistant transaction resumed",
+        )
+
+    def accept_assistant_proposal(self) -> dict[str, Any]:
+        return self._execute_assistant_action(
+            self.assistant.accept_pending,
+            status="Assistant proposal applied to the live Canvas",
+            refresh_document=True,
+        )
+
+    def reject_assistant_proposal(
+        self,
+        *,
+        reason: str = "Rejected from the Assistant pane.",
+    ) -> dict[str, Any]:
+        return self._execute_assistant_action(
+            lambda: self.assistant.reject_pending(reason=reason),
+            status="Assistant proposal rejected without changing the document",
+        )
+
+    def undo_assistant_batch(self) -> dict[str, Any]:
+        return self._execute_assistant_action(
+            self.assistant.undo_last_batch,
+            status="Undid the latest accepted Assistant batch",
+            refresh_document=True,
+        )
+
+    def commit_assistant_transaction(self) -> dict[str, Any]:
+        return self._execute_assistant_action(
+            self.assistant.commit,
+            status="Assistant turn committed; accepted edits remain on Canvas",
+            refresh_document=True,
+        )
+
+    def rollback_assistant_transaction(
+        self,
+        *,
+        reason: str = "Rolled back from the Assistant pane.",
+    ) -> dict[str, Any]:
+        return self._execute_assistant_action(
+            lambda: self.assistant.rollback(reason=reason),
+            status="Assistant turn rolled back to its exact baseline",
+            refresh_document=True,
+        )
+
+    def _assistant_pause_triggered(self) -> None:
+        transaction = self.assistant.transaction
+        if transaction is None:
+            self._open_assistant_workspace()
+            return
+        callback = (
+            self.resume_assistant_transaction
+            if transaction.status == "paused"
+            else self.pause_assistant_transaction
+        )
+        self._run_ui_action("Assistant pause failed", callback)
+
+    def _assistant_accept_triggered(self) -> None:
+        self._run_ui_action(
+            "Assistant proposal failed",
+            self.accept_assistant_proposal,
+        )
+
+    def _assistant_reject_triggered(self) -> None:
+        self._run_ui_action(
+            "Assistant rejection failed",
+            self.reject_assistant_proposal,
+        )
+
+    def _assistant_undo_triggered(self) -> None:
+        self._run_ui_action(
+            "Assistant undo failed",
+            self.undo_assistant_batch,
+        )
+
+    def _assistant_commit_triggered(self) -> None:
+        self._run_ui_action(
+            "Assistant commit failed",
+            self.commit_assistant_transaction,
+        )
+
+    def _assistant_rollback_triggered(self) -> None:
+        transaction = self.assistant.transaction
+        if transaction is None:
+            return
+        if self.interactive and transaction.active_batch_ids:
+            message = QtWidgets.QMessageBox(self)
+            message.setWindowTitle("Roll back entire Assistant turn?")
+            message.setText(
+                "Restore the exact document and review baseline from "
+                f"revision {transaction.base_revision}?"
+            )
+            message.setInformativeText(
+                "All accepted batches in this Assistant turn will be removed. "
+                "The rollback itself remains in the audit journal."
+            )
+            rollback_button = message.addButton(
+                "Roll Back Turn",
+                QtWidgets.QMessageBox.ButtonRole.DestructiveRole,
+            )
+            message.addButton(QtWidgets.QMessageBox.StandardButton.Cancel)
+            message.exec()
+            if message.clickedButton() is not rollback_button:
+                return
+        self._run_ui_action(
+            "Assistant rollback failed",
+            self.rollback_assistant_transaction,
+        )
 
     def apply_contextual_changes(
         self,
@@ -1298,6 +1611,8 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         return path
 
     def undo_document(self) -> dict[str, Any]:
+        if self.assistant.active:
+            return self.undo_assistant_batch()
         entry = self.controller.undo(provider="user")
         self._refresh_contextual_inspector()
         self._refresh_review_layer()
@@ -1307,6 +1622,10 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         return entry
 
     def redo_document(self) -> dict[str, Any]:
+        if self.assistant.active:
+            raise RuntimeError(
+                "Redo is unavailable inside an active Assistant transaction."
+            )
         entry = self.controller.redo(provider="user")
         self._refresh_contextual_inspector()
         self._refresh_review_layer()
@@ -1316,6 +1635,10 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         return entry
 
     def export_current(self) -> dict[str, Any]:
+        if self.assistant.active:
+            raise RuntimeError(
+                "Commit or roll back the Assistant turn before Export + QA."
+            )
         if (
             self.inspector_panel.has_staged_changes
             or self.review_panel.has_staged_changes
@@ -1372,6 +1695,11 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
 
     def _advanced_editor_triggered(self) -> None:
         def launch() -> None:
+            if self.assistant.active:
+                raise RuntimeError(
+                    "Commit or roll back the Assistant turn before opening "
+                    "Advanced Editor."
+                )
             if self.controller.session.dirty:
                 if not self.interactive:
                     raise RuntimeError(
@@ -1506,6 +1834,18 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 self.controller.update_interface_state(inspector_width=width)
 
     def _sync_selection_ui(self) -> None:
+        if self.assistant.active:
+            selected = self.controller.selected_object
+            if selected is None:
+                self.selection_status.setText("Selection: none")
+            else:
+                self.selection_status.setText(
+                    "Selection: "
+                    f"{selected.get('object_type', 'object')} · "
+                    f"{selected.get('display_name') or 'Unnamed'}"
+                )
+            self.controller.adapter.clear_selection_visual()
+            return
         if (
             hasattr(self, "inspector_tabs")
             and self.inspector_tabs.currentIndex() == 1
@@ -1541,6 +1881,8 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
 
     def _sync_ui(self) -> None:
         session = self.controller.session
+        assistant_active = self.assistant.active
+        self._refresh_assistant_panel()
         state_text = session.state.replace("_", " ")
         self.state_chip.setText(state_text)
         self.state_chip.setAccessibleName(f"Document state: {state_text}")
@@ -1552,9 +1894,65 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             style = self.state_chip.style()
             style.unpolish(self.state_chip)
             style.polish(self.state_chip)
-        self.save_action.setEnabled(session.dirty)
-        self.undo_action.setEnabled(self.controller.adapter.can_undo)
-        self.redo_action.setEnabled(self.controller.adapter.can_redo)
+        self.save_action.setEnabled(session.dirty and not assistant_active)
+        self.undo_action.setEnabled(
+            self.assistant.can_undo_batch
+            if assistant_active
+            else self.controller.adapter.can_undo
+        )
+        self.redo_action.setEnabled(
+            not assistant_active and self.controller.adapter.can_redo
+        )
+        self.export_action.setEnabled(not assistant_active)
+        self.advanced_action.setEnabled(not assistant_active)
+        self.point_pick_action.setEnabled(not assistant_active)
+        self.review_action.setEnabled(not assistant_active)
+        self.inspector_panel.setEnabled(not assistant_active)
+        self.review_panel.setEnabled(not assistant_active)
+        if assistant_active:
+            self.controller.adapter.clear_selection_visual()
+        self.assistant_action.setText(
+            "Assist · Active" if assistant_active else "Assist"
+        )
+        self.assistant_pause_action.setEnabled(assistant_active)
+        transaction = self.assistant.transaction
+        pending = bool(
+            transaction is not None and transaction.pending_batch is not None
+        )
+        applying = bool(
+            transaction is not None
+            and transaction.applying_batch_id is not None
+        )
+        active_status = bool(
+            transaction is not None and transaction.status == "active"
+        )
+        paused_status = bool(
+            transaction is not None and transaction.status == "paused"
+        )
+        self.assistant_pause_action.setText(
+            "Resume Assistant" if paused_status else "Pause Assistant"
+        )
+        self.assistant_accept_action.setEnabled(
+            active_status and pending and not applying
+        )
+        self.assistant_reject_action.setEnabled(
+            (active_status or paused_status) and pending and not applying
+        )
+        self.assistant_undo_action.setEnabled(
+            self.assistant.can_undo_batch
+        )
+        self.assistant_commit_action.setEnabled(
+            (active_status or paused_status) and not pending and not applying
+        )
+        self.assistant_rollback_action.setEnabled(
+            assistant_active and not applying
+        )
+        if assistant_active:
+            self.undo_action.setToolTip(
+                "Undo the latest accepted batch in this Assistant turn"
+            )
+        else:
+            self.undo_action.setToolTip("Undo one accepted Canvas batch")
         self.recovery_banner.setVisible(
             self.controller.recovered_from_snapshot is not None and session.dirty
         )
@@ -1709,6 +2107,41 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             return "cancel"
         return "cancel"
 
+    def _prompt_assistant_close_policy(self) -> str:
+        transaction = self.assistant.transaction
+        if transaction is None:
+            return "keep"
+        message = QtWidgets.QMessageBox(self)
+        message.setWindowTitle("Active Assistant transaction")
+        message.setText(
+            "This Assistant turn has not been committed or rolled back."
+        )
+        message.setInformativeText(
+            "Keep it for verified recovery on the next open, or restore the "
+            f"exact revision {transaction.base_revision} baseline now."
+        )
+        keep_button = message.addButton(
+            "Keep for Reopen",
+            QtWidgets.QMessageBox.ButtonRole.AcceptRole,
+        )
+        rollback_button = message.addButton(
+            "Roll Back and Close",
+            QtWidgets.QMessageBox.ButtonRole.DestructiveRole,
+        )
+        cancel_button = message.addButton(
+            QtWidgets.QMessageBox.StandardButton.Cancel
+        )
+        message.setDefaultButton(keep_button)
+        message.exec()
+        clicked = message.clickedButton()
+        if clicked is keep_button:
+            return "keep"
+        if clicked is rollback_button:
+            return "rollback"
+        if clicked is cancel_button:
+            return "cancel"
+        return "cancel"
+
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         if self._closed:
             event.accept()
@@ -1728,6 +2161,27 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 self.review_panel.revert_staged()
         policy = self._close_policy_override
         self._close_policy_override = None
+        if self.assistant.active:
+            assistant_policy = (
+                self._prompt_assistant_close_policy()
+                if self.interactive
+                else "keep"
+            )
+            if assistant_policy == "cancel":
+                event.ignore()
+                return
+            if assistant_policy == "rollback":
+                result = self._run_ui_action(
+                    "Assistant rollback failed",
+                    lambda: self.rollback_assistant_transaction(
+                        reason="Rolled back while closing the Canvas."
+                    ),
+                )
+                if result is None:
+                    event.ignore()
+                    return
+            elif assistant_policy == "keep" and self.controller.session.dirty:
+                policy = "keep_recovery"
         if self.controller.session.dirty:
             if policy is None:
                 policy = (

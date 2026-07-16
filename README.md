@@ -29,15 +29,23 @@ fixture、策略或 QA，使下一次能够少用或不用 AI。
 项目的目标不是提高 AI 占比，而是让 AI 只处理未知性。对于已验收的数据和绘图规则，
 程序应直接返回 `ready_to_use=true`，无需 AI 看图；不确定时必须停在确认或修复状态。
 
-当前完成到 M2 的工程内核：统一 Canvas 会话、封闭的类型化操作、选择驱动的页面/图区/轴/
-曲线/箱线/图例/标量场/标注检查器、数据点选择、直接标注拖动、结构 QA、审阅批注和数据
-映射合同已经建立。原生 Qt Canvas 直接嵌入 `PlotWindow`，处理选择、编辑、撤销/重做、
-保存、恢复、精确导出、QA 和项目交付。界面支持系统 palette 驱动的明暗/高对比主题、
-窄窗口浮动检查器、`Tab` Canvas-only、菜单/快捷键对等、可访问名称和跨重开状态持久化。
+当前已完成 M0/M1、M2 的工程内核，以及 M3 的第一段可逆 Assistant 事务内核：统一
+Canvas 会话、封闭的类型化操作、选择驱动的页面/图区/轴/曲线/箱线/图例/标量场/标注
+检查器、数据点选择、直接标注拖动、结构 QA、审阅批注和数据映射合同已经建立。原生 Qt
+Canvas 直接嵌入 `PlotWindow`，处理选择、编辑、撤销/重做、保存、恢复、精确导出、QA
+和项目交付。界面支持系统 palette 驱动的明暗/高对比主题、窄窗口浮动检查器、`Tab`
+Canvas-only、菜单/快捷键对等、可访问名称和跨重开状态持久化。
 
 M2 的非导出审阅层也已实现：五种工具、五类坐标锚点、独立 sidecar、关闭重开、审阅到
 Veusz 原生标注的类型化晋升，以及撤销/重做和精确导出门禁均已通过。当前仍需至少十次
 真实日常编辑/审阅会话和用户批准的 `studio` 默认入口切换，因此不把自动探针冒充真人验收。
+
+M3 的 Assistant 现在是 Inspector 中的第三个自适应工作区，而不是第二个侧栏或伪聊天框。
+类型化 `CanvasOperationBatch` 可以先完整预览 Before/After，再暂停、接受、拒绝、逐批撤销、
+提交或整轮回滚；事务关闭重开、apply 中断、冲突、日志重试、页面/缩放变化和 exact-current
+导出均有自动门禁。没有 AI provider 时，普通 Canvas 编辑、审阅、QA、保存和导出仍完整
+可用。当前尚未接入真实模型，也尚未实现确定性的 `DataMappingProposal` 执行，因此 M3
+仍处于开发中。
 
 ## 日常主流程
 
@@ -87,7 +95,7 @@ skill/scripts/sciplot studio PATH \
 `--rule` 是明确的科学语义选择，会绕过自动猜测；`--template` 是明确的呈现选择，可单独使用，
 也可省略并采用该规则的默认模板。Luna/Codex 可以根据用户自然语言直接填写这两个参数。
 
-## 原生 Canvas（M2 受控日常入口）
+## 原生 Canvas（M2 + M3 事务内核受控入口）
 
 对已有 SciPlot project、`plot_request.json` 或独立 VSZ 进行实时编辑：
 
@@ -114,6 +122,11 @@ SciPlot 窗口中显示实时画布和从属检查器。当前高频能力包括
 - 显式未保存恢复；
 - `F9` 收起检查器；
 - `Ctrl+Shift+R` 打开 Review 工作区；
+- `Ctrl+Shift+A` 打开 Assistant 工作区；没有 provider 时显示明确的 AI-optional 空状态；
+- 类型化 Assistant 提案完整展示 Before/After，接受前不改变 VSZ、修订或实时渲染；
+- Assistant 回合支持暂停/恢复、拒绝提案、逐批撤销、提交、关闭重开和整轮精确回滚；
+- 活动 Assistant 回合独占文档变更，普通编辑、review promotion、Save、Export + QA 和
+  Advanced Editor 必须先提交或回滚；
 - `Tab` 进入 Canvas-only，`Esc` 恢复界面；
 - 系统 palette 驱动的明暗与高对比应用 chrome；
 - 窄窗口检查器自动浮动，保持画布宽度；
@@ -206,6 +219,8 @@ PROJECT/
 - M2 palette-backed 明暗/高对比主题、适应式检查器、Canvas-only、可访问性和界面状态持久化；
 - M2 选择驱动的十类对象检查器、数据点选择、原生 label 拖动、结构 QA、五工具审阅层、
   五类锚点和四类原生标注晋升；
+- M3 provider-neutral Assistant 面板、`CanvasSession` v4 事务状态机、零修改预览、实时
+  apply、暂停/拒绝/逐批撤销/提交/整轮回滚、冲突与中断恢复、幂等日志 outbox；
 - 60/120/180 mm 单图尺寸以及 183 mm 组合图布局；
 - publication intent、transform ledger、研究模型和证据绑定；
 - PDF 页面/字体/尺寸/可见墨迹、TIFF 分辨率、PDF-TIFF 配对和哈希 QA；

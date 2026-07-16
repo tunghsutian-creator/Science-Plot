@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sciplot_core._utils import file_sha256, json_safe
 from sciplot_core.canvas.annotations import (
@@ -12,12 +12,18 @@ from sciplot_core.canvas.annotations import (
     ReviewAnnotationStyle,
 )
 from sciplot_core.canvas.inspector import CanvasInspectorModel
-from sciplot_core.canvas.model import CanvasSelection, CanvasSession
+from sciplot_core.canvas.model import (
+    CanvasSelection,
+    CanvasSession,
+    CanvasViewport,
+)
 from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 from sciplot_core.canvas.persistence import (
     append_operation_journal,
+    append_operation_journal_once,
     load_canvas_session,
     load_review_annotations,
+    read_operation_journal,
     save_canvas_session,
     save_review_annotations,
 )
@@ -185,9 +191,9 @@ class DocumentController:
             self.session,
         )
         self.persist()
+        self.flush_journal_outbox()
         if self.recovered_from_snapshot is not None:
-            append_operation_journal(
-                self.journal_path,
+            self.record_journal_entry(
                 {
                     "kind": "sciplot_canvas_journal_entry",
                     "version": 1,
@@ -200,6 +206,77 @@ class DocumentController:
 
     def persist(self) -> Path:
         return save_canvas_session(self.session_path, self.session)
+
+    def _queue_journal_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
+        payload = json_safe(
+            {
+                "kind": "sciplot_canvas_journal_entry",
+                "version": 1,
+                "event_id": str(entry.get("event_id") or uuid4()),
+                "recorded_at": str(entry.get("recorded_at") or _now()),
+                **entry,
+            }
+        )
+        if not isinstance(payload, dict):
+            raise ValueError("Canvas journal entries must be JSON objects.")
+        event_id = str(payload.get("event_id") or "").strip()
+        if not event_id:
+            raise ValueError("Canvas journal entries require an event_id.")
+        if any(
+            str(value.get("event_id") or "") == event_id
+            for value in self.session.journal_outbox
+        ):
+            raise ValueError(f"Duplicate Canvas journal event ID: {event_id}")
+        self.session.journal_outbox.append(payload)
+        return payload
+
+    def flush_journal_outbox(self) -> list[str]:
+        if not self.session.journal_outbox:
+            return []
+        pending = list(self.session.journal_outbox)
+        existing_ids = {
+            str(entry.get("event_id") or "")
+            for entry in read_operation_journal(self.journal_path)
+            if entry.get("event_id")
+        }
+        flushed: list[str] = []
+        for entry in pending:
+            event_id = str(entry["event_id"])
+            if event_id not in existing_ids:
+                append_operation_journal_once(self.journal_path, entry)
+                existing_ids.add(event_id)
+            flushed.append(event_id)
+        flushed_ids = set(flushed)
+        self.session.journal_outbox = [
+            entry
+            for entry in pending
+            if str(entry.get("event_id") or "") not in flushed_ids
+        ]
+        try:
+            self.persist()
+        except Exception:
+            self.session.journal_outbox = pending
+            raise
+        return flushed
+
+    def record_journal_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
+        payload = self._queue_journal_entry(entry)
+        self.persist()
+        try:
+            self.flush_journal_outbox()
+        except Exception as exc:
+            payload["journal_flush_pending"] = True
+            payload["journal_flush_error"] = f"{type(exc).__name__}: {exc}"
+        return payload
+
+    def _assert_no_active_transaction(self, action: str) -> None:
+        transaction = self.session.active_transaction
+        if transaction is None:
+            return
+        raise RuntimeError(
+            f"Resolve assistant transaction {transaction.transaction_id} "
+            f"before you {action}."
+        )
 
     def review_annotation(self, annotation_id: str) -> ReviewAnnotation:
         annotation = next(
@@ -258,6 +335,7 @@ class DocumentController:
         *,
         provider: str = "user_review",
     ) -> ReviewAnnotation:
+        self._assert_no_active_transaction("edit the review layer")
         if any(
             value.annotation_id == annotation.annotation_id
             for value in self.review_annotations
@@ -336,6 +414,7 @@ class DocumentController:
         style: ReviewAnnotationStyle | dict[str, Any] | None = None,
         provider: str = "user_review",
     ) -> ReviewAnnotation:
+        self._assert_no_active_transaction("edit the review layer")
         current = self.review_annotation(annotation_id)
         if current.state != "review_only":
             raise ValueError("Only active review-only annotations can be edited.")
@@ -404,6 +483,7 @@ class DocumentController:
         *,
         provider: str = "user_review",
     ) -> ReviewAnnotation:
+        self._assert_no_active_transaction("edit the review layer")
         current = self.review_annotation(annotation_id)
         if current.state != "review_only":
             raise ValueError(
@@ -691,17 +771,314 @@ class DocumentController:
         }
         return persisted_value, snapshot_hash
 
+    def _transaction_root(self, transaction_id: str) -> Path:
+        transaction_text = str(transaction_id)
+        try:
+            normalized = str(UUID(transaction_text))
+        except ValueError as exc:
+            raise ValueError("Assistant transaction ID must be a UUID.") from exc
+        if normalized != transaction_text:
+            raise ValueError("Assistant transaction ID must use canonical UUID form.")
+        root = (
+            self.session_path.parent
+            / ".canvas_transactions"
+            / normalized
+        ).resolve()
+        transaction_parent = (
+            self.session_path.parent / ".canvas_transactions"
+        ).resolve()
+        if not root.is_relative_to(transaction_parent):
+            raise RuntimeError("Assistant transaction path escaped its project root.")
+        return root
+
+    def _resolve_transaction_artifact(
+        self,
+        reference: str,
+        *,
+        transaction_id: str,
+    ) -> Path:
+        value = Path(reference).expanduser()
+        if not value.is_absolute():
+            value = self.session_path.parent / value
+        resolved = value.resolve()
+        root = self._transaction_root(transaction_id)
+        if not resolved.is_relative_to(root):
+            raise RuntimeError(
+                "Assistant transaction artifact resolves outside its transaction root."
+            )
+        return resolved
+
+    def create_transaction_baseline(
+        self,
+        transaction_id: str,
+    ) -> dict[str, Any]:
+        """Persist the exact document and review sidecar before an AI turn."""
+
+        self.adapter.assert_gui_thread()
+        if self.session.active_transaction is not None:
+            raise RuntimeError("An assistant transaction is already active.")
+        self._sync_view_state()
+        root = self._transaction_root(transaction_id)
+        if root.exists() and any(root.iterdir()):
+            raise RuntimeError(
+                f"Assistant transaction artifacts already exist: {root}"
+            )
+        root.mkdir(parents=True, exist_ok=True)
+        snapshot = root / "baseline.vsz"
+        review_snapshot = root / "review_annotations.json"
+        try:
+            self.adapter.save_recovery_snapshot(snapshot)
+            save_review_annotations(review_snapshot, self.review_annotations)
+        except Exception:
+            if snapshot.exists():
+                snapshot.unlink()
+            if review_snapshot.exists():
+                review_snapshot.unlink()
+            try:
+                root.rmdir()
+            except OSError:
+                pass
+            raise
+        return {
+            "snapshot_path": str(snapshot.relative_to(self.session_path.parent)),
+            "snapshot_sha256": file_sha256(snapshot),
+            "review_snapshot_path": str(
+                review_snapshot.relative_to(self.session_path.parent)
+            ),
+            "review_snapshot_sha256": file_sha256(review_snapshot),
+            "baseline_render_sha256": self.adapter.render_fingerprint(),
+        }
+
+    def restore_transaction_baseline(
+        self,
+        transaction_id: str,
+        *,
+        outcome: str,
+        reason: str,
+    ) -> dict[str, Any]:
+        """Restore the exact cross-process transaction baseline and finalize."""
+
+        self.adapter.assert_gui_thread()
+        transaction = self.session.active_transaction
+        if transaction is None or transaction.transaction_id != transaction_id:
+            raise ValueError("No matching assistant transaction is active.")
+        if outcome not in {"rejected", "rolled_back"}:
+            raise ValueError(f"Unsupported assistant rollback outcome: {outcome!r}")
+        if transaction.applying_batch_id is not None:
+            raise RuntimeError(
+                "An interrupted applying batch must be reconciled before rollback."
+            )
+        if not transaction.baseline_complete:
+            transaction.status = "conflict"
+            self.session.set_state("conflict")
+            self.persist()
+            raise RuntimeError(
+                "Assistant transaction baseline is incomplete and cannot roll back."
+            )
+        baseline = self._resolve_transaction_artifact(
+            str(transaction.snapshot_path),
+            transaction_id=transaction_id,
+        )
+        review_baseline = self._resolve_transaction_artifact(
+            str(transaction.review_snapshot_path),
+            transaction_id=transaction_id,
+        )
+        if (
+            not baseline.is_file()
+            or file_sha256(baseline) != transaction.snapshot_sha256
+            or not review_baseline.is_file()
+            or file_sha256(review_baseline)
+            != transaction.review_snapshot_sha256
+        ):
+            transaction.status = "conflict"
+            self.session.set_state("conflict")
+            self.persist()
+            raise RuntimeError(
+                "Assistant transaction baseline integrity could not be verified."
+            )
+
+        root = self._transaction_root(transaction_id)
+        current_snapshot = root / "pre_rollback_current.vsz"
+        current_review = root / "pre_rollback_review_annotations.json"
+        self.adapter.save_recovery_snapshot(current_snapshot)
+        save_review_annotations(current_review, self.review_annotations)
+        session_before = self.session.to_dict()
+        annotations_before = list(self.review_annotations)
+        before_render = self.adapter.render_fingerprint()
+        rollback_snapshot: Path | None = None
+        committed = False
+        entry: dict[str, Any] | None = None
+        try:
+            baseline_clean = (
+                transaction.baseline_saved_revision
+                == transaction.base_revision
+            )
+            baseline_viewport = CanvasViewport.from_dict(
+                transaction.baseline_viewport
+            )
+            restored_render = self.adapter.restore_snapshot(
+                baseline,
+                mark_modified=not baseline_clean,
+                page_index=transaction.baseline_page,
+                zoom_factor=baseline_viewport.zoom,
+            )
+            if restored_render != transaction.baseline_render_sha256:
+                raise RuntimeError(
+                    "Restored assistant baseline rendered differently from "
+                    "the transaction start."
+                )
+            restored_annotations = load_review_annotations(review_baseline)
+            next_revision = self.session.revision + 1
+            rollback_snapshot = self._create_recovery_snapshot(
+                revision=next_revision,
+                event=f"assistant_{outcome}",
+            )
+            terminal_transaction = CanvasSession.from_dict(
+                session_before
+            ).active_transaction
+            if terminal_transaction is None:
+                raise RuntimeError("Missing assistant transaction during rollback.")
+            terminal_transaction.status = outcome
+            terminal_transaction.pending_batch = None
+            terminal_transaction.pending_preview = None
+            terminal_transaction.applying_batch_id = None
+            terminal_transaction.updated_at = _now()
+
+            self.session.revision = next_revision
+            self.session.saved_revision = (
+                next_revision
+                if baseline_clean
+                else int(transaction.baseline_saved_revision)
+            )
+            self.session.exported_revision = (
+                next_revision
+                if baseline_clean
+                and transaction.baseline_exported_revision
+                == transaction.base_revision
+                else transaction.baseline_exported_revision
+            )
+            self.session.document_sha256 = transaction.baseline_document_sha256
+            self.session.qa_summary = dict(transaction.baseline_qa_summary)
+            self.session.structural_qa_summary = dict(
+                transaction.baseline_structural_qa_summary
+            )
+            self.session.last_render_sha256 = restored_render
+            self.session.current_page = self.adapter.current_page
+            self.session.viewport = baseline_viewport
+            self.review_annotations = restored_annotations
+            self.session.review_annotation_ids = [
+                annotation.annotation_id for annotation in restored_annotations
+            ]
+            save_review_annotations(
+                self.annotations_path,
+                restored_annotations,
+            )
+            snapshot_reference, snapshot_hash = self._record_recovery_snapshot(
+                rollback_snapshot
+            )
+            self.inventory = self.adapter.bind_object_registry(self.session)
+            self.adapter.restore_data_point_selection(
+                self.session.selection.data_point,
+                self.session,
+            )
+            self.session.active_transaction = None
+            self.session.set_state(
+                str(transaction.baseline_state)
+                if baseline_clean
+                else "editing"
+            )
+            entry = self._queue_journal_entry(
+                {
+                    "event": f"assistant_transaction_{outcome}",
+                    "provider": transaction.provider,
+                    "transaction_id": transaction_id,
+                    "revision": next_revision,
+                    "reason": str(reason or "").strip(),
+                    "transaction": terminal_transaction.to_dict(),
+                    "render_before": before_render,
+                    "render_after": restored_render,
+                    "baseline_render_sha256": (
+                        transaction.baseline_render_sha256
+                    ),
+                    "recovery_snapshot": snapshot_reference,
+                    "recovery_snapshot_sha256": snapshot_hash,
+                    "verification": {
+                        "exact_baseline_render": (
+                            restored_render
+                            == transaction.baseline_render_sha256
+                        ),
+                        "baseline_vsz_hash_verified": True,
+                        "baseline_review_hash_verified": True,
+                        "canonical_vsz_unchanged": (
+                            transaction.baseline_document_sha256 is None
+                            or (
+                                self.document_path.is_file()
+                                and file_sha256(self.document_path)
+                                == transaction.baseline_document_sha256
+                            )
+                        ),
+                    },
+                }
+            )
+            self.persist()
+            committed = True
+            current_snapshot.unlink(missing_ok=True)
+            current_review.unlink(missing_ok=True)
+            self._history_side_effects_undo.clear()
+            self._history_side_effects_redo.clear()
+            self.flush_journal_outbox()
+            return entry
+        except Exception as exc:
+            if committed and entry is not None:
+                entry["journal_flush_pending"] = True
+                entry["journal_flush_error"] = f"{type(exc).__name__}: {exc}"
+                return entry
+            try:
+                self.adapter.restore_snapshot(
+                    current_snapshot,
+                    mark_modified=(
+                        session_before["revision"]
+                        != session_before["saved_revision"]
+                    ),
+                    page_index=int(session_before["current_page"]),
+                    zoom_factor=float(session_before["viewport"]["zoom"]),
+                )
+                self.review_annotations = annotations_before
+                save_review_annotations(
+                    self.annotations_path,
+                    annotations_before,
+                )
+            finally:
+                if rollback_snapshot is not None and rollback_snapshot.exists():
+                    rollback_snapshot.unlink()
+                self.session = CanvasSession.from_dict(session_before)
+                self.inventory = self.adapter.bind_object_registry(self.session)
+                self.adapter.restore_data_point_selection(
+                    self.session.selection.data_point,
+                    self.session,
+                )
+                self.persist()
+            raise
+
     def _resolve_operation_targets(
         self,
         batch: CanvasOperationBatch,
     ) -> list[dict[str, Any]]:
         changes: list[dict[str, Any]] = []
+        setting_paths: set[str] = set()
+        widget_paths: set[str] = set()
+        inventory_paths = {str(item.get("path") or "") for item in self.inventory}
         for operation in batch.operations:
             target = self.session.object_registry.by_id(operation.target_id)
             if target is None:
                 raise ValueError(f"Unknown Canvas target: {operation.target_id}")
             if operation.operation_type == "set_setting":
                 setting_path = str(operation.arguments["setting_path"])
+                if setting_path in setting_paths:
+                    raise ValueError(
+                        f"CanvasOperationBatch repeats setting path {setting_path!r}."
+                    )
+                setting_paths.add(setting_path)
                 if not setting_path.startswith(f"{target.current_path}/"):
                     raise ValueError(
                         f"Setting path {setting_path!r} is outside target "
@@ -718,8 +1095,9 @@ class DocumentController:
                         f"{operation.arguments['expected_value']!r} "
                         f"!= {current_value!r}"
                     )
-                self.adapter.validate_setting_value(
-                    setting_path, operation.arguments["value"]
+                normalized = self.adapter.validate_setting_value(
+                    setting_path,
+                    operation.arguments["value"],
                 )
                 changes.append(
                     {
@@ -727,7 +1105,8 @@ class DocumentController:
                         "operation_id": operation.operation_id,
                         "target_id": operation.target_id,
                         "setting_path": setting_path,
-                        "value": operation.arguments["value"],
+                        "old_value": json_safe(current_value),
+                        "value": json_safe(normalized),
                     }
                 )
                 continue
@@ -736,6 +1115,16 @@ class DocumentController:
                     raise ValueError(
                         "Native annotations can only be added to a page or graph."
                     )
+                widget_path = (
+                    f"{target.current_path.rstrip('/')}/"
+                    f"{operation.arguments['name']}"
+                )
+                if widget_path in widget_paths or widget_path in inventory_paths:
+                    raise ValueError(
+                        f"CanvasOperationBatch widget path already exists: "
+                        f"{widget_path!r}."
+                    )
+                widget_paths.add(widget_path)
                 changes.append(
                     {
                         "operation_type": "add_widget",
@@ -744,6 +1133,7 @@ class DocumentController:
                         "parent_path": target.current_path,
                         "widget_type": operation.arguments["widget_type"],
                         "name": operation.arguments["name"],
+                        "proposed_path": widget_path,
                         "index": operation.arguments.get("index", -1),
                         "settings": dict(operation.arguments["settings"]),
                     }
@@ -754,11 +1144,89 @@ class DocumentController:
             )
         return changes
 
-    def apply_batch(self, batch: CanvasOperationBatch) -> dict[str, Any]:
+    def preview_batch(self, batch: CanvasOperationBatch) -> dict[str, Any]:
+        """Validate a typed batch and summarize it without mutating the VSZ."""
+
         self.adapter.assert_gui_thread()
         self._sync_view_state()
         batch = CanvasOperationBatch.from_dict(batch.to_dict())
         if batch.base_revision != self.session.revision:
+            raise ValueError(
+                f"Stale CanvasOperationBatch: base_revision={batch.base_revision}, "
+                f"current_revision={self.session.revision}."
+            )
+        changes = self._resolve_operation_targets(batch)
+        effectful = any(
+            change["operation_type"] == "add_widget"
+            or json_safe(change.get("old_value")) != json_safe(change.get("value"))
+            for change in changes
+        )
+        if not effectful:
+            raise ValueError(
+                "CanvasOperationBatch does not change the exact-current document."
+            )
+        return {
+            "kind": "sciplot_canvas_operation_preview",
+            "version": 1,
+            "batch_id": batch.batch_id,
+            "base_revision": batch.base_revision,
+            "provider": batch.provider,
+            "rationale": batch.rationale,
+            "operation_count": len(batch.operations),
+            "affected_target_ids": list(
+                dict.fromkeys(
+                    str(change["target_id"]) for change in changes
+                )
+            ),
+            "changes": json_safe(changes),
+            "render_before": self.adapter.render_fingerprint(),
+            "publication_document_changed": False,
+        }
+
+    def _assert_operation_gateway(
+        self,
+        batch: CanvasOperationBatch,
+        *,
+        transaction_id: str | None,
+    ) -> None:
+        transaction = self.session.active_transaction
+        if transaction is None:
+            if transaction_id is not None:
+                raise ValueError("No active assistant transaction matches this batch.")
+            return
+        if transaction_id != transaction.transaction_id:
+            raise RuntimeError(
+                "An active assistant transaction owns document mutations. "
+                "Accept, reject, commit, or roll it back first."
+            )
+        if transaction.status != "active":
+            raise RuntimeError("Resume the assistant transaction before applying.")
+        if transaction.current_revision != self.session.revision:
+            transaction.status = "conflict"
+            self.session.set_state("conflict")
+            self.persist()
+            raise ValueError(
+                "The assistant transaction revision no longer matches the "
+                "exact-current document."
+            )
+        if transaction.applying_batch_id != batch.batch_id:
+            raise ValueError(
+                "The assistant transaction did not authorize this batch for apply."
+            )
+
+    def apply_batch(
+        self,
+        batch: CanvasOperationBatch,
+        *,
+        transaction_id: str | None = None,
+    ) -> dict[str, Any]:
+        self.adapter.assert_gui_thread()
+        self._sync_view_state()
+        batch = CanvasOperationBatch.from_dict(batch.to_dict())
+        self._assert_operation_gateway(batch, transaction_id=transaction_id)
+        if batch.base_revision != self.session.revision:
+            if transaction_id is not None and self.session.active_transaction:
+                self.session.active_transaction.status = "conflict"
             self.session.set_state("conflict")
             self.persist()
             raise ValueError(
@@ -766,42 +1234,112 @@ class DocumentController:
                 f"current_revision={self.session.revision}."
             )
         changes = self._resolve_operation_targets(batch)
+        if not any(
+            change["operation_type"] == "add_widget"
+            or json_safe(change.get("old_value")) != json_safe(change.get("value"))
+            for change in changes
+        ):
+            raise ValueError(
+                "CanvasOperationBatch does not change the exact-current document."
+            )
+        session_before = self.session.to_dict()
         before_render = self.adapter.render_fingerprint()
-        applied = self.adapter.apply_operation_batch(
-            changes,
-            description=batch.rationale,
-        )
-        after_render = self.adapter.render_fingerprint()
-        next_revision = self.session.revision + 1
+        snapshot: Path | None = None
+        applied_document = False
+        committed = False
+        entry: dict[str, Any] | None = None
         try:
+            applied = self.adapter.apply_operation_batch(
+                changes,
+                description=batch.rationale,
+            )
+            applied_document = True
+            after_render = self.adapter.render_fingerprint()
+            next_revision = self.session.revision + 1
             snapshot = self._create_recovery_snapshot(
                 revision=next_revision,
-                event="operation_batch",
+                event=(
+                    "assistant_batch"
+                    if transaction_id is not None
+                    else "operation_batch"
+                ),
             )
-        except Exception:
-            self.adapter.undo()
+            revision = self.session.advance_revision(
+                state=(
+                    "ai_proposing"
+                    if transaction_id is not None
+                    else "editing"
+                )
+            )
+            snapshot_reference, snapshot_hash = self._record_recovery_snapshot(
+                snapshot
+            )
+            self.session.last_render_sha256 = after_render
+            self.inventory = self.adapter.bind_object_registry(self.session)
+            if transaction_id is not None:
+                transaction = self.session.active_transaction
+                if transaction is None:
+                    raise RuntimeError(
+                        "The assistant transaction disappeared during apply."
+                    )
+                transaction.record_applied(
+                    batch_id=batch.batch_id,
+                    revision=revision,
+                )
+            entry = self._queue_journal_entry(
+                {
+                    "event": (
+                        "assistant_batch_applied"
+                        if transaction_id is not None
+                        else "operation_batch_applied"
+                    ),
+                    "provider": batch.provider,
+                    "transaction_id": transaction_id,
+                    "revision": revision,
+                    "batch": batch.to_dict(),
+                    "changes": json_safe(applied),
+                    "affected_targets": list(
+                        dict.fromkeys(
+                            str(change["target_id"]) for change in changes
+                        )
+                    ),
+                    "render_before": before_render,
+                    "render_after": after_render,
+                    "recovery_snapshot": snapshot_reference,
+                    "recovery_snapshot_sha256": snapshot_hash,
+                    "verification": {
+                        "target_resolution": "passed",
+                        "atomic_batch": True,
+                        "live_render_changed": after_render != before_render,
+                        "recovery_snapshot_verified": (
+                            file_sha256(snapshot) == snapshot_hash
+                        ),
+                    },
+                }
+            )
+            self.persist()
+            committed = True
+            self.flush_journal_outbox()
+            self._record_history_side_effect(None)
+            return entry
+        except Exception as exc:
+            if committed and entry is not None:
+                entry["journal_flush_pending"] = True
+                entry["journal_flush_error"] = f"{type(exc).__name__}: {exc}"
+                self._record_history_side_effect(None)
+                return entry
+            if applied_document:
+                try:
+                    self.adapter.undo()
+                except Exception:
+                    pass
+            if snapshot is not None and snapshot.exists():
+                snapshot.unlink()
+            self.session = CanvasSession.from_dict(session_before)
+            self.inventory = self.adapter.bind_object_registry(self.session)
+            self.adapter.force_redraw()
+            self.persist()
             raise
-        revision = self.session.advance_revision(state="editing")
-        snapshot_reference, snapshot_hash = self._record_recovery_snapshot(snapshot)
-        self.session.last_render_sha256 = after_render
-        self.inventory = self.adapter.bind_object_registry(self.session)
-        self.persist()
-        entry = {
-            "kind": "sciplot_canvas_journal_entry",
-            "version": 1,
-            "event": "operation_batch_applied",
-            "recorded_at": _now(),
-            "revision": revision,
-            "batch": batch.to_dict(),
-            "changes": json_safe(applied),
-            "render_before": before_render,
-            "render_after": after_render,
-            "recovery_snapshot": snapshot_reference,
-            "recovery_snapshot_sha256": snapshot_hash,
-        }
-        append_operation_journal(self.journal_path, entry)
-        self._record_history_side_effect(None)
-        return entry
 
     def apply_setting_changes(
         self,
@@ -845,6 +1383,7 @@ class DocumentController:
     ) -> dict[str, Any]:
         """Atomically promote a sidecar mark into one native Veusz widget."""
 
+        self._assert_no_active_transaction("promote a review annotation")
         self.adapter.assert_gui_thread()
         self._sync_view_state()
         annotation = self.review_annotation(annotation_id)
@@ -1064,8 +1603,44 @@ class DocumentController:
         self.persist()
         return report
 
-    def undo(self, *, provider: str = "user") -> dict[str, Any]:
+    def undo(
+        self,
+        *,
+        provider: str = "user",
+        transaction_id: str | None = None,
+    ) -> dict[str, Any]:
         self._sync_view_state()
+        transaction = self.session.active_transaction
+        transaction_batch_id: str | None = None
+        if transaction is not None:
+            if transaction_id != transaction.transaction_id:
+                raise RuntimeError(
+                    "The active assistant transaction owns document undo."
+                )
+            if transaction.status != "active":
+                raise RuntimeError(
+                    "Resume the assistant transaction before undoing its batch."
+                )
+            if transaction.pending_batch is not None:
+                raise RuntimeError(
+                    "Accept or reject the pending proposal before undoing a batch."
+                )
+            if transaction.current_revision != self.session.revision:
+                transaction.status = "conflict"
+                self.session.set_state("conflict")
+                self.persist()
+                raise RuntimeError(
+                    "The assistant transaction revision no longer matches "
+                    "the document."
+                )
+            active_batches = transaction.active_batch_ids
+            if not active_batches:
+                raise RuntimeError(
+                    "The assistant transaction has no accepted batch to undo."
+                )
+            transaction_batch_id = active_batches[-1]
+        elif transaction_id is not None:
+            raise ValueError("No active assistant transaction matches this undo.")
         before_render = self.adapter.render_fingerprint()
         has_side_effect = bool(self._history_side_effects_undo)
         side_effect = (
@@ -1073,6 +1648,16 @@ class DocumentController:
             if has_side_effect
             else None
         )
+        if transaction is not None and not self.adapter.can_undo:
+            raise RuntimeError(
+                "Per-batch undo is unavailable after a recovery boundary; "
+                "roll back the whole assistant turn instead."
+            )
+        session_before = self.session.to_dict()
+        annotations_before = list(self.review_annotations)
+        snapshot: Path | None = None
+        committed = False
+        entry: dict[str, Any] | None = None
         after_render = self.adapter.undo()
         next_revision = self.session.revision + 1
         review_transition: dict[str, Any] | None = None
@@ -1082,37 +1667,93 @@ class DocumentController:
                 direction="undo",
             )
             snapshot = self._create_recovery_snapshot(
-                revision=next_revision, event="undo"
+                revision=next_revision,
+                event=(
+                    "assistant_undo"
+                    if transaction is not None
+                    else "undo"
+                ),
             )
-        except Exception:
+            revision = self.session.advance_revision(
+                state=(
+                    "ai_proposing"
+                    if transaction is not None
+                    else "editing"
+                )
+            )
+            snapshot_reference, snapshot_hash = self._record_recovery_snapshot(
+                snapshot
+            )
+            self.session.last_render_sha256 = after_render
+            if transaction is not None:
+                if transaction_batch_id is None:
+                    raise RuntimeError("Missing assistant batch identity for undo.")
+                transaction.record_undo(
+                    batch_id=transaction_batch_id,
+                    revision=revision,
+                )
+            entry = self._queue_journal_entry(
+                {
+                    "event": (
+                        "assistant_batch_undone"
+                        if transaction is not None
+                        else "undo"
+                    ),
+                    "provider": provider,
+                    "transaction_id": transaction_id,
+                    "batch_id": transaction_batch_id,
+                    "revision": revision,
+                    "render_before": before_render,
+                    "render_after": after_render,
+                    "recovery_snapshot": snapshot_reference,
+                    "recovery_snapshot_sha256": snapshot_hash,
+                    "review_transition": review_transition,
+                    "verification": {
+                        "live_render_changed": after_render != before_render,
+                        "recovery_snapshot_verified": (
+                            file_sha256(snapshot) == snapshot_hash
+                        ),
+                    },
+                }
+            )
+            self.persist()
+            committed = True
+            self.flush_journal_outbox()
+            if has_side_effect:
+                self._history_side_effects_undo.pop()
+                self._history_side_effects_redo.append(side_effect)
+            return entry
+        except Exception as exc:
+            if committed and entry is not None:
+                entry["journal_flush_pending"] = True
+                entry["journal_flush_error"] = f"{type(exc).__name__}: {exc}"
+                if has_side_effect:
+                    self._history_side_effects_undo.pop()
+                    self._history_side_effects_redo.append(side_effect)
+                return entry
             if review_transition is not None:
-                self._apply_history_side_effect(side_effect, direction="redo")
+                try:
+                    self._apply_history_side_effect(
+                        side_effect,
+                        direction="redo",
+                    )
+                except Exception:
+                    self.review_annotations = annotations_before
+                    save_review_annotations(
+                        self.annotations_path,
+                        annotations_before,
+                    )
             self.adapter.redo()
+            if snapshot is not None and snapshot.exists():
+                snapshot.unlink()
+            self.session = CanvasSession.from_dict(session_before)
+            self.inventory = self.adapter.bind_object_registry(self.session)
+            self.adapter.force_redraw()
+            self.persist()
             raise
-        revision = self.session.advance_revision(state="editing")
-        snapshot_reference, snapshot_hash = self._record_recovery_snapshot(snapshot)
-        self.session.last_render_sha256 = after_render
-        self.persist()
-        entry = {
-            "kind": "sciplot_canvas_journal_entry",
-            "version": 1,
-            "event": "undo",
-            "provider": provider,
-            "recorded_at": _now(),
-            "revision": revision,
-            "render_before": before_render,
-            "render_after": after_render,
-            "recovery_snapshot": snapshot_reference,
-            "recovery_snapshot_sha256": snapshot_hash,
-            "review_transition": review_transition,
-        }
-        append_operation_journal(self.journal_path, entry)
-        if has_side_effect:
-            self._history_side_effects_undo.pop()
-            self._history_side_effects_redo.append(side_effect)
-        return entry
 
     def redo(self, *, provider: str = "user") -> dict[str, Any]:
+        self._assert_no_active_transaction("redo document history")
         self._sync_view_state()
         before_render = self.adapter.render_fingerprint()
         has_side_effect = bool(self._history_side_effects_redo)
@@ -1161,6 +1802,7 @@ class DocumentController:
         return entry
 
     def save(self) -> Path:
+        self._assert_no_active_transaction("save the canonical VSZ")
         target = self.adapter.save(self.document_path)
         self.session.document_path = str(target)
         self.session.mark_saved(document_sha256=file_sha256(target))
@@ -1181,6 +1823,7 @@ class DocumentController:
         return target
 
     def mark_exported(self, exports: list[dict[str, Any]]) -> None:
+        self._assert_no_active_transaction("record an exact-current export")
         if not exports or not all(
             isinstance(item, dict)
             and item.get("exists") is True

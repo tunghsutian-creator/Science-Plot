@@ -25,10 +25,12 @@ from sciplot_core.canvas.model import (
     CanvasDataPointSelection,
     CanvasSelection,
     CanvasSession,
+    CanvasTransaction,
 )
 from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 from sciplot_core.canvas.persistence import (
     append_operation_journal,
+    append_operation_journal_once,
     load_canvas_session,
     load_review_annotations,
     read_operation_journal,
@@ -74,8 +76,10 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
     root = output_root.expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     session_path = root / "canvas_session.json"
+    transaction_session_path = root / "canvas_transaction_session.json"
     annotations_path = root / "review_annotations.json"
     journal_path = root / "operation_journal.jsonl"
+    idempotent_journal_path = root / "idempotent_journal.jsonl"
 
     session = CanvasSession(
         project_id="canvas_contract_probe",
@@ -167,8 +171,66 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         human_confirmed=False,
         rationale="Contract-only proposal; no data are executed.",
     )
+    transaction = CanvasTransaction(
+        transaction_id="transaction-contract-probe",
+        provider="contract_probe",
+        base_revision=0,
+        status="active",
+        snapshot_path=".canvas_transactions/contract/baseline.vsz",
+        snapshot_sha256="b" * 64,
+        review_snapshot_path=(
+            ".canvas_transactions/contract/review_annotations.json"
+        ),
+        review_snapshot_sha256="c" * 64,
+        baseline_render_sha256="d" * 64,
+        baseline_saved_revision=0,
+        baseline_exported_revision=None,
+        baseline_state="canvas_ready",
+        baseline_document_sha256="e" * 64,
+        baseline_page=0,
+        baseline_viewport=session.viewport.to_dict(),
+        current_revision=0,
+        rationale="Contract-only active Assistant transaction.",
+        pending_batch=batch.to_dict(),
+        pending_preview={
+            "kind": "sciplot_canvas_operation_preview",
+            "version": 1,
+            "batch_id": batch.batch_id,
+            "base_revision": 0,
+            "provider": "contract_probe",
+            "rationale": batch.rationale,
+            "operation_count": 1,
+            "affected_target_ids": [axis.object_id],
+            "changes": [
+                {
+                    "operation_type": "set_setting",
+                    "operation_id": operation.operation_id,
+                    "target_id": axis.object_id,
+                    "setting_path": "/page/graph/x/label",
+                    "old_value": "",
+                    "value": "Frequency",
+                }
+            ],
+            "render_before": "f" * 64,
+            "publication_document_changed": False,
+        },
+    )
+    outbox_event = {
+        "kind": "sciplot_canvas_journal_entry",
+        "version": 1,
+        "event_id": "contract-event-1",
+        "event": "assistant_transaction_started",
+        "transaction_id": transaction.transaction_id,
+        "revision": 0,
+    }
+    transaction_session = CanvasSession.from_dict(session.to_dict())
+    transaction_session.state = "ai_proposing"
+    transaction_session.active_inspector = "assistant"
+    transaction_session.active_transaction = transaction
+    transaction_session.journal_outbox = [dict(outbox_event)]
 
     save_canvas_session(session_path, session)
+    save_canvas_session(transaction_session_path, transaction_session)
     save_review_annotations(annotations_path, [annotation])
     append_operation_journal(
         journal_path,
@@ -179,10 +241,20 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             "batch": batch.to_dict(),
         },
     )
+    _, first_idempotent_append = append_operation_journal_once(
+        idempotent_journal_path,
+        outbox_event,
+    )
+    _, duplicate_idempotent_append = append_operation_journal_once(
+        idempotent_journal_path,
+        outbox_event,
+    )
 
     loaded = load_canvas_session(session_path)
+    loaded_transaction_session = load_canvas_session(transaction_session_path)
     loaded_annotations = load_review_annotations(annotations_path)
     journal = read_operation_journal(journal_path)
+    idempotent_journal = read_operation_journal(idempotent_journal_path)
     rebound = loaded.object_registry.bind(
         structural_key="root/page[0]/graph[0]/axis[0]",
         current_path="/renamed_page/renamed_graph/renamed_axis",
@@ -290,6 +362,64 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
                     **session.interface.to_dict(),
                     "inspector_width": 40,
                 },
+            }
+        )
+    )
+    pending_pair_mismatch_rejected = _raises_value_error(
+        lambda: CanvasTransaction.from_dict(
+            {
+                **transaction.to_dict(),
+                "pending_preview": None,
+            }
+        )
+    )
+    pending_preview_identity_rejected = _raises_value_error(
+        lambda: CanvasTransaction.from_dict(
+            {
+                **transaction.to_dict(),
+                "pending_preview": {
+                    **dict(transaction.pending_preview or {}),
+                    "batch_id": "different-batch",
+                },
+            }
+        )
+    )
+    pending_preview_value_rejected = _raises_value_error(
+        lambda: CanvasTransaction.from_dict(
+            {
+                **transaction.to_dict(),
+                "pending_preview": {
+                    **dict(transaction.pending_preview or {}),
+                    "changes": [
+                        {
+                            **dict(
+                                (transaction.pending_preview or {})[
+                                    "changes"
+                                ][0]
+                            ),
+                            "value": "Different visible value",
+                        }
+                    ],
+                },
+            }
+        )
+    )
+    terminal_pending_rejected = _raises_value_error(
+        lambda: CanvasTransaction.from_dict(
+            {
+                **transaction.to_dict(),
+                "status": "committed",
+            }
+        )
+    )
+    duplicate_outbox_event_rejected = _raises_value_error(
+        lambda: CanvasSession.from_dict(
+            {
+                **transaction_session.to_dict(),
+                "journal_outbox": [
+                    dict(outbox_event),
+                    dict(outbox_event),
+                ],
             }
         )
     )
@@ -424,6 +554,39 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             == session.interface.to_dict()
             and migrated_version_two_session.selection.data_point is None
             and not migrated_version_two_session.structural_qa_summary,
+        ),
+        _check(
+            "assistant_transaction_session_roundtrip",
+            "CanvasSession version 4 persists a bounded active Assistant transaction and durable journal outbox",
+            loaded_transaction_session.active_transaction is not None
+            and loaded_transaction_session.active_transaction.to_dict()
+            == transaction.to_dict()
+            and loaded_transaction_session.journal_outbox
+            == transaction_session.journal_outbox
+            and loaded_transaction_session.active_inspector == "assistant"
+            and loaded_transaction_session.state == "ai_proposing",
+        ),
+        _check(
+            "assistant_pending_pair_is_atomic",
+            "Assistant transactions reject a missing or identity-mismatched pending preview",
+            pending_pair_mismatch_rejected
+            and pending_preview_identity_rejected
+            and pending_preview_value_rejected,
+        ),
+        _check(
+            "assistant_terminal_state_is_closed",
+            "Committed transactions cannot retain pending or applying work",
+            terminal_pending_rejected,
+        ),
+        _check(
+            "assistant_journal_outbox_is_idempotent",
+            "Journal outbox IDs are unique and durable appends deduplicate retries",
+            duplicate_outbox_event_rejected
+            and first_idempotent_append
+            and not duplicate_idempotent_append
+            and len(idempotent_journal) == 1
+            and idempotent_journal[0].get("event_id")
+            == outbox_event["event_id"],
         ),
         _check(
             "stable_object_identity",
@@ -567,8 +730,10 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         "checks": checks,
         "artifacts": {
             "session": str(session_path),
+            "transaction_session": str(transaction_session_path),
             "annotations": str(annotations_path),
             "journal": str(journal_path),
+            "idempotent_journal": str(idempotent_journal_path),
         },
     }
 

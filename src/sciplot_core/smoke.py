@@ -15,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 11
+RUNTIME_SMOKE_VERSION = 12
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -728,8 +728,8 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         )
         checks.append(
             _check(
-                "canvas_contract_v4",
-                "CanvasSession, contextual inspector, typed edits, native review promotion, point selection, and mapping proposals roundtrip without Qt",
+                "canvas_contract_v5",
+                "CanvasSession, active Assistant transactions, journal outbox, contextual inspector, typed edits, native review promotion, point selection, and mapping proposals roundtrip without Qt",
                 canvas_contract_probe.get("status") == "passed",
                 detail=canvas_contract_probe,
             )
@@ -969,6 +969,48 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     "summary": canvas_review_probe.get("summary"),
                     "evidence": canvas_review_probe.get("evidence"),
                     "artifacts": canvas_review_probe.get("artifacts"),
+                },
+            )
+        )
+        from sciplot_core.canvas_assistant_probe import (
+            run_canvas_assistant_probe,
+        )
+
+        canvas_assistant_probe = run_canvas_assistant_probe(
+            project_dir,
+            output_root=run_root / "canvas_assistant",
+        )
+        canvas_assistant_evidence = canvas_assistant_probe.get("evidence")
+        canvas_assistant_evidence = (
+            canvas_assistant_evidence
+            if isinstance(canvas_assistant_evidence, dict)
+            else {}
+        )
+        checks.append(
+            _check(
+                "native_canvas_assistant_transaction",
+                "The SciPlot-owned Canvas previews typed Assistant diffs "
+                "without mutation, applies them live, pauses, rejects, undoes, "
+                "reopens, commits, rolls back exactly, and survives an "
+                "interrupted apply marker",
+                canvas_assistant_probe.get("status") == "passed",
+                detail={
+                    "status": canvas_assistant_probe.get("status"),
+                    "summary": canvas_assistant_probe.get("summary"),
+                    "first_apply_latency_ms": canvas_assistant_evidence.get(
+                        "first_apply_latency_ms"
+                    ),
+                    "journal_event_count": canvas_assistant_evidence.get(
+                        "journal_event_count"
+                    ),
+                    "source_hash_before": canvas_assistant_evidence.get(
+                        "source_hash_before"
+                    ),
+                    "source_hash_after": canvas_assistant_evidence.get(
+                        "source_hash_after"
+                    ),
+                    "artifacts": canvas_assistant_probe.get("artifacts"),
+                    "limitations": canvas_assistant_probe.get("limitations"),
                 },
             )
         )
