@@ -329,6 +329,11 @@ QFrame#inspector {{
     background: {tokens.inspector};
     border-left: {border_width}px solid {tokens.border};
 }}
+QScrollArea#inspectorScroll,
+QScrollArea#inspectorScroll QWidget#qt_scrollarea_viewport {{
+    background: transparent;
+    border: 0;
+}}
 QLabel#inspectorTitle {{
     color: {tokens.text};
     font-size: 18px;
@@ -367,7 +372,58 @@ QLabel#muted {{
 QLabel#value {{
     color: {tokens.text};
 }}
-QLineEdit, QComboBox {{
+QLabel#breadcrumb {{
+    color: {tokens.text};
+    font-weight: 650;
+}}
+QLabel#pointSelection,
+QLabel#directManipulationHint {{
+    background: {tokens.neutral_background};
+    color: {tokens.neutral_text};
+    border-radius: 7px;
+    padding: 8px 10px;
+}}
+QLabel#validationMessage {{
+    background: {tokens.negative_background};
+    color: {tokens.negative_text};
+    border-radius: 7px;
+    padding: 8px 10px;
+}}
+QLabel#readOnlyValue {{
+    background: {tokens.input};
+    color: {tokens.muted_text};
+    border: {border_width}px solid {tokens.border};
+    border-radius: 7px;
+    padding: 7px 9px;
+}}
+QLabel#fieldLabel {{
+    color: {tokens.muted_text};
+}}
+QLabel[qaState="passed"] {{
+    color: {tokens.positive_text};
+}}
+QLabel[qaState="warning"] {{
+    color: {tokens.warning_text};
+}}
+QLabel[qaState="failed"] {{
+    color: {tokens.negative_text};
+}}
+QGroupBox#inspectorSection {{
+    background: transparent;
+    color: {tokens.text};
+    border: {border_width}px solid {tokens.border};
+    border-radius: 9px;
+    margin-top: 10px;
+    padding-top: 8px;
+    font-weight: 650;
+}}
+QGroupBox#inspectorSection::title {{
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 5px;
+    color: {tokens.text};
+}}
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
     background: {tokens.input};
     color: {tokens.text};
     border: {border_width}px solid {tokens.border};
@@ -375,9 +431,13 @@ QLineEdit, QComboBox {{
     padding: 7px 9px;
     min-height: 20px;
 }}
-QLineEdit:focus, QComboBox:focus {{
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
     border: {focus_width}px solid {tokens.focus};
     background: {tokens.inspector};
+}}
+QCheckBox {{
+    color: {tokens.text};
+    spacing: 8px;
 }}
 QPushButton {{
     background: {tokens.accent};
@@ -396,6 +456,58 @@ QPushButton:focus {{
 QPushButton:disabled {{
     background: {tokens.border};
     color: {tokens.disabled_text};
+}}
+QPushButton#secondaryButton {{
+    background: transparent;
+    color: {tokens.text};
+    border-color: {tokens.border};
+}}
+QPushButton#secondaryButton:hover {{
+    background: {tokens.hover};
+}}
+QToolButton#secondaryToolButton {{
+    background: transparent;
+    color: {tokens.text};
+    border: {border_width}px solid {tokens.border};
+    border-radius: 6px;
+    padding: 5px 8px;
+}}
+QToolButton#secondaryToolButton:hover {{
+    background: {tokens.hover};
+}}
+QToolButton#secondaryToolButton:disabled {{
+    color: {tokens.disabled_text};
+}}
+QToolButton#colorSwatch {{
+    background: {tokens.input};
+    border: {border_width}px solid {tokens.border};
+    border-radius: 6px;
+    min-width: 28px;
+    padding: 5px;
+}}
+QToolButton#colorSwatch:hover {{
+    background: {tokens.hover};
+}}
+QScrollBar:vertical {{
+    background: transparent;
+    width: 10px;
+    margin: 1px;
+}}
+QScrollBar::handle:vertical {{
+    background: {tokens.border};
+    border-radius: 4px;
+    min-height: 28px;
+}}
+QScrollBar::handle:vertical:hover {{
+    background: {tokens.muted_text};
+}}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {{
+    background: transparent;
+    border: 0;
+    height: 0;
 }}
 QFrame#divider {{
     background: {tokens.border};

@@ -7,8 +7,8 @@ from typing import Any
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
-from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 from sciplot_gui.document_controller import DocumentController
+from sciplot_gui.inspectors import ContextualInspectorPanel
 from sciplot_gui.theme import (
     CanvasThemeTokens,
     build_canvas_stylesheet,
@@ -38,6 +38,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._adaptive_floating = False
         self._applying_theme = False
         self._restoring_interface = False
+        self._point_pick_active = False
         self._narrow_threshold = 980
         self.theme_tokens: CanvasThemeTokens | None = None
         self.setObjectName("sciplotCanvasWindow")
@@ -57,6 +58,10 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         )
         self.plot_window = self.controller.adapter.plot_window
         self.plot_window.viewtoolbar.hide()
+        self._structural_qa_timer = QtCore.QTimer(self)
+        self._structural_qa_timer.setSingleShot(True)
+        self._structural_qa_timer.setInterval(400)
+        self._structural_qa_timer.timeout.connect(self._run_structural_qa)
 
         self._build_toolbar()
         self._build_central_workspace()
@@ -65,8 +70,9 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._apply_theme()
         self._restore_interface_state()
         self._connect_canvas_signals()
-        self._populate_text_targets()
+        self._refresh_contextual_inspector()
         self._sync_ui()
+        self._schedule_structural_qa(delay_ms=0)
         if self.controller.recovered_from_snapshot is not None:
             self.status_message.setText("Recovered unsaved Canvas work")
         elif self.controller.session.state == "ready":
@@ -269,6 +275,14 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             object_name="inspectorAction",
         )
         self.inspector_action.setCheckable(True)
+        self.point_pick_action = self._action(
+            "Pick Data Point",
+            "Ctrl+Shift+P",
+            self._point_pick_action_triggered,
+            tooltip="Pick and persist the nearest plotted data point",
+            object_name="pointPickAction",
+        )
+        self.point_pick_action.setCheckable(True)
         self.canvas_only_action = self._action(
             "Canvas Only",
             None,
@@ -297,6 +311,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
 
         more_menu = QtWidgets.QMenu(self)
         more_menu.addAction(self.inspector_action)
+        more_menu.addAction(self.point_pick_action)
         more_menu.addAction(self.canvas_only_action)
         more_menu.addAction(self.high_contrast_action)
         more_menu.addSeparator()
@@ -338,83 +353,21 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         canvas_layout.addWidget(self.recovery_banner)
         canvas_layout.addWidget(self.plot_window, 1)
 
-        inspector = QtWidgets.QFrame()
-        inspector.setObjectName("inspector")
-        inspector.setMinimumWidth(280)
-        inspector.setMaximumWidth(720)
-        inspector_layout = QtWidgets.QVBoxLayout(inspector)
-        inspector_layout.setContentsMargins(22, 20, 22, 20)
-        inspector_layout.setSpacing(10)
-
-        inspector_title = QtWidgets.QLabel("Figure")
-        inspector_title.setObjectName("inspectorTitle")
-        inspector_title.setAccessibleName("Figure inspector")
-        inspector_layout.addWidget(inspector_title)
+        inspector = ContextualInspectorPanel()
         context = (
             "SciPlot project"
             if self.workspace.has_project_delivery
             else "Standalone VSZ"
         )
-        path_label = QtWidgets.QLabel(f"{context} · exact-current authority")
-        path_label.setObjectName("muted")
-        path_label.setWordWrap(True)
-        path_label.setToolTip(str(self.workspace.document_path))
-        inspector_layout.addWidget(path_label)
-        inspector_layout.addWidget(self._divider())
-
-        inspector_layout.addWidget(self._section_label("CURRENT SELECTION"))
-        self.selection_name = QtWidgets.QLabel("Click an item on the figure")
-        self.selection_name.setObjectName("value")
-        self.selection_name.setWordWrap(True)
-        self.selection_type = QtWidgets.QLabel("No object selected")
-        self.selection_type.setObjectName("muted")
-        self.selection_path = QtWidgets.QLabel("")
-        self.selection_path.setObjectName("muted")
-        self.selection_path.setWordWrap(True)
-        inspector_layout.addWidget(self.selection_name)
-        inspector_layout.addWidget(self.selection_type)
-        inspector_layout.addWidget(self.selection_path)
-        inspector_layout.addWidget(self._divider())
-
-        inspector_layout.addWidget(self._section_label("VISIBLE TEXT"))
-        self.text_target_combo = QtWidgets.QComboBox()
-        self.text_target_combo.setAccessibleName("Visible figure text target")
-        self.text_target_combo.setAccessibleDescription(
-            "Choose a bounded visible label from the exact-current figure."
+        inspector.set_context_label(
+            f"{context} · exact-current authority",
+            tooltip=str(self.workspace.document_path),
         )
-        self.text_target_combo.setToolTip(
-            "Bounded list of visible labels; this is not the Veusz object tree."
-        )
-        self.text_target_combo.currentIndexChanged.connect(self._text_target_changed)
-        self.text_value_edit = QtWidgets.QLineEdit()
-        self.text_value_edit.setAccessibleName("Selected figure text")
-        self.text_value_edit.setAccessibleDescription(
-            "Edit the selected visible label before applying it to the live canvas."
-        )
-        self.text_value_edit.setPlaceholderText("Select a visible label")
-        self.text_value_edit.returnPressed.connect(self._apply_text_triggered)
-        self.apply_text_button = QtWidgets.QPushButton("Apply to live canvas")
-        self.apply_text_button.setAccessibleName("Apply text to live canvas")
-        self.apply_text_button.clicked.connect(self._apply_text_triggered)
-        inspector_layout.addWidget(self.text_target_combo)
-        inspector_layout.addWidget(self.text_value_edit)
-        inspector_layout.addWidget(self.apply_text_button)
-        inspector_layout.addWidget(self._divider())
-
-        inspector_layout.addWidget(self._section_label("EXPORT READINESS"))
-        self.qa_status = QtWidgets.QLabel("Not exported in this Canvas session.")
-        self.qa_status.setObjectName("muted")
-        self.qa_status.setWordWrap(True)
-        inspector_layout.addWidget(self.qa_status)
-        inspector_layout.addStretch(1)
-
-        contract_note = QtWidgets.QLabel(
-            "Exact-current VSZ remains the visual authority. "
-            "Advanced Editor is a recovery route."
-        )
-        contract_note.setObjectName("muted")
-        contract_note.setWordWrap(True)
-        inspector_layout.addWidget(contract_note)
+        inspector.objectSelected.connect(self._inspector_object_selected)
+        inspector.applyRequested.connect(self._apply_inspector_changes)
+        inspector.immediateRequested.connect(self._apply_inspector_immediate)
+        inspector.pointPickToggled.connect(self._set_point_pick_active)
+        inspector.clearPointRequested.connect(self._clear_data_point_selection)
 
         inspector_dock = QtWidgets.QDockWidget("Inspector", self)
         inspector_dock.setObjectName("inspectorDock")
@@ -449,6 +402,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.canvas_well = canvas_well
         self.inspector_dock = inspector_dock
         self.inspector = inspector
+        self.inspector_panel = inspector
 
     def _build_status_bar(self) -> None:
         status = QtWidgets.QStatusBar(self)
@@ -474,6 +428,8 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         edit_menu = menu_bar.addMenu("Edit")
         edit_menu.addAction(self.undo_action)
         edit_menu.addAction(self.redo_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self.point_pick_action)
 
         view_menu = menu_bar.addMenu("View")
         view_menu.addAction(self.previous_page_action)
@@ -496,16 +452,6 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.view_menu = view_menu
         self.document_menu = document_menu
 
-    def _divider(self) -> QtWidgets.QFrame:
-        divider = QtWidgets.QFrame()
-        divider.setObjectName("divider")
-        return divider
-
-    def _section_label(self, text: str) -> QtWidgets.QLabel:
-        label = QtWidgets.QLabel(text)
-        label.setObjectName("sectionTitle")
-        return label
-
     def _apply_theme(self) -> None:
         if self._applying_theme:
             return
@@ -518,10 +464,15 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 high_contrast=self.controller.session.interface.high_contrast,
             )
             self.setStyleSheet(build_canvas_stylesheet(self.theme_tokens))
+            self.controller.adapter.set_display_surface(
+                canvas_color=self.theme_tokens.canvas_well,
+            )
             if hasattr(self, "state_chip"):
                 style = self.state_chip.style()
                 style.unpolish(self.state_chip)
                 style.polish(self.state_chip)
+            if hasattr(self, "plot_window"):
+                self._sync_selection_visual()
         finally:
             self._applying_theme = False
 
@@ -663,103 +614,294 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.plot_window.sigWidgetClicked.connect(self._on_widget_clicked)
         self.plot_window.sigAxisValuesFromMouse.connect(self._on_axis_values)
         self.plot_window.sigUpdatePage.connect(self._on_page_updated)
+        self.plot_window.sigPointPicked.connect(self._on_point_picked)
 
-    def _populate_text_targets(self, selected_id: str | None = None) -> None:
-        selected_id = selected_id or self.controller.session.selection.primary_object_id
-        targets = self.controller.visible_text_targets()
-        blocker = QtCore.QSignalBlocker(self.text_target_combo)
-        self.text_target_combo.clear()
-        selected_index = -1
-        for index, target in enumerate(targets):
-            label = str(target.get("value") or "").strip()
-            display = label or str(target.get("display_name") or target["path"])
-            display = f"{target['object_type']} · {display}"
-            self.text_target_combo.addItem(display, target)
-            if target.get("object_id") == selected_id:
-                selected_index = index
-        del blocker
-        if selected_index < 0 and targets:
-            selected_index = 0
-        self.text_target_combo.setCurrentIndex(selected_index)
-        self.text_target_combo.setEnabled(bool(targets))
-        self.text_value_edit.setEnabled(bool(targets))
-        self.apply_text_button.setEnabled(bool(targets))
-        if selected_index >= 0:
-            self._text_target_changed(selected_index)
-        else:
-            self.text_value_edit.clear()
-
-    def _text_target_changed(self, index: int) -> None:
-        if index < 0:
-            return
-        target = self.text_target_combo.itemData(index)
-        if not isinstance(target, dict):
-            return
-        self.controller.select_object_id(str(target["object_id"]))
-        current_value = self.controller.adapter.setting_value(
-            str(target["setting_path"])
-        )
-        self.text_value_edit.setText(str(current_value))
-        if self.controller.session.active_inspector != "visible_text":
-            self.controller.update_interface_state(active_inspector="visible_text")
+    def _refresh_contextual_inspector(self) -> None:
+        model = self.controller.contextual_inspector()
+        self.inspector_panel.set_model(model)
+        if self.controller.session.active_inspector != "contextual":
+            self.controller.update_interface_state(active_inspector="contextual")
+        structural = self.controller.session.structural_qa_summary
+        if structural:
+            self.inspector_panel.set_structural_qa(structural)
         self._sync_selection_ui()
 
+    def _inspector_object_selected(self, object_id: str) -> None:
+        def select() -> None:
+            if not self._resolve_staged_fields("select another object"):
+                self._refresh_contextual_inspector()
+                return
+            self.controller.select_object_id(object_id)
+            self._refresh_contextual_inspector()
+            self.status_message.setText("Selected a bounded Canvas object")
+
+        self._run_ui_action("Selection failed", select)
+
+    def _selected_object_id(self) -> str:
+        selected_id = self.controller.session.selection.primary_object_id
+        if selected_id is None:
+            raise RuntimeError("No Canvas object is selected.")
+        return selected_id
+
+    def _resolve_staged_fields(self, action: str) -> bool:
+        if not self.inspector_panel.has_staged_changes:
+            return True
+        if not self.interactive:
+            raise RuntimeError(
+                f"Apply or revert staged inspector fields before you {action}."
+            )
+        message = QtWidgets.QMessageBox(self)
+        message.setWindowTitle("Staged inspector changes")
+        message.setText(
+            f"Apply the staged inspector fields before you {action}?"
+        )
+        message.setInformativeText(
+            "Only applied fields become typed Canvas operations and part of "
+            "the exact-current document."
+        )
+        apply_button = message.addButton(
+            "Apply Changes",
+            QtWidgets.QMessageBox.ButtonRole.AcceptRole,
+        )
+        revert_button = message.addButton(
+            "Revert Fields",
+            QtWidgets.QMessageBox.ButtonRole.DestructiveRole,
+        )
+        cancel_button = message.addButton(
+            QtWidgets.QMessageBox.StandardButton.Cancel
+        )
+        message.setDefaultButton(apply_button)
+        message.exec()
+        clicked = message.clickedButton()
+        if clicked is apply_button:
+            try:
+                changes = self.inspector_panel.collect_changes()
+            except ValueError as exc:
+                self.status_message.setText(str(exc))
+                return False
+            result = self._run_ui_action(
+                "Inspector update failed",
+                lambda: self.apply_contextual_changes(
+                    changes,
+                    rationale=(
+                        f"Apply staged inspector changes before {action}."
+                    ),
+                ),
+            )
+            return result is not None
+        if clicked is revert_button:
+            self.inspector_panel.revert_staged()
+            return True
+        if clicked is cancel_button:
+            return False
+        return False
+
+    def apply_contextual_changes(
+        self,
+        changes: list[dict[str, Any]],
+        *,
+        provider: str = "user_inspector",
+        rationale: str = "Edit a bounded scientific figure property.",
+    ) -> dict[str, Any]:
+        entry = self.controller.apply_setting_changes(
+            target_id=self._selected_object_id(),
+            changes=changes,
+            provider=provider,
+            rationale=rationale,
+        )
+        self._refresh_contextual_inspector()
+        self._schedule_structural_qa()
+        self.status_message.setText(
+            f"Applied {len(changes)} typed Canvas "
+            + ("operation" if len(changes) == 1 else "operations")
+        )
+        self._sync_ui()
+        return entry
+
+    def _apply_inspector_changes(self, changes: Any) -> None:
+        self._run_ui_action(
+            "Inspector update failed",
+            lambda: self.apply_contextual_changes(
+                list(changes),
+                rationale="Apply staged contextual inspector changes.",
+            ),
+        )
+
+    def _apply_inspector_immediate(self, change: Any) -> None:
+        result = self._run_ui_action(
+            "Inspector update failed",
+            lambda: self.apply_contextual_changes(
+                [dict(change)],
+                rationale="Apply an immediate contextual inspector change.",
+            ),
+        )
+        if result is None:
+            self._refresh_contextual_inspector()
+
+    def _point_pick_action_triggered(self, checked: bool) -> None:
+        self._set_point_pick_active(bool(checked))
+
+    def _set_point_pick_active(self, active: bool) -> None:
+        active = bool(active)
+        self.controller.set_interaction_mode("pick" if active else "select")
+        self._point_pick_active = active
+        action_blocker = QtCore.QSignalBlocker(self.point_pick_action)
+        self.point_pick_action.setChecked(active)
+        del action_blocker
+        self.inspector_panel.set_point_pick_active(active)
+        self.status_message.setText(
+            "Pick a plotted data point · Esc to stop"
+            if active
+            else "Data-point picker stopped"
+        )
+
+    def _on_point_picked(self, pickinfo: Any) -> None:
+        def apply_pick() -> None:
+            point = self.controller.select_data_point(pickinfo)
+            self._set_point_pick_active(False)
+            self._refresh_contextual_inspector()
+            self.status_message.setText(
+                f"Selected {point['x_label']}={point['x']:.5g}, "
+                f"{point['y_label']}={point['y']:.5g}"
+            )
+
+        self._run_ui_action("Could not select data point", apply_pick)
+
+    def _clear_data_point_selection(self) -> None:
+        def clear() -> None:
+            self.controller.clear_data_point_selection()
+            self._refresh_contextual_inspector()
+            self.status_message.setText("Cleared the selected data point")
+
+        self._run_ui_action("Could not clear data point", clear)
+
+    def _apply_direct_manipulation(
+        self,
+        widget_path: str,
+        changes: list[dict[str, Any]],
+        rationale: str,
+    ) -> dict[str, Any]:
+        selected = self.controller.select_widget_path(widget_path)
+        if selected is None:
+            raise RuntimeError(
+                "The directly manipulated object no longer resolves."
+            )
+        return self.apply_contextual_changes(
+            changes,
+            provider="user_direct_manipulation",
+            rationale=rationale,
+        )
+
+    def _direct_manipulation_requested(
+        self,
+        widget_path: str,
+        changes: list[dict[str, Any]],
+        rationale: str,
+    ) -> None:
+        result = self._run_ui_action(
+            "Direct manipulation failed",
+            lambda: self._apply_direct_manipulation(
+                widget_path,
+                changes,
+                rationale,
+            ),
+        )
+        if result is None:
+            self.controller.adapter.force_redraw()
+            self._refresh_contextual_inspector()
+
+    def _sync_selection_visual(self) -> None:
+        selected = self.controller.selected_object
+        path = str(selected.get("path")) if selected is not None else None
+        color = self.theme_tokens.focus if self.theme_tokens is not None else "#308cc6"
+        self.controller.adapter.show_selection_visual(
+            path,
+            color=color,
+            direct_callback=self._direct_manipulation_requested,
+        )
+
+    def _schedule_structural_qa(self, *, delay_ms: int = 400) -> None:
+        if self._closed:
+            return
+        self._structural_qa_timer.start(max(int(delay_ms), 0))
+
+    def _run_structural_qa(self) -> dict[str, Any] | None:
+        if self._closed:
+            return None
+        report = self._run_ui_action(
+            "Structural QA failed",
+            self.controller.run_structural_qa,
+        )
+        if isinstance(report, dict):
+            self.inspector_panel.set_structural_qa(report)
+        return report
+
     def select_text_target(self, object_id: str) -> dict[str, Any]:
-        for index in range(self.text_target_combo.count()):
-            target = self.text_target_combo.itemData(index)
-            if isinstance(target, dict) and target.get("object_id") == object_id:
-                self.text_target_combo.setCurrentIndex(index)
+        for target in self.controller.visible_text_targets():
+            if target.get("object_id") == object_id:
+                self.controller.select_object_id(object_id)
+                self._refresh_contextual_inspector()
                 return target
         raise ValueError(f"Visible text target not found: {object_id}")
 
     def apply_selected_text(self, value: str) -> dict[str, Any]:
-        target = self.text_target_combo.currentData()
-        if not isinstance(target, dict):
-            raise ValueError("No visible text target is selected.")
-        setting_path = str(target["setting_path"])
-        current_value = self.controller.adapter.setting_value(setting_path)
-        batch = CanvasOperationBatch(
-            base_revision=self.controller.session.revision,
+        targets = self.controller.visible_text_targets()
+        selected_id = self.controller.session.selection.primary_object_id
+        target = next(
+            (
+                candidate
+                for candidate in targets
+                if candidate.get("object_id") == selected_id
+            ),
+            targets[0] if targets else None,
+        )
+        if target is None:
+            raise ValueError("No visible text target is available.")
+        self.controller.select_object_id(str(target["object_id"]))
+        return self.apply_contextual_changes(
+            [
+                {
+                    "setting_path": str(target["setting_path"]),
+                    "value": value,
+                }
+            ],
             provider="user",
             rationale="Update visible figure text from the SciPlot Canvas.",
-            operations=(
-                CanvasOperation.set_setting(
-                    target_id=str(target["object_id"]),
-                    setting_path=setting_path,
-                    value=value,
-                    expected_value=current_value,
-                    require_expected_value=True,
-                ),
-            ),
         )
-        entry = self.controller.apply_batch(batch)
-        self._populate_text_targets(str(target["object_id"]))
-        self.status_message.setText("Applied one typed Canvas operation")
-        self._sync_ui()
-        return entry
 
     def save_document(self) -> Path:
+        if self.inspector_panel.has_staged_changes:
+            raise RuntimeError(
+                "Apply or revert staged inspector fields before saving."
+            )
         path = self.controller.save()
         self.recovery_banner.hide()
         self.status_message.setText(f"Saved {path.name}")
         self._sync_ui()
+        self._schedule_structural_qa()
         return path
 
     def undo_document(self) -> dict[str, Any]:
         entry = self.controller.undo(provider="user")
-        self._populate_text_targets()
+        self._refresh_contextual_inspector()
         self.status_message.setText("Undid one Canvas batch")
         self._sync_ui()
+        self._schedule_structural_qa()
         return entry
 
     def redo_document(self) -> dict[str, Any]:
         entry = self.controller.redo(provider="user")
-        self._populate_text_targets()
+        self._refresh_contextual_inspector()
         self.status_message.setText("Redid one Canvas batch")
         self._sync_ui()
+        self._schedule_structural_qa()
         return entry
 
     def export_current(self) -> dict[str, Any]:
+        if self.inspector_panel.has_staged_changes:
+            raise RuntimeError(
+                "Apply or revert staged inspector fields before Export + QA."
+            )
         if self.controller.session.dirty:
             self.save_document()
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
@@ -770,20 +912,11 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         finally:
             QtWidgets.QApplication.restoreOverrideCursor()
         if payload.get("ready_to_use") is True:
-            self.qa_status.setText(
-                "Passed exact-current PDF/TIFF export, QA, and "
-                + (
-                    "project delivery."
-                    if payload.get("scope") == "project_delivery"
-                    else "standalone artifact checks."
-                )
-            )
             self.status_message.setText("Export and QA passed")
         else:
-            self.qa_status.setText(
-                f"Export needs attention: {payload.get('state') or 'failed'}"
-            )
             self.status_message.setText("Export or QA needs repair")
+        report = self.controller.run_structural_qa()
+        self.inspector_panel.set_structural_qa(report)
         self._sync_ui()
         return payload
 
@@ -800,12 +933,6 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
 
     def _redo_triggered(self) -> None:
         self._run_ui_action("Redo failed", self.redo_document)
-
-    def _apply_text_triggered(self) -> None:
-        self._run_ui_action(
-            "Text update failed",
-            lambda: self.apply_selected_text(self.text_value_edit.text()),
-        )
 
     def _export_triggered(self) -> None:
         result = self._run_ui_action("Export failed", self.export_current)
@@ -881,11 +1008,15 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             return None
 
     def _change_page(self, delta: int) -> None:
+        if not self._resolve_staged_fields("change pages"):
+            return
         page = self.controller.set_page(
             self.controller.adapter.current_page + int(delta)
         )
+        self._refresh_contextual_inspector()
         self.status_message.setText(f"Page {page + 1}")
         self._sync_ui()
+        self._schedule_structural_qa()
 
     def _set_zoom(self, zoom: float) -> None:
         self.controller.set_zoom_factor(zoom)
@@ -896,24 +1027,18 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._sync_ui()
 
     def _on_widget_clicked(self, widget: Any, mode: str) -> None:
+        if not self._resolve_staged_fields("select another object"):
+            self._refresh_contextual_inspector()
+            return
         selected = self.controller.select_widget_path(str(widget.path), mode=str(mode))
         if selected is not None:
-            selected_id = str(selected["object_id"])
-            for index in range(self.text_target_combo.count()):
-                target = self.text_target_combo.itemData(index)
-                if isinstance(target, dict) and target.get("object_id") == selected_id:
-                    blocker = QtCore.QSignalBlocker(self.text_target_combo)
-                    self.text_target_combo.setCurrentIndex(index)
-                    del blocker
-                    self.text_value_edit.setText(
-                        str(
-                            self.controller.adapter.setting_value(
-                                str(target["setting_path"])
-                            )
-                        )
-                    )
-                    break
-        self._sync_selection_ui()
+            self._refresh_contextual_inspector()
+            self.status_message.setText(
+                f"Selected {selected['object_type']} · "
+                f"{selected['display_name']}"
+            )
+        else:
+            self._sync_selection_ui()
 
     def _on_axis_values(self, values: dict[Any, Any]) -> None:
         if not values:
@@ -956,18 +1081,13 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
     def _sync_selection_ui(self) -> None:
         selected = self.controller.selected_object
         if selected is None:
-            self.selection_name.setText("Click an item on the figure")
-            self.selection_type.setText("No object selected")
-            self.selection_path.clear()
             self.selection_status.setText("Selection: none")
+            self.controller.adapter.clear_selection_visual()
             return
         display_name = str(selected.get("display_name") or "Unnamed")
         object_type = str(selected.get("object_type") or "object")
-        path = str(selected.get("path") or "")
-        self.selection_name.setText(display_name)
-        self.selection_type.setText(object_type)
-        self.selection_path.setText(path)
         self.selection_status.setText(f"Selection: {object_type} · {display_name}")
+        self._sync_selection_visual()
 
     def _sync_page_ui(self) -> None:
         page = self.controller.adapter.current_page
@@ -1002,17 +1122,6 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.setWindowTitle(
             f"{self.workspace.document_path.stem}{dirty_marker} — SciPlot Canvas"
         )
-        if self.last_export is None and session.exported_revision is not None:
-            if session.exported_revision == session.revision:
-                self.qa_status.setText(
-                    f"Revision {session.revision} was exported and passed its "
-                    "recorded QA gate."
-                )
-            else:
-                self.qa_status.setText(
-                    f"Last passing export was revision {session.exported_revision}; "
-                    f"current revision {session.revision} requires re-export."
-                )
         self._sync_page_ui()
         self._sync_selection_ui()
 
@@ -1051,6 +1160,10 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             self._set_canvas_only(not self._canvas_only)
             event.accept()
             return
+        if event.key() == QtCore.Qt.Key.Key_Escape and self._point_pick_active:
+            self._set_point_pick_active(False)
+            event.accept()
+            return
         if event.key() == QtCore.Qt.Key.Key_Escape and self._canvas_only:
             self._set_canvas_only(False)
             event.accept()
@@ -1079,6 +1192,13 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                     event.accept()
                     return True
                 self._set_canvas_only(not self._canvas_only)
+                event.accept()
+                return True
+            if (
+                event.key() == QtCore.Qt.Key.Key_Escape
+                and self._point_pick_active
+            ):
+                self._set_point_pick_active(False)
                 event.accept()
                 return True
             if event.key() == QtCore.Qt.Key.Key_Escape and self._canvas_only:
@@ -1130,6 +1250,14 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         if self._closed:
             event.accept()
             return
+        if self.inspector_panel.has_staged_changes:
+            if self.interactive:
+                if not self._resolve_staged_fields("close the Canvas"):
+                    self._refresh_contextual_inspector()
+                    event.ignore()
+                    return
+            else:
+                self.inspector_panel.revert_staged()
         policy = self._close_policy_override
         self._close_policy_override = None
         if self.controller.session.dirty:
@@ -1157,6 +1285,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 raise
         self._closing = True
         self._view_state_timer.stop()
+        self._structural_qa_timer.stop()
         inspector_width = self.inspector_dock.width()
         if 280 <= inspector_width <= 720:
             self.controller.update_interface_state(inspector_width=inspector_width)

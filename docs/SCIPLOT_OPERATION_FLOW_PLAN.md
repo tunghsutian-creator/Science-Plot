@@ -1,8 +1,9 @@
 # SciPlot Operation Flow and Visual System
 
 Status: active frontend source of truth, 2026-07-17. M1 is complete; M2 is in
-progress. The adaptive visual foundation is implemented, while contextual
-scientific editing and review tools remain active work.
+progress. The adaptive visual foundation and bounded contextual editing kernel
+are implemented; non-exported review tooling and the real-session retirement
+gate remain active work.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -188,7 +189,9 @@ or menu route so the toolbar can adapt or be hidden.
 - neutral system-derived background;
 - centered white page with a subtle boundary or shadow;
 - smooth pan and zoom;
-- visible selection and direct-manipulation affordances;
+- visible stable-object selection and direct-manipulation affordances;
+- XY data-point picking with a persistent redraw-safe marker;
+- native label dragging routed through the typed operation gateway;
 - no fake placeholder canvas during import;
 - `Tab` Canvas-only mode with `Esc` recovery.
 
@@ -203,6 +206,16 @@ It starts with:
 - sections relevant to the selection;
 - immediate preview where safe;
 - Apply/Revert semantics where a commit boundary is needed.
+
+The bounded M2 object set is page, graph, axis, XY series, box plot, legend,
+image, contour, colorbar, and native label. Dataset mappings are visible but
+read-only in this visual editor. Changing data authority belongs to the
+validated mapping path, not to a color/style inspector.
+
+Safe booleans and closed choices may apply immediately. Text, numbers,
+distances, colors, ranges, and lists remain staged until Apply. A staged field
+must be applied, reverted, or cancelled before changing object/page, saving,
+exporting, or closing; no navigation path may silently discard it.
 
 Do not lead with absolute filesystem paths or expose every arbitrary Veusz
 property. Full paths and technical IDs belong in disclosure, tooltips, or
@@ -248,41 +261,56 @@ The M2 foundation now uses a palette-backed token layer:
 The scientific figure's own colors remain governed by SciPlot publication and
 accessibility QA, not by application chrome tokens.
 
-## M2 foundation delivered
+## M2 visual and editing kernel delivered
 
 - application chrome is generated from the active `QPalette`, including real
   dark-palette and increased-contrast variants;
 - the inspector is a native dock that floats below 980 px and returns to its
   dock on wider windows;
-- inspector visibility, bounded width, contrast preference, and active
-  inspector persist in `CanvasSession` version 2, with safe version-1
-  migration;
+- inspector visibility, bounded width, contrast preference, active inspector,
+  stable-object selection, XY point selection, and structural-QA state persist
+  in `CanvasSession` version 3, with safe version-1 and version-2 migration;
 - `Tab`, `Esc`, `F9`, menus, shortcuts, focus indication, and accessible
   control names are covered by the native application probe;
+- the selection-driven inspector exposes only the ten bounded scientific
+  object types and keeps dataset mappings read-only;
+- immediate and staged edits share the typed operation gateway; Apply/Revert,
+  navigation, Save, Export + QA, and close preserve an explicit commit
+  boundary;
+- plot clicks resolve to the nearest supported object, XY point selections
+  persist across redraw/reopen, and native label drag becomes one typed,
+  journaled operation batch;
+- debounced structural QA reports live-document safety while artifact QA stays
+  tied to explicit exact-current export;
 - normal, dark, increased-contrast, and recovery screenshots are generated
   from the actual Qt workbench;
-- the representative native app gate now passes `21/21`, and runtime smoke v10
-  passes `26/26`.
+- the pure Canvas contract passes `21/21`, the representative native app gate
+  passes `26/26`, and the six-document contextual-inspector matrix passes
+  `8/8` across 87 objects and all ten bounded object types;
+- runtime smoke v10 passes `26/26` with 50 accepted live edits, clean reopen,
+  exact-current PDF/TIFF, structural and artifact QA, recovery, hash-matched
+  delivery, and the theme-render invariance gate.
 
 ## M2 implementation order
 
-Completed foundation:
+Completed M2 increments:
 
 1. Extract palette, typography, spacing, focus, and semantic-state tokens.
 2. Add adaptive inspector docking/floating and Canvas-only mode.
 3. Persist interface state and verify keyboard/accessibility parity.
+4. Replace the visible-text prototype with selection-driven page, graph, axis,
+   series, legend, appearance, scalar-field, and annotation inspectors.
+5. Add structural breadcrumbs, stable selection highlighting, and XY
+   data-point selection.
+6. Add immediate/staged Apply/Revert semantics, save/navigation protection,
+   native label drag, and debounced structural QA.
 
 Remaining M2 work:
 
-1. Replace the visible-text prototype with selection-driven page, axis,
-   series, legend, appearance, and annotation inspectors.
-2. Add structural breadcrumbs, selection highlighting, and data-point
-   selection.
-3. Add preview/apply/revert interaction and debounced structural QA.
-4. Add non-exported review overlay and persistent annotation coordinates.
-5. Promote review marks into native Veusz annotations.
-6. Run at least ten representative real sessions across five figure families.
-7. Only then migrate the normal `studio` entrypoint from Veusz MainWindow to
+1. Add non-exported review overlay and persistent annotation coordinates.
+2. Promote review marks into native Veusz annotations.
+3. Run at least ten representative real sessions across five figure families.
+4. Only then migrate the normal `studio` entrypoint from Veusz MainWindow to
    SciPlot Canvas.
 
 ## Design acceptance

@@ -17,8 +17,8 @@ from sciplot_core.canvas._validation import (
 )
 
 CANVAS_SESSION_KIND = "sciplot_canvas_session"
-CANVAS_SESSION_VERSION = 2
-CANVAS_SESSION_COMPATIBLE_VERSIONS = {1, CANVAS_SESSION_VERSION}
+CANVAS_SESSION_VERSION = 3
+CANVAS_SESSION_COMPATIBLE_VERSIONS = {1, 2, CANVAS_SESSION_VERSION}
 CANVAS_SESSION_STATES = {
     "preparing",
     "canvas_ready",
@@ -204,9 +204,128 @@ class ObjectIdentityRegistry:
 
 
 @dataclass
+class CanvasDataPointSelection:
+    target_object_id: str
+    x: float
+    y: float
+    graph_x: float
+    graph_y: float
+    x_label: str = "x"
+    y_label: str = "y"
+    index: str | None = None
+    display_type: tuple[str, str] = ("numeric", "numeric")
+
+    def __post_init__(self) -> None:
+        self.target_object_id = _required_text(
+            self.target_object_id, "data_point.target_object_id"
+        )
+        values = (self.x, self.y, self.graph_x, self.graph_y)
+        if not all(
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(float(value))
+            for value in values
+        ):
+            raise ValueError("Canvas data-point coordinates must be finite numbers.")
+        self.x = float(self.x)
+        self.y = float(self.y)
+        self.graph_x = float(self.graph_x)
+        self.graph_y = float(self.graph_y)
+        self.x_label = _required_text(self.x_label, "data_point.x_label")
+        self.y_label = _required_text(self.y_label, "data_point.y_label")
+        if self.index is not None:
+            self.index = _required_text(self.index, "data_point.index")
+        if (
+            not isinstance(self.display_type, tuple)
+            or len(self.display_type) != 2
+            or not all(isinstance(item, str) and item for item in self.display_type)
+        ):
+            raise ValueError("data_point.display_type must contain two strings.")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "target_object_id": self.target_object_id,
+            "x": self.x,
+            "y": self.y,
+            "graph_x": self.graph_x,
+            "graph_y": self.graph_y,
+            "x_label": self.x_label,
+            "y_label": self.y_label,
+            "index": self.index,
+            "display_type": list(self.display_type),
+        }
+
+    @classmethod
+    def from_dict(
+        cls, payload: dict[str, Any] | None
+    ) -> CanvasDataPointSelection | None:
+        if payload is None:
+            return None
+        value = require_json_object(payload, label="selection.data_point")
+        reject_unknown_keys(
+            value,
+            {
+                "target_object_id",
+                "x",
+                "y",
+                "graph_x",
+                "graph_y",
+                "x_label",
+                "y_label",
+                "index",
+                "display_type",
+            },
+            label="selection.data_point",
+        )
+        raw_display = require_json_list(
+            value.get("display_type", ["numeric", "numeric"]),
+            label="selection.data_point.display_type",
+        )
+        if len(raw_display) != 2 or not all(
+            isinstance(item, str) and item for item in raw_display
+        ):
+            raise ValueError(
+                "selection.data_point.display_type must contain two strings."
+            )
+
+        def number(key: str) -> float:
+            raw = value.get(key)
+            if (
+                not isinstance(raw, (int, float))
+                or isinstance(raw, bool)
+                or not math.isfinite(float(raw))
+            ):
+                raise ValueError(f"selection.data_point.{key} must be finite.")
+            return float(raw)
+
+        raw_index = value.get("index")
+        if raw_index is not None and not isinstance(raw_index, str):
+            raise ValueError("selection.data_point.index must be a string or null.")
+        return cls(
+            target_object_id=_required_text(
+                value.get("target_object_id"),
+                "selection.data_point.target_object_id",
+            ),
+            x=number("x"),
+            y=number("y"),
+            graph_x=number("graph_x"),
+            graph_y=number("graph_y"),
+            x_label=_required_text(
+                value.get("x_label", "x"), "selection.data_point.x_label"
+            ),
+            y_label=_required_text(
+                value.get("y_label", "y"), "selection.data_point.y_label"
+            ),
+            index=raw_index or None,
+            display_type=(str(raw_display[0]), str(raw_display[1])),
+        )
+
+
+@dataclass
 class CanvasSelection:
     object_ids: list[str] = field(default_factory=list)
     primary_object_id: str | None = None
+    data_point: CanvasDataPointSelection | None = None
 
     def __post_init__(self) -> None:
         self.object_ids = [
@@ -217,11 +336,26 @@ class CanvasSelection:
             raise ValueError("CanvasSelection object_ids must be unique.")
         if self.primary_object_id and self.primary_object_id not in self.object_ids:
             raise ValueError("primary_object_id must be included in object_ids.")
+        if (
+            self.data_point is not None
+            and self.data_point.target_object_id not in self.object_ids
+        ):
+            raise ValueError(
+                "data_point target_object_id must be included in object_ids."
+            )
+        if (
+            self.data_point is not None
+            and self.primary_object_id != self.data_point.target_object_id
+        ):
+            raise ValueError(
+                "data_point target_object_id must be the primary_object_id."
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "object_ids": list(self.object_ids),
             "primary_object_id": self.primary_object_id,
+            "data_point": self.data_point.to_dict() if self.data_point else None,
         }
 
     @classmethod
@@ -231,7 +365,7 @@ class CanvasSelection:
         payload = require_json_object(payload, label="selection")
         reject_unknown_keys(
             payload,
-            {"object_ids", "primary_object_id"},
+            {"object_ids", "primary_object_id", "data_point"},
             label="selection",
         )
         raw_ids = require_json_list(
@@ -244,6 +378,9 @@ class CanvasSelection:
         return cls(
             object_ids=ids,
             primary_object_id=primary or None,
+            data_point=CanvasDataPointSelection.from_dict(
+                payload.get("data_point")
+            ),
         )
 
 
@@ -423,6 +560,7 @@ class CanvasSession:
     document_sha256: str | None = None
     last_render_sha256: str | None = None
     review_annotation_ids: list[str] = field(default_factory=list)
+    structural_qa_summary: dict[str, Any] = field(default_factory=dict)
     qa_summary: dict[str, Any] = field(default_factory=dict)
     recovery_snapshots: list[str] = field(default_factory=list)
     recovery_snapshot_hashes: dict[str, str] = field(default_factory=dict)
@@ -456,6 +594,8 @@ class CanvasSession:
             raise ValueError("exported_revision must be between zero and revision.")
         if len(set(self.review_annotation_ids)) != len(self.review_annotation_ids):
             raise ValueError("review_annotation_ids must be unique.")
+        if not isinstance(self.structural_qa_summary, dict):
+            raise ValueError("structural_qa_summary must be an object.")
         if not isinstance(self.qa_summary, dict):
             raise ValueError("qa_summary must be an object.")
         if not isinstance(self.recovery_snapshot_hashes, dict):
@@ -517,6 +657,7 @@ class CanvasSession:
             "document_sha256": self.document_sha256,
             "last_render_sha256": self.last_render_sha256,
             "review_annotation_ids": list(self.review_annotation_ids),
+            "structural_qa_summary": dict(self.structural_qa_summary),
             "qa_summary": dict(self.qa_summary),
             "recovery_snapshots": list(self.recovery_snapshots),
             "recovery_snapshot_hashes": dict(self.recovery_snapshot_hashes),
@@ -550,6 +691,7 @@ class CanvasSession:
                 "document_sha256",
                 "last_render_sha256",
                 "review_annotation_ids",
+                "structural_qa_summary",
                 "qa_summary",
                 "recovery_snapshots",
                 "recovery_snapshot_hashes",
@@ -580,6 +722,10 @@ class CanvasSession:
         )
         qa_summary = require_json_object(
             payload.get("qa_summary", {}), label="qa_summary"
+        )
+        structural_qa_summary = require_json_object(
+            payload.get("structural_qa_summary", {}),
+            label="structural_qa_summary",
         )
         active_inspector = payload.get("active_inspector")
         if active_inspector is not None and not isinstance(active_inspector, str):
@@ -625,6 +771,7 @@ class CanvasSession:
                 _required_text(item, "review_annotation_id")
                 for item in review_annotation_ids
             ],
+            structural_qa_summary=dict(structural_qa_summary),
             qa_summary=dict(qa_summary),
             recovery_snapshots=[
                 _required_text(item, "recovery snapshot") for item in recovery_snapshots
@@ -653,6 +800,7 @@ __all__ = [
     "CANVAS_SESSION_STATES",
     "CANVAS_SESSION_VERSION",
     "CANVAS_TRANSACTION_STATES",
+    "CanvasDataPointSelection",
     "CanvasInterfaceState",
     "CanvasObjectRecord",
     "CanvasSelection",

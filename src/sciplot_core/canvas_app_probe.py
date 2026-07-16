@@ -17,7 +17,7 @@ from sciplot_core._utils import file_sha256, json_safe
 from sciplot_core.canvas.persistence import read_operation_journal
 
 CANVAS_APP_PROBE_KIND = "sciplot_canvas_app_probe"
-CANVAS_APP_PROBE_VERSION = 2
+CANVAS_APP_PROBE_VERSION = 3
 
 
 def _now() -> str:
@@ -131,6 +131,18 @@ def _capture_window(
         canvas_mean_luminance = sum(
             canvas_luma.histogram()[index] * index for index in range(256)
         ) / (canvas_luma.width * canvas_luma.height)
+        paper_crop = rgb.crop(
+            (
+                round(width * 0.18),
+                round(height * 0.12),
+                round(width * 0.68),
+                round(height * 0.90),
+            )
+        )
+        paper_luma = paper_crop.convert("L")
+        paper_mean_luminance = sum(
+            paper_luma.histogram()[index] * index for index in range(256)
+        ) / (paper_luma.width * paper_luma.height)
         inspector_crop = rgb.crop((round(width * 0.75), 40, width, height - 25))
         inspector_luma = inspector_crop.convert("L")
         inspector_mean_luminance = sum(
@@ -144,6 +156,8 @@ def _capture_window(
         "has_tonal_range": all(high - low >= 80 for low, high in extrema),
         "canvas_mean_luminance": round(canvas_mean_luminance, 3),
         "canvas_surface_ready": canvas_mean_luminance >= 90.0,
+        "paper_mean_luminance": round(paper_mean_luminance, 3),
+        "paper_surface_ready": paper_mean_luminance >= 180.0,
         "inspector_mean_luminance": round(inspector_mean_luminance, 3),
         "inspector_surface_ready": (
             inspector_mean_luminance <= 110.0
@@ -316,9 +330,10 @@ def run_canvas_app_probe(
         }
         control_accessibility = {
             "more": window.more_button.accessibleName(),
-            "text_target": window.text_target_combo.accessibleName(),
-            "text_value": window.text_value_edit.accessibleName(),
-            "apply_text": window.apply_text_button.accessibleName(),
+            "object_navigator": window.inspector_panel.object_combo.accessibleName(),
+            "point_picker": window.inspector_panel.point_pick_button.accessibleName(),
+            "apply": window.inspector_panel.apply_button.accessibleName(),
+            "revert": window.inspector_panel.revert_button.accessibleName(),
             "inspector": window.inspector_dock.accessibleName(),
         }
         menu_actions = {
@@ -335,6 +350,7 @@ def run_canvas_app_probe(
         primary_actions = (
             *accessibility_actions,
             window.inspector_action,
+            window.point_pick_action,
             window.canvas_only_action,
             window.high_contrast_action,
             window.advanced_action,
@@ -372,7 +388,8 @@ def run_canvas_app_probe(
             and window.coordinate_status.isVisible(),
         }
 
-        window.text_value_edit.setFocus(QtCore.Qt.FocusReason.TabFocusReason)
+        focus_control = window.inspector_panel.object_combo
+        focus_control.setFocus(QtCore.Qt.FocusReason.TabFocusReason)
         application.processEvents()
         focus_before_tab = application.focusWidget()
         navigation_event = QtGui.QKeyEvent(
@@ -381,7 +398,7 @@ def run_canvas_app_probe(
             QtCore.Qt.KeyboardModifier.NoModifier,
         )
         tab_navigation_handled = window.eventFilter(
-            window.text_value_edit,
+            focus_control,
             navigation_event,
         )
         application.processEvents()
@@ -416,6 +433,8 @@ def run_canvas_app_probe(
             "inspector_visible": window.inspector_dock.isVisible(),
         }
 
+        window.controller.set_zoom_factor(1.0)
+        theme_render_reference = window.controller.adapter.force_redraw()
         window.high_contrast_action.trigger()
         application.processEvents()
         high_contrast_enabled = (
@@ -428,6 +447,8 @@ def run_canvas_app_probe(
             high_contrast_screenshot_path,
             application=application,
         )
+        window.controller.set_zoom_factor(1.0)
+        high_contrast_render = window.controller.adapter.force_redraw()
         window.high_contrast_action.trigger()
         application.processEvents()
         high_contrast_restored = (
@@ -447,17 +468,52 @@ def run_canvas_app_probe(
             application=application,
             expected_mode="dark",
         )
+        window.controller.set_zoom_factor(1.0)
+        dark_render = window.controller.adapter.force_redraw()
         application.setPalette(original_palette)
         application.processEvents()
         window._apply_theme()
+        window.controller.set_zoom_factor(1.0)
+        restored_theme_render = window.controller.adapter.force_redraw()
         system_theme_restored = (
             window.theme_tokens is not None
             and window.theme_tokens.mode == baseline_theme.get("mode")
         )
+        theme_render_invariant = (
+            bool(theme_render_reference)
+            and high_contrast_render == theme_render_reference
+            and dark_render == theme_render_reference
+            and restored_theme_render == theme_render_reference
+        )
 
-        target_info = window.controller.visible_text_targets()[0]
+        target_info = next(
+            target
+            for target in window.controller.visible_text_targets()
+            if target.get("object_type") == "axis"
+        )
         selected_target = window.select_text_target(str(target_info["object_id"]))
-        text_target_count = window.text_target_combo.count()
+        inspector_model = window.controller.contextual_inspector()
+        inspector_object_count = window.inspector_panel.object_combo.count()
+        field_ids = {field.field_id for field in inspector_model.fields}
+        selection_visual = {
+            "overlay_visible": window.controller.adapter.selection_overlay_visible,
+            "direct_manipulation": (
+                window.controller.adapter.direct_manipulation_supported
+            ),
+        }
+        xy_object = next(
+            item
+            for item in inspector_model.related_objects
+            if item.object_type == "xy"
+        )
+        window.controller.select_object_id(xy_object.object_id)
+        xy_model = window.controller.contextual_inspector()
+        dataset_fields = [
+            field.to_dict()
+            for field in xy_model.fields
+            if field.editor == "dataset"
+        ]
+        window.select_text_target(str(target_info["object_id"]))
         inspector_initially_visible = window.inspector.isVisible()
         window.inspector_action.trigger()
         application.processEvents()
@@ -474,11 +530,60 @@ def run_canvas_app_probe(
         )
         value_a = f"{original_value} [Canvas A]"
         value_b = f"{original_value} [Canvas B]"
+        staged_value = f"{original_value} [Staged only]"
+        staged_widget = window.inspector_panel.field_widgets["axis_label"]
+        staged_widget.setText(staged_value)
+        application.processEvents()
+        staged_revision = window.controller.session.revision
+        staged_apply_enabled = window.inspector_panel.apply_button.isEnabled()
+        staged_save_blocked = False
+        staged_navigation_blocked = False
+        try:
+            window.save_document()
+        except RuntimeError:
+            staged_save_blocked = True
+        try:
+            window._inspector_object_selected(xy_object.object_id)
+        except RuntimeError:
+            staged_navigation_blocked = True
+        staged_selection_preserved = (
+            window.controller.session.selection.primary_object_id
+            == target_info["object_id"]
+        )
+        window.inspector_panel.revert_staged()
+        application.processEvents()
+        staged_reverted_value = window.controller.adapter.setting_value(
+            str(selected_target["setting_path"])
+        )
+
+        immediate_widget = window.inspector_panel.field_widgets["axis_label_bold"]
+        immediate_before = bool(immediate_widget.isChecked())
+        immediate_revision_before = window.controller.session.revision
+        immediate_render_before = window.controller.adapter.render_fingerprint()
+        immediate_widget.setChecked(not immediate_before)
+        application.processEvents()
+        immediate_revision_after = window.controller.session.revision
+        immediate_render_after = window.controller.adapter.render_fingerprint()
+        immediate_value_after = bool(
+            window.controller.adapter.setting_value(
+                next(
+                    field.setting_path
+                    for field in window.controller.contextual_inspector().fields
+                    if field.field_id == "axis_label_bold"
+                )
+            )
+        )
+
         render_hashes = [window.controller.adapter.render_fingerprint()]
         applied_values: list[str] = []
         for index in range(operation_count):
             value = value_a if index % 2 == 0 else value_b
-            window.apply_selected_text(value)
+            if index == 0:
+                label_widget = window.inspector_panel.field_widgets["axis_label"]
+                label_widget.setText(value)
+                window.inspector_panel._apply_clicked()
+            else:
+                window.apply_selected_text(value)
             application.processEvents()
             applied_values.append(value)
             render_hashes.append(window.controller.adapter.render_fingerprint())
@@ -492,9 +597,24 @@ def run_canvas_app_probe(
                 strict=True,
             )
         )
+        pre_export_structural = window.controller.run_structural_qa()
+        window.inspector_panel.set_structural_qa(pre_export_structural)
+        pickinfo = window.controller.adapter.first_data_point_pick()
+        window._set_point_pick_active(True)
+        window._on_point_picked(pickinfo)
+        application.processEvents()
+        selected_point = (
+            window.controller.session.selection.data_point.to_dict()
+            if window.controller.session.selection.data_point is not None
+            else None
+        )
+        point_marker_visible = window.plot_window.pickeritem.isVisible()
         window.save_document()
         application.processEvents()
         export_payload = window.export_current()
+        post_export_structural = dict(
+            window.controller.session.structural_qa_summary
+        )
         normal_screenshot = _capture_window(
             window,
             screenshot_path,
@@ -518,6 +638,12 @@ def run_canvas_app_probe(
         windows.append(reopened)
         reopened.show()
         application.processEvents()
+        reopened_point = (
+            reopened.controller.session.selection.data_point.to_dict()
+            if reopened.controller.session.selection.data_point is not None
+            else None
+        )
+        reopened_point_marker_visible = reopened.plot_window.pickeritem.isVisible()
         reopened_target = reopened.select_text_target(str(target_info["object_id"]))
         reopened_value = reopened.controller.adapter.setting_value(
             str(reopened_target["setting_path"])
@@ -590,6 +716,10 @@ def run_canvas_app_probe(
             and dark_screenshot["canvas_surface_ready"] is True
             and high_contrast_screenshot["canvas_surface_ready"] is True
             and recovery_screenshot["canvas_surface_ready"] is True
+            and normal_screenshot["paper_surface_ready"] is True
+            and dark_screenshot["paper_surface_ready"] is True
+            and high_contrast_screenshot["paper_surface_ready"] is True
+            and recovery_screenshot["paper_surface_ready"] is True
             and normal_screenshot["inspector_surface_ready"] is True
             and dark_screenshot["inspector_surface_ready"] is True
             and high_contrast_screenshot["inspector_surface_ready"] is True
@@ -657,7 +787,36 @@ def run_canvas_app_probe(
             "reopened_theme_high_contrast": reopened_theme_high_contrast,
             "dark_runtime_enabled": dark_runtime_enabled,
             "system_theme_restored": system_theme_restored,
+            "contextual_inspector": {
+                "target": inspector_model.target.to_dict(),
+                "field_ids": sorted(field_ids),
+                "object_count": inspector_object_count,
+                "dataset_fields": dataset_fields,
+                "selection_visual": selection_visual,
+                "staged_revision": staged_revision,
+                "staged_apply_enabled": staged_apply_enabled,
+                "staged_save_blocked": staged_save_blocked,
+                "staged_navigation_blocked": staged_navigation_blocked,
+                "staged_selection_preserved": staged_selection_preserved,
+                "staged_reverted_value": staged_reverted_value,
+                "immediate_before": immediate_before,
+                "immediate_value_after": immediate_value_after,
+                "immediate_revision_before": immediate_revision_before,
+                "immediate_revision_after": immediate_revision_after,
+                "immediate_render_before": immediate_render_before,
+                "immediate_render_after": immediate_render_after,
+            },
             "text_target": target_info,
+            "data_point_selection": {
+                "selected": selected_point,
+                "marker_visible": point_marker_visible,
+                "reopened": reopened_point,
+                "reopened_marker_visible": reopened_point_marker_visible,
+            },
+            "structural_qa": {
+                "before_export": pre_export_structural,
+                "after_export": post_export_structural,
+            },
             "inspector_toggle": {
                 "initially_visible": inspector_initially_visible,
                 "hides": inspector_hides,
@@ -670,6 +829,7 @@ def run_canvas_app_probe(
             "recovery_value": recovery_value,
             "recovered_value": recovered_value,
             "operation_count": operation_count,
+            "immediate_operation_count": 1,
             "revision_after_operations": revision_after_operations,
             "reopened_revision": reopened_revision,
             "reopened_state": reopened_state,
@@ -697,6 +857,13 @@ def run_canvas_app_probe(
             "dark_screenshot": dark_screenshot,
             "high_contrast_screenshot": high_contrast_screenshot,
             "recovery_screenshot": recovery_screenshot,
+            "theme_render": {
+                "reference": theme_render_reference,
+                "high_contrast": high_contrast_render,
+                "dark": dark_render,
+                "restored": restored_theme_render,
+                "invariant": theme_render_invariant,
+            },
         }
         checks.extend(
             [
@@ -736,6 +903,17 @@ def run_canvas_app_probe(
                         **theme_contract,
                         "dark_runtime_enabled": dark_runtime_enabled,
                         "system_theme_restored": system_theme_restored,
+                    },
+                ),
+                _check(
+                    "theme_preserves_figure_render",
+                    "Application theme changes never alter the exact-current figure pixmap",
+                    theme_render_invariant,
+                    {
+                        "reference": theme_render_reference,
+                        "high_contrast": high_contrast_render,
+                        "dark": dark_render,
+                        "restored": restored_theme_render,
                     },
                 ),
                 _check(
@@ -814,17 +992,26 @@ def run_canvas_app_probe(
                     },
                 ),
                 _check(
-                    "bounded_text_inspector",
-                    "The focused visible-text inspector selects a stable Canvas object",
+                    "bounded_contextual_inspector",
+                    "Selection opens a finite scientific editor instead of a raw Veusz property tree",
                     selected_target.get("object_id") == target_info.get("object_id")
-                    and text_target_count > 0
+                    and inspector_object_count > 0
+                    and {"axis_label", "axis_min", "axis_max", "axis_label_bold"}
+                    <= field_ids
+                    and dataset_fields
+                    and all(field.get("read_only") is True for field in dataset_fields)
+                    and selection_visual["overlay_visible"] is True
                     and inspector_initially_visible
                     and inspector_hides
                     and inspector_restores
                     and advanced_editor_in_more,
                     {
                         "selection": selected_target,
-                        "target_count": text_target_count,
+                        "target": inspector_model.target.to_dict(),
+                        "field_ids": sorted(field_ids),
+                        "object_count": inspector_object_count,
+                        "dataset_fields": dataset_fields,
+                        "selection_visual": selection_visual,
                         "inspector_toggle": {
                             "initially_visible": inspector_initially_visible,
                             "hides": inspector_hides,
@@ -834,13 +1021,47 @@ def run_canvas_app_probe(
                     },
                 ),
                 _check(
+                    "inspector_staging_and_revert",
+                    "Staged fields do not mutate the document until Apply and can be reverted",
+                    staged_revision == 0
+                    and staged_apply_enabled is True
+                    and staged_save_blocked is True
+                    and staged_navigation_blocked is True
+                    and staged_selection_preserved is True
+                    and staged_reverted_value == original_value,
+                    {
+                        "revision": staged_revision,
+                        "apply_enabled": staged_apply_enabled,
+                        "save_blocked": staged_save_blocked,
+                        "navigation_blocked": staged_navigation_blocked,
+                        "selection_preserved": staged_selection_preserved,
+                        "reverted_value": staged_reverted_value,
+                    },
+                ),
+                _check(
+                    "immediate_inspector_operation",
+                    "A safe immediate field uses the typed gateway and redraws live",
+                    immediate_revision_after == immediate_revision_before + 1
+                    and immediate_value_after == (not immediate_before)
+                    and immediate_render_after != immediate_render_before,
+                    {
+                        "revision_before": immediate_revision_before,
+                        "revision_after": immediate_revision_after,
+                        "value_before": immediate_before,
+                        "value_after": immediate_value_after,
+                        "render_before": immediate_render_before,
+                        "render_after": immediate_render_after,
+                    },
+                ),
+                _check(
                     "sequential_typed_operations",
                     f"{operation_count} sequential user-path operations complete",
-                    revision_after_operations == operation_count
+                    revision_after_operations == operation_count + 1
                     and len(applied_values) == operation_count,
                     {
                         "revision": revision_after_operations,
                         "operation_count": operation_count,
+                        "immediate_operation_count": 1,
                     },
                 ),
                 _check(
@@ -850,6 +1071,35 @@ def run_canvas_app_probe(
                     {
                         "render_changes": render_changes,
                         "operation_count": operation_count,
+                    },
+                ),
+                _check(
+                    "data_point_selection_persists",
+                    "A picked data point is persisted and restored on the exact-current Canvas",
+                    selected_point is not None
+                    and selected_point == reopened_point
+                    and point_marker_visible is True
+                    and reopened_point_marker_visible is True,
+                    {
+                        "selected": selected_point,
+                        "reopened": reopened_point,
+                        "marker_visible": point_marker_visible,
+                        "reopened_marker_visible": reopened_point_marker_visible,
+                    },
+                ),
+                _check(
+                    "debounced_structural_qa_boundary",
+                    "Structural QA passes before export while honestly marking artifact QA stale",
+                    pre_export_structural.get("status") == "warning"
+                    and pre_export_structural.get("ready_for_artifact_qa") is True
+                    and (
+                        pre_export_structural.get("summary", {}).get("warning_ids")
+                        == ["artifact_qa_current"]
+                    )
+                    and post_export_structural.get("status") == "passed",
+                    {
+                        "before_export": pre_export_structural,
+                        "after_export": post_export_structural,
                     },
                 ),
                 _check(
@@ -1028,8 +1278,8 @@ def run_canvas_app_probe(
         },
         "error": error,
         "limitations": [
-            "This probe covers the M2 workbench foundation, not the complete "
-            "scientific inspector or review-overlay suite.",
+            "This probe covers the M2 contextual editing core; native annotation "
+            "dragging is exercised by a dedicated label-bearing project probe.",
             "Cross-process recovery restores the exact accepted visual state "
             "but intentionally starts a new Veusz in-memory undo boundary.",
         ],

@@ -1,7 +1,8 @@
 # SciPlot AI-Enhanced Canvas Development Roadmap
 
 Status: active product roadmap, 2026-07-17. M0 and M1 complete; M2 is in
-progress, with its adaptive visual foundation complete.
+progress. Its adaptive visual foundation and bounded contextual editing kernel
+are complete; review annotations and the real-session retirement gate remain.
 
 This roadmap supersedes the former assumption that native canvas work and
 multi-panel composition should remain deferred. Distribution to other users is
@@ -410,18 +411,18 @@ M1 completion evidence, 2026-07-17:
 
 Not included yet: conversational AI, freehand review marks, or composition.
 
-Known limits carried into M2:
+M1 limits handed to M2, with current disposition:
 
-- the M1 inspector intentionally covers visible text only; page, axis,
-  series, legend, appearance, annotation, and QA inspectors are M2;
-- PlotWindow click selection still resolves the topmost Veusz widget and does
-  not yet expose SciPlot data-point selection or direct manipulation;
-- cross-process recovery restores the exact accepted visual state but starts
-  a new in-memory undo boundary;
-- the current light QSS is an M1 prototype; M2 must introduce palette-backed
-  light, dark, increased-contrast, focus, spacing, and icon tokens;
-- normal `studio` still uses the transition route until ten representative
-  real M2 sessions prove the daily editing and review gate.
+- the visible-text-only inspector has been replaced by the bounded contextual
+  editing kernel described below;
+- SciPlot now owns persistent object selection, XY data-point selection, and
+  native label dragging; broader direct geometry remains evidence-driven;
+- cross-process recovery still restores the exact accepted visual state while
+  starting a new in-memory undo boundary;
+- the prototype light QSS has been replaced by palette-backed light, dark,
+  increased-contrast, focus, spacing, and semantic-state tokens;
+- normal `studio` still uses the transition route until review tooling and ten
+  representative real M2 sessions prove the full daily-use gate.
 
 ### M2 — Daily Editing and Review Canvas
 
@@ -442,7 +443,7 @@ Deliverables:
 - migration of the normal `studio` entrypoint to the SciPlot canvas after the
   exit gate passes.
 
-M2 foundation progress, 2026-07-17:
+M2 implementation progress, 2026-07-17:
 
 - replaced the fixed M1 stylesheet with palette-derived light, dark, and
   increased-contrast tokens while keeping scientific figure colors under the
@@ -460,7 +461,8 @@ M2 foundation progress, 2026-07-17:
   `21/21`, including palette-backed theming, real dark-palette rendering,
   increased contrast, adaptive narrow layout, Canvas-only mode, accessibility,
   menu parity, persistence, recovery, and exact-current delivery;
-- runtime smoke v10 passes `26/26`, containing Canvas contract `14/14`,
+- the adaptive-foundation runtime smoke v10 passed `26/26`, containing Canvas
+  contract `14/14`,
   native application `21/21`, 50 sequential live redraws, save/reopen,
   recovery, exact-current PDF/TIFF, QA, and complete delivery;
 - authorized real FTIR and TEMP3 multi-panel probes, plus representative
@@ -474,11 +476,49 @@ M2 foundation progress, 2026-07-17:
   helper, while `doctor` verifies that the actual Veusz Qt helper imports.
   Runtime smoke also selects the offscreen platform before any in-process
   QApplication is constructed;
+- promoted `CanvasSession` to version 3 with backward loading of versions 1
+  and 2, persistent stable-object and XY data-point selection, and a persisted
+  structural-QA summary;
+- replaced the visible-text prototype with a closed contextual inspector for
+  page, graph, axis, XY series, box plot, legend, image, contour, colorbar, and
+  native label objects. Dataset mappings remain read-only visual authority;
+- added native color swatches plus bounded boolean, choice, numeric, distance,
+  list, text, and auto-value editors. Safe boolean/choice fields apply
+  immediately; other edits stage locally and cross the typed operation gateway
+  only on Apply;
+- made staged state explicit and loss-resistant: object/page navigation,
+  Save, Export + QA, and close must apply, revert, or cancel staged fields.
+  Loading a high-precision value can no longer invent a false staged change;
+- linked plot clicks to the nearest supported scientific object, added
+  persistent XY point picking with a redraw-safe marker, and added a visible
+  selection boundary;
+- routed native label dragging through one
+  `user_direct_manipulation` operation batch, one revision increment, and one
+  journal entry instead of accepting an untracked Veusz-side mutation;
+- added debounced structural QA for live render, page geometry, dataset
+  resolution, axis ranges, selection validity, external conflicts, and
+  artifact-QA freshness. Full artifact QA remains an explicit Export + QA
+  boundary;
+- kept the scientific page display white under light, dark, and
+  increased-contrast application chrome without mutating VSZ or export
+  appearance. The native app probe now also compares fixed-zoom render
+  fingerprints across themes;
+- the pure Canvas contract now passes `21/21`; the native application gate
+  passes `26/26`; and the six-document inspector matrix passes `8/8` across 87
+  contextual objects and all ten supported object types. The matrix covers
+  FTIR, rheology, tensile, impact, scalar-field, and TEMP3 multi-panel VSZ
+  documents, verifies source immutability, and exercises typed label drag;
+- the final editing-kernel runtime smoke v10 passes `26/26`, including the
+  `21/21` pure contract, `26/26` native application lifecycle, 50 accepted
+  live edits, fixed-zoom theme invariance, save/reopen, recovery,
+  exact-current PDF/TIFF, passing QA, matching delivery hashes, and complete
+  delivery;
 - no upstream `third_party/veusz` or migrated `_vendor` source was changed.
 
-This is not M2 completion. Contextual scientific inspectors, persistent
-selection/direct manipulation, review overlays, annotation promotion, and ten
-real editing/review sessions remain required by the exit gate.
+This is not M2 completion. The contextual editing kernel is complete, but the
+non-exported review overlay, review-to-native annotation promotion, at least
+ten real daily editing/review sessions, and default `studio` migration remain
+required by the exit gate.
 
 Exit gate:
 

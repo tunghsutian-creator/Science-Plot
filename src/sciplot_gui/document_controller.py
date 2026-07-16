@@ -6,8 +6,9 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core._utils import file_sha256, json_safe
+from sciplot_core.canvas.inspector import CanvasInspectorModel
 from sciplot_core.canvas.model import CanvasSelection, CanvasSession
-from sciplot_core.canvas.operations import CanvasOperationBatch
+from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 from sciplot_core.canvas.persistence import (
     append_operation_journal,
     load_canvas_session,
@@ -97,6 +98,11 @@ class DocumentController:
             load_path = self.document_path
         self.adapter = VeuszCanvasAdapter(load_path, parent=parent, visible=visible)
         self.inventory = self.adapter.bind_object_registry(self.session)
+        selected_id = self.session.selection.primary_object_id
+        if selected_id is not None and not any(
+            item.get("object_id") == selected_id for item in self.inventory
+        ):
+            self.session.selection = CanvasSelection()
         self.session.current_page = self.adapter.set_page(self.session.current_page)
         self.session.viewport.zoom = self.adapter.set_zoom_factor(
             self.session.viewport.zoom
@@ -128,6 +134,17 @@ class DocumentController:
         else:
             restored_state = "canvas_ready"
         self.session.set_state(restored_state)
+        if self.session.selection.primary_object_id is None:
+            default_id = self.adapter.default_inspector_object_id(self.session)
+            if default_id is not None:
+                self.session.selection = CanvasSelection(
+                    object_ids=[default_id],
+                    primary_object_id=default_id,
+                )
+        self.adapter.restore_data_point_selection(
+            self.session.selection.data_point,
+            self.session,
+        )
         self.persist()
         if self.recovered_from_snapshot is not None:
             append_operation_journal(
@@ -188,6 +205,16 @@ class DocumentController:
         self.session.selection = CanvasSelection(
             object_ids=current,
             primary_object_id=primary,
+            data_point=(
+                self.session.selection.data_point
+                if self.session.selection.data_point is not None
+                and self.session.selection.data_point.target_object_id == primary
+                else None
+            ),
+        )
+        self.adapter.restore_data_point_selection(
+            self.session.selection.data_point,
+            self.session,
         )
         self.persist()
         return item
@@ -198,24 +225,71 @@ class DocumentController:
         *,
         mode: str = "new",
     ) -> dict[str, Any] | None:
-        item = next(
-            (
-                candidate
-                for candidate in self.inventory
-                if candidate.get("path") == widget_path
-            ),
-            None,
+        object_id = self.adapter.nearest_inspector_object_id(
+            self.session,
+            widget_path,
         )
-        if item is None:
+        if object_id is None:
             return None
-        return self.select_object_id(str(item["object_id"]), mode=mode)
+        return self.select_object_id(object_id, mode=mode)
 
     def visible_text_targets(self) -> list[dict[str, Any]]:
         return self.adapter.visible_text_targets(self.session)
 
+    def contextual_inspector(self) -> CanvasInspectorModel:
+        selected_id = self.session.selection.primary_object_id
+        if selected_id is None:
+            default_id = self.adapter.default_inspector_object_id(self.session)
+            if default_id is None:
+                raise RuntimeError(
+                    "The current page does not contain a supported Canvas object."
+                )
+            self.select_object_id(default_id)
+            selected_id = default_id
+        return self.adapter.contextual_inspector(self.session, selected_id)
+
+    def select_data_point(self, pickinfo: Any) -> dict[str, Any]:
+        point = self.adapter.point_selection_from_pick(self.session, pickinfo)
+        self.session.selection = CanvasSelection(
+            object_ids=[point.target_object_id],
+            primary_object_id=point.target_object_id,
+            data_point=point,
+        )
+        self.persist()
+        self.adapter.restore_data_point_selection(point, self.session)
+        return point.to_dict()
+
+    def clear_data_point_selection(self) -> None:
+        selection = self.session.selection
+        self.session.selection = CanvasSelection(
+            object_ids=list(selection.object_ids),
+            primary_object_id=selection.primary_object_id,
+        )
+        self.adapter.restore_data_point_selection(None, self.session)
+        self.persist()
+
+    def set_interaction_mode(self, mode: str) -> str:
+        return self.adapter.set_interaction_mode(mode)
+
     def set_page(self, page_index: int) -> int:
         page = self.adapter.set_page(page_index)
         self.session.current_page = page
+        selected = self.selected_object
+        current_page_path = self.adapter.current_page_path
+        if selected is None or not (
+            str(selected.get("path")) == current_page_path
+            or str(selected.get("path")).startswith(f"{current_page_path}/")
+        ):
+            default_id = self.adapter.default_inspector_object_id(self.session)
+            self.session.selection = (
+                CanvasSelection(
+                    object_ids=[default_id],
+                    primary_object_id=default_id,
+                )
+                if default_id is not None
+                else CanvasSelection()
+            )
+            self.adapter.restore_data_point_selection(None, self.session)
         self.session.last_render_sha256 = self.adapter.render_fingerprint()
         self.persist()
         return page
@@ -392,6 +466,47 @@ class DocumentController:
         }
         append_operation_journal(self.journal_path, entry)
         return entry
+
+    def apply_setting_changes(
+        self,
+        *,
+        target_id: str,
+        changes: list[dict[str, Any]],
+        provider: str,
+        rationale: str,
+    ) -> dict[str, Any]:
+        if not changes:
+            raise ValueError("Canvas setting changes cannot be empty.")
+        operations: list[CanvasOperation] = []
+        for change in changes:
+            setting_path = str(change.get("setting_path") or "")
+            if not setting_path:
+                raise ValueError("Canvas setting_path must be a non-empty string.")
+            current_value = self.adapter.setting_value(setting_path)
+            operations.append(
+                CanvasOperation.set_setting(
+                    target_id=target_id,
+                    setting_path=setting_path,
+                    value=change.get("value"),
+                    expected_value=current_value,
+                    require_expected_value=True,
+                )
+            )
+        return self.apply_batch(
+            CanvasOperationBatch(
+                base_revision=self.session.revision,
+                provider=provider,
+                rationale=rationale,
+                operations=tuple(operations),
+            )
+        )
+
+    def run_structural_qa(self) -> dict[str, Any]:
+        report = self.adapter.structural_qa(self.session)
+        self.session.structural_qa_summary = json_safe(report)
+        self.session.last_render_sha256 = self.adapter.render_fingerprint()
+        self.persist()
+        return report
 
     def undo(self, *, provider: str = "user") -> dict[str, Any]:
         self._sync_view_state()

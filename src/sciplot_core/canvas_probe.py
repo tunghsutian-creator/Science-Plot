@@ -16,7 +16,12 @@ from sciplot_core.canvas.assistant_contract import (
     DataMappingProposal,
     DeclarativeTransformation,
 )
-from sciplot_core.canvas.model import CanvasSession
+from sciplot_core.canvas.inspector import CanvasInspectorField
+from sciplot_core.canvas.model import (
+    CanvasDataPointSelection,
+    CanvasSelection,
+    CanvasSession,
+)
 from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 from sciplot_core.canvas.persistence import (
     append_operation_journal,
@@ -83,6 +88,26 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         object_type="axis",
         revision=session.revision,
     )
+    session.selection = CanvasSelection(
+        object_ids=[axis.object_id],
+        primary_object_id=axis.object_id,
+        data_point=CanvasDataPointSelection(
+            target_object_id=axis.object_id,
+            x=1.25,
+            y=2.5,
+            graph_x=140.0,
+            graph_y=90.0,
+            x_label="Frequency",
+            y_label="Storage modulus",
+            index="4",
+        ),
+    )
+    session.structural_qa_summary = {
+        "kind": "sciplot_canvas_structural_qa",
+        "version": 1,
+        "status": "warning",
+        "revision": 0,
+    }
     operation = CanvasOperation.set_setting(
         target_id=axis.object_id,
         setting_path="/page/graph/x/label",
@@ -194,7 +219,14 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
     legacy_payload = session.to_dict()
     legacy_payload["version"] = 1
     legacy_payload.pop("interface")
+    legacy_payload.pop("structural_qa_summary")
+    legacy_payload["selection"].pop("data_point")
     migrated_legacy_session = CanvasSession.from_dict(legacy_payload)
+    version_two_payload = session.to_dict()
+    version_two_payload["version"] = 2
+    version_two_payload.pop("structural_qa_summary")
+    version_two_payload["selection"].pop("data_point")
+    migrated_version_two_session = CanvasSession.from_dict(version_two_payload)
     invalid_interface_rejected = _raises_value_error(
         lambda: CanvasSession.from_dict(
             {
@@ -206,20 +238,98 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             }
         )
     )
+    choice_field = CanvasInspectorField(
+        field_id="line_style",
+        section="Line",
+        label="Line style",
+        setting_path="/page/graph/series/PlotLine/style",
+        setting_type="choice",
+        editor="choice",
+        value="solid",
+        choices=("solid", "dashed"),
+    )
+    dataset_field = CanvasInspectorField(
+        field_id="x_data",
+        section="Data authority",
+        label="X data",
+        setting_path="/page/graph/series/xData",
+        setting_type="dataset-extended",
+        editor="dataset",
+        value="x",
+        read_only=True,
+    )
+    auto_field = CanvasInspectorField(
+        field_id="minimum",
+        section="Range",
+        label="Minimum",
+        setting_path="/page/graph/x/min",
+        setting_type="float-or-auto",
+        editor="number_or_auto",
+        value="Auto",
+    )
+    optional_text_field = CanvasInspectorField(
+        field_id="legend_title",
+        section="Legend",
+        label="Title",
+        setting_path="/page/graph/key/title",
+        setting_type="str",
+        editor="text",
+        value="",
+    )
+    invalid_choice_rejected = _raises_value_error(
+        lambda: choice_field.coerce_input("arbitrary")
+    )
+    read_only_dataset_rejected = _raises_value_error(
+        lambda: dataset_field.coerce_input("replacement")
+    )
+    nonfinite_data_point_rejected = _raises_value_error(
+        lambda: CanvasDataPointSelection(
+            target_object_id=axis.object_id,
+            x=float("nan"),
+            y=1.0,
+            graph_x=2.0,
+            graph_y=3.0,
+        )
+    )
+    nonprimary_data_point_rejected = _raises_value_error(
+        lambda: CanvasSelection(
+            object_ids=[axis.object_id, "another-object"],
+            primary_object_id="another-object",
+            data_point=CanvasDataPointSelection(
+                target_object_id=axis.object_id,
+                x=1.0,
+                y=2.0,
+                graph_x=3.0,
+                graph_y=4.0,
+            ),
+        )
+    )
     checks = [
         _check(
             "session_roundtrip",
-            "CanvasSession version 2 persists workbench state without Qt",
+            "CanvasSession version 3 persists workbench, point-selection, and structural-QA state without Qt",
             loaded.session_id == session.session_id
             and loaded.state == "canvas_ready"
-            and loaded.interface.to_dict() == session.interface.to_dict(),
+            and loaded.interface.to_dict() == session.interface.to_dict()
+            and loaded.selection.to_dict() == session.selection.to_dict()
+            and loaded.structural_qa_summary == session.structural_qa_summary,
         ),
         _check(
             "session_v1_migration",
             "CanvasSession version 1 payloads migrate to safe M2 interface defaults",
             migrated_legacy_session.interface.inspector_visible is True
             and migrated_legacy_session.interface.inspector_width == 340
-            and migrated_legacy_session.interface.high_contrast is False,
+            and migrated_legacy_session.interface.high_contrast is False
+            and migrated_legacy_session.selection.data_point is None
+            and not migrated_legacy_session.structural_qa_summary,
+        ),
+        _check(
+            "session_v2_migration",
+            "CanvasSession version 2 payloads migrate without inventing point or QA state",
+            migrated_version_two_session.interface.to_dict()
+            == session.interface.to_dict()
+            and migrated_version_two_session.selection.data_point is None
+            and not migrated_version_two_session.structural_qa_summary,
         ),
         _check(
             "stable_object_identity",
@@ -284,6 +394,38 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             "interface_state_schema_is_bounded",
             "Canvas interface state rejects unsafe persisted geometry",
             invalid_interface_rejected,
+        ),
+        _check(
+            "inspector_choice_schema_is_closed",
+            "Contextual choice fields reject arbitrary renderer values",
+            choice_field.coerce_input("dashed") == "dashed"
+            and invalid_choice_rejected,
+        ),
+        _check(
+            "inspector_data_mapping_is_read_only",
+            "Dataset mapping cannot be rewritten from the visual inspector",
+            read_only_dataset_rejected,
+        ),
+        _check(
+            "inspector_auto_range_is_typed",
+            "Auto-range fields normalize only finite numbers or the explicit Auto token",
+            auto_field.coerce_input("auto") == "Auto"
+            and auto_field.coerce_input(1.5) == 1.5,
+        ),
+        _check(
+            "inspector_optional_text_accepts_empty",
+            "Legitimate empty labels and titles do not block unrelated edits",
+            optional_text_field.coerce_input("") == "",
+        ),
+        _check(
+            "data_point_schema_rejects_nonfinite_coordinates",
+            "Persisted data-point selections reject non-finite coordinates",
+            nonfinite_data_point_rejected,
+        ),
+        _check(
+            "data_point_schema_requires_primary_target",
+            "A persisted point selection cannot target a background object",
+            nonprimary_data_point_rejected,
         ),
     ]
     return {

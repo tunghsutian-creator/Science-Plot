@@ -728,8 +728,8 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         )
         checks.append(
             _check(
-                "canvas_contract_v2",
-                "CanvasSession, typed operations, review annotations, and mapping proposals roundtrip without Qt",
+                "canvas_contract_v3",
+                "CanvasSession, contextual inspector, typed operations, point selection, review annotations, and mapping proposals roundtrip without Qt",
                 canvas_contract_probe.get("status") == "passed",
                 detail=canvas_contract_probe,
             )
@@ -931,8 +931,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         checks.append(
             _check(
                 "native_canvas_app_lifecycle",
-                "The SciPlot-owned Canvas completes 50 live edits, save/reopen, "
-                "exact export, project delivery, and explicit recovery",
+                "The SciPlot-owned Canvas completes contextual edits, point "
+                "selection, structural QA, 50 live redraws, save/reopen, exact "
+                "export, project delivery, and explicit recovery",
                 canvas_app_probe.get("status") == "passed",
                 detail={
                     "status": canvas_app_probe.get("status"),

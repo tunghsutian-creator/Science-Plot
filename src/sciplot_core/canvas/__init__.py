@@ -6,6 +6,7 @@ from sciplot_core.canvas.assistant_contract import (
     DeclarativeTransformation,
 )
 from sciplot_core.canvas.model import (
+    CanvasDataPointSelection,
     CanvasObjectRecord,
     CanvasSelection,
     CanvasSession,
@@ -17,6 +18,7 @@ from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 
 __all__ = [
     "CanvasObjectRecord",
+    "CanvasDataPointSelection",
     "CanvasOperation",
     "CanvasOperationBatch",
     "CanvasSelection",
