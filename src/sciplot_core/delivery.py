@@ -174,11 +174,115 @@ def _write_executable(path: Path, lines: list[str]) -> None:
     path.chmod(0o755)
 
 
+def build_minimal_user_delivery(
+    destination: Path,
+    *,
+    figures: list[tuple[str, Path]],
+    data_files: list[tuple[str, Path]],
+    veusz_documents: list[tuple[str, Path]],
+) -> dict[str, Any]:
+    """Build a deliberately small handoff: figures, data, VSZs, one launcher.
+
+    The ordinary delivery package remains the provenance-complete contract.
+    This helper is for an explicitly curated user handoff where QA records,
+    manifests, specs, logs, and per-document launchers would be clutter.
+    """
+    resolved_destination = destination.expanduser().resolve()
+    if resolved_destination.exists():
+        shutil.rmtree(resolved_destination)
+    figures_dir = resolved_destination / "figures"
+    data_dir = resolved_destination / "data"
+    veusz_dir = resolved_destination / "veusz"
+    for directory in (figures_dir, data_dir, veusz_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    def copy_named(records: list[tuple[str, Path]], target_dir: Path) -> list[Path]:
+        copied: list[Path] = []
+        used_names: set[str] = set()
+        for name, source in records:
+            if not name or Path(name).name != name:
+                raise ValueError(f"Minimal delivery artifact needs a plain filename: {name!r}")
+            if name in used_names:
+                raise ValueError(f"Duplicate minimal delivery filename: {name}")
+            resolved_source = source.expanduser().resolve()
+            if not resolved_source.is_file():
+                raise FileNotFoundError(resolved_source)
+            destination_path = target_dir / name
+            shutil.copy2(resolved_source, destination_path)
+            copied.append(destination_path)
+            used_names.add(name)
+        return copied
+
+    copied_figures = copy_named(figures, figures_dir)
+    copied_data = copy_named(data_files, data_dir)
+    copied_documents = copy_named(veusz_documents, veusz_dir)
+    if not copied_documents:
+        raise ValueError("Minimal delivery needs at least one editable Veusz document.")
+
+    launcher = resolved_destination / "Open_in_Veusz.command"
+    _write_executable(
+        launcher,
+        [
+            "#!/bin/zsh",
+            "set -euo pipefail",
+            'DELIVERY_DIR="${0:A:h}"',
+            "unset QT_QPA_PLATFORM || true",
+            'documents=("${DELIVERY_DIR}"/veusz/*.vsz(N))',
+            'if (( ${#documents[@]} == 0 )); then',
+            '  print -u2 "No Veusz documents found in ${DELIVERY_DIR}/veusz"',
+            "  exit 1",
+            "fi",
+            'if (( $# > 0 )); then',
+            '  DOCUMENT="$1"',
+            '  [[ "${DOCUMENT}" = /* ]] || DOCUMENT="${DELIVERY_DIR}/veusz/${DOCUMENT}"',
+            "else",
+            '  print "Select a figure to edit in Veusz:"',
+            '  for index in {1..${#documents[@]}}; do',
+            '    print "${index}) ${documents[$index]:t:r}"',
+            "  done",
+            '  while true; do',
+            '    read "choice?> "',
+            '    if [[ "${choice}" = <-> ]] && (( choice >= 1 && choice <= ${#documents[@]} )); then',
+            '      DOCUMENT="${documents[$choice]}"',
+            "      break",
+            "    fi",
+            '    print -u2 "Enter a number from 1 to ${#documents[@]}."',
+            "  done",
+            "fi",
+            'if [[ ! -f "${DOCUMENT}" ]]; then',
+            '  print -u2 "Veusz document not found: ${DOCUMENT}"',
+            "  exit 1",
+            "fi",
+            'if [[ "${SCIPLOT_LAUNCH_DRY_RUN:-0}" == "1" ]]; then',
+            '  print -r -- "${DOCUMENT}"',
+            "  exit 0",
+            "fi",
+            f'cd "{REPO_ROOT}"',
+            'exec skill/scripts/sciplot studio "${DOCUMENT}" --advanced-editor',
+        ],
+    )
+    return {
+        "kind": "sciplot_minimal_user_delivery",
+        "root": str(resolved_destination),
+        "figures": [str(path) for path in copied_figures],
+        "data": [str(path) for path in copied_data],
+        "veusz_documents": [str(path) for path in copied_documents],
+        "launcher": str(launcher),
+        "file_count": len(copied_figures) + len(copied_data) + len(copied_documents) + 1,
+    }
+
+
 def _write_editable_launchers(project_dir: Path) -> tuple[Path, Path, Path]:
     open_veusz = project_dir / "Open_in_Veusz.command"
     export_edited = project_dir / "Export_Edited_Veusz.command"
     open_studio = project_dir / "Open_in_SciPlot_Studio.command"
-    shared = ["#!/bin/zsh", "set -euo pipefail", 'PROJECT_DIR="${0:A:h}"', f'cd "{REPO_ROOT}"']
+    shared = [
+        "#!/bin/zsh",
+        "set -euo pipefail",
+        'PROJECT_DIR="${0:A:h}"',
+        "unset QT_QPA_PLATFORM || true",
+        f'cd "{REPO_ROOT}"',
+    ]
     _write_executable(
         open_veusz,
         [*shared, 'exec skill/scripts/sciplot studio "${PROJECT_DIR}/studio/document.vsz" --advanced-editor'],

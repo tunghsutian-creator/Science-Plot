@@ -336,8 +336,12 @@ def run_studio_command(
     original_argv: list[str] | None = None,
 ) -> int:
     if qt_smoke:
+        # GUI smoke runs inside CI/Codex processes which may not own an Aqua
+        # application session.  Exercise the real MainWindow offscreen so the
+        # check cannot crash in macOS application registration.
+        _prefer_offscreen_export_platform()
         maybe_reexec_with_qt_runtime(original_argv or ["studio", "--qt-smoke"])
-        payload = qt_smoke_payload()
+        payload = qt_smoke_payload(target.expanduser() if target is not None else None)
         print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
         return 0
 
@@ -414,24 +418,49 @@ def run_studio_command(
     return launch_veusz_gui(document_path)
 
 
-def qt_smoke_payload() -> dict[str, Any]:
+def qt_smoke_payload(document_path: Path | None = None) -> dict[str, Any]:
     _ensure_veusz_on_path()
     from PyQt6 import QtCore, QtWidgets
-    from veusz.windows.simplewindow import SimpleWindow
 
     app = QtWidgets.QApplication.instance()
     created_app = app is None
     if app is None:
         app = QtWidgets.QApplication([])
-    window = SimpleWindow("SciPlot Studio smoke")
-    window.enableToolbar(True)
+    # Construct the complete editor window.  Opening a VSZ here can trigger an
+    # upstream import-security confirmation dialog, which is intentionally left
+    # to the separate reopen/export smoke rather than an offscreen GUI check.
+    window = _create_veusz_window(None)
+    document_probe: dict[str, Any] = {
+        "document": None,
+        "document_loaded": None,
+        "datasets": [],
+        "pages": [],
+    }
+    if document_path is not None:
+        resolved_document = document_path.expanduser().resolve()
+        if not resolved_document.is_file():
+            raise FileNotFoundError(resolved_document)
+        from veusz import document as veusz_document
+
+        loaded_document = veusz_document.Document()
+        # Load directly rather than through MainWindow's error dialog.  A
+        # missing saved-script command must fail the smoke process instead of
+        # hanging behind an offscreen modal dialog.
+        loaded_document.load(str(resolved_document))
+        document_probe = {
+            "document": str(resolved_document),
+            "document_loaded": True,
+            "datasets": sorted(str(name) for name in loaded_document.data),
+            "pages": [str(child.name) for child in loaded_document.basewidget.children],
+        }
     payload = {
         "kind": "sciplot_studio_qt_smoke",
         "status": "passed",
         "qt_version": QtCore.QT_VERSION_STR,
         "pyqt_version": QtCore.PYQT_VERSION_STR,
         "window": type(window).__name__,
-        "plot_window": type(window.plot).__name__,
+        "main_window_constructed": True,
+        **document_probe,
         "upstreams": upstream_status(),
     }
     window.close()
@@ -469,9 +498,11 @@ def launch_sciplot_studio(
 
 
 def _create_veusz_window(document_path: Path | None) -> Any:
+    _ensure_veusz_qsettings_compat()
     from veusz.windows.mainwindow import MainWindow
 
     _ensure_veusz_loader_compat()
+    _ensure_veusz_examples_menu_compat(MainWindow)
     window = MainWindow()
     if document_path is not None:
         window.openFileInWindow(str(document_path))
@@ -483,11 +514,71 @@ def _create_veusz_window(document_path: Path | None) -> Any:
     return window
 
 
+def _ensure_veusz_qsettings_compat() -> None:
+    """Keep Veusz settings scoped to Veusz on macOS.
+
+    Native QSettings includes the macOS global preference domain as a fallback.
+    Veusz evaluates every returned value as one of its own settings, producing
+    dozens of misleading ``Error interpreting item Apple...`` messages.  The
+    adapter disables only that fallback and leaves Veusz's own preferences
+    readable and writable.
+    """
+    from veusz import qtall as qt
+
+    current = qt.QSettings
+    if getattr(current, "_sciplot_fallbacks_disabled", False):
+        return
+
+    class SciPlotQSettings(current):
+        _sciplot_fallbacks_disabled = True
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            self.setFallbacksEnabled(False)
+
+    qt.QSettings = SciPlotQSettings
+
+
+def _ensure_veusz_examples_menu_compat(main_window_type: type[Any]) -> None:
+    """Treat the intentionally omitted upstream examples directory as optional."""
+    from veusz import utils
+
+    current = main_window_type.populateExamplesMenu
+    if getattr(current, "_sciplot_missing_examples_safe", False):
+        return
+
+    def populate_examples_menu(window: Any) -> Any:
+        if not Path(str(utils.exampleDirectory)).is_dir():
+            return None
+        return current(window)
+
+    populate_examples_menu._sciplot_missing_examples_safe = True  # type: ignore[attr-defined]
+    main_window_type.populateExamplesMenu = populate_examples_menu
+
+
 def _ensure_veusz_loader_compat() -> None:
     """Keep Veusz script loading alive when optional import commands are absent."""
+    from importlib import import_module
+
+    # The upstream Veusz application imports this package during its startup
+    # thread.  SciPlot constructs MainWindow directly, so repeat the same
+    # registration step before loading a saved document.  Without it, native
+    # Veusz dumps containing ImportString2D/ImportStringND fail with NameError.
+    import_module("veusz.dataimport")
+
     from veusz import document as veusz_document
     from veusz.document import mime
     from veusz.document.commandinterface import CommandInterface, registerImportCommand
+
+    for command_name in ("ImportString2D", "ImportStringND"):
+        if (
+            not hasattr(CommandInterface, command_name)
+            or command_name not in CommandInterface.import_commands
+            or CommandInterface.import_filenamearg.get(command_name) != -1
+        ):
+            raise RuntimeError(
+                f"Veusz saved-data command {command_name} is unavailable in this Studio runtime."
+            )
 
     if hasattr(CommandInterface, "ImportFITSFile"):
         pass
@@ -3647,10 +3738,36 @@ def _scalar_field_plot_contract(
             render_options.get("highlight_contour_line_width_pt") or 0.9
         ),
         "colorbar_direction": str(render_options.get("colorbar_direction") or "horizontal"),
+        "colorbar_manual_position": render_options.get("colorbar_manual_position") is True,
         "colorbar_width_mm": float(render_options.get("colorbar_width_mm") or 31.0),
         "colorbar_height_mm": float(render_options.get("colorbar_height_mm") or 2.4),
         "colorbar_horz_manual": float(render_options.get("colorbar_horz_manual") or 0.86),
-        "colorbar_vert_manual": float(render_options.get("colorbar_vert_manual") or 0.18),
+        "colorbar_vert_manual": float(
+            render_options["colorbar_vert_manual"]
+            if render_options.get("colorbar_vert_manual") is not None
+            else 0.18
+        ),
+        "colorbar_foreground_color": str(
+            render_options.get("colorbar_foreground_color") or "#111111"
+        ),
+        "colorbar_background_color": str(
+            render_options.get("colorbar_background_color") or ""
+        ),
+        "colorbar_background_transparency": int(
+            render_options.get("colorbar_background_transparency") or 0
+        ),
+        "colorbar_background_x_fraction": float(
+            render_options.get("colorbar_background_x_fraction") or 0.5
+        ),
+        "colorbar_background_y_fraction": float(
+            render_options.get("colorbar_background_y_fraction") or 0.86
+        ),
+        "colorbar_background_width_fraction": float(
+            render_options.get("colorbar_background_width_fraction") or 0.44
+        ),
+        "colorbar_background_height_fraction": float(
+            render_options.get("colorbar_background_height_fraction") or 0.24
+        ),
     }
 
 
@@ -3674,6 +3791,12 @@ def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str,
             end = value_number
         if start is None or end is None:
             continue
+        transparency_value = item.get("transparency")
+        transparency = (
+            86 if transparency_value is None and kind == "band"
+            else 35 if transparency_value is None
+            else int(transparency_value)
+        )
         guides.append(
             {
                 "id": str(item.get("id") or f"guide_{index}"),
@@ -3682,7 +3805,7 @@ def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str,
                 "start": min(start, end),
                 "end": max(start, end),
                 "color": str(item.get("color") or "#6B7280"),
-                "transparency": int(item.get("transparency") or (86 if kind == "band" else 35)),
+                "transparency": min(max(transparency, 0), 100),
                 "line_width_pt": float(item.get("line_width_pt") or 0.7),
                 "line_style": str(item.get("line_style") or "dashed"),
             }
@@ -4067,17 +4190,9 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any], style: dict[
     colormap_name = str(scalar["colormap_name"])
     colormap = [_hex_to_veusz_rgba(value) for value in scalar["colormap_colors"]]
     interface.AddCustom("colormap", colormap_name, colormap, mode="replace")
-    interface.Add("image", name="field_image", autoadd=False)
-    interface.To("field_image")
-    interface.Set("data", data_name)
-    interface.Set("min", float(scalar["z_min"]))
-    interface.Set("max", float(scalar["z_max"]))
-    interface.Set("colorScaling", str(scalar["zscale"]))
-    interface.Set("colorMap", colormap_name)
-    interface.Set("colorInvert", bool(scalar.get("color_invert")))
-    interface.Set("mapping", str(scalar.get("field_mapping") or "bounds"))
-    interface.Set("drawMode", str(scalar.get("field_draw_mode") or "rectangles"))
-    interface.To("..")
+    # Veusz paints graph children in reverse object-tree order. Add overlays
+    # first and the opaque image last so contours and the colorbar remain
+    # visible above the scalar field.
     if scalar.get("show_contours") is True:
         _add_veusz_contour(
             interface,
@@ -4102,12 +4217,24 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any], style: dict[
     if scalar.get("show_colorbar") is True:
         interface.Add("colorbar", name="field_colorbar", autoadd=False)
         interface.To("field_colorbar")
-        interface.Set("widgetName", "/page1/graph1/field_image")
+        # Veusz WidgetChoice stores the sibling widget name, not an absolute
+        # object-tree path.  An absolute path silently leaves the colorbar
+        # detached and falls back to a synthetic 0--1 scale.
+        interface.Set("widgetName", "field_image")
+        # Keep the colorbar numerically identical to the image even though the
+        # colorbar is created first to satisfy Veusz's reverse paint order.
+        interface.Set("min", float(scalar["z_min"]))
+        interface.Set("max", float(scalar["z_max"]))
         direction = str(scalar.get("colorbar_direction") or "horizontal").strip().casefold()
         if direction not in {"horizontal", "vertical"}:
             direction = "horizontal"
         interface.Set("direction", direction)
-        if direction == "horizontal":
+        if scalar.get("colorbar_manual_position") is True:
+            interface.Set("horzPosn", "manual")
+            interface.Set("vertPosn", "manual")
+            interface.Set("horzManual", float(scalar.get("colorbar_horz_manual") or 0.0))
+            interface.Set("vertManual", float(scalar.get("colorbar_vert_manual") or 0.0))
+        elif direction == "horizontal":
             interface.Set("horzPosn", "right")
             interface.Set("vertPosn", "top")
         else:
@@ -4120,21 +4247,59 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any], style: dict[
         interface.Set("label", str(scalar.get("z_label") or "Z"))
         interface.Set("autoMirror", False)
         interface.Set("outerticks", True)
-        interface.Set("Line/color", "black")
+        foreground_color = str(scalar.get("colorbar_foreground_color") or "#111111")
+        interface.Set("Line/color", foreground_color)
         interface.Set("Line/width", _pt(float(style["axis_linewidth_pt"])))
-        interface.Set("Border/color", "black")
+        interface.Set("Border/color", foreground_color)
         interface.Set("Border/width", _pt(float(style["axis_linewidth_pt"])))
         interface.Set("MajorTicks/width", _pt(float(style["tick_width_pt"])))
         interface.Set("MajorTicks/length", _pt(float(style["tick_length_pt"])))
         interface.Set("MinorTicks/width", _pt(float(style["minor_tick_width_pt"])))
         interface.Set("MinorTicks/length", _pt(float(style["minor_tick_length_pt"])))
         interface.Set("Label/size", _pt(float(style["font_size_pt"])))
+        interface.Set("Label/color", foreground_color)
         interface.Set("TickLabels/size", _pt(float(style["font_size_pt"])))
+        interface.Set("TickLabels/color", foreground_color)
         interface.Set("TickLabels/format", str(scalar.get("z_tick_format") or "Auto"))
         z_ticks = scalar.get("z_ticks") if isinstance(scalar.get("z_ticks"), list) else []
         if 1 < len(z_ticks) <= 12:
             interface.Set("MajorTicks/manualTicks", [float(value) for value in z_ticks])
         interface.To("..")
+    background_color = str(scalar.get("colorbar_background_color") or "").strip()
+    if scalar.get("show_colorbar") is True and background_color:
+        interface.Add("rect", name="field_colorbar_background", autoadd=False)
+        interface.To("field_colorbar_background")
+        interface.Set("positioning", "relative")
+        interface.Set("xPos", [float(scalar.get("colorbar_background_x_fraction") or 0.5)])
+        interface.Set("yPos", [float(scalar.get("colorbar_background_y_fraction") or 0.86)])
+        interface.Set(
+            "width",
+            [float(scalar.get("colorbar_background_width_fraction") or 0.44)],
+        )
+        interface.Set(
+            "height",
+            [float(scalar.get("colorbar_background_height_fraction") or 0.24)],
+        )
+        interface.Set("clip", True)
+        interface.Set("Fill/color", background_color)
+        interface.Set("Fill/hide", False)
+        interface.Set(
+            "Fill/transparency",
+            min(max(int(scalar.get("colorbar_background_transparency") or 0), 0), 100),
+        )
+        interface.Set("Border/hide", True)
+        interface.To("..")
+    interface.Add("image", name="field_image", autoadd=False)
+    interface.To("field_image")
+    interface.Set("data", data_name)
+    interface.Set("min", float(scalar["z_min"]))
+    interface.Set("max", float(scalar["z_max"]))
+    interface.Set("colorScaling", str(scalar["zscale"]))
+    interface.Set("colorMap", colormap_name)
+    interface.Set("colorInvert", bool(scalar.get("color_invert")))
+    interface.Set("mapping", str(scalar.get("field_mapping") or "bounds"))
+    interface.Set("drawMode", str(scalar.get("field_draw_mode") or "rectangles"))
+    interface.To("..")
 
 
 def _axis_midpoint(axis_spec: dict[str, Any]) -> float:
@@ -4203,7 +4368,10 @@ def _add_veusz_reference_guides(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("height", [min(max(height_fraction, 0.0), 1.0)])
         interface.Set("clip", True)
         interface.Set("Fill/color", str(guide.get("color") or "#6B7280"))
-        interface.Set("Fill/transparency", min(max(int(guide.get("transparency") or 86), 0), 100))
+        transparency_value = guide.get("transparency")
+        transparency = 86 if transparency_value is None else int(transparency_value)
+        interface.Set("Fill/transparency", min(max(transparency, 0), 100))
+        interface.Set("Fill/hide", False)
         interface.Set("Border/hide", True)
         interface.To("..")
 
@@ -4261,7 +4429,6 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     scalar = spec.get("scalar_field") if isinstance(spec.get("scalar_field"), dict) else None
     if scalar is not None:
         _add_veusz_scalar_field(interface, scalar, style)
-    _add_veusz_reference_guides(interface, spec)
     legend = spec["legend"]
     if legend["show"]:
         interface.Add("key", name="key1", autoadd=False)
@@ -4360,6 +4527,10 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("ErrorBarLine/hide", True)
         interface.Set("Label/hide", True)
         interface.To("..")
+    # Graph children are painted in reverse object-tree order.  Add reference
+    # guides after data plotters so bands/lines paint first and never obscure
+    # the scientific curves.
+    _add_veusz_reference_guides(interface, spec)
     for item in spec["direct_labels"]:
         interface.Add("label", name=item["name"], autoadd=False)
         interface.To(item["name"])
@@ -4375,6 +4546,22 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("Background/hide", True)
         interface.Set("Border/hide", True)
         interface.To("..")
+    interface.To("..")
+    # Force an opaque export canvas.  Some Veusz PDF/TIFF backends retain an
+    # alpha page when free-plotter guide rectangles are present even though
+    # the Page background is set to white.  This page-level rectangle is added
+    # after the graph, so reverse child painting draws it first as a true
+    # background without covering any graph content.
+    interface.Add("rect", name="page_export_background", autoadd=False)
+    interface.To("page_export_background")
+    interface.Set("positioning", "relative")
+    interface.Set("xPos", [0.5])
+    interface.Set("yPos", [0.5])
+    interface.Set("width", [1.0])
+    interface.Set("height", [1.0])
+    interface.Set("Fill/color", "white")
+    interface.Set("Fill/hide", False)
+    interface.Set("Border/hide", True)
     interface.To("..")
     interface.To("..")
 
@@ -4693,6 +4880,7 @@ def _write_studio_launcher(project_dir: Path) -> Path:
                 "#!/bin/zsh",
                 "set -euo pipefail",
                 'PROJECT_DIR="${0:A:h}"',
+                "unset QT_QPA_PLATFORM || true",
                 f'cd "{REPO_ROOT}"',
                 'skill/scripts/sciplot studio "${PROJECT_DIR}"',
             ]
@@ -4720,6 +4908,7 @@ def _write_veusz_launcher(project_dir: Path, document_path: Path) -> Path:
                 "#!/bin/zsh",
                 "set -euo pipefail",
                 'PROJECT_DIR="${0:A:h}"',
+                "unset QT_QPA_PLATFORM || true",
                 f'cd "{REPO_ROOT}"',
                 f"exec skill/scripts/sciplot studio {document_argument} --advanced-editor",
             ]

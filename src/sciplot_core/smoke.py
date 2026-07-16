@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import os
 import subprocess
 import sys
 import tempfile
@@ -13,7 +14,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 4
+RUNTIME_SMOKE_VERSION = 6
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -79,6 +80,55 @@ def _package_import_probe() -> dict[str, Any]:
         "passed": not vendor_added,
         "added_paths": added,
         "vendor_paths_added": vendor_added,
+    }
+
+
+def _qt_mainwindow_probe(document_path: Path | None = None) -> dict[str, Any]:
+    """Construct the complete Veusz editor without requiring an Aqua session."""
+    env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    command = [sys.executable, "-m", "sciplot_core.cli", "studio"]
+    if document_path is not None:
+        command.append(str(document_path.expanduser().resolve()))
+    command.append("--qt-smoke")
+    completed = subprocess.run(
+        command,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+        timeout=30,
+    )
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        payload = {}
+    settings_noise = "Error interpreting item" in completed.stderr
+    passed = (
+        completed.returncode == 0
+        and payload.get("status") == "passed"
+        and payload.get("window") == "MainWindow"
+        and payload.get("main_window_constructed") is True
+        and not settings_noise
+    )
+    if document_path is not None:
+        passed = (
+            passed
+            and payload.get("document_loaded") is True
+            and bool(payload.get("datasets"))
+            and bool(payload.get("pages"))
+        )
+    return {
+        "passed": passed,
+        "returncode": completed.returncode,
+        "window": payload.get("window"),
+        "main_window_constructed": payload.get("main_window_constructed"),
+        "document": payload.get("document"),
+        "document_loaded": payload.get("document_loaded"),
+        "datasets": payload.get("datasets"),
+        "pages": payload.get("pages"),
+        "settings_noise": settings_noise,
+        "stderr": completed.stderr.strip(),
     }
 
 
@@ -325,6 +375,80 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
     }
 
 
+def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
+    """Exercise the public XYZ-to-Veusz scalar-field contract."""
+
+    import pandas as pd
+
+    from sciplot_core.render import render_to_dir
+
+    source = run_root / "scalar_field_contract" / "field_xyz.csv"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {
+            "thickness_mm": [-2.0, 0.0, 2.0, -2.0, 0.0, 2.0],
+            "in_plane_mm": [0.0, 0.0, 0.0, 20.0, 20.0, 20.0],
+            "temperature_C": [125.0, 265.0, 125.0, 125.0, 265.0, 125.0],
+        }
+    ).to_csv(source, index=False)
+    rendered = render_to_dir(
+        source,
+        template="heatmap",
+        output_dir=source.parent / "rendered",
+        options={
+            "size": "60x55",
+            "data_variables": {
+                "x": "thickness_mm",
+                "y": "in_plane_mm",
+                "z": "temperature_C",
+            },
+            "z_min": 125.0,
+            "z_max": 265.0,
+            "contour_levels": [160.0, 230.0],
+            "highlight_contour_levels": [195.0],
+            "show_colorbar": True,
+        },
+        export_formats=("pdf",),
+    )
+    outputs = [Path(str(path)) for path in rendered.get("outputs") or []]
+    document = Path(str((rendered.get("veusz_documents") or [""])[0]))
+    document_text = document.read_text(encoding="utf-8") if document.exists() else ""
+    colorbar_index = document_text.find("Add('colorbar', name='field_colorbar'")
+    contour_index = document_text.find("Add('contour', name='field_contours'")
+    image_index = document_text.find("Add('image', name='field_image'")
+    qa_reports = rendered.get("qa_reports") if isinstance(rendered.get("qa_reports"), list) else []
+    passed = (
+        rendered.get("render_engine") == "veusz"
+        and outputs
+        and all(path.exists() and path.stat().st_size > 0 for path in outputs)
+        and document.exists()
+        and 0 <= colorbar_index < image_index
+        and 0 <= contour_index < image_index
+        and "Set('widgetName', 'field_image')" in document_text
+        and "Add('rect', name='page_export_background'" in document_text
+        and all(not report.get("issues") for report in qa_reports if isinstance(report, dict))
+    )
+    return {
+        "passed": bool(passed),
+        "source": str(source),
+        "grid_shape": [2, 3],
+        "field_orientation": {
+            "x": "thickness_mm",
+            "y": "in_plane_mm",
+            "z": "temperature_C",
+        },
+        "outputs": [str(path) for path in outputs],
+        "document": str(document),
+        "overlay_order": {
+            "colorbar_before_image_in_object_tree": 0 <= colorbar_index < image_index,
+            "contours_before_image_in_object_tree": 0 <= contour_index < image_index,
+        },
+        "opaque_page_background": "Add('rect', name='page_export_background'" in document_text,
+        "real_data_evidence": False,
+        "evidence_tier": "generated_synthetic_contract_fixture",
+    }
+
+
 def _run_hash_failure_probe(output_dir: Path, manifest: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
     from sciplot_core.delivery import build_delivery_package
 
@@ -386,6 +510,15 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 },
             )
         )
+        qt_mainwindow_probe = _qt_mainwindow_probe()
+        checks.append(
+            _check(
+                "qt_mainwindow_constructs",
+                "The complete Veusz editor constructs without optional examples or macOS settings noise",
+                qt_mainwindow_probe.get("passed") is True,
+                detail=qt_mainwindow_probe,
+            )
+        )
         normal_mode = doctor.get("normal_mode") if isinstance(doctor.get("normal_mode"), dict) else {}
         checks.append(
             _check(
@@ -405,6 +538,26 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 "Generated SAXS, Agilent GPC, impact, and explicit-intent swelling contracts parse deterministically",
                 parser_probe.get("passed") is True,
                 detail=parser_probe,
+            )
+        )
+
+        scalar_probe = _scalar_field_render_probe(run_root)
+        checks.append(
+            _check(
+                "scalar_field_render",
+                "Synthetic XYZ data render through Veusz with visible contours and colorbar",
+                scalar_probe.get("passed") is True,
+                detail=scalar_probe,
+            )
+        )
+        scalar_document = Path(str(scalar_probe.get("document") or ""))
+        qt_scalar_document_probe = _qt_mainwindow_probe(scalar_document)
+        checks.append(
+            _check(
+                "qt_scalar_vsz_loads",
+                "The Studio GUI runtime loads a saved 2D scalar-field VSZ with its dataset and page",
+                qt_scalar_document_probe.get("passed") is True,
+                detail=qt_scalar_document_probe,
             )
         )
 
@@ -663,7 +816,8 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         },
         "error": error,
         "limitations": [
-            "The generated FTIR table is a synthetic contract fixture, not real-data evidence.",
+            "The generated FTIR and scalar-field tables are synthetic contract fixtures, "
+            "not real-data evidence.",
             "This smoke proves one representative Studio lifecycle and a delivery hash failure path; "
             "it does not replace the complete ready-rule acceptance matrix.",
             "Lifecycle success and artifact QA do not establish blanket journal compliance.",
