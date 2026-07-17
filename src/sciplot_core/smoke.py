@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import csv
 import json
 import math
 import os
@@ -14,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 6
+RUNTIME_SMOKE_VERSION = 9
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -34,6 +35,122 @@ def _delivery_artifact(delivery: dict[str, Any], artifact_id: str) -> dict[str, 
         if isinstance(item, dict) and item.get("id") == artifact_id:
             return item
     return {}
+
+
+def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
+    """Verify the small user-facing delivery surface and its CSV contract."""
+
+    delivery_path = Path(str(delivery.get("path") or "")).expanduser().resolve()
+    expected_entries = {"data", "pdf", "tiff", "project", "Open_in_Veusz.command"}
+    actual_entries = {path.name for path in delivery_path.iterdir()} if delivery_path.is_dir() else set()
+    forbidden_names = {
+        "_sciplot_internal",
+        "editable",
+        "figures",
+        "README.md",
+        ".sciplot",
+        "manifest.json",
+        "raw",
+        "tables",
+    }
+    forbidden_paths = [
+        str(path)
+        for path in delivery_path.rglob("*")
+        if path.name in forbidden_names or path.suffix.casefold() in {".xlsx", ".xls", ".sciplot"}
+    ] if delivery_path.is_dir() else []
+
+    data_records = delivery.get("data_csvs") if isinstance(delivery.get("data_csvs"), list) else []
+    data_checks: list[dict[str, Any]] = []
+    for record in data_records:
+        path = Path(str(record.get("path") or "")) if isinstance(record, dict) else Path()
+        rows: list[list[str]] = []
+        if path.is_file():
+            with path.open("r", encoding="utf-8", newline="") as handle:
+                rows = list(csv.reader(handle))
+        data_checks.append(
+            {
+                "path": str(path),
+                "under_data": path.parent == delivery_path / "data",
+                "row_count": len(rows),
+                "four_row_header": len(rows) >= 4 and all(rows[index] for index in range(3)),
+                "data_rows": max(len(rows) - 3, 0),
+                "column_count": len(rows[0]) if rows else 0,
+            }
+        )
+
+    figure_records = delivery.get("figures") if isinstance(delivery.get("figures"), list) else []
+    figure_locations = [
+        {
+            "path": str(record.get("path")),
+            "format": record.get("format"),
+            "in_expected_folder": (
+                Path(str(record.get("path") or "")).parent
+                == delivery_path / ("pdf" if record.get("format") == "pdf" else "tiff")
+            ),
+        }
+        for record in figure_records
+        if isinstance(record, dict)
+    ]
+    project_records = delivery.get("project_documents")
+    project_records = project_records if isinstance(project_records, list) else []
+    project_locations = [
+        {
+            "path": str(record.get("path")),
+            "in_project": Path(str(record.get("path") or "")).parent == delivery_path / "project",
+            "exists": bool(record.get("exists")),
+        }
+        for record in project_records
+        if isinstance(record, dict)
+    ]
+
+    launcher = delivery_path / "Open_in_Veusz.command"
+    launcher_probe: dict[str, Any] = {"path": str(launcher), "exists": launcher.is_file()}
+    if launcher.is_file():
+        env = os.environ.copy()
+        env["SCIPLOT_LAUNCH_DRY_RUN"] = "1"
+        completed = subprocess.run(
+            ["zsh", str(launcher)],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=env,
+        )
+        launcher_probe.update(
+            {
+                "returncode": completed.returncode,
+                "dry_run_path": completed.stdout.strip(),
+                "stderr": completed.stderr.strip(),
+            }
+        )
+
+    passed = (
+        delivery_path.is_dir()
+        and actual_entries == expected_entries
+        and not forbidden_paths
+        and bool(data_checks)
+        and all(
+            item["under_data"] and item["four_row_header"] and item["data_rows"] > 0 and item["column_count"] > 0
+            for item in data_checks
+        )
+        and bool(figure_locations)
+        and all(item["in_expected_folder"] for item in figure_locations)
+        and bool(project_locations)
+        and all(item["in_project"] and item["exists"] for item in project_locations)
+        and launcher_probe.get("exists") is True
+        and launcher_probe.get("returncode") == 0
+        and Path(launcher_probe.get("dry_run_path") or "").is_file()
+    )
+    return {
+        "passed": passed,
+        "delivery_path": str(delivery_path),
+        "expected_entries": sorted(expected_entries),
+        "actual_entries": sorted(actual_entries),
+        "forbidden_paths": forbidden_paths,
+        "data": data_checks,
+        "figures": figure_locations,
+        "projects": project_locations,
+        "launcher": launcher_probe,
+    }
 
 
 def _package_import_probe() -> dict[str, Any]:
@@ -510,6 +627,69 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 },
             )
         )
+        from sciplot_core.policy import (
+            DEFAULT_LOG_MINOR_MULTIPLIERS,
+            DEFAULT_LOG_MINOR_TICK_COUNT,
+            RHEOLOGY_FREQUENCY_RENDER_OPTIONS,
+            UNIFIED_AXIS_LINEWIDTH_PT,
+            UNIFIED_FONT_FAMILY,
+            UNIFIED_FONT_SIZE_PT,
+            UNIFIED_LEGEND_FONT_SIZE_PT,
+            UNIFIED_LINE_WIDTH_PT,
+            UNIFIED_MARKER_SIZE_PT,
+            UNIFIED_MINOR_TICK_WIDTH_PT,
+            UNIFIED_PANEL_LABEL_SIZE_PT,
+            UNIFIED_TICK_WIDTH_PT,
+        )
+
+        log_tick_policy = {
+            "subdivisions_per_decade": DEFAULT_LOG_MINOR_TICK_COUNT,
+            "visible_minor_multipliers": list(DEFAULT_LOG_MINOR_MULTIPLIERS),
+            "rheology_frequency_minor_tick_count": (
+                RHEOLOGY_FREQUENCY_RENDER_OPTIONS.get("minor_tick_count")
+            ),
+        }
+        checks.append(
+            _check(
+                "sparse_log_minor_tick_policy",
+                "Log modulus axes retain four visible minor ticks per decade",
+                DEFAULT_LOG_MINOR_TICK_COUNT == 5
+                and DEFAULT_LOG_MINOR_MULTIPLIERS == (2.0, 4.0, 6.0, 8.0)
+                and RHEOLOGY_FREQUENCY_RENDER_OPTIONS.get("minor_tick_count")
+                == DEFAULT_LOG_MINOR_TICK_COUNT,
+                detail=log_tick_policy,
+            )
+        )
+        unified_style = {
+            "font_family": UNIFIED_FONT_FAMILY,
+            "font_size_pt": UNIFIED_FONT_SIZE_PT,
+            "legend_font_size_pt": UNIFIED_LEGEND_FONT_SIZE_PT,
+            "panel_label_size_pt": UNIFIED_PANEL_LABEL_SIZE_PT,
+            "line_width_pt": UNIFIED_LINE_WIDTH_PT,
+            "axis_linewidth_pt": UNIFIED_AXIS_LINEWIDTH_PT,
+            "tick_width_pt": UNIFIED_TICK_WIDTH_PT,
+            "minor_tick_width_pt": UNIFIED_MINOR_TICK_WIDTH_PT,
+            "marker_size_pt": UNIFIED_MARKER_SIZE_PT,
+        }
+        checks.append(
+            _check(
+                "unified_figure_style_contract",
+                "All templates use the same SciPlot typography, strokes, and marker size",
+                unified_style
+                == {
+                    "font_family": "Arial",
+                    "font_size_pt": 7.0,
+                    "legend_font_size_pt": 6.0,
+                    "panel_label_size_pt": 7.0,
+                    "line_width_pt": 1.2,
+                    "axis_linewidth_pt": 0.8,
+                    "tick_width_pt": 0.8,
+                    "minor_tick_width_pt": 0.8,
+                    "marker_size_pt": 2.0,
+                },
+                detail=unified_style,
+            )
+        )
         qt_mainwindow_probe = _qt_mainwindow_probe()
         checks.append(
             _check(
@@ -687,6 +867,7 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             isinstance(item, dict) and item.get("exists") is True and int(item.get("size_bytes") or 0) > 0
             for item in exports
         )
+        delivery_layout = _delivery_layout_probe(delivery)
 
         checks.extend(
             [
@@ -738,6 +919,12 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     "Delivery contains a canonical PDF and 300 dpi TIFF pair",
                     _delivery_artifact(delivery, "canonical_pdf_tiff_pairs").get("exists") is True,
                     detail=_delivery_artifact(delivery, "canonical_pdf_tiff_pairs"),
+                ),
+                _check(
+                    "minimal_delivery_layout",
+                    "The user-facing delivery contains only four artifact groups and its Veusz launcher",
+                    delivery_layout.get("passed") is True,
+                    detail=delivery_layout,
                 ),
                 _check(
                     "qa_and_delivery_hashes",

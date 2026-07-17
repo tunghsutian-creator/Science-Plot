@@ -88,9 +88,9 @@
       "colorbar_main_gap_fraction": 0.1,
       "colorbar_top_edge_fraction": 1.0,
       "label_position": "left_of_colorbar_inside_frame",
-      "label_font_size_pt": 4.8,
-      "tick_font_size_pt": 4.3,
-      "tick_length_pt": 2.0
+      "label_font_size_pt": 7.0,
+      "tick_font_size_pt": 7.0,
+      "tick_length_pt": 2.8
     },
     "wide_nmr": {
       "width_mm": 60.0,
@@ -117,7 +117,7 @@
       "small_panel_height_mm": 55.0,
       "direct_label_max_series": 4,
       "direct_label_fallback_max_series": 8,
-      "direct_label_dense_font_size_pt": 5.2,
+      "direct_label_dense_font_size_pt": 7.0,
       "legend_candidate_order": [
         "upper_right",
         "lower_right",
@@ -135,11 +135,11 @@
       "compact_direct_label_inset_fraction": 0.04,
       "compact_direct_label_offset_pt": 4.0,
       "compact_direct_label_search_band_fraction": 0.12,
-      "compact_tick_width_scale": 0.82,
-      "compact_tick_length_scale": 0.88,
+      "compact_tick_width_scale": 1.0,
+      "compact_tick_length_scale": 1.0,
       "compact_legend_max_series": 3,
       "compact_legend_columns": 2,
-      "compact_legend_font_scale": 0.92,
+      "compact_legend_font_scale": 1.0,
       "compact_legend_handlelength": 1.35,
       "compact_legend_handletextpad": 0.35,
       "compact_legend_columnspacing": 0.8,
@@ -171,10 +171,10 @@
       "dense_marker_point_threshold": 24,
       "dense_markevery_min": 2,
       "dense_markevery_max": 6,
-      "dense_marker_scale": 0.88,
-      "dense_tick_width_scale": 0.85,
-      "dense_tick_length_scale": 0.9,
-      "dense_line_width_scale": 0.96,
+      "dense_marker_scale": 1.0,
+      "dense_tick_width_scale": 1.0,
+      "dense_tick_length_scale": 1.0,
+      "dense_line_width_scale": 1.0,
       "stroke_line_width_min_pt": 1.0,
       "stroke_line_width_max_pt": 1.8,
       "stroke_line_tick_ratio_min": 0.95,
@@ -253,27 +253,25 @@
       },
       "typography": {
         "font_family": [
-          "Arial",
-          "Helvetica",
-          "DejaVu Sans"
+          "Arial"
         ],
-        "font_size_pt": 6.5,
+        "font_size_pt": 7.0,
         "legend_font_size_pt": 6.0,
-        "panel_label_size_pt": 8.0,
+        "panel_label_size_pt": 7.0,
         "panel_label_weight": "bold"
       },
       "stroke": {
-        "axis_linewidth_pt": 1.0,
-        "tick_width_pt": 1.0,
-        "tick_length_pt": 3.4,
+        "axis_linewidth_pt": 0.8,
+        "tick_width_pt": 0.8,
+        "tick_length_pt": 2.8,
         "minor_tick_width_pt": 0.8,
-        "minor_tick_length_pt": 2.0,
+        "minor_tick_length_pt": 1.5,
         "line_width_pt": 1.2,
         "line_alpha": 0.92,
         "marker_alpha": 0.95,
         "fill_alpha": 0.34,
         "max_fill_alpha": 0.45,
-        "marker_size_pt": 3.4
+        "marker_size_pt": 2.0
       },
       "spacing": {
         "axes_labelpad": 2.0,
@@ -315,27 +313,25 @@
       },
       "typography": {
         "font_family": [
-          "Arial",
-          "Helvetica",
-          "DejaVu Sans"
+          "Arial"
         ],
         "font_size_pt": 7.0,
-        "legend_font_size_pt": 6.2,
-        "panel_label_size_pt": 8.6,
+        "legend_font_size_pt": 6.0,
+        "panel_label_size_pt": 7.0,
         "panel_label_weight": "bold"
       },
       "stroke": {
-        "axis_linewidth_pt": 1.0,
-        "tick_width_pt": 1.0,
-        "tick_length_pt": 3.4,
+        "axis_linewidth_pt": 0.8,
+        "tick_width_pt": 0.8,
+        "tick_length_pt": 2.8,
         "minor_tick_width_pt": 0.8,
-        "minor_tick_length_pt": 2.0,
-        "line_width_pt": 1.3,
+        "minor_tick_length_pt": 1.5,
+        "line_width_pt": 1.2,
         "line_alpha": 0.94,
         "marker_alpha": 0.96,
         "fill_alpha": 0.32,
         "max_fill_alpha": 0.42,
-        "marker_size_pt": 3.6
+        "marker_size_pt": 2.0
       },
       "spacing": {
         "axes_labelpad": 2.2,
@@ -376,27 +372,25 @@
       },
       "typography": {
         "font_family": [
-          "Arial",
-          "Helvetica",
-          "DejaVu Sans"
+          "Arial"
         ],
         "font_size_pt": 7.0,
-        "legend_font_size_pt": 6.2,
-        "panel_label_size_pt": 8.6,
+        "legend_font_size_pt": 6.0,
+        "panel_label_size_pt": 7.0,
         "panel_label_weight": "bold"
       },
       "stroke": {
-        "axis_linewidth_pt": 1.0,
-        "tick_width_pt": 1.0,
-        "tick_length_pt": 3.3,
+        "axis_linewidth_pt": 0.8,
+        "tick_width_pt": 0.8,
+        "tick_length_pt": 2.8,
         "minor_tick_width_pt": 0.8,
-        "minor_tick_length_pt": 2.0,
-        "line_width_pt": 1.25,
+        "minor_tick_length_pt": 1.5,
+        "line_width_pt": 1.2,
         "line_alpha": 0.94,
         "marker_alpha": 0.96,
         "fill_alpha": 0.32,
         "max_fill_alpha": 0.42,
-        "marker_size_pt": 3.5
+        "marker_size_pt": 2.0
       },
       "spacing": {
         "axes_labelpad": 2.2,
@@ -437,27 +431,25 @@
       },
       "typography": {
         "font_family": [
-          "Arial",
-          "Helvetica",
-          "DejaVu Sans"
+          "Arial"
         ],
-        "font_size_pt": 7.2,
-        "legend_font_size_pt": 6.4,
-        "panel_label_size_pt": 8.8,
+        "font_size_pt": 7.0,
+        "legend_font_size_pt": 6.0,
+        "panel_label_size_pt": 7.0,
         "panel_label_weight": "bold"
       },
       "stroke": {
-        "axis_linewidth_pt": 1.05,
-        "tick_width_pt": 1.05,
-        "tick_length_pt": 3.6,
-        "minor_tick_width_pt": 0.85,
-        "minor_tick_length_pt": 2.1,
-        "line_width_pt": 1.4,
+        "axis_linewidth_pt": 0.8,
+        "tick_width_pt": 0.8,
+        "tick_length_pt": 2.8,
+        "minor_tick_width_pt": 0.8,
+        "minor_tick_length_pt": 1.5,
+        "line_width_pt": 1.2,
         "line_alpha": 0.94,
         "marker_alpha": 0.96,
         "fill_alpha": 0.3,
         "max_fill_alpha": 0.4,
-        "marker_size_pt": 3.8
+        "marker_size_pt": 2.0
       },
       "spacing": {
         "axes_labelpad": 2.3,
@@ -498,27 +490,25 @@
       },
       "typography": {
         "font_family": [
-          "Arial",
-          "Helvetica",
-          "DejaVu Sans"
+          "Arial"
         ],
         "font_size_pt": 7.0,
-        "legend_font_size_pt": 6.2,
-        "panel_label_size_pt": 8.6,
+        "legend_font_size_pt": 6.0,
+        "panel_label_size_pt": 7.0,
         "panel_label_weight": "bold"
       },
       "stroke": {
-        "axis_linewidth_pt": 1.0,
-        "tick_width_pt": 1.0,
-        "tick_length_pt": 3.4,
+        "axis_linewidth_pt": 0.8,
+        "tick_width_pt": 0.8,
+        "tick_length_pt": 2.8,
         "minor_tick_width_pt": 0.8,
-        "minor_tick_length_pt": 2.0,
-        "line_width_pt": 1.3,
+        "minor_tick_length_pt": 1.5,
+        "line_width_pt": 1.2,
         "line_alpha": 0.94,
         "marker_alpha": 0.96,
         "fill_alpha": 0.32,
         "max_fill_alpha": 0.42,
-        "marker_size_pt": 3.6
+        "marker_size_pt": 2.0
       },
       "spacing": {
         "axes_labelpad": 2.2,
@@ -770,10 +760,8 @@
         "series_styles",
         "series_offsets",
         "marker_sequence",
-        "marker_size",
         "marker_fill_mode",
         "marker_alpha",
-        "marker_line_width_pt",
         "legend_position",
         "series_label_mode",
         "x_label_override",
@@ -781,14 +769,6 @@
         "x_tick_format",
         "y_tick_format",
         "minor_tick_count",
-        "font_size_pt",
-        "legend_font_size_pt",
-        "axis_linewidth_pt",
-        "tick_width_pt",
-        "tick_length_pt",
-        "minor_tick_width_pt",
-        "minor_tick_length_pt",
-        "line_width_pt",
         "line_alpha",
         "legend_curve_clearance_mm",
         "legend_edge_padding_mm",
@@ -999,14 +979,6 @@
         "legend_position",
         "series_label_mode",
         "stack_spacing_scale",
-        "font_size_pt",
-        "legend_font_size_pt",
-        "axis_linewidth_pt",
-        "tick_width_pt",
-        "tick_length_pt",
-        "minor_tick_width_pt",
-        "minor_tick_length_pt",
-        "line_width_pt",
         "line_alpha",
         "legend_curve_clearance_mm",
         "legend_edge_padding_mm",

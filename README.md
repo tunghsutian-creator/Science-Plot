@@ -56,7 +56,7 @@ skill/scripts/sciplot studio PATH \
 
 ## 高级修图
 
-需要高级修正时，打开项目内的 `Open_in_Veusz.command`，或运行：
+需要高级修正时，打开运行交付包内的 `delivery/Open_in_Veusz.command`，或运行：
 
 ```bash
 skill/scripts/sciplot studio PROJECT/studio/document.vsz --advanced-editor
@@ -91,10 +91,18 @@ PROJECT/
       transform_ledger.json
       publication_qa.json
       tables/analysis_metrics.csv
-      raw/
-      figures/
-      delivery/
+    raw/
+    figures/
+    delivery/
+      data/<project>_plot_data.csv
+      pdf/*.pdf
+      tiff/*_300dpi.tiff
+      project/*.vsz
+      Open_in_Veusz.command
 ```
+
+`delivery/` 只放绘图数据 CSV、PDF、TIFF、可编辑 VSZ 和一个 Veusz 启动器；
+manifest、review、分析表、QA、原始数据和溯源仍保留在运行目录中，供验收使用。
 
 交付前读取 `manifest.json`、`review.html`、`tables/analysis_metrics.csv`、QA 和 `delivery/`；
 不要仅凭命令退出码或空预览判断成功。

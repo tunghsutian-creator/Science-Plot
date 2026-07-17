@@ -357,16 +357,7 @@ _SHARED_FIGURE_STYLE_KEYS = {
     "visual_theme_id",
     "style_preset",
     "palette_preset",
-    "font_size_pt",
-    "legend_font_size_pt",
-    "axis_linewidth_pt",
-    "tick_width_pt",
-    "tick_length_pt",
-    "minor_tick_width_pt",
-    "minor_tick_length_pt",
-    "marker_size",
     "marker_alpha",
-    "marker_line_width_pt",
 }
 
 

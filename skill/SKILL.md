@@ -43,8 +43,10 @@ only production renderer; `studio/document.vsz` is the advanced-editing truth.
    `--rule` bypasses automatic recognition and must name a ready rule.
    `--template` remains optional and independently user-selectable.
 
-3. If advanced correction is needed, open `PROJECT/Open_in_Veusz.command`,
-   save the VSZ, then export the exact current document:
+3. If advanced correction is needed, open the user-facing
+   `RUN/delivery/Open_in_Veusz.command` launcher (the prepared project also
+   keeps `PROJECT/Open_in_Veusz.command` as a convenience entrypoint), save
+   the VSZ, then export the exact current document:
 
    ```bash
    skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
@@ -54,6 +56,22 @@ only production renderer; `studio/document.vsz` is the advanced-editing truth.
    `manifest.json`, `review.html`, figures, `tables/analysis_metrics.csv`, QA and
    `delivery/`. Require `state=ready`, `qa.status=passed` and
    `delivery.complete=true`.
+
+   The user-facing `delivery/` is intentionally small and has only this
+   structure:
+
+   ```text
+   delivery/
+     data/*.csv                 four-row plotting-data CSVs only
+     pdf/*.pdf                  PDF figures only
+     tiff/*_300dpi.tiff         300 dpi TIFF figures only
+     project/*.vsz              editable Veusz project documents
+     Open_in_Veusz.command      launcher for the project documents
+   ```
+
+   Runtime manifests, raw archives, analysis metrics, QA reports, and
+   provenance remain in the run output rather than being copied into this
+   handoff surface.
 
 ## State handling
 

@@ -7,6 +7,7 @@ from sciplot_core._bootstrap import ensure_legacy_core
 from sciplot_core.policy import (
     DEFAULT_EXPORT_FORMATS_POLICY,
     RENDER_OPTION_KEYS,
+    UNIFIED_HARD_OPTION_KEYS,
     normalize_categorical_summary,
     normalize_raw_point_jitter_fraction,
 )
@@ -69,6 +70,7 @@ def _validate_template_render_option_keys(keys: set[str], *, template: str | Non
         key
         for key in keys
         if key not in spec.editable_options
+        and key not in UNIFIED_HARD_OPTION_KEYS
         and key not in {"fit_options", "custom_theme_id", "custom_theme_draft", "visual_theme_id"}
     )
     if unsupported:
@@ -90,6 +92,13 @@ def normalize_render_options(
         str(key): value
         for key, value in render_options.items()
         if value not in (None, "")
+    }
+
+    # Keep old request files readable, but do not let legacy typography/stroke
+    # options survive as effective settings.  The renderer owns one hard
+    # project-wide style now.
+    selected = {
+        key: value for key, value in selected.items() if key not in UNIFIED_HARD_OPTION_KEYS
     }
 
     unknown = sorted(key for key in selected if key not in _RENDER_PARAMETER_NAMES)

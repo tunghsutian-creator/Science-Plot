@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-import json
 import re
 import shutil
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
-
 from sciplot_core._paths import REPO_ROOT
-from sciplot_core._utils import existing_file_sha256, json_safe, read_json_object, slug
-from sciplot_core.assisted_cleanup import CLEANUP_REQUEST_FILENAME, CLEANUP_RESULT_FILENAME
+from sciplot_core._utils import existing_file_sha256, slug
+from sciplot_core.plot_data import build_plot_data_exports
 from sciplot_core.policy import (
+    DELIVERY_DATA_DIR,
     DELIVERY_DIR,
-    DELIVERY_EDITABLE_DIR,
-    DELIVERY_FIGURES_DIR,
-    DELIVERY_INTERNAL_DIR,
+    DELIVERY_LAUNCHER,
+    DELIVERY_PDF_DIR,
+    DELIVERY_PROJECT_DIR,
+    DELIVERY_TIFF_DIR,
 )
 
 PUBLICATION_ARTIFACT_FILENAMES = (
@@ -44,23 +43,6 @@ def _project_slug(output_dir: Path, manifest: dict[str, Any]) -> str:
     return slug(output_dir.name)
 
 
-def _copytree_if_exists(source: Path, destination: Path) -> bool:
-    if not source.exists():
-        return False
-    if destination.exists():
-        shutil.rmtree(destination)
-    shutil.copytree(source, destination)
-    return True
-
-
-def _copy_file_if_exists(source: Path, destination: Path) -> bool:
-    if not source.exists():
-        return False
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, destination)
-    return True
-
-
 def _canonical_figure_stem(path_value: object) -> str:
     stem = Path(str(path_value)).stem
     return re.sub(r"_\d+dpi$", "", stem, flags=re.IGNORECASE).casefold()
@@ -69,7 +51,7 @@ def _canonical_figure_stem(path_value: object) -> str:
 def _delivery_figure_pairing(figure_records: list[dict[str, Any]]) -> dict[str, Any]:
     pdf_index: dict[str, list[str]] = {}
     tiff_index: dict[str, list[str]] = {}
-    invalid_tiff_names = []
+    invalid_tiff_names: list[str] = []
     for record in figure_records:
         path = Path(str(record["path"]))
         if path.suffix.casefold() == ".pdf":
@@ -85,10 +67,8 @@ def _delivery_figure_pairing(figure_records: list[dict[str, Any]]) -> dict[str, 
     orphan_tiffs = sorted(tiff_stems - pdf_stems)
     duplicate_pdfs = {stem: paths for stem, paths in pdf_index.items() if len(paths) != 1}
     duplicate_tiffs = {stem: paths for stem, paths in tiff_index.items() if len(paths) != 1}
-    passed = (
-        bool(pdf_index)
-        and bool(tiff_index)
-        and not any((missing_tiffs, orphan_tiffs, duplicate_pdfs, duplicate_tiffs, invalid_tiff_names))
+    passed = bool(pdf_index) and bool(tiff_index) and not any(
+        (missing_tiffs, orphan_tiffs, duplicate_pdfs, duplicate_tiffs, invalid_tiff_names)
     )
     return {
         "passed": passed,
@@ -99,30 +79,6 @@ def _delivery_figure_pairing(figure_records: list[dict[str, Any]]) -> dict[str, 
         "duplicate_pdfs": duplicate_pdfs,
         "duplicate_tiffs": duplicate_tiffs,
         "invalid_tiff_names": invalid_tiff_names,
-    }
-
-
-def _editable_vsz_delivery_record(manifest: dict[str, Any], internal_dir: Path) -> dict[str, Any] | None:
-    expected_hash = manifest.get("exported_document_hash")
-    if not isinstance(expected_hash, str) or not expected_hash.strip():
-        return None
-    document_value = manifest.get("veusz_document")
-    document_name = Path(document_value).name if isinstance(document_value, str) else "document.vsz"
-    candidate = internal_dir / "studio" / document_name
-    if not candidate.exists():
-        documents = sorted((internal_dir / "studio").glob("*.vsz"))
-        candidate = documents[0] if documents else candidate
-    actual_hash = existing_file_sha256(candidate)
-    return {
-        "kind": "sciplot_delivery_editable_vsz",
-        "path": str(candidate),
-        "relative_path": str(candidate.relative_to(internal_dir.parent)) if candidate.exists() else None,
-        "exists": candidate.exists(),
-        "authority": manifest.get("document_authority"),
-        "manual_edit_detected": bool(manifest.get("manual_edit_detected")),
-        "expected_hash": expected_hash,
-        "actual_hash": actual_hash,
-        "hash_matches_export": bool(actual_hash and actual_hash == expected_hash),
     }
 
 
@@ -154,7 +110,6 @@ def _manifest_veusz_documents(manifest: dict[str, Any], output_dir: Path) -> lis
     documents = existing_documents(values)
     if documents:
         return documents
-
     fallback_values: list[object] = []
     fallback_values.extend(sorted((output_dir / "figures" / "_veusz").glob("**/studio/document.vsz")))
     fallback_values.extend(sorted((output_dir / "studio").glob("*.vsz")))
@@ -165,8 +120,8 @@ def _editable_project_name(document: Path, *, index: int) -> str:
     project_root = document.parent.parent
     candidate = project_root.parent.name if project_root.name.startswith(("single", "panel_")) else project_root.name
     if candidate in {"", "_veusz", "figures", "studio"}:
-        candidate = f"figure_{index:02d}"
-    return slug(candidate)
+        candidate = document.stem if document.stem not in {"", "document"} else f"figure_{index:02d}"
+    return slug(candidate) or f"figure_{index:02d}"
 
 
 def _write_executable(path: Path, lines: list[str]) -> None:
@@ -174,52 +129,8 @@ def _write_executable(path: Path, lines: list[str]) -> None:
     path.chmod(0o755)
 
 
-def build_minimal_user_delivery(
-    destination: Path,
-    *,
-    figures: list[tuple[str, Path]],
-    data_files: list[tuple[str, Path]],
-    veusz_documents: list[tuple[str, Path]],
-) -> dict[str, Any]:
-    """Build a deliberately small handoff: figures, data, VSZs, one launcher.
-
-    The ordinary delivery package remains the provenance-complete contract.
-    This helper is for an explicitly curated user handoff where QA records,
-    manifests, specs, logs, and per-document launchers would be clutter.
-    """
-    resolved_destination = destination.expanduser().resolve()
-    if resolved_destination.exists():
-        shutil.rmtree(resolved_destination)
-    figures_dir = resolved_destination / "figures"
-    data_dir = resolved_destination / "data"
-    veusz_dir = resolved_destination / "veusz"
-    for directory in (figures_dir, data_dir, veusz_dir):
-        directory.mkdir(parents=True, exist_ok=True)
-
-    def copy_named(records: list[tuple[str, Path]], target_dir: Path) -> list[Path]:
-        copied: list[Path] = []
-        used_names: set[str] = set()
-        for name, source in records:
-            if not name or Path(name).name != name:
-                raise ValueError(f"Minimal delivery artifact needs a plain filename: {name!r}")
-            if name in used_names:
-                raise ValueError(f"Duplicate minimal delivery filename: {name}")
-            resolved_source = source.expanduser().resolve()
-            if not resolved_source.is_file():
-                raise FileNotFoundError(resolved_source)
-            destination_path = target_dir / name
-            shutil.copy2(resolved_source, destination_path)
-            copied.append(destination_path)
-            used_names.add(name)
-        return copied
-
-    copied_figures = copy_named(figures, figures_dir)
-    copied_data = copy_named(data_files, data_dir)
-    copied_documents = copy_named(veusz_documents, veusz_dir)
-    if not copied_documents:
-        raise ValueError("Minimal delivery needs at least one editable Veusz document.")
-
-    launcher = resolved_destination / "Open_in_Veusz.command"
+def _write_delivery_launcher(delivery_dir: Path) -> Path:
+    launcher = delivery_dir / DELIVERY_LAUNCHER
     _write_executable(
         launcher,
         [
@@ -227,14 +138,16 @@ def build_minimal_user_delivery(
             "set -euo pipefail",
             'DELIVERY_DIR="${0:A:h}"',
             "unset QT_QPA_PLATFORM || true",
-            'documents=("${DELIVERY_DIR}"/veusz/*.vsz(N))',
+            'documents=("${DELIVERY_DIR}"/project/*.vsz(N))',
             'if (( ${#documents[@]} == 0 )); then',
-            '  print -u2 "No Veusz documents found in ${DELIVERY_DIR}/veusz"',
+            '  print -u2 "No Veusz project files found in ${DELIVERY_DIR}/project"',
             "  exit 1",
             "fi",
             'if (( $# > 0 )); then',
             '  DOCUMENT="$1"',
-            '  [[ "${DOCUMENT}" = /* ]] || DOCUMENT="${DELIVERY_DIR}/veusz/${DOCUMENT}"',
+            '  [[ "${DOCUMENT}" = /* ]] || DOCUMENT="${DELIVERY_DIR}/project/${DOCUMENT}"',
+            "elif (( ${#documents[@]} == 1 )); then",
+            '  DOCUMENT="${documents[1]}"',
             "else",
             '  print "Select a figure to edit in Veusz:"',
             '  for index in {1..${#documents[@]}}; do',
@@ -261,90 +174,20 @@ def build_minimal_user_delivery(
             'exec skill/scripts/sciplot studio "${DOCUMENT}" --advanced-editor',
         ],
     )
-    return {
-        "kind": "sciplot_minimal_user_delivery",
-        "root": str(resolved_destination),
-        "figures": [str(path) for path in copied_figures],
-        "data": [str(path) for path in copied_data],
-        "veusz_documents": [str(path) for path in copied_documents],
-        "launcher": str(launcher),
-        "file_count": len(copied_figures) + len(copied_data) + len(copied_documents) + 1,
-    }
+    return launcher
 
 
-def _write_editable_launchers(project_dir: Path) -> tuple[Path, Path, Path]:
-    open_veusz = project_dir / "Open_in_Veusz.command"
-    export_edited = project_dir / "Export_Edited_Veusz.command"
-    open_studio = project_dir / "Open_in_SciPlot_Studio.command"
-    shared = [
-        "#!/bin/zsh",
-        "set -euo pipefail",
-        'PROJECT_DIR="${0:A:h}"',
-        "unset QT_QPA_PLATFORM || true",
-        f'cd "{REPO_ROOT}"',
-    ]
-    _write_executable(
-        open_veusz,
-        [*shared, 'exec skill/scripts/sciplot studio "${PROJECT_DIR}/studio/document.vsz" --advanced-editor'],
-    )
-    _write_executable(
-        export_edited,
-        [*shared, 'skill/scripts/sciplot studio "${PROJECT_DIR}" --export pdf,tiff_300 --json'],
-    )
-    _write_executable(open_studio, [*shared, 'skill/scripts/sciplot studio "${PROJECT_DIR}"'])
-    return open_veusz, export_edited, open_studio
-
-
-def _copy_editable_request(
-    source_root: Path,
-    destination: Path,
-    *,
-    manifest: dict[str, Any],
-    output_dir: Path,
-) -> tuple[Path, str | None]:
-    candidates = [source_root / "plot_request.json"]
-    request_value = manifest.get("request_path")
-    if isinstance(request_value, str) and request_value.strip():
-        candidates.append(Path(request_value).expanduser())
-    candidates.append(output_dir / "request_snapshot.json")
-    request: dict[str, Any] = {}
-    for candidate in candidates:
-        payload = read_json_object(candidate)
-        if payload is not None:
-            request = payload
-            break
-    copied_data: str | None = None
-    input_value = request.get("input")
-    if isinstance(input_value, str) and input_value.strip():
-        source = Path(input_value).expanduser()
-        if not source.is_absolute():
-            source = source_root / source
-        if source.exists() and source.is_file():
-            data_dir = destination / "data"
-            data_dir.mkdir(parents=True, exist_ok=True)
-            data_path = data_dir / source.name
-            shutil.copy2(source, data_path)
-            copied_data = str(data_path)
-            request["input"] = str(data_path.relative_to(destination))
-    request.setdefault("template", "curve")
-    request["output"] = "."
-    request_path = destination / "plot_request.json"
-    request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
-    return request_path, copied_data
-
-
-def _copy_editable_veusz_projects(
+def _copy_project_documents(
     manifest: dict[str, Any],
     *,
     output_dir: Path,
-    editable_dir: Path,
+    project_dir: Path,
 ) -> list[dict[str, Any]]:
     documents = _manifest_veusz_documents(manifest, output_dir)
-    if not documents:
-        return []
-    editable_dir.mkdir(parents=True, exist_ok=True)
+    project_dir.mkdir(parents=True, exist_ok=True)
     records: list[dict[str, Any]] = []
     used_names: set[str] = set()
+    expected_hash = str(manifest.get("exported_document_hash") or "").strip()
     for index, source_document in enumerate(documents, start=1):
         base_name = _editable_project_name(source_document, index=index)
         name = base_name
@@ -353,138 +196,183 @@ def _copy_editable_veusz_projects(
             name = f"{base_name}_{suffix}"
             suffix += 1
         used_names.add(name)
-        destination = editable_dir / name
-        studio_dir = destination / "studio"
-        studio_dir.mkdir(parents=True, exist_ok=True)
-        document = studio_dir / "document.vsz"
-        shutil.copy2(source_document, document)
-        source_spec = source_document.parent / "spec.json"
-        spec = studio_dir / "spec.json"
-        if source_spec.exists():
-            shutil.copy2(source_spec, spec)
-        source_root = source_document.parent.parent
-        request_path, copied_data = _copy_editable_request(
-            source_root,
-            destination,
-            manifest=manifest,
-            output_dir=output_dir,
-        )
+        destination = project_dir / f"{name}.vsz"
+        shutil.copy2(source_document, destination)
         source_hash = existing_file_sha256(source_document)
-        delivery_hash = existing_file_sha256(document)
-        intake_manifest = {
-            "kind": "sciplot_editable_delivery_project",
-            "version": 1,
-            "project": name,
-            "request": str(request_path.relative_to(destination)),
-            "studio": {
-                "engine": "veusz",
-                "document": str(document.relative_to(destination)),
-                "spec": str(spec.relative_to(destination)) if spec.exists() else None,
-                "generated_hash": delivery_hash,
-                "export_exact_current_document": True,
-            },
-        }
-        (destination / "intake_manifest.json").write_text(
-            json.dumps(json_safe(intake_manifest), indent=2, ensure_ascii=False),
-            encoding="utf-8",
+        delivery_hash = existing_file_sha256(destination)
+        hash_matches_export = bool(
+            source_hash
+            and delivery_hash
+            and source_hash == delivery_hash
+            and (not expected_hash or delivery_hash == expected_hash)
         )
-        open_veusz, export_edited, open_studio = _write_editable_launchers(destination)
         records.append(
             {
-                "kind": "sciplot_delivery_editable_vsz_project",
+                "kind": "sciplot_delivery_project_file",
                 "id": name,
+                "source": str(source_document),
                 "path": str(destination),
-                "relative_path": str(destination.relative_to(editable_dir.parent)),
-                "document": str(document),
-                "document_relative_path": str(document.relative_to(editable_dir.parent)),
-                "request": str(request_path),
-                "data": copied_data,
-                "open_in_veusz": str(open_veusz),
-                "export_edited": str(export_edited),
-                "open_in_sciplot_studio": str(open_studio),
-                "source_document": str(source_document),
+                "relative_path": str(destination.relative_to(project_dir.parent)),
+                "format": "vsz",
                 "source_sha256": source_hash,
                 "delivery_sha256": delivery_hash,
                 "copy_hash_matches": bool(source_hash and source_hash == delivery_hash),
+                "hash_matches_export": hash_matches_export,
+                "exists": destination.exists(),
             }
         )
-    readme = editable_dir / "README.md"
-    readme.write_text(
-        "\n".join(
-            [
-                "# Editable Veusz projects",
-                "",
-                "Each folder is a self-contained SciPlot/Veusz project for one delivered figure.",
-                "",
-                "1. Double-click `Open_in_Veusz.command` to edit the real `.vsz` document.",
-                "2. Save inside Veusz.",
-                "3. Double-click `Export_Edited_Veusz.command` to export that exact saved document through SciPlot QA.",
-                "",
-                "The export command never regenerates the plot from Python or replaces the saved Veusz document.",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
     return records
 
 
-def _write_excel_data(source: Path, destination: Path) -> dict[str, Any]:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if source.suffix.lower() in {".xlsx", ".xlsm", ".xls"}:
-        shutil.copy2(source, destination)
-        return {"source": str(source), "converted": False, "sheet": None}
-    if source.suffix.lower() in {".csv", ".txt", ".tsv"}:
-        separator = "\t" if source.suffix.lower() == ".tsv" else ","
-        frame = pd.read_csv(source, header=None, sep=separator)
-        with pd.ExcelWriter(destination) as writer:
-            frame.to_excel(writer, sheet_name="plot_data", header=False, index=False)
-        return {"source": str(source), "converted": True, "sheet": "plot_data"}
-    frame = pd.DataFrame({"source_path": [str(source)]})
-    with pd.ExcelWriter(destination) as writer:
-        frame.to_excel(writer, sheet_name="plot_data", index=False)
-    return {"source": str(source), "converted": True, "sheet": "plot_data"}
+def _qa_hash_evidence(manifest: dict[str, Any], figure_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    qa_payload = manifest.get("qa") if isinstance(manifest.get("qa"), dict) else {}
+    qa_hashes = {
+        str(Path(str(report.get("path"))).expanduser().resolve()): str(report.get("sha256"))
+        for report_group in (qa_payload.get("pdfs"), qa_payload.get("tiffs"))
+        if isinstance(report_group, list)
+        for report in report_group
+        if isinstance(report, dict) and report.get("path") and report.get("sha256")
+    }
+    return [
+        {
+            "source": record["source"],
+            "qa_sha256": qa_hashes.get(str(Path(record["source"]).expanduser().resolve())),
+            "source_sha256": record.get("source_sha256"),
+            "delivery_sha256": record.get("delivery_sha256"),
+        }
+        for record in figure_records
+    ]
 
 
-def _delivery_data_source(manifest: dict[str, Any]) -> Path | None:
-    result = manifest.get("result") if isinstance(manifest.get("result"), dict) else {}
-    for key in ("processed_source", "input"):
-        value = result.get(key)
-        if isinstance(value, str) and value.strip():
-            candidate = Path(value).expanduser()
-            if candidate.exists() and candidate.is_file():
-                return candidate
-    value = manifest.get("input")
-    if isinstance(value, str) and value.strip():
-        candidate = Path(value).expanduser()
-        if candidate.exists() and candidate.is_file():
-            return candidate
-    return None
+def _publication_status(output_dir: Path) -> tuple[bool, list[dict[str, Any]]]:
+    present = any((output_dir / filename).exists() for filename in PUBLICATION_ARTIFACT_FILENAMES)
+    if not present:
+        return False, []
+    statuses: list[dict[str, Any]] = []
+    for filename in PUBLICATION_ARTIFACT_FILENAMES:
+        path = output_dir / filename
+        valid_json = False
+        valid_contract = False
+        if path.exists():
+            try:
+                import json
+
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                valid_json = isinstance(payload, dict)
+                valid_contract = valid_json and payload.get("kind") == PUBLICATION_ARTIFACT_KINDS[filename]
+            except (OSError, ValueError):
+                pass
+        statuses.extend(
+            [
+                {"id": f"{Path(filename).stem}_valid_json", "path": str(path), "exists": valid_json},
+                {"id": f"{Path(filename).stem}_valid_contract", "path": str(path), "exists": valid_contract},
+            ]
+        )
+    return True, statuses
+
+
+def build_minimal_user_delivery(
+    destination: Path,
+    *,
+    figures: list[tuple[str, Path]],
+    data_files: list[tuple[str, Path]],
+    veusz_documents: list[tuple[str, Path]],
+) -> dict[str, Any]:
+    """Build the same four-group handoff used by the normal export path."""
+
+    resolved_destination = destination.expanduser().resolve()
+    if resolved_destination.exists():
+        shutil.rmtree(resolved_destination)
+    data_dir = resolved_destination / DELIVERY_DATA_DIR
+    pdf_dir = resolved_destination / DELIVERY_PDF_DIR
+    tiff_dir = resolved_destination / DELIVERY_TIFF_DIR
+    project_dir = resolved_destination / DELIVERY_PROJECT_DIR
+    for directory in (data_dir, pdf_dir, tiff_dir, project_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    def copy_named(
+        records: list[tuple[str, Path]],
+        target_dir: Path,
+        *,
+        allowed_suffixes: set[str] | None = None,
+    ) -> list[Path]:
+        copied: list[Path] = []
+        used_names: set[str] = set()
+        for name, source in records:
+            if not name or Path(name).name != name:
+                raise ValueError(f"Minimal delivery artifact needs a plain filename: {name!r}")
+            if allowed_suffixes is not None and Path(name).suffix.casefold() not in allowed_suffixes:
+                suffixes = ", ".join(sorted(allowed_suffixes))
+                raise ValueError(f"Minimal delivery artifact {name!r} must use one of: {suffixes}")
+            if name in used_names:
+                raise ValueError(f"Duplicate minimal delivery filename: {name}")
+            resolved_source = source.expanduser().resolve()
+            if not resolved_source.is_file():
+                raise FileNotFoundError(resolved_source)
+            destination_path = target_dir / name
+            shutil.copy2(resolved_source, destination_path)
+            copied.append(destination_path)
+            used_names.add(name)
+        return copied
+
+    copied_pdf = copy_named(
+        [(name, path) for name, path in figures if path.suffix.casefold() == ".pdf"],
+        pdf_dir,
+        allowed_suffixes={".pdf"},
+    )
+    copied_tiff = copy_named(
+        [(name, path) for name, path in figures if path.suffix.casefold() in {".tif", ".tiff"}],
+        tiff_dir,
+        allowed_suffixes={".tif", ".tiff"},
+    )
+    copied_data = copy_named(data_files, data_dir, allowed_suffixes={".csv"})
+    copied_documents = copy_named(veusz_documents, project_dir, allowed_suffixes={".vsz"})
+    if not copied_documents:
+        raise ValueError("Minimal delivery needs at least one editable Veusz document.")
+    launcher = _write_delivery_launcher(resolved_destination)
+    return {
+        "kind": "sciplot_user_delivery_package",
+        "version": 3,
+        "root": str(resolved_destination),
+        "pdf": [str(path) for path in copied_pdf],
+        "tiff": [str(path) for path in copied_tiff],
+        "data": [str(path) for path in copied_data],
+        "project": [str(path) for path in copied_documents],
+        "launcher": str(launcher),
+        "file_count": len(copied_pdf) + len(copied_tiff) + len(copied_data) + len(copied_documents) + 1,
+    }
 
 
 def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dict[str, Any]:
+    """Build the small user-facing delivery surface.
+
+    Internal manifests, QA reports, raw archives, analysis tables, and
+    provenance stay in the run output.  They are intentionally not copied
+    into ``delivery/``.
+    """
+
     output_dir = output_dir.expanduser().resolve()
     delivery_dir = output_dir / DELIVERY_DIR
     if delivery_dir.exists():
         shutil.rmtree(delivery_dir)
-    figures_dir = delivery_dir / DELIVERY_FIGURES_DIR
-    editable_dir = delivery_dir / DELIVERY_EDITABLE_DIR
-    internal_dir = delivery_dir / DELIVERY_INTERNAL_DIR
-    figures_dir.mkdir(parents=True, exist_ok=True)
-    internal_dir.mkdir(parents=True, exist_ok=True)
+    data_dir = delivery_dir / DELIVERY_DATA_DIR
+    pdf_dir = delivery_dir / DELIVERY_PDF_DIR
+    tiff_dir = delivery_dir / DELIVERY_TIFF_DIR
+    project_dir = delivery_dir / DELIVERY_PROJECT_DIR
+    for directory in (data_dir, pdf_dir, tiff_dir, project_dir):
+        directory.mkdir(parents=True, exist_ok=True)
 
     project = _project_slug(output_dir, manifest)
-    sciplot_path = delivery_dir / f"{project}.sciplot"
-    data_path = delivery_dir / f"{project}.xlsx"
-
     figure_records: list[dict[str, Any]] = []
     for figure_value in manifest.get("figures", []):
         if not isinstance(figure_value, str):
             continue
         source = Path(figure_value).expanduser()
-        if not source.exists() or not source.is_file():
+        suffix = source.suffix.casefold()
+        if not source.is_file() or suffix not in {".pdf", ".tif", ".tiff"}:
             continue
-        destination = figures_dir / source.name
+        target_dir = pdf_dir if suffix == ".pdf" else tiff_dir
+        destination = target_dir / source.name
         shutil.copy2(source, destination)
         source_hash = existing_file_sha256(source)
         delivery_hash = existing_file_sha256(destination)
@@ -493,230 +381,138 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
                 "source": str(source),
                 "path": str(destination),
                 "relative_path": str(destination.relative_to(delivery_dir)),
-                "format": source.suffix.lower().lstrip("."),
+                "format": "pdf" if suffix == ".pdf" else "tiff",
+                "export_format": "pdf" if suffix == ".pdf" else "tiff_300",
                 "source_sha256": source_hash,
                 "delivery_sha256": delivery_hash,
                 "copy_hash_matches": bool(source_hash and source_hash == delivery_hash),
+                "exists": destination.exists(),
             }
         )
 
-    data_source = _delivery_data_source(manifest)
-    data_record: dict[str, Any] | None = None
-    if data_source is not None:
-        data_record = _write_excel_data(data_source, data_path)
-        data_record["path"] = str(data_path)
-        data_record["relative_path"] = str(data_path.relative_to(delivery_dir))
-
-    copied_internal: list[str] = []
-    for filename in (
-        "request_snapshot.json",
-        "analysis_report.md",
-        "revision_brief.md",
-        "review.html",
-        "intervention_request.json",
-        CLEANUP_REQUEST_FILENAME,
-        CLEANUP_RESULT_FILENAME,
-        *PUBLICATION_ARTIFACT_FILENAMES,
-    ):
-        if _copy_file_if_exists(output_dir / filename, internal_dir / filename):
-            copied_internal.append(filename)
-    for folder in ("tables", "raw", "processed", "_veusz", "studio"):
-        if _copytree_if_exists(output_dir / folder, internal_dir / folder):
-            copied_internal.append(folder)
-    if _copytree_if_exists(output_dir / "figures" / "_veusz", internal_dir / "_veusz"):
-        copied_internal.append("_veusz")
-
-    editable_vsz = _editable_vsz_delivery_record(manifest, internal_dir)
-    editable_vsz_projects = _copy_editable_veusz_projects(
-        manifest,
-        output_dir=output_dir,
-        editable_dir=editable_dir,
-    )
-
-    delivery_record = {
-        "kind": "sciplot_minimal_delivery_package",
-        "version": 2,
-        "path": str(delivery_dir),
-        "project": project,
-        "project_file": str(sciplot_path),
-        "excel_data": str(data_path) if data_path.exists() else None,
-        "figures": figure_records,
-        "internal": str(internal_dir),
-        "internal_artifacts": copied_internal,
-        "editable_vsz": editable_vsz,
-        "editable": str(editable_dir) if editable_vsz_projects else None,
-        "editable_vsz_projects": editable_vsz_projects,
-    }
-    manifest_payload = json_safe({**manifest, "delivery_package": delivery_record})
-    (internal_dir / "manifest.json").write_text(
-        json.dumps(manifest_payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    copied_internal.insert(0, "manifest.json")
-
-    project_payload = {
-        "kind": "sciplot_project",
-        "version": 1,
-        "project": project,
-        "manifest": manifest_payload,
-        "delivery_package": delivery_record,
-        "data": data_record,
-        "figures": figure_records,
-        "internal_dir": DELIVERY_INTERNAL_DIR,
-    }
-    sciplot_path.write_text(json.dumps(project_payload, indent=2, ensure_ascii=False), encoding="utf-8")
-
+    data_records = build_plot_data_exports(manifest, destination=data_dir)
+    project_records = _copy_project_documents(manifest, output_dir=output_dir, project_dir=project_dir)
+    launcher = _write_delivery_launcher(delivery_dir)
     figure_pairing = _delivery_figure_pairing(figure_records)
-    artifact_status = [
-        {"id": "project_file", "path": str(sciplot_path), "exists": sciplot_path.exists()},
-        {"id": "excel_data", "path": str(data_path), "exists": data_path.exists()},
-        {"id": "pdf", "path": str(figures_dir), "exists": bool(figure_pairing["pdf_stems"])},
-        {"id": "tiff_300", "path": str(figures_dir), "exists": bool(figure_pairing["tiff_stems"])},
+    qa_hash_evidence = _qa_hash_evidence(manifest, figure_records)
+    qa_hashes_match = bool(qa_hash_evidence) and all(
+        item["qa_sha256"]
+        and item["qa_sha256"] == item["source_sha256"] == item["delivery_sha256"]
+        for item in qa_hash_evidence
+    )
+    project_files_exist = bool(project_records) and all(item["exists"] for item in project_records)
+    data_files_exist = bool(data_records) and all(Path(str(item["path"])).exists() for item in data_records)
+    qa_payload = manifest.get("qa") if isinstance(manifest.get("qa"), dict) else {}
+    qa_passed = qa_payload.get("status") == "passed"
+    publication_present, publication_status = _publication_status(output_dir)
+
+    artifact_status: list[dict[str, Any]] = [
+        {
+            "id": "plot_data_csv",
+            "path": str(data_dir),
+            "exists": data_files_exist,
+            "details": data_records,
+        },
+        {
+            "id": "pdf_exports",
+            "path": str(pdf_dir),
+            "exists": bool(figure_pairing["pdf_stems"]),
+        },
+        {
+            "id": "tiff_exports",
+            "path": str(tiff_dir),
+            "exists": bool(figure_pairing["tiff_stems"]),
+        },
         {
             "id": "canonical_pdf_tiff_pairs",
-            "path": str(figures_dir),
+            "path": str(delivery_dir),
             "exists": bool(figure_pairing["passed"]),
             "details": figure_pairing,
         },
         {
+            "id": "project_files",
+            "path": str(project_dir),
+            "exists": project_files_exist,
+            "details": project_records,
+        },
+        {
+            "id": "open_in_veusz",
+            "path": str(launcher),
+            "exists": launcher.exists() and bool(project_records),
+        },
+        {
             "id": "qa_passed",
-            "path": str(internal_dir / "manifest.json"),
-            "exists": bool(
-                isinstance(manifest.get("qa"), dict)
-                and manifest["qa"].get("status") == "passed"
-                and (internal_dir / "manifest.json").exists()
-            ),
+            "path": str(output_dir / "manifest.json"),
+            "exists": qa_passed,
+        },
+        {
+            "id": "qa_artifact_hashes_match_delivery",
+            "path": str(delivery_dir),
+            "exists": qa_hashes_match,
+            "details": qa_hash_evidence,
         },
     ]
-    publication_intent = (
-        manifest.get("publication_intent") if isinstance(manifest.get("publication_intent"), dict) else {}
-    )
-    publication_contract_present = bool(publication_intent) or any(
-        (output_dir / filename).exists() for filename in PUBLICATION_ARTIFACT_FILENAMES
-    )
-    parsed_publication_artifacts: dict[str, dict[str, Any] | None] = {}
-    if publication_contract_present:
-        for filename in PUBLICATION_ARTIFACT_FILENAMES:
-            artifact_path = internal_dir / filename
-            parsed = read_json_object(artifact_path)
-            parsed_publication_artifacts[filename] = parsed
-            artifact_status.append(
-                {
-                    "id": f"{Path(filename).stem}_valid_json",
-                    "path": str(artifact_path),
-                    "exists": parsed is not None,
-                }
-            )
-            artifact_status.append(
-                {
-                    "id": f"{Path(filename).stem}_valid_contract",
-                    "path": str(artifact_path),
-                    "exists": bool(
-                        isinstance(parsed, dict) and parsed.get("kind") == PUBLICATION_ARTIFACT_KINDS[filename]
-                    ),
-                }
-            )
-        copied_ledger = parsed_publication_artifacts.get("transform_ledger.json")
+    if project_records:
         artifact_status.append(
             {
-                "id": "transform_lineage_reviewed",
-                "path": str(internal_dir / "transform_ledger.json"),
-                "exists": bool(
-                    isinstance(copied_ledger, dict) and copied_ledger.get("status") in {"runtime_recorded", "confirmed"}
-                ),
+                "id": "editable_vsz_hash_match",
+                "path": str(project_records[0]["path"]),
+                "exists": bool(project_records[0]["hash_matches_export"]),
             }
         )
-        qa_payload = manifest.get("qa") if isinstance(manifest.get("qa"), dict) else {}
-        qa_hashes = {
-            str(Path(str(report.get("path"))).expanduser().resolve()): str(report.get("sha256"))
-            for report_group in (qa_payload.get("pdfs"), qa_payload.get("tiffs"))
-            if isinstance(report_group, list)
-            for report in report_group
-            if isinstance(report, dict) and report.get("path") and report.get("sha256")
-        }
-        hash_evidence = [
-            {
-                "source": record["source"],
-                "qa_sha256": qa_hashes.get(str(Path(record["source"]).expanduser().resolve())),
-                "source_sha256": record.get("source_sha256"),
-                "delivery_sha256": record.get("delivery_sha256"),
-            }
-            for record in figure_records
-        ]
-        artifact_status.append(
-            {
-                "id": "qa_artifact_hashes_match_delivery",
-                "path": str(figures_dir),
-                "exists": bool(hash_evidence)
-                and all(
-                    evidence["qa_sha256"]
-                    and evidence["qa_sha256"] == evidence["source_sha256"] == evidence["delivery_sha256"]
-                    for evidence in hash_evidence
-                ),
-                "details": hash_evidence,
-            }
+    if publication_present:
+        artifact_status.extend(publication_status)
+        publication_intent = (
+            manifest.get("publication_intent") if isinstance(manifest.get("publication_intent"), dict) else {}
         )
+        if publication_intent.get("target_status") == "confirmed":
+            artifact_status.append(
+                {
+                    "id": "publication_qa_passed",
+                    "path": str(output_dir / "publication_qa.json"),
+                    "exists": (output_dir / "publication_qa.json").exists()
+                    and isinstance(manifest.get("publication_qa"), dict)
+                    and manifest["publication_qa"].get("status") == "passed",
+                }
+            )
 
-    copied_intent = parsed_publication_artifacts.get("publication_intent.json")
-    target_confirmed = publication_intent.get("target_status") == "confirmed" or bool(
-        isinstance(copied_intent, dict) and copied_intent.get("target_status") == "confirmed"
-    )
-    if target_confirmed:
-        publication_qa = parsed_publication_artifacts.get("publication_qa.json")
-        artifact_status.append(
-            {
-                "id": "publication_qa_passed",
-                "path": str(internal_dir / "publication_qa.json"),
-                "exists": bool(isinstance(publication_qa, dict) and publication_qa.get("status") == "passed"),
-            }
-        )
-    if editable_vsz is not None:
-        artifact_status.extend(
-            [
-                {
-                    "id": "editable_vsz",
-                    "path": str(editable_vsz["path"]),
-                    "exists": bool(editable_vsz["exists"]),
-                },
-                {
-                    "id": "editable_vsz_hash_match",
-                    "path": str(editable_vsz["path"]),
-                    "exists": bool(editable_vsz["hash_matches_export"]),
-                },
-            ]
-        )
-    if editable_vsz_projects:
-        artifact_status.extend(
-            [
-                {
-                    "id": "editable_vsz_projects",
-                    "path": str(editable_dir),
-                    "exists": all(Path(str(item["document"])).exists() for item in editable_vsz_projects),
-                    "details": editable_vsz_projects,
-                },
-                {
-                    "id": "editable_vsz_project_hashes_match",
-                    "path": str(editable_dir),
-                    "exists": all(bool(item["copy_hash_matches"]) for item in editable_vsz_projects),
-                },
-                {
-                    "id": "editable_vsz_launchers",
-                    "path": str(editable_dir),
-                    "exists": all(
-                        Path(str(item[key])).exists()
-                        for item in editable_vsz_projects
-                        for key in ("open_in_veusz", "export_edited", "open_in_sciplot_studio")
-                    ),
-                },
-            ]
-        )
-    delivery_record = {
-        **delivery_record,
-        "complete": all(item["exists"] for item in artifact_status),
+    project_file = project_records[0]["path"] if project_records else None
+    editable_vsz = None
+    if project_records:
+        first = project_records[0]
+        editable_vsz = {
+            "kind": "sciplot_delivery_editable_vsz",
+            "path": first["path"],
+            "relative_path": first["relative_path"],
+            "exists": first["exists"],
+            "authority": manifest.get("document_authority"),
+            "manual_edit_detected": bool(manifest.get("manual_edit_detected")),
+            "expected_hash": manifest.get("exported_document_hash") or first["source_sha256"],
+            "actual_hash": first["delivery_sha256"],
+            "hash_matches_export": first["hash_matches_export"],
+        }
+    delivery_record: dict[str, Any] = {
+        "kind": "sciplot_user_delivery_package",
+        "version": 3,
+        "path": str(delivery_dir),
+        "project": project,
+        "data_dir": str(data_dir),
+        "data_csvs": data_records,
+        "pdf_dir": str(pdf_dir),
+        "tiff_dir": str(tiff_dir),
+        "figures": figure_records,
+        "project_dir": str(project_dir),
+        "project_file": project_file,
+        "project_documents": project_records,
+        "open_in_veusz": str(launcher),
+        "editable": str(project_dir),
+        "editable_vsz": editable_vsz,
+        "editable_vsz_projects": project_records,
         "artifacts": artifact_status,
     }
-    manifest_payload = json_safe({**manifest, "delivery_package": delivery_record})
-    one_step = manifest_payload.get("one_step")
+    delivery_record["complete"] = all(item["exists"] for item in artifact_status)
+
+    one_step = manifest.get("one_step")
     if isinstance(one_step, dict):
         one_step["delivery_package"] = delivery_record
         figure_qa = one_step.get("figure_qa_report")
@@ -731,13 +527,6 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
             one_step["state_reasons"] = reasons or ["all_programmatic_gates_passed"]
             if one_step.get("state") == "needs_rule_repair" and not reasons:
                 one_step["state"] = "ready"
-    project_payload["delivery_package"] = delivery_record
-    project_payload["manifest"] = manifest_payload
-    (internal_dir / "manifest.json").write_text(
-        json.dumps(project_payload["manifest"], indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    sciplot_path.write_text(json.dumps(project_payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return delivery_record
 
 

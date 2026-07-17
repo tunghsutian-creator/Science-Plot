@@ -56,6 +56,41 @@ DEFAULT_SCALAR_FIELD_COLORS = (
     "#F6D35B",
     "#FFEA46",
 )
+
+# One typography/stroke contract is shared by every SciPlot presentation.
+# Templates may still choose semantic behavior (for example, log axes,
+# markers-on, stacking, or a colorbar), but they do not get their own visual
+# sizes or widths.
+UNIFIED_FONT_FAMILY = "Arial"
+UNIFIED_FONT_SIZE_PT = 7.0
+UNIFIED_LEGEND_FONT_SIZE_PT = 6.0
+UNIFIED_PANEL_LABEL_SIZE_PT = 7.0
+UNIFIED_LINE_WIDTH_PT = 1.2
+UNIFIED_AXIS_LINEWIDTH_PT = 0.8
+UNIFIED_TICK_WIDTH_PT = 0.8
+UNIFIED_TICK_LENGTH_PT = 2.8
+UNIFIED_MINOR_TICK_WIDTH_PT = 0.8
+UNIFIED_MINOR_TICK_LENGTH_PT = 1.5
+UNIFIED_MARKER_SIZE_PT = 2.0
+UNIFIED_MARKER_LINE_WIDTH_PT = 0.8
+UNIFIED_HARD_OPTION_KEYS = frozenset(
+    {
+        "font_size_pt",
+        "legend_font_size_pt",
+        "axis_linewidth_pt",
+        "tick_width_pt",
+        "tick_length_pt",
+        "minor_tick_width_pt",
+        "minor_tick_length_pt",
+        "line_width_pt",
+        "marker_size",
+        "marker_size_pt",
+        "marker_line_width_pt",
+        "contour_line_width_pt",
+        "highlight_contour_line_width_pt",
+    }
+)
+
 DEFAULT_LINE_STYLE_SEQUENCE = (
     "solid",
     "dashed",
@@ -69,7 +104,9 @@ FIGURE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x11
 
 DEFAULT_EXPORT_FORMATS_POLICY = ("pdf", "tiff_300")
 DEFAULT_LOG_TICK_FORMAT = "%Ve"
-DEFAULT_LOG_MINOR_TICK_COUNT = 10
+# Five subdivisions per decade give four visible minor ticks (2, 4, 6, 8),
+# matching the sparse publication style used for rheology modulus axes.
+DEFAULT_LOG_MINOR_TICK_COUNT = 5
 DEFAULT_LOG_MINOR_MULTIPLIERS = (2.0, 4.0, 6.0, 8.0)
 AUTO_LOG_BOUND_PADDING_FACTOR = 1.10
 MAX_AUTO_LOG_EMPTY_RANGE_FACTOR = 2.0
@@ -91,7 +128,7 @@ MAX_RAW_POINT_JITTER_FRACTION = 0.35
 MIN_BOX_REPLICATES = 2
 CATEGORICAL_BOX_FILL_FRACTION = 0.36
 CATEGORICAL_BOX_FILL_TRANSPARENCY = 72
-CATEGORICAL_BOX_LINE_WIDTH_PT = 0.8
+CATEGORICAL_BOX_LINE_WIDTH_PT = UNIFIED_LINE_WIDTH_PT
 
 # Public request keys accepted by the compatibility intake surface.  Keep this
 # contract explicit and renderer-independent so importing intake never starts
@@ -200,6 +237,16 @@ RENDER_OPTION_KEYS = frozenset(
 )
 
 DELIVERY_DIR = "delivery"
+# User-facing delivery has exactly four artifact groups plus one launcher.
+DELIVERY_DATA_DIR = "data"
+DELIVERY_PDF_DIR = "pdf"
+DELIVERY_TIFF_DIR = "tiff"
+DELIVERY_PROJECT_DIR = "project"
+DELIVERY_LAUNCHER = "Open_in_Veusz.command"
+
+# Kept as compatibility symbols for older manifests and callers.  They are no
+# longer created inside the user-facing delivery package; runtime evidence
+# stays in the ordinary run output instead.
 DELIVERY_EDITABLE_DIR = "editable"
 DELIVERY_INTERNAL_DIR = "_sciplot_internal"
 DELIVERY_FIGURES_DIR = "figures"
@@ -211,6 +258,16 @@ DEFAULT_RENDER_OPTIONS: dict[str, Any] = {
     "style_preset": "nature",
     "size": DEFAULT_FIGURE_SIZE,
     "palette_preset": DEFAULT_PALETTE_PRESET,
+    "font_size_pt": UNIFIED_FONT_SIZE_PT,
+    "legend_font_size_pt": UNIFIED_LEGEND_FONT_SIZE_PT,
+    "axis_linewidth_pt": UNIFIED_AXIS_LINEWIDTH_PT,
+    "tick_width_pt": UNIFIED_TICK_WIDTH_PT,
+    "tick_length_pt": UNIFIED_TICK_LENGTH_PT,
+    "minor_tick_width_pt": UNIFIED_MINOR_TICK_WIDTH_PT,
+    "minor_tick_length_pt": UNIFIED_MINOR_TICK_LENGTH_PT,
+    "line_width_pt": UNIFIED_LINE_WIDTH_PT,
+    "marker_size": UNIFIED_MARKER_SIZE_PT,
+    "marker_line_width_pt": UNIFIED_MARKER_LINE_WIDTH_PT,
 }
 
 
@@ -366,35 +423,17 @@ CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS: dict[str, Any] = {
     "legend_position": "none",
     "series_label_mode": "none",
     "marker_sequence": ["circle"],
-    "marker_size": 1.7,
     "marker_fill_mode": "filled",
     "raw_point_jitter_fraction": 0.18,
     "palette_preset": DEFAULT_PALETTE_PRESET,
-    "font_size_pt": 7.0,
-    "legend_font_size_pt": 6.5,
-    "axis_linewidth_pt": 0.7,
-    "tick_width_pt": 0.7,
-    "tick_length_pt": 2.8,
-    "minor_tick_width_pt": 0.45,
-    "minor_tick_length_pt": 1.5,
-    "line_width_pt": CATEGORICAL_BOX_LINE_WIDTH_PT,
     "line_alpha": 1.0,
     "marker_alpha": 0.78,
-    "marker_line_width_pt": 0.3,
 }
 
 
 CURVE_RENDER_OPTIONS: dict[str, Any] = {
     **DEFAULT_RENDER_OPTIONS,
     "palette_preset": JAMA_EDITORIAL_PALETTE_ID,
-    "font_size_pt": 7.0,
-    "legend_font_size_pt": 6.5,
-    "axis_linewidth_pt": 0.7,
-    "tick_width_pt": 0.7,
-    "tick_length_pt": 2.8,
-    "minor_tick_width_pt": 0.45,
-    "minor_tick_length_pt": 1.5,
-    "line_width_pt": 0.9,
     "line_alpha": 1.0,
     "legend_curve_clearance_mm": DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
     "legend_edge_padding_mm": DEFAULT_LEGEND_EDGE_PADDING_MM,
@@ -404,10 +443,8 @@ CURVE_RENDER_OPTIONS: dict[str, Any] = {
 POINT_LINE_RENDER_OPTIONS: dict[str, Any] = {
     **CURVE_RENDER_OPTIONS,
     "marker_sequence": ["circle", "square", "diamond", "triangle"],
-    "marker_size": 1.7,
     "marker_fill_mode": "filled",
     "marker_alpha": 1.0,
-    "marker_line_width_pt": 0.3,
 }
 
 
@@ -419,7 +456,7 @@ RHEOLOGY_FREQUENCY_RENDER_OPTIONS: dict[str, Any] = {
     "x_label_override": RHEOLOGY_FREQUENCY_X_RENDER_LABEL,
     "x_tick_format": RHEOLOGY_FREQUENCY_TICK_FORMAT,
     "y_tick_format": RHEOLOGY_FREQUENCY_TICK_FORMAT,
-    "minor_tick_count": 10,
+    "minor_tick_count": DEFAULT_LOG_MINOR_TICK_COUNT,
 }
 
 TORQUE_CURVE_RENDER_OPTIONS: dict[str, Any] = {
@@ -617,6 +654,19 @@ def render_options_copy(options: dict[str, Any] | None = None) -> dict[str, Any]
 __all__ = [
     "DEFAULT_EXPORT_FORMATS_POLICY",
     "AUTO_LOG_BOUND_PADDING_FACTOR",
+    "UNIFIED_AXIS_LINEWIDTH_PT",
+    "UNIFIED_FONT_FAMILY",
+    "UNIFIED_FONT_SIZE_PT",
+    "UNIFIED_HARD_OPTION_KEYS",
+    "UNIFIED_LEGEND_FONT_SIZE_PT",
+    "UNIFIED_LINE_WIDTH_PT",
+    "UNIFIED_MARKER_LINE_WIDTH_PT",
+    "UNIFIED_MARKER_SIZE_PT",
+    "UNIFIED_MINOR_TICK_LENGTH_PT",
+    "UNIFIED_MINOR_TICK_WIDTH_PT",
+    "UNIFIED_PANEL_LABEL_SIZE_PT",
+    "UNIFIED_TICK_LENGTH_PT",
+    "UNIFIED_TICK_WIDTH_PT",
     "DEFAULT_FIGURE_SIZE",
     "DEFAULT_LAYOUT_POLICY",
     "DEFAULT_LOG_MINOR_MULTIPLIERS",
@@ -627,9 +677,14 @@ __all__ = [
     "DEFAULT_RENDER_OPTIONS",
     "CURVE_RENDER_OPTIONS",
     "DELIVERY_DIR",
+    "DELIVERY_DATA_DIR",
     "DELIVERY_EDITABLE_DIR",
     "DELIVERY_FIGURES_DIR",
     "DELIVERY_INTERNAL_DIR",
+    "DELIVERY_LAUNCHER",
+    "DELIVERY_PDF_DIR",
+    "DELIVERY_PROJECT_DIR",
+    "DELIVERY_TIFF_DIR",
     "FIGURE_SIZE_PRESETS",
     "FTIR_SPECTRUM_RENDER_OPTIONS",
     "FTIR_LAYOUT_POLICY",

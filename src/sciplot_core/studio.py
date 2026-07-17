@@ -50,6 +50,17 @@ from sciplot_core.policy import (
     MIN_BOX_REPLICATES,
     POINT_LINE_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_X_RENDER_LABEL,
+    UNIFIED_AXIS_LINEWIDTH_PT,
+    UNIFIED_FONT_FAMILY,
+    UNIFIED_FONT_SIZE_PT,
+    UNIFIED_LEGEND_FONT_SIZE_PT,
+    UNIFIED_LINE_WIDTH_PT,
+    UNIFIED_MARKER_LINE_WIDTH_PT,
+    UNIFIED_MARKER_SIZE_PT,
+    UNIFIED_MINOR_TICK_LENGTH_PT,
+    UNIFIED_MINOR_TICK_WIDTH_PT,
+    UNIFIED_TICK_LENGTH_PT,
+    UNIFIED_TICK_WIDTH_PT,
     anchored_log_decade_ticks,
     compact_linear_axis,
     is_removed_outside_legend_position,
@@ -119,19 +130,19 @@ class StudioSeries:
 
 @dataclass(frozen=True)
 class _VeuszStyleContract:
-    font_family: str = "Arial"
-    font_size_pt: float = 6.5
-    legend_font_size_pt: float = 5.8
-    axis_linewidth_pt: float = 1.0
-    tick_width_pt: float = 1.0
-    tick_length_pt: float = 3.4
-    minor_tick_width_pt: float = 0.8
-    minor_tick_length_pt: float = 2.0
-    line_width_pt: float = 1.2
+    font_family: str = UNIFIED_FONT_FAMILY
+    font_size_pt: float = UNIFIED_FONT_SIZE_PT
+    legend_font_size_pt: float = UNIFIED_LEGEND_FONT_SIZE_PT
+    axis_linewidth_pt: float = UNIFIED_AXIS_LINEWIDTH_PT
+    tick_width_pt: float = UNIFIED_TICK_WIDTH_PT
+    tick_length_pt: float = UNIFIED_TICK_LENGTH_PT
+    minor_tick_width_pt: float = UNIFIED_MINOR_TICK_WIDTH_PT
+    minor_tick_length_pt: float = UNIFIED_MINOR_TICK_LENGTH_PT
+    line_width_pt: float = UNIFIED_LINE_WIDTH_PT
     line_alpha: float = 0.92
     marker_alpha: float = 0.95
-    marker_size_pt: float = 3.4
-    marker_line_width_pt: float = 0.8
+    marker_size_pt: float = UNIFIED_MARKER_SIZE_PT
+    marker_line_width_pt: float = UNIFIED_MARKER_LINE_WIDTH_PT
     axes_labelpad_pt: float = 2.0
     xtick_major_pad_pt: float = 1.4
     ytick_major_pad_pt: float = 1.4
@@ -2327,11 +2338,9 @@ def _apply_series_options(
     order = _string_list(render_options.get("series_order")) or _string_list(request.get("series_order"))
     styles = render_options.get("series_styles") if isinstance(render_options.get("series_styles"), list) else []
     palette = _palette_for_render_options(render_options)
-    default_line_width = _default_line_width(render_options)
     marker_sequence = _string_list(render_options.get("marker_sequence"))
     if not marker_sequence:
         marker_sequence = list(POINT_LINE_MARKERS)
-    default_marker_size = _optional_float(render_options.get("marker_size"))
     line_style_sequence = _string_list(render_options.get("line_style_sequence"))
     if not line_style_sequence:
         line_style_sequence = list(DEFAULT_LINE_STYLE_SEQUENCE)
@@ -2372,9 +2381,9 @@ def _apply_series_options(
                 x_values=item.x_values,
                 y_values=item.y_values,
                 color=str(style.get("color") or palette[index % len(palette)]),
-                line_width=_optional_float(style.get("line_width")) or default_line_width,
+                line_width=UNIFIED_LINE_WIDTH_PT,
                 marker=style.get("marker", item.marker or default_marker),
-                marker_size=_optional_float(style.get("marker_size")) or default_marker_size,
+                marker_size=UNIFIED_MARKER_SIZE_PT,
                 line_style=str(style.get("line_style") or style.get("linestyle") or default_line_style),
                 presentation_kind=item.presentation_kind,
                 category_position=item.category_position,
@@ -2428,20 +2437,24 @@ def _veusz_style_contract(render_options: dict[str, Any]) -> _VeuszStyleContract
         style = contract.styles.get(normalize_style_alias(style_id))
         if style is None:
             return _VeuszStyleContract()
-        family = tuple(str(item) for item in style.typography.font_family)
         base = _VeuszStyleContract(
-            font_family=family[0] if family else "Arial",
-            font_size_pt=float(style.typography.font_size_pt),
-            legend_font_size_pt=float(style.typography.legend_font_size_pt),
-            axis_linewidth_pt=float(style.stroke.axis_linewidth_pt),
-            tick_width_pt=float(style.stroke.tick_width_pt),
-            tick_length_pt=float(style.stroke.tick_length_pt),
-            minor_tick_width_pt=float(style.stroke.minor_tick_width_pt),
-            minor_tick_length_pt=float(style.stroke.minor_tick_length_pt),
-            line_width_pt=float(style.stroke.line_width_pt),
+            # Typography and physical strokes are deliberately not read from
+            # template/style overrides.  They are the project-wide hard
+            # contract; style presets remain only for semantic/layout
+            # compatibility and palette/theme selection.
+            font_family=UNIFIED_FONT_FAMILY,
+            font_size_pt=UNIFIED_FONT_SIZE_PT,
+            legend_font_size_pt=UNIFIED_LEGEND_FONT_SIZE_PT,
+            axis_linewidth_pt=UNIFIED_AXIS_LINEWIDTH_PT,
+            tick_width_pt=UNIFIED_TICK_WIDTH_PT,
+            tick_length_pt=UNIFIED_TICK_LENGTH_PT,
+            minor_tick_width_pt=UNIFIED_MINOR_TICK_WIDTH_PT,
+            minor_tick_length_pt=UNIFIED_MINOR_TICK_LENGTH_PT,
+            line_width_pt=UNIFIED_LINE_WIDTH_PT,
             line_alpha=float(style.stroke.line_alpha),
             marker_alpha=float(style.stroke.marker_alpha),
-            marker_size_pt=float(style.stroke.marker_size_pt),
+            marker_size_pt=UNIFIED_MARKER_SIZE_PT,
+            marker_line_width_pt=UNIFIED_MARKER_LINE_WIDTH_PT,
             axes_labelpad_pt=float(style.spacing.axes_labelpad),
             xtick_major_pad_pt=float(style.spacing.xtick_major_pad),
             ytick_major_pad_pt=float(style.spacing.ytick_major_pad),
@@ -2454,33 +2467,10 @@ def _veusz_style_contract(render_options: dict[str, Any]) -> _VeuszStyleContract
         )
     except Exception:
         base = _VeuszStyleContract()
-    overrides: dict[str, float] = {}
-    for key in (
-        "font_size_pt",
-        "legend_font_size_pt",
-        "axis_linewidth_pt",
-        "tick_width_pt",
-        "tick_length_pt",
-        "minor_tick_width_pt",
-        "minor_tick_length_pt",
-        "line_width_pt",
-        "line_alpha",
-        "marker_alpha",
-        "marker_line_width_pt",
-    ):
-        value = _optional_float(render_options.get(key))
-        if value is not None:
-            overrides[key] = value
-    marker_size = _optional_float(render_options.get("marker_size_pt"))
-    if marker_size is None:
-        marker_size = _optional_float(render_options.get("marker_size"))
-    if marker_size is not None:
-        overrides["marker_size_pt"] = marker_size
-    return replace(base, **overrides)
-
-
-def _default_line_width(render_options: dict[str, Any]) -> float:
-    return _veusz_style_contract(render_options).line_width_pt
+    # Explicit request-level typography/stroke values are intentionally
+    # ignored.  Veusz editing remains available after generation, but every
+    # generated template starts from the same SciPlot hard standard.
+    return base
 
 
 def _apply_domain_render_defaults(
@@ -3727,16 +3717,14 @@ def _scalar_field_plot_contract(
         "contour_levels": contour_levels,
         "contour_color": str(render_options.get("contour_color") or "#FFFFFF"),
         "contour_line_style": str(render_options.get("contour_line_style") or "solid"),
-        "contour_line_width_pt": float(render_options.get("contour_line_width_pt") or 0.45),
+        "contour_line_width_pt": UNIFIED_LINE_WIDTH_PT,
         "contour_labels": render_options.get("contour_labels") is True,
         "highlight_contour_levels": highlight_levels,
         "highlight_contour_color": str(render_options.get("highlight_contour_color") or "#111111"),
         "highlight_contour_line_style": str(
             render_options.get("highlight_contour_line_style") or "dashed"
         ),
-        "highlight_contour_line_width_pt": float(
-            render_options.get("highlight_contour_line_width_pt") or 0.9
-        ),
+        "highlight_contour_line_width_pt": UNIFIED_LINE_WIDTH_PT,
         "colorbar_direction": str(render_options.get("colorbar_direction") or "horizontal"),
         "colorbar_manual_position": render_options.get("colorbar_manual_position") is True,
         "colorbar_width_mm": float(render_options.get("colorbar_width_mm") or 31.0),
@@ -3806,7 +3794,7 @@ def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str,
                 "end": max(start, end),
                 "color": str(item.get("color") or "#6B7280"),
                 "transparency": min(max(transparency, 0), 100),
-                "line_width_pt": float(item.get("line_width_pt") or 0.7),
+                "line_width_pt": UNIFIED_LINE_WIDTH_PT,
                 "line_style": str(item.get("line_style") or "dashed"),
             }
         )
@@ -3845,7 +3833,7 @@ def _build_veusz_plot_spec(
         if side not in {"left", "right"}:
             side = "left" if reverse_x else "right"
         align = "left" if side == "left" else "right"
-        label_size = max(style.legend_font_size_pt, min(style.font_size_pt, 6.2))
+        label_size = UNIFIED_FONT_SIZE_PT
         y_span = (
             axis_contract.y_max - axis_contract.y_min
             if axis_contract.y_max is not None and axis_contract.y_min is not None
@@ -4201,7 +4189,7 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any], style: dict[
             levels=[float(value) for value in scalar.get("contour_levels") or []],
             color=str(scalar.get("contour_color") or "#FFFFFF"),
             line_style=str(scalar.get("contour_line_style") or "solid"),
-            line_width_pt=float(scalar.get("contour_line_width_pt") or 0.45),
+            line_width_pt=UNIFIED_LINE_WIDTH_PT,
             show_labels=bool(scalar.get("contour_labels")),
         )
     _add_veusz_contour(
@@ -4211,7 +4199,7 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any], style: dict[
         levels=[float(value) for value in scalar.get("highlight_contour_levels") or []],
         color=str(scalar.get("highlight_contour_color") or "#111111"),
         line_style=str(scalar.get("highlight_contour_line_style") or "dashed"),
-        line_width_pt=float(scalar.get("highlight_contour_line_width_pt") or 0.9),
+        line_width_pt=UNIFIED_LINE_WIDTH_PT,
         show_labels=False,
     )
     if scalar.get("show_colorbar") is True:

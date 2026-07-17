@@ -695,11 +695,14 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
     }
     delivery = last_run.get("delivery_package") if isinstance(last_run.get("delivery_package"), dict) else {}
     project_file = delivery.get("project_file")
-    excel_data = delivery.get("excel_data")
+    data_csvs = delivery.get("data_csvs") if isinstance(delivery.get("data_csvs"), list) else []
     if isinstance(project_file, str) and project_file.strip():
         artifacts["delivery_project"] = _artifact_info(Path(project_file), project_slug=project_slug)
-    if isinstance(excel_data, str) and excel_data.strip():
-        artifacts["delivery_excel"] = _artifact_info(Path(excel_data), project_slug=project_slug)
+    artifacts["delivery_data"] = [
+        _artifact_info(Path(str(item.get("path"))), project_slug=project_slug)
+        for item in data_csvs
+        if isinstance(item, dict) and isinstance(item.get("path"), str) and item.get("path")
+    ]
     figure_paths = [Path(str(path)) for path in last_run.get("figures", []) if isinstance(path, str)]
     figures = [_artifact_info(path, project_slug=project_slug) for path in figure_paths]
     preview_figure = _figure_preview_info(figure_paths, project_slug=project_slug)
