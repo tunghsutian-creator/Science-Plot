@@ -14,6 +14,11 @@ migration remain active work. M5 now provides source-controlled validated
 envelopes for all 23 ready rules and binds recognition, semantic/render,
 source/mapping, strict QA, delivery, and one-step/autoplot state before
 `ready_to_use=true`; the learning/promotion loop remains active work.
+The active cutover sequence is evidence contract, promotion infrastructure,
+canonical-task/capability closure, live-model truth, five-lane discovery,
+evidence-backed gap closure, release-candidate freeze, fifteen qualifying
+frozen-build completions, and an explicit owner-approved default-entrypoint
+change. Distribution remains outside this personal-product objective.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -282,6 +287,64 @@ but cannot retain `ready_to_use=true`.
 This default path requires no AI provider and no routine AI image inspection.
 AI remains available for novel meaning, explicit refinement, or rule repair;
 it cannot override a failed deterministic gate.
+
+## Active personal cutover protocol
+
+The remaining frontend work is evidence-driven rather than feature-count
+driven:
+
+1. establish the local, hash-chained session ledger and counting contract
+   before any live-model or owner-session result can count;
+2. close the hash-bound M5a promotion mechanism without granting a candidate
+   runtime authority or allowing AI to promote itself;
+3. map all six M3 canonical tasks to the typed capability catalog. The current
+   production adapter is selected-object `set_setting` only, so multi-target,
+   spatial-legend, annotation-promotion, and diagnostic-repair tasks need
+   explicit minimal host capabilities before model quality is judged;
+4. run exactly two preregistered scored attempts per canonical task against a
+   real production endpoint and preserve first responses and retries.
+   Additional diagnostics do not alter the score. Require 12/12 safe
+   authority, 2/2 exact cancellation rollback, at least one end-to-end success
+   per planning task, at least 9/10 semantically correct first proposals, and
+   100% complete lifecycle for accepted work; wire fixtures remain protocol
+   tests only;
+5. run one real discovery attempt in each of five lanes: rheology/DMA/torque,
+   spectroscopy/scattering/chromatography, thermal,
+   mechanical/categorical/swelling, and scalar-field/review/composition;
+6. fix every authority, data-loss, rollback, stale-export/QA, false-Ready, or
+   ordinary/high-frequency Canvas gap, process any naturally eligible M5
+   candidate, then freeze one exact release candidate that already contains
+   the final Canvas-default entrypoint and obsolete normal-path cleanup;
+7. collect at least fifteen qualifying real completions on that unchanged
+   candidate, at least three per lane. The M2 ten-session gate is an
+   intermediate subset and never authorizes cutover;
+8. present the evidence to the owner and promote that identical commit/package
+   to the normal workspace/install only after explicit approval; run a
+   reversible entrypoint canary and make no post-canary source/package cleanup.
+
+A qualifying session is owner-operated, real-project work that ends with a
+saved and reopened exact-current VSZ, QA-checked PDF/TIFF, complete delivery,
+and an explicit outcome. Automated probes, synthetic fixtures, injected
+providers, copied outputs, agent-only review, failed attempts, and sessions
+that require Veusz MainWindow for an ordinary task do not count. Failed
+attempts and Advanced Editor fallbacks stay in the ledger with concrete
+reasons so they can drive the next smallest shared-code fix. Discovery
+attempts are not part of the final fifteen. Any runtime, rule, policy, adapter,
+renderer, package, or runtime-identity change after freeze creates a new
+candidate and restarts the formal count.
+
+The final fifteen also cover the workflows orthogonally: one provider-disabled
+completion in every lane; at least three accepted real-AI completions across
+three lanes; one confirmed real data-mapping handoff; review sidecar
+save/reopen/export isolation and native promotion; and one native composition
+create/edit/reopen/export lifecycle. The ledger binds
+`review_annotations.json`, mapping execution/ledger evidence, or
+`composition.json` whenever that state is authoritative.
+
+The normal Canvas owns high-frequency scientific editing. The Advanced Editor
+remains the low-frequency, unsupported-property, and recovery surface. A gap
+in that boundary is not permission to build a second general Veusz property
+editor or renderer.
 
 ## Window anatomy
 
@@ -586,8 +649,9 @@ Completed M2 increments:
 Remaining M2 work:
 
 1. Run at least ten representative real sessions across five figure families.
-2. Only then migrate the normal `studio` entrypoint from Veusz MainWindow to
-   SciPlot Canvas.
+2. Treat those ten sessions only as an intermediate evidence checkpoint. The
+   normal `studio` entrypoint can migrate only after the M6 frozen-candidate
+   fifteen-session gate and explicit owner approval.
 
 ## Design acceptance
 

@@ -17,7 +17,12 @@ M5's source-controlled validated-envelope baseline is implemented for all 23
 ready rules: full recognition and semantic contracts, host-side one-step and
 autoplot gating, current-code authorized-real-data acceptance, and adversarial
 probe coverage are active. The repeated-AI-success promotion workflow remains
-open, so M5 is not yet complete.
+open, so M5 is not yet complete. The active execution order is now frozen as:
+evidence contract, M5 promotion infrastructure, M3 task/capability closure and
+live-model truth, M6 discovery and evidence-backed gap closure, a frozen
+release candidate, fifteen qualifying real sessions, then the user-approved
+default-frontend cutover. New renderer, general-purpose editor, distribution,
+and unrelated plot-family work do not enter this critical path.
 
 This roadmap supersedes the former assumption that native canvas work and
 multi-panel composition should remain deferred. Distribution to other users is
@@ -83,6 +88,291 @@ software.
 9. **Success claims stay separated.**
    Lifecycle success, exact-current artifact QA, provenance completeness, and
    journal-specific compliance are different fields.
+
+## Active execution charter
+
+This charter turns the north-star objective into an ordered personal-product
+cutover program. It is the default work-selection policy until M6 is complete.
+Later phases must not be used to bypass an earlier failed authority or
+reliability gate.
+
+### E0 — Establish the evidence contract
+
+Implement the local session ledger before any production-model or real-session
+result is allowed to count. The ledger is hash-chained and evidence-bound so
+changes are visible; a local file is not described as impossible to forge.
+
+Each preregistered task binds:
+
+- the exact source/project identity and acceptance lane;
+- the git commit, installed package/wheel hash, runtime identity, rule/envelope
+  versions, entry route, provider, and model where applicable;
+- the intended natural task and expected completion evidence;
+- a unique session ID and owner attestation.
+
+Each completed record binds the first provider response and every retry,
+accepted/committed/not-undone operation IDs, final document revision, saved and
+reopened VSZ hash, final-revision QA, PDF/TIFF and delivery hashes, all fallback
+or external-editor use, timing/failure metrics, and the owner's explicit
+outcome. When applicable it also binds the review sidecar, confirmed mapping
+execution/ledger, composition model, and immutable source-module hashes.
+Abandonment, crash, `needs_rule_repair`, unrecorded external Veusz use, and
+silent workarounds are outcomes, not missing rows.
+
+Exit evidence: a closed schema, append/reopen and tamper-detection probe,
+duplicate-session rejection, final-revision artifact binding, and
+source-controlled documentation pass. No result recorded before this contract
+exists is retroactively promoted into formal M3/M6 evidence.
+
+### E1 — Close the M5a promotion mechanism
+
+Build the reviewed learning loop before collecting more AI-assisted evidence:
+
+- collect only replay-verified `DataMappingProposal` executions and committed
+  `CanvasOperationBatch` transactions, never an uncommitted preview or a
+  provider claim;
+- canonicalize away source paths, timestamps, provider identifiers, raw
+  values, and instance-only object IDs before comparing decisions;
+- require at least three distinct, explicitly attested real sessions before a
+  repeated decision becomes `ready_for_review`; synthetic probes never satisfy
+  that threshold;
+- make every candidate hash-bound, reviewable, and powerless at runtime;
+- require an explicit owner decision, an ordinary reviewed source change, an
+  affected fixture/probe, and the applicable real-data lifecycle before a
+  candidate can become deterministic behavior;
+- never let AI edit a rule, policy, validated envelope, or its own promotion
+  status automatically.
+
+Exit evidence: collect/build/decide/plan/verify contracts, adversarial probe,
+doctor, runtime smoke, and an installable package all pass. This closes the
+mechanism, not a fabricated real-world promotion. Outcomes from E3 and E4 feed
+the mechanism; any naturally qualifying candidate must be approved,
+implemented, and revalidated before the release-candidate freeze in E5. If no
+decision repeats naturally, record zero eligible candidates rather than
+manufacturing repetition.
+
+### E2 — Close the M3 task/capability matrix
+
+Do not use a model-quality test to discover that the host never exposed the
+required typed operation. Before calling a live endpoint, bind every canonical
+task to its required context, target scope, operation type, host validation,
+and completion evidence.
+
+The current production catalog exposes only bounded `set_setting` operations
+for one selected object. Therefore the matrix must explicitly resolve:
+
+- axis renaming/formatting through the existing selected-axis fields;
+- multi-series requests through a bounded multi-target catalog rather than
+  silently changing only one curve;
+- spatial legend intent through review/region geometry mapped to closed legend
+  operations;
+- review-to-native promotion through bounded annotation operations and an
+  atomic review-state transition;
+- QA repair only where a current diagnostic maps to advertised safe fields;
+- Stop and rollback as a host cancellation/recovery gate, not a claim about
+  model scientific reasoning.
+
+Missing expressiveness is a product capability gap. Add only the smallest
+typed context/operation needed for a canonical task; arbitrary renderer
+commands, free-form VSZ patches, and model-generated code remain prohibited.
+
+Exit evidence: the source-controlled matrix covers all six tasks, unsupported
+catalog requests stop before model-quality scoring, and every newly exposed
+operation passes invalid-target, stale-revision, partial-mutation, rollback,
+provider-disabled, save/reopen, QA, and delivery probes.
+
+### E3 — Prove the M3 production-model loop
+
+The in-memory wire fixture proves protocol safety, not model usefulness. Use a
+real configured endpoint and the E0 ledger to exercise all six canonical
+natural-language tasks on appropriate real projects:
+
+1. rename and format an axis;
+2. change selected series while preserving unselected series;
+3. restructure a legend from spatial intent;
+4. convert a review comment or arrow into a formal annotation;
+5. repair a QA-reported layout problem;
+6. stop an in-progress turn and restore the exact baseline.
+
+Run exactly two preregistered scored live attempts per canonical task. Preserve
+both first proposals and every retry; retries cannot erase a poor first
+proposal. Additional diagnostic attempts are unscored and cannot rescue the
+round. A changed host capability, model configuration, or candidate starts a
+new explicitly versioned evaluation round. The gate is quantitative:
+
+- all 12 attempts preserve host authority, raw immutability, and zero partial
+  mutation;
+- both Stop/cancellation attempts restore the exact baseline;
+- each of the five model-planning tasks succeeds end to end at least once;
+- at least 9 of those 10 first proposals are semantically correct and need no
+  hidden manual rewrite;
+- every accepted proposal saves, reopens, passes exact-current QA/export, and
+  reaches complete delivery.
+
+Each task also needs a persisted request/response record, zero-mutation
+preview, explicit acceptance or rejection, and journal outcome. Unsupported,
+unsafe, or semantically wrong model output is a valid rejection but not a
+pass. If a real endpoint is unavailable, M3 remains honestly incomplete; a
+stub or wire fixture cannot replace this gate.
+
+### E4 — Run the five-lane discovery pass
+
+Use the E0 ledger to run one real discovery attempt in each acceptance lane:
+
+1. rheology, DMA, or torque;
+2. spectroscopy, scattering, or chromatography;
+3. thermal analysis;
+4. mechanical, categorical, or swelling;
+5. scalar-field, review/annotation, or multi-panel composition.
+
+A natural session is owner-operated real-project work for a declared figure
+outcome. It opens through a recorded entry route and attempts to end with an
+exact-current saved and reopened VSZ, final-revision QA, a PDF/TIFF pair,
+complete delivery, and an explicit owner outcome.
+
+Discovery attempts find gaps; they never count toward the final frozen-build
+fifteen. Automated probes, synthetic fixtures, injected providers, duplicated
+artifact trees, agent-only visual inspection, and repeated reopening of an
+unchanged project are not real sessions.
+
+### E5 — Close evidence-backed gaps and freeze the release candidate
+
+Classify every discovered failure, silent error, workaround, and fallback:
+
+- **P0 authority/integrity:** raw mutation, lost edits, incorrect lineage,
+  broken rollback, stale export/QA, false Ready, or final-artifact mismatch.
+  Stop confirmation work and fix immediately.
+- **P1 ordinary/high-frequency:** a common task requires Veusz MainWindow,
+  repeated chat coordinates, or a hidden workaround. Add the smallest typed
+  Canvas capability and regression evidence.
+- **P2 low-frequency/unsupported:** keep the explicit Advanced Editor path and
+  document the fallback; do not clone Veusz's general property editor.
+- **P3 distribution/collaboration:** defer beyond M6.
+
+Every P0/P1 fix lands in shared code, adds a focused regression gate, and
+repeats the affected real lifecycle. Process every naturally eligible M5
+candidate by explicit owner decision before freeze; approval still requires
+an ordinary code change and applicable regression/real-data recertification.
+No unrelated feature is added merely because a session exposed an interesting
+possibility.
+
+Freeze one exact candidate commit, wheel/package hash, Veusz/Qt runtime,
+validated-envelope registry, and session-ledger schema after doctor, runtime
+smoke, affected probes, authorized-real-data lifecycles, and package import
+pass. This isolated candidate already contains the final `studio`-to-Canvas
+default routing, removal of obsolete normal-path UI/documentation, and the
+Advanced Editor escape hatch; it is exercised without changing the separate
+normal workspace or installed release. The final fifteen sessions all qualify
+this same candidate. Any runtime, rule, policy, adapter, renderer, entrypoint,
+or cleanup implementation change creates a new candidate and restarts the
+formal count.
+
+### E6 — Qualify the frozen personal daily product
+
+Accumulate at least fifteen qualifying completions on the frozen candidate,
+with at least three in each of the five acceptance lanes. The earlier M2
+ten-session requirement is an intermediate evidence check and a subset of
+these fifteen; it never authorizes the default-entrypoint switch.
+
+A qualifying completion must:
+
+- be performed by the owner on a real project for a declared figure outcome;
+- have a unique session identity and source/project evidence;
+- begin from a recorded entry route and end with an exact-current saved VSZ,
+  QA-checked PDF/TIFF pair, and complete delivery;
+- report every accepted manual or AI operation and whether it survived
+  save/reopen;
+- record each Advanced Editor use with the exact missing capability;
+- receive an explicit owner outcome of `pass`, `needs_fix`, or `abandoned`.
+
+Automated probes, synthetic fixtures, injected providers, copied outputs,
+agent-only review, failed/abandoned attempts, and sessions that require Veusz
+MainWindow for an ordinary task do not count. Restarting the same unchanged
+project is not a new session; a repeated source can count only for a distinct
+natural task and independently verified operation sequence. One session can
+satisfy M2, M3, M4, and M6 evidence simultaneously, but it is counted once.
+
+The qualification dossier must prove:
+
+- zero accepted edit loss;
+- every counted AI batch was committed, not undone or rolled back, and bound
+  to the saved/reopened final revision;
+- zero silent raw-data or exact-current-VSZ replacement;
+- no ordinary/high-frequency task requires Veusz MainWindow;
+- all fallbacks are explicit and only P2;
+- covered deterministic runs need no provider or routine AI image inspection;
+- accepted AI output passes the same save/reopen, QA, export, and delivery
+  gates as manual output;
+- composition remains native and physically correct;
+- latency, recovery, and failure evidence meet the targets below.
+
+The fifteen-session set also has orthogonal workflow coverage. It includes:
+
+- at least one provider-disabled deterministic end-to-end completion in every
+  acceptance lane;
+- at least three AI-assisted completions across at least three lanes, each with
+  a real committed, not-undone operation;
+- a real confirmed `DataMappingProposal` execution and isolated candidate
+  Canvas handoff;
+- review-sidecar save/reopen and export isolation plus at least one
+  review-to-native annotation promotion;
+- native multi-panel composition create/edit/reopen/export with
+  `composition.json` and source-module authority verified.
+
+These are cross-cutting requirements inside the same fifteen, not additional
+session quotas.
+
+### E7 — User-approved cutover, canary, and cleanup
+
+Present the complete dossier before promoting the new normal entrypoint. Only
+after the owner explicitly approves:
+
+- promote the exact frozen commit/package already tested in E6 to the normal
+  workspace/install without rebuilding or changing source/runtime identity;
+- move Veusz `MainWindow` behind the explicit Advanced Editor/recovery command;
+- retain exact-current VSZ compatibility and the low-frequency escape hatch;
+- rerun doctor, runtime smoke, relevant probes, an installed-wheel check, and
+  at least one representative real end-to-end project through the new default;
+- treat that project as an entrypoint canary; if it fails, restore the prior
+  branch/install pointer immediately without removing Advanced Editor;
+- make no post-canary source or package cleanup change; any further cleanup is
+  a new candidate and must repeat E6.
+
+If the environment cannot promote the identical candidate artifact and instead
+requires an entrypoint code/package change, that change creates a new
+candidate and E6 must be rerun. Approval never turns untested code into the
+normal release.
+
+The product has no independent/AI mode switch. Optional AI appears when the
+owner invokes it; supported deterministic work remains complete without it.
+M7 distribution is not part of this objective.
+
+### Global stop conditions
+
+Stop the active phase and do not claim progress toward cutover when any of the
+following is true:
+
+- exact-current authority, raw immutability, rollback, save/reopen, QA, or
+  delivery cannot be proven;
+- the E0 ledger, frozen build identity, or preregistered task is missing;
+- evidence identity is ambiguous, duplicated, synthetic, or agent-attested in
+  place of a real owner session;
+- a canonical task is outside the typed capability catalog; classify and close
+  the host capability gap before judging model quality;
+- a proposed capability requires arbitrary VSZ text rewriting, unbounded model
+  code execution, or a second rendering authority;
+- a promotion candidate has fewer than three independent real successes,
+  mixes different scientific semantics, contains only synthetic evidence, or
+  lacks explicit owner approval;
+- any code, rule, policy, adapter, renderer, package, or runtime identity
+  changes after the candidate freeze; invalidate the count and freeze again;
+- an ordinary/high-frequency fallback remains open;
+- the production-model gate is being replaced by a stub;
+- fewer than fifteen frozen-candidate sessions pass, any lane has fewer than
+  three, any orthogonal workflow above is missing, or a fallback remains
+  unexplained;
+- the owner has not approved the final default-entrypoint change;
+- the post-switch entrypoint canary fails; restore the prior default.
 
 ## Product and renderer boundary
 
@@ -1024,7 +1314,9 @@ Deliverables:
 Retirement gate:
 
 - at least fifteen real plotting/editing/composition sessions across five
-  experiment or figure families complete through SciPlot Canvas;
+  experiment or figure families complete through SciPlot Canvas, with at
+  least three qualifying completions in each acceptance lane defined in E4,
+  all bound to the same frozen candidate;
 - zero accepted manual or AI edits are lost;
 - no high-frequency or ordinary task requires Veusz MainWindow;
 - every fallback use is recorded with a concrete missing capability;
@@ -1051,23 +1343,21 @@ or deterministic trust.
 ## Critical path
 
 ```text
-M0 characterization
-  -> M1 live canvas
-  -> M2 daily editing and review
-  -> M3 AI operation loop
-  -> M6 daily-use cutover
-
-M2
-  -> M4 composition board
-  -> M6
-
-M0
-  -> M5 deterministic Ready and learning loop
-  -> M6
+M0-M4 engineering baselines + M5 deterministic Ready
+  -> E0 evidence ledger and counting contract
+  -> E1 M5a reviewed promotion mechanism
+  -> E2 M3 canonical-task / typed-capability matrix
+  -> E3 M3 real-endpoint canonical tasks
+  -> E4 M6 five-lane discovery
+  -> E5 P0/P1 closure + natural M5 candidates + candidate freeze
+  -> E6 15 frozen-candidate real sessions
+  -> E7 owner approval + reversible Canvas cutover canary
 ```
 
-Do not begin broad UI polishing, installer work, or new plot-family expansion
-before the current milestone's exit gate passes.
+E1 defines the promotion authority contract; E3/E4 supply real outcomes, and
+E5 closes any naturally eligible candidate before the final build freezes.
+Do not begin broad UI polishing, installer work, or unrelated plot-family
+expansion before the current phase's exit gate passes.
 
 ## Engineering gates for every non-trivial implementation turn
 
