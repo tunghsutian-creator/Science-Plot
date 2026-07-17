@@ -15,9 +15,11 @@ from sciplot_core.canvas.annotations import (
     REVIEW_ANNOTATION_VERSION,
     ReviewAnnotation,
 )
+from sciplot_core.canvas.composition import CompositionProject
 from sciplot_core.canvas.model import CanvasSession
 
 CANVAS_SESSION_FILENAME = "canvas_session.json"
+COMPOSITION_FILENAME = "composition.json"
 REVIEW_ANNOTATIONS_FILENAME = "review_annotations.json"
 OPERATION_JOURNAL_FILENAME = "operation_journal.jsonl"
 
@@ -62,6 +64,17 @@ def load_canvas_session(path: Path) -> CanvasSession:
     if not isinstance(payload, dict):
         raise ValueError("canvas_session.json must contain an object.")
     return CanvasSession.from_dict(payload)
+
+
+def save_composition_project(path: Path, project: CompositionProject) -> Path:
+    return atomic_write_json(path, project.to_dict())
+
+
+def load_composition_project(path: Path) -> CompositionProject:
+    payload = json.loads(path.expanduser().read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("composition.json must contain an object.")
+    return CompositionProject.from_dict(payload)
 
 
 def save_review_annotations(path: Path, annotations: list[ReviewAnnotation]) -> Path:
@@ -160,14 +173,17 @@ def read_operation_journal(path: Path) -> list[dict[str, Any]]:
 
 __all__ = [
     "CANVAS_SESSION_FILENAME",
+    "COMPOSITION_FILENAME",
     "OPERATION_JOURNAL_FILENAME",
     "REVIEW_ANNOTATIONS_FILENAME",
     "append_operation_journal",
     "append_operation_journal_once",
     "atomic_write_json",
     "load_canvas_session",
+    "load_composition_project",
     "load_review_annotations",
     "read_operation_journal",
     "save_canvas_session",
+    "save_composition_project",
     "save_review_annotations",
 ]

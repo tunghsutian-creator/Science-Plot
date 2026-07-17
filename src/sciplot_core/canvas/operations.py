@@ -12,13 +12,29 @@ from sciplot_core.canvas._validation import (
     require_json_bool,
     require_json_int,
     require_json_list,
+    require_json_number,
     require_json_object,
 )
 
 CANVAS_OPERATION_KIND = "sciplot_canvas_operation"
 CANVAS_OPERATION_BATCH_KIND = "sciplot_canvas_operation_batch"
 CANVAS_OPERATION_VERSION = 1
-SUPPORTED_CANVAS_OPERATIONS = {"set_setting", "add_widget"}
+SUPPORTED_COMPOSITION_OPERATIONS = {
+    "composition_place_module",
+    "composition_reorder_modules",
+    "composition_set_canvas_height",
+    "composition_set_layout",
+    "composition_set_legend_policy",
+}
+SUPPORTED_CANVAS_OPERATIONS = {
+    "set_setting",
+    "add_widget",
+    "composition_place_module",
+    "composition_reorder_modules",
+    "composition_set_canvas_height",
+    "composition_set_layout",
+    "composition_set_legend_policy",
+}
 SUPPORTED_NATIVE_ANNOTATION_WIDGETS = {"label", "line", "rect", "ellipse"}
 NATIVE_ANNOTATION_WIDGET_SETTINGS = {
     "label": {
@@ -96,6 +112,27 @@ def _required_text(value: object, label: str) -> str:
     return text
 
 
+def _optional_safe_reference(value: object, label: str) -> str | None:
+    if value is None:
+        return None
+    text = _required_text(value, label)
+    if _SAFE_WIDGET_NAME.fullmatch(text) is None:
+        raise ValueError(f"{label} must be a safe SciPlot identifier.")
+    return text
+
+
+def _composition_module_ids(value: object, label: str) -> list[str]:
+    items = require_json_list(value, label=label)
+    if not 1 <= len(items) <= 12:
+        raise ValueError(f"{label} must contain one to twelve module ids.")
+    normalized = [_required_text(item, f"{label} item") for item in items]
+    if any(_SAFE_WIDGET_NAME.fullmatch(item) is None for item in normalized):
+        raise ValueError(f"{label} entries must be safe SciPlot identifiers.")
+    if len(set(normalized)) != len(normalized):
+        raise ValueError(f"{label} entries must be unique.")
+    return normalized
+
+
 def _validate_json_value(value: Any, *, path: str = "value") -> None:
     if value is None or isinstance(value, str | bool | int):
         return
@@ -170,17 +207,13 @@ class CanvasOperation:
                 )
             name = _required_text(self.arguments.get("name"), "name")
             if _SAFE_WIDGET_NAME.fullmatch(name) is None:
-                raise ValueError(
-                    "add_widget name must be a safe renderer object name."
-                )
+                raise ValueError("add_widget name must be a safe renderer object name.")
             index = require_json_int(
                 self.arguments.get("index", -1),
                 label="add_widget index",
             )
             if index not in {-1, 0}:
-                raise ValueError(
-                    "add_widget index must be -1 (append) or 0 (front)."
-                )
+                raise ValueError("add_widget index must be -1 (append) or 0 (front).")
             settings = require_json_object(
                 self.arguments.get("settings"),
                 label="add_widget settings",
@@ -195,6 +228,118 @@ class CanvasOperation:
                 )
             if not settings:
                 raise ValueError("add_widget requires bounded initial settings.")
+        elif self.operation_type == "composition_place_module":
+            unexpected = set(self.arguments) - {
+                "module_id",
+                "slot_ref",
+                "expected_slot_ref",
+            }
+            if unexpected:
+                raise ValueError(
+                    "composition_place_module contains unsupported arguments: "
+                    f"{sorted(unexpected)!r}"
+                )
+            if (
+                "slot_ref" not in self.arguments
+                or "expected_slot_ref" not in self.arguments
+            ):
+                raise ValueError(
+                    "composition_place_module requires slot_ref and expected_slot_ref."
+                )
+            module_id = _required_text(
+                self.arguments.get("module_id"),
+                "composition module_id",
+            )
+            if _SAFE_WIDGET_NAME.fullmatch(module_id) is None:
+                raise ValueError("composition module_id must be a safe identifier.")
+            _optional_safe_reference(
+                self.arguments.get("slot_ref"),
+                "composition slot_ref",
+            )
+            _optional_safe_reference(
+                self.arguments.get("expected_slot_ref"),
+                "composition expected_slot_ref",
+            )
+        elif self.operation_type == "composition_reorder_modules":
+            unexpected = set(self.arguments) - {
+                "ordered_module_ids",
+                "expected_ordered_module_ids",
+            }
+            if unexpected:
+                raise ValueError(
+                    "composition_reorder_modules contains unsupported arguments: "
+                    f"{sorted(unexpected)!r}"
+                )
+            ordered = _composition_module_ids(
+                self.arguments.get("ordered_module_ids"),
+                "ordered_module_ids",
+            )
+            expected = _composition_module_ids(
+                self.arguments.get("expected_ordered_module_ids"),
+                "expected_ordered_module_ids",
+            )
+            if set(ordered) != set(expected):
+                raise ValueError(
+                    "Composition reorder current and expected ids must match."
+                )
+        elif self.operation_type == "composition_set_layout":
+            unexpected = set(self.arguments) - {
+                "layout_id",
+                "expected_layout_id",
+            }
+            if unexpected:
+                raise ValueError(
+                    "composition_set_layout contains unsupported arguments: "
+                    f"{sorted(unexpected)!r}"
+                )
+            _required_text(self.arguments.get("layout_id"), "layout_id")
+            _required_text(
+                self.arguments.get("expected_layout_id"),
+                "expected_layout_id",
+            )
+        elif self.operation_type == "composition_set_canvas_height":
+            unexpected = set(self.arguments) - {
+                "height_mm",
+                "expected_height_mm",
+            }
+            if unexpected:
+                raise ValueError(
+                    "composition_set_canvas_height contains unsupported arguments: "
+                    f"{sorted(unexpected)!r}"
+                )
+            height = require_json_number(
+                self.arguments.get("height_mm"),
+                label="height_mm",
+            )
+            expected_height = require_json_number(
+                self.arguments.get("expected_height_mm"),
+                label="expected_height_mm",
+            )
+            if not 20.0 <= height <= 170.0:
+                raise ValueError("height_mm must be between 20 and 170 mm.")
+            if not 20.0 <= expected_height <= 170.0:
+                raise ValueError("expected_height_mm must be between 20 and 170 mm.")
+        elif self.operation_type == "composition_set_legend_policy":
+            unexpected = set(self.arguments) - {
+                "legend_policy",
+                "expected_legend_policy",
+            }
+            if unexpected:
+                raise ValueError(
+                    "composition_set_legend_policy contains unsupported arguments: "
+                    f"{sorted(unexpected)!r}"
+                )
+            allowed = {"auto", "shared_when_equivalent", "per_panel"}
+            policy = _required_text(
+                self.arguments.get("legend_policy"),
+                "legend_policy",
+            )
+            expected_policy = _required_text(
+                self.arguments.get("expected_legend_policy"),
+                "expected_legend_policy",
+            )
+            if policy not in allowed or expected_policy not in allowed:
+                raise ValueError(f"Legend policy must be one of {sorted(allowed)!r}.")
 
     @classmethod
     def set_setting(
@@ -236,6 +381,93 @@ class CanvasOperation:
                 "name": name,
                 "index": index,
                 "settings": dict(settings),
+            },
+        )
+
+    @classmethod
+    def place_composition_module(
+        cls,
+        *,
+        variant_id: str,
+        module_id: str,
+        slot_ref: str | None,
+        expected_slot_ref: str | None,
+    ) -> CanvasOperation:
+        return cls(
+            operation_type="composition_place_module",
+            target_id=variant_id,
+            arguments={
+                "module_id": module_id,
+                "slot_ref": slot_ref,
+                "expected_slot_ref": expected_slot_ref,
+            },
+        )
+
+    @classmethod
+    def reorder_composition_modules(
+        cls,
+        *,
+        variant_id: str,
+        ordered_module_ids: list[str] | tuple[str, ...],
+        expected_ordered_module_ids: list[str] | tuple[str, ...],
+    ) -> CanvasOperation:
+        return cls(
+            operation_type="composition_reorder_modules",
+            target_id=variant_id,
+            arguments={
+                "ordered_module_ids": list(ordered_module_ids),
+                "expected_ordered_module_ids": list(expected_ordered_module_ids),
+            },
+        )
+
+    @classmethod
+    def set_composition_layout(
+        cls,
+        *,
+        variant_id: str,
+        layout_id: str,
+        expected_layout_id: str,
+    ) -> CanvasOperation:
+        return cls(
+            operation_type="composition_set_layout",
+            target_id=variant_id,
+            arguments={
+                "layout_id": layout_id,
+                "expected_layout_id": expected_layout_id,
+            },
+        )
+
+    @classmethod
+    def set_composition_canvas_height(
+        cls,
+        *,
+        variant_id: str,
+        height_mm: float,
+        expected_height_mm: float,
+    ) -> CanvasOperation:
+        return cls(
+            operation_type="composition_set_canvas_height",
+            target_id=variant_id,
+            arguments={
+                "height_mm": height_mm,
+                "expected_height_mm": expected_height_mm,
+            },
+        )
+
+    @classmethod
+    def set_composition_legend_policy(
+        cls,
+        *,
+        variant_id: str,
+        legend_policy: str,
+        expected_legend_policy: str,
+    ) -> CanvasOperation:
+        return cls(
+            operation_type="composition_set_legend_policy",
+            target_id=variant_id,
+            arguments={
+                "legend_policy": legend_policy,
+                "expected_legend_policy": expected_legend_policy,
             },
         )
 
@@ -387,5 +619,6 @@ __all__ = [
     "CanvasOperationBatch",
     "NATIVE_ANNOTATION_WIDGET_SETTINGS",
     "SUPPORTED_CANVAS_OPERATIONS",
+    "SUPPORTED_COMPOSITION_OPERATIONS",
     "SUPPORTED_NATIVE_ANNOTATION_WIDGETS",
 ]

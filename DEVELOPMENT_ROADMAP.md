@@ -1,7 +1,9 @@
 # SciPlot AI-Enhanced Canvas Development Roadmap
 
 Status: active product roadmap, 2026-07-17. M0 and M1 are complete; M2 and M3
-are in progress. M2's adaptive visual, contextual editing, and
+are in progress. M4's automated engineering baseline is implemented, while
+mixed-family real-session evidence remains part of the M6 cutover. M2's
+adaptive visual, contextual editing, and
 review/promotion kernels are complete, but its real-session retirement gate
 and default `studio` migration remain. M3's provider-neutral reversible
 `CanvasOperationBatch` transaction kernel and deterministic
@@ -895,6 +897,32 @@ Exit gate:
   pass QA;
 - a user can complete common assembly primarily by dragging and selecting, not
   by describing coordinates in chat.
+
+Current implementation status:
+
+- `composition.json` is a closed exact-mm authority model with immutable source
+  snapshots, independent variants, strict hashes, and five 183 mm layouts;
+- drag/drop, slot swapping, module tray, rulers, keyboard movement,
+  undo/redo, variants, height, legend policy, and live exact-current preview
+  run in a dedicated Qt Composition Board;
+- native compilation uses Veusz dataset copies and graph clone operations to
+  create one page, one grid, and native graph/text objects without raster panel
+  stitching or arbitrary VSZ text rewriting;
+- graph margins, typography, axis/tick strokes, series strokes, and panel
+  labels are normalized and audited; shared-axis and visible-legend
+  eligibility are persisted with honest `not_applicable` handling;
+- external/manual composite edits block layout mutation until the user
+  explicitly archives and regenerates; exact-current export never requires
+  regeneration;
+- PDF/TIFF physical pairing, native structure, text preservation, source
+  immutability, delivery parity, variants, real Qt drag, and manual-edit
+  lifecycle pass the source-controlled composition probe `11/11`;
+- runtime smoke version 17 passes `33/33`, including the native composition
+  lifecycle gate.
+
+This establishes the automated M4 engineering baseline. It does not count as
+the owner's mixed-family daily-use acceptance or authorize the M6 Veusz
+frontend retirement decision.
 
 ### M5 — Deterministic Ready and Learning Loop
 

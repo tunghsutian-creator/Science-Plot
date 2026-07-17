@@ -15,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 16
+RUNTIME_SMOKE_VERSION = 17
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -1258,6 +1258,28 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     "summary": canvas_review_probe.get("summary"),
                     "evidence": canvas_review_probe.get("evidence"),
                     "artifacts": canvas_review_probe.get("artifacts"),
+                },
+            )
+        )
+        from sciplot_core.composition_probe import run_composition_probe
+
+        composition_probe = run_composition_probe(
+            [document_path],
+            output_root=run_root / "composition",
+        )
+        checks.append(
+            _check(
+                "native_composition_lifecycle",
+                "The 183 mm Composition Board compiles all five native layouts, "
+                "routes a real drag through typed reversible operations, protects "
+                "manual edits, keeps variants and source VSZ files independent, "
+                "and passes exact-current PDF/TIFF delivery QA",
+                composition_probe.get("status") == "passed",
+                detail={
+                    "status": composition_probe.get("status"),
+                    "check_count": composition_probe.get("check_count"),
+                    "passed_count": composition_probe.get("passed_count"),
+                    "artifacts": composition_probe.get("artifacts"),
                 },
             )
         )

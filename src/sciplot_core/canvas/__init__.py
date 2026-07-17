@@ -12,6 +12,19 @@ from sciplot_core.canvas.assistant_contract import (
     DeclarativeTransformation,
     LegacyDataMappingConfirmation,
 )
+from sciplot_core.canvas.composition import (
+    CompositionLayout,
+    CompositionPlacement,
+    CompositionProject,
+    CompositionSlot,
+    CompositionSourceModule,
+    CompositionVariant,
+    apply_composition_batch,
+    clone_composition_variant,
+    composition_layout,
+    new_composition_project,
+    preview_composition_batch,
+)
 from sciplot_core.canvas.model import (
     CanvasDataPointSelection,
     CanvasObjectRecord,
@@ -44,6 +57,12 @@ __all__ = [
     "CanvasSession",
     "CanvasTransaction",
     "CanvasViewport",
+    "CompositionLayout",
+    "CompositionPlacement",
+    "CompositionProject",
+    "CompositionSlot",
+    "CompositionSourceModule",
+    "CompositionVariant",
     "ASSISTANT_MAX_INTENT_LENGTH",
     "AssistantCancellationToken",
     "AssistantCancelled",
@@ -63,4 +82,9 @@ __all__ = [
     "ObjectIdentityRegistry",
     "ReviewAnnotation",
     "ReviewAnnotationStyle",
+    "apply_composition_batch",
+    "clone_composition_variant",
+    "composition_layout",
+    "new_composition_project",
+    "preview_composition_batch",
 ]

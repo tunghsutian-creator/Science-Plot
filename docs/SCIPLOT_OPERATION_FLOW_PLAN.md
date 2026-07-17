@@ -1,15 +1,16 @@
 # SciPlot Operation Flow and Visual System
 
 Status: active frontend source of truth, 2026-07-17. M1 is complete; M2 and M3
-are in progress. The adaptive visual, contextual editing, and non-exported
+are in progress. M4's automated native-composition engineering baseline is
+implemented. The adaptive visual, contextual editing, and non-exported
 review/promotion kernels are implemented. The first provider-neutral M3
 Assistant transaction kernel and deterministic M3 data-mapping executor are
 also implemented. The provider-neutral request/progress/cancellation boundary,
 production OpenAI Responses adapter, and visible request UI are implemented.
 Confirmed data mappings now execute from the Canvas decision card into a
 separate candidate Canvas. Live-model canonical-task evaluation, real-session
-cutover, native composition, and the default `studio` migration remain active
-work.
+cutover, mixed-family composition acceptance, and the default `studio`
+migration remain active work.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -217,6 +218,28 @@ remains available and the Assistant shows its honest optional state.
 M4 uses a dedicated task workspace on an exact 183 mm canvas. Standalone
 figures are imported as immutable source modules and compiled into native
 Veusz page/grid/graph objects. Final raster-panel stitching is prohibited.
+
+The implemented workspace keeps the same authority split as the main Canvas:
+
+- `composition.json` is the exact figure-level layout model;
+- source VSZ snapshots are immutable and hash verified;
+- users and future AI issue the same typed placement, reorder, layout, height,
+  and legend-policy operations;
+- the left board provides millimetre rulers, drag/swap slots, module tray,
+  keyboard movement, and typed undo/redo;
+- the right side embeds and resize-fits the exact-current native composite;
+- variants own independent VSZ, archive, export, and delivery lifecycles;
+- manual edits block regeneration until explicit archival approval;
+- `Export + QA` delivers the exact-current VSZ, PDF, 300 dpi TIFF, physical
+  QA, source snapshots, manifests, and hashes.
+
+Compilation aligns graph frames, Arial 7 pt typography, axis/tick and series
+strokes, and bold 8 pt panel labels. Shared-axis and visible-legend
+eligibility are recorded; absent legends are `not_applicable`, not falsely
+reported as shared. The source-controlled M4 probe passes `11/11`. This is
+automated contract evidence, not the owner's mixed-family daily-use
+acceptance. Runtime smoke version 17 passes `33/33`, including this native
+composition lifecycle gate.
 
 ### Export
 

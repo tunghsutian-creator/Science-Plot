@@ -87,20 +87,32 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    inspect_parser = subparsers.add_parser("inspect", help="Inspect a source and return ranked plot recommendations.")
+    inspect_parser = subparsers.add_parser(
+        "inspect", help="Inspect a source and return ranked plot recommendations."
+    )
     inspect_parser.add_argument("input", type=Path)
     inspect_parser.add_argument("--sheet", default="0")
-    inspect_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    inspect_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
 
-    doctor_parser = subparsers.add_parser("doctor", help="Check whether this SciPlot install is ready for alpha use.")
-    doctor_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="Check whether this SciPlot install is ready for alpha use."
+    )
+    doctor_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
 
     smoke_parser = subparsers.add_parser(
         "smoke",
         help="Run the fixture-free Studio lifecycle and delivery change gate.",
     )
-    smoke_parser.add_argument("--out", type=Path, default=Path(".tmp_verify") / "runtime_smoke")
-    smoke_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    smoke_parser.add_argument(
+        "--out", type=Path, default=Path(".tmp_verify") / "runtime_smoke"
+    )
+    smoke_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
 
     canvas_parser = subparsers.add_parser(
         "canvas",
@@ -139,6 +151,44 @@ def _build_parser() -> argparse.ArgumentParser:
         help=argparse.SUPPRESS,
     )
 
+    compose_parser = subparsers.add_parser(
+        "compose",
+        help="Arrange standalone VSZ figures on a native 183 mm composition board.",
+    )
+    compose_parser.add_argument(
+        "targets",
+        type=Path,
+        nargs="+",
+        help="An existing composition project, or one or more source VSZ files.",
+    )
+    compose_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path("outputs") / "composition_projects",
+        help="Parent directory for a new composition project.",
+    )
+    compose_parser.add_argument("--name", help="Composition project name.")
+    compose_parser.add_argument(
+        "--layout",
+        help="Exact layout id; defaults from the number of source modules.",
+    )
+    compose_parser.add_argument(
+        "--height-mm",
+        type=float,
+        default=55.0,
+        help="Exact composition page height in millimetres.",
+    )
+    compose_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Resolve or create the project without opening the GUI.",
+    )
+    compose_parser.add_argument(
+        "--export",
+        action="store_true",
+        help="Compile when needed, then export and verify exact-current delivery.",
+    )
+
     canvas_probe_parser = subparsers.add_parser("canvas-probe", help=argparse.SUPPRESS)
     canvas_probe_parser.add_argument("document", type=Path)
     canvas_probe_parser.add_argument(
@@ -147,6 +197,21 @@ def _build_parser() -> argparse.ArgumentParser:
         default=Path(".tmp_verify") / "canvas_characterization",
     )
     canvas_probe_parser.add_argument("--json", action="store_true")
+    composition_probe_parser = subparsers.add_parser(
+        "composition-probe",
+        help=argparse.SUPPRESS,
+    )
+    composition_probe_parser.add_argument(
+        "documents",
+        type=Path,
+        nargs="+",
+    )
+    composition_probe_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(".tmp_verify") / "composition_probe",
+    )
+    composition_probe_parser.add_argument("--json", action="store_true")
     canvas_inspector_probe_parser = subparsers.add_parser(
         "canvas-inspector-probe",
         help=argparse.SUPPRESS,
@@ -228,11 +293,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     data_mapping_probe_parser.add_argument("--json", action="store_true")
 
-    render_parser = subparsers.add_parser("render", help="Render a source through the SciPlot renderer.")
+    render_parser = subparsers.add_parser(
+        "render", help="Render a source through the SciPlot renderer."
+    )
     render_parser.add_argument("input", type=Path)
-    render_parser.add_argument("--template", help="Template id. Optional when --auto is given.")
+    render_parser.add_argument(
+        "--template", help="Template id. Optional when --auto is given."
+    )
     render_parser.add_argument("--sheet", default="0")
-    render_parser.add_argument("--options", help="JSON object or @path JSON file with render options.")
+    render_parser.add_argument(
+        "--options", help="JSON object or @path JSON file with render options."
+    )
     render_parser.add_argument(
         "--auto",
         action="store_true",
@@ -241,10 +312,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     render_parser.add_argument("--out", type=Path, required=True)
 
-    recipe_parser = subparsers.add_parser("recipe", help="Run an experiment-family recipe.")
+    recipe_parser = subparsers.add_parser(
+        "recipe", help="Run an experiment-family recipe."
+    )
     recipe_parser.add_argument("name")
     recipe_parser.add_argument("input", type=Path)
-    recipe_parser.add_argument("--options", help="JSON object or @path JSON file with recipe/render options.")
+    recipe_parser.add_argument(
+        "--options", help="JSON object or @path JSON file with recipe/render options."
+    )
     recipe_parser.add_argument("--out", type=Path, required=True)
 
     run_parser = subparsers.add_parser("run", help="Run a plot_request.json workflow.")
@@ -255,84 +330,154 @@ def _build_parser() -> argparse.ArgumentParser:
         help=argparse.SUPPRESS,
     )
     one_step_parser.add_argument("input", type=Path)
-    one_step_parser.add_argument("--out", type=Path, default=Path("outputs") / "one_step_projects")
-    one_step_parser.add_argument("--name", help="Project name. Defaults to the input file or folder name.")
-    one_step_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    one_step_parser.add_argument(
+        "--out", type=Path, default=Path("outputs") / "one_step_projects"
+    )
+    one_step_parser.add_argument(
+        "--name", help="Project name. Defaults to the input file or folder name."
+    )
+    one_step_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
 
     autoplot_parser = subparsers.add_parser(
         "autoplot",
         help="One-command local plotting entrypoint with stable delivery and optional assistant handoff policy.",
     )
     autoplot_parser.add_argument("input", type=Path)
-    autoplot_parser.add_argument("--out", type=Path, default=Path("outputs") / "autoplot_projects")
-    autoplot_parser.add_argument("--name", help="Project name. Defaults to the input file or folder name.")
-    autoplot_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    autoplot_parser.add_argument(
+        "--out", type=Path, default=Path("outputs") / "autoplot_projects"
+    )
+    autoplot_parser.add_argument(
+        "--name", help="Project name. Defaults to the input file or folder name."
+    )
+    autoplot_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
 
-    acceptance_parser = subparsers.add_parser("acceptance", help="Run real-data acceptance suites.")
-    acceptance_subparsers = acceptance_parser.add_subparsers(dest="acceptance_command", required=True)
+    acceptance_parser = subparsers.add_parser(
+        "acceptance", help="Run real-data acceptance suites."
+    )
+    acceptance_subparsers = acceptance_parser.add_subparsers(
+        dest="acceptance_command", required=True
+    )
     acceptance_3dpa_parser = acceptance_subparsers.add_parser(
         "3dpa",
         help="Run the representative 3D PA real-data acceptance suite.",
     )
     acceptance_3dpa_parser.add_argument("input", type=Path)
-    acceptance_3dpa_parser.add_argument("--out", type=Path, default=Path("outputs") / "acceptance")
-    acceptance_3dpa_parser.add_argument("--name", default="3dpa_acceptance", help="Acceptance project name.")
+    acceptance_3dpa_parser.add_argument(
+        "--out", type=Path, default=Path("outputs") / "acceptance"
+    )
+    acceptance_3dpa_parser.add_argument(
+        "--name", default="3dpa_acceptance", help="Acceptance project name."
+    )
     acceptance_3dpa_parser.add_argument("--representative-count", type=int, default=6)
     acceptance_3dpa_parser.add_argument("--dense-series", type=int, default=44)
-    acceptance_3dpa_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    acceptance_3dpa_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
     acceptance_rules_parser = acceptance_subparsers.add_parser(
         "rules",
         help="Run the ready-rule Studio lifecycle acceptance matrix.",
     )
-    acceptance_rules_parser.add_argument("--out", type=Path, default=Path("outputs") / "acceptance")
-    acceptance_rules_parser.add_argument("--name", default="ready_rule_acceptance", help="Acceptance project name.")
+    acceptance_rules_parser.add_argument(
+        "--out", type=Path, default=Path("outputs") / "acceptance"
+    )
+    acceptance_rules_parser.add_argument(
+        "--name", default="ready_rule_acceptance", help="Acceptance project name."
+    )
     acceptance_rules_parser.add_argument(
         "--rule",
         dest="rule_ids",
         action="append",
         help="Run one ready rule; repeat for a batch. Defaults to all ready rules.",
     )
-    acceptance_rules_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    acceptance_rules_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
 
     quick_parser = subparsers.add_parser("quick", help=argparse.SUPPRESS)
     quick_parser.add_argument("input", type=Path)
     quick_parser.add_argument("--host", default="127.0.0.1")
-    quick_parser.add_argument("--port", type=int, default=0, help="Use 0 to choose a free local port.")
-    quick_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
-    quick_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
+    quick_parser.add_argument(
+        "--port", type=int, default=0, help="Use 0 to choose a free local port."
+    )
+    quick_parser.add_argument(
+        "--out", type=Path, default=Path("outputs") / "intake_projects"
+    )
+    quick_parser.add_argument(
+        "--no-open", action="store_true", help="Do not open a browser automatically."
+    )
 
-    curate_parser = subparsers.add_parser("curate", help="Create a reviewable curation project.")
-    curate_subparsers = curate_parser.add_subparsers(dest="curate_command", required=True)
-    curate_torque_parser = curate_subparsers.add_parser("torque", help="Curate torque event segments.")
+    curate_parser = subparsers.add_parser(
+        "curate", help="Create a reviewable curation project."
+    )
+    curate_subparsers = curate_parser.add_subparsers(
+        dest="curate_command", required=True
+    )
+    curate_torque_parser = curate_subparsers.add_parser(
+        "torque", help="Curate torque event segments."
+    )
     curate_torque_parser.add_argument("input", type=Path)
-    curate_torque_parser.add_argument("--name", required=True, help="User-facing project name.")
-    curate_torque_parser.add_argument("--out", type=Path, default=Path("outputs") / "curation_projects")
-    curate_torque_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
-    curate_torque_parser.add_argument("--open", action="store_true", help="Open the review HTML after export.")
+    curate_torque_parser.add_argument(
+        "--name", required=True, help="User-facing project name."
+    )
+    curate_torque_parser.add_argument(
+        "--out", type=Path, default=Path("outputs") / "curation_projects"
+    )
+    curate_torque_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
+    curate_torque_parser.add_argument(
+        "--open", action="store_true", help="Open the review HTML after export."
+    )
 
     prepare_parser = subparsers.add_parser("prepare", help=argparse.SUPPRESS)
     prepare_parser.add_argument("input", type=Path)
-    prepare_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
-    prepare_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    prepare_parser.add_argument(
+        "--out", type=Path, default=Path("outputs") / "intake_projects"
+    )
+    prepare_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
 
-    rules_parser = subparsers.add_parser("rules", help="Inspect SciPlot material semantic rules.")
+    rules_parser = subparsers.add_parser(
+        "rules", help="Inspect SciPlot material semantic rules."
+    )
     rules_subparsers = rules_parser.add_subparsers(dest="rules_command", required=True)
-    rules_list_parser = rules_subparsers.add_parser("list", help="List material semantic rules.")
-    rules_list_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
-    rules_list_parser.add_argument("--all", action="store_true", help="Include pending internal rules.")
-    rules_show_parser = rules_subparsers.add_parser("show", help="Show one material semantic rule.")
+    rules_list_parser = rules_subparsers.add_parser(
+        "list", help="List material semantic rules."
+    )
+    rules_list_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
+    rules_list_parser.add_argument(
+        "--all", action="store_true", help="Include pending internal rules."
+    )
+    rules_show_parser = rules_subparsers.add_parser(
+        "show", help="Show one material semantic rule."
+    )
     rules_show_parser.add_argument("rule_id")
-    rules_show_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    rules_show_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
 
-    cleanup_parser = subparsers.add_parser("cleanup", help="Create or inspect assisted-cleanup artifacts.")
-    cleanup_subparsers = cleanup_parser.add_subparsers(dest="cleanup_command", required=True)
+    cleanup_parser = subparsers.add_parser(
+        "cleanup", help="Create or inspect assisted-cleanup artifacts."
+    )
+    cleanup_subparsers = cleanup_parser.add_subparsers(
+        dest="cleanup_command", required=True
+    )
     cleanup_result_parser = cleanup_subparsers.add_parser(
         "result",
         help="Write a cleanup_result.json from a Codex/agent assisted cleanup job.",
     )
     cleanup_result_parser.add_argument("output_dir", type=Path)
     cleanup_result_parser.add_argument("--cleaned-data", type=Path, required=True)
-    cleanup_result_parser.add_argument("--mapping", help="JSON object or @path JSON file with column/sample mapping.")
+    cleanup_result_parser.add_argument(
+        "--mapping", help="JSON object or @path JSON file with column/sample mapping."
+    )
     cleanup_result_parser.add_argument("--confidence", type=float, required=True)
     cleanup_result_parser.add_argument(
         "--confirm",
@@ -350,14 +495,20 @@ def _build_parser() -> argparse.ArgumentParser:
         default="manual",
         help="Cleanup provider label, e.g. manual or codex.",
     )
-    cleanup_result_parser.add_argument("--notes", default="", help="Short cleanup note.")
-    cleanup_result_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    cleanup_result_parser.add_argument(
+        "--notes", default="", help="Short cleanup note."
+    )
+    cleanup_result_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
     cleanup_show_parser = cleanup_subparsers.add_parser(
         "show",
         help="Show cleanup_result.json from a directory or file.",
     )
     cleanup_show_parser.add_argument("target", type=Path)
-    cleanup_show_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    cleanup_show_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
 
     mapping_parser = subparsers.add_parser(
         "mapping",
@@ -408,7 +559,9 @@ def _build_parser() -> argparse.ArgumentParser:
     mapping_show_parser.add_argument("target", type=Path)
     mapping_show_parser.add_argument("--json", action="store_true")
 
-    batch_parser = subparsers.add_parser("batch", help="Run a batch over a data folder.")
+    batch_parser = subparsers.add_parser(
+        "batch", help="Run a batch over a data folder."
+    )
     batch_parser.add_argument("input_dir", type=Path)
     batch_parser.add_argument("--out", type=Path, required=True)
     batch_parser.add_argument("--mode", choices=["smoke", "all"], default="smoke")
@@ -419,40 +572,80 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Allow-list tensile data root. Repeat to allow multiple tensile folders.",
     )
 
-    app_parser = subparsers.add_parser("app", help="Open the local SciPlot Web app for manual plotting.")
+    app_parser = subparsers.add_parser(
+        "app", help="Open the local SciPlot Web app for manual plotting."
+    )
     app_parser.add_argument("input", nargs="?", type=Path)
-    app_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
-    app_parser.add_argument("--all", action="store_true", help="Include pending internal catalog entries.")
-    app_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    app_parser.add_argument(
+        "--catalog", action="store_true", help="Print the intake data type catalog."
+    )
+    app_parser.add_argument(
+        "--all", action="store_true", help="Include pending internal catalog entries."
+    )
+    app_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
     app_parser.add_argument("--host", default="127.0.0.1")
     app_parser.add_argument("--port", type=int, default=8765)
-    app_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
-    app_parser.add_argument("--project", help="Open an existing intake project under --out.")
-    app_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
+    app_parser.add_argument(
+        "--out", type=Path, default=Path("outputs") / "intake_projects"
+    )
+    app_parser.add_argument(
+        "--project", help="Open an existing intake project under --out."
+    )
+    app_parser.add_argument(
+        "--no-open", action="store_true", help="Do not open a browser automatically."
+    )
 
     intake_parser = subparsers.add_parser("intake", help=argparse.SUPPRESS)
     intake_parser.add_argument("input", nargs="?", type=Path)
-    intake_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
-    intake_parser.add_argument("--all", action="store_true", help="Include pending internal catalog entries.")
-    intake_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    intake_parser.add_argument(
+        "--catalog", action="store_true", help="Print the intake data type catalog."
+    )
+    intake_parser.add_argument(
+        "--all", action="store_true", help="Include pending internal catalog entries."
+    )
+    intake_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
     intake_parser.add_argument("--host", default="127.0.0.1")
     intake_parser.add_argument("--port", type=int, default=8765)
-    intake_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
-    intake_parser.add_argument("--project", help="Open an existing intake project under --out.")
-    intake_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
+    intake_parser.add_argument(
+        "--out", type=Path, default=Path("outputs") / "intake_projects"
+    )
+    intake_parser.add_argument(
+        "--project", help="Open an existing intake project under --out."
+    )
+    intake_parser.add_argument(
+        "--no-open", action="store_true", help="Do not open a browser automatically."
+    )
 
     workbench_parser = subparsers.add_parser("workbench", help=argparse.SUPPRESS)
     workbench_parser.add_argument("input", nargs="?", type=Path)
-    workbench_parser.add_argument("--catalog", action="store_true", help="Print the intake data type catalog.")
-    workbench_parser.add_argument("--all", action="store_true", help="Include pending internal catalog entries.")
-    workbench_parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    workbench_parser.add_argument(
+        "--catalog", action="store_true", help="Print the intake data type catalog."
+    )
+    workbench_parser.add_argument(
+        "--all", action="store_true", help="Include pending internal catalog entries."
+    )
+    workbench_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
     workbench_parser.add_argument("--host", default="127.0.0.1")
     workbench_parser.add_argument("--port", type=int, default=8765)
-    workbench_parser.add_argument("--out", type=Path, default=Path("outputs") / "intake_projects")
-    workbench_parser.add_argument("--project", help="Open an existing intake project under --out.")
-    workbench_parser.add_argument("--no-open", action="store_true", help="Do not open a browser automatically.")
+    workbench_parser.add_argument(
+        "--out", type=Path, default=Path("outputs") / "intake_projects"
+    )
+    workbench_parser.add_argument(
+        "--project", help="Open an existing intake project under --out."
+    )
+    workbench_parser.add_argument(
+        "--no-open", action="store_true", help="Do not open a browser automatically."
+    )
 
-    studio_parser = subparsers.add_parser("studio", help="Open the GPL SciPlot Studio desktop editor.")
+    studio_parser = subparsers.add_parser(
+        "studio", help="Open the GPL SciPlot Studio desktop editor."
+    )
     studio_parser.add_argument(
         "target",
         nargs="?",
@@ -472,15 +665,24 @@ def _build_parser() -> argparse.ArgumentParser:
         "--rule",
         help="Explicit ready material rule selected by the user or Luna/Codex; bypass automatic recognition.",
     )
-    studio_parser.add_argument("--template", help="Preselect the SciPlot plot template, e.g. curve or stacked_curve.")
-    studio_parser.add_argument("--name", help="Preselect the SciPlot project/figure name.")
-    studio_parser.add_argument("--new", action="store_true", help="Open an empty embedded Veusz Studio window.")
+    studio_parser.add_argument(
+        "--template",
+        help="Preselect the SciPlot plot template, e.g. curve or stacked_curve.",
+    )
+    studio_parser.add_argument(
+        "--name", help="Preselect the SciPlot project/figure name."
+    )
+    studio_parser.add_argument(
+        "--new", action="store_true", help="Open an empty embedded Veusz Studio window."
+    )
     studio_parser.add_argument(
         "--advanced-editor",
         action="store_true",
         help="Open the full upstream Veusz editor for a generated .vsz document.",
     )
-    studio_parser.add_argument("--export", help="Comma-separated export formats, e.g. pdf,tiff_300.")
+    studio_parser.add_argument(
+        "--export", help="Comma-separated export formats, e.g. pdf,tiff_300."
+    )
     studio_parser.add_argument(
         "--json",
         action="store_true",
@@ -520,15 +722,25 @@ def _build_parser() -> argparse.ArgumentParser:
         "publication",
         help="Inspect SciPlot publication profiles and 183 mm composite layouts.",
     )
-    publication_subparsers = publication_parser.add_subparsers(dest="publication_command", required=True)
-    publication_profiles_parser = publication_subparsers.add_parser("profiles", help="List publication profiles.")
+    publication_subparsers = publication_parser.add_subparsers(
+        dest="publication_command", required=True
+    )
+    publication_profiles_parser = publication_subparsers.add_parser(
+        "profiles", help="List publication profiles."
+    )
     publication_profiles_parser.add_argument("--json", action="store_true")
-    publication_profile_parser = publication_subparsers.add_parser("profile", help="Show one publication profile.")
+    publication_profile_parser = publication_subparsers.add_parser(
+        "profile", help="Show one publication profile."
+    )
     publication_profile_parser.add_argument("profile_id")
     publication_profile_parser.add_argument("--json", action="store_true")
-    publication_layouts_parser = publication_subparsers.add_parser("layouts", help="List composite layouts.")
+    publication_layouts_parser = publication_subparsers.add_parser(
+        "layouts", help="List composite layouts."
+    )
     publication_layouts_parser.add_argument("--json", action="store_true")
-    publication_layout_parser = publication_subparsers.add_parser("layout", help="Show one composite layout.")
+    publication_layout_parser = publication_subparsers.add_parser(
+        "layout", help="Show one composite layout."
+    )
     publication_layout_parser.add_argument("layout_id")
     publication_layout_parser.add_argument("--height-mm", type=float, default=55.0)
     publication_layout_parser.add_argument("--json", action="store_true")
@@ -540,15 +752,20 @@ def _build_parser() -> argparse.ArgumentParser:
         "intake",
         "workbench",
         "canvas-probe",
+        "composition-probe",
         "canvas-assistant-probe",
         "openai-provider-probe",
         "canvas-openai-provider-probe",
         "data-mapping-probe",
     }
     subparsers._choices_actions[:] = [  # type: ignore[attr-defined]
-        action for action in subparsers._choices_actions if action.dest not in hidden_compatibility_commands
+        action
+        for action in subparsers._choices_actions
+        if action.dest not in hidden_compatibility_commands
     ]
-    public_commands = [name for name in subparsers.choices if name not in hidden_compatibility_commands]
+    public_commands = [
+        name for name in subparsers.choices if name not in hidden_compatibility_commands
+    ]
     subparsers.metavar = "{" + ",".join(public_commands) + "}"
 
     return parser
@@ -561,11 +778,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "inspect":
             from sciplot_core.render import inspect_payload
 
-            payload = inspect_payload(_resolve_input(args.input), sheet=_coerce_sheet(args.sheet))
+            payload = inspect_payload(
+                _resolve_input(args.input), sheet=_coerce_sheet(args.sheet)
+            )
             if args.json:
                 _print_json(payload)
             else:
-                print(payload.get("recommendation_summary", "No recommendation summary available."))
+                print(
+                    payload.get(
+                        "recommendation_summary", "No recommendation summary available."
+                    )
+                )
             return 0
         if args.command == "doctor":
             from sciplot_core.doctor import doctor_payload
@@ -582,7 +805,9 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 for check in payload["checks"]:
                     marker = "ok" if check["status"] == "passed" else "failed"
-                    print(f"{marker}  {check['label']}: {check.get('detail') or check['status']}")
+                    print(
+                        f"{marker}  {check['label']}: {check.get('detail') or check['status']}"
+                    )
             return 0 if payload["status"] == "ready" else 1
         if args.command == "smoke":
             from sciplot_core.studio import maybe_reexec_with_qt_runtime
@@ -641,6 +866,94 @@ def main(argv: list[str] | None = None) -> int:
                 template=args.template,
                 project_name=args.name,
             )
+        if args.command == "compose":
+            targets = [
+                _resolve_input(target, kind="composition target")
+                for target in args.targets
+            ]
+            if args.export:
+                os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+                from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+                original_argv = list(sys.argv[1:] if argv is None else argv)
+                maybe_reexec_with_qt_runtime(original_argv)
+                from sciplot_gui.app import (
+                    resolve_composition_application_workspace,
+                )
+
+                workspace = resolve_composition_application_workspace(
+                    targets,
+                    output_root=args.out,
+                    name=args.name,
+                    layout_id=args.layout,
+                    canvas_height_mm=args.height_mm,
+                )
+                project = workspace.load()
+                variant = project.active_variant
+                document = workspace.variant_document_path(variant.variant_id)
+                compile_result = None
+                if variant.compiled_document_ref is None or not document.is_file():
+                    from sciplot_gui.composition_compiler import (
+                        compile_native_composition,
+                    )
+
+                    compile_result = compile_native_composition(workspace)
+                from sciplot_core.composition_delivery import (
+                    export_composition_delivery,
+                )
+
+                delivery = export_composition_delivery(workspace)
+                payload = {
+                    "kind": "sciplot_composition_export",
+                    "version": 1,
+                    "status": delivery.get("status"),
+                    "ready_to_use": delivery.get("ready_to_use") is True,
+                    "workspace": str(workspace.root),
+                    "composition": str(workspace.composition_path),
+                    "compile": compile_result,
+                    "delivery": delivery,
+                }
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(f"SciPlot Composition export: {payload['status']}")
+                    print(delivery.get("delivery_manifest"))
+                return 0 if payload["ready_to_use"] else 1
+            if args.json:
+                from sciplot_gui.app import (
+                    resolve_composition_application_workspace,
+                )
+
+                workspace = resolve_composition_application_workspace(
+                    targets,
+                    output_root=args.out,
+                    name=args.name,
+                    layout_id=args.layout,
+                    canvas_height_mm=args.height_mm,
+                )
+                _print_json(
+                    {
+                        "kind": "sciplot_composition_workspace",
+                        "version": 1,
+                        "root": str(workspace.root),
+                        "composition": str(workspace.composition_path),
+                        "project": workspace.load().to_dict(),
+                    }
+                )
+                return 0
+            from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+            original_argv = list(sys.argv[1:] if argv is None else argv)
+            maybe_reexec_with_qt_runtime(original_argv)
+            from sciplot_gui.app import launch_composition_application
+
+            return launch_composition_application(
+                targets,
+                output_root=args.out,
+                name=args.name,
+                layout_id=args.layout,
+                canvas_height_mm=args.height_mm,
+            )
         if args.command == "canvas-probe":
             from sciplot_core.studio import maybe_reexec_with_qt_runtime
 
@@ -656,6 +969,27 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(f"SciPlot Canvas characterization: {payload['status']}")
+                print(payload["artifacts"]["summary"])
+            return 0 if payload["status"] == "passed" else 1
+        if args.command == "composition-probe":
+            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+            from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+            original_argv = list(sys.argv[1:] if argv is None else argv)
+            maybe_reexec_with_qt_runtime(original_argv)
+            from sciplot_core.composition_probe import run_composition_probe
+
+            payload = run_composition_probe(
+                [
+                    _resolve_input(document, kind="composition probe VSZ")
+                    for document in args.documents
+                ],
+                output_root=args.out,
+            )
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot Composition probe: {payload['status']}")
                 print(payload["artifacts"]["summary"])
             return 0 if payload["status"] == "passed" else 1
         if args.command == "canvas-inspector-probe":
@@ -771,16 +1105,25 @@ def main(argv: list[str] | None = None) -> int:
             template = args.template
             options = _load_options(args.options)
             if args.auto:
-                recommendations = inspect_payload(source, sheet=sheet).get("recommendations") or []
+                recommendations = (
+                    inspect_payload(source, sheet=sheet).get("recommendations") or []
+                )
                 if not recommendations:
-                    raise ValueError("--auto could not recommend a template; pass --template and --options explicitly.")
+                    raise ValueError(
+                        "--auto could not recommend a template; pass --template and --options explicitly."
+                    )
                 top = recommendations[0]
                 template = template or str(top.get("template_id"))
                 defaults = top.get("default_render_overrides")
                 if isinstance(defaults, dict):
-                    options = {**defaults, **options}  # explicit --options take precedence
+                    options = {
+                        **defaults,
+                        **options,
+                    }  # explicit --options take precedence
             if not template:
-                raise ValueError("render needs a template: pass --template NAME, or --auto to choose one.")
+                raise ValueError(
+                    "render needs a template: pass --template NAME, or --auto to choose one."
+                )
             payload = render_to_dir(
                 source,
                 template=template,
@@ -806,7 +1149,11 @@ def main(argv: list[str] | None = None) -> int:
 
             payload = run_request(_resolve_input(args.request, kind="Request file"))
             _print_json(payload)
-            request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
+            request = (
+                payload.get("request")
+                if isinstance(payload.get("request"), dict)
+                else {}
+            )
             qa = payload.get("qa") if isinstance(payload.get("qa"), dict) else {}
             if bool(request.get("publication_strict")) and qa.get("status") != "passed":
                 return 1
@@ -832,7 +1179,12 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(payload["delivery"] or payload["run_output"])
-            return 0 if payload.get("state") == "ready" and payload.get("ready_to_use") is not False else 1
+            return (
+                0
+                if payload.get("state") == "ready"
+                and payload.get("ready_to_use") is not False
+                else 1
+            )
         if args.command == "acceptance":
             if args.acceptance_command == "3dpa":
                 from sciplot_core.acceptance import run_3dpa_acceptance
@@ -897,14 +1249,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "prepare":
             from sciplot_core.intake import prepare_intake_session
 
-            payload = prepare_intake_session(args.input.expanduser(), output_root=args.out.expanduser())
+            payload = prepare_intake_session(
+                args.input.expanduser(), output_root=args.out.expanduser()
+            )
             if args.json:
                 _print_json(payload)
             else:
                 print(payload["session_path"])
             return 0
         if args.command == "rules":
-            from sciplot_core.materials_rules import list_rules_payload, show_rule_payload
+            from sciplot_core.materials_rules import (
+                list_rules_payload,
+                show_rule_payload,
+            )
 
             if args.rules_command == "list":
                 payload = list_rules_payload(include_pending=args.all)
@@ -912,7 +1269,11 @@ def main(argv: list[str] | None = None) -> int:
                     _print_json(payload)
                 else:
                     for item in payload["rules"]:
-                        status = "" if item.get("fixture_status") == "ready" else f" [{item['fixture_status']}]"
+                        status = (
+                            ""
+                            if item.get("fixture_status") == "ready"
+                            else f" [{item['fixture_status']}]"
+                        )
                         print(f"{item['rule_id']}{status}: {item['x']} -> {item['y']}")
                 return 0
             if args.rules_command == "show":
@@ -925,7 +1286,10 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"{payload['rule_id']}: {x_label} -> {y_label}")
                 return 0
         if args.command == "cleanup":
-            from sciplot_core.assisted_cleanup import load_cleanup_result, write_cleanup_result
+            from sciplot_core.assisted_cleanup import (
+                load_cleanup_result,
+                write_cleanup_result,
+            )
 
             if args.cleanup_command == "result":
                 payload = write_cleanup_result(
@@ -962,10 +1326,14 @@ def main(argv: list[str] | None = None) -> int:
                 write_data_mapping_confirmation,
             )
 
-            proposal_path = _resolve_input(
-                args.proposal,
-                kind="DataMappingProposal",
-            ) if hasattr(args, "proposal") else None
+            proposal_path = (
+                _resolve_input(
+                    args.proposal,
+                    kind="DataMappingProposal",
+                )
+                if hasattr(args, "proposal")
+                else None
+            )
             if args.mapping_command == "preview":
                 payload = preview_data_mapping_proposal(
                     proposal_path,
@@ -1120,13 +1488,21 @@ def main(argv: list[str] | None = None) -> int:
             )
 
             if args.publication_command == "profiles":
-                payload = {"kind": "sciplot_publication_profiles", "profiles": list_publication_profiles()}
+                payload = {
+                    "kind": "sciplot_publication_profiles",
+                    "profiles": list_publication_profiles(),
+                }
             elif args.publication_command == "profile":
                 payload = get_publication_profile(args.profile_id)
             elif args.publication_command == "layouts":
-                payload = {"kind": "sciplot_composite_layouts", "layouts": list_composite_layouts()}
+                payload = {
+                    "kind": "sciplot_composite_layouts",
+                    "layouts": list_composite_layouts(),
+                }
             else:
-                payload = build_composite_layout(args.layout_id, canvas_height_mm=args.height_mm)
+                payload = build_composite_layout(
+                    args.layout_id, canvas_height_mm=args.height_mm
+                )
             if args.json:
                 _print_json(payload)
             else:

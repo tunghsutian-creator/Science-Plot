@@ -83,7 +83,9 @@ MAX_LOG_LEGEND_RESERVE_DECADES = 0.70
 MAX_LINEAR_LEGEND_RESERVE_FRACTION = 0.60
 MAX_POINT_LINE_MARKERS_PER_SERIES = 32
 INSIDE_LEGEND_POSITIONS = ("upper_right", "lower_right", "upper_left", "lower_left")
-REMOVED_OUTSIDE_LEGEND_POSITIONS = frozenset({"outside", "outside_right", "right_outside"})
+REMOVED_OUTSIDE_LEGEND_POSITIONS = frozenset(
+    {"outside", "outside_right", "right_outside"}
+)
 DEFAULT_CATEGORICAL_SUMMARY = "median_iqr"
 CATEGORICAL_SUMMARY_OPTIONS = ("median_iqr", "raw_only")
 DEFAULT_RAW_POINT_JITTER_FRACTION = 0.12
@@ -92,6 +94,16 @@ MIN_BOX_REPLICATES = 2
 CATEGORICAL_BOX_FILL_FRACTION = 0.36
 CATEGORICAL_BOX_FILL_TRANSPARENCY = 72
 CATEGORICAL_BOX_LINE_WIDTH_PT = 0.8
+COMPOSITION_NATIVE_STYLE_POLICY: dict[str, str] = {
+    "font_family": "Arial",
+    "font_size": "7pt",
+    "axis_line_width": "0.7pt",
+    "major_tick_width": "0.7pt",
+    "minor_tick_width": "0.45pt",
+    "plot_line_width": "0.9pt",
+    "marker_line_width": "0.8pt",
+    "panel_label_size": "8pt",
+}
 
 # Public request keys accepted by the compatibility intake surface.  Keep this
 # contract explicit and renderer-independent so importing intake never starts
@@ -228,9 +240,16 @@ def normalize_raw_point_jitter_fraction(value: object) -> float:
     try:
         normalized = float(value)
     except (TypeError, ValueError) as exc:
-        raise ValueError("Raw-point jitter fraction must be a finite number between 0 and 0.35.") from exc
-    if not math.isfinite(normalized) or not 0.0 <= normalized <= MAX_RAW_POINT_JITTER_FRACTION:
-        raise ValueError("Raw-point jitter fraction must be a finite number between 0 and 0.35.")
+        raise ValueError(
+            "Raw-point jitter fraction must be a finite number between 0 and 0.35."
+        ) from exc
+    if (
+        not math.isfinite(normalized)
+        or not 0.0 <= normalized <= MAX_RAW_POINT_JITTER_FRACTION
+    ):
+        raise ValueError(
+            "Raw-point jitter fraction must be a finite number between 0 and 0.35."
+        )
     return normalized
 
 
@@ -322,7 +341,9 @@ def compact_linear_axis(
         end_index = math.floor(display_max / step + 1e-12)
         if end_index < start_index:
             continue
-        ticks = tuple(round(index * step, 12) for index in range(start_index, end_index + 1))
+        ticks = tuple(
+            round(index * step, 12) for index in range(start_index, end_index + 1)
+        )
         if len(ticks) < 2:
             continue
         count_penalty = 0.0 if 4 <= len(ticks) <= 6 else 100.0
@@ -332,7 +353,11 @@ def compact_linear_axis(
             abs(math.log(step / raw_step)),
         )
         candidates.append((score, ticks))
-    ticks = min(candidates, key=lambda item: item[0])[1] if candidates else (data_min, data_max)
+    ticks = (
+        min(candidates, key=lambda item: item[0])[1]
+        if candidates
+        else (data_min, data_max)
+    )
     return float(display_min), float(display_max), ticks
 
 
@@ -352,11 +377,27 @@ def rheology_metric_axis_label(value: object) -> str | None:
         "viscosity",
     }:
         return RHEOLOGY_METRIC_AXIS_LABELS["complex_viscosity"]
-    if "complex modulus" in folded or "g*" in folded or "g∗" in folded or token == "complexmodulus":
+    if (
+        "complex modulus" in folded
+        or "g*" in folded
+        or "g∗" in folded
+        or token == "complexmodulus"
+    ):
         return RHEOLOGY_METRIC_AXIS_LABELS["complex_modulus"]
-    if "loss modulus" in folded or "g″" in folded or 'g"' in folded or "g''" in folded or token == "lossmodulus":
+    if (
+        "loss modulus" in folded
+        or "g″" in folded
+        or 'g"' in folded
+        or "g''" in folded
+        or token == "lossmodulus"
+    ):
         return RHEOLOGY_METRIC_AXIS_LABELS["loss_modulus"]
-    if "storage modulus" in folded or "g′" in folded or "g'" in folded or token == "storagemodulus":
+    if (
+        "storage modulus" in folded
+        or "g′" in folded
+        or "g'" in folded
+        or token == "storagemodulus"
+    ):
         return RHEOLOGY_METRIC_AXIS_LABELS["storage_modulus"]
     return RHEOLOGY_METRIC_AXIS_LABELS.get(token)
 
@@ -489,7 +530,9 @@ class LayoutPolicy:
     tick_policy: dict[str, Any] = field(default_factory=dict)
     stack_spacing_policy: dict[str, Any] = field(default_factory=dict)
     stroke_policy: StrokePolicy = field(default_factory=StrokePolicy)
-    frame_alignment_policy: FrameAlignmentPolicy = field(default_factory=FrameAlignmentPolicy)
+    frame_alignment_policy: FrameAlignmentPolicy = field(
+        default_factory=FrameAlignmentPolicy
+    )
 
 
 DEFAULT_LAYOUT_POLICY = LayoutPolicy(policy_id="default_curve")
@@ -497,7 +540,13 @@ DEFAULT_LAYOUT_POLICY = LayoutPolicy(policy_id="default_curve")
 FTIR_LAYOUT_POLICY = LayoutPolicy(
     policy_id="ftir_spectrum",
     figure_size=STACKED_SPECTRUM_FIGURE_SIZE,
-    allowed_legend_positions=("upper_right", "upper_left", "lower_right", "lower_left", "inline"),
+    allowed_legend_positions=(
+        "upper_right",
+        "upper_left",
+        "lower_right",
+        "lower_left",
+        "inline",
+    ),
     forbid_outside_legend=True,
     inside_legend_max_series=4,
     prefer_inline_min_series=5,
@@ -521,7 +570,13 @@ FTIR_LAYOUT_POLICY = LayoutPolicy(
 
 TORQUE_LAYOUT_POLICY = LayoutPolicy(
     policy_id="torque_curve",
-    allowed_legend_positions=("upper_right", "lower_right", "upper_left", "lower_left", "inline"),
+    allowed_legend_positions=(
+        "upper_right",
+        "lower_right",
+        "upper_left",
+        "lower_left",
+        "inline",
+    ),
     forbid_outside_legend=True,
     inside_legend_max_series=8,
     prefer_inline_min_series=None,
@@ -529,7 +584,13 @@ TORQUE_LAYOUT_POLICY = LayoutPolicy(
 
 STRESS_RELAXATION_LAYOUT_POLICY = LayoutPolicy(
     policy_id="rheology_stress_relaxation",
-    allowed_legend_positions=("upper_right", "lower_right", "upper_left", "lower_left", "inline"),
+    allowed_legend_positions=(
+        "upper_right",
+        "lower_right",
+        "upper_left",
+        "lower_left",
+        "inline",
+    ),
     forbid_outside_legend=True,
     inside_legend_max_series=8,
     prefer_inline_min_series=None,
@@ -565,7 +626,9 @@ def normalize_legend_position(value: object) -> str:
     return normalized or "auto"
 
 
-def layout_policy_for_semantic(semantic: dict[str, Any] | None, *, template: str | None = None) -> LayoutPolicy:
+def layout_policy_for_semantic(
+    semantic: dict[str, Any] | None, *, template: str | None = None
+) -> LayoutPolicy:
     semantic = semantic if isinstance(semantic, dict) else {}
     for key in (
         semantic.get("rule_id"),
@@ -626,6 +689,7 @@ __all__ = [
     "DEFAULT_PALETTE_PRESET",
     "DEFAULT_RENDER_OPTIONS",
     "CURVE_RENDER_OPTIONS",
+    "COMPOSITION_NATIVE_STYLE_POLICY",
     "DELIVERY_DIR",
     "DELIVERY_EDITABLE_DIR",
     "DELIVERY_FIGURES_DIR",
