@@ -103,6 +103,32 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Emit machine-readable JSON."
     )
 
+    readiness_parser = subparsers.add_parser(
+        "readiness",
+        help="Inspect or certify deterministic ready-rule validation envelopes.",
+    )
+    readiness_subparsers = readiness_parser.add_subparsers(
+        dest="readiness_command",
+        required=True,
+    )
+    readiness_status_parser = readiness_subparsers.add_parser(
+        "status",
+        help="Verify current ready-rule contracts against accepted evidence.",
+    )
+    readiness_status_parser.add_argument(
+        "--registry",
+        type=Path,
+        help="Optional candidate validated-envelope registry.",
+    )
+    readiness_status_parser.add_argument("--json", action="store_true")
+    readiness_certify_parser = readiness_subparsers.add_parser(
+        "certify",
+        help="Build a candidate registry from a complete real-data acceptance run.",
+    )
+    readiness_certify_parser.add_argument("acceptance_summary", type=Path)
+    readiness_certify_parser.add_argument("--out", type=Path, required=True)
+    readiness_certify_parser.add_argument("--json", action="store_true")
+
     smoke_parser = subparsers.add_parser(
         "smoke",
         help="Run the fixture-free Studio lifecycle and delivery change gate.",
@@ -212,6 +238,16 @@ def _build_parser() -> argparse.ArgumentParser:
         default=Path(".tmp_verify") / "composition_probe",
     )
     composition_probe_parser.add_argument("--json", action="store_true")
+    readiness_probe_parser = subparsers.add_parser(
+        "readiness-probe",
+        help=argparse.SUPPRESS,
+    )
+    readiness_probe_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(".tmp_verify") / "readiness_probe",
+    )
+    readiness_probe_parser.add_argument("--json", action="store_true")
     canvas_inspector_probe_parser = subparsers.add_parser(
         "canvas-inspector-probe",
         help=argparse.SUPPRESS,
@@ -753,6 +789,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "workbench",
         "canvas-probe",
         "composition-probe",
+        "readiness-probe",
         "canvas-assistant-probe",
         "openai-provider-probe",
         "canvas-openai-provider-probe",
@@ -808,6 +845,65 @@ def main(argv: list[str] | None = None) -> int:
                     print(
                         f"{marker}  {check['label']}: {check.get('detail') or check['status']}"
                     )
+            return 0 if payload["status"] == "ready" else 1
+        if args.command == "readiness":
+            from sciplot_core._utils import file_sha256
+            from sciplot_core.readiness import (
+                build_validated_envelope_registry,
+                load_validated_envelope_registry,
+                validated_envelope_status,
+                write_validated_envelope_registry,
+            )
+
+            if args.readiness_command == "status":
+                registry_path = (
+                    _resolve_input(
+                        args.registry,
+                        kind="Validated-envelope registry",
+                    )
+                    if args.registry is not None
+                    else None
+                )
+                registry = (
+                    load_validated_envelope_registry(registry_path)
+                    if registry_path is not None
+                    else None
+                )
+                payload = validated_envelope_status(
+                    registry,
+                    registry_path=registry_path,
+                )
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(f"SciPlot readiness: {payload['status']}")
+                    print(
+                        "Current validated envelopes: "
+                        f"{payload['ready_without_ai_rule_count']}/"
+                        f"{payload['current_ready_rule_count']}"
+                    )
+                return 0 if payload["status"] == "ready" else 1
+            acceptance_summary = _resolve_input(
+                args.acceptance_summary,
+                kind="Ready-rule acceptance summary",
+            )
+            registry = build_validated_envelope_registry(acceptance_summary)
+            output = write_validated_envelope_registry(args.out, registry)
+            status = validated_envelope_status(registry)
+            payload = {
+                "kind": "sciplot_validated_envelope_certification",
+                "version": 1,
+                "status": status["status"],
+                "acceptance_summary": str(acceptance_summary.resolve()),
+                "registry": str(output),
+                "registry_sha256": file_sha256(output),
+                "envelopes": status,
+            }
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot readiness certification: {payload['status']}")
+                print(payload["registry"])
             return 0 if payload["status"] == "ready" else 1
         if args.command == "smoke":
             from sciplot_core.studio import maybe_reexec_with_qt_runtime
@@ -990,6 +1086,16 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(f"SciPlot Composition probe: {payload['status']}")
+                print(payload["artifacts"]["summary"])
+            return 0 if payload["status"] == "passed" else 1
+        if args.command == "readiness-probe":
+            from sciplot_core.readiness_probe import run_readiness_probe
+
+            payload = run_readiness_probe(output_root=args.out)
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot readiness probe: {payload['status']}")
                 print(payload["artifacts"]["summary"])
             return 0 if payload["status"] == "passed" else 1
         if args.command == "canvas-inspector-probe":

@@ -10,7 +10,10 @@ production OpenAI Responses adapter, and visible request UI are implemented.
 Confirmed data mappings now execute from the Canvas decision card into a
 separate candidate Canvas. Live-model canonical-task evaluation, real-session
 cutover, mixed-family composition acceptance, and the default `studio`
-migration remain active work.
+migration remain active work. M5 now provides source-controlled validated
+envelopes for all 23 ready rules and binds recognition, semantic/render,
+source/mapping, strict QA, delivery, and one-step/autoplot state before
+`ready_to_use=true`; the learning/promotion loop remains active work.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -43,7 +46,8 @@ user invokes it or the deterministic pipeline stops honestly.
    Tool chrome stays quiet and subordinate.
 2. **Frequent actions are visible; recovery actions are available.** Save,
    undo, redo, navigation, zoom, and export belong in the main toolbar.
-   Advanced Editor and infrequent commands belong in an overflow menu.
+   Advanced Editor and infrequent or not-yet-supported commands belong in an
+   overflow menu.
 3. **Selection drives the inspector.** The trailing pane changes with the
    selected page, graph, axis, series, legend, or annotation. It is not a
    permanent reproduction of Veusz's full object tree.
@@ -239,7 +243,8 @@ eligibility are recorded; absent legends are `not_applicable`, not falsely
 reported as shared. The source-controlled M4 probe passes `11/11`. This is
 automated contract evidence, not the owner's mixed-family daily-use
 acceptance. Runtime smoke version 17 passes `33/33`, including this native
-composition lifecycle gate.
+composition lifecycle gate. The current version-18 smoke passes `34/34` after
+adding the deterministic-readiness gate.
 
 ### Export
 
@@ -251,6 +256,32 @@ requires:
 - matching current/exported/delivery VSZ hashes;
 - complete delivery;
 - provenance and transform evidence where the project contract requires them.
+
+### Deterministic Ready
+
+Ready is evaluated after the current input has been recognized, mapped,
+rendered, checked, and delivered. It is not a provider response or a UI badge
+that can be copied from an older project.
+
+The source-controlled registry binds every accepted rule's recognition
+conditions, semantic/render contract, and versioned runtime-request policy to
+authorized-real-data lifecycle evidence. High-confidence supported input can
+proceed directly; a supported medium-confidence match pauses for explicit
+confirmation. Pure presentation overrides can remain automatic, but changed
+templates, direct recipes, axis semantics, data selection/transforms, fits,
+scientific annotations, or split policies leave the certified request
+envelope. Missing, stale, low-confidence, mismatched, tampered, or failed-QA
+cases stop at repair.
+
+The persisted one-step evaluation is the authority consumed by autoplot.
+Autoplot additionally requires matching reported/persisted states, a complete
+evaluation kind/version, `contract_current=true`, strict QA `passed`, and
+complete delivery. Legacy artifacts without this envelope remain inspectable
+but cannot retain `ready_to_use=true`.
+
+This default path requires no AI provider and no routine AI image inspection.
+AI remains available for novel meaning, explicit refinement, or rule repair;
+it cannot override a failed deterministic gate.
 
 ## Window anatomy
 
@@ -266,9 +297,10 @@ Keep visible:
 - Export + QA;
 - More.
 
-`More` contains the inspector toggle, Advanced Editor recovery, and future
-infrequent document commands. Every toolbar action must also have a shortcut
-or menu route so the toolbar can adapt or be hidden.
+`More` contains the inspector toggle, the explicit Advanced Editor route for
+infrequent/unsupported properties and recovery, and future infrequent document
+commands. Every toolbar action must also have a shortcut or menu route so the
+toolbar can adapt or be hidden.
 
 ### Canvas well
 
@@ -567,4 +599,5 @@ M2 is not visually complete because a screenshot looks polished. It must prove:
 - state and errors remain understandable without color;
 - review marks never leak into publication export unless promoted;
 - no accepted document change is lost;
-- Advanced Editor is visibly a recovery route, not the expected workflow.
+- Advanced Editor is visibly a low-frequency/unsupported-property and recovery
+  route, not the expected workflow.

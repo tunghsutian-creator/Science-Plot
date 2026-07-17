@@ -68,6 +68,9 @@ DEFAULT_LINE_STYLE_SEQUENCE = (
 FIGURE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
 
 DEFAULT_EXPORT_FORMATS_POLICY = ("pdf", "tiff_300")
+SUPPORTED_EXPORT_FORMATS = frozenset(
+    {"pdf", "svg", "png", "png_300", "png_600", "tiff", "tiff_300"}
+)
 DEFAULT_LOG_TICK_FORMAT = "%Ve"
 DEFAULT_LOG_MINOR_TICK_COUNT = 10
 DEFAULT_LOG_MINOR_MULTIPLIERS = (2.0, 4.0, 6.0, 8.0)
@@ -208,6 +211,70 @@ RENDER_OPTION_KEYS = frozenset(
         "analytical_layers",
         "data_variables",
         "data_transforms",
+    }
+)
+
+# A validated rule certificate covers the rule's scientific rendering contract.
+# Runtime requests may vary only these presentation-only fields while retaining
+# automatic ready-to-use authority. Every other public render option must equal
+# the certified rule/axis default or the request leaves the validated envelope.
+VALIDATED_VISUAL_OVERRIDE_KEYS = frozenset(
+    {
+        "size",
+        "x_tick_density",
+        "y_tick_density",
+        "x_tick_edge_labels",
+        "y_tick_edge_labels",
+        "minor_tick_count",
+        "series_order",
+        "series_styles",
+        "line_style_sequence",
+        "marker_sequence",
+        "marker_size",
+        "marker_fill_mode",
+        "raw_point_jitter_fraction",
+        "palette_colors",
+        "font_size_pt",
+        "legend_font_size_pt",
+        "axis_linewidth_pt",
+        "tick_width_pt",
+        "tick_length_pt",
+        "minor_tick_width_pt",
+        "minor_tick_length_pt",
+        "line_width_pt",
+        "line_alpha",
+        "marker_alpha",
+        "marker_line_width_pt",
+        "legend_position",
+        "legend_curve_clearance_mm",
+        "legend_edge_padding_mm",
+        "series_label_mode",
+        "colormap_name",
+        "colormap_colors",
+        "color_invert",
+        "contour_color",
+        "contour_line_style",
+        "contour_line_width_pt",
+        "contour_labels",
+        "highlight_contour_color",
+        "highlight_contour_line_style",
+        "highlight_contour_line_width_pt",
+        "colorbar_width_mm",
+        "colorbar_height_mm",
+        "colorbar_direction",
+        "colorbar_manual_position",
+        "colorbar_horz_manual",
+        "colorbar_vert_manual",
+        "colorbar_foreground_color",
+        "colorbar_background_color",
+        "colorbar_background_transparency",
+        "colorbar_background_x_fraction",
+        "colorbar_background_y_fraction",
+        "colorbar_background_width_fraction",
+        "colorbar_background_height_fraction",
+        "style_preset",
+        "palette_preset",
+        "visual_theme_id",
     }
 )
 
@@ -710,12 +777,14 @@ __all__ = [
     "STACKED_SPECTRUM_FIGURE_SIZE",
     "SPECTRUM_STACK_RENDER_OPTIONS",
     "STRESS_RELAXATION_LAYOUT_POLICY",
+    "SUPPORTED_EXPORT_FORMATS",
     "StrokePolicy",
     "TORQUE_CURVE_RENDER_OPTIONS",
     "TORQUE_LAYOUT_POLICY",
     "TORQUE_OFFSET_STACK_RENDER_OPTIONS",
     "TOL_BRIGHT_COLORS",
     "TOL_BRIGHT_PALETTE_ID",
+    "VALIDATED_VISUAL_OVERRIDE_KEYS",
     "WIDE_FIGURE_SIZE",
     "anchored_log_decade_ticks",
     "compact_linear_axis",

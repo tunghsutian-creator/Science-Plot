@@ -15,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 17
+RUNTIME_SMOKE_VERSION = 18
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -993,6 +993,31 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 "tampered state",
                 data_mapping_probe.get("status") == "passed",
                 detail=data_mapping_probe,
+            )
+        )
+        from sciplot_core.readiness_probe import run_readiness_probe
+
+        readiness_probe = run_readiness_probe(output_root=run_root / "readiness")
+        readiness_registry = readiness_probe.get("registry_status") or {}
+        checks.append(
+            _check(
+                "validated_ready_envelopes",
+                "All current accepted rule contracts remain bound to authorized "
+                "real-data evidence, reject contract drift and provider-authored "
+                "ready flags, and gate one-step readiness",
+                readiness_probe.get("status") == "passed",
+                detail={
+                    "status": readiness_probe.get("status"),
+                    "passed_count": readiness_probe.get("passed_count"),
+                    "check_count": readiness_probe.get("check_count"),
+                    "ready_without_ai_rule_count": readiness_registry.get(
+                        "ready_without_ai_rule_count"
+                    ),
+                    "evidence_strength_counts": readiness_registry.get(
+                        "evidence_strength_counts"
+                    ),
+                    "artifacts": readiness_probe.get("artifacts"),
+                },
             )
         )
 

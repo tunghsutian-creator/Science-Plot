@@ -13,6 +13,11 @@ adapter are also implemented. The Canvas now previews, explicitly confirms,
 executes, recovers, and opens a confirmed data-mapping proposal as a separate
 candidate Canvas. Live-endpoint model evaluation, the canonical
 natural-language acceptance tasks, and real-session cutover evidence remain.
+M5's source-controlled validated-envelope baseline is implemented for all 23
+ready rules: full recognition and semantic contracts, host-side one-step and
+autoplot gating, current-code authorized-real-data acceptance, and adversarial
+probe coverage are active. The repeated-AI-success promotion workflow remains
+open, so M5 is not yet complete.
 
 This roadmap supersedes the former assumption that native canvas work and
 multi-panel composition should remain deferred. Distribution to other users is
@@ -32,6 +37,9 @@ The finished system must:
 - support point-and-click selection, direct manipulation, review annotations,
   and native multi-panel composition without repeated verbal coordinate
   descriptions;
+- expose the high-frequency scientific editing controls needed for daily work,
+  while keeping the full Veusz editor as an explicit escape hatch for
+  infrequent or not-yet-supported properties;
 - let AI interpret scientific intent and propose typed operations, but never
   require AI for supported deterministic workflows;
 - make accepted AI work reusable by promoting repeated decisions into rules,
@@ -93,8 +101,8 @@ software.
 - Veusz `CommandInterface` and document operations;
 - Veusz undo/redo semantics where they can be safely composed;
 - native VSZ saving, reopening, and exact-current export;
-- an explicit Advanced Editor recovery route until SciPlot proves sufficient
-  over real daily work.
+- an explicit Advanced Editor route for infrequent or not-yet-supported edits
+  and recovery, without presenting it as the ordinary workflow.
 
 Retiring the Veusz frontend does not mean deleting or forking the upstream
 editor immediately. It means that ordinary `studio` use no longer exposes it.
@@ -917,8 +925,8 @@ Current implementation status:
 - PDF/TIFF physical pairing, native structure, text preservation, source
   immutability, delivery parity, variants, real Qt drag, and manual-edit
   lifecycle pass the source-controlled composition probe `11/11`;
-- runtime smoke version 17 passes `33/33`, including the native composition
-  lifecycle gate.
+- runtime smoke version 18 passes `34/34`, including the native composition
+  and deterministic-readiness lifecycle gates.
 
 This establishes the automated M4 engineering baseline. It does not count as
 the owner's mixed-family daily-use acceptance or authorize the M6 Veusz
@@ -959,6 +967,43 @@ Target contribution profile:
 | genuinely new mapping or layout | 50–80% initially | 20–50% initially |
 | same case after promotion into shared code | 90–100% | 0–10% |
 
+Current implementation status:
+
+- `validated_envelopes.json` is a closed, portable certificate registry for
+  all 23 current ready rules and contains evidence hashes/metadata without
+  local source paths;
+- each rule hash binds its recognition inputs, matcher policy, semantic family,
+  recipe, template, axes, units, analyses, metrics, render options, readiness,
+  priority, and a versioned runtime-request policy; the accepted semantic
+  payload is hash-bound separately;
+- the runtime-request policy admits only the automatic route, the certified
+  template, the canonical PDF/TIFF pair, and a closed set of presentation-only
+  overrides; changed axis domains, scales, labels, data selection/transforms,
+  fits, annotations, split policies, templates, or direct recipes leave the
+  automatic envelope;
+- one-step requires matching source, mapping, experiment, family, confidence,
+  package, semantic, contract, strict QA, and delivery gates;
+- autoplot additionally rejects missing/legacy envelopes, forged ready flags,
+  invalid evaluation kinds or versions, unknown QA, and reported/persisted
+  state conflicts;
+- high-confidence supported inputs may proceed automatically; medium
+  confidence requires an explicit host-side confirmation; unsupported, stale,
+  low-confidence, or tampered inputs stop at repair;
+- the current version-3 acceptance reran all 23 authorized-real-data rules:
+  23/23 lifecycle, contract, physical-size, provenance, QA, delivery, and
+  explicit contact-sheet visual decisions passed with zero
+  instrument-shaped gaps;
+- evidence strength remains explicit: 13 registered fixture/source/unit
+  contracts, 2 registered fixture/source contracts with canonical units only,
+  and 8 computed-unregistered fixture hashes;
+- the readiness adversarial probe passes `29/29`, a real FTIR autoplot reaches
+  `ready_to_use=true` without AI image review, doctor reports 23/23 current
+  envelopes, and runtime smoke version 18 passes `34/34`.
+
+This establishes the deterministic-ready baseline but does not finish M5.
+Promotion of repeated accepted AI mappings or operations into reviewed rules,
+fixtures, policies, and regression probes remains the next M5 increment.
+
 ### M6 — Daily-Use Cutover and Veusz Frontend Retirement
 
 Purpose: make the new architecture the actual daily product rather than a
@@ -968,7 +1013,8 @@ Deliverables:
 
 - `studio` opens SciPlot Canvas by default;
 - Veusz MainWindow disappears from normal documentation and user actions;
-- Advanced Editor remains only as an explicit recovery/developer command;
+- Advanced Editor remains an explicit low-frequency, unsupported-property, and
+  recovery command; it is not duplicated wholesale inside SciPlot;
 - browser Result Review is compatibility-only rather than the primary canvas;
 - daily-use telemetry is local and limited to operational metrics such as
   latency, state transitions, failures, and recovery—not scientific data;
@@ -980,13 +1026,14 @@ Retirement gate:
 - at least fifteen real plotting/editing/composition sessions across five
   experiment or figure families complete through SciPlot Canvas;
 - zero accepted manual or AI edits are lost;
-- no normal task requires Veusz MainWindow;
+- no high-frequency or ordinary task requires Veusz MainWindow;
 - every fallback use is recorded with a concrete missing capability;
 - exact-current VSZ, QA, and delivery remain green;
 - the user explicitly accepts the cutover after reviewing the evidence.
 
-After this gate, the Veusz frontend is retired as a product surface. The
-vendored upstream code may remain for compatibility and recovery.
+After this gate, the Veusz frontend is retired as the normal product surface.
+The vendored upstream editor may remain as the explicit low-frequency escape
+hatch and recovery surface.
 
 ### M7 — Future Distribution
 

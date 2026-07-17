@@ -46,6 +46,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 sciplot_core = [
+  "validated_envelopes.json",
   "intake_static/*",
   "_vendor/src/plot_contract.json",
   "_vendor/src/data_studio_templates/builtin/*.json",
