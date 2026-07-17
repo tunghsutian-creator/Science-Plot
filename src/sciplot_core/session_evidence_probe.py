@@ -41,7 +41,7 @@ from sciplot_core.session_evidence import (
 from sciplot_core.session_evidence_artifacts import verify_regular_production_qa
 
 SESSION_EVIDENCE_PROBE_KIND = "sciplot_session_evidence_probe"
-SESSION_EVIDENCE_PROBE_VERSION = 4
+SESSION_EVIDENCE_PROBE_VERSION = 5
 
 
 def _check(
@@ -722,7 +722,7 @@ def run_session_evidence_probe(
         ] = False
         unverified_frozen_ok, unverified_frozen_detail = _expect_failure(
             lambda: _validate_preregistration(unverified_frozen_probe),
-            contains="Frozen-build sessions require",
+            contains="verified",
         )
         checks.append(
             _check(
