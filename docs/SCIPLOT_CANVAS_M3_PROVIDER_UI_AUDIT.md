@@ -1,9 +1,11 @@
 # SciPlot Canvas M3 Provider Lifecycle and UI Audit
 
-Status: provider-neutral operation and data-mapping decision loops implemented
-and verified with an injected deterministic provider, 2026-07-17. This audit
-proves the integration, authority, recovery, and visible Canvas lifecycle. It
-does not prove production-model scientific quality or complete M3.
+Status: provider-neutral operation and data-mapping decision loops plus the
+production OpenAI Responses adapter are implemented, 2026-07-17. Deterministic
+and in-memory wire fixtures verify integration, authority, recovery, protocol,
+and the visible Canvas lifecycle. No live API key was available, so this audit
+does not prove endpoint availability, production-model scientific quality, or
+complete M3.
 
 ## Outcome
 
@@ -29,6 +31,12 @@ For a `DataMappingProposal`, the same pane now continues through source
 location, zero-write semantic preview, explicit path-bound confirmation,
 background deterministic execution, and a verified separate-Canvas handoff.
 The provider proposes meaning; only deterministic code reads or writes data.
+
+The production adapter connects this operation path to the OpenAI Responses
+API. It streams a strict structured draft, but SciPlot remains the authority:
+the host creates IDs, binds the exact base revision and expected old values,
+validates every target/path/value against the selected object's local catalog,
+and requires an explicit preview decision before mutation.
 
 ## Interaction decision
 
@@ -92,15 +100,19 @@ Only `CanvasOperationBatch` and `DataMappingProposal` are valid proposal
 payloads. Responses must match the exact request ID, transaction, provider,
 base revision, and request SHA-256.
 
-Provider context is a closed, bounded, zero-trust payload. It may contain the
-current selection, aggregate document inventory, bounded review summaries,
-and sanitized QA state. It rejects unknown nested keys, inconsistent
-selection state, declared or embedded raw arrays, and payloads above 256 KB.
-Absolute document paths and raw dataset arrays are not sent.
+Provider context is a closed, bounded, zero-trust payload. Version 3 may contain
+the current selection, aggregate document inventory, bounded review summaries,
+sanitized QA state, and the selected object's exact editable Inspector catalog.
+Each allowed operation names one stable target ID, setting path, editor type,
+current value, choices, and numeric bounds. Read-only data mapping fields are
+excluded. The schema rejects unknown nested keys, inconsistent selection,
+declared or embedded raw arrays, and payloads above 256 KB. Absolute document
+paths, host request IDs, and raw dataset arrays are not sent. Version-2 context
+remains readable for persisted audit but is not provider-executable.
 
 ## Runtime and persistence
 
-An injected provider runs in a dedicated Qt thread. The GUI thread owns the
+Every provider runs in a dedicated Qt thread. The GUI thread owns the
 document and receives only typed queued events. Progress sequence, request
 identity, provider identity, response hash, and base revision are checked
 before the event reaches transaction state.
@@ -127,6 +139,32 @@ Path-unbound version-1 confirmation receipts remain parseable for audit only.
 They cannot execute, render, or hand off. A fresh explicit version-2
 confirmation into a new output root is required to restore authority.
 
+## Production Responses adapter
+
+`OpenAIResponsesProvider` follows the official
+[Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create),
+[Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs),
+and [streaming](https://developers.openai.com/api/docs/guides/streaming-responses)
+contracts. Requests use `store=false`, `stream=true`, and a strict JSON schema.
+The standard-library transport enforces HTTPS outside loopback tests, validates
+the API root, bounds SSE lines/events/output, handles refusal/incomplete/failure
+terminal states, interrupts an active read on cancellation, and redacts the API
+key from descriptors, exceptions, and persisted evidence.
+
+The provider activates automatically when `SCIPLOT_OPENAI_API_KEY` or the
+standard `OPENAI_API_KEY` exists. Model, base URL, reasoning effort, output-token
+limit, and timeout have namespaced environment overrides. There is no GUI mode
+switch. No key means no provider and no request; explicit `None` remains a
+supported deterministic-test injection boundary. Invalid provider
+configuration produces a runtime warning and resolves to no provider,
+so an optional integration cannot prevent the deterministic Canvas from
+opening.
+
+The production provider intentionally advertises only selected-object
+`CanvasOperationBatch` proposals and cancellation. It does not advertise data
+mapping until SciPlot can give a model a bounded source/header capability
+catalog. The already-confirmed deterministic mapping executor is unaffected.
+
 ## Visual audit
 
 Fresh same-turn evidence was captured from the real Qt workbench. The initial
@@ -147,7 +185,11 @@ Evidence paths:
 - final mapped Canvas:
   `.tmp_verify/m3_mapping_authority_assistant_probe_final/canvas_assistant_probe_xiurt4j9/assistant_mapping_canvas.png`;
 - same-size provider/mapping comparison:
-  `.tmp_verify/m3_mapping_authority_assistant_probe_final/canvas_assistant_probe_xiurt4j9/assistant_reference_mapping_comparison.png`.
+  `.tmp_verify/m3_mapping_authority_assistant_probe_final/canvas_assistant_probe_xiurt4j9/assistant_reference_mapping_comparison.png`;
+- production-adapter proposal:
+  `.tmp_verify/runtime_smoke_v16/runtime_smoke_obpj9veg/canvas_openai_provider/canvas_openai_probe_rtv6rq6k/openai_provider_proposal.png`;
+- production-adapter applied state:
+  `.tmp_verify/runtime_smoke_v16/runtime_smoke_obpj9veg/canvas_openai_provider/canvas_openai_probe_rtv6rq6k/openai_provider_applied.png`.
 
 The ignored screenshot paths are repeatable engineering evidence, not shipped
 product assets.
@@ -178,10 +220,26 @@ The focused Assistant lifecycle probe passes `41/41`. It covers:
 - original-VSZ conflict before handoff and during commit QA;
 - exact rollback from both conflict boundaries.
 
+The production-provider protocol probe passes `12/12`: environment activation,
+HTTPS policy, Canvas auto-resolution, Responses request shape, bounded context,
+host-owned typed operations, ordered progress, malformed/unauthorized output,
+refusal/incomplete/no-op states, local selection gating, active cancellation,
+and credential redaction. The visible production-adapter Canvas probe passes
+`8/8` from Chinese natural-language composer input through threaded streaming,
+zero-mutation preview, accepted redraw, and exact rollback. Both use an
+in-memory HTTP/SSE fixture, not a live model.
+
+The six-document Inspector matrix also passes `8/8` across 87 objects and all
+ten bounded object types. Its existing contextual-model gate now constructs
+and validates a context-v3 `AssistantRequest` for every selected object and
+requires the advertised operations to match the editable manual Inspector
+fields exactly; dataset/read-only fields never enter the catalog.
+
 The cumulative pure Canvas contract passes `36/36`; deterministic mapping
-passes `55/55`; runtime smoke version 15 passes `30/30`, including Assistant
-`41/41`, exact-current save/reopen and PDF/TIFF export, QA, delivery, source
-immutability, relocated launchers, and delivery-hash failure rejection.
+passes `55/55`; runtime smoke version 16 passes `32/32`, including Assistant
+`41/41`, the two production-provider gates, exact-current save/reopen and
+PDF/TIFF export, QA, delivery, source immutability, relocated launchers, and
+delivery-hash failure rejection.
 
 An independent read-only reviewer ran twice. The first pass found receipt path
 binding, handoff revalidation, original-VSZ authority, executed-state action,
@@ -192,17 +250,17 @@ same reviewer then reported all prior findings resolved with no remaining
 actionable defect or new regression.
 
 The final wheel is
-`/private/tmp/sciplot-m3-mapping-authority-wheel-final-20260717-v2/sciplot_core-0.1.0-py3-none-any.whl`
+`/private/tmp/sciplot-openai-provider-wheel-20260717-v2/sciplot_core-0.1.0-py3-none-any.whl`
 with SHA-256
-`46401001ecabf56abd1323224819d5c2030fc64d6e43b36840a66c558d92a31f`.
-Imports resolve from an isolated target outside the checkout, where the wheel
-independently passes Canvas contract `36/36`, mapping `55/55`, and Assistant
-`41/41`.
+`bf5ef8a6eb6ddf994304985d13d3dc843fce245725752d5b9fcefa32f165cf76`.
+Imports resolve from an isolated target outside the checkout, where this wheel
+independently passes Canvas contract `36/36` and the production-provider
+protocol probe `12/12` under the dependency-light system Python.
 
 ## Honest remaining work
 
-- add a production model-provider adapter behind the frozen boundary;
-- run the six canonical natural-language tasks with a production provider;
+- run a real endpoint/key smoke without weakening credential handling;
+- run the six canonical natural-language tasks with a live production model;
 - accumulate real user sessions for M2/M6 cutover evidence;
 - keep Veusz `MainWindow` as a recovery surface until the user accepts the
   retirement gate;

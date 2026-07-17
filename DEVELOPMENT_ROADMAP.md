@@ -6,11 +6,11 @@ review/promotion kernels are complete, but its real-session retirement gate
 and default `studio` migration remain. M3's provider-neutral reversible
 `CanvasOperationBatch` transaction kernel and deterministic
 `DataMappingProposal` executor are implemented. Its provider-neutral,
-hash-bound request lifecycle and injected-provider Canvas UI are also
-implemented. The Canvas now previews, explicitly confirms, executes, recovers,
-and opens a confirmed data-mapping proposal as a separate candidate Canvas;
-a production model-provider adapter and canonical natural-language acceptance
-tasks remain.
+hash-bound request lifecycle, Canvas UI, and production OpenAI Responses
+adapter are also implemented. The Canvas now previews, explicitly confirms,
+executes, recovers, and opens a confirmed data-mapping proposal as a separate
+candidate Canvas. Live-endpoint model evaluation, the canonical
+natural-language acceptance tasks, and real-session cutover evidence remain.
 
 This roadmap supersedes the former assumption that native canvas work and
 multi-panel composition should remain deferred. Distribution to other users is
@@ -247,6 +247,9 @@ src/sciplot_core/canvas/
   annotations.py         review/formal annotation contracts
   composition.py         module and exact-mm layout contracts
   assistant_contract.py  AI context and proposal schemas
+
+src/sciplot_core/openai_provider.py
+  production Responses API adapter behind the typed provider boundary
 
 src/sciplot_gui/
   app.py                 native application entrypoint
@@ -784,6 +787,45 @@ This increment still uses an injected deterministic provider. It proves the
 human-authority and deterministic-execution boundary, not a production
 model's scientific interpretation quality or a real daily-use session.
 
+Implemented production OpenAI Responses provider increment, 2026-07-17:
+
+- promoted the bounded Assistant context to version 3 with a selected-object
+  editing-capability catalog. It exposes only exact editable Inspector target
+  IDs, setting paths, editor types, current values, choices, and numeric bounds;
+  read-only data mapping fields and raw dataset arrays remain excluded;
+- retained version-2 request readability without rewriting its version or hash.
+  A legacy request cannot be sent to the production provider because it lacks
+  the capability catalog required for safe planning;
+- added a standard-library Responses API adapter with `store=false`, streaming
+  SSE, strict Structured Outputs, cooperative socket cancellation, bounded
+  stream/event sizes, HTTPS enforcement, configurable model/reasoning/token
+  limits, and credential-redacted errors;
+- kept all authority host-side: the model may select only an advertised
+  target/path and return a JSON-encoded value. SciPlot creates operation and
+  batch IDs, supplies the exact expected old value, binds the base revision,
+  validates editor type/range, and shows a zero-mutation preview before the
+  user can accept;
+- activated the provider automatically when `SCIPLOT_OPENAI_API_KEY` or
+  `OPENAI_API_KEY` exists. There is no user-facing mode switch; without a key,
+  or when a caller explicitly disables injection for a deterministic probe,
+  all ordinary Canvas workflows remain independent. Invalid provider
+  configuration emits a warning and falls back to the same independent Canvas
+  instead of blocking launch;
+- intentionally advertised only bounded `CanvasOperationBatch` operations.
+  AI-originated data mapping remains disabled until SciPlot can disclose a
+  similarly bounded source/header catalog; confirmed deterministic mapping is
+  still fully available;
+- the provider protocol probe passes `12/12`; the visible Qt lifecycle using
+  the production adapter and an in-memory Responses/SSE wire fixture passes
+  `8/8`; the six-document Inspector matrix passes `8/8` across 87 objects and
+  verifies a valid context-v3 capability catalog for all ten bounded object
+  types; runtime smoke version 16 passes `32/32`, including Canvas contract
+  `36/36`, deterministic mapping `55/55`, and Assistant lifecycle `41/41`;
+- no API key was available during this increment. These gates prove the
+  adapter, typed authority boundary, cancellation, redaction, UI lifecycle,
+  exact rollback, and deterministic fallback. They do not prove a successful
+  paid API call or live-model scientific quality.
+
 Canonical acceptance tasks:
 
 - rename and format an axis from natural language;
@@ -814,12 +856,13 @@ Current gate status:
   authorized-real-data gates;
 - provider-neutral request, progress, cancellation, response, persistence,
   and `CanvasOperationBatch` preview, accept/reject, and rollback UI pass with
-  an injected deterministic provider;
+  both an injected deterministic provider and the production OpenAI adapter
+  exercised through an in-memory wire fixture;
 - deterministic `DataMappingProposal` source discovery, zero-write preview,
   explicit receipt, background execution, retry/reopen recovery, and separate
   candidate-Canvas handoff pass with an injected deterministic provider;
-- a production model-provider adapter and the canonical natural-language tasks
-  remain open;
+- live OpenAI endpoint execution, live-model quality evaluation, and the six
+  canonical natural-language tasks remain open;
 - automated probes do not satisfy M2's real-session cutover gate or the final
   user decision to retire the Veusz frontend.
 

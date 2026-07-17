@@ -16,6 +16,8 @@ from sciplot_core.canvas.model import (
 )
 from sciplot_core.canvas.operations import CanvasOperationBatch
 from sciplot_core.canvas.provider import (
+    ASSISTANT_CONTEXT_KIND,
+    ASSISTANT_CONTEXT_VERSION,
     ASSISTANT_MAX_INTENT_LENGTH,
     AssistantDataMappingState,
     AssistantProgressEvent,
@@ -123,8 +125,8 @@ class AssistantTransactionCoordinator:
         )
         artifact = session.qa_summary if isinstance(session.qa_summary, dict) else {}
         return {
-            "kind": "sciplot_canvas_assistant_context",
-            "version": 2,
+            "kind": ASSISTANT_CONTEXT_KIND,
+            "version": ASSISTANT_CONTEXT_VERSION,
             "project_id": session.project_id,
             "document_id": session.document_id,
             "revision": session.revision,
@@ -175,6 +177,9 @@ class AssistantTransactionCoordinator:
                 "artifact_status": artifact.get("status") or "not_run",
                 "ready_to_use": artifact.get("ready_to_use"),
             },
+            "editing_capabilities": (
+                self.controller.assistant_editing_capabilities()
+            ),
             "raw_dataset_arrays_included": False,
             "explicit_selected_point_included": selection.get("data_point") is not None,
         }

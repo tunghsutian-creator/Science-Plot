@@ -38,6 +38,9 @@ studio = [
 [project.scripts]
 sciplot = "sciplot_core.cli:main"
 
+[tool.ruff]
+extend-exclude = ["src/sciplot_core/_vendor"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

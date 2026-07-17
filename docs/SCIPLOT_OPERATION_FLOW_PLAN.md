@@ -4,11 +4,12 @@ Status: active frontend source of truth, 2026-07-17. M1 is complete; M2 and M3
 are in progress. The adaptive visual, contextual editing, and non-exported
 review/promotion kernels are implemented. The first provider-neutral M3
 Assistant transaction kernel and deterministic M3 data-mapping executor are
-also implemented. The provider-neutral request/progress/cancellation boundary
-and injected-provider request UI are now implemented. Confirmed data mappings
-now execute from the Canvas decision card into a separate candidate Canvas.
-Real-session cutover, a production model adapter, native composition, and the
-default `studio` migration remain active work.
+also implemented. The provider-neutral request/progress/cancellation boundary,
+production OpenAI Responses adapter, and visible request UI are implemented.
+Confirmed data mappings now execute from the Canvas decision card into a
+separate candidate Canvas. Live-model canonical-task evaluation, real-session
+cutover, native composition, and the default `studio` migration remain active
+work.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -201,7 +202,15 @@ decision card. SciPlot first shows a zero-write, raw-value-free preview; a
 separate user click creates a hash-bound receipt and starts background atomic
 execution. Ambiguous source roots stop at a source chooser. Success opens an
 isolated mapped project in a new Canvas while the current Canvas and VSZ remain
-unchanged. A real model/provider connection remains later M3 work.
+unchanged.
+
+When an API key is available, the production OpenAI Responses adapter appears
+through this same provider-neutral panel without a mode switch. Context version
+3 gives the model only the selected object's exact bounded Inspector operation
+catalog; the model cannot invent another target or setting path. SciPlot owns
+IDs, expected old values, revision binding, validation, preview, acceptance,
+application, and rollback. With no key, every deterministic Canvas workflow
+remains available and the Assistant shows its honest optional state.
 
 ### Compose
 
@@ -468,12 +477,38 @@ accessibility QA, not by application chrome tokens.
 - path-unbound v1 receipts remain inspectable but cannot execute, render, or
   hand off; only an explicit fresh v2 confirmation into a new output root
   restores authority;
-- the pure Canvas contract passes `36/36`, the threaded Assistant lifecycle
-  and adversarial probe passes `41/41`, deterministic mapping passes `55/55`,
-  and runtime smoke version 15 passes `30/30`.
 
-The current engineering provider is deterministic and injected. A production
-model adapter and canonical natural-language acceptance tasks remain M3 work.
+## M3 production OpenAI Responses adapter delivered
+
+- Assistant context version 3 advertises only the selected object's exact
+  editable setting paths, current values, editor types, choices, and bounds;
+  version-2 persisted requests remain readable but cannot be sent without the
+  new capability catalog;
+- the production adapter uses the Responses API with `store=false`, streaming
+  SSE, strict JSON-schema Structured Outputs, cooperative cancellation, closed
+  local validation, bounded payloads/events, HTTPS, and redacted credentials;
+- a provider is resolved automatically only when a configured API key exists.
+  There is still no independent/AI mode switch and no-key Canvas behavior is
+  unchanged. Invalid provider configuration warns and falls back to the
+  independent Canvas rather than blocking launch;
+- the host creates all operation/batch IDs, binds the document revision and
+  exact expected old value, and rejects unknown paths, duplicate fields,
+  malformed JSON, wrong types, out-of-range values, refusals, and incomplete
+  output without changing the document;
+- protocol evidence passes `12/12`; the visible Canvas lifecycle passes `8/8`
+  from natural-language composer input through production-adapter streaming,
+  typed preview, accepted live redraw, and exact whole-turn rollback;
+- the six-document Inspector matrix remains `8/8` across 87 objects and now
+  verifies that every one of the ten bounded object types produces an exact,
+  raw-array-free context-v3 capability catalog;
+- runtime smoke version 16 passes `32/32`, including Canvas contract `36/36`,
+  deterministic mapping `55/55`, and Assistant lifecycle `41/41`;
+- the protocol and UI gates use an in-memory Responses/SSE wire fixture. No API
+  key was available, so they do not claim a live API call or production-model
+  scientific quality.
+
+Live-endpoint execution, live-model scientific-quality evaluation, and the six
+canonical natural-language acceptance tasks remain M3 work.
 
 ## M2 implementation order
 

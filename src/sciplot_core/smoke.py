@@ -15,7 +15,7 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 15
+RUNTIME_SMOKE_VERSION = 16
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -1315,6 +1315,50 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 },
             )
         )
+        from sciplot_core.openai_provider_probe import run_openai_provider_probe
+
+        openai_provider_probe = run_openai_provider_probe(
+            output_root=run_root / "openai_provider",
+        )
+        checks.append(
+            _check(
+                "openai_responses_provider_boundary",
+                "The production Responses adapter streams strict structured output, "
+                "enforces the selected-object capability catalog, cancels safely, "
+                "and redacts credentials",
+                openai_provider_probe.get("status") == "passed",
+                detail={
+                    "status": openai_provider_probe.get("status"),
+                    "summary": openai_provider_probe.get("summary"),
+                    "artifacts": openai_provider_probe.get("artifacts"),
+                    "limitations": openai_provider_probe.get("limitations"),
+                },
+            )
+        )
+        from sciplot_core.canvas_openai_provider_probe import (
+            run_canvas_openai_provider_probe,
+        )
+
+        canvas_openai_probe = run_canvas_openai_provider_probe(
+            project_dir,
+            output_root=run_root / "canvas_openai_provider",
+        )
+        checks.append(
+            _check(
+                "native_canvas_openai_provider_lifecycle",
+                "A natural-language request reaches the production adapter from "
+                "the visible Canvas, previews without mutation, applies through "
+                "the typed gateway, and rolls back exactly",
+                canvas_openai_probe.get("status") == "passed",
+                detail={
+                    "status": canvas_openai_probe.get("status"),
+                    "summary": canvas_openai_probe.get("summary"),
+                    "evidence": canvas_openai_probe.get("evidence"),
+                    "artifacts": canvas_openai_probe.get("artifacts"),
+                    "limitations": canvas_openai_probe.get("limitations"),
+                },
+            )
+        )
         launcher_probe = _portable_launcher_probe(project_dir)
         checks.append(
             _check(
@@ -1559,6 +1603,8 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             "This smoke proves one representative Studio lifecycle, project and relocated-delivery "
             "launcher checks, a standalone exact-current export, and a delivery hash failure path; "
             "it does not replace the complete ready-rule acceptance matrix.",
+            "The OpenAI provider gates use an in-memory HTTP/SSE wire fixture and do not "
+            "claim live-model quality or a successful paid API call.",
             "Lifecycle success and artifact QA do not establish blanket journal compliance.",
         ],
     }

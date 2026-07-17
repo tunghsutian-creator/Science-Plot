@@ -8,6 +8,7 @@ import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from sciplot_core._utils import file_sha256, json_safe
 from sciplot_core.canvas.inspector import (
@@ -15,6 +16,7 @@ from sciplot_core.canvas.inspector import (
     SUPPORTED_INSPECTOR_TYPES,
 )
 from sciplot_core.canvas.persistence import read_operation_journal
+from sciplot_core.canvas.provider import AssistantRequest
 
 CANVAS_INSPECTOR_PROBE_KIND = "sciplot_canvas_inspector_matrix"
 CANVAS_INSPECTOR_PROBE_VERSION = 1
@@ -106,6 +108,45 @@ def _exercise_document(
                 editor_types_valid = all(
                     field.editor in INSPECTOR_EDITORS for field in model.fields
                 )
+                assistant_context_valid = False
+                assistant_context_error: str | None = None
+                assistant_capability_count = 0
+                try:
+                    assistant_request = AssistantRequest(
+                        transaction_id=str(uuid4()),
+                        provider_id="inspector_matrix",
+                        intent="Validate this selected object's bounded catalog.",
+                        base_revision=window.controller.session.revision,
+                        context=window.assistant.context_summary(),
+                        allowed_proposal_kinds=("canvas_operation_batch",),
+                    )
+                    allowed_operations = assistant_request.context[
+                        "editing_capabilities"
+                    ]["allowed_operations"]
+                    editable_fields = [
+                        field for field in model.fields if not field.read_only
+                    ]
+                    assistant_capability_count = len(allowed_operations)
+                    assistant_context_valid = (
+                        assistant_capability_count == len(editable_fields)
+                        and {item["field_id"] for item in allowed_operations}
+                        == {field.field_id for field in editable_fields}
+                        and {
+                            item["setting_path"] for item in allowed_operations
+                        }
+                        == {field.setting_path for field in editable_fields}
+                        and all(
+                            item["editor"] not in {"dataset", "read_only"}
+                            for item in allowed_operations
+                        )
+                    )
+                    if not assistant_context_valid:
+                        assistant_context_error = (
+                            "Capability catalog does not exactly match editable "
+                            "Inspector fields."
+                        )
+                except (KeyError, TypeError, ValueError) as exc:
+                    assistant_context_error = str(exc)
                 coercion_errors: list[dict[str, str]] = []
                 for field in model.fields:
                     if field.read_only:
@@ -142,6 +183,9 @@ def _exercise_document(
                         "choice_fields_valid": choice_fields_valid,
                         "dataset_fields_read_only": dataset_fields_read_only,
                         "editor_types_valid": editor_types_valid,
+                        "assistant_context_valid": assistant_context_valid,
+                        "assistant_capability_count": assistant_capability_count,
+                        "assistant_context_error": assistant_context_error,
                         "current_values_coercible": not coercion_errors,
                         "coercion_errors": coercion_errors,
                         "editor_roundtrip_clean": (
@@ -345,6 +389,7 @@ def run_canvas_inspector_matrix_probe(
             or item.get("choice_fields_valid") is not True
             or item.get("dataset_fields_read_only") is not True
             or item.get("editor_types_valid") is not True
+            or item.get("assistant_context_valid") is not True
             or item.get("current_values_coercible") is not True
         )
     ]
@@ -399,7 +444,7 @@ def run_canvas_inspector_matrix_probe(
             ),
             _check(
                 "all_contextual_models_valid",
-                "Every supported object builds a finite, scoped, closed inspector model",
+                "Every supported object builds a finite, scoped manual and Assistant context model",
                 bool(object_reports) and not invalid_objects,
                 {
                     "object_count": len(object_reports),

@@ -192,6 +192,31 @@ def _build_parser() -> argparse.ArgumentParser:
         default=Path(".tmp_verify") / "canvas_assistant",
     )
     canvas_assistant_probe_parser.add_argument("--json", action="store_true")
+    openai_provider_probe_parser = subparsers.add_parser(
+        "openai-provider-probe",
+        help=argparse.SUPPRESS,
+    )
+    openai_provider_probe_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(".tmp_verify") / "openai_provider",
+    )
+    openai_provider_probe_parser.add_argument("--json", action="store_true")
+    canvas_openai_probe_parser = subparsers.add_parser(
+        "canvas-openai-provider-probe",
+        help=argparse.SUPPRESS,
+    )
+    canvas_openai_probe_parser.add_argument(
+        "target",
+        type=Path,
+        help="SciPlot project or VSZ used for the production-provider UI probe.",
+    )
+    canvas_openai_probe_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(".tmp_verify") / "canvas_openai_provider",
+    )
+    canvas_openai_probe_parser.add_argument("--json", action="store_true")
     data_mapping_probe_parser = subparsers.add_parser(
         "data-mapping-probe",
         help=argparse.SUPPRESS,
@@ -516,6 +541,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "workbench",
         "canvas-probe",
         "canvas-assistant-probe",
+        "openai-provider-probe",
+        "canvas-openai-provider-probe",
         "data-mapping-probe",
     }
     subparsers._choices_actions[:] = [  # type: ignore[attr-defined]
@@ -690,6 +717,38 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(f"SciPlot Canvas Assistant probe: {payload['status']}")
+                print(payload["artifacts"]["summary"])
+            return 0 if payload["status"] == "passed" else 1
+        if args.command == "openai-provider-probe":
+            from sciplot_core.openai_provider_probe import (
+                run_openai_provider_probe,
+            )
+
+            payload = run_openai_provider_probe(output_root=args.out)
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot OpenAI provider probe: {payload['status']}")
+                print(payload["artifacts"]["summary"])
+            return 0 if payload["status"] == "passed" else 1
+        if args.command == "canvas-openai-provider-probe":
+            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+            from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+            original_argv = list(sys.argv[1:] if argv is None else argv)
+            maybe_reexec_with_qt_runtime(original_argv)
+            from sciplot_core.canvas_openai_provider_probe import (
+                run_canvas_openai_provider_probe,
+            )
+
+            payload = run_canvas_openai_provider_probe(
+                _resolve_input(args.target, kind="Canvas OpenAI provider target"),
+                output_root=args.out,
+            )
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot Canvas OpenAI provider probe: {payload['status']}")
                 print(payload["artifacts"]["summary"])
             return 0 if payload["status"] == "passed" else 1
         if args.command == "data-mapping-probe":

@@ -637,6 +637,43 @@ class DocumentController:
             selected_id = default_id
         return self.adapter.contextual_inspector(self.session, selected_id)
 
+    def assistant_editing_capabilities(self) -> dict[str, Any]:
+        """Describe only the selected object's bounded editable Inspector fields."""
+
+        selected_id = self.session.selection.primary_object_id
+        if selected_id is None:
+            return {
+                "scope": "selected_object",
+                "target_object_id": None,
+                "allowed_operations": [],
+            }
+        model = self.adapter.contextual_inspector(self.session, selected_id)
+        operations = []
+        for field in model.fields:
+            if field.read_only:
+                continue
+            operations.append(
+                {
+                    "operation_type": "set_setting",
+                    "target_id": selected_id,
+                    "field_id": field.field_id,
+                    "section": field.section,
+                    "label": field.label,
+                    "setting_path": field.setting_path,
+                    "editor": field.editor,
+                    "current_value": json_safe(field.value),
+                    "choices": list(field.choices),
+                    "minimum": field.minimum,
+                    "maximum": field.maximum,
+                    "help_text": field.help_text,
+                }
+            )
+        return {
+            "scope": "selected_object",
+            "target_object_id": selected_id,
+            "allowed_operations": operations,
+        }
+
     def select_data_point(self, pickinfo: Any) -> dict[str, Any]:
         point = self.adapter.point_selection_from_pick(self.session, pickinfo)
         self.session.selection = CanvasSelection(

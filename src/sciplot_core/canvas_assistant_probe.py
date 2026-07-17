@@ -1926,10 +1926,26 @@ def run_canvas_assistant_probe(
                         "bounded_context_excludes_raw_values",
                         "Assistant context is structured and excludes raw dataset values",
                         context.get("kind") == "sciplot_canvas_assistant_context"
-                        and context.get("version") == 2
+                        and context.get("version") == 3
                         and context.get("raw_dataset_arrays_included") is False
                         and isinstance(context.get("document_inventory"), dict)
-                        and isinstance(context.get("review"), dict),
+                        and isinstance(context.get("review"), dict)
+                        and isinstance(context.get("editing_capabilities"), dict)
+                        and bool(
+                            context["editing_capabilities"].get(
+                                "allowed_operations"
+                            )
+                        )
+                        and all(
+                            item.get("operation_type") == "set_setting"
+                            and item.get("target_id")
+                            == context["selection"].get("primary_object_id")
+                            and item.get("editor")
+                            not in {"dataset", "read_only"}
+                            for item in context["editing_capabilities"].get(
+                                "allowed_operations", []
+                            )
+                        ),
                         context,
                     ),
                     _check(
