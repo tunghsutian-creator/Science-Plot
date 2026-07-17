@@ -341,6 +341,48 @@ create/edit/reopen/export lifecycle. The ledger binds
 `review_annotations.json`, mapping execution/ledger evidence, or
 `composition.json` whenever that state is authoritative.
 
+The E0 implementation is the `sciplot sessions` command family. Every formal
+M3 or M6 run uses one explicit shared ledger and one `round_id`; separate
+rounds, provider/model identities, or frozen build identities are reported
+independently and cannot be combined into a pass. The sequence is:
+
+```text
+sessions preregister
+  -> owner performs the declared natural task
+  -> exact-current save + PDF/TIFF + QA + delivery
+  -> owner actually closes and reopens Canvas/Composition Board
+  -> sessions witness
+  -> sessions complete
+  -> sessions status
+```
+
+Before a formal round, `sessions freeze-build` creates a wheel from one clean
+commit and verifies that its `RECORD` and package bytes exactly equal the
+active runtime. Automated promotion uses `sessions status --require m3|m6`,
+not top-level ledger integrity. A pending append blocks every claim until
+`sessions recover` proves and completes one unambiguous transaction state.
+An installed CLI receives explicit `--repo` and `--veusz-root` paths; it never
+infers either authority from the wheel's `site-packages` location.
+The release-candidate check uses the non-counting `formal_contract_probe`
+scope: it enforces that same clean frozen-build contract from an ordinary
+wheel installation while allowing only a declared synthetic fixture. It can
+prove the installed lifecycle but can never enter the M3 or M6 cohorts.
+
+The program replays journal prefixes/suffixes, accepted/not-undone AI
+transactions, exact rollback evidence, Canvas or composition state, review
+promotion, confirmed mapping, source hashes, build/package identity, QA,
+exports, and delivery. The owner supplies the semantic first-proposal score and
+the physical reopen attestation. Top-level `sessions status=passed` means only
+that ledger integrity passed; the quantitative claims remain separately at
+`m3.gate_passed` and `m6.gate_passed`. Closed values, full commands, failure
+recording, and the local trust boundary are specified in
+`docs/SESSION_EVIDENCE.md`.
+
+Confirmed mappings use the complete preregistered source-root directory as
+their initial authority. Their final ledger must retain the byte-identical
+confirmed mapping step as its prefix and the plotted table as its terminal
+snapshot; a proposal ID without this causal chain is not evidence.
+
 The normal Canvas owns high-frequency scientific editing. The Advanced Editor
 remains the low-frequency, unsupported-property, and recovery surface. A gap
 in that boundary is not permission to build a second general Veusz property

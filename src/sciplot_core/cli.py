@@ -140,6 +140,253 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Emit machine-readable JSON."
     )
 
+    sessions_parser = subparsers.add_parser(
+        "sessions",
+        help="Preregister and verify real-use evidence sessions.",
+    )
+    from sciplot_core.session_evidence import (
+        ACCEPTANCE_LANES,
+        CANONICAL_MODEL_TASKS,
+        ENTRY_ROUTES,
+        EXPECTED_EVIDENCE,
+        EXTERNAL_EDITOR_USES,
+        MODEL_SCORES,
+        SESSION_OUTCOMES,
+        SESSION_SCOPES,
+        SOURCE_CLASSES,
+    )
+
+    sessions_subparsers = sessions_parser.add_subparsers(
+        dest="sessions_command",
+        required=True,
+    )
+    sessions_preregister_parser = sessions_subparsers.add_parser(
+        "preregister",
+        help="Bind a natural task, source, owner, build, and journal before work.",
+    )
+    sessions_preregister_parser.add_argument("project", type=Path)
+    sessions_preregister_parser.add_argument(
+        "--ledger",
+        type=Path,
+        help="Evidence JSONL; defaults inside PROJECT/.sciplot_evidence.",
+    )
+    sessions_preregister_parser.add_argument(
+        "--source",
+        type=Path,
+        action="append",
+        required=True,
+        help="Explicit raw/source path; repeat for multiple sources.",
+    )
+    sessions_preregister_parser.add_argument(
+        "--lane",
+        choices=ACCEPTANCE_LANES,
+        required=True,
+    )
+    sessions_preregister_parser.add_argument(
+        "--scope",
+        choices=SESSION_SCOPES,
+        required=True,
+    )
+    sessions_preregister_parser.add_argument(
+        "--source-class",
+        choices=SOURCE_CLASSES,
+        required=True,
+    )
+    sessions_preregister_parser.add_argument("--task", required=True)
+    sessions_preregister_parser.add_argument(
+        "--round-id",
+        help="Required formal evaluation/qualification round identity.",
+    )
+    sessions_preregister_parser.add_argument("--owner", required=True)
+    sessions_preregister_parser.add_argument(
+        "--entry-route",
+        choices=ENTRY_ROUTES,
+        required=True,
+    )
+    sessions_preregister_parser.add_argument(
+        "--build-artifact",
+        type=Path,
+        required=True,
+    )
+    sessions_preregister_parser.add_argument(
+        "--repo",
+        type=Path,
+        help=(
+            "Explicit clean SciPlot Git checkout. Required when the active "
+            "CLI is installed outside that checkout."
+        ),
+    )
+    sessions_preregister_parser.add_argument(
+        "--veusz-root",
+        type=Path,
+        help=(
+            "Explicit Veusz runtime root. Required when it is not bundled "
+            "under the active SciPlot checkout."
+        ),
+    )
+    sessions_preregister_parser.add_argument(
+        "--expected",
+        action="append",
+        choices=EXPECTED_EVIDENCE,
+        required=True,
+        help="Closed evidence ID; repeat when the session covers several.",
+    )
+    sessions_preregister_parser.add_argument(
+        "--journal",
+        type=Path,
+        required=True,
+    )
+    sessions_preregister_parser.add_argument("--provider")
+    sessions_preregister_parser.add_argument("--model")
+    sessions_preregister_parser.add_argument(
+        "--canonical-task",
+        choices=CANONICAL_MODEL_TASKS,
+    )
+    sessions_preregister_parser.add_argument("--attempt", type=int)
+    sessions_preregister_parser.add_argument("--session-id")
+    sessions_preregister_parser.add_argument("--json", action="store_true")
+
+    sessions_witness_parser = sessions_subparsers.add_parser(
+        "witness",
+        help="Record the owner-attested close/reopen against replayed authority.",
+    )
+    sessions_witness_parser.add_argument("ledger", type=Path)
+    sessions_witness_parser.add_argument("session_id")
+    sessions_witness_parser.add_argument("--owner", required=True)
+    sessions_witness_parser.add_argument(
+        "--journal",
+        type=Path,
+        required=True,
+    )
+    sessions_witness_parser.add_argument("--canvas-session", type=Path)
+    sessions_witness_parser.add_argument("--document", type=Path)
+    sessions_witness_parser.add_argument("--review", type=Path)
+    sessions_witness_parser.add_argument("--mapping-execution", type=Path)
+    sessions_witness_parser.add_argument("--composition", type=Path)
+    sessions_witness_parser.add_argument("--delivery-manifest", type=Path)
+    sessions_witness_parser.add_argument("--json", action="store_true")
+
+    sessions_complete_parser = sessions_subparsers.add_parser(
+        "complete",
+        help="Replay final authority, QA, exports, delivery, and counting rules.",
+    )
+    sessions_complete_parser.add_argument("ledger", type=Path)
+    sessions_complete_parser.add_argument("session_id")
+    sessions_complete_parser.add_argument("--owner", required=True)
+    sessions_complete_parser.add_argument(
+        "--outcome",
+        choices=SESSION_OUTCOMES,
+        required=True,
+    )
+    sessions_complete_parser.add_argument(
+        "--active-seconds",
+        type=float,
+        required=True,
+    )
+    sessions_complete_parser.add_argument("--manifest", type=Path)
+    sessions_complete_parser.add_argument(
+        "--fallback",
+        action="append",
+        default=[],
+        help="Closed fallback class plus reason as CLASS:reason.",
+    )
+    sessions_complete_parser.add_argument(
+        "--external-editor-use",
+        choices=EXTERNAL_EDITOR_USES,
+        default="none",
+    )
+    sessions_complete_parser.add_argument(
+        "--failure",
+        action="append",
+        default=[],
+    )
+    sessions_complete_parser.add_argument(
+        "--model-score",
+        choices=MODEL_SCORES,
+        default="not_applicable",
+    )
+    sessions_complete_parser.add_argument("--json", action="store_true")
+
+    sessions_status_parser = sessions_subparsers.add_parser(
+        "status",
+        help="Verify chain integrity and report M3/M6 gates without inflating counts.",
+    )
+    sessions_status_parser.add_argument("ledger", type=Path)
+    sessions_status_parser.add_argument(
+        "--require",
+        action="append",
+        choices=("integrity", "m3", "m6"),
+        default=[],
+        help="Exit nonzero unless the named integrity/gate requirement passes.",
+    )
+    sessions_status_parser.add_argument("--json", action="store_true")
+
+    sessions_recover_parser = sessions_subparsers.add_parser(
+        "recover",
+        help="Safely finish or clear a proven interrupted ledger append.",
+    )
+    sessions_recover_parser.add_argument("ledger", type=Path)
+    sessions_recover_parser.add_argument("--json", action="store_true")
+
+    sessions_schema_parser = sessions_subparsers.add_parser(
+        "schema",
+        help="Print the closed evidence enums, event fields, and aggregate gates.",
+    )
+    sessions_schema_parser.add_argument("--json", action="store_true")
+
+    sessions_freeze_parser = sessions_subparsers.add_parser(
+        "freeze-build",
+        help="Build and verify a wheel that exactly matches the active runtime.",
+    )
+    sessions_freeze_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(".tmp_verify") / "frozen_builds",
+    )
+    sessions_freeze_parser.add_argument(
+        "--repo",
+        type=Path,
+        help=(
+            "Clean SciPlot Git checkout to build; defaults to the active "
+            "source checkout."
+        ),
+    )
+    sessions_freeze_parser.add_argument(
+        "--veusz-root",
+        type=Path,
+        help=(
+            "Veusz runtime root to fingerprint; defaults to the configured "
+            "active runtime."
+        ),
+    )
+    sessions_freeze_parser.add_argument("--json", action="store_true")
+
+    session_evidence_probe_parser = subparsers.add_parser(
+        "session-evidence-probe",
+        help=argparse.SUPPRESS,
+    )
+    session_evidence_probe_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(".tmp_verify") / "session_evidence",
+    )
+    session_evidence_probe_parser.add_argument(
+        "--build-artifact",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
+    session_evidence_probe_parser.add_argument(
+        "--repo",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
+    session_evidence_probe_parser.add_argument(
+        "--veusz-root",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
+    session_evidence_probe_parser.add_argument("--json", action="store_true")
+
     canvas_parser = subparsers.add_parser(
         "canvas",
         help="Open the experimental native SciPlot live Canvas.",
@@ -794,6 +1041,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "openai-provider-probe",
         "canvas-openai-provider-probe",
         "data-mapping-probe",
+        "session-evidence-probe",
     }
     subparsers._choices_actions[:] = [  # type: ignore[attr-defined]
         action
@@ -917,6 +1165,154 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(f"SciPlot runtime smoke: {payload['status']}")
+                print(payload["artifacts"]["summary"])
+            return 0 if payload["status"] == "passed" else 1
+        if args.command == "sessions":
+            from sciplot_core.session_evidence import (
+                complete_session,
+                default_session_ledger,
+                preregister_session,
+                recover_session_ledger,
+                session_evidence_schema,
+                session_ledger_status,
+                witness_session_reopen,
+            )
+
+            requirements_passed = True
+            if args.sessions_command == "preregister":
+                if args.scope != "synthetic_probe" and args.ledger is None:
+                    raise ValueError(
+                        "Formal sessions require an explicit shared --ledger."
+                    )
+                ledger = args.ledger or default_session_ledger(args.project)
+                payload = preregister_session(
+                    ledger,
+                    project_path=args.project,
+                    source_paths=args.source,
+                    lane=args.lane,
+                    scope=args.scope,
+                    source_class=args.source_class,
+                    task=args.task,
+                    round_id=args.round_id,
+                    owner=args.owner,
+                    entry_route=args.entry_route,
+                    build_artifact=args.build_artifact,
+                    repo_root=args.repo,
+                    veusz_root=args.veusz_root,
+                    expected_evidence=args.expected,
+                    journal_path=args.journal,
+                    provider=args.provider,
+                    model=args.model,
+                    canonical_task=args.canonical_task,
+                    attempt=args.attempt,
+                    session_id=args.session_id,
+                )
+            elif args.sessions_command == "witness":
+                payload = witness_session_reopen(
+                    args.ledger,
+                    args.session_id,
+                    owner=args.owner,
+                    journal_path=args.journal,
+                    canvas_session_path=args.canvas_session,
+                    document_path=args.document,
+                    review_path=args.review,
+                    mapping_execution_path=args.mapping_execution,
+                    composition_path=args.composition,
+                    composition_delivery_path=args.delivery_manifest,
+                )
+            elif args.sessions_command == "complete":
+                payload = complete_session(
+                    args.ledger,
+                    args.session_id,
+                    owner=args.owner,
+                    outcome=args.outcome,
+                    active_seconds=args.active_seconds,
+                    manifest_path=args.manifest,
+                    fallback_values=args.fallback,
+                    external_editor_use=args.external_editor_use,
+                    failures=args.failure,
+                    model_score=args.model_score,
+                )
+            elif args.sessions_command == "recover":
+                payload = recover_session_ledger(args.ledger)
+            elif args.sessions_command == "schema":
+                payload = session_evidence_schema()
+            elif args.sessions_command == "freeze-build":
+                from sciplot_core._paths import (
+                    REPO_ROOT,
+                    VEUSZ_ROOT,
+                    VEUSZ_UPSTREAM_COMMIT,
+                )
+                from sciplot_core.session_evidence_runtime import (
+                    freeze_runtime_wheel,
+                )
+
+                payload = freeze_runtime_wheel(
+                    repo_root=args.repo or REPO_ROOT,
+                    output_root=args.out,
+                    veusz_root=args.veusz_root or VEUSZ_ROOT,
+                    veusz_upstream_commit=VEUSZ_UPSTREAM_COMMIT,
+                )
+            else:
+                payload = session_ledger_status(args.ledger)
+                requested = sorted(set(args.require))
+                passed_requirements = {
+                    "integrity": payload.get("status") == "passed",
+                    "m3": bool(
+                        payload.get("status") == "passed"
+                        and isinstance(payload.get("m3"), dict)
+                        and payload["m3"].get("gate_passed") is True
+                    ),
+                    "m6": bool(
+                        payload.get("status") == "passed"
+                        and isinstance(payload.get("m6"), dict)
+                        and payload["m6"].get("gate_passed") is True
+                    ),
+                }
+                failed_requirements = [
+                    name for name in requested if not passed_requirements[name]
+                ]
+                requirements_passed = not failed_requirements
+                payload["requirements"] = {
+                    "requested": requested,
+                    "results": {name: passed_requirements[name] for name in requested},
+                    "passed": requirements_passed,
+                    "failed": failed_requirements,
+                }
+            if args.json:
+                _print_json(payload)
+            else:
+                print(
+                    f"SciPlot session evidence: "
+                    f"{payload.get('status') or payload.get('outcome')}"
+                )
+                if payload.get("session_id"):
+                    print(payload["session_id"])
+                elif isinstance(payload.get("summary"), dict):
+                    print(
+                        "Qualifying M6 sessions: "
+                        f"{payload['summary'].get('qualifying_m6_count', 0)}/15"
+                    )
+            return 0 if payload.get("status") != "failed" and requirements_passed else 1
+        if args.command == "session-evidence-probe":
+            from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+            original_argv = list(sys.argv[1:] if argv is None else argv)
+            maybe_reexec_with_qt_runtime(original_argv)
+            from sciplot_core.session_evidence_probe import (
+                run_session_evidence_probe,
+            )
+
+            payload = run_session_evidence_probe(
+                output_root=args.out,
+                frozen_build_artifact=args.build_artifact,
+                repo_root=args.repo,
+                veusz_root=args.veusz_root,
+            )
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot session evidence probe: {payload['status']}")
                 print(payload["artifacts"]["summary"])
             return 0 if payload["status"] == "passed" else 1
         if args.command == "canvas":

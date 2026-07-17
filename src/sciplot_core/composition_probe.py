@@ -7,7 +7,7 @@ import shutil
 import tempfile
 import traceback
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from sciplot_core._utils import file_sha256, json_safe
 from sciplot_core.canvas.composition import (
@@ -72,6 +72,7 @@ def run_composition_probe(
     documents: list[Path] | tuple[Path, ...],
     *,
     output_root: Path,
+    before_actions: Callable[[Any, list[Path], Path], Any] | None = None,
 ) -> dict[str, Any]:
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from PyQt6 import QtCore, QtTest, QtWidgets
@@ -100,6 +101,7 @@ def run_composition_probe(
     report_path = run_root / "composition_probe_report.html"
     checks: list[dict[str, Any]] = []
     evidence: dict[str, Any] = {}
+    before_actions_result: Any = None
 
     application = QtWidgets.QApplication.instance()
     owns_application = application is None
@@ -170,6 +172,12 @@ def run_composition_probe(
             name="M4 Composition Probe",
             layout_id="triple_equal_60",
         )
+        if before_actions is not None:
+            before_actions_result = before_actions(
+                workspace,
+                probe_sources,
+                run_root,
+            )
         controller = CompositionController(workspace)
 
         preview_batch = controller.placement_batch("module_a", "panel_b")
@@ -446,6 +454,7 @@ def run_composition_probe(
             "compiled_layouts": compiled_layouts,
             "board_screenshot": str(screenshot),
             "delivery": delivery,
+            "before_actions": before_actions_result,
         }
     except Exception as exc:
         checks.append(

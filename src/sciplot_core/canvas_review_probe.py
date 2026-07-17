@@ -7,7 +7,7 @@ import shutil
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import fitz
 
@@ -42,9 +42,7 @@ def _tree_hash(path: Path) -> str:
         digest.update(path.name.encode("utf-8"))
         digest.update(path.read_bytes())
         return digest.hexdigest()
-    for child in sorted(
-        value for value in path.rglob("*") if value.is_file()
-    ):
+    for child in sorted(value for value in path.rglob("*") if value.is_file()):
         digest.update(str(child.relative_to(path)).encode("utf-8"))
         digest.update(child.read_bytes())
     return digest.hexdigest()
@@ -67,9 +65,7 @@ def _pdf_visual_hash(path: Path) -> str:
                 matrix=fitz.Matrix(2.0, 2.0),
                 alpha=False,
             )
-            digest.update(
-                f"{pixmap.width}x{pixmap.height}:{pixmap.n}".encode("utf-8")
-            )
+            digest.update(f"{pixmap.width}x{pixmap.height}:{pixmap.n}".encode("utf-8"))
             digest.update(pixmap.samples)
     return digest.hexdigest()
 
@@ -84,9 +80,7 @@ def _export_content_hashes(
         export_format = str(item["format"])
         path = Path(str(item["path"]))
         hashes[export_format] = (
-            _pdf_visual_hash(path)
-            if export_format == "pdf"
-            else file_sha256(path)
+            _pdf_visual_hash(path) if export_format == "pdf" else file_sha256(path)
         )
     return hashes
 
@@ -103,16 +97,49 @@ def _copy_target(source: Path, run_root: Path) -> Path:
                 "__pycache__",
             ),
         )
+        _rebase_copied_project_json(source, target)
         return target
     target = run_root / source.name
     shutil.copy2(source, target)
     return target
 
 
+def _rebase_copied_project_json(source: Path, target: Path) -> None:
+    source_root = source.expanduser().resolve()
+    target_root = target.expanduser().resolve()
+
+    def rebase(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: rebase(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [rebase(item) for item in value]
+        if not isinstance(value, str) or not value.startswith("/"):
+            return value
+        candidate = Path(value).expanduser()
+        try:
+            relative = candidate.resolve().relative_to(source_root)
+        except (OSError, ValueError):
+            return value
+        return str((target_root / relative).resolve())
+
+    for path in sorted(target_root.rglob("*.json")):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        rebased = rebase(payload)
+        if rebased != payload:
+            path.write_text(
+                json.dumps(rebased, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+
+
 def run_canvas_review_probe(
     target: Path,
     *,
     output_root: Path,
+    before_actions: Callable[[Any, Path, Path], Any] | None = None,
 ) -> dict[str, Any]:
     """Exercise the full non-exported review and native-promotion lifecycle."""
 
@@ -135,6 +162,7 @@ def run_canvas_review_probe(
     window: Any = None
     reopened: Any = None
     final_window: Any = None
+    before_actions_result: Any = None
 
     source_hash_before = _tree_hash(source)
     try:
@@ -158,14 +186,19 @@ def run_canvas_review_probe(
         progress_path.write_text("target_copied\n", encoding="utf-8")
         workspace = resolve_canvas_workspace(copied_target)
         progress_path.write_text("workspace_resolved\n", encoding="utf-8")
+        if before_actions is not None:
+            before_actions_result = before_actions(
+                workspace,
+                copied_target,
+                run_root,
+            )
+            progress_path.write_text("before_actions_completed\n", encoding="utf-8")
         baseline_exports = export_studio_document(
             workspace.document_path,
             formats=["pdf", "tiff_300"],
             output_dir=run_root / "baseline_exports",
         )
-        baseline_hashes = _export_hashes(
-            list(baseline_exports.get("exports") or [])
-        )
+        baseline_hashes = _export_hashes(list(baseline_exports.get("exports") or []))
         baseline_content_hashes = _export_content_hashes(
             list(baseline_exports.get("exports") or [])
         )
@@ -203,9 +236,7 @@ def run_canvas_review_probe(
                 item
                 for item in window.controller.inventory
                 if item.get("object_type") == "graph"
-                and str(item.get("path")).startswith(
-                    f"{adapter.current_page_path}"
-                )
+                and str(item.get("path")).startswith(f"{adapter.current_page_path}")
             )
             data_item = None
             for item in window.controller.inventory:
@@ -308,9 +339,7 @@ def run_canvas_review_probe(
                     text="Freehand review trace",
                 ),
             ]
-            window._refresh_review_layer(
-                selected_id=annotations[0].annotation_id
-            )
+            window._refresh_review_layer(selected_id=annotations[0].annotation_id)
             application.processEvents()
             overlay_screenshot_saved = window.grab().save(
                 str(screenshot_path),
@@ -362,9 +391,7 @@ def run_canvas_review_probe(
                     "color": "#ff3b30",
                 },
             )
-            window._refresh_review_layer(
-                selected_id=updated_text.annotation_id
-            )
+            window._refresh_review_layer(selected_id=updated_text.annotation_id)
             application.processEvents()
 
             review_export = window.export_current()
@@ -374,9 +401,7 @@ def run_canvas_review_probe(
             review_export_content_hashes = _export_content_hashes(
                 list(review_export.get("exports") or [])
             )
-            prepromotion_journal = read_operation_journal(
-                workspace.journal_path
-            )
+            prepromotion_journal = read_operation_journal(workspace.journal_path)
             window.close()
             application.processEvents()
             window = None
@@ -386,9 +411,7 @@ def run_canvas_review_probe(
             reopened.show()
             application.processEvents()
             reopened._refresh_review_layer()
-            reopened_annotations = list(
-                reopened.controller.review_annotations
-            )
+            reopened_annotations = list(reopened.controller.review_annotations)
             reopened_active = reopened.controller.active_review_annotations()
             reopened_overlay_count = len(reopened.review_overlay._items)
 
@@ -402,9 +425,7 @@ def run_canvas_review_probe(
                         annotation.annotation_id
                     )
                 )
-                render_hashes.append(
-                    reopened.controller.adapter.render_fingerprint()
-                )
+                render_hashes.append(reopened.controller.adapter.render_fingerprint())
             reopened._refresh_review_layer()
             application.processEvents()
 
@@ -415,9 +436,7 @@ def run_canvas_review_probe(
             )
             freehand_rejected = False
             try:
-                reopened.controller.promote_review_annotation(
-                    freehand.annotation_id
-                )
+                reopened.controller.promote_review_annotation(freehand.annotation_id)
             except ValueError:
                 freehand_rejected = True
 
@@ -454,8 +473,7 @@ def run_canvas_review_probe(
             promoted_inventory = [
                 item
                 for item in reopened.controller.inventory
-                if item.get("object_type")
-                in {"label", "line", "rect", "ellipse"}
+                if item.get("object_type") in {"label", "line", "rect", "ellipse"}
                 and str(item.get("display_name", "")).startswith("review_")
             ]
             existing_object_ids_after_promotion = {
@@ -471,9 +489,7 @@ def run_canvas_review_probe(
             final_window = SciPlotCanvasWindow(workspace, interactive=False)
             final_window.show()
             application.processEvents()
-            final_annotations = list(
-                final_window.controller.review_annotations
-            )
+            final_annotations = list(final_window.controller.review_annotations)
             final_promoted = [
                 annotation
                 for annotation in final_annotations
@@ -483,8 +499,7 @@ def run_canvas_review_probe(
             final_native = [
                 item
                 for item in final_window.controller.inventory
-                if item.get("object_type")
-                in {"label", "line", "rect", "ellipse"}
+                if item.get("object_type") in {"label", "line", "rect", "ellipse"}
                 and str(item.get("display_name", "")).startswith("review_")
             ]
             journal = read_operation_journal(workspace.journal_path)
@@ -517,10 +532,7 @@ def run_canvas_review_probe(
                         "Text, arrow, rectangle, ellipse, and freehand marks persist in the sidecar",
                         len(annotations) == 5
                         and len(reopened_annotations) == 5
-                        and {
-                            annotation.shape
-                            for annotation in reopened_annotations
-                        }
+                        and {annotation.shape for annotation in reopened_annotations}
                         == {
                             "text",
                             "arrow",
@@ -532,10 +544,7 @@ def run_canvas_review_probe(
                     _check(
                         "all_anchor_spaces_resolve",
                         "Page, normalized-page, graph, data, and object anchors survive zoom and structural QA",
-                        {
-                            annotation.coordinate_space
-                            for annotation in annotations
-                        }
+                        {annotation.coordinate_space for annotation in annotations}
                         == {
                             "page",
                             "normalized_page",
@@ -589,8 +598,7 @@ def run_canvas_review_probe(
                     _check(
                         "review_marks_do_not_leak_into_exports",
                         "Unpromoted review marks leave PDF page pixels and TIFF bytes unchanged",
-                        baseline_content_hashes
-                        == review_export_content_hashes
+                        baseline_content_hashes == review_export_content_hashes
                         and review_export.get("ready_to_use") is True,
                         {
                             "baseline_bytes": baseline_hashes,
@@ -656,21 +664,16 @@ def run_canvas_review_probe(
                         ellipse_after_undo.state == "review_only"
                         and ellipse_after_undo.promoted_object_id is None
                         and ellipse_after_redo.state == "promoted"
-                        and undo_entry.get("review_transition", {}).get(
-                            "direction"
-                        )
+                        and undo_entry.get("review_transition", {}).get("direction")
                         == "undo"
-                        and redo_entry.get("review_transition", {}).get(
-                            "direction"
-                        )
+                        and redo_entry.get("review_transition", {}).get("direction")
                         == "redo",
                     ),
                     _check(
                         "promoted_annotations_change_exact_current_exports",
                         "Promoted native annotations appear in the saved VSZ and final exports",
                         final_document_hash != document_hash_before
-                        and promoted_export_content_hashes
-                        != baseline_content_hashes
+                        and promoted_export_content_hashes != baseline_content_hashes
                         and promoted_export.get("ready_to_use") is True,
                         {
                             "baseline_bytes": baseline_hashes,
@@ -690,13 +693,11 @@ def run_canvas_review_probe(
                         and final_active[0].shape == "freehand",
                         {
                             "promoted": [
-                                annotation.to_dict()
-                                for annotation in final_promoted
+                                annotation.to_dict() for annotation in final_promoted
                             ],
                             "native": final_native,
                             "active": [
-                                annotation.to_dict()
-                                for annotation in final_active
+                                annotation.to_dict() for annotation in final_active
                             ],
                         },
                     ),
@@ -704,9 +705,9 @@ def run_canvas_review_probe(
                         "review_structural_qa_passes",
                         "Review sidecar consistency and anchors pass structural QA after promotion",
                         final_structural_qa.get("ready_for_artifact_qa") is True
-                        and not (
-                            final_structural_qa.get("summary") or {}
-                        ).get("failed_ids"),
+                        and not (final_structural_qa.get("summary") or {}).get(
+                            "failed_ids"
+                        ),
                         final_structural_qa,
                     ),
                     _check(
@@ -718,8 +719,7 @@ def run_canvas_review_probe(
                         )
                         == 5
                         and sum(
-                            entry.get("event")
-                            == "review_annotation_promoted"
+                            entry.get("event") == "review_annotation_promoted"
                             for entry in journal
                         )
                         == 4
@@ -765,6 +765,7 @@ def run_canvas_review_probe(
                 "baseline_export_hashes": baseline_hashes,
                 "review_export_hashes": review_export_hashes,
                 "promoted_export_hashes": promoted_export_hashes,
+                "promoted_export": promoted_export,
                 "document_hash_before": document_hash_before,
                 "document_hash_after": final_document_hash,
                 "promotion_count": len(promotion_entries),
@@ -772,6 +773,7 @@ def run_canvas_review_probe(
                 "final_promoted_count": len(final_promoted),
                 "final_active_count": len(final_active),
                 "journal_event_count": len(journal),
+                "before_actions": before_actions_result,
             }
     except Exception as exc:
         error = {
@@ -798,9 +800,7 @@ def run_canvas_review_probe(
                     except Exception:
                         pass
 
-    failed_ids = [
-        str(check["id"]) for check in checks if check["status"] == "failed"
-    ]
+    failed_ids = [str(check["id"]) for check in checks if check["status"] == "failed"]
     payload = {
         "kind": CANVAS_REVIEW_PROBE_KIND,
         "version": CANVAS_REVIEW_PROBE_VERSION,
@@ -808,9 +808,7 @@ def run_canvas_review_probe(
         "status": "passed" if not failed_ids else "failed",
         "summary": {
             "check_count": len(checks),
-            "passed_count": sum(
-                check["status"] == "passed" for check in checks
-            ),
+            "passed_count": sum(check["status"] == "passed" for check in checks),
             "failed_ids": failed_ids,
         },
         "checks": checks,

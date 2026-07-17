@@ -382,10 +382,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             preview=mapping_preview,
             confirmation=mapping_confirmation.to_dict(),
             execution_manifest=str(
-                root
-                / "mapped_projects"
-                / proposal.proposal_id
-                / "execution.json"
+                root / "mapped_projects" / proposal.proposal_id / "execution.json"
             ),
             execution_manifest_sha256="f" * 64,
             mapped_document=str(
@@ -398,9 +395,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             mapped_document_sha256="e" * 64,
         )
     )
-    executed_mapping_record = AssistantRequestRecord.from_dict(
-        mapping_record.to_dict()
-    )
+    executed_mapping_record = AssistantRequestRecord.from_dict(mapping_record.to_dict())
     executed_mapping_reject_blocked = _raises_value_error(
         lambda: executed_mapping_record.mark_proposal_outcome(accepted=False)
     )
@@ -527,6 +522,45 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         revision=1,
     )
     reconciled_by_path = {record.current_path: record for record in reconciled_records}
+    revival_session = CanvasSession(
+        project_id="object_identity_revival_probe",
+        document_id="22222222-2222-4222-8222-222222222222",
+        document_path=str(root / "revival_document.vsz"),
+        state="canvas_ready",
+    )
+    original_record = revival_session.object_registry.reconcile(
+        [("root/page[0]/label[0]", "/page/review_mark", "label")],
+        revision=0,
+    )[0]
+    revival_session.object_registry.reconcile([], revision=1)
+    replacement_record = revival_session.object_registry.reconcile(
+        [("root/page[0]/label[0]", "/page/review_mark", "label")],
+        revision=2,
+    )[0]
+    revival_session.object_registry.reconcile([], revision=3)
+    explicitly_revived_record = revival_session.object_registry.reconcile(
+        [("root/page[0]/label[0]", "/page/review_mark", "label")],
+        revision=4,
+        revive_object_ids={original_record.object_id},
+    )[0]
+    unknown_revival_rejected = _raises_value_error(
+        lambda: revival_session.object_registry.reconcile(
+            [("root/page[0]/label[0]", "/page/review_mark", "label")],
+            revision=5,
+            revive_object_ids={"unknown-retired-id"},
+        )
+    )
+    registry_before_failed_revival = revival_session.object_registry.to_dict()
+    mismatched_revival_rejected = _raises_value_error(
+        lambda: revival_session.object_registry.reconcile(
+            [("root/page[0]/label[0]", "/page/different_mark", "label")],
+            revision=5,
+            revive_object_ids={replacement_record.object_id},
+        )
+    )
+    failed_revival_is_atomic = (
+        revival_session.object_registry.to_dict() == registry_before_failed_revival
+    )
     restored_batch = CanvasOperationBatch.from_dict(batch.to_dict())
     restored_native_annotation_operation = CanvasOperation.from_dict(
         native_annotation_operation.to_dict()
@@ -878,8 +912,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             and mapping_record.parsed_mapping_state.status == "executed"
             and mapping_record.parsed_mapping_state.execution_manifest_sha256
             == "f" * 64
-            and mapping_record.parsed_mapping_state.mapped_document_sha256
-            == "e" * 64
+            and mapping_record.parsed_mapping_state.mapped_document_sha256 == "e" * 64
             and executed_mapping_reject_blocked,
         ),
         _check(
@@ -920,6 +953,16 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             reconciled_by_path["/page/title"].object_id == existing_label.object_id
             and reconciled_by_path["/page/review_contract"].object_id
             != existing_label.object_id,
+        ),
+        _check(
+            "retired_object_identity_requires_explicit_revival",
+            "A new same-path object receives a new ID while undo/redo can "
+            "explicitly revive the exact retired ID",
+            replacement_record.object_id != original_record.object_id
+            and explicitly_revived_record.object_id == original_record.object_id
+            and unknown_revival_rejected
+            and mismatched_revival_rejected
+            and failed_revival_is_atomic,
         ),
         _check(
             "typed_operation_roundtrip",

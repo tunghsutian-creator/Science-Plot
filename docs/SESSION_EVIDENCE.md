@@ -1,0 +1,277 @@
+# SciPlot Session Evidence Contract
+
+Version 1 is the counting authority for the M3 production-model round and the
+M6 personal-product cutover. No run performed before preregistration can be
+promoted into either gate.
+
+The contract has three events:
+
+1. `preregistered` binds the natural task, explicit source hashes, project
+   baseline, owner, lane, scope, entry route, clean Git commit, frozen
+   wheel/package hash, validated-envelope registry, Veusz runtime identity,
+   provider/model when applicable, expected evidence, and the operation-journal
+   prefix;
+2. `reopen_witnessed` is recorded only after the owner really closes and
+   reopens the final Canvas or Composition Board. SciPlot replays the current
+   session/model, final revision, exact-current VSZ hash, journal suffix,
+   PDF/TIFF pair, QA state, and any review or mapping authority;
+3. `completed` re-verifies unchanged sources, build identity, witnessed
+   authority, passing final manifest, QA, PDF/TIFF hashes, editable VSZ parity,
+   delivery, fallbacks, elapsed active time, and the owner outcome.
+
+The JSONL ledger is hash-chained and has a companion `.head.json` checkpoint.
+This detects accidental payload edits, reordering, middle deletion, ordinary
+tail truncation, and replacement. It is not a signature, remote timestamp, or
+identity provider. A person with write access can rewrite the ledger and its
+checkpoint together. The owner identity and the fact that a GUI was physically
+reopened are explicit attestations; the program binds the files observed at
+that moment. Every append first writes and fsyncs a `.pending.json` transaction.
+While that file exists, status and further appends fail closed. `sessions
+recover` completes only one of the three provable interrupted states
+(pending-only, appended-tail, or completed-head) and refuses every mismatch.
+
+Use one explicit central ledger for every session in a formal M3 evaluation
+round or M6 qualification round. Per-project defaults are convenient for
+isolated diagnostics but cannot produce one aggregate dossier.
+
+## Closed vocabulary
+
+Acceptance lanes:
+
+- `rheology_dma_torque`
+- `spectroscopy_scattering_chromatography`
+- `thermal_analysis`
+- `mechanical_categorical_swelling`
+- `scalar_review_composition`
+
+Scopes:
+
+- `m3_live_model_scored`
+- `m6_discovery`
+- `m6_qualification`
+- `formal_contract_probe`
+- `synthetic_probe`
+
+`formal_contract_probe` exists only to prove the complete clean-checkout,
+frozen-wheel, installed-CLI, runtime-identity, preregistration, reopen, and
+completion path with a synthetic fixture. It requires the same clean commit,
+explicit `round_id`, verified wheel, repository, and Veusz runtime as a formal
+round, but it is deliberately ineligible for M3 or M6 and cannot be promoted
+into either count. Ordinary `synthetic_probe` does not require a frozen build.
+
+Source classes:
+
+- `owner_authorized_real`
+- `public_authorized_real`
+- `synthetic_contract_fixture`
+
+Entry routes:
+
+- `studio`
+- `canvas`
+- `compose`
+- `autoplot`
+- `one_step`
+- `mapped_candidate_canvas`
+- `advanced_editor`
+- `cli_run`
+
+Expected evidence IDs:
+
+- `canvas_lifecycle`
+- `provider_disabled`
+- `ai_operation`
+- `cancellation_rollback`
+- `data_mapping`
+- `review_sidecar`
+- `review_promotion`
+- `composition_lifecycle`
+
+M3 canonical tasks:
+
+- `axis_format`
+- `multi_series`
+- `spatial_legend`
+- `review_promotion`
+- `qa_layout_repair`
+- `cancellation_rollback`
+
+Fallback classes:
+
+- `p0_integrity`
+- `p1_ordinary`
+- `p2_low_frequency`
+- `p3_distribution`
+
+P0 and P1 cannot complete as `pass`. P2 can remain as an honest low-frequency
+outcome, but any fallback or Advanced Editor use prevents that session from
+qualifying for the final M6 fifteen.
+
+## Owner workflow
+
+Use explicit raw/source paths. Do not pass the mutable SciPlot project root as
+the source directory, and do not place the evidence ledger inside a directory
+whose tree hash is being treated as raw-source authority.
+
+Freeze the exact clean committed runtime before a formal round:
+
+```bash
+skill/scripts/sciplot sessions freeze-build \
+  --out /absolute/path/to/frozen_builds \
+  --repo /absolute/path/to/clean/sciplot-checkout \
+  --veusz-root /absolute/path/to/veusz-runtime \
+  --json
+```
+
+The command builds a wheel without dependency resolution, verifies every
+wheel `RECORD` member, and requires the active `sciplot_core`, `sciplot_gui`,
+and `sciplot_recipes` bytes to match the wheel exactly. The preregistration
+also binds the validated-envelope registry plus the active Veusz, PyQt/linked
+Qt, Python, platform, and dependency fingerprints. Use the wheel reported by
+`frozen_build.json`; an arbitrary ZIP or stale wheel is rejected. The wrapper
+supplies its source and runtime roots automatically. A normally installed
+wheel must pass explicit `--repo` and `--veusz-root` paths so no checkout or
+renderer location is inferred from `site-packages`.
+
+Before doing the declared work:
+
+```bash
+skill/scripts/sciplot sessions preregister PROJECT \
+  --ledger /absolute/path/to/m6_discovery_2026_07.jsonl \
+  --source RAW_SOURCE \
+  --lane spectroscopy_scattering_chromatography \
+  --scope m6_discovery \
+  --source-class owner_authorized_real \
+  --task "Create and refine the cross-sample FTIR comparison" \
+  --round-id m6_discovery_2026_07 \
+  --owner dongxutian \
+  --entry-route canvas \
+  --build-artifact /absolute/path/to/frozen-sciplot.whl \
+  --repo /absolute/path/to/clean/sciplot-checkout \
+  --veusz-root /absolute/path/to/veusz-runtime \
+  --expected canvas_lifecycle \
+  --expected provider_disabled \
+  --journal PROJECT/.sciplot_canvas/operation_journal.jsonl \
+  --json
+```
+
+For a formal round, also pass one shared absolute `--ledger` path to every
+preregistration. The per-project default is
+`PROJECT/.sciplot_evidence/session_evidence.jsonl`. Formal scopes reject a
+missing `--round-id`, a dirty or uncommitted worktree, and synthetic source
+class. The non-counting `formal_contract_probe` accepts only the synthetic
+source class while still enforcing the clean frozen-build contract.
+
+Perform the task through SciPlot, save the exact-current VSZ, export the
+canonical PDF and 300 dpi TIFF, and let the normal QA/delivery path finish.
+Then close the Canvas, reopen that project yourself, inspect the reopened
+figure, and record the witness:
+
+```bash
+skill/scripts/sciplot sessions witness \
+  /absolute/path/to/m6_discovery_2026_07.jsonl SESSION_ID \
+  --owner dongxutian \
+  --journal PROJECT/.sciplot_canvas/operation_journal.jsonl \
+  --canvas-session PROJECT/.sciplot_canvas/canvas_session.json \
+  --document PROJECT/studio/document.vsz \
+  --json
+```
+
+Add `--review PROJECT/.sciplot_canvas/review_annotations.json` when review
+evidence was preregistered. Add `--mapping-execution .../execution.json` for a
+confirmed mapping handoff. For a `data_mapping` session, preregister the exact
+mapping `source_root` directory as `--source`, not only one member file: the
+directory inventory is the first transform input and every proposal source
+hash must equal that inventory. The final transform ledger must begin with the
+exact confirmed mapping step and end at the plotted data snapshot. For native
+composition, use `--composition .../composition.json` instead of
+`--canvas-session` and `--document`.
+
+Do not edit the witnessed authority. Complete it against the ready Studio
+manifest or composition delivery manifest:
+
+```bash
+skill/scripts/sciplot sessions complete \
+  /absolute/path/to/m6_discovery_2026_07.jsonl SESSION_ID \
+  --owner dongxutian \
+  --outcome pass \
+  --active-seconds 420 \
+  --manifest PROJECT/runs/studio_001/manifest.json \
+  --json
+```
+
+Use `--outcome needs_fix` or `--outcome abandoned` with at least one
+`--failure "..."` when the task does not finish. Record every fallback as, for
+example, `--fallback
+p2_low_frequency:used an unsupported low-frequency Veusz property`. M3
+planning attempts use `--model-score correct|incorrect`; the two cancellation
+attempts use `not_applicable`.
+
+Inspect aggregate truth with:
+
+```bash
+skill/scripts/sciplot sessions status \
+  /absolute/path/to/m6_discovery_2026_07.jsonl \
+  --require integrity \
+  --json
+```
+
+Top-level `status=passed` means the ledger and checkpoint are internally
+consistent. It does not mean M3 or M6 passed. Those claims exist only at
+`m3.gate_passed` and `m6.gate_passed`. Automation must use `--require m3` or
+`--require m6`; the command then exits nonzero until that exact gate passes.
+Print the machine-readable closed enums and aggregate contract with
+`skill/scripts/sciplot sessions schema --json`.
+
+If status reports an interrupted append, do not delete or edit any companion
+file. Run:
+
+```bash
+skill/scripts/sciplot sessions recover \
+  /absolute/path/to/m6_discovery_2026_07.jsonl \
+  --json
+```
+
+Recovery succeeds only when the pending candidate, JSONL tail, and head prove
+one unambiguous append state.
+
+## Counting rules
+
+- One preregistered session counts at most once.
+- A duplicate natural task on the same source evidence is rejected. Reusing a
+  source can count only for a genuinely different natural task.
+- M3 accepts exactly attempts 1 and 2 for each provider/model/canonical task.
+  The five planning tasks need 9 of 10 correct first proposals, at least one
+  success per task, and all ten safe lifecycles. Both cancellation attempts
+  must restore the exact baseline, giving 12 of 12 authority-safe attempts.
+- Attempts from different `round_id`, provider/model identities, or frozen
+  build identities are reported separately and can never be combined into a
+  passing M3 round.
+- `m6_discovery` is diagnostic and never counts toward the final fifteen.
+- `m6_qualification` requires owner/public authorized real source evidence,
+  positive active time, unchanged sources and frozen build, an actual reopen
+  witness, final ready manifest, no fallback, and no Advanced Editor use.
+- All fifteen must bind one candidate identity: Git commit, frozen artifact
+  hash, registry hash, and Veusz runtime commit. Sessions from different
+  `round_id` values are never combined.
+- M6 is one fixed cohort of exactly fifteen: exactly three sessions in every
+  lane, one provider-disabled pass in every lane, three AI-operation passes
+  across three lanes, one confirmed mapping, review-sidecar plus promotion
+  evidence, and one native composition. Overfilled, mixed-candidate, and
+  cross-round collections do not pass.
+- Synthetic probes, copied artifacts, failed/abandoned attempts, agent-only
+  review, discovery sessions, undone/rolled-back AI edits, and unrecorded
+  external-editor use never qualify.
+
+The source-controlled adversarial gate is:
+
+```bash
+skill/scripts/sciplot session-evidence-probe \
+  --out .tmp_verify/session_evidence \
+  --json
+```
+
+It uses explicitly synthetic source data and never counts as a real session.
+Its positive paths nevertheless create real Veusz VSZ/PDF/300 dpi TIFF
+artifacts and run production QA and delivery; fake artifact bytes appear only
+in rejection tests.

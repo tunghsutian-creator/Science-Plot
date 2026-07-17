@@ -38,6 +38,7 @@ ftir_output/
 # Design/development documents are local-only. Retain the legal notice.
 /docs/*
 !/docs/THIRD_PARTY_NOTICES.md
+!/docs/SESSION_EVIDENCE.md
 
 # Vendored Veusz runtime only; upstream development material is local-only.
 /third_party/veusz/tests/

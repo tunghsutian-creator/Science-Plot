@@ -1000,13 +1000,28 @@ def build_transform_ledger(
         if str(step.get("confirmation_status") or "runtime_recorded")
         not in {"runtime_recorded", "confirmed", "not_applicable"}
     ]
+    first_step_inputs = (
+        recorded_steps[0].get("input_artifacts")
+        if isinstance(recorded_steps[0].get("input_artifacts"), list)
+        else []
+    )
+    first_source_path = next(
+        (
+            str(artifact.get("path"))
+            for artifact in first_step_inputs
+            if isinstance(artifact, dict)
+            and isinstance(artifact.get("path"), str)
+            and str(artifact.get("path")).strip()
+        ),
+        str(Path(input_path).expanduser().resolve()),
+    )
     payload = {
         "kind": TRANSFORM_LEDGER_KIND,
         "version": TRANSFORM_LEDGER_VERSION,
         "status": "needs_human_confirmation"
         if unresolved_step_ids
         else "runtime_recorded",
-        "source_root": str(Path(input_path).expanduser().resolve()),
+        "source_root": str(Path(first_source_path).expanduser().resolve()),
         "replicate_policy": deepcopy(study_model.get("replicate_policy") or {}),
         "column_confirmations": deepcopy(request.get("column_confirmations") or []),
         "steps": recorded_steps,

@@ -12,10 +12,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sciplot_core._paths import VENDORED_CORE_ROOT
+from sciplot_core._paths import (
+    VEUSZ_ROOT,
+    VEUSZ_UPSTREAM_COMMIT,
+    VENDORED_CORE_ROOT,
+)
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 18
+RUNTIME_SMOKE_VERSION = 20
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
@@ -397,6 +401,10 @@ def _data_mapping_studio_lifecycle_probe(
         execute_data_mapping_proposal,
         preview_data_mapping_proposal,
     )
+    from sciplot_core.session_evidence_artifacts import (
+        artifact_content_record,
+        verify_regular_source_lineage,
+    )
     from sciplot_core.studio import (
         export_studio_document,
         prepare_studio_document,
@@ -494,6 +502,60 @@ def _data_mapping_studio_lifecycle_probe(
         for step in transform.get("steps", [])
         if isinstance(step, dict)
     ]
+    mapping_execution_path = project_dir / "execution.json"
+    mapping_execution = json.loads(mapping_execution_path.read_text(encoding="utf-8"))
+    source_record = artifact_content_record(source_path.parent)
+    source_evidence = {
+        "source_id": "source_01",
+        "kind": "directory",
+        "path": source_record["path"],
+        "file_count": source_record["member_count"],
+        "size_bytes": source_record["size_bytes"],
+        "tree_sha256": "",
+        "artifact_sha256": source_record["sha256"],
+        "members": source_record["members"],
+    }
+    witnessed_mapping = {
+        "path": str(mapping_execution_path.resolve()),
+        "sha256": file_sha256(mapping_execution_path),
+        "proposal_id": mapping_execution["proposal_id"],
+        "proposal_sha256": mapping_execution["proposal_sha256"],
+        "provider": mapping_execution["provider"],
+        "confirmation_id": mapping_execution["confirmation_id"],
+        "transform_ledger_sha256": mapping_execution["transform_ledger_sha256"],
+        "raw_inputs_unchanged": True,
+        "handoff_allowed": True,
+    }
+    try:
+        verified_lineage = verify_regular_source_lineage(
+            manifest,
+            preregistration={
+                "sources": [source_evidence],
+                "expected_evidence": ["data_mapping"],
+            },
+            witnessed_mapping=witnessed_mapping,
+        )
+        lineage_error = None
+    except (OSError, TypeError, ValueError) as exc:
+        verified_lineage = None
+        lineage_error = str(exc)
+    forged_manifest = copy.deepcopy(manifest)
+    forged_steps = (forged_manifest.get("transform_ledger") or {}).get("steps")
+    if isinstance(forged_steps, list) and forged_steps:
+        forged_steps[0]["operation"] = "forged_mapping_operation"
+    try:
+        verify_regular_source_lineage(
+            forged_manifest,
+            preregistration={
+                "sources": [source_evidence],
+                "expected_evidence": ["data_mapping"],
+            },
+            witnessed_mapping=witnessed_mapping,
+        )
+    except ValueError:
+        forged_mapping_rejected = True
+    else:
+        forged_mapping_rejected = False
     raw_hash_after = file_sha256(source_path)
     passed = bool(
         preview.get("writes_performed") is False
@@ -511,6 +573,9 @@ def _data_mapping_studio_lifecycle_probe(
         and manifest.get("ready_to_use") is True
         and (manifest.get("qa") or {}).get("status") == "passed"
         and (manifest.get("delivery_package") or {}).get("complete") is True
+        and isinstance(verified_lineage, dict)
+        and verified_lineage.get("mapping_bound") is True
+        and forged_mapping_rejected
     )
     return {
         "passed": passed,
@@ -524,6 +589,9 @@ def _data_mapping_studio_lifecycle_probe(
         "series_count": prepared.get("series_count"),
         "coverage": coverage,
         "operations": operations,
+        "verified_lineage": verified_lineage,
+        "lineage_error": lineage_error,
+        "forged_mapping_rejected": forged_mapping_rejected,
         "qa_status": (manifest.get("qa") or {}).get("status"),
         "publication_status": ((manifest.get("qa") or {}).get("publication") or {}).get(
             "status"
@@ -1021,6 +1089,111 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             )
         )
 
+        from sciplot_core.session_evidence_probe import (
+            run_session_evidence_probe,
+        )
+
+        session_evidence_probe = run_session_evidence_probe(
+            output_root=run_root / "session_evidence"
+        )
+        checks.append(
+            _check(
+                "session_evidence_contract_v1",
+                "Preregistered natural-task evidence is hash-chained, "
+                "reopen-witnessed, final-authority bound, duplicate-safe, "
+                "tamper-evident, and unable to promote synthetic probes into "
+                "M3/M6 counts",
+                session_evidence_probe.get("status") == "passed",
+                detail={
+                    "status": session_evidence_probe.get("status"),
+                    "summary": session_evidence_probe.get("summary"),
+                    "artifacts": session_evidence_probe.get("artifacts"),
+                    "limitations": session_evidence_probe.get("limitations"),
+                },
+            )
+        )
+
+        from sciplot_core.session_evidence_runtime import (
+            _linked_qt_binaries,
+            runtime_identity,
+        )
+
+        frozen_runtime = runtime_identity(
+            veusz_root=VEUSZ_ROOT,
+            veusz_upstream_commit=VEUSZ_UPSTREAM_COMMIT,
+        )
+        linked_qt = frozen_runtime.get("linked_qt_binaries")
+        linked_qt = linked_qt if isinstance(linked_qt, dict) else {}
+        linked_qt_binaries = linked_qt.get("binaries")
+        linked_qt_binaries = (
+            linked_qt_binaries if isinstance(linked_qt_binaries, list) else []
+        )
+        helper_count = len(list((VEUSZ_ROOT / "veusz" / "helpers").glob("*.so")))
+        no_helper_veusz_root = run_root / "runtime_identity_no_helpers"
+        no_helper_package = no_helper_veusz_root / "veusz"
+        no_helper_package.mkdir(parents=True, exist_ok=True)
+        (no_helper_package / "__init__.py").write_text(
+            "# Runtime identity no-helper contract fixture.\n",
+            encoding="utf-8",
+        )
+        no_helper_runtime = runtime_identity(
+            veusz_root=no_helper_veusz_root,
+            veusz_upstream_commit=VEUSZ_UPSTREAM_COMMIT,
+        )
+        no_helper_linked = (no_helper_runtime.get("linked_qt_binaries") or {}).get(
+            "binaries"
+        )
+        no_helper_linked = (
+            no_helper_linked if isinstance(no_helper_linked, list) else []
+        )
+        unresolved_qt_rejected = True
+        if sys.platform == "darwin":
+            try:
+                _linked_qt_binaries(
+                    no_helper_veusz_root,
+                    qt_binding_root=run_root / "missing_pyqt_runtime",
+                )
+            except ValueError:
+                pass
+            else:
+                unresolved_qt_rejected = False
+        checks.append(
+            _check(
+                "frozen_runtime_identity",
+                "The evidence candidate fingerprints active Veusz, every "
+                "PyQt/Qt binary, linked Qt helper runtimes, Python, platform, "
+                "and installed dependency versions",
+                bool(frozen_runtime.get("identity_sha256"))
+                and int((frozen_runtime.get("veusz") or {}).get("file_count") or 0) > 0
+                and int((frozen_runtime.get("qt_binding") or {}).get("file_count") or 0)
+                > 0
+                and (
+                    sys.platform != "darwin"
+                    or (
+                        bool(linked_qt_binaries)
+                        and bool(no_helper_linked)
+                        and unresolved_qt_rejected
+                    )
+                ),
+                detail={
+                    "identity_sha256": frozen_runtime.get("identity_sha256"),
+                    "veusz_file_count": (frozen_runtime.get("veusz") or {}).get(
+                        "file_count"
+                    ),
+                    "qt_binary_count": (frozen_runtime.get("qt_binding") or {}).get(
+                        "file_count"
+                    ),
+                    "veusz_helper_count": helper_count,
+                    "linked_qt_binary_count": len(linked_qt_binaries),
+                    "no_helper_linked_qt_binary_count": len(no_helper_linked),
+                    "unresolved_qt_rejected": unresolved_qt_rejected,
+                    "dependency_count": (frozen_runtime.get("dependencies") or {}).get(
+                        "count"
+                    ),
+                },
+            )
+        )
+
         from sciplot_core.doctor import doctor_payload
         from sciplot_core.studio import (
             export_studio_document,
@@ -1265,12 +1438,18 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 },
             )
         )
-        from sciplot_core.canvas_review_probe import run_canvas_review_probe
-
-        canvas_review_probe = run_canvas_review_probe(
-            project_dir,
-            output_root=run_root / "canvas_review",
+        session_runtime_probes = session_evidence_probe.get("runtime_probes")
+        session_runtime_probes = (
+            session_runtime_probes if isinstance(session_runtime_probes, dict) else {}
         )
+        canvas_review_probe = session_runtime_probes.get("canvas_review")
+        if not isinstance(canvas_review_probe, dict):
+            from sciplot_core.canvas_review_probe import run_canvas_review_probe
+
+            canvas_review_probe = run_canvas_review_probe(
+                project_dir,
+                output_root=run_root / "canvas_review",
+            )
         checks.append(
             _check(
                 "native_canvas_review_lifecycle",
@@ -1286,12 +1465,14 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 },
             )
         )
-        from sciplot_core.composition_probe import run_composition_probe
+        composition_probe = session_runtime_probes.get("composition")
+        if not isinstance(composition_probe, dict):
+            from sciplot_core.composition_probe import run_composition_probe
 
-        composition_probe = run_composition_probe(
-            [document_path],
-            output_root=run_root / "composition",
-        )
+            composition_probe = run_composition_probe(
+                [document_path],
+                output_root=run_root / "composition",
+            )
         checks.append(
             _check(
                 "native_composition_lifecycle",
@@ -1652,6 +1833,8 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             "it does not replace the complete ready-rule acceptance matrix.",
             "The OpenAI provider gates use an in-memory HTTP/SSE wire fixture and do not "
             "claim live-model quality or a successful paid API call.",
+            "The session-evidence gate uses synthetic contracts and adversarial "
+            "mutations; it never counts as owner-operated M3/M6 evidence.",
             "Lifecycle success and artifact QA do not establish blanket journal compliance.",
         ],
     }

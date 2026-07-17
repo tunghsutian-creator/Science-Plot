@@ -84,15 +84,9 @@ class VeuszCanvasAdapter:
         self.document.load(str(self.document_path))
         self.plot_window = runtime["PlotWindow"](self.document, parent)
         self._paper_item = self._QtWidgets.QGraphicsRectItem()
-        self._paper_item.setPen(
-            self._QtGui.QPen(self._QtCore.Qt.PenStyle.NoPen)
-        )
-        self._paper_item.setBrush(
-            self._QtGui.QBrush(self._QtGui.QColor("#ffffff"))
-        )
-        self._paper_item.setAcceptedMouseButtons(
-            self._QtCore.Qt.MouseButton.NoButton
-        )
+        self._paper_item.setPen(self._QtGui.QPen(self._QtCore.Qt.PenStyle.NoPen))
+        self._paper_item.setBrush(self._QtGui.QBrush(self._QtGui.QColor("#ffffff")))
+        self._paper_item.setAcceptedMouseButtons(self._QtCore.Qt.MouseButton.NoButton)
         self._paper_item.setZValue(-1.0)
         self.plot_window.scene.addItem(self._paper_item)
         self._selection_overlay: Any = None
@@ -143,9 +137,7 @@ class VeuszCanvasAdapter:
         """Set display-only Canvas surfaces without changing the Veusz document."""
 
         self.assert_gui_thread()
-        self.plot_window.setBackgroundBrush(
-            self._QtGui.QColor(str(canvas_color))
-        )
+        self.plot_window.setBackgroundBrush(self._QtGui.QColor(str(canvas_color)))
         self._paper_item.setBrush(
             self._QtGui.QBrush(self._QtGui.QColor(str(paper_color)))
         )
@@ -165,7 +157,12 @@ class VeuszCanvasAdapter:
             buffer.close()
         return hashlib.sha256(bytes(byte_array)).hexdigest()
 
-    def bind_object_registry(self, session: CanvasSession) -> list[dict[str, Any]]:
+    def bind_object_registry(
+        self,
+        session: CanvasSession,
+        *,
+        revive_object_ids: set[str] | None = None,
+    ) -> list[dict[str, Any]]:
         self.assert_gui_thread()
         self._active_session = session
         objects: list[tuple[str, str, str, str]] = []
@@ -194,6 +191,7 @@ class VeuszCanvasAdapter:
                 for structural_key, path, object_type, _ in objects
             ],
             revision=session.revision,
+            revive_object_ids=revive_object_ids,
         )
         return [
             {
@@ -306,9 +304,7 @@ class VeuszCanvasAdapter:
         target_object_id: str,
         session: CanvasSession,
     ) -> tuple[Any, tuple[Any, Any], Any]:
-        widget = self._widget(
-            self._object_record_path(session, target_object_id)
-        )
+        widget = self._widget(self._object_record_path(session, target_object_id))
         graph = self._graph_widget_for(widget)
         if graph is None:
             raise ValueError("Data-space review marks require a graph-bound target.")
@@ -353,15 +349,13 @@ class VeuszCanvasAdapter:
         selected_id = session.selection.primary_object_id
         if coordinate_space == "object":
             if selected_id is None:
-                raise ValueError("Select a Canvas object before using an object anchor.")
+                raise ValueError(
+                    "Select a Canvas object before using an object anchor."
+                )
             return selected_id
         inventory = self.bind_object_registry(session)
         selected_item = next(
-            (
-                item
-                for item in inventory
-                if item.get("object_id") == selected_id
-            ),
+            (item for item in inventory if item.get("object_id") == selected_id),
             None,
         )
         selected_widget = (
@@ -393,13 +387,10 @@ class VeuszCanvasAdapter:
             candidates.extend(
                 str(item["object_id"])
                 for item in inventory
-                if item.get("object_type")
-                in {"xy", "boxplot", "image", "contour"}
+                if item.get("object_type") in {"xy", "boxplot", "image", "contour"}
                 and (
                     str(item.get("path")) == self.current_page_path
-                    or str(item.get("path")).startswith(
-                        f"{self.current_page_path}/"
-                    )
+                    or str(item.get("path")).startswith(f"{self.current_page_path}/")
                 )
             )
             for object_id in dict.fromkeys(candidates):
@@ -503,7 +494,9 @@ class VeuszCanvasAdapter:
         session: CanvasSession,
     ) -> dict[str, Any]:
         if int(page_index) != self.current_page:
-            raise ValueError("Review annotations can only be created on the active page.")
+            raise ValueError(
+                "Review annotations can only be created on the active page."
+            )
         points = annotation_geometry_points(shape, scene_geometry)
         page_rect = self._page_scene_rect()
 
@@ -529,9 +522,7 @@ class VeuszCanvasAdapter:
                 raise ValueError(
                     f"{coordinate_space}-space review marks require a target."
                 )
-            target = self._widget(
-                self._object_record_path(session, target_object_id)
-            )
+            target = self._widget(self._object_record_path(session, target_object_id))
             if coordinate_space == "graph":
                 target = self._graph_widget_for(target)
                 if target is None:
@@ -572,7 +563,9 @@ class VeuszCanvasAdapter:
                 for x, y in points
             ]
         else:
-            raise ValueError(f"Unsupported review coordinate space: {coordinate_space!r}")
+            raise ValueError(
+                f"Unsupported review coordinate space: {coordinate_space!r}"
+            )
         return annotation_geometry_from_points(shape, transformed)
 
     def native_annotation_spec(
@@ -605,7 +598,9 @@ class VeuszCanvasAdapter:
             None,
         )
         if parent_item is None:
-            raise RuntimeError("Native annotation parent is outside the object registry.")
+            raise RuntimeError(
+                "Native annotation parent is outside the object registry."
+            )
 
         scene_geometry = self.review_geometry_to_scene(annotation, session)
         scene_points = annotation_geometry_points(
@@ -846,9 +841,7 @@ class VeuszCanvasAdapter:
         object_type = str(item["object_type"])
         specs = specs_for_object_type(object_type)
         if not specs:
-            raise ValueError(
-                f"SciPlot has no bounded inspector for {object_type!r}."
-            )
+            raise ValueError(f"SciPlot has no bounded inspector for {object_type!r}.")
         widget_path = str(item["path"])
         fields: list[CanvasInspectorField] = []
         for spec in specs:
@@ -857,9 +850,7 @@ class VeuszCanvasAdapter:
                 setting = self.document.resolveSettingPath(None, setting_path)
             except ValueError:
                 continue
-            choices = tuple(
-                str(choice) for choice in getattr(setting, "vallist", ())
-            )
+            choices = tuple(str(choice) for choice in getattr(setting, "vallist", ()))
             help_text = spec.help_text or str(getattr(setting, "descr", "") or "")
             fields.append(
                 CanvasInspectorField(
@@ -915,11 +906,7 @@ class VeuszCanvasAdapter:
         for index in range(len(parts)):
             prefix = f"/{'/'.join(parts[: index + 1])}"
             candidate = next(
-                (
-                    value
-                    for value in inventory
-                    if str(value.get("path")) == prefix
-                ),
+                (value for value in inventory if str(value.get("path")) == prefix),
                 None,
             )
             if candidate is not None:
@@ -1171,9 +1158,7 @@ class VeuszCanvasAdapter:
         pen.setCosmetic(True)
         overlay = self._QtWidgets.QGraphicsRectItem(rect)
         overlay.setPen(pen)
-        overlay.setBrush(
-            self._QtGui.QBrush(self._QtCore.Qt.BrushStyle.NoBrush)
-        )
+        overlay.setBrush(self._QtGui.QBrush(self._QtCore.Qt.BrushStyle.NoBrush))
         overlay.setAcceptedMouseButtons(self._QtCore.Qt.MouseButton.NoButton)
         overlay.setZValue(3.0)
         self.plot_window.scene.addItem(overlay)
@@ -1193,8 +1178,7 @@ class VeuszCanvasAdapter:
     @property
     def selection_overlay_visible(self) -> bool:
         return bool(
-            self._selection_overlay is not None
-            and self._selection_overlay.isVisible()
+            self._selection_overlay is not None and self._selection_overlay.isVisible()
         )
 
     @property
@@ -1372,12 +1356,8 @@ class VeuszCanvasAdapter:
             },
             severity="warning",
         )
-        failed_ids = [
-            item["id"] for item in checks if item["status"] == "failed"
-        ]
-        warning_ids = [
-            item["id"] for item in checks if item["status"] == "warning"
-        ]
+        failed_ids = [item["id"] for item in checks if item["status"] == "failed"]
+        warning_ids = [item["id"] for item in checks if item["status"] == "warning"]
         status = "failed" if failed_ids else ("warning" if warning_ids else "passed")
         return {
             "kind": "sciplot_canvas_structural_qa",
@@ -1387,9 +1367,7 @@ class VeuszCanvasAdapter:
             "ready_for_artifact_qa": not failed_ids,
             "summary": {
                 "check_count": len(checks),
-                "passed_count": sum(
-                    item["status"] == "passed" for item in checks
-                ),
+                "passed_count": sum(item["status"] == "passed" for item in checks),
                 "failed_ids": failed_ids,
                 "warning_ids": warning_ids,
             },
@@ -1572,9 +1550,7 @@ class VeuszCanvasAdapter:
                         "new_value": normalized,
                     }
                 )
-                operations.append(
-                    self._OperationSettingSet(setting_path, normalized)
-                )
+                operations.append(self._OperationSettingSet(setting_path, normalized))
                 continue
             if operation_type == "add_widget":
                 parent_path = str(payload["parent_path"])
@@ -1680,9 +1656,7 @@ class VeuszCanvasAdapter:
             raise FileNotFoundError(source)
         canonical_filename = self.document.filename
         target_page = self.current_page if page_index is None else int(page_index)
-        target_zoom = (
-            self.zoom_factor if zoom_factor is None else float(zoom_factor)
-        )
+        target_zoom = self.zoom_factor if zoom_factor is None else float(zoom_factor)
         self.clear_selection_visual()
         self._data_point_selection = None
         self._data_point_session = None

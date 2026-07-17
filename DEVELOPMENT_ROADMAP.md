@@ -124,6 +124,22 @@ duplicate-session rejection, final-revision artifact binding, and
 source-controlled documentation pass. No result recorded before this contract
 exists is retroactively promoted into formal M3/M6 evidence.
 
+Current implementation checkpoint (2026-07-17): the E0 candidate now exposes
+`sessions schema`, `preregister`, `witness`, `complete`, `status --require`,
+`recover`, and `freeze-build`. Runtime smoke version 20 passes all 36 gates,
+including confirmed mapping lineage and forged-step rejection. Its embedded E0
+adversarial subprobe passes 12/12 with real Veusz VSZ/PDF/TIFF positive
+artifacts, production QA/delivery, three interrupted-append recoveries, and
+negative rejection of fake artifacts, forged classification, covert nested
+fields, duplicate natural tasks, cross-transaction AI evidence, mixed rounds,
+overfilled cohorts, and a dirty/unverified frozen-build claim. These fixtures
+remain synthetic and count as zero M3/M6 sessions. Independent re-review now
+reports no P0/P1 findings. E0 is not marked closed until the clean committed
+wheel/install check passes. That final install check uses the synthetic-only,
+non-counting `formal_contract_probe` scope, which still requires the exact
+clean commit, verified wheel, explicit checkout, Veusz runtime identity,
+reopen witness, and completed artifact chain.
+
 ### E1 — Close the M5a promotion mechanism
 
 Build the reviewed learning loop before collecting more AI-assisted evidence:

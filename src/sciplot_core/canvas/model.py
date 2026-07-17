@@ -86,9 +86,7 @@ def _validate_json_tree(value: Any, *, path: str) -> None:
                 raise ValueError(f"{path} keys must be strings.")
             _validate_json_tree(item, path=f"{path}.{key}")
         return
-    raise ValueError(
-        f"{path} must contain JSON values, not {type(value).__name__}."
-    )
+    raise ValueError(f"{path} must contain JSON values, not {type(value).__name__}.")
 
 
 @dataclass
@@ -157,6 +155,7 @@ class ObjectIdentityRegistry:
     """Persist SciPlot IDs against structural positions, not display names."""
 
     records: dict[str, CanvasObjectRecord] = field(default_factory=dict)
+    retired_records: dict[str, CanvasObjectRecord] = field(default_factory=dict)
 
     def bind(
         self,
@@ -207,6 +206,7 @@ class ObjectIdentityRegistry:
         objects: list[tuple[str, str, str]],
         *,
         revision: int,
+        revive_object_ids: set[str] | None = None,
     ) -> list[CanvasObjectRecord]:
         """Reconcile a complete object tree without losing IDs on insertion.
 
@@ -224,13 +224,35 @@ class ObjectIdentityRegistry:
         if len(set(current_paths)) != len(current_paths):
             raise ValueError("Object reconciliation paths must be unique.")
 
-        old_records = list(self.records.values())
+        requested_revivals = {
+            _required_text(object_id, "revive_object_id")
+            for object_id in (revive_object_ids or set())
+        }
+        active_records = list(self.records.values())
+        retired_records = list(self.retired_records.values())
+        active_ids = {record.object_id for record in active_records}
+        retired_ids = {record.object_id for record in retired_records}
+        if requested_revivals & active_ids:
+            raise ValueError("Active object IDs cannot be requested for revival.")
+        unknown_revivals = requested_revivals - retired_ids
+        if unknown_revivals:
+            raise ValueError(
+                "Object revival requested unknown retired IDs: "
+                f"{sorted(unknown_revivals)!r}."
+            )
+        old_records = [*active_records, *retired_records]
         assigned: list[CanvasObjectRecord | None] = [None] * len(objects)
         used_ids: set[str] = set()
         by_path = {
             (record.current_path, record.object_type): record
-            for record in old_records
+            for record in active_records
         }
+        for record in retired_records:
+            if record.object_id in requested_revivals:
+                by_path.setdefault(
+                    (record.current_path, record.object_type),
+                    record,
+                )
 
         for index, (_, current_path, object_type) in enumerate(objects):
             record = by_path.get((str(current_path), str(object_type)))
@@ -256,7 +278,9 @@ class ObjectIdentityRegistry:
             key = _required_text(structural_key, "structural_key")
             path = _required_text(current_path, "current_path")
             kind = _required_text(object_type, "object_type")
-            record = assigned[index]
+            record = (
+                copy.deepcopy(assigned[index]) if assigned[index] is not None else None
+            )
             if record is None:
                 record = CanvasObjectRecord(
                     object_id=str(uuid4()),
@@ -277,14 +301,30 @@ class ObjectIdentityRegistry:
                 record.last_seen_revision = revision
             reconciled[key] = record
             ordered.append(record)
+        missing_revivals = requested_revivals - used_ids
+        if missing_revivals:
+            raise ValueError(
+                "Retired objects did not reappear at their exact typed paths: "
+                f"{sorted(missing_revivals)!r}."
+            )
+        retired = {
+            record.object_id: record
+            for record in old_records
+            if record.object_id not in used_ids
+        }
         self.records = reconciled
+        self.retired_records = retired
         return ordered
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "strategy": "typed_sibling_index_v1",
+            "strategy": "typed_sibling_index_v2",
             "records": {
                 key: record.to_dict() for key, record in sorted(self.records.items())
+            },
+            "retired_records": {
+                object_id: record.to_dict()
+                for object_id, record in sorted(self.retired_records.items())
             },
         }
 
@@ -295,11 +335,14 @@ class ObjectIdentityRegistry:
         payload = require_json_object(payload, label="object_registry")
         reject_unknown_keys(
             payload,
-            {"strategy", "records"},
+            {"strategy", "records", "retired_records"},
             label="object_registry",
         )
         strategy = payload.get("strategy", "typed_sibling_index_v1")
-        if strategy != "typed_sibling_index_v1":
+        if strategy not in {
+            "typed_sibling_index_v1",
+            "typed_sibling_index_v2",
+        }:
             raise ValueError(f"Unsupported object identity strategy: {strategy!r}")
         raw_records = require_json_object(
             payload.get("records"), label="object_registry.records"
@@ -312,10 +355,29 @@ class ObjectIdentityRegistry:
             if str(key) != record.structural_key:
                 raise ValueError("Object registry key does not match structural_key.")
             records[str(key)] = record
-        object_ids = [record.object_id for record in records.values()]
+        raw_retired = require_json_object(
+            payload.get("retired_records", {}),
+            label="object_registry.retired_records",
+        )
+        retired_records: dict[str, CanvasObjectRecord] = {}
+        for object_id, value in raw_retired.items():
+            if not isinstance(value, dict):
+                raise ValueError(
+                    "Every retired object registry record must be an object."
+                )
+            record = CanvasObjectRecord.from_dict(value)
+            if str(object_id) != record.object_id:
+                raise ValueError(
+                    "Retired object registry key does not match object_id."
+                )
+            retired_records[str(object_id)] = record
+        object_ids = [
+            record.object_id
+            for record in [*records.values(), *retired_records.values()]
+        ]
         if len(set(object_ids)) != len(object_ids):
             raise ValueError("Object registry object IDs must be unique.")
-        return cls(records=records)
+        return cls(records=records, retired_records=retired_records)
 
 
 @dataclass
@@ -493,9 +555,7 @@ class CanvasSelection:
         return cls(
             object_ids=ids,
             primary_object_id=primary or None,
-            data_point=CanvasDataPointSelection.from_dict(
-                payload.get("data_point")
-            ),
+            data_point=CanvasDataPointSelection.from_dict(payload.get("data_point")),
         )
 
 
@@ -745,8 +805,10 @@ class CanvasTransaction:
                     "transaction request_record provider must match the Canvas "
                     "transaction."
                 )
-            if not self.base_revision <= request.base_revision <= int(
-                self.current_revision
+            if (
+                not self.base_revision
+                <= request.base_revision
+                <= int(self.current_revision)
             ):
                 raise ValueError(
                     "transaction request_record revision must remain inside the "
@@ -832,7 +894,9 @@ class CanvasTransaction:
         ):
             if not isinstance(values, list):
                 raise ValueError(f"transaction {label} must be a list.")
-            normalized = [_required_text(value, f"transaction {label}") for value in values]
+            normalized = [
+                _required_text(value, f"transaction {label}") for value in values
+            ]
             if len(set(normalized)) != len(normalized):
                 raise ValueError(f"transaction {label} must be unique.")
             setattr(self, label, normalized)
@@ -842,12 +906,9 @@ class CanvasTransaction:
         ):
             raise ValueError("transaction accepted_revisions must contain integers.")
         if len(self.accepted_revisions) != len(self.accepted_batch_ids):
-            raise ValueError(
-                "transaction accepted batch IDs and revisions must align."
-            )
+            raise ValueError("transaction accepted batch IDs and revisions must align.")
         if any(
-            revision <= self.base_revision
-            for revision in self.accepted_revisions
+            revision <= self.base_revision for revision in self.accepted_revisions
         ) or any(
             later <= earlier
             for earlier, later in zip(
@@ -962,9 +1023,7 @@ class CanvasTransaction:
             for target_id in target_ids
         ]
         if len(set(normalized_target_ids)) != len(normalized_target_ids):
-            raise ValueError(
-                "transaction pending preview target IDs must be unique."
-            )
+            raise ValueError("transaction pending preview target IDs must be unique.")
         changes = require_json_list(
             value.get("changes"),
             label="transaction.pending_preview.changes",
@@ -987,9 +1046,7 @@ class CanvasTransaction:
             )
         publication_changed = require_json_bool(
             value.get("publication_document_changed"),
-            label=(
-                "transaction.pending_preview.publication_document_changed"
-            ),
+            label=("transaction.pending_preview.publication_document_changed"),
         )
         if publication_changed:
             raise ValueError(
@@ -1025,30 +1082,25 @@ class CanvasTransaction:
                 )
             if operation.operation_type == "set_setting":
                 if (
-                    change.get("setting_path")
-                    != operation.arguments["setting_path"]
+                    change.get("setting_path") != operation.arguments["setting_path"]
                     or change.get("value") != operation.arguments["value"]
                 ):
                     raise ValueError(
                         "transaction pending preview setting change does not "
                         "match its operation."
                     )
-                if (
-                    "expected_value" in operation.arguments
-                    and change.get("old_value")
-                    != operation.arguments.get("expected_value")
-                ):
+                if "expected_value" in operation.arguments and change.get(
+                    "old_value"
+                ) != operation.arguments.get("expected_value"):
                     raise ValueError(
                         "transaction pending preview before value does not "
                         "match its operation precondition."
                     )
                 continue
             if operation.operation_type == "add_widget" and (
-                change.get("widget_type")
-                != operation.arguments["widget_type"]
+                change.get("widget_type") != operation.arguments["widget_type"]
                 or change.get("name") != operation.arguments["name"]
-                or change.get("index", -1)
-                != operation.arguments.get("index", -1)
+                or change.get("index", -1) != operation.arguments.get("index", -1)
                 or change.get("settings") != operation.arguments["settings"]
             ):
                 raise ValueError(
@@ -1073,9 +1125,7 @@ class CanvasTransaction:
     def active_batch_ids(self) -> list[str]:
         undone = set(self.undone_batch_ids)
         return [
-            batch_id
-            for batch_id in self.accepted_batch_ids
-            if batch_id not in undone
+            batch_id for batch_id in self.accepted_batch_ids if batch_id not in undone
         ]
 
     @property
@@ -1229,8 +1279,10 @@ class CanvasTransaction:
             raise ValueError(
                 "Assistant request provider must match the Canvas transaction."
             )
-        if not self.base_revision <= request.base_revision <= int(
-            self.current_revision
+        if (
+            not self.base_revision
+            <= request.base_revision
+            <= int(self.current_revision)
         ):
             raise ValueError(
                 "Assistant request revision must remain inside the Canvas "
@@ -1406,9 +1458,7 @@ class CanvasTransaction:
                 else None
             ),
             baseline_qa_summary=dict(baseline_qa_summary),
-            baseline_structural_qa_summary=dict(
-                baseline_structural_qa_summary
-            ),
+            baseline_structural_qa_summary=dict(baseline_structural_qa_summary),
             baseline_page=require_json_int(
                 payload.get("baseline_page", 0),
                 label="active_transaction.baseline_page",
@@ -1463,7 +1513,9 @@ class CanvasTransaction:
                 )
             ],
             created_at=str(payload.get("created_at") or _now()),
-            updated_at=str(payload.get("updated_at") or payload.get("created_at") or _now()),
+            updated_at=str(
+                payload.get("updated_at") or payload.get("created_at") or _now()
+            ),
         )
 
 
@@ -1599,9 +1651,7 @@ class CanvasSession:
             "document_sha256": self.document_sha256,
             "last_render_sha256": self.last_render_sha256,
             "review_annotation_ids": list(self.review_annotation_ids),
-            "structural_qa_summary": copy.deepcopy(
-                self.structural_qa_summary
-            ),
+            "structural_qa_summary": copy.deepcopy(self.structural_qa_summary),
             "qa_summary": copy.deepcopy(self.qa_summary),
             "journal_outbox": copy.deepcopy(self.journal_outbox),
             "recovery_snapshots": list(self.recovery_snapshots),

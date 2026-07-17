@@ -87,6 +87,24 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             assistant_provider,
             parent=self,
         )
+        descriptor = self.assistant_runner.descriptor
+        self.controller.record_journal_entry(
+            {
+                "event": "assistant_provider_state",
+                "provider_connected": descriptor is not None,
+                "provider_configuration": (
+                    "connected" if descriptor is not None else "disabled_or_unavailable"
+                ),
+                "provider": (
+                    descriptor.provider_id if descriptor is not None else None
+                ),
+                "descriptor": (
+                    descriptor.to_dict() if descriptor is not None else None
+                ),
+                "revision": self.controller.session.revision,
+                "publication_document_changed": False,
+            }
+        )
         self.data_mapping_runner = DataMappingTaskRunner(parent=self)
         self.plot_window = self.controller.adapter.plot_window
         self.plot_window.viewtoolbar.hide()

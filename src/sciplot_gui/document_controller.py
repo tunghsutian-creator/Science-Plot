@@ -396,10 +396,7 @@ class DocumentController:
             shape=shape,
             coordinate_space=coordinate_space,
             geometry=geometry,
-            text=(
-                str(text).strip()
-                or ("Review note" if shape == "text" else "")
-            ),
+            text=(str(text).strip() or ("Review note" if shape == "text" else "")),
             target_object_id=resolved_target,
             style=annotation_style,
         )
@@ -486,9 +483,7 @@ class DocumentController:
         self._assert_no_active_transaction("edit the review layer")
         current = self.review_annotation(annotation_id)
         if current.state != "review_only":
-            raise ValueError(
-                "Only an active review-only annotation can be removed."
-            )
+            raise ValueError("Only an active review-only annotation can be removed.")
         removed = replace(
             current,
             state="removed",
@@ -524,24 +519,48 @@ class DocumentController:
         self._history_side_effects_undo = self._history_side_effects_undo[-10:]
         self._history_side_effects_redo.clear()
 
+    @staticmethod
+    def _history_revival_ids(
+        side_effect: dict[str, Any] | None,
+    ) -> set[str]:
+        if not isinstance(side_effect, dict):
+            return set()
+        values = side_effect.get("object_identity_revival_ids", [])
+        if not isinstance(values, list) or not all(
+            isinstance(value, str) and value for value in values
+        ):
+            raise ValueError("History object-identity revival IDs are invalid.")
+        if len(set(values)) != len(values):
+            raise ValueError("History object-identity revival IDs must be unique.")
+        return set(values)
+
+    @staticmethod
+    def _with_history_revivals(
+        side_effect: dict[str, Any] | None,
+        object_ids: set[str],
+    ) -> dict[str, Any] | None:
+        if not object_ids:
+            return side_effect
+        updated = dict(side_effect or {})
+        updated["object_identity_revival_ids"] = sorted(object_ids)
+        return updated
+
     def _apply_history_side_effect(
         self,
         side_effect: dict[str, Any] | None,
         *,
         direction: str,
     ) -> dict[str, Any] | None:
-        if side_effect is None:
+        if side_effect is None or side_effect.get("kind") != (
+            "review_annotation_transition"
+        ):
             return None
         if direction not in {"undo", "redo"}:
             raise ValueError(f"Unsupported history direction: {direction!r}")
         payload = side_effect["before" if direction == "undo" else "after"]
         replacement = ReviewAnnotation.from_dict(dict(payload))
         annotations = [
-            (
-                replacement
-                if value.annotation_id == replacement.annotation_id
-                else value
-            )
+            (replacement if value.annotation_id == replacement.annotation_id else value)
             for value in self.review_annotations
         ]
         self._save_review_state(annotations)
@@ -817,9 +836,7 @@ class DocumentController:
         if normalized != transaction_text:
             raise ValueError("Assistant transaction ID must use canonical UUID form.")
         root = (
-            self.session_path.parent
-            / ".canvas_transactions"
-            / normalized
+            self.session_path.parent / ".canvas_transactions" / normalized
         ).resolve()
         transaction_parent = (
             self.session_path.parent / ".canvas_transactions"
@@ -857,9 +874,7 @@ class DocumentController:
         self._sync_view_state()
         root = self._transaction_root(transaction_id)
         if root.exists() and any(root.iterdir()):
-            raise RuntimeError(
-                f"Assistant transaction artifacts already exist: {root}"
-            )
+            raise RuntimeError(f"Assistant transaction artifacts already exist: {root}")
         root.mkdir(parents=True, exist_ok=True)
         snapshot = root / "baseline.vsz"
         review_snapshot = root / "review_annotations.json"
@@ -924,8 +939,7 @@ class DocumentController:
             not baseline.is_file()
             or file_sha256(baseline) != transaction.snapshot_sha256
             or not review_baseline.is_file()
-            or file_sha256(review_baseline)
-            != transaction.review_snapshot_sha256
+            or file_sha256(review_baseline) != transaction.review_snapshot_sha256
         ):
             transaction.status = "conflict"
             self.session.set_state("conflict")
@@ -947,12 +961,9 @@ class DocumentController:
         entry: dict[str, Any] | None = None
         try:
             baseline_clean = (
-                transaction.baseline_saved_revision
-                == transaction.base_revision
+                transaction.baseline_saved_revision == transaction.base_revision
             )
-            baseline_viewport = CanvasViewport.from_dict(
-                transaction.baseline_viewport
-            )
+            baseline_viewport = CanvasViewport.from_dict(transaction.baseline_viewport)
             restored_render = self.adapter.restore_snapshot(
                 baseline,
                 mark_modified=not baseline_clean,
@@ -990,8 +1001,7 @@ class DocumentController:
             self.session.exported_revision = (
                 next_revision
                 if baseline_clean
-                and transaction.baseline_exported_revision
-                == transaction.base_revision
+                and transaction.baseline_exported_revision == transaction.base_revision
                 else transaction.baseline_exported_revision
             )
             self.session.document_sha256 = transaction.baseline_document_sha256
@@ -1020,9 +1030,7 @@ class DocumentController:
             )
             self.session.active_transaction = None
             self.session.set_state(
-                str(transaction.baseline_state)
-                if baseline_clean
-                else "editing"
+                str(transaction.baseline_state) if baseline_clean else "editing"
             )
             entry = self._queue_journal_entry(
                 {
@@ -1034,15 +1042,12 @@ class DocumentController:
                     "transaction": terminal_transaction.to_dict(),
                     "render_before": before_render,
                     "render_after": restored_render,
-                    "baseline_render_sha256": (
-                        transaction.baseline_render_sha256
-                    ),
+                    "baseline_render_sha256": (transaction.baseline_render_sha256),
                     "recovery_snapshot": snapshot_reference,
                     "recovery_snapshot_sha256": snapshot_hash,
                     "verification": {
                         "exact_baseline_render": (
-                            restored_render
-                            == transaction.baseline_render_sha256
+                            restored_render == transaction.baseline_render_sha256
                         ),
                         "baseline_vsz_hash_verified": True,
                         "baseline_review_hash_verified": True,
@@ -1074,8 +1079,7 @@ class DocumentController:
                 self.adapter.restore_snapshot(
                     current_snapshot,
                     mark_modified=(
-                        session_before["revision"]
-                        != session_before["saved_revision"]
+                        session_before["revision"] != session_before["saved_revision"]
                     ),
                     page_index=int(session_before["current_page"]),
                     zoom_factor=float(session_before["viewport"]["zoom"]),
@@ -1153,8 +1157,7 @@ class DocumentController:
                         "Native annotations can only be added to a page or graph."
                     )
                 widget_path = (
-                    f"{target.current_path.rstrip('/')}/"
-                    f"{operation.arguments['name']}"
+                    f"{target.current_path.rstrip('/')}/{operation.arguments['name']}"
                 )
                 if widget_path in widget_paths or widget_path in inventory_paths:
                     raise ValueError(
@@ -1211,9 +1214,7 @@ class DocumentController:
             "rationale": batch.rationale,
             "operation_count": len(batch.operations),
             "affected_target_ids": list(
-                dict.fromkeys(
-                    str(change["target_id"]) for change in changes
-                )
+                dict.fromkeys(str(change["target_id"]) for change in changes)
             ),
             "changes": json_safe(changes),
             "render_before": self.adapter.render_fingerprint(),
@@ -1302,15 +1303,9 @@ class DocumentController:
                 ),
             )
             revision = self.session.advance_revision(
-                state=(
-                    "ai_proposing"
-                    if transaction_id is not None
-                    else "editing"
-                )
+                state=("ai_proposing" if transaction_id is not None else "editing")
             )
-            snapshot_reference, snapshot_hash = self._record_recovery_snapshot(
-                snapshot
-            )
+            snapshot_reference, snapshot_hash = self._record_recovery_snapshot(snapshot)
             self.session.last_render_sha256 = after_render
             self.inventory = self.adapter.bind_object_registry(self.session)
             if transaction_id is not None:
@@ -1336,9 +1331,7 @@ class DocumentController:
                     "batch": batch.to_dict(),
                     "changes": json_safe(applied),
                     "affected_targets": list(
-                        dict.fromkeys(
-                            str(change["target_id"]) for change in changes
-                        )
+                        dict.fromkeys(str(change["target_id"]) for change in changes)
                     ),
                     "render_before": before_render,
                     "render_after": after_render,
@@ -1425,9 +1418,7 @@ class DocumentController:
         self._sync_view_state()
         annotation = self.review_annotation(annotation_id)
         if annotation.page_index != self.session.current_page:
-            raise ValueError(
-                "Open the review annotation's page before promoting it."
-            )
+            raise ValueError("Open the review annotation's page before promoting it.")
         spec = self.adapter.native_annotation_spec(annotation, self.session)
         operation = CanvasOperation.add_widget(
             target_id=str(spec["target_id"]),
@@ -1440,8 +1431,7 @@ class DocumentController:
             base_revision=self.session.revision,
             provider=provider,
             rationale=(
-                f"Promote review {annotation.shape} into a native Veusz "
-                "annotation."
+                f"Promote review {annotation.shape} into a native Veusz annotation."
             ),
             operations=(operation,),
         )
@@ -1465,9 +1455,7 @@ class DocumentController:
                 event="review_promotion",
             )
             revision = self.session.advance_revision(state="editing")
-            snapshot_reference, snapshot_hash = self._record_recovery_snapshot(
-                snapshot
-            )
+            snapshot_reference, snapshot_hash = self._record_recovery_snapshot(snapshot)
             self.session.last_render_sha256 = after_render
             self.inventory = self.adapter.bind_object_registry(self.session)
             created_path = str(applied[0].get("created_path") or "")
@@ -1491,11 +1479,7 @@ class DocumentController:
                 updated_at=_now(),
             )
             promoted_annotations = [
-                (
-                    promoted
-                    if value.annotation_id == annotation.annotation_id
-                    else value
-                )
+                (promoted if value.annotation_id == annotation.annotation_id else value)
                 for value in self.review_annotations
             ]
             self._save_review_state(promoted_annotations)
@@ -1594,16 +1578,14 @@ class DocumentController:
             }
         )
         sidecar_only = all(
-            annotation.state != "review_only"
-            or annotation.promoted_object_id is None
+            annotation.state != "review_only" or annotation.promoted_object_id is None
             for annotation in self.review_annotations
         )
         checks.append(
             {
                 "id": "review_marks_sidecar_only",
                 "label": (
-                    "Unpromoted review marks remain outside the publication "
-                    "document"
+                    "Unpromoted review marks remain outside the publication document"
                 ),
                 "status": "passed" if sidecar_only else "failed",
                 "detail": {
@@ -1613,14 +1595,10 @@ class DocumentController:
             }
         )
         failed_ids = [
-            str(check["id"])
-            for check in checks
-            if check.get("status") == "failed"
+            str(check["id"]) for check in checks if check.get("status") == "failed"
         ]
         warning_ids = [
-            str(check["id"])
-            for check in checks
-            if check.get("status") == "warning"
+            str(check["id"]) for check in checks if check.get("status") == "warning"
         ]
         report["checks"] = checks
         report["status"] = (
@@ -1629,9 +1607,7 @@ class DocumentController:
         report["ready_for_artifact_qa"] = not failed_ids
         report["summary"] = {
             "check_count": len(checks),
-            "passed_count": sum(
-                check.get("status") == "passed" for check in checks
-            ),
+            "passed_count": sum(check.get("status") == "passed" for check in checks),
             "failed_ids": failed_ids,
             "warning_ids": warning_ids,
         }
@@ -1667,8 +1643,7 @@ class DocumentController:
                 self.session.set_state("conflict")
                 self.persist()
                 raise RuntimeError(
-                    "The assistant transaction revision no longer matches "
-                    "the document."
+                    "The assistant transaction revision no longer matches the document."
                 )
             active_batches = transaction.active_batch_ids
             if not active_batches:
@@ -1680,47 +1655,43 @@ class DocumentController:
             raise ValueError("No active assistant transaction matches this undo.")
         before_render = self.adapter.render_fingerprint()
         has_side_effect = bool(self._history_side_effects_undo)
-        side_effect = (
-            self._history_side_effects_undo[-1]
-            if has_side_effect
-            else None
-        )
+        side_effect = self._history_side_effects_undo[-1] if has_side_effect else None
         if transaction is not None and not self.adapter.can_undo:
             raise RuntimeError(
                 "Per-batch undo is unavailable after a recovery boundary; "
                 "roll back the whole assistant turn instead."
             )
+        self.inventory = self.adapter.bind_object_registry(self.session)
+        active_ids_before = {str(item["object_id"]) for item in self.inventory}
         session_before = self.session.to_dict()
         annotations_before = list(self.review_annotations)
         snapshot: Path | None = None
         committed = False
+        document_undone = False
         entry: dict[str, Any] | None = None
-        after_render = self.adapter.undo()
         next_revision = self.session.revision + 1
         review_transition: dict[str, Any] | None = None
         try:
+            after_render = self.adapter.undo()
+            document_undone = True
             review_transition = self._apply_history_side_effect(
                 side_effect,
                 direction="undo",
             )
             snapshot = self._create_recovery_snapshot(
                 revision=next_revision,
-                event=(
-                    "assistant_undo"
-                    if transaction is not None
-                    else "undo"
-                ),
+                event=("assistant_undo" if transaction is not None else "undo"),
             )
             revision = self.session.advance_revision(
-                state=(
-                    "ai_proposing"
-                    if transaction is not None
-                    else "editing"
-                )
+                state=("ai_proposing" if transaction is not None else "editing")
             )
-            snapshot_reference, snapshot_hash = self._record_recovery_snapshot(
-                snapshot
+            self.inventory = self.adapter.bind_object_registry(self.session)
+            active_ids_after = {str(item["object_id"]) for item in self.inventory}
+            side_effect = self._with_history_revivals(
+                side_effect,
+                active_ids_before - active_ids_after,
             )
+            snapshot_reference, snapshot_hash = self._record_recovery_snapshot(snapshot)
             self.session.last_render_sha256 = after_render
             if transaction is not None:
                 if transaction_batch_id is None:
@@ -1732,9 +1703,7 @@ class DocumentController:
             entry = self._queue_journal_entry(
                 {
                     "event": (
-                        "assistant_batch_undone"
-                        if transaction is not None
-                        else "undo"
+                        "assistant_batch_undone" if transaction is not None else "undo"
                     ),
                     "provider": provider,
                     "transaction_id": transaction_id,
@@ -1745,6 +1714,9 @@ class DocumentController:
                     "recovery_snapshot": snapshot_reference,
                     "recovery_snapshot_sha256": snapshot_hash,
                     "review_transition": review_transition,
+                    "object_identity_revival_ids": sorted(
+                        self._history_revival_ids(side_effect)
+                    ),
                     "verification": {
                         "live_render_changed": after_render != before_render,
                         "recovery_snapshot_verified": (
@@ -1758,7 +1730,8 @@ class DocumentController:
             self.flush_journal_outbox()
             if has_side_effect:
                 self._history_side_effects_undo.pop()
-                self._history_side_effects_redo.append(side_effect)
+            self._history_side_effects_redo.append(side_effect)
+            self._history_side_effects_redo = self._history_side_effects_redo[-10:]
             return entry
         except Exception as exc:
             if committed and entry is not None:
@@ -1766,7 +1739,8 @@ class DocumentController:
                 entry["journal_flush_error"] = f"{type(exc).__name__}: {exc}"
                 if has_side_effect:
                     self._history_side_effects_undo.pop()
-                    self._history_side_effects_redo.append(side_effect)
+                self._history_side_effects_redo.append(side_effect)
+                self._history_side_effects_redo = self._history_side_effects_redo[-10:]
                 return entry
             if review_transition is not None:
                 try:
@@ -1780,7 +1754,8 @@ class DocumentController:
                         self.annotations_path,
                         annotations_before,
                     )
-            self.adapter.redo()
+            if document_undone:
+                self.adapter.redo()
             if snapshot is not None and snapshot.exists():
                 snapshot.unlink()
             self.session = CanvasSession.from_dict(session_before)
@@ -1794,15 +1769,17 @@ class DocumentController:
         self._sync_view_state()
         before_render = self.adapter.render_fingerprint()
         has_side_effect = bool(self._history_side_effects_redo)
-        side_effect = (
-            self._history_side_effects_redo[-1]
-            if has_side_effect
-            else None
-        )
-        after_render = self.adapter.redo()
+        side_effect = self._history_side_effects_redo[-1] if has_side_effect else None
+        revival_ids = self._history_revival_ids(side_effect)
+        session_before = self.session.to_dict()
+        annotations_before = list(self.review_annotations)
+        snapshot: Path | None = None
+        document_redone = False
         next_revision = self.session.revision + 1
         review_transition: dict[str, Any] | None = None
         try:
+            after_render = self.adapter.redo()
+            document_redone = True
             review_transition = self._apply_history_side_effect(
                 side_effect,
                 direction="redo",
@@ -1810,33 +1787,52 @@ class DocumentController:
             snapshot = self._create_recovery_snapshot(
                 revision=next_revision, event="redo"
             )
-        except Exception:
-            if review_transition is not None:
-                self._apply_history_side_effect(side_effect, direction="undo")
-            self.adapter.undo()
-            raise
-        revision = self.session.advance_revision(state="editing")
-        snapshot_reference, snapshot_hash = self._record_recovery_snapshot(snapshot)
-        self.session.last_render_sha256 = after_render
-        self.persist()
-        entry = {
-            "kind": "sciplot_canvas_journal_entry",
-            "version": 1,
-            "event": "redo",
-            "provider": provider,
-            "recorded_at": _now(),
-            "revision": revision,
-            "render_before": before_render,
-            "render_after": after_render,
-            "recovery_snapshot": snapshot_reference,
-            "recovery_snapshot_sha256": snapshot_hash,
-            "review_transition": review_transition,
-        }
-        append_operation_journal(self.journal_path, entry)
-        if has_side_effect:
-            self._history_side_effects_redo.pop()
+            revision = self.session.advance_revision(state="editing")
+            self.inventory = self.adapter.bind_object_registry(
+                self.session,
+                revive_object_ids=revival_ids,
+            )
+            snapshot_reference, snapshot_hash = self._record_recovery_snapshot(snapshot)
+            self.session.last_render_sha256 = after_render
+            self.persist()
+            entry = {
+                "kind": "sciplot_canvas_journal_entry",
+                "version": 1,
+                "event": "redo",
+                "provider": provider,
+                "recorded_at": _now(),
+                "revision": revision,
+                "render_before": before_render,
+                "render_after": after_render,
+                "recovery_snapshot": snapshot_reference,
+                "recovery_snapshot_sha256": snapshot_hash,
+                "review_transition": review_transition,
+                "object_identity_revival_ids": sorted(revival_ids),
+            }
+            append_operation_journal(self.journal_path, entry)
+            if has_side_effect:
+                self._history_side_effects_redo.pop()
             self._history_side_effects_undo.append(side_effect)
-        return entry
+            self._history_side_effects_undo = self._history_side_effects_undo[-10:]
+            return entry
+        except Exception:
+            if document_redone:
+                try:
+                    self.adapter.undo()
+                except Exception:
+                    pass
+            if snapshot is not None and snapshot.exists():
+                snapshot.unlink()
+            self.session = CanvasSession.from_dict(session_before)
+            self.review_annotations = annotations_before
+            self.session.review_annotation_ids = [
+                value.annotation_id for value in annotations_before
+            ]
+            save_review_annotations(self.annotations_path, annotations_before)
+            self.inventory = self.adapter.bind_object_registry(self.session)
+            self.adapter.force_redraw()
+            self.persist()
+            raise
 
     def save(self) -> Path:
         self._assert_no_active_transaction("save the canonical VSZ")
