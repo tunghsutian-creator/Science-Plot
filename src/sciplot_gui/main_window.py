@@ -7,16 +7,20 @@ from typing import Any
 
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from sciplot_core._utils import file_sha256
 from sciplot_core.canvas.operations import CanvasOperationBatch
+from sciplot_core.canvas.assistant_contract import DataMappingConfirmation
 from sciplot_core.canvas.provider import (
     AssistantProgressEvent,
     AssistantProvider,
     AssistantResponse,
 )
+from sciplot_core.data_mapping import load_data_mapping_execution
 from sciplot_gui.annotation_overlay import AnnotationOverlayController
 from sciplot_gui.assistant_controller import AssistantTransactionCoordinator
 from sciplot_gui.assistant_panel import AssistantTransactionPanel
 from sciplot_gui.assistant_runtime import AssistantRequestRunner
+from sciplot_gui.data_mapping_runtime import DataMappingTaskRunner
 from sciplot_gui.document_controller import DocumentController
 from sciplot_gui.inspectors import ContextualInspectorPanel, ReviewInspectorPanel
 from sciplot_gui.theme import (
@@ -24,7 +28,13 @@ from sciplot_gui.theme import (
     build_canvas_stylesheet,
     build_canvas_theme,
 )
-from sciplot_gui.workspace import CanvasWorkspace, export_canvas_workspace
+from sciplot_gui.workspace import (
+    CanvasWorkspace,
+    default_data_mapping_output_root,
+    export_canvas_workspace,
+    resolve_canvas_workspace,
+    resolve_data_mapping_source_root,
+)
 
 
 class SciPlotCanvasWindow(QtWidgets.QMainWindow):
@@ -51,6 +61,9 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._restoring_interface = False
         self._point_pick_active = False
         self._review_refreshing = False
+        self._assistant_provider = assistant_provider
+        self._pending_mapped_workspace: CanvasWorkspace | None = None
+        self._child_canvas_windows: list[SciPlotCanvasWindow] = []
         self._narrow_threshold = 980
         self.theme_tokens: CanvasThemeTokens | None = None
         self.setObjectName("sciplotCanvasWindow")
@@ -74,6 +87,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             assistant_provider,
             parent=self,
         )
+        self.data_mapping_runner = DataMappingTaskRunner(parent=self)
         self.plot_window = self.controller.adapter.plot_window
         self.plot_window.viewtoolbar.hide()
         self._structural_qa_timer = QtCore.QTimer(self)
@@ -84,6 +98,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._build_toolbar()
         self._build_central_workspace()
         self._connect_assistant_runner()
+        self._connect_data_mapping_runner()
         self._build_status_bar()
         self._build_menus()
         self._apply_theme()
@@ -109,6 +124,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         application = QtWidgets.QApplication.instance()
         if application is not None:
             application.installEventFilter(self)
+        QtCore.QTimer.singleShot(0, self._resume_mapping_on_open)
 
     def _action(
         self,
@@ -469,9 +485,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
 
         assistant_panel = AssistantTransactionPanel()
         assistant_panel.set_provider(self.assistant_runner.descriptor)
-        assistant_panel.requestSubmitted.connect(
-            self._assistant_request_submitted
-        )
+        assistant_panel.requestSubmitted.connect(self._assistant_request_submitted)
         assistant_panel.cancelRequestRequested.connect(
             self._assistant_cancel_request_triggered
         )
@@ -481,15 +495,9 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         assistant_panel.rejectProposalRequested.connect(
             self._assistant_reject_triggered
         )
-        assistant_panel.undoBatchRequested.connect(
-            self._assistant_undo_triggered
-        )
-        assistant_panel.commitRequested.connect(
-            self._assistant_commit_triggered
-        )
-        assistant_panel.rollbackRequested.connect(
-            self._assistant_rollback_triggered
-        )
+        assistant_panel.undoBatchRequested.connect(self._assistant_undo_triggered)
+        assistant_panel.commitRequested.connect(self._assistant_commit_triggered)
+        assistant_panel.rollbackRequested.connect(self._assistant_rollback_triggered)
 
         inspector_tabs = QtWidgets.QTabWidget(self)
         inspector_tabs.setObjectName("inspectorTabs")
@@ -543,12 +551,8 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             self.plot_window,
             parent=self,
         )
-        self.review_overlay.geometryCreated.connect(
-            self._create_review_annotation
-        )
-        self.review_overlay.geometryMoved.connect(
-            self._move_review_annotation
-        )
+        self.review_overlay.geometryCreated.connect(self._create_review_annotation)
+        self.review_overlay.geometryMoved.connect(self._move_review_annotation)
         self.review_overlay.annotationSelected.connect(
             self._review_annotation_selection_requested
         )
@@ -613,9 +617,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             action = self._action(
                 label,
                 None,
-                lambda _checked=False, selected=tool: self._set_review_tool(
-                    selected
-                ),
+                lambda _checked=False, selected=tool: self._set_review_tool(selected),
                 tooltip=label,
                 object_name=f"review{tool.title()}Action",
             )
@@ -666,7 +668,9 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._applying_theme = True
         try:
             application = QtWidgets.QApplication.instance()
-            palette = application.palette() if application is not None else self.palette()
+            palette = (
+                application.palette() if application is not None else self.palette()
+            )
             self.theme_tokens = build_canvas_theme(
                 palette,
                 high_contrast=self.controller.session.interface.high_contrast,
@@ -760,11 +764,8 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         names = {0: "contextual", 1: "review", 2: "assistant"}
         next_name = names.get(index, "contextual")
         previous_name = self.controller.session.active_inspector or "contextual"
-        if (
-            previous_name != next_name
-            and not self._resolve_staged_fields(
-                f"switch to the {next_name} workspace"
-            )
+        if previous_name != next_name and not self._resolve_staged_fields(
+            f"switch to the {next_name} workspace"
         ):
             blocker = QtCore.QSignalBlocker(self.inspector_tabs)
             self.inspector_tabs.setCurrentIndex(
@@ -813,9 +814,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.controller.update_interface_state(high_contrast=bool(checked))
         self._apply_theme()
         self.status_message.setText(
-            "Increased contrast enabled"
-            if checked
-            else "Using system contrast"
+            "Increased contrast enabled" if checked else "Using system contrast"
         )
 
     def _inspector_visibility_changed(self, visible: bool) -> None:
@@ -941,6 +940,17 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             self._assistant_provider_active_changed
         )
 
+    def _connect_data_mapping_runner(self) -> None:
+        self.data_mapping_runner.progress.connect(self._data_mapping_progress)
+        self.data_mapping_runner.previewReady.connect(self._data_mapping_preview_ready)
+        self.data_mapping_runner.executionReady.connect(
+            self._data_mapping_execution_ready
+        )
+        self.data_mapping_runner.failed.connect(self._data_mapping_failed)
+        self.data_mapping_runner.activeChanged.connect(
+            self._data_mapping_active_changed
+        )
+
     def _refresh_contextual_inspector(self) -> None:
         model = self.controller.contextual_inspector()
         self.inspector_panel.set_model(model)
@@ -978,9 +988,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             )
         message = QtWidgets.QMessageBox(self)
         message.setWindowTitle("Staged Canvas changes")
-        message.setText(
-            f"Apply the staged fields before you {action}?"
-        )
+        message.setText(f"Apply the staged fields before you {action}?")
         message.setInformativeText(
             "Figure edits become typed document operations. Review edits stay "
             "in the non-exported annotation sidecar."
@@ -993,24 +1001,18 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             "Revert Fields",
             QtWidgets.QMessageBox.ButtonRole.DestructiveRole,
         )
-        cancel_button = message.addButton(
-            QtWidgets.QMessageBox.StandardButton.Cancel
-        )
+        cancel_button = message.addButton(QtWidgets.QMessageBox.StandardButton.Cancel)
         message.setDefaultButton(apply_button)
         message.exec()
         clicked = message.clickedButton()
         if clicked is apply_button:
             try:
                 contextual_changes = (
-                    self.inspector_panel.collect_changes()
-                    if contextual_staged
-                    else []
+                    self.inspector_panel.collect_changes() if contextual_staged else []
                 )
                 review_id = self.review_panel.selected_annotation_id
                 review_changes = (
-                    self.review_panel.collect_changes()
-                    if review_staged
-                    else None
+                    self.review_panel.collect_changes() if review_staged else None
                 )
             except ValueError as exc:
                 self.status_message.setText(str(exc))
@@ -1020,9 +1022,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                     "Inspector update failed",
                     lambda: self.apply_contextual_changes(
                         contextual_changes,
-                        rationale=(
-                            f"Apply staged inspector changes before {action}."
-                        ),
+                        rationale=(f"Apply staged inspector changes before {action}."),
                     ),
                 )
                 if result is None:
@@ -1126,9 +1126,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 restored.request_id != request.request_id
                 or restored.provider_id != request.provider_id
             ):
-                raise ValueError(
-                    "Provider progress does not match the active request."
-                )
+                raise ValueError("Provider progress does not match the active request.")
             if record.status == "cancel_requested" or not record.provider_running:
                 return
             self.assistant.record_progress(restored)
@@ -1179,6 +1177,14 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             )
         self._open_assistant_workspace()
         self._sync_ui()
+        record = self.assistant.request_record
+        response_value = record.parsed_response if record is not None else None
+        if (
+            response_value is not None
+            and response_value.status == "proposal"
+            and response_value.proposal_kind == "data_mapping_proposal"
+        ):
+            QtCore.QTimer.singleShot(0, self._resume_mapping_on_open)
 
     @QtCore.pyqtSlot(object)
     def _assistant_provider_failed(self, payload: object) -> None:
@@ -1212,6 +1218,331 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 )
         self._sync_ui()
 
+    def _resume_mapping_on_open(self) -> None:
+        if self._closed or self.data_mapping_runner.active:
+            return
+        state = self.assistant.mapping_state
+        if state is not None and state.status == "proposed":
+            self._start_data_mapping_preview()
+
+    def _start_data_mapping_preview(
+        self,
+        source_root: Path | None = None,
+    ) -> dict[str, Any] | None:
+        if self.data_mapping_runner.active:
+            raise RuntimeError("A deterministic data-mapping task is already active.")
+        proposal = self.assistant.mapping_proposal
+        if proposal is None:
+            raise RuntimeError("No DataMappingProposal is ready for preview.")
+        try:
+            resolved_root = resolve_data_mapping_source_root(
+                self.workspace,
+                proposal,
+                selected_root=source_root,
+            )
+        except Exception as exc:
+            entry = self.assistant.require_mapping_source(
+                f"{type(exc).__name__}: {exc}",
+                source_root=source_root,
+            )
+            self.status_message.setText(
+                "Choose the hash-matched source folder to preview data meaning"
+            )
+            self._refresh_assistant_panel()
+            self._sync_ui()
+            return entry
+
+        entry = self.assistant.begin_mapping_preview(source_root=resolved_root)
+        self.assistant_panel.set_mapping_activity(
+            True,
+            stage="validating_sources",
+            message="Verifying request and source hashes without writing files.",
+        )
+        try:
+            if self.workspace.request_path is None:
+                raise RuntimeError("Canvas workspace has no plot_request.json.")
+            self.data_mapping_runner.submit_preview(
+                proposal=proposal,
+                source_root=resolved_root,
+                request_path=self.workspace.request_path,
+            )
+        except Exception as exc:
+            self.assistant.fail_mapping_task(f"{type(exc).__name__}: {exc}")
+            self.assistant_panel.set_mapping_activity(False)
+            raise
+        self.status_message.setText(
+            "Checking data mapping without changing the project"
+        )
+        self._refresh_assistant_panel()
+        self._sync_ui()
+        return entry
+
+    def select_data_mapping_source_root(self, source_root: Path) -> Any:
+        return self._start_data_mapping_preview(source_root)
+
+    def _choose_data_mapping_source_root(self) -> Any:
+        if not self.interactive:
+            raise RuntimeError(
+                "Pass an explicit source_root in non-interactive Canvas use."
+            )
+        state = self.assistant.mapping_state
+        start = (
+            state.source_root
+            if state is not None and state.source_root
+            else str(self.workspace.project_dir or self.workspace.target.parent)
+        )
+        selected = QtWidgets.QFileDialog.getExistingDirectory(
+            self,
+            "Choose data-mapping source folder",
+            start,
+            QtWidgets.QFileDialog.Option.ShowDirsOnly,
+        )
+        if not selected:
+            return None
+        return self.select_data_mapping_source_root(Path(selected))
+
+    def _start_data_mapping_execution(self) -> dict[str, Any]:
+        if self.data_mapping_runner.active:
+            raise RuntimeError("A deterministic data-mapping task is already active.")
+        state = self.assistant.mapping_state
+        proposal = self.assistant.mapping_proposal
+        if state is None or proposal is None or state.status != "confirmed":
+            raise RuntimeError("No confirmed data mapping is ready to execute.")
+        if (
+            state.source_root is None
+            or state.output_root is None
+            or state.preview is None
+            or state.confirmation is None
+        ):
+            raise RuntimeError("Confirmed data mapping state is incomplete.")
+        receipt = DataMappingConfirmation.from_dict(state.confirmation)
+        request_path = Path(str(state.preview.get("base_request") or ""))
+        entry = self.assistant.begin_mapping_execution()
+        self.assistant_panel.set_mapping_activity(
+            True,
+            stage="executing_mapping",
+            message=(
+                "Building an isolated mapped project; raw sources stay unchanged."
+            ),
+        )
+        try:
+            self.data_mapping_runner.submit_execution(
+                proposal=proposal,
+                confirmation=receipt,
+                source_root=Path(state.source_root),
+                request_path=request_path,
+                output_root=Path(state.output_root),
+            )
+        except Exception as exc:
+            self.assistant.fail_mapping_task(f"{type(exc).__name__}: {exc}")
+            self.assistant_panel.set_mapping_activity(False)
+            raise
+        self.status_message.setText(
+            "Building a verified mapped project in the background"
+        )
+        self._refresh_assistant_panel()
+        self._sync_ui()
+        return entry
+
+    def continue_data_mapping(self) -> Any:
+        state = self.assistant.mapping_state
+        if state is None:
+            raise RuntimeError("No data-mapping decision is active.")
+        if state.status in {"proposed", "source_required"}:
+            return self._choose_data_mapping_source_root()
+        if state.status == "preview_ready":
+            self.assistant.confirm_mapping(
+                confirmed_by="local_canvas_user_explicit_click",
+            )
+            return self._start_data_mapping_execution()
+        if state.status == "confirmed":
+            return self._start_data_mapping_execution()
+        if state.status == "executed":
+            return self.open_mapped_canvas()
+        raise RuntimeError(
+            f"Data mapping cannot continue while state is {state.status!r}."
+        )
+
+    @QtCore.pyqtSlot(object)
+    def _data_mapping_progress(self, payload: object) -> None:
+        value = dict(payload) if isinstance(payload, dict) else {}
+        stage = str(value.get("stage") or "deterministic_mapping")
+        message = str(value.get("message") or "Working on data mapping.")
+        self.assistant_panel.set_mapping_activity(
+            True,
+            stage=stage,
+            message=message,
+        )
+        self.status_message.setText(message)
+
+    @QtCore.pyqtSlot(object)
+    def _data_mapping_preview_ready(self, payload: object) -> None:
+        preview = dict(payload) if isinstance(payload, dict) else {}
+        try:
+            self.assistant.complete_mapping_preview(
+                preview,
+                output_root=default_data_mapping_output_root(self.workspace),
+            )
+            self.status_message.setText(
+                "Data meaning is ready for your explicit confirmation"
+            )
+        except Exception as exc:
+            self.assistant.fail_mapping_task(f"{type(exc).__name__}: {exc}")
+            self.status_message.setText("Data mapping preview failed safely")
+        self._refresh_assistant_panel()
+        self._sync_ui()
+
+    @QtCore.pyqtSlot(object)
+    def _data_mapping_execution_ready(self, payload: object) -> None:
+        value = dict(payload) if isinstance(payload, dict) else {}
+        execution = value.get("execution")
+        workspace = value.get("workspace")
+        try:
+            if not isinstance(execution, dict) or not isinstance(
+                workspace, CanvasWorkspace
+            ):
+                raise ValueError("Data-mapping worker returned an invalid handoff.")
+            self.assistant.complete_mapping_execution(
+                execution,
+                mapped_document=workspace.document_path,
+            )
+            self._pending_mapped_workspace = workspace
+            self.status_message.setText(
+                "Mapped project verified; opening a new exact-current Canvas"
+            )
+            self._refresh_assistant_panel()
+            self._sync_ui()
+            self.open_mapped_canvas()
+        except Exception as exc:
+            state = self.assistant.mapping_state
+            if state is not None and state.status == "executing":
+                self.assistant.fail_mapping_task(f"{type(exc).__name__}: {exc}")
+            self.status_message.setText(
+                "Mapped project is preserved, but Canvas handoff needs attention"
+            )
+            if self.interactive:
+                QtWidgets.QMessageBox.critical(
+                    self,
+                    "Could not open mapped Canvas",
+                    str(exc),
+                )
+            self._refresh_assistant_panel()
+            self._sync_ui()
+
+    @QtCore.pyqtSlot(object)
+    def _data_mapping_failed(self, payload: object) -> None:
+        value = dict(payload) if isinstance(payload, dict) else {}
+        error = str(value.get("error") or "Deterministic mapping failed.")
+        try:
+            self.assistant.fail_mapping_task(error)
+        except Exception:
+            pass
+        self.status_message.setText(
+            "Data mapping stopped safely; original files are unchanged"
+        )
+        self._refresh_assistant_panel()
+        self._sync_ui()
+
+    @QtCore.pyqtSlot(bool)
+    def _data_mapping_active_changed(self, active: bool) -> None:
+        if not active:
+            self.assistant_panel.set_mapping_activity(False)
+            self._refresh_assistant_panel()
+            self._sync_ui()
+
+    def _forget_child_canvas(self, window: SciPlotCanvasWindow) -> None:
+        if window in self._child_canvas_windows:
+            self._child_canvas_windows.remove(window)
+
+    def _verified_mapped_workspace(self) -> CanvasWorkspace:
+        state = self.assistant.mapping_state
+        proposal = self.assistant.mapping_proposal
+        if state is None or proposal is None or state.status != "executed":
+            raise RuntimeError("No executed mapping handoff is available.")
+        if (
+            state.execution_manifest is None
+            or state.execution_manifest_sha256 is None
+            or state.mapped_document is None
+            or state.mapped_document_sha256 is None
+        ):
+            raise RuntimeError("Mapped handoff evidence is incomplete.")
+        manifest_path = Path(state.execution_manifest).expanduser().resolve()
+        if not manifest_path.is_file():
+            raise FileNotFoundError(manifest_path)
+        if file_sha256(manifest_path) != state.execution_manifest_sha256:
+            raise ValueError("Mapped execution manifest changed before handoff.")
+        execution = load_data_mapping_execution(manifest_path)
+        if execution.get("handoff_allowed") is not True:
+            raise ValueError(
+                "Mapped execution requires an explicit current confirmation before handoff."
+            )
+        execution_root = Path(str(execution.get("output_root") or "")).resolve()
+        expected_root = (Path(state.output_root or "") / proposal.proposal_id).resolve()
+        if execution_root != expected_root:
+            raise ValueError("Mapped execution root changed before handoff.")
+        document_path = Path(state.mapped_document).expanduser().resolve()
+        if document_path != expected_root / "studio" / "document.vsz":
+            raise ValueError("Mapped Canvas document path changed before handoff.")
+        if not document_path.is_file():
+            raise FileNotFoundError(document_path)
+        if file_sha256(document_path) != state.mapped_document_sha256:
+            raise ValueError("Mapped Canvas document changed before handoff.")
+        workspace = resolve_canvas_workspace(expected_root)
+        if workspace.document_path != document_path:
+            raise ValueError("Resolved mapped Canvas does not match handoff evidence.")
+        if file_sha256(workspace.document_path) != state.mapped_document_sha256:
+            raise ValueError("Mapped Canvas document changed during preparation.")
+        return workspace
+
+    def open_mapped_canvas(self) -> dict[str, Any]:
+        state = self.assistant.mapping_state
+        if state is None or state.status != "executed":
+            raise RuntimeError("No verified mapped project is ready to open.")
+        original_document_sha256 = self.assistant.ensure_original_document_unchanged()
+        workspace = self._verified_mapped_workspace()
+        child = SciPlotCanvasWindow(
+            workspace,
+            interactive=self.interactive,
+            assistant_provider=self._assistant_provider,
+        )
+        try:
+            if (
+                state.execution_manifest is None
+                or file_sha256(Path(state.execution_manifest))
+                != state.execution_manifest_sha256
+                or file_sha256(workspace.document_path) != state.mapped_document_sha256
+            ):
+                raise ValueError("Mapped handoff evidence changed while opening.")
+            self.assistant.accept_mapping_handoff()
+            commit = self.assistant.commit()
+        except Exception:
+            child.set_close_policy_for_test("keep_recovery")
+            child.close()
+            raise
+        self._child_canvas_windows.append(child)
+        child.destroyed.connect(
+            lambda _value=None, window=child: self._forget_child_canvas(window)
+        )
+        child.show()
+        child.raise_()
+        child.activateWindow()
+        self._pending_mapped_workspace = None
+        self.status_message.setText(
+            "Mapped Canvas opened; the original Canvas and VSZ are unchanged"
+        )
+        self._refresh_assistant_panel()
+        self._sync_ui()
+        return {
+            "workspace": workspace.to_dict(),
+            "commit": commit,
+            "original_document": str(self.workspace.document_path),
+            "mapped_document": str(workspace.document_path),
+            "original_document_unchanged": (
+                original_document_sha256 is None
+                or file_sha256(self.workspace.document_path) == original_document_sha256
+            ),
+        }
+
     def _execute_assistant_action(
         self,
         callback: Any,
@@ -1220,9 +1551,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         refresh_document: bool = False,
     ) -> Any:
         self.assistant_panel.set_busy(True)
-        QtWidgets.QApplication.setOverrideCursor(
-            QtCore.Qt.CursorShape.WaitCursor
-        )
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         try:
             result = callback()
             if refresh_document:
@@ -1335,12 +1664,29 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self._run_ui_action("Assistant pause failed", callback)
 
     def _assistant_accept_triggered(self) -> None:
+        if self.assistant.mapping_state is not None:
+            self._run_ui_action(
+                "Data mapping could not continue",
+                self.continue_data_mapping,
+            )
+            return
         self._run_ui_action(
             "Assistant proposal failed",
             self.accept_assistant_proposal,
         )
 
     def _assistant_reject_triggered(self) -> None:
+        if self.assistant.mapping_state is not None:
+            self._run_ui_action(
+                "Data mapping rejection failed",
+                lambda: self._execute_assistant_action(
+                    lambda: self.assistant.reject_mapping(
+                        reason="Rejected from the Canvas data-mapping card."
+                    ),
+                    status=("Data mapping rejected; the original project is unchanged"),
+                ),
+            )
+            return
         self._run_ui_action(
             "Assistant rejection failed",
             self.reject_assistant_proposal,
@@ -1442,8 +1788,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             page_annotations = [
                 annotation
                 for annotation in self.controller.review_annotations
-                if annotation.page_index == page
-                and annotation.state != "removed"
+                if annotation.page_index == page and annotation.state != "removed"
             ]
             active_entries = [
                 (
@@ -1461,9 +1806,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 selected_id=selected_id,
             )
             self.review_overlay.set_annotations(active_entries)
-            current_id = (
-                selected_id or self.review_panel.selected_annotation_id
-            )
+            current_id = selected_id or self.review_panel.selected_annotation_id
             if current_id is not None:
                 self.review_overlay.select_annotation(current_id)
             selected = (
@@ -1472,9 +1815,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 else None
             )
             promotable = bool(selected is not None and selected.promotable)
-            removable = bool(
-                selected is not None and selected.state == "review_only"
-            )
+            removable = bool(selected is not None and selected.state == "review_only")
             if hasattr(self, "promote_review_action"):
                 self.promote_review_action.setEnabled(promotable)
                 self.remove_review_action.setEnabled(removable)
@@ -1486,11 +1827,8 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         annotation_id: str,
     ) -> None:
         previous = self.review_panel.selected_annotation_id
-        if (
-            previous != annotation_id
-            and not self._resolve_staged_fields(
-                "select another review mark"
-            )
+        if previous != annotation_id and not self._resolve_staged_fields(
+            "select another review mark"
         ):
             self.review_panel.select_annotation(previous)
             self.review_overlay.select_annotation(previous)
@@ -1500,8 +1838,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         self.review_overlay.select_annotation(annotation_id)
         annotation = self.controller.review_annotation(annotation_id)
         self.status_message.setText(
-            f"Selected review {annotation.shape} · "
-            f"{annotation.coordinate_space} anchor"
+            f"Selected review {annotation.shape} · {annotation.coordinate_space} anchor"
         )
         self._refresh_review_layer(selected_id=annotation_id)
 
@@ -1534,9 +1871,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             self._refresh_review_layer(selected_id=annotation.annotation_id)
             self.review_panel.select_annotation(annotation.annotation_id)
             self.review_overlay.select_annotation(annotation.annotation_id)
-            self.status_message.setText(
-                f"Added non-exported review {annotation.shape}"
-            )
+            self.status_message.setText(f"Added non-exported review {annotation.shape}")
             return annotation
 
         self._run_ui_action("Could not add review annotation", create)
@@ -1568,9 +1903,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             style=dict(payload.get("style") or {}),
         )
         self._refresh_review_layer(selected_id=annotation.annotation_id)
-        self.status_message.setText(
-            "Updated the non-exported review annotation"
-        )
+        self.status_message.setText("Updated the non-exported review annotation")
         return annotation
 
     def _update_review_annotation(
@@ -1621,18 +1954,14 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
     def _promote_selected_review(self) -> None:
         annotation_id = self.review_panel.selected_annotation_id
         if annotation_id is None:
-            self.status_message.setText(
-                "Select a review mark before promoting it."
-            )
+            self.status_message.setText("Select a review mark before promoting it.")
             return
         self._promote_review_annotation(annotation_id)
 
     def _remove_selected_review(self) -> None:
         annotation_id = self.review_panel.selected_annotation_id
         if annotation_id is None:
-            self.status_message.setText(
-                "Select a review mark before removing it."
-            )
+            self.status_message.setText("Select a review mark before removing it.")
             return
         self._remove_review_annotation(annotation_id)
 
@@ -1685,9 +2014,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
     ) -> dict[str, Any]:
         selected = self.controller.select_widget_path(widget_path)
         if selected is None:
-            raise RuntimeError(
-                "The directly manipulated object no longer resolves."
-            )
+            raise RuntimeError("The directly manipulated object no longer resolves.")
         return self.apply_contextual_changes(
             changes,
             provider="user_direct_manipulation",
@@ -1713,10 +2040,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             self._refresh_contextual_inspector()
 
     def _sync_selection_visual(self) -> None:
-        if (
-            hasattr(self, "inspector_tabs")
-            and self.inspector_tabs.currentIndex() == 1
-        ):
+        if hasattr(self, "inspector_tabs") and self.inspector_tabs.currentIndex() == 1:
             self.controller.adapter.clear_selection_visual()
             return
         selected = self.controller.selected_object
@@ -1826,8 +2150,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             or self.review_panel.has_staged_changes
         ):
             raise RuntimeError(
-                "Apply or revert staged inspector or review fields before "
-                "Export + QA."
+                "Apply or revert staged inspector or review fields before Export + QA."
             )
         if self.controller.session.dirty:
             self.save_document()
@@ -1969,8 +2292,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         if selected is not None:
             self._refresh_contextual_inspector()
             self.status_message.setText(
-                f"Selected {selected['object_type']} · "
-                f"{selected['display_name']}"
+                f"Selected {selected['object_type']} · {selected['display_name']}"
             )
         else:
             self._sync_selection_ui()
@@ -2065,7 +2387,10 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
         session = self.controller.session
         assistant_active = self.assistant.active
         self._refresh_assistant_panel()
-        state_text = session.state.replace("_", " ")
+        state_text = {
+            "needs_human_confirmation": "needs confirmation",
+            "needs_rule_repair": "needs rule repair",
+        }.get(session.state, session.state.replace("_", " "))
         self.state_chip.setText(state_text)
         self.state_chip.setAccessibleName(f"Document state: {state_text}")
         self.state_chip.setAccessibleDescription(
@@ -2105,15 +2430,10 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             transaction is not None and transaction.pending_batch is not None
         )
         applying = bool(
-            transaction is not None
-            and transaction.applying_batch_id is not None
+            transaction is not None and transaction.applying_batch_id is not None
         )
-        active_status = bool(
-            transaction is not None and transaction.status == "active"
-        )
-        paused_status = bool(
-            transaction is not None and transaction.status == "paused"
-        )
+        active_status = bool(transaction is not None and transaction.status == "active")
+        paused_status = bool(transaction is not None and transaction.status == "paused")
         self.assistant_pause_action.setText(
             "Resume Assistant" if paused_status else "Pause Assistant"
         )
@@ -2242,10 +2562,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 self._set_canvas_only(not self._canvas_only)
                 event.accept()
                 return True
-            if (
-                event.key() == QtCore.Qt.Key.Key_Escape
-                and self._point_pick_active
-            ):
+            if event.key() == QtCore.Qt.Key.Key_Escape and self._point_pick_active:
                 self._set_point_pick_active(False)
                 event.accept()
                 return True
@@ -2307,9 +2624,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             return "keep"
         message = QtWidgets.QMessageBox(self)
         message.setWindowTitle("Active Assistant transaction")
-        message.setText(
-            "This Assistant turn has not been committed or rolled back."
-        )
+        message.setText("This Assistant turn has not been committed or rolled back.")
         message.setInformativeText(
             "Keep it for verified recovery on the next open, or restore the "
             f"exact revision {transaction.base_revision} baseline now."
@@ -2322,9 +2637,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
             "Roll Back and Close",
             QtWidgets.QMessageBox.ButtonRole.DestructiveRole,
         )
-        cancel_button = message.addButton(
-            QtWidgets.QMessageBox.StandardButton.Cancel
-        )
+        cancel_button = message.addButton(QtWidgets.QMessageBox.StandardButton.Cancel)
         message.setDefaultButton(keep_button)
         message.exec()
         clicked = message.clickedButton()
@@ -2355,6 +2668,23 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 self.review_panel.revert_staged()
         policy = self._close_policy_override
         self._close_policy_override = None
+        if self.data_mapping_runner.active:
+            if not self.data_mapping_runner.shutdown(wait_ms=30_000):
+                if self.interactive:
+                    QtWidgets.QMessageBox.information(
+                        self,
+                        "Data mapping is still finishing",
+                        "Wait for the atomic mapping task to finish before closing. "
+                        "The original project remains unchanged.",
+                    )
+                    event.ignore()
+                    return
+                raise RuntimeError(
+                    "Data mapping did not finish before non-interactive close."
+                )
+            application = QtWidgets.QApplication.instance()
+            if application is not None:
+                application.processEvents()
         if self.assistant_runner.active:
             record = self.assistant.request_record
             try:
@@ -2383,9 +2713,7 @@ class SciPlotCanvasWindow(QtWidgets.QMainWindow):
                 raise
         if self.assistant.active:
             assistant_policy = (
-                self._prompt_assistant_close_policy()
-                if self.interactive
-                else "keep"
+                self._prompt_assistant_close_policy() if self.interactive else "keep"
             )
             if assistant_policy == "cancel":
                 event.ignore()

@@ -18,6 +18,7 @@ from sciplot_core.canvas.annotations import (
 )
 from sciplot_core.canvas.assistant_contract import (
     DataColumnMapping,
+    DataMappingConfirmation,
     DataMappingProposal,
     DataSourceReference,
     DeclarativeTransformation,
@@ -40,10 +41,12 @@ from sciplot_core.canvas.persistence import (
     save_review_annotations,
 )
 from sciplot_core.canvas.provider import (
+    AssistantDataMappingState,
     AssistantProgressEvent,
     AssistantRequest,
     AssistantRequestRecord,
     AssistantResponse,
+    canonical_payload_sha256,
 )
 
 CANVAS_CHARACTERIZATION_KIND = "sciplot_canvas_characterization"
@@ -242,9 +245,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         },
         allowed_proposal_kinds=("canvas_operation_batch",),
     )
-    assistant_record = AssistantRequestRecord(
-        request=assistant_request.to_dict()
-    )
+    assistant_record = AssistantRequestRecord(request=assistant_request.to_dict())
     assistant_record.append_event(
         AssistantProgressEvent(
             request_id=assistant_request.request_id,
@@ -268,6 +269,142 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             proposal=batch.to_dict(),
         )
     )
+    mapping_request = AssistantRequest(
+        transaction_id="33333333-3333-4333-8333-333333333333",
+        provider_id="contract_probe",
+        intent="Map the hash-bound source columns into an isolated candidate project.",
+        base_revision=0,
+        context=assistant_request.context,
+        allowed_proposal_kinds=("data_mapping_proposal",),
+    )
+    mapping_record = AssistantRequestRecord(request=mapping_request.to_dict())
+    mapping_record.complete(
+        AssistantResponse(
+            request_id=mapping_request.request_id,
+            transaction_id=mapping_request.transaction_id,
+            provider_id=mapping_request.provider_id,
+            request_sha256=mapping_request.payload_sha256,
+            status="proposal",
+            understanding="Map only the declared, hash-bound source columns.",
+            proposal_kind="data_mapping_proposal",
+            proposal=proposal.to_dict(),
+        )
+    )
+    proposal_sha256 = canonical_payload_sha256(proposal.to_dict())
+    mapping_preview = {
+        "kind": "sciplot_data_mapping_preview",
+        "version": 1,
+        "status": "ready_for_confirmation",
+        "proposal_id": proposal.proposal_id,
+        "proposal_sha256": proposal_sha256,
+        "provider": proposal.provider,
+        "base_request": str(root / "plot_request.json"),
+        "base_request_sha256": proposal.base_request_sha256,
+        "source_root": str(root),
+        "sources": [
+            {
+                "source_id": "example",
+                "relative_path": "raw/example.csv",
+                "sha256": "a" * 64,
+                "source_size_bytes": 128,
+                "detected_headers": ["Frequency", "Storage modulus"],
+                "mapped_columns": ["Frequency", "Storage modulus"],
+                "row_count": 4,
+                "column_count": 2,
+                "units": {"Frequency": "Hz"},
+                "transformations": ["unit_convert"],
+                "sample_label": "Example",
+            }
+        ],
+        "request_patch": proposal.request_patch,
+        "confidence": proposal.confidence,
+        "rationale": proposal.rationale,
+        "raw_values_in_preview": False,
+        "writes_performed": False,
+        "requires_confirmation_receipt": True,
+    }
+    mapping_record.set_mapping_state(
+        AssistantDataMappingState(
+            status="preview_ready",
+            source_root=str(root),
+            output_root=str(root / "mapped_projects"),
+            preview=mapping_preview,
+        )
+    )
+    mapping_premature_accept_rejected = _raises_value_error(
+        lambda: mapping_record.mark_proposal_outcome(accepted=True)
+    )
+    mapping_confirmation = DataMappingConfirmation(
+        proposal_id=proposal.proposal_id,
+        proposal_sha256=proposal_sha256,
+        base_request_sha256=proposal.base_request_sha256,
+        source_hashes=proposal.source_hashes,
+        source_root=str(root),
+        request_path=str(root / "plot_request.json"),
+        output_root=str(root / "mapped_projects"),
+        confirmed_by="canvas_contract_probe",
+    )
+    mapping_record.set_mapping_state(
+        AssistantDataMappingState(
+            status="confirmed",
+            source_root=str(root),
+            output_root=str(root / "mapped_projects"),
+            preview=mapping_preview,
+            confirmation=mapping_confirmation.to_dict(),
+        )
+    )
+    restored_mapping_record = AssistantRequestRecord.from_dict(mapping_record.to_dict())
+    legacy_mapping_record_payload = mapping_record.to_dict()
+    legacy_mapping_record_payload["version"] = 1
+    legacy_mapping_record_payload.pop("mapping_state")
+    migrated_mapping_record_v1 = AssistantRequestRecord.from_dict(
+        legacy_mapping_record_payload
+    )
+    stale_mapping_record_payload = mapping_record.to_dict()
+    stale_mapping_record_payload["mapping_state"]["preview"]["proposal_sha256"] = (
+        "0" * 64
+    )
+    stale_mapping_binding_rejected = _raises_value_error(
+        lambda: AssistantRequestRecord.from_dict(stale_mapping_record_payload)
+    )
+    rebound_mapping_path_payload = mapping_record.to_dict()
+    rebound_mapping_path_payload["mapping_state"]["source_root"] = str(
+        root / "other_source"
+    )
+    rebound_mapping_path_rejected = _raises_value_error(
+        lambda: AssistantRequestRecord.from_dict(rebound_mapping_path_payload)
+    )
+    mapping_record.set_mapping_state(
+        AssistantDataMappingState(
+            status="executed",
+            source_root=str(root),
+            output_root=str(root / "mapped_projects"),
+            preview=mapping_preview,
+            confirmation=mapping_confirmation.to_dict(),
+            execution_manifest=str(
+                root
+                / "mapped_projects"
+                / proposal.proposal_id
+                / "execution.json"
+            ),
+            execution_manifest_sha256="f" * 64,
+            mapped_document=str(
+                root
+                / "mapped_projects"
+                / proposal.proposal_id
+                / "studio"
+                / "document.vsz"
+            ),
+            mapped_document_sha256="e" * 64,
+        )
+    )
+    executed_mapping_record = AssistantRequestRecord.from_dict(
+        mapping_record.to_dict()
+    )
+    executed_mapping_reject_blocked = _raises_value_error(
+        lambda: executed_mapping_record.mark_proposal_outcome(accepted=False)
+    )
+    mapping_record.mark_proposal_outcome(accepted=True)
     transaction = CanvasTransaction(
         transaction_id=transaction_id,
         provider="contract_probe",
@@ -275,9 +412,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         status="active",
         snapshot_path=".canvas_transactions/contract/baseline.vsz",
         snapshot_sha256="b" * 64,
-        review_snapshot_path=(
-            ".canvas_transactions/contract/review_annotations.json"
-        ),
+        review_snapshot_path=(".canvas_transactions/contract/review_annotations.json"),
         review_snapshot_sha256="c" * 64,
         baseline_render_sha256="d" * 64,
         baseline_saved_revision=0,
@@ -326,17 +461,17 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
     transaction_session.active_inspector = "assistant"
     transaction_session.active_transaction = transaction
     transaction_session.journal_outbox = [dict(outbox_event)]
-    original_request_structural_status = (
-        transaction_session.active_transaction.parsed_request_record
-        .parsed_request.context["qa"]["structural_status"]
-    )
+    original_request_structural_status = transaction_session.active_transaction.parsed_request_record.parsed_request.context[
+        "qa"
+    ]["structural_status"]
     detached_session_payload = transaction_session.to_dict()
-    detached_session_payload["active_transaction"]["request_record"][
-        "request"
-    ]["context"]["qa"]["structural_status"] = "tampered"
+    detached_session_payload["active_transaction"]["request_record"]["request"][
+        "context"
+    ]["qa"]["structural_status"] = "tampered"
     transaction_payload_is_detached = bool(
-        transaction_session.active_transaction.parsed_request_record
-        .parsed_request.context["qa"]["structural_status"]
+        transaction_session.active_transaction.parsed_request_record.parsed_request.context[
+            "qa"
+        ]["structural_status"]
         == original_request_structural_status
     )
 
@@ -391,9 +526,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         ],
         revision=1,
     )
-    reconciled_by_path = {
-        record.current_path: record for record in reconciled_records
-    }
+    reconciled_by_path = {record.current_path: record for record in reconciled_records}
     restored_batch = CanvasOperationBatch.from_dict(batch.to_dict())
     restored_native_annotation_operation = CanvasOperation.from_dict(
         native_annotation_operation.to_dict()
@@ -402,9 +535,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
     legacy_annotation_payload = annotation.to_dict()
     legacy_annotation_payload["version"] = 1
     legacy_annotation_payload.pop("style")
-    migrated_legacy_annotation = ReviewAnnotation.from_dict(
-        legacy_annotation_payload
-    )
+    migrated_legacy_annotation = ReviewAnnotation.from_dict(legacy_annotation_payload)
     operation_schema_rejected = _raises_value_error(
         lambda: CanvasOperation(
             operation_type="set_setting",
@@ -471,9 +602,10 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
     version_four_payload = transaction_session.to_dict()
     version_four_payload["version"] = 4
     version_four_payload["active_transaction"].pop("request_record")
-    migrated_version_four_session = CanvasSession.from_dict(
-        version_four_payload
-    )
+    migrated_version_four_session = CanvasSession.from_dict(version_four_payload)
+    version_five_payload = transaction_session.to_dict()
+    version_five_payload["version"] = 5
+    migrated_version_five_session = CanvasSession.from_dict(version_five_payload)
     invalid_interface_rejected = _raises_value_error(
         lambda: CanvasSession.from_dict(
             {
@@ -512,11 +644,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
                     **dict(transaction.pending_preview or {}),
                     "changes": [
                         {
-                            **dict(
-                                (transaction.pending_preview or {})[
-                                    "changes"
-                                ][0]
-                            ),
+                            **dict((transaction.pending_preview or {})["changes"][0]),
                             "value": "Different visible value",
                         }
                     ],
@@ -656,7 +784,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
     checks = [
         _check(
             "session_roundtrip",
-            "CanvasSession version 5 persists workbench, point-selection, and structural-QA state without Qt",
+            "CanvasSession version 6 persists workbench, point-selection, and structural-QA state without Qt",
             loaded.session_id == session.session_id
             and loaded.state == "canvas_ready"
             and loaded.interface.to_dict() == session.interface.to_dict()
@@ -682,15 +810,14 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         ),
         _check(
             "assistant_transaction_session_roundtrip",
-            "CanvasSession version 5 persists a hash-bound Assistant request, response, transaction, and journal outbox",
+            "CanvasSession version 6 persists a hash-bound Assistant request, response, transaction, and journal outbox",
             loaded_transaction_session.active_transaction is not None
             and loaded_transaction_session.active_transaction.to_dict()
             == transaction.to_dict()
             and loaded_transaction_session.active_transaction.parsed_request_record
             is not None
             and (
-                loaded_transaction_session.active_transaction.parsed_request_record
-                .parsed_response.request_sha256
+                loaded_transaction_session.active_transaction.parsed_request_record.parsed_response.request_sha256
                 == assistant_request.payload_sha256
             )
             and loaded_transaction_session.journal_outbox
@@ -704,13 +831,56 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             "CanvasSession version 4 Assistant turns migrate without inventing provider request state",
             migrated_version_four_session.active_transaction is not None
             and (
-                migrated_version_four_session.active_transaction.request_record
-                is None
+                migrated_version_four_session.active_transaction.request_record is None
             )
             and (
                 migrated_version_four_session.active_transaction.pending_batch_id
                 == batch.batch_id
             ),
+        ),
+        _check(
+            "session_v5_assistant_migration",
+            "CanvasSession version 5 Assistant turns remain readable after mapping-state persistence is added",
+            migrated_version_five_session.active_transaction is not None
+            and (
+                migrated_version_five_session.active_transaction.to_dict()
+                == transaction.to_dict()
+            ),
+        ),
+        _check(
+            "mapping_request_record_v1_migration",
+            "AssistantRequestRecord version 1 mapping proposals migrate without inventing preview or consent",
+            migrated_mapping_record_v1.status == "proposal_ready"
+            and migrated_mapping_record_v1.parsed_mapping_state is not None
+            and migrated_mapping_record_v1.parsed_mapping_state.status == "proposed"
+            and migrated_mapping_record_v1.parsed_mapping_state.preview is None
+            and migrated_mapping_record_v1.parsed_mapping_state.confirmation is None,
+        ),
+        _check(
+            "mapping_state_roundtrip_is_hash_bound",
+            "Mapping preview and confirmation state roundtrip with proposal, request, and source hashes bound",
+            restored_mapping_record.parsed_mapping_state is not None
+            and restored_mapping_record.parsed_mapping_state.status == "confirmed"
+            and restored_mapping_record.parsed_mapping_state.preview == mapping_preview
+            and (
+                restored_mapping_record.parsed_mapping_state.confirmation
+                == mapping_confirmation.to_dict()
+            )
+            and stale_mapping_binding_rejected
+            and rebound_mapping_path_rejected,
+        ),
+        _check(
+            "mapping_acceptance_requires_execution",
+            "A mapping proposal cannot be accepted before execution and closes only with a hashed manifest",
+            mapping_premature_accept_rejected
+            and mapping_record.status == "applied"
+            and mapping_record.parsed_mapping_state is not None
+            and mapping_record.parsed_mapping_state.status == "executed"
+            and mapping_record.parsed_mapping_state.execution_manifest_sha256
+            == "f" * 64
+            and mapping_record.parsed_mapping_state.mapped_document_sha256
+            == "e" * 64
+            and executed_mapping_reject_blocked,
         ),
         _check(
             "assistant_response_hash_is_bound",
@@ -736,8 +906,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             and first_idempotent_append
             and not duplicate_idempotent_append
             and len(idempotent_journal) == 1
-            and idempotent_journal[0].get("event_id")
-            == outbox_event["event_id"],
+            and idempotent_journal[0].get("event_id") == outbox_event["event_id"],
         ),
         _check(
             "stable_object_identity",
@@ -748,8 +917,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         _check(
             "stable_object_identity_survives_sibling_insertion",
             "Existing object IDs survive insertion of a same-type native annotation",
-            reconciled_by_path["/page/title"].object_id
-            == existing_label.object_id
+            reconciled_by_path["/page/title"].object_id == existing_label.object_id
             and reconciled_by_path["/page/review_contract"].object_id
             != existing_label.object_id,
         ),
@@ -763,8 +931,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
             "ReviewAnnotation version 2 persists as a review-only sidecar object",
             len(loaded_annotations) == 1
             and loaded_annotations[0].state == "review_only"
-            and loaded_annotations[0].to_dict()["version"]
-            == REVIEW_ANNOTATION_VERSION,
+            and loaded_annotations[0].to_dict()["version"] == REVIEW_ANNOTATION_VERSION,
         ),
         _check(
             "review_annotation_v1_migration",
@@ -783,14 +950,12 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         _check(
             "native_annotation_schema_is_closed",
             "Native annotation operations reject unsafe draw positions and renderer settings",
-            native_annotation_index_rejected
-            and native_annotation_setting_rejected,
+            native_annotation_index_rejected and native_annotation_setting_rejected,
         ),
         _check(
             "review_annotation_geometry_is_bounded",
             "Normalized review coordinates and style colors reject invalid values",
-            invalid_annotation_geometry_rejected
-            and invalid_annotation_style_rejected,
+            invalid_annotation_geometry_rejected and invalid_annotation_style_rejected,
         ),
         _check(
             "mapping_proposal_is_declarative",
@@ -842,8 +1007,7 @@ def run_canvas_contract_probe(*, output_root: Path) -> dict[str, Any]:
         _check(
             "inspector_choice_schema_is_closed",
             "Contextual choice fields reject arbitrary renderer values",
-            choice_field.coerce_input("dashed") == "dashed"
-            and invalid_choice_rejected,
+            choice_field.coerce_input("dashed") == "dashed" and invalid_choice_rejected,
         ),
         _check(
             "inspector_data_mapping_is_read_only",

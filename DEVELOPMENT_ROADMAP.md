@@ -7,8 +7,9 @@ and default `studio` migration remain. M3's provider-neutral reversible
 `CanvasOperationBatch` transaction kernel and deterministic
 `DataMappingProposal` executor are implemented. Its provider-neutral,
 hash-bound request lifecycle and injected-provider Canvas UI are also
-implemented; a production model-provider adapter, Canvas execution of a
-confirmed data-mapping proposal, and canonical natural-language acceptance
+implemented. The Canvas now previews, explicitly confirms, executes, recovers,
+and opens a confirmed data-mapping proposal as a separate candidate Canvas;
+a production model-provider adapter and canonical natural-language acceptance
 tasks remain.
 
 This roadmap supersedes the former assumption that native canvas work and
@@ -635,8 +636,9 @@ Implemented deterministic data-mapping increment, 2026-07-17:
   rationale, and timezone-aware creation time;
 - separated proposal from authorization. The provider-visible proposal always
   has `requires_confirmation=true` and `executable=false`; a separate
-  `DataMappingConfirmation` binds the exact proposal SHA, base-request SHA,
-  source hashes, operator, and immutable confirmation timestamp;
+  `DataMappingConfirmation` version 2 binds the exact proposal SHA,
+  base-request SHA, source hashes, normalized source/request/output paths,
+  operator, and immutable confirmation timestamp;
 - added a zero-write, raw-value-free preview and rejected path traversal,
   stale requests, changed sources, forged receipts, executable content, and
   unknown transformation fields;
@@ -685,8 +687,9 @@ Implemented deterministic data-mapping increment, 2026-07-17:
 - validated the ordinary deterministic `run` route on the mapped FTIR
   candidate, with mapping then semantic-preparation lineage, passed QA, and a
   complete delivery package;
-- the adversarial mapping probe passes `50/50`; runtime smoke version 13
-  passes `30/30`, including a full mapped-project Studio lifecycle;
+- the adversarial mapping probe passes `55/55`, including normalized path
+  rebinding rejection and legacy-receipt migration; runtime smoke version 15 passes `30/30`, including a
+  full mapped-project Studio lifecycle;
 - the non-interactive receipts used for this engineering acceptance are
   explicitly not user confirmations and do not count as human sessions or
   prove model interpretation quality.
@@ -733,6 +736,54 @@ This increment is verified with an injected deterministic provider. It proves
 the integration boundary and UI lifecycle, not the scientific quality of a
 production model.
 
+Implemented Canvas data-mapping confirmation and handoff increment,
+2026-07-17:
+
+- promoted `CanvasSession` to version 6 and `AssistantRequestRecord` to
+  version 2, while retaining safe Canvas versions 1-5 and request-record
+  version-1 loading without inventing a preview or user consent;
+- persisted a closed mapping state machine from proposal and source discovery
+  through zero-write preview, explicit confirmation, execution, verified
+  handoff, or rejection;
+- bound every persisted preview and confirmation receipt to the exact proposal
+  SHA, base-request SHA, provider, request patch, and complete source-hash
+  inventory plus normalized source, request, and output paths. A mapping
+  request cannot become accepted until execution records a hashed manifest;
+- derived candidate source roots from the active project and request without
+  guessing between distinct valid trees. Ambiguity stops at a visible source
+  chooser and changes no document or data;
+- moved deterministic preview, execution, and mapped Studio preparation to a
+  Qt worker. The only primary write action is the user's explicit
+  `Confirm and Build Project` click;
+- made confirmed execution create or reuse an isolated candidate project.
+  The current Canvas and exact-current VSZ remain untouched, and success opens
+  the candidate in a separate Canvas window;
+- persisted the same confirmation receipt across execution retry. Reopen
+  reconciles an actually persisted `executing` marker to `confirmed`, then
+  reuses a completed candidate idempotently instead of inventing success,
+  consent, or a second execution;
+- made version-1 path-unbound receipts inspection-only. They cannot execute,
+  render, or hand off; an explicit version-2 reconfirmation into a new output
+  root is required;
+- revalidate the full manifest, normalized mapping paths, mapped VSZ bytes,
+  and original VSZ before handoff. The original VSZ is checked again after
+  structural QA immediately before commit, so a concurrent change enters a
+  recoverable conflict;
+- added source-tamper rejection, duplicate-confirmation prevention,
+  close/reopen recovery, original-tree immutability, receipt/ledger checks,
+  separate-Canvas handoff, and real UI screenshot evidence to the Assistant
+  lifecycle probe;
+- an independent read-only reviewer found and then rechecked authority,
+  recovery, legacy-compatibility, and actual-button-path defects; the final
+  re-review reported no remaining actionable defect or regression;
+- the cumulative pure Canvas contract passes `36/36`, deterministic mapping
+  passes `55/55`, the Assistant lifecycle passes `41/41`, and runtime smoke
+  version 15 passes `30/30`.
+
+This increment still uses an injected deterministic provider. It proves the
+human-authority and deterministic-execution boundary, not a production
+model's scientific interpretation quality or a real daily-use session.
+
 Canonical acceptance tasks:
 
 - rename and format an axis from natural language;
@@ -764,9 +815,11 @@ Current gate status:
 - provider-neutral request, progress, cancellation, response, persistence,
   and `CanvasOperationBatch` preview, accept/reject, and rollback UI pass with
   an injected deterministic provider;
-- a production model-provider adapter, deterministic execution of a confirmed
-  `DataMappingProposal` from the Canvas decision card, and the canonical
-  natural-language tasks remain open;
+- deterministic `DataMappingProposal` source discovery, zero-write preview,
+  explicit receipt, background execution, retry/reopen recovery, and separate
+  candidate-Canvas handoff pass with an injected deterministic provider;
+- a production model-provider adapter and the canonical natural-language tasks
+  remain open;
 - automated probes do not satisfy M2's real-session cutover gate or the final
   user decision to retire the Veusz frontend.
 

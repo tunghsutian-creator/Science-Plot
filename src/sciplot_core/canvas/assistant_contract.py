@@ -4,7 +4,7 @@ import math
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 from uuid import uuid4
 
@@ -21,7 +21,8 @@ from sciplot_core.canvas.operations import _validate_json_value
 DATA_MAPPING_PROPOSAL_KIND = "sciplot_data_mapping_proposal"
 DATA_MAPPING_PROPOSAL_VERSION = 2
 DATA_MAPPING_CONFIRMATION_KIND = "sciplot_data_mapping_confirmation"
-DATA_MAPPING_CONFIRMATION_VERSION = 1
+DATA_MAPPING_CONFIRMATION_LEGACY_VERSION = 1
+DATA_MAPPING_CONFIRMATION_VERSION = 2
 
 DECLARATIVE_TRANSFORMATIONS = frozenset(
     {
@@ -79,6 +80,14 @@ _FORBIDDEN_EXECUTABLE_KEYS = {
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _absolute_path(value: object, label: str) -> str:
+    text = _required_text(value, label)
+    path = Path(text).expanduser()
+    if not path.is_absolute():
+        raise ValueError(f"{label} must be an absolute path.")
+    return str(path.resolve())
 
 
 def _timestamp(value: object, label: str) -> str:
@@ -194,9 +203,7 @@ def _reject_executable_keys(value: Any, *, path: str = "parameters") -> None:
 def _string_mapping(value: object, *, label: str) -> dict[str, str]:
     payload = require_json_object(value, label=label)
     result = {
-        _required_text(key, f"{label} key"): _required_text(
-            item, f"{label}[{key!r}]"
-        )
+        _required_text(key, f"{label} key"): _required_text(item, f"{label}[{key!r}]")
         for key, item in payload.items()
     }
     if not result:
@@ -268,9 +275,7 @@ def _validate_transform_parameters(
             _int_list(parameters["row_indices"], label="exclude row_indices")
             has_selector = True
         if "where" in parameters:
-            conditions = require_json_list(
-                parameters["where"], label="exclude where"
-            )
+            conditions = require_json_list(parameters["where"], label="exclude where")
             if not conditions or not all(isinstance(item, dict) for item in conditions):
                 raise ValueError("exclude where must contain condition objects.")
             for index, condition in enumerate(conditions):
@@ -340,9 +345,7 @@ def _validate_transform_parameters(
         if source == target:
             raise ValueError("unit_convert source and target units must differ.")
         if "output_column" in parameters:
-            _required_text(
-                parameters["output_column"], "unit_convert output_column"
-            )
+            _required_text(parameters["output_column"], "unit_convert output_column")
         return
     if transformation_type == "derive_ratio":
         reject_unknown_keys(
@@ -366,9 +369,7 @@ def _validate_transform_parameters(
             "error",
             "missing",
         }:
-            raise ValueError(
-                "derive_ratio zero_policy must be `error` or `missing`."
-            )
+            raise ValueError("derive_ratio zero_policy must be `error` or `missing`.")
         return
     if transformation_type == "normalize_baseline":
         reject_unknown_keys(
@@ -392,17 +393,13 @@ def _validate_transform_parameters(
             "explicit",
         }
         if method not in supported:
-            raise ValueError(
-                f"normalize_baseline has unsupported method: {method!r}"
-            )
+            raise ValueError(f"normalize_baseline has unsupported method: {method!r}")
         if method == "mean_first_n":
             n = require_json_int(parameters.get("n"), label="normalize_baseline n")
             if n <= 0:
                 raise ValueError("normalize_baseline n must be positive.")
         elif "n" in parameters:
-            raise ValueError(
-                "normalize_baseline n is only valid for mean_first_n."
-            )
+            raise ValueError("normalize_baseline n is only valid for mean_first_n.")
         if method == "explicit":
             value = require_json_number(
                 parameters.get("value"), label="normalize_baseline value"
@@ -410,9 +407,7 @@ def _validate_transform_parameters(
             if value == 0.0:
                 raise ValueError("normalize_baseline explicit value cannot be zero.")
         elif "value" in parameters:
-            raise ValueError(
-                "normalize_baseline value is only valid for explicit."
-            )
+            raise ValueError("normalize_baseline value is only valid for explicit.")
         return
     if transformation_type == "aggregate_replicates":
         reject_unknown_keys(
@@ -449,13 +444,9 @@ def _validate_transform_parameters(
                 "aggregate count_column",
             )
         elif "count_column" in parameters:
-            raise ValueError(
-                "aggregate count_column requires include_count=true."
-            )
+            raise ValueError("aggregate count_column requires include_count=true.")
         return
-    raise ValueError(
-        f"Unsupported declarative transformation: {transformation_type!r}"
-    )
+    raise ValueError(f"Unsupported declarative transformation: {transformation_type!r}")
 
 
 def _validate_request_patch(value: object) -> dict[str, Any]:
@@ -502,9 +493,7 @@ class DataSourceReference:
             self, "relative_path", _relative_source_path(self.relative_path)
         )
         object.__setattr__(self, "sha256", _sha256(self.sha256, "source sha256"))
-        if isinstance(self.sheet, bool) or not isinstance(
-            self.sheet, str | int | None
-        ):
+        if isinstance(self.sheet, bool) or not isinstance(self.sheet, str | int | None):
             raise ValueError("source sheet must be a string, integer, or null.")
         if isinstance(self.sheet, str) and not self.sheet.strip():
             raise ValueError("source sheet string must not be empty.")
@@ -585,9 +574,7 @@ class DataColumnMapping:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "source_id", _safe_id(self.source_id, "source_id"))
-        index = require_json_int(
-            self.source_column_index, label="source_column_index"
-        )
+        index = require_json_int(self.source_column_index, label="source_column_index")
         if index < 0:
             raise ValueError("source_column_index must be non-negative.")
         output = _required_text(self.output_column, "output_column")
@@ -788,9 +775,7 @@ class DataMappingProposal:
         if not self.columns or not all(
             isinstance(column, DataColumnMapping) for column in self.columns
         ):
-            raise ValueError(
-                "DataMappingProposal requires DataColumnMapping entries."
-            )
+            raise ValueError("DataMappingProposal requires DataColumnMapping entries.")
         unknown_column_sources = sorted(
             {column.source_id for column in self.columns} - set(source_ids)
         )
@@ -817,10 +802,7 @@ class DataMappingProposal:
                 raise ValueError(
                     f"Data source {source_id!r} has duplicate output columns."
                 )
-        if not any(
-            column.role in {"x", "y", "z", "value"}
-            for column in self.columns
-        ):
+        if not any(column.role in {"x", "y", "z", "value"} for column in self.columns):
             raise ValueError(
                 "DataMappingProposal must map at least one numeric "
                 "x, y, z, or value role."
@@ -864,8 +846,7 @@ class DataMappingProposal:
                 "transformations must contain DeclarativeTransformation objects."
             )
         transformation_ids = [
-            transformation.transformation_id
-            for transformation in self.transformations
+            transformation.transformation_id for transformation in self.transformations
         ]
         if len(set(transformation_ids)) != len(transformation_ids):
             raise ValueError("Transformation IDs must be unique.")
@@ -901,9 +882,7 @@ class DataMappingProposal:
 
     @property
     def source_hashes(self) -> dict[str, str]:
-        return {
-            source.relative_path: source.sha256 for source in self.sources
-        }
+        return {source.relative_path: source.sha256 for source in self.sources}
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -917,8 +896,7 @@ class DataMappingProposal:
             "sample_labels": dict(self.sample_labels),
             "unit_overrides": dict(self.unit_overrides),
             "transformations": [
-                transformation.to_dict()
-                for transformation in self.transformations
+                transformation.to_dict() for transformation in self.transformations
             ],
             "request_patch": dict(self.request_patch),
             "confidence": self.confidence,
@@ -956,9 +934,7 @@ class DataMappingProposal:
             raise ValueError("Not a SciPlot DataMappingProposal payload.")
         version = require_json_int(payload.get("version", 0), label="version")
         if version != DATA_MAPPING_PROPOSAL_VERSION:
-            raise ValueError(
-                f"Unsupported DataMappingProposal version: {version!r}"
-            )
+            raise ValueError(f"Unsupported DataMappingProposal version: {version!r}")
         if "created_at" not in payload:
             raise ValueError(
                 "DataMappingProposal created_at is required so its confirmation hash is stable."
@@ -992,12 +968,8 @@ class DataMappingProposal:
                 "base_request_sha256",
             ),
             provider=_required_text(payload.get("provider"), "provider"),
-            sources=tuple(
-                DataSourceReference.from_dict(item) for item in raw_sources
-            ),
-            columns=tuple(
-                DataColumnMapping.from_dict(item) for item in raw_columns
-            ),
+            sources=tuple(DataSourceReference.from_dict(item) for item in raw_sources),
+            columns=tuple(DataColumnMapping.from_dict(item) for item in raw_columns),
             sample_labels={
                 _required_text(key, "sample_labels source_id"): _required_text(
                     value,
@@ -1040,30 +1012,36 @@ class DataMappingProposal:
                 "created_at",
             ),
         )
-        if "requires_confirmation" in payload and require_json_bool(
-            payload["requires_confirmation"], label="requires_confirmation"
-        ) is not True:
+        if (
+            "requires_confirmation" in payload
+            and require_json_bool(
+                payload["requires_confirmation"], label="requires_confirmation"
+            )
+            is not True
+        ):
             raise ValueError(
                 "DataMappingProposal version 2 always requires external confirmation."
             )
-        if "executable" in payload and require_json_bool(
-            payload["executable"], label="executable"
-        ) is not False:
-            raise ValueError(
-                "DataMappingProposal cannot self-authorize execution."
-            )
+        if (
+            "executable" in payload
+            and require_json_bool(payload["executable"], label="executable")
+            is not False
+        ):
+            raise ValueError("DataMappingProposal cannot self-authorize execution.")
         return proposal
 
 
 @dataclass(frozen=True)
-class DataMappingConfirmation:
+class LegacyDataMappingConfirmation:
+    """Read-only compatibility shape for path-unbound v1 receipts."""
+
     proposal_id: str
     proposal_sha256: str
     base_request_sha256: str
     source_hashes: dict[str, str]
     confirmed_by: str
-    confirmed_at: str = field(default_factory=_now)
-    confirmation_id: str = field(default_factory=lambda: str(uuid4()))
+    confirmed_at: str
+    confirmation_id: str
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -1093,11 +1071,137 @@ class DataMappingConfirmation:
             _timestamp(self.confirmed_at, "confirmed_at"),
         )
         if not isinstance(self.source_hashes, dict) or not self.source_hashes:
+            raise ValueError("LegacyDataMappingConfirmation requires source hashes.")
+        normalized = {
+            _relative_source_path(path): _sha256(digest, f"source_hashes[{path!r}]")
+            for path, digest in self.source_hashes.items()
+        }
+        object.__setattr__(self, "source_hashes", normalized)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": DATA_MAPPING_CONFIRMATION_KIND,
+            "version": DATA_MAPPING_CONFIRMATION_LEGACY_VERSION,
+            "confirmation_id": self.confirmation_id,
+            "proposal_id": self.proposal_id,
+            "proposal_sha256": self.proposal_sha256,
+            "base_request_sha256": self.base_request_sha256,
+            "source_hashes": dict(self.source_hashes),
+            "confirmed_by": self.confirmed_by,
+            "confirmed_at": self.confirmed_at,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> LegacyDataMappingConfirmation:
+        reject_unknown_keys(
+            payload,
+            {
+                "kind",
+                "version",
+                "confirmation_id",
+                "proposal_id",
+                "proposal_sha256",
+                "base_request_sha256",
+                "source_hashes",
+                "confirmed_by",
+                "confirmed_at",
+            },
+            label="LegacyDataMappingConfirmation",
+        )
+        if payload.get("kind") != DATA_MAPPING_CONFIRMATION_KIND:
+            raise ValueError("Not a SciPlot DataMappingConfirmation payload.")
+        version = require_json_int(payload.get("version", 0), label="version")
+        if version != DATA_MAPPING_CONFIRMATION_LEGACY_VERSION:
+            raise ValueError(
+                f"Unsupported legacy DataMappingConfirmation version: {version!r}"
+            )
+        if "confirmed_at" not in payload:
+            raise ValueError(
+                "LegacyDataMappingConfirmation confirmed_at is required for inspection."
+            )
+        return cls(
+            confirmation_id=_required_text(
+                payload.get("confirmation_id"), "confirmation_id"
+            ),
+            proposal_id=_required_text(payload.get("proposal_id"), "proposal_id"),
+            proposal_sha256=_required_text(
+                payload.get("proposal_sha256"), "proposal_sha256"
+            ),
+            base_request_sha256=_required_text(
+                payload.get("base_request_sha256"), "base_request_sha256"
+            ),
+            source_hashes={
+                _required_text(key, "source_hash path"): _required_text(
+                    value, f"source_hashes[{key!r}]"
+                )
+                for key, value in require_json_object(
+                    payload.get("source_hashes"), label="source_hashes"
+                ).items()
+            },
+            confirmed_by=_required_text(payload.get("confirmed_by"), "confirmed_by"),
+            confirmed_at=_required_text(payload.get("confirmed_at"), "confirmed_at"),
+        )
+
+
+@dataclass(frozen=True)
+class DataMappingConfirmation:
+    proposal_id: str
+    proposal_sha256: str
+    base_request_sha256: str
+    source_hashes: dict[str, str]
+    source_root: str
+    request_path: str
+    output_root: str
+    confirmed_by: str
+    confirmed_at: str = field(default_factory=_now)
+    confirmation_id: str = field(default_factory=lambda: str(uuid4()))
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "confirmation_id",
+            _safe_id(self.confirmation_id, "confirmation_id"),
+        )
+        object.__setattr__(
+            self, "proposal_id", _safe_id(self.proposal_id, "proposal_id")
+        )
+        object.__setattr__(
+            self,
+            "proposal_sha256",
+            _sha256(self.proposal_sha256, "proposal_sha256"),
+        )
+        object.__setattr__(
+            self,
+            "base_request_sha256",
+            _sha256(self.base_request_sha256, "base_request_sha256"),
+        )
+        object.__setattr__(
+            self,
+            "source_root",
+            _absolute_path(self.source_root, "source_root"),
+        )
+        object.__setattr__(
+            self,
+            "request_path",
+            _absolute_path(self.request_path, "request_path"),
+        )
+        object.__setattr__(
+            self,
+            "output_root",
+            _absolute_path(self.output_root, "output_root"),
+        )
+        object.__setattr__(
+            self, "confirmed_by", _required_text(self.confirmed_by, "confirmed_by")
+        )
+        object.__setattr__(
+            self,
+            "confirmed_at",
+            _timestamp(self.confirmed_at, "confirmed_at"),
+        )
+        if not isinstance(self.source_hashes, dict) or not self.source_hashes:
             raise ValueError("DataMappingConfirmation requires source hashes.")
         normalized = {
-            _relative_source_path(path): _sha256(
-                digest, f"source_hashes[{path!r}]"
-            )
+            _relative_source_path(path): _sha256(digest, f"source_hashes[{path!r}]")
             for path, digest in self.source_hashes.items()
         }
         object.__setattr__(self, "source_hashes", normalized)
@@ -1111,6 +1215,9 @@ class DataMappingConfirmation:
             "proposal_sha256": self.proposal_sha256,
             "base_request_sha256": self.base_request_sha256,
             "source_hashes": dict(self.source_hashes),
+            "source_root": self.source_root,
+            "request_path": self.request_path,
+            "output_root": self.output_root,
             "confirmed_by": self.confirmed_by,
             "confirmed_at": self.confirmed_at,
         }
@@ -1127,6 +1234,9 @@ class DataMappingConfirmation:
                 "proposal_sha256",
                 "base_request_sha256",
                 "source_hashes",
+                "source_root",
+                "request_path",
+                "output_root",
                 "confirmed_by",
                 "confirmed_at",
             },
@@ -1170,6 +1280,18 @@ class DataMappingConfirmation:
                     label="source_hashes",
                 ).items()
             },
+            source_root=_required_text(
+                payload.get("source_root"),
+                "source_root",
+            ),
+            request_path=_required_text(
+                payload.get("request_path"),
+                "request_path",
+            ),
+            output_root=_required_text(
+                payload.get("output_root"),
+                "output_root",
+            ),
             confirmed_by=_required_text(
                 payload.get("confirmed_by"),
                 "confirmed_by",
@@ -1184,6 +1306,7 @@ class DataMappingConfirmation:
 __all__ = [
     "DATA_COLUMN_ROLES",
     "DATA_MAPPING_CONFIRMATION_KIND",
+    "DATA_MAPPING_CONFIRMATION_LEGACY_VERSION",
     "DATA_MAPPING_CONFIRMATION_VERSION",
     "DATA_MAPPING_PROPOSAL_KIND",
     "DATA_MAPPING_PROPOSAL_VERSION",
@@ -1194,4 +1317,5 @@ __all__ = [
     "DataMappingProposal",
     "DataSourceReference",
     "DeclarativeTransformation",
+    "LegacyDataMappingConfirmation",
 ]

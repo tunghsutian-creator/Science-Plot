@@ -15,12 +15,14 @@ from typing import Any
 from sciplot_core._paths import VENDORED_CORE_ROOT
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 14
+RUNTIME_SMOKE_VERSION = 15
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
 
-def _check(check_id: str, label: str, passed: bool, *, detail: Any = None) -> dict[str, Any]:
+def _check(
+    check_id: str, label: str, passed: bool, *, detail: Any = None
+) -> dict[str, Any]:
     return {
         "id": check_id,
         "label": label,
@@ -30,7 +32,9 @@ def _check(check_id: str, label: str, passed: bool, *, detail: Any = None) -> di
 
 
 def _delivery_artifact(delivery: dict[str, Any], artifact_id: str) -> dict[str, Any]:
-    artifacts = delivery.get("artifacts") if isinstance(delivery.get("artifacts"), list) else []
+    artifacts = (
+        delivery.get("artifacts") if isinstance(delivery.get("artifacts"), list) else []
+    )
     for item in artifacts:
         if isinstance(item, dict) and item.get("id") == artifact_id:
             return item
@@ -112,7 +116,8 @@ def _source_checkout_wrapper_probe() -> dict[str, Any]:
         timeout=30,
     )
     return {
-        "passed": completed.returncode == 0 and "Local SciPlot plotting" in completed.stdout,
+        "passed": completed.returncode == 0
+        and "Local SciPlot plotting" in completed.stdout,
         "mode": "source_checkout_wrapper" if wrapper.is_file() else "installed_cli",
         "wrapper": str(wrapper),
         "installed_cli": installed_cli,
@@ -227,7 +232,9 @@ def _portable_launcher_probe(
     }
 
 
-def _relocated_delivery_launcher_probe(run_root: Path, delivery: dict[str, Any]) -> dict[str, Any]:
+def _relocated_delivery_launcher_probe(
+    run_root: Path, delivery: dict[str, Any]
+) -> dict[str, Any]:
     """Copy an editable delivery elsewhere and prove its launchers still load the VSZ."""
 
     projects = (
@@ -294,9 +301,15 @@ def _standalone_export_probe(run_root: Path, document_path: Path) -> dict[str, A
         payload = json.loads(completed.stdout)
     except json.JSONDecodeError:
         payload = {}
-    receipt = payload.get("standalone_export") if isinstance(payload.get("standalone_export"), dict) else {}
+    receipt = (
+        payload.get("standalone_export")
+        if isinstance(payload.get("standalone_export"), dict)
+        else {}
+    )
     spec_reference = (
-        receipt.get("spec_reference") if isinstance(receipt.get("spec_reference"), dict) else {}
+        receipt.get("spec_reference")
+        if isinstance(receipt.get("spec_reference"), dict)
+        else {}
     )
     exports = receipt.get("exports") if isinstance(receipt.get("exports"), list) else []
     export_paths = [
@@ -318,7 +331,10 @@ def _standalone_export_probe(run_root: Path, document_path: Path) -> dict[str, A
         and spec_reference.get("path") is None
         and spec_reference.get("required_for_exact_current_export") is False
         and len(export_paths) == 2
-        and all(path.is_file() and path.parent == (artifact_root / "figures").resolve() for path in export_paths)
+        and all(
+            path.is_file() and path.parent == (artifact_root / "figures").resolve()
+            for path in export_paths
+        )
         and receipt_path.is_file()
         and qa_path.is_file()
     )
@@ -344,10 +360,10 @@ def _write_synthetic_ftir(path: Path) -> dict[str, Any]:
     for wavenumber in range(4000, 399, -50):
         transmittance = (
             97.5
-            - 30.0 * math.exp(-((wavenumber - 3300.0) / 145.0) ** 2)
-            - 18.0 * math.exp(-((wavenumber - 1715.0) / 75.0) ** 2)
-            - 12.0 * math.exp(-((wavenumber - 1250.0) / 95.0) ** 2)
-            - 8.0 * math.exp(-((wavenumber - 760.0) / 65.0) ** 2)
+            - 30.0 * math.exp(-(((wavenumber - 3300.0) / 145.0) ** 2))
+            - 18.0 * math.exp(-(((wavenumber - 1715.0) / 75.0) ** 2))
+            - 12.0 * math.exp(-(((wavenumber - 1250.0) / 95.0) ** 2))
+            - 8.0 * math.exp(-(((wavenumber - 760.0) / 65.0) ** 2))
         )
         rows.append((float(wavenumber), transmittance))
     path.write_text(
@@ -438,6 +454,7 @@ def _data_mapping_studio_lifecycle_probe(
         proposal,
         source_root=source_path.parent,
         request_path=base_request_path,
+        output_root=run_root / "mapped_projects",
         confirmed_by="runtime_smoke_noninteractive_operator",
     )
     execution = execute_data_mapping_proposal(
@@ -482,8 +499,7 @@ def _data_mapping_studio_lifecycle_probe(
         preview.get("writes_performed") is False
         and execution.get("raw_inputs_unchanged") is True
         and raw_hash_before == raw_hash_after
-        and Path(str(execution["request_candidate"])).name
-        == "plot_request.json"
+        and Path(str(execution["request_candidate"])).name == "plot_request.json"
         and int(prepared.get("series_count") or 0) == 1
         and coverage.get("status") == "passed"
         and coverage.get("actual_series_labels") == ["runtime_ftir"]
@@ -509,19 +525,21 @@ def _data_mapping_studio_lifecycle_probe(
         "coverage": coverage,
         "operations": operations,
         "qa_status": (manifest.get("qa") or {}).get("status"),
-        "publication_status": (
-            (manifest.get("qa") or {}).get("publication") or {}
-        ).get("status"),
-        "delivery_complete": (
-            manifest.get("delivery_package") or {}
-        ).get("complete"),
+        "publication_status": ((manifest.get("qa") or {}).get("publication") or {}).get(
+            "status"
+        ),
+        "delivery_complete": (manifest.get("delivery_package") or {}).get("complete"),
         "ready_to_use": manifest.get("ready_to_use"),
         "real_data_evidence": False,
     }
 
 
 def _transform_parameters(result: dict[str, Any]) -> dict[str, Any]:
-    steps = result.get("transform_steps") if isinstance(result.get("transform_steps"), list) else []
+    steps = (
+        result.get("transform_steps")
+        if isinstance(result.get("transform_steps"), list)
+        else []
+    )
     first = steps[0] if steps and isinstance(steps[0], dict) else {}
     parameters = first.get("parameters")
     return parameters if isinstance(parameters, dict) else {}
@@ -639,21 +657,69 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
     for point_index in range(5):
         row: list[object] = [""]
         for series_index in range(9):
-            row.extend([point_index * 100 + series_index * 5, 1.0 + point_index * 0.03 + series_index * 0.001])
+            row.extend(
+                [
+                    point_index * 100 + series_index * 5,
+                    1.0 + point_index * 0.03 + series_index * 0.001,
+                ]
+            )
         swelling_rows.append(row)
     swelling_rows.extend(
         [
             [""] * 19,
             [""] * 19,
-            ["", "", "", "", "", "", 72000, 72.6, "", "", "", "", "", "", "", "", "", "", ""],
-            ["", "", "", "", "", "", 73000, 72.7, "", "", "", "", "", "", "", "", "", "", ""],
+            [
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                72000,
+                72.6,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ],
+            [
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                73000,
+                72.7,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ],
         ]
     )
     swelling_source.write_text(
-        "\n".join(",".join(str(value) for value in row) for row in swelling_rows) + "\n",
+        "\n".join(",".join(str(value) for value in row) for row in swelling_rows)
+        + "\n",
         encoding="utf-8",
     )
-    swelling_semantic = classify_source(swelling_source, requested_rule_id="swelling_curve")
+    swelling_semantic = classify_source(
+        swelling_source, requested_rule_id="swelling_curve"
+    )
     swelling_result = prepare_semantic_source(
         swelling_source,
         output_dir=contracts / "swelling_output",
@@ -670,12 +736,16 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
                 y_values=(1.0, 1.1),
                 color="#000000",
             )
-            for index, label in enumerate(swelling_parameters.get("series_order") or [], start=1)
+            for index, label in enumerate(
+                swelling_parameters.get("series_order") or [], start=1
+            )
         ],
         render_options=dict(swelling_semantic.get("render_options") or {}),
         request={"template": "point_line", "rule_id": "swelling_curve"},
     )
-    swelling_non_color_signatures = [(item.line_style, str(item.marker)) for item in styled_swelling_series]
+    swelling_non_color_signatures = [
+        (item.line_style, str(item.marker)) for item in styled_swelling_series
+    ]
 
     expected_saxs_order = ["HDPE", "2 wt% UDC 3"]
     expected_impact_order = ["V-PA (2 mm)", "E-PA (2 mm)", "V-PA (4 mm)", "E-PA (4 mm)"]
@@ -703,7 +773,8 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         and gpc_semantic.get("rule_id") == "gpc_sec_chromatogram"
         and gpc_parameters.get("series_order") == ["Sample 8"]
         and gpc_parameters.get("source_point_counts") == [4]
-        and (gpc_parameters.get("source_selections") or [{}])[0].get("detector_unit") == "mV"
+        and (gpc_parameters.get("source_selections") or [{}])[0].get("detector_unit")
+        == "mV"
         and impact_semantic.get("rule_id") == "impact_metric"
         and impact_parameters.get("sample_order") == expected_impact_order
         and impact_parameters.get("replicate_count_total") == 12
@@ -713,9 +784,12 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         and swelling_semantic.get("confidence") == 100.0
         and swelling_parameters.get("series_order") == expected_swelling_order
         and swelling_parameters.get("source_point_counts") == [5] * 9
-        and first_swelling_block.get("selection_policy") == "contiguous_labeled_swelling_block"
+        and first_swelling_block.get("selection_policy")
+        == "contiguous_labeled_swelling_block"
         and first_swelling_block.get("excluded_disconnected_rows") == 2
-        and math.isclose(float(first_time_conversion.get("factor") or 0.0), 1.0 / 3600.0)
+        and math.isclose(
+            float(first_time_conversion.get("factor") or 0.0), 1.0 / 3600.0
+        )
         and len(set(swelling_non_color_signatures)) == 9
     )
     return {
@@ -792,7 +866,11 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
     colorbar_index = document_text.find("Add('colorbar', name='field_colorbar'")
     contour_index = document_text.find("Add('contour', name='field_contours'")
     image_index = document_text.find("Add('image', name='field_image'")
-    qa_reports = rendered.get("qa_reports") if isinstance(rendered.get("qa_reports"), list) else []
+    qa_reports = (
+        rendered.get("qa_reports")
+        if isinstance(rendered.get("qa_reports"), list)
+        else []
+    )
     passed = (
         rendered.get("render_engine") == "veusz"
         and outputs
@@ -802,7 +880,11 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
         and 0 <= contour_index < image_index
         and "Set('widgetName', 'field_image')" in document_text
         and "Add('rect', name='page_export_background'" in document_text
-        and all(not report.get("issues") for report in qa_reports if isinstance(report, dict))
+        and all(
+            not report.get("issues")
+            for report in qa_reports
+            if isinstance(report, dict)
+        )
     )
     return {
         "passed": bool(passed),
@@ -819,20 +901,25 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
             "colorbar_before_image_in_object_tree": 0 <= colorbar_index < image_index,
             "contours_before_image_in_object_tree": 0 <= contour_index < image_index,
         },
-        "opaque_page_background": "Add('rect', name='page_export_background'" in document_text,
+        "opaque_page_background": "Add('rect', name='page_export_background'"
+        in document_text,
         "real_data_evidence": False,
         "evidence_tier": "generated_synthetic_contract_fixture",
     }
 
 
-def _run_hash_failure_probe(output_dir: Path, manifest: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+def _run_hash_failure_probe(
+    output_dir: Path, manifest: dict[str, Any]
+) -> tuple[bool, dict[str, Any]]:
     from sciplot_core.delivery import build_delivery_package
 
     mismatched_manifest = copy.deepcopy(manifest)
     mismatched_manifest["exported_document_hash"] = "0" * 64
     rejected = build_delivery_package(output_dir, manifest=mismatched_manifest)
     hash_gate = _delivery_artifact(rejected, "editable_vsz_hash_match")
-    rejected_as_expected = rejected.get("complete") is False and hash_gate.get("exists") is False
+    rejected_as_expected = (
+        rejected.get("complete") is False and hash_gate.get("exists") is False
+    )
 
     restored = build_delivery_package(output_dir, manifest=manifest)
     restored_successfully = restored.get("complete") is True
@@ -937,7 +1024,11 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 detail=qt_mainwindow_probe,
             )
         )
-        normal_mode = doctor.get("normal_mode") if isinstance(doctor.get("normal_mode"), dict) else {}
+        normal_mode = (
+            doctor.get("normal_mode")
+            if isinstance(doctor.get("normal_mode"), dict)
+            else {}
+        )
         checks.append(
             _check(
                 "independent_mode",
@@ -985,13 +1076,18 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             "veusz_label": r"LS\_5CRW\_20W\_t1",
             "pdf_label": "LS_5CRW_20W_t1",
         }
-        qa_label_probe["normalized_veusz_label"] = _normalized_label(qa_label_probe["veusz_label"])
-        qa_label_probe["normalized_pdf_label"] = _normalized_label(qa_label_probe["pdf_label"])
+        qa_label_probe["normalized_veusz_label"] = _normalized_label(
+            qa_label_probe["veusz_label"]
+        )
+        qa_label_probe["normalized_pdf_label"] = _normalized_label(
+            qa_label_probe["pdf_label"]
+        )
         checks.append(
             _check(
                 "veusz_pdf_label_equivalence",
                 "Escaped Veusz labels match their rendered PDF text",
-                qa_label_probe["normalized_veusz_label"] == qa_label_probe["normalized_pdf_label"],
+                qa_label_probe["normalized_veusz_label"]
+                == qa_label_probe["normalized_pdf_label"],
                 detail=qa_label_probe,
             )
         )
@@ -1011,8 +1107,12 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 "explicit_render_option_provenance",
                 "A user-selected render option becomes authoritative without promoting semantic defaults",
                 option_provenance_probe.get("explicit_render_option_keys") == ["size"]
-                and (option_provenance_probe.get("render_options") or {}).get("size") == "120x55"
-                and (option_provenance_probe.get("render_options") or {}).get("legend_position") == "auto",
+                and (option_provenance_probe.get("render_options") or {}).get("size")
+                == "120x55"
+                and (option_provenance_probe.get("render_options") or {}).get(
+                    "legend_position"
+                )
+                == "auto",
                 detail=option_provenance_probe,
             )
         )
@@ -1048,7 +1148,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             request_path=override_request_path,
             rule_id="saxs_profile",
         )
-        overridden_request = json.loads(override_request_path.read_text(encoding="utf-8"))
+        overridden_request = json.loads(
+            override_request_path.read_text(encoding="utf-8")
+        )
         overridden_options = overridden_request.get("render_options") or {}
         checks.append(
             _check(
@@ -1128,9 +1230,7 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     "status": canvas_app_probe.get("status"),
                     "summary": canvas_app_probe.get("summary"),
                     "operation_count": canvas_app_evidence.get("operation_count"),
-                    "revision": canvas_app_evidence.get(
-                        "revision_after_operations"
-                    ),
+                    "revision": canvas_app_evidence.get("revision_after_operations"),
                     "render_changes": canvas_app_evidence.get("render_changes"),
                     "reopened_state": canvas_app_evidence.get("reopened_state"),
                     "recovered_state": canvas_app_evidence.get("recovered_state"),
@@ -1182,7 +1282,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 "off the GUI thread, shows progress, previews hash-bound typed "
                 "diffs without mutation, discards late cancelled results, "
                 "applies live, undoes, commits, rolls back exactly, and "
-                "recovers interrupted work",
+                "recovers interrupted work; DataMappingProposal additionally "
+                "requires a zero-write preview and an explicit receipt before "
+                "building a separate mapped Canvas",
                 canvas_assistant_probe.get("status") == "passed",
                 detail={
                     "status": canvas_assistant_probe.get("status"),
@@ -1200,9 +1302,7 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                         "provider_contract_guards"
                     ),
                     "provider_late_result_discarded": (
-                        canvas_assistant_evidence.get(
-                            "provider_late_result_discarded"
-                        )
+                        canvas_assistant_evidence.get("provider_late_result_discarded")
                     ),
                     "source_hash_before": canvas_assistant_evidence.get(
                         "source_hash_before"
@@ -1227,8 +1327,14 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         with document_path.open("a", encoding="utf-8") as handle:
             handle.write(f"\n{MANUAL_EDIT_MARKER}\n")
 
-        export_payload = export_studio_document(document_path, formats=["pdf", "tiff_300"])
-        exports = export_payload.get("exports") if isinstance(export_payload.get("exports"), list) else []
+        export_payload = export_studio_document(
+            document_path, formats=["pdf", "tiff_300"]
+        )
+        exports = (
+            export_payload.get("exports")
+            if isinstance(export_payload.get("exports"), list)
+            else []
+        )
         studio_run = publish_studio_export_run(
             project_dir=project_dir,
             request_path=request_path,
@@ -1237,20 +1343,46 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         )
         manifest_path = Path(str(studio_run["manifest"]))
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        semantic = manifest.get("semantic") if isinstance(manifest.get("semantic"), dict) else {}
-        transform = manifest.get("transform_ledger") if isinstance(manifest.get("transform_ledger"), dict) else {}
-        publication_intent = (
-            manifest.get("publication_intent") if isinstance(manifest.get("publication_intent"), dict) else {}
+        semantic = (
+            manifest.get("semantic")
+            if isinstance(manifest.get("semantic"), dict)
+            else {}
         )
-        delivery = manifest.get("delivery_package") if isinstance(manifest.get("delivery_package"), dict) else {}
-        relocated_delivery_probe = _relocated_delivery_launcher_probe(run_root, delivery)
-        editable_vsz = delivery.get("editable_vsz") if isinstance(delivery.get("editable_vsz"), dict) else {}
-        editable_path = Path(str(editable_vsz["path"])) if editable_vsz.get("path") else None
+        transform = (
+            manifest.get("transform_ledger")
+            if isinstance(manifest.get("transform_ledger"), dict)
+            else {}
+        )
+        publication_intent = (
+            manifest.get("publication_intent")
+            if isinstance(manifest.get("publication_intent"), dict)
+            else {}
+        )
+        delivery = (
+            manifest.get("delivery_package")
+            if isinstance(manifest.get("delivery_package"), dict)
+            else {}
+        )
+        relocated_delivery_probe = _relocated_delivery_launcher_probe(
+            run_root, delivery
+        )
+        editable_vsz = (
+            delivery.get("editable_vsz")
+            if isinstance(delivery.get("editable_vsz"), dict)
+            else {}
+        )
+        editable_path = (
+            Path(str(editable_vsz["path"])) if editable_vsz.get("path") else None
+        )
         raw_archive_value = (manifest.get("raw_archive") or {}).get("path")
         raw_archive_path = Path(str(raw_archive_value)) if raw_archive_value else None
-        exported_formats = {str(item.get("format")) for item in exports if isinstance(item, dict)}
+        exported_formats = {
+            str(item.get("format")) for item in exports if isinstance(item, dict)
+        }
         exports_exist = all(
-            isinstance(item, dict) and item.get("exists") is True and int(item.get("size_bytes") or 0) > 0
+            isinstance(item, dict)
+            and item.get("exists") is True
+            and int(item.get("size_bytes") or 0) > 0
             for item in exports
         )
 
@@ -1260,7 +1392,10 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     "semantic_rule_selected",
                     "Synthetic FTIR input selects the ready FTIR rule",
                     semantic.get("rule_id") == EXPECTED_RULE_ID,
-                    detail={"selected": semantic.get("rule_id"), "expected": EXPECTED_RULE_ID},
+                    detail={
+                        "selected": semantic.get("rule_id"),
+                        "expected": EXPECTED_RULE_ID,
+                    },
                 ),
                 _check(
                     "vsz_reopen_export",
@@ -1285,7 +1420,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     and MANUAL_EDIT_MARKER in editable_path.read_text(encoding="utf-8"),
                     detail={
                         "manual_edit_detected": manifest.get("manual_edit_detected"),
-                        "editable_vsz": str(editable_path) if editable_path is not None else None,
+                        "editable_vsz": str(editable_path)
+                        if editable_path is not None
+                        else None,
                     },
                 ),
                 _check(
@@ -1294,7 +1431,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     manifest.get("exported_document_hash") == file_sha256(document_path)
                     and editable_vsz.get("hash_matches_export") is True,
                     detail={
-                        "exported_document_hash": manifest.get("exported_document_hash"),
+                        "exported_document_hash": manifest.get(
+                            "exported_document_hash"
+                        ),
                         "current_document_hash": file_sha256(document_path),
                         "delivery_document_hash": editable_vsz.get("actual_hash"),
                     },
@@ -1302,24 +1441,35 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 _check(
                     "canonical_pdf_tiff_pair",
                     "Delivery contains a canonical PDF and 300 dpi TIFF pair",
-                    _delivery_artifact(delivery, "canonical_pdf_tiff_pairs").get("exists") is True,
+                    _delivery_artifact(delivery, "canonical_pdf_tiff_pairs").get(
+                        "exists"
+                    )
+                    is True,
                     detail=_delivery_artifact(delivery, "canonical_pdf_tiff_pairs"),
                 ),
                 _check(
                     "qa_and_delivery_hashes",
                     "Artifact QA passes and its hashes match the delivery copies",
                     (manifest.get("qa") or {}).get("status") == "passed"
-                    and _delivery_artifact(delivery, "qa_artifact_hashes_match_delivery").get("exists") is True,
+                    and _delivery_artifact(
+                        delivery, "qa_artifact_hashes_match_delivery"
+                    ).get("exists")
+                    is True,
                     detail={
                         "qa_status": (manifest.get("qa") or {}).get("status"),
-                        "hash_gate": _delivery_artifact(delivery, "qa_artifact_hashes_match_delivery"),
+                        "hash_gate": _delivery_artifact(
+                            delivery, "qa_artifact_hashes_match_delivery"
+                        ),
                     },
                 ),
                 _check(
                     "delivery_complete",
                     "The portable delivery package is complete",
                     delivery.get("complete") is True,
-                    detail={"path": delivery.get("path"), "complete": delivery.get("complete")},
+                    detail={
+                        "path": delivery.get("path"),
+                        "complete": delivery.get("complete"),
+                    },
                 ),
                 _check(
                     "relocated_delivery_launchers",
@@ -1337,7 +1487,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     detail={
                         "transform_status": transform.get("status"),
                         "publication_kind": publication_intent.get("kind"),
-                        "raw_archive": str(raw_archive_path) if raw_archive_path is not None else None,
+                        "raw_archive": str(raw_archive_path)
+                        if raw_archive_path is not None
+                        else None,
                     },
                 ),
             ]
@@ -1376,7 +1528,11 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             )
         )
 
-    status = "passed" if checks and all(item["status"] == "passed" for item in checks) else "failed"
+    status = (
+        "passed"
+        if checks and all(item["status"] == "passed" for item in checks)
+        else "failed"
+    )
     payload = {
         "kind": "sciplot_runtime_smoke",
         "version": RUNTIME_SMOKE_VERSION,

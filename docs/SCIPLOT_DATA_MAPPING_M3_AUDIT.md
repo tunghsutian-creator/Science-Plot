@@ -1,9 +1,10 @@
 # SciPlot M3 Deterministic Data-Mapping Audit
 
-Status: deterministic executor implemented and verified, 2026-07-17. This
-audit covers the typed proposal, external confirmation, deterministic
-execution, lineage, Studio integration, and delivery gates. It does not claim
-that a real model/provider or the Canvas confirmation UI is complete.
+Status: deterministic executor and Canvas confirmation loop implemented and
+verified, 2026-07-17. This audit covers the typed proposal, explicit external
+confirmation, deterministic execution, recovery, separate-Canvas handoff,
+lineage, Studio integration, and delivery gates. It does not claim that a real
+model/provider or real daily-use acceptance is complete.
 
 ## First-principles boundary
 
@@ -17,8 +18,9 @@ The lifecycle is:
 2. SciPlot validates the closed schema, request hash, source paths, source
    hashes, headers, columns, units, and transformations;
 3. preview executes in memory, writes nothing, and reveals no raw values;
-4. a separate `DataMappingConfirmation` binds the exact proposal SHA,
-   base-request SHA, source hashes, operator, and timestamp;
+4. a separate `DataMappingConfirmation` version 2 binds the exact proposal
+   SHA, base-request SHA, source hashes, normalized source/request/output
+   paths, operator, and timestamp;
 5. the deterministic executor writes an isolated candidate project
    atomically;
 6. Studio or the normal run path verifies `execution.json` before consuming
@@ -33,6 +35,41 @@ timezone-aware fields; omitting either is rejected so repeated loads cannot
 change a confirmation hash. Every externally supplied transformation also
 requires a stable `transformation_id`; parsing cannot silently mint a new UUID
 and thereby change the proposal hash.
+
+## Canvas confirmation and handoff
+
+The Assistant Inspector now owns the human decision without becoming a second
+data executor:
+
+1. a typed provider response creates a persisted `proposed` mapping state;
+2. SciPlot resolves only uniquely hash-matched source roots; multiple distinct
+   valid roots require the user to choose a folder;
+3. deterministic preview runs on a Qt worker, writes nothing, and displays
+   source roles, row counts, units, transformations, and request routing;
+4. only `Confirm and Build Project` creates a receipt identified as
+   `local_canvas_user_explicit_click`;
+5. deterministic execution and mapped Studio preparation run in the worker and
+   write an isolated candidate project atomically;
+6. the original Canvas, exact-current VSZ, request, and raw source tree remain
+   unchanged; success opens the candidate in a separate Canvas;
+7. close/reopen preserves preview without inventing consent, and interrupted
+   execution returns to the same confirmed receipt for an idempotent retry;
+8. an executed proposal cannot be accepted until a hashed execution manifest
+   and replay verification are persisted.
+
+`CanvasSession` version 6 and `AssistantRequestRecord` version 2 persist this
+state. Canvas versions 1-5 and request-record version 1 remain readable; legacy
+mapping records reopen as unconfirmed proposals rather than gaining a preview
+or receipt.
+
+Confirmation receipts have a deliberately narrower compatibility rule. A
+committed version-1 receipt lacks normalized path authority, so it remains
+fully parseable and replay-verifiable for inspection but is returned with
+`confirmation_migration_required=true`, `handoff_allowed=false`, and
+`ready_to_use=false`. It cannot authorize execution, normal mapped-request
+consumption, or Canvas handoff. The migration path is a fresh explicit
+version-2 confirmation of source root, request path, and a new output root;
+SciPlot then executes and verifies a new isolated candidate.
 
 ## Closed contract
 
@@ -183,6 +220,7 @@ skill/scripts/sciplot mapping preview PROPOSAL \
 
 skill/scripts/sciplot mapping confirm PROPOSAL \
   --source-root RAW_DIR --request REQUEST \
+  --execution-root OUTPUT_ROOT \
   --by OPERATOR --out CONFIRMATION --json
 
 skill/scripts/sciplot mapping execute PROPOSAL \
@@ -192,6 +230,11 @@ skill/scripts/sciplot mapping execute PROPOSAL \
 
 skill/scripts/sciplot mapping show EXECUTION_OR_PROJECT --json
 ```
+
+`mapping show` may inspect a verified legacy-v1 execution, but the returned
+authority flags block reuse. Run `mapping confirm` again with the exact current
+paths and a new output root before `mapping execute`; legacy consent is never
+silently upgraded.
 
 The resulting project uses the ordinary command:
 
@@ -204,8 +247,8 @@ skill/scripts/sciplot studio MAPPED_PROJECT \
 
 Synthetic adversarial probe:
 
-- `.tmp_verify/m3_data_mapping_probe_v18/`
-- 50/50 checks passed;
+- `.tmp_verify/m3_mapping_legacy_probe_v1/`
+- 55/55 checks passed;
 - covers schema round-trip, stable timestamps, no self-authorization, path
   confinement, stable transformation identity, closed transformation fields,
   zero-write preview, no raw preview values, exact receipt binding,
@@ -222,13 +265,15 @@ Synthetic adversarial probe:
   recovery, numeric and unit-like sample labels, metadata stripping without
   dropping ordinary leading ones, case- and Unicode-normalization-safe
   output-name collision prevention, immutable raw authority/proposal
-  identity, and mapped-series coverage.
+  identity, mapped-series coverage, normalized source/request/output path
+  rebinding rejection, committed-format v1 inspection-only loading, blocked
+  v1 execution/render/handoff, and explicit v2 reconfirmation.
 
 Full runtime gate:
 
-- `.tmp_verify/m3_mapping_runtime_smoke_v12/runtime_smoke_vc5b6nrh/`
-- runtime smoke version 13 passed 30/30 top-level checks;
-- includes the 50/50 mapping probe and a complete synthetic mapped-project
+- `.tmp_verify/runtime_smoke_mapping_authority_final/runtime_smoke_dsolc1u5/`
+- runtime smoke version 15 passed 30/30 top-level checks;
+- includes the 55/55 mapping probe and a complete synthetic mapped-project
   Studio lifecycle. This fixture is a runtime change gate, not real-data
   evidence.
 
@@ -259,13 +304,13 @@ publication QA, and produced a complete delivery package.
 
 Packaged-code gate:
 
-- `/private/tmp/sciplot-m3-mapping-wheel-final6-20260717/sciplot_core-0.1.0-py3-none-any.whl`
+- `/private/tmp/sciplot-m3-mapping-authority-wheel-final-20260717-v2/sciplot_core-0.1.0-py3-none-any.whl`
 - SHA-256:
-  `770f1cca453c87bc78ce2998bc68140c72e0c78e6dee9ea879b7e7f55483dbef`;
-- isolated installation passes `pip check`;
-- importing `sciplot_core` and `sciplot_core.data_mapping` from the wheel does
-  not load PyQt or Veusz;
-- the wheel-installed CLI independently passes the same 50/50 mapping probe.
+  `46401001ecabf56abd1323224819d5c2030fc64d6e43b36840a66c558d92a31f`;
+- imports of `sciplot_core`, `sciplot_gui`, the legacy receipt parser, and the
+  Qt mapping worker resolve from an isolated target outside the checkout;
+- wheel-installed code independently passes the pure Canvas contract `36/36`,
+  mapping `55/55`, and Assistant `41/41` probes.
 
 ## Honest limitations
 
@@ -275,10 +320,10 @@ Packaged-code gate:
   sessions.
 - No real model/provider is connected. The proposals used typed structured
   payloads and do not prove model interpretation quality.
-- The Canvas Assistant does not yet show proposal, confirmation, progress, or
-  cancellation UI for data mapping.
-- `--by` records an operator assertion; authenticated identity and consent
-  belong to the future local provider/UI boundary.
+- The GUI probe drives the real confirmation control, but an automated click is
+  not evidence of a real human daily-use session.
+- The Canvas receipt records an explicit local click; CLI `--by` remains an
+  operator assertion rather than authenticated identity.
 - The executor intentionally supports a narrow transformation language. New
   scientific transformations require a schema addition, deterministic
   implementation, fixture, adversarial probe, and authorized-real-data
@@ -288,10 +333,9 @@ Packaged-code gate:
 
 ## Next M3 work
 
-1. Define the provider-neutral request/response envelope and cancellation
-   protocol.
-2. Show `DataMappingProposal` preview and confirmation in the existing
-   Assistant Inspector tab.
-3. Require a real user action to issue a production confirmation receipt.
-4. Run the six canonical natural-language Canvas tasks and real mapping tasks.
-5. Promote repeated accepted mappings into deterministic material rules.
+1. Connect a production model-provider adapter behind the frozen typed
+   boundary.
+2. Run the six canonical natural-language Canvas tasks and representative real
+   mapping tasks.
+3. Accumulate real user confirmation sessions and promote repeated accepted
+   mappings into deterministic material rules.

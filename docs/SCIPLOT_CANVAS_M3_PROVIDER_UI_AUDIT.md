@@ -1,9 +1,9 @@
 # SciPlot Canvas M3 Provider Lifecycle and UI Audit
 
-Status: implemented and verified with an injected deterministic provider,
-2026-07-17. This audit proves the provider-neutral integration boundary and
-visible Canvas lifecycle. It does not prove production-model scientific
-quality or complete M3.
+Status: provider-neutral operation and data-mapping decision loops implemented
+and verified with an injected deterministic provider, 2026-07-17. This audit
+proves the integration, authority, recovery, and visible Canvas lifecycle. It
+does not prove production-model scientific quality or complete M3.
 
 ## Outcome
 
@@ -25,6 +25,11 @@ The Canvas remains the primary surface. Assistant work stays in the existing
 trailing utility pane and never becomes a detached chat window or a second
 document model.
 
+For a `DataMappingProposal`, the same pane now continues through source
+location, zero-write semantic preview, explicit path-bound confirmation,
+background deterministic execution, and a verified separate-Canvas handoff.
+The provider proposes meaning; only deterministic code reads or writes data.
+
 ## Interaction decision
 
 The action hierarchy is state-driven:
@@ -33,8 +38,12 @@ The action hierarchy is state-driven:
 | --- | --- | --- |
 | no active turn | Ask Assistant | none |
 | provider running | none | Stop |
-| proposal ready | Accept & Apply | Reject |
+| operation proposal ready | Accept and Apply | Reject Proposal |
 | accepted change | Commit Turn | Undo Batch, Roll Back Turn |
+| mapping source missing | Choose Source Folder | Reject Proposal, Roll Back Entire Turn |
+| mapping preview ready | Confirm and Build Project | Reject Proposal, Roll Back Entire Turn |
+| mapping confirmed after interruption | Resume Build | Roll Back Entire Turn |
+| mapping executed | Open Mapped Canvas | Roll Back Entire Turn |
 
 Only one visually primary action is present in each state. While a proposal is
 pending, the pane prioritizes provider understanding, warnings, and complete
@@ -74,8 +83,10 @@ The frozen contracts are:
 - `AssistantProgressEvent` for contiguous, identity-bound progress;
 - `AssistantResponse` for one typed proposal or an explicit confirmation,
   repair, or cancellation state;
-- `AssistantRequestRecord` for durable lifecycle state inside
-  `CanvasTransaction` and `CanvasSession` version 5.
+- `AssistantRequestRecord` version 2 for durable provider and mapping state
+  inside `CanvasTransaction` and `CanvasSession` version 6;
+- `DataMappingConfirmation` version 2 for immutable proposal, request, source,
+  normalized source-root, request-path, and output-root authority.
 
 Only `CanvasOperationBatch` and `DataMappingProposal` are valid proposal
 payloads. Responses must match the exact request ID, transaction, provider,
@@ -105,6 +116,17 @@ step fails, the previous session snapshot is restored. On reopen, an abandoned
 running request becomes interrupted and the transaction pauses for explicit
 recovery rather than pretending the remote computation still exists.
 
+Mapping preview and execution use a separate Qt worker. A persisted
+`executing` marker reopens as `confirmed` with the same receipt; a candidate
+created before completion is replay-verified and reused idempotently. Before
+handoff SciPlot rechecks the execution manifest, mapped VSZ, normalized paths,
+and original exact-current VSZ. A change during structural QA is checked again
+at commit and enters a recoverable conflict instead of closing the turn.
+
+Path-unbound version-1 confirmation receipts remain parseable for audit only.
+They cannot execute, render, or hand off. A fresh explicit version-2
+confirmation into a new output root is required to restore authority.
+
 ## Visual audit
 
 Fresh same-turn evidence was captured from the real Qt workbench. The initial
@@ -119,16 +141,20 @@ Evidence paths:
 - corrected proposal:
   `.tmp_verify/runtime_smoke_provider_ui_final3/runtime_smoke_rmv4swxy/canvas_assistant/canvas_assistant_probe_9gb5shcl/assistant_provider_proposal.png`;
 - focused final proposal:
-  `.tmp_verify/m3_provider_ui_loop_v6_wrapper/canvas_assistant_probe_l0wqed6g/assistant_provider_proposal.png`;
-- same-size baseline/current comparison:
-  `.tmp_verify/m3_provider_ui_final_comparison.png`.
+  `.tmp_verify/m3_mapping_authority_assistant_probe_final/canvas_assistant_probe_xiurt4j9/assistant_provider_proposal.png`;
+- final mapping confirmation:
+  `.tmp_verify/m3_mapping_authority_assistant_probe_final/canvas_assistant_probe_xiurt4j9/assistant_mapping_confirmation.png`;
+- final mapped Canvas:
+  `.tmp_verify/m3_mapping_authority_assistant_probe_final/canvas_assistant_probe_xiurt4j9/assistant_mapping_canvas.png`;
+- same-size provider/mapping comparison:
+  `.tmp_verify/m3_mapping_authority_assistant_probe_final/canvas_assistant_probe_xiurt4j9/assistant_reference_mapping_comparison.png`.
 
 The ignored screenshot paths are repeatable engineering evidence, not shipped
 product assets.
 
 ## Adversarial evidence
 
-The focused provider lifecycle probe passes `29/29`. It covers:
+The focused Assistant lifecycle probe passes `41/41`. It covers:
 
 - real composer submission through the injected provider thread;
 - contiguous progress and visible working state;
@@ -142,22 +168,40 @@ The focused provider lifecycle probe passes `29/29`. It covers:
 - detached request/session serialization so an exposed copy cannot alter the
   canonical request hash or persisted transaction;
 - request-record, request-hash, base-revision, progress-sequence, and untyped
-  output fault injection.
+  output fault injection;
+- close/reopen without invented mapping consent;
+- persisted `executing -> confirmed` recovery with the same receipt;
+- idempotent reuse after candidate creation but before persisted completion;
+- manifest and mapped-VSZ tamper rejection before handoff;
+- the actual reopened `Open Mapped Canvas` button path;
+- executed-candidate rejection lockout;
+- original-VSZ conflict before handoff and during commit QA;
+- exact rollback from both conflict boundaries.
 
-The cumulative pure Canvas contract passes `32/32`. Runtime smoke version 14
-passes `30/30`, including the Assistant `29/29`, deterministic mapping
-`50/50`, exact-current save/reopen and PDF/TIFF export, QA, delivery, source
+The cumulative pure Canvas contract passes `36/36`; deterministic mapping
+passes `55/55`; runtime smoke version 15 passes `30/30`, including Assistant
+`41/41`, exact-current save/reopen and PDF/TIFF export, QA, delivery, source
 immutability, relocated launchers, and delivery-hash failure rejection.
 
-No independent subagent tool was callable for this increment. The review used
-a separate adversarial pass, fault injection, fresh screenshot comparison, and
-the full runtime gate; this is not represented as independent review.
+An independent read-only reviewer ran twice. The first pass found receipt path
+binding, handoff revalidation, original-VSZ authority, executed-state action,
+and crash-recovery defects. The second pass found the actual Open-button guard,
+a commit-time QA race, legacy-v1 compatibility, and a missing persisted
+`executing` recovery test. All findings were corrected and fault-injected; the
+same reviewer then reported all prior findings resolved with no remaining
+actionable defect or new regression.
+
+The final wheel is
+`/private/tmp/sciplot-m3-mapping-authority-wheel-final-20260717-v2/sciplot_core-0.1.0-py3-none-any.whl`
+with SHA-256
+`46401001ecabf56abd1323224819d5c2030fc64d6e43b36840a66c558d92a31f`.
+Imports resolve from an isolated target outside the checkout, where the wheel
+independently passes Canvas contract `36/36`, mapping `55/55`, and Assistant
+`41/41`.
 
 ## Honest remaining work
 
 - add a production model-provider adapter behind the frozen boundary;
-- execute a user-confirmed `DataMappingProposal` from its Canvas decision card
-  through the existing deterministic executor and receipt workflow;
 - run the six canonical natural-language tasks with a production provider;
 - accumulate real user sessions for M2/M6 cutover evidence;
 - keep Veusz `MainWindow` as a recovery surface until the user accepts the

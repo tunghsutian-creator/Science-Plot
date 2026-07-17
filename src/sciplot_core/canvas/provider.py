@@ -7,6 +7,7 @@ import re
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Callable, Protocol
 from uuid import UUID, uuid4
 
@@ -34,14 +35,18 @@ ASSISTANT_PROGRESS_VERSION = 1
 ASSISTANT_RESPONSE_KIND = "sciplot_assistant_response"
 ASSISTANT_RESPONSE_VERSION = 1
 ASSISTANT_REQUEST_RECORD_KIND = "sciplot_assistant_request_record"
-ASSISTANT_REQUEST_RECORD_VERSION = 1
+ASSISTANT_REQUEST_RECORD_VERSION = 2
+ASSISTANT_REQUEST_RECORD_COMPATIBLE_VERSIONS = {
+    1,
+    ASSISTANT_REQUEST_RECORD_VERSION,
+}
+ASSISTANT_DATA_MAPPING_STATE_KIND = "sciplot_assistant_data_mapping_state"
+ASSISTANT_DATA_MAPPING_STATE_VERSION = 2
 
 ASSISTANT_PROPOSAL_KINDS = frozenset(
     {"canvas_operation_batch", "data_mapping_proposal"}
 )
-ASSISTANT_PROVIDER_CAPABILITIES = frozenset(
-    {*ASSISTANT_PROPOSAL_KINDS, "cancellation"}
-)
+ASSISTANT_PROVIDER_CAPABILITIES = frozenset({*ASSISTANT_PROPOSAL_KINDS, "cancellation"})
 ASSISTANT_PROGRESS_STAGES = frozenset(
     {
         "queued",
@@ -100,6 +105,19 @@ _MAX_CONTEXT_OBJECTS = 100_000
 _MAX_CONTEXT_OBJECT_TYPES = 128
 _MAX_REVIEW_ANNOTATIONS = 128
 _MAX_QA_IDS = 256
+
+ASSISTANT_DATA_MAPPING_STATES = frozenset(
+    {
+        "proposed",
+        "source_required",
+        "previewing",
+        "preview_ready",
+        "confirmed",
+        "executing",
+        "executed",
+        "rejected",
+    }
+)
 
 
 def _now() -> str:
@@ -257,9 +275,7 @@ def _validate_document_inventory(payload: object) -> dict[str, Any]:
             raise ValueError("context document_inventory counts must be non-negative.")
         object_types[object_type] = count
     if sum(object_types.values()) != object_count:
-        raise ValueError(
-            "context document_inventory counts must sum to object_count."
-        )
+        raise ValueError("context document_inventory counts must sum to object_count.")
     return {
         "object_count": object_count,
         "object_types": dict(sorted(object_types.items())),
@@ -417,9 +433,12 @@ def _validate_context(context: dict[str, Any]) -> dict[str, Any]:
     )
     if value.get("kind") != ASSISTANT_CONTEXT_KIND:
         raise ValueError("Assistant request context has an unsupported kind.")
-    if require_json_int(
-        value.get("version", 0), label="assistant request context version"
-    ) != ASSISTANT_CONTEXT_VERSION:
+    if (
+        require_json_int(
+            value.get("version", 0), label="assistant request context version"
+        )
+        != ASSISTANT_CONTEXT_VERSION
+    ):
         raise ValueError("Assistant request context has an unsupported version.")
     project_id = _required_text(
         value.get("project_id"),
@@ -470,14 +489,14 @@ def _validate_context(context: dict[str, Any]) -> dict[str, Any]:
             ),
         }
     elif selection.get("primary_object_id") is not None:
-        raise ValueError(
-            "context selected_object is required for a primary selection."
-        )
+        raise ValueError("context selected_object is required for a primary selection.")
     if require_json_bool(
         value.get("raw_dataset_arrays_included"),
         label="context raw_dataset_arrays_included",
     ):
-        raise ValueError("Assistant request context must not contain raw dataset arrays.")
+        raise ValueError(
+            "Assistant request context must not contain raw dataset arrays."
+        )
     selected_point_included = require_json_bool(
         value.get("explicit_selected_point_included"),
         label="context explicit_selected_point_included",
@@ -666,7 +685,9 @@ class AssistantRequest:
         if self.context_sha256 is not None:
             supplied = _sha256(self.context_sha256, "context_sha256")
             if supplied != expected_sha:
-                raise ValueError("Assistant request context_sha256 does not match context.")
+                raise ValueError(
+                    "Assistant request context_sha256 does not match context."
+                )
         object.__setattr__(self, "context_sha256", expected_sha)
         object.__setattr__(
             self, "created_at", _timestamp(self.created_at, "request created_at")
@@ -723,9 +744,7 @@ class AssistantRequest:
             raise ValueError("Unsupported AssistantRequest version.")
         return cls(
             request_id=_uuid_text(value.get("request_id"), "request_id"),
-            transaction_id=_uuid_text(
-                value.get("transaction_id"), "transaction_id"
-            ),
+            transaction_id=_uuid_text(value.get("transaction_id"), "transaction_id"),
             provider_id=_provider_id(value.get("provider_id")),
             intent=_required_text(
                 value.get("intent"),
@@ -735,12 +754,8 @@ class AssistantRequest:
             base_revision=require_json_int(
                 value.get("base_revision"), label="base_revision"
             ),
-            context=dict(
-                require_json_object(value.get("context"), label="context")
-            ),
-            context_sha256=_sha256(
-                value.get("context_sha256"), "context_sha256"
-            ),
+            context=dict(require_json_object(value.get("context"), label="context")),
+            context_sha256=_sha256(value.get("context_sha256"), "context_sha256"),
             allowed_proposal_kinds=_text_list(
                 value.get("allowed_proposal_kinds"),
                 label="allowed_proposal_kinds",
@@ -904,7 +919,9 @@ class AssistantResponse:
         object.__setattr__(self, "warnings", warnings)
         if self.status == "proposal":
             if self.proposal_kind not in ASSISTANT_PROPOSAL_KINDS:
-                raise ValueError("Proposal response requires a supported proposal_kind.")
+                raise ValueError(
+                    "Proposal response requires a supported proposal_kind."
+                )
             if not isinstance(self.proposal, dict):
                 raise ValueError("Proposal response requires a proposal object.")
             if self.proposal_kind == "canvas_operation_batch":
@@ -940,7 +957,9 @@ class AssistantResponse:
         if self.proposal_kind is not None and (
             self.proposal_kind not in request.allowed_proposal_kinds
         ):
-            raise ValueError("Assistant response uses a proposal kind not allowed by request.")
+            raise ValueError(
+                "Assistant response uses a proposal kind not allowed by request."
+            )
         if self.proposal_kind == "canvas_operation_batch":
             batch = CanvasOperationBatch.from_dict(dict(self.proposal or {}))
             if batch.base_revision != request.base_revision:
@@ -961,9 +980,7 @@ class AssistantResponse:
             "understanding": self.understanding,
             "proposal_kind": self.proposal_kind,
             "proposal": (
-                copy.deepcopy(self.proposal)
-                if self.proposal is not None
-                else None
+                copy.deepcopy(self.proposal) if self.proposal is not None else None
             ),
             "warnings": list(self.warnings),
             "created_at": self.created_at,
@@ -1005,9 +1022,7 @@ class AssistantResponse:
         return cls(
             response_id=_uuid_text(value.get("response_id"), "response_id"),
             request_id=_uuid_text(value.get("request_id"), "request_id"),
-            transaction_id=_uuid_text(
-                value.get("transaction_id"), "transaction_id"
-            ),
+            transaction_id=_uuid_text(value.get("transaction_id"), "transaction_id"),
             provider_id=_provider_id(value.get("provider_id")),
             request_sha256=_sha256(
                 value.get("request_sha256"),
@@ -1033,11 +1048,312 @@ class AssistantResponse:
 
 
 @dataclass
+class AssistantDataMappingState:
+    """Persisted human-confirmation state for one mapping proposal."""
+
+    status: str = "proposed"
+    source_root: str | None = None
+    output_root: str | None = None
+    preview: dict[str, Any] | None = None
+    confirmation: dict[str, Any] | None = None
+    execution_manifest: str | None = None
+    execution_manifest_sha256: str | None = None
+    mapped_document: str | None = None
+    mapped_document_sha256: str | None = None
+    last_error: str | None = None
+    updated_at: str = field(default_factory=_now)
+
+    def __post_init__(self) -> None:
+        if self.status not in ASSISTANT_DATA_MAPPING_STATES:
+            raise ValueError(
+                f"Unsupported Assistant data-mapping state: {self.status!r}"
+            )
+        for field_name in (
+            "source_root",
+            "output_root",
+            "execution_manifest",
+            "mapped_document",
+        ):
+            value = getattr(self, field_name)
+            if value is None:
+                continue
+            text = _required_text(value, f"mapping {field_name}", maximum=4096)
+            if not Path(text).is_absolute():
+                raise ValueError(f"mapping {field_name} must be an absolute path.")
+            setattr(self, field_name, text)
+        if self.execution_manifest_sha256 is not None:
+            self.execution_manifest_sha256 = _sha256(
+                self.execution_manifest_sha256,
+                "mapping execution_manifest_sha256",
+            )
+        if self.mapped_document_sha256 is not None:
+            self.mapped_document_sha256 = _sha256(
+                self.mapped_document_sha256,
+                "mapping mapped_document_sha256",
+            )
+        if self.preview is not None:
+            self.preview = dict(
+                require_json_object(self.preview, label="mapping preview")
+            )
+            _validate_json_value(self.preview, path="mapping.preview")
+            if self.preview.get("kind") != "sciplot_data_mapping_preview":
+                raise ValueError("Mapping preview has an unsupported kind.")
+            if (
+                require_json_int(
+                    self.preview.get("version", 0), label="mapping preview version"
+                )
+                != 1
+            ):
+                raise ValueError("Mapping preview has an unsupported version.")
+            if self.preview.get("status") != "ready_for_confirmation":
+                raise ValueError("Mapping preview is not ready for confirmation.")
+            if self.preview.get("writes_performed") is not False:
+                raise ValueError("Mapping preview must prove that no writes occurred.")
+            if self.preview.get("raw_values_in_preview") is not False:
+                raise ValueError("Mapping preview must not contain raw values.")
+            if self.preview.get("requires_confirmation_receipt") is not True:
+                raise ValueError("Mapping preview must require a confirmation receipt.")
+        if self.confirmation is not None:
+            from sciplot_core.canvas.assistant_contract import (
+                DataMappingConfirmation,
+            )
+
+            self.confirmation = DataMappingConfirmation.from_dict(
+                dict(
+                    require_json_object(
+                        self.confirmation,
+                        label="mapping confirmation",
+                    )
+                )
+            ).to_dict()
+        if self.last_error is not None:
+            self.last_error = _required_text(
+                self.last_error,
+                "mapping last_error",
+                maximum=2000,
+            )
+        self.updated_at = _timestamp(self.updated_at, "mapping updated_at")
+
+        preview_required = self.status in {
+            "preview_ready",
+            "confirmed",
+            "executing",
+            "executed",
+        }
+        confirmation_required = self.status in {
+            "confirmed",
+            "executing",
+            "executed",
+        }
+        if self.status in {
+            "previewing",
+            "confirmed",
+            "executing",
+            "executed",
+        } and (self.source_root is None):
+            raise ValueError(f"Mapping state {self.status!r} requires source_root.")
+        if preview_required and self.preview is None:
+            raise ValueError(f"Mapping state {self.status!r} requires a preview.")
+        if preview_required and self.output_root is None:
+            raise ValueError(f"Mapping state {self.status!r} requires output_root.")
+        if confirmation_required and self.confirmation is None:
+            raise ValueError(
+                f"Mapping state {self.status!r} requires a confirmation receipt."
+            )
+        if confirmation_required and self.output_root is None:
+            raise ValueError(f"Mapping state {self.status!r} requires output_root.")
+        if self.status == "executed":
+            if self.execution_manifest is None or (
+                self.execution_manifest_sha256 is None
+            ) or self.mapped_document is None or (
+                self.mapped_document_sha256 is None
+            ):
+                raise ValueError(
+                    "Executed mapping state requires hashed execution and mapped-document artifacts."
+                )
+        elif any(
+            value is not None
+            for value in (
+                self.execution_manifest,
+                self.execution_manifest_sha256,
+                self.mapped_document,
+                self.mapped_document_sha256,
+            )
+        ):
+            raise ValueError(
+                "Only an executed mapping state may reference handoff artifacts."
+            )
+
+    def validate_for_proposal(self, proposal: DataMappingProposal) -> None:
+        proposal_hash = canonical_payload_sha256(proposal.to_dict())
+        if self.preview is not None:
+            if self.preview.get("proposal_id") != proposal.proposal_id:
+                raise ValueError("Mapping preview targets another proposal.")
+            if self.preview.get("proposal_sha256") != proposal_hash:
+                raise ValueError("Mapping preview proposal hash is stale.")
+            if self.preview.get("base_request_sha256") != (
+                proposal.base_request_sha256
+            ):
+                raise ValueError("Mapping preview request hash is stale.")
+            if self.preview.get("provider") != proposal.provider:
+                raise ValueError("Mapping preview provider does not match proposal.")
+            preview_sources = self.preview.get("sources")
+            if not isinstance(preview_sources, list):
+                raise ValueError("Mapping preview requires a source inventory.")
+            source_proofs = {
+                str(item.get("relative_path") or ""): str(item.get("sha256") or "")
+                for item in preview_sources
+                if isinstance(item, dict)
+            }
+            if source_proofs != proposal.source_hashes:
+                raise ValueError("Mapping preview source hashes are stale.")
+            if self.preview.get("request_patch") != proposal.request_patch:
+                raise ValueError("Mapping preview request patch changed.")
+            if self.source_root is None or Path(
+                str(self.preview.get("source_root") or "")
+            ).expanduser().resolve() != Path(self.source_root):
+                raise ValueError("Mapping preview source-root binding is stale.")
+        if self.confirmation is not None:
+            from sciplot_core.canvas.assistant_contract import (
+                DataMappingConfirmation,
+            )
+
+            receipt = DataMappingConfirmation.from_dict(self.confirmation)
+            if receipt.proposal_id != proposal.proposal_id:
+                raise ValueError("Mapping confirmation targets another proposal.")
+            if receipt.proposal_sha256 != proposal_hash:
+                raise ValueError("Mapping confirmation proposal hash is stale.")
+            if receipt.base_request_sha256 != proposal.base_request_sha256:
+                raise ValueError("Mapping confirmation request hash is stale.")
+            if receipt.source_hashes != proposal.source_hashes:
+                raise ValueError("Mapping confirmation source hashes are stale.")
+            if self.source_root is None or receipt.source_root != self.source_root:
+                raise ValueError("Mapping confirmation source-root binding is stale.")
+            if self.output_root is None or receipt.output_root != self.output_root:
+                raise ValueError("Mapping confirmation output-root binding is stale.")
+            preview_request = Path(
+                str((self.preview or {}).get("base_request") or "")
+            ).expanduser().resolve()
+            if Path(receipt.request_path) != preview_request:
+                raise ValueError("Mapping confirmation request-path binding is stale.")
+        if self.status == "executed":
+            expected_root = (Path(self.output_root or "") / proposal.proposal_id).resolve()
+            if Path(self.execution_manifest or "") != (
+                expected_root / "execution.json"
+            ):
+                raise ValueError("Mapping execution manifest path is not confirmed.")
+            if Path(self.mapped_document or "") != (
+                expected_root / "studio" / "document.vsz"
+            ):
+                raise ValueError("Mapped Canvas document path is not confirmed.")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": ASSISTANT_DATA_MAPPING_STATE_KIND,
+            "version": ASSISTANT_DATA_MAPPING_STATE_VERSION,
+            "status": self.status,
+            "source_root": self.source_root,
+            "output_root": self.output_root,
+            "preview": copy.deepcopy(self.preview),
+            "confirmation": copy.deepcopy(self.confirmation),
+            "execution_manifest": self.execution_manifest,
+            "execution_manifest_sha256": self.execution_manifest_sha256,
+            "mapped_document": self.mapped_document,
+            "mapped_document_sha256": self.mapped_document_sha256,
+            "last_error": self.last_error,
+            "updated_at": self.updated_at,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> AssistantDataMappingState:
+        value = require_json_object(payload, label="AssistantDataMappingState")
+        reject_unknown_keys(
+            value,
+            {
+                "kind",
+                "version",
+                "status",
+                "source_root",
+                "output_root",
+                "preview",
+                "confirmation",
+                "execution_manifest",
+                "execution_manifest_sha256",
+                "mapped_document",
+                "mapped_document_sha256",
+                "last_error",
+                "updated_at",
+            },
+            label="AssistantDataMappingState",
+        )
+        if value.get("kind") != ASSISTANT_DATA_MAPPING_STATE_KIND:
+            raise ValueError("Not a SciPlot AssistantDataMappingState payload.")
+        if require_json_int(value.get("version", 0), label="version") != (
+            ASSISTANT_DATA_MAPPING_STATE_VERSION
+        ):
+            raise ValueError("Unsupported AssistantDataMappingState version.")
+        return cls(
+            status=_required_text(value.get("status"), "mapping status"),
+            source_root=_optional_text(
+                value.get("source_root"), "mapping source_root", maximum=4096
+            ),
+            output_root=_optional_text(
+                value.get("output_root"), "mapping output_root", maximum=4096
+            ),
+            preview=(
+                dict(require_json_object(value["preview"], label="mapping preview"))
+                if value.get("preview") is not None
+                else None
+            ),
+            confirmation=(
+                dict(
+                    require_json_object(
+                        value["confirmation"], label="mapping confirmation"
+                    )
+                )
+                if value.get("confirmation") is not None
+                else None
+            ),
+            execution_manifest=_optional_text(
+                value.get("execution_manifest"),
+                "mapping execution_manifest",
+                maximum=4096,
+            ),
+            execution_manifest_sha256=(
+                _sha256(
+                    value["execution_manifest_sha256"],
+                    "mapping execution_manifest_sha256",
+                )
+                if value.get("execution_manifest_sha256") is not None
+                else None
+            ),
+            mapped_document=_optional_text(
+                value.get("mapped_document"),
+                "mapping mapped_document",
+                maximum=4096,
+            ),
+            mapped_document_sha256=(
+                _sha256(
+                    value["mapped_document_sha256"],
+                    "mapping mapped_document_sha256",
+                )
+                if value.get("mapped_document_sha256") is not None
+                else None
+            ),
+            last_error=_optional_text(
+                value.get("last_error"), "mapping last_error", maximum=2000
+            ),
+            updated_at=_timestamp(value.get("updated_at"), "mapping updated_at"),
+        )
+
+
+@dataclass
 class AssistantRequestRecord:
     request: dict[str, Any]
     status: str = "queued"
     events: list[dict[str, Any]] = field(default_factory=list)
     response: dict[str, Any] | None = None
+    mapping_state: dict[str, Any] | None = None
     error: str | None = None
     request_sha256: str | None = None
     created_at: str = field(default_factory=_now)
@@ -1050,27 +1366,41 @@ class AssistantRequestRecord:
         if self.request_sha256 is not None:
             supplied = _sha256(self.request_sha256, "request_sha256")
             if supplied != expected_sha:
-                raise ValueError("Assistant request record hash does not match request.")
+                raise ValueError(
+                    "Assistant request record hash does not match request."
+                )
         self.request_sha256 = expected_sha
         if self.status not in ASSISTANT_REQUEST_RECORD_STATUSES:
-            raise ValueError(f"Unsupported Assistant request record status: {self.status!r}")
+            raise ValueError(
+                f"Unsupported Assistant request record status: {self.status!r}"
+            )
         normalized_events: list[dict[str, Any]] = []
         if len(self.events) > _MAX_EVENTS:
             raise ValueError("Assistant request record contains too many events.")
         for index, payload in enumerate(self.events, start=1):
             event = AssistantProgressEvent.from_dict(payload)
             if event.request_id != parsed_request.request_id:
-                raise ValueError("Assistant progress request_id does not match request.")
+                raise ValueError(
+                    "Assistant progress request_id does not match request."
+                )
             if event.provider_id != parsed_request.provider_id:
-                raise ValueError("Assistant progress provider_id does not match request.")
+                raise ValueError(
+                    "Assistant progress provider_id does not match request."
+                )
             if event.sequence != index:
-                raise ValueError("Assistant progress events must be contiguous and ordered.")
+                raise ValueError(
+                    "Assistant progress events must be contiguous and ordered."
+                )
             normalized_events.append(event.to_dict())
         self.events = normalized_events
         if self.status == "queued" and self.events:
-            raise ValueError("Queued Assistant requests cannot contain progress events.")
+            raise ValueError(
+                "Queued Assistant requests cannot contain progress events."
+            )
+        parsed_response = None
         if self.response is not None:
             response = AssistantResponse.from_dict(self.response)
+            parsed_response = response
             response.validate_for_request(parsed_request)
             self.response = response.to_dict()
             expected_status = {
@@ -1097,6 +1427,35 @@ class AssistantRequestRecord:
         }:
             raise ValueError(
                 "Assistant request record status requires a matching response."
+            )
+        restored_mapping = None
+        if self.mapping_state is not None:
+            restored_mapping = AssistantDataMappingState.from_dict(self.mapping_state)
+        mapping_response = bool(
+            parsed_response is not None
+            and parsed_response.proposal_kind == "data_mapping_proposal"
+        )
+        if mapping_response:
+            proposal = DataMappingProposal.from_dict(
+                dict(parsed_response.proposal or {})
+            )
+            if restored_mapping is None:
+                restored_mapping = AssistantDataMappingState(
+                    status=("rejected" if self.status == "rejected" else "proposed")
+                )
+            restored_mapping.validate_for_proposal(proposal)
+            if self.status == "applied" and restored_mapping.status != "executed":
+                raise ValueError(
+                    "Applied data mapping requests require executed mapping state."
+                )
+            if self.status == "rejected" and restored_mapping.status != "rejected":
+                raise ValueError(
+                    "Rejected data mapping requests require rejected mapping state."
+                )
+            self.mapping_state = restored_mapping.to_dict()
+        elif restored_mapping is not None:
+            raise ValueError(
+                "Only a DataMappingProposal response may persist mapping state."
             )
         if self.error is not None:
             self.error = _required_text(self.error, "request error", maximum=2000)
@@ -1130,11 +1489,17 @@ class AssistantRequestRecord:
         )
 
     @property
+    def parsed_mapping_state(self) -> AssistantDataMappingState | None:
+        return (
+            AssistantDataMappingState.from_dict(self.mapping_state)
+            if self.mapping_state is not None
+            else None
+        )
+
+    @property
     def latest_event(self) -> AssistantProgressEvent | None:
         return (
-            AssistantProgressEvent.from_dict(self.events[-1])
-            if self.events
-            else None
+            AssistantProgressEvent.from_dict(self.events[-1]) if self.events else None
         )
 
     @property
@@ -1143,14 +1508,18 @@ class AssistantRequestRecord:
 
     def append_event(self, event: AssistantProgressEvent) -> None:
         if self.status not in {"queued", "running"}:
-            raise ValueError("Assistant request cannot accept progress in its current state.")
+            raise ValueError(
+                "Assistant request cannot accept progress in its current state."
+            )
         request = self.parsed_request
         if event.request_id != request.request_id:
             raise ValueError("Assistant progress request_id does not match request.")
         if event.provider_id != request.provider_id:
             raise ValueError("Assistant progress provider_id does not match request.")
         if event.sequence != len(self.events) + 1:
-            raise ValueError("Assistant progress sequence is not the next expected value.")
+            raise ValueError(
+                "Assistant progress sequence is not the next expected value."
+            )
         if len(self.events) >= _MAX_EVENTS:
             raise ValueError("Assistant request has reached its progress-event limit.")
         self.events.append(event.to_dict())
@@ -1179,6 +1548,11 @@ class AssistantRequestRecord:
             "needs_rule_repair": "needs_rule_repair",
             "cancelled": "cancelled",
         }[response.status]
+        self.mapping_state = (
+            AssistantDataMappingState().to_dict()
+            if response.proposal_kind == "data_mapping_proposal"
+            else None
+        )
         self.error = None
         self.updated_at = _now()
 
@@ -1199,7 +1573,39 @@ class AssistantRequestRecord:
     def mark_proposal_outcome(self, *, accepted: bool) -> None:
         if self.status != "proposal_ready":
             raise ValueError("Assistant request has no pending proposal outcome.")
+        response = self.parsed_response
+        if response is not None and response.proposal_kind == "data_mapping_proposal":
+            state = self.parsed_mapping_state
+            if state is None:
+                raise ValueError("Data mapping proposal has no persisted state.")
+            if accepted and state.status != "executed":
+                raise ValueError(
+                    "Data mapping proposal cannot be accepted before execution."
+                )
+            if not accepted:
+                if state.status == "executed":
+                    raise ValueError(
+                        "An executed mapping candidate retains evidence and cannot be relabeled as rejected."
+                    )
+                state.status = "rejected"
+                state.last_error = None
+                state.updated_at = _now()
+                self.mapping_state = AssistantDataMappingState.from_dict(
+                    state.to_dict()
+                ).to_dict()
         self.status = "applied" if accepted else "rejected"
+        self.updated_at = _now()
+
+    def set_mapping_state(self, state: AssistantDataMappingState) -> None:
+        if self.status != "proposal_ready":
+            raise ValueError("Assistant request has no active mapping proposal.")
+        response = self.parsed_response
+        if response is None or response.proposal_kind != "data_mapping_proposal":
+            raise ValueError("Assistant response is not a DataMappingProposal.")
+        restored = AssistantDataMappingState.from_dict(state.to_dict())
+        proposal = DataMappingProposal.from_dict(dict(response.proposal or {}))
+        restored.validate_for_proposal(proposal)
+        self.mapping_state = restored.to_dict()
         self.updated_at = _now()
 
     def to_dict(self) -> dict[str, Any]:
@@ -1211,8 +1617,11 @@ class AssistantRequestRecord:
             "status": self.status,
             "events": copy.deepcopy(self.events),
             "response": (
-                copy.deepcopy(self.response)
-                if self.response is not None
+                copy.deepcopy(self.response) if self.response is not None else None
+            ),
+            "mapping_state": (
+                copy.deepcopy(self.mapping_state)
+                if self.mapping_state is not None
                 else None
             ),
             "error": self.error,
@@ -1233,6 +1642,7 @@ class AssistantRequestRecord:
                 "status",
                 "events",
                 "response",
+                "mapping_state",
                 "error",
                 "created_at",
                 "updated_at",
@@ -1241,9 +1651,8 @@ class AssistantRequestRecord:
         )
         if value.get("kind") != ASSISTANT_REQUEST_RECORD_KIND:
             raise ValueError("Not a SciPlot AssistantRequestRecord payload.")
-        if require_json_int(value.get("version", 0), label="version") != (
-            ASSISTANT_REQUEST_RECORD_VERSION
-        ):
+        version = require_json_int(value.get("version", 0), label="version")
+        if version not in ASSISTANT_REQUEST_RECORD_COMPATIBLE_VERSIONS:
             raise ValueError("Unsupported AssistantRequestRecord version.")
         events = require_json_list(value.get("events", []), label="request events")
         if not all(isinstance(event, dict) for event in events):
@@ -1252,22 +1661,19 @@ class AssistantRequestRecord:
         if response is not None:
             response = dict(require_json_object(response, label="request response"))
         return cls(
-            request=dict(
-                require_json_object(value.get("request"), label="request")
-            ),
-            request_sha256=_sha256(
-                value.get("request_sha256"), "request_sha256"
-            ),
+            request=dict(require_json_object(value.get("request"), label="request")),
+            request_sha256=_sha256(value.get("request_sha256"), "request_sha256"),
             status=_required_text(value.get("status"), "request status"),
             events=[dict(event) for event in events],
             response=response,
+            mapping_state=(
+                dict(require_json_object(value["mapping_state"], label="mapping_state"))
+                if value.get("mapping_state") is not None
+                else None
+            ),
             error=_optional_text(value.get("error"), "request error", maximum=2000),
-            created_at=_timestamp(
-                value.get("created_at"), "request record created_at"
-            ),
-            updated_at=_timestamp(
-                value.get("updated_at"), "request record updated_at"
-            ),
+            created_at=_timestamp(value.get("created_at"), "request record created_at"),
+            updated_at=_timestamp(value.get("updated_at"), "request record updated_at"),
         )
 
 
@@ -1311,6 +1717,7 @@ __all__ = [
     "ASSISTANT_CONTEXT_KIND",
     "ASSISTANT_CONTEXT_VERSION",
     "ASSISTANT_DATA_POLICY",
+    "ASSISTANT_DATA_MAPPING_STATES",
     "ASSISTANT_MAX_INTENT_LENGTH",
     "ASSISTANT_PROGRESS_STAGES",
     "ASSISTANT_PROPOSAL_KINDS",
@@ -1320,6 +1727,7 @@ __all__ = [
     "ASSISTANT_RESPONSE_STATUSES",
     "AssistantCancellationToken",
     "AssistantCancelled",
+    "AssistantDataMappingState",
     "AssistantProgressCallback",
     "AssistantProgressEvent",
     "AssistantProvider",

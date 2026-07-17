@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from collections import Counter
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from sciplot_core._utils import file_sha256, json_safe
+from sciplot_core.canvas.assistant_contract import (
+    DataMappingConfirmation,
+    DataMappingProposal,
+)
 from sciplot_core.canvas.model import (
     CanvasSession,
     CanvasTransaction,
@@ -12,11 +17,17 @@ from sciplot_core.canvas.model import (
 from sciplot_core.canvas.operations import CanvasOperationBatch
 from sciplot_core.canvas.provider import (
     ASSISTANT_MAX_INTENT_LENGTH,
+    AssistantDataMappingState,
     AssistantProgressEvent,
     AssistantProviderDescriptor,
     AssistantRequest,
     AssistantRequestRecord,
     AssistantResponse,
+)
+from sciplot_core.data_mapping import (
+    DATA_MAPPING_EXECUTION_FILENAME,
+    create_data_mapping_confirmation,
+    load_data_mapping_execution,
 )
 from sciplot_gui.document_controller import DocumentController
 
@@ -51,6 +62,19 @@ class AssistantTransactionCoordinator:
     def request_record(self) -> AssistantRequestRecord | None:
         transaction = self.transaction
         return transaction.parsed_request_record if transaction is not None else None
+
+    @property
+    def mapping_state(self) -> AssistantDataMappingState | None:
+        record = self.request_record
+        return record.parsed_mapping_state if record is not None else None
+
+    @property
+    def mapping_proposal(self) -> DataMappingProposal | None:
+        record = self.request_record
+        response = record.parsed_response if record is not None else None
+        if response is None or response.proposal_kind != "data_mapping_proposal":
+            return None
+        return DataMappingProposal.from_dict(dict(response.proposal or {}))
 
     def _require_transaction(self) -> CanvasTransaction:
         transaction = self.transaction
@@ -152,8 +176,7 @@ class AssistantTransactionCoordinator:
                 "ready_to_use": artifact.get("ready_to_use"),
             },
             "raw_dataset_arrays_included": False,
-            "explicit_selected_point_included": selection.get("data_point")
-            is not None,
+            "explicit_selected_point_included": selection.get("data_point") is not None,
         }
 
     def begin(
@@ -189,9 +212,7 @@ class AssistantTransactionCoordinator:
             baseline_state=session.state,
             baseline_document_sha256=session.document_sha256,
             baseline_qa_summary=dict(session.qa_summary),
-            baseline_structural_qa_summary=dict(
-                session.structural_qa_summary
-            ),
+            baseline_structural_qa_summary=dict(session.structural_qa_summary),
             baseline_page=session.current_page,
             baseline_viewport=session.viewport.to_dict(),
             current_revision=session.revision,
@@ -211,13 +232,9 @@ class AssistantTransactionCoordinator:
                     "baseline": {
                         **baseline,
                         "saved_revision": session_before["saved_revision"],
-                        "exported_revision": session_before[
-                            "exported_revision"
-                        ],
+                        "exported_revision": session_before["exported_revision"],
                         "session_state": session_before["state"],
-                        "document_sha256": session_before[
-                            "document_sha256"
-                        ],
+                        "document_sha256": session_before["document_sha256"],
                     },
                     "context": self.context_summary(),
                 },
@@ -382,10 +399,10 @@ class AssistantTransactionCoordinator:
                 provider_id=request.provider_id,
                 request_sha256=request.payload_sha256,
                 status="cancelled",
-                understanding=(
-                    "Stopped before a provider proposal could be accepted."
+                understanding=("Stopped before a provider proposal could be accepted."),
+                warnings=(
+                    "A late provider response was discarded after cancellation.",
                 ),
-                warnings=("A late provider response was discarded after cancellation.",),
             )
         session_before = self.controller.session.to_dict()
         try:
@@ -393,9 +410,7 @@ class AssistantTransactionCoordinator:
             if restored.status == "proposal" and restored.proposal_kind == (
                 "canvas_operation_batch"
             ):
-                batch = CanvasOperationBatch.from_dict(
-                    dict(restored.proposal or {})
-                )
+                batch = CanvasOperationBatch.from_dict(dict(restored.proposal or {}))
                 preview = self.controller.preview_batch(batch)
                 record.complete(restored)
                 transaction.set_request_record(record)
@@ -465,6 +480,304 @@ class AssistantTransactionCoordinator:
         except Exception:
             self._restore_session(session_before)
             raise
+
+    def _set_mapping_state(
+        self,
+        state: AssistantDataMappingState,
+        *,
+        event: str,
+        evidence: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        transaction = self._require_transaction()
+        record = transaction.parsed_request_record
+        if record is None:
+            raise RuntimeError("No Assistant request is active.")
+        session_before = self.controller.session.to_dict()
+        record.set_mapping_state(state)
+        transaction.set_request_record(record)
+        transaction.status = "paused"
+        transaction.updated_at = self._now()
+        self.controller.session.set_state("needs_human_confirmation")
+        return self._record_with_session_rollback(
+            session_before,
+            {
+                "event": event,
+                "provider": transaction.provider,
+                "transaction_id": transaction.transaction_id,
+                "request_id": record.parsed_request.request_id,
+                "revision": self.controller.session.revision,
+                "mapping_state": state.to_dict(),
+                "evidence": json_safe(evidence or {}),
+                "publication_document_changed": False,
+                "raw_inputs_mutated": False,
+            },
+        )
+
+    def begin_mapping_preview(self, *, source_root: Path) -> dict[str, Any]:
+        state = self.mapping_state
+        if state is None or state.status not in {
+            "proposed",
+            "source_required",
+            "preview_ready",
+        }:
+            raise RuntimeError("Data mapping is not ready for source validation.")
+        state.status = "previewing"
+        state.source_root = str(source_root.expanduser().resolve())
+        state.output_root = None
+        state.preview = None
+        state.confirmation = None
+        state.execution_manifest = None
+        state.execution_manifest_sha256 = None
+        state.mapped_document = None
+        state.mapped_document_sha256 = None
+        state.last_error = None
+        state.updated_at = self._now()
+        return self._set_mapping_state(
+            state,
+            event="assistant_data_mapping_preview_started",
+            evidence={"source_root": state.source_root},
+        )
+
+    def complete_mapping_preview(
+        self,
+        preview: dict[str, Any],
+        *,
+        output_root: Path,
+    ) -> dict[str, Any]:
+        state = self.mapping_state
+        if state is None or state.status != "previewing":
+            raise RuntimeError("No data-mapping preview is active.")
+        state.status = "preview_ready"
+        state.preview = dict(preview)
+        state.output_root = str(output_root.expanduser().resolve())
+        state.last_error = None
+        state.updated_at = self._now()
+        return self._set_mapping_state(
+            state,
+            event="assistant_data_mapping_preview_ready",
+            evidence={
+                "proposal_sha256": preview.get("proposal_sha256"),
+                "base_request_sha256": preview.get("base_request_sha256"),
+                "source_count": len(preview.get("sources") or []),
+                "writes_performed": preview.get("writes_performed"),
+                "raw_values_in_preview": preview.get("raw_values_in_preview"),
+            },
+        )
+
+    def require_mapping_source(
+        self,
+        error: str,
+        *,
+        source_root: Path | None = None,
+    ) -> dict[str, Any]:
+        state = self.mapping_state
+        if state is None or state.status not in {
+            "proposed",
+            "source_required",
+            "previewing",
+            "preview_ready",
+        }:
+            raise RuntimeError("Data mapping cannot request another source root.")
+        state.status = "source_required"
+        state.source_root = (
+            str(source_root.expanduser().resolve())
+            if source_root is not None
+            else state.source_root
+        )
+        state.output_root = None
+        state.preview = None
+        state.confirmation = None
+        state.execution_manifest = None
+        state.execution_manifest_sha256 = None
+        state.mapped_document = None
+        state.mapped_document_sha256 = None
+        state.last_error = str(error or "Select the folder containing the sources.")
+        state.updated_at = self._now()
+        return self._set_mapping_state(
+            state,
+            event="assistant_data_mapping_source_required",
+            evidence={"error": state.last_error},
+        )
+
+    def confirm_mapping(
+        self,
+        *,
+        confirmed_by: str,
+    ) -> DataMappingConfirmation:
+        state = self.mapping_state
+        proposal = self.mapping_proposal
+        if state is None or proposal is None or state.status != "preview_ready":
+            raise RuntimeError("Data mapping has no verified preview to confirm.")
+        if state.source_root is None:
+            raise RuntimeError("Data mapping source root is missing.")
+        if state.output_root is None:
+            raise RuntimeError("Data mapping output root is missing.")
+        request_path = Path(str(state.preview.get("base_request") or ""))
+        receipt = create_data_mapping_confirmation(
+            proposal,
+            source_root=Path(state.source_root),
+            request_path=request_path,
+            output_root=Path(state.output_root),
+            confirmed_by=confirmed_by,
+        )
+        state.status = "confirmed"
+        state.confirmation = receipt.to_dict()
+        state.last_error = None
+        state.updated_at = self._now()
+        self._set_mapping_state(
+            state,
+            event="assistant_data_mapping_confirmed",
+            evidence={
+                "confirmation_id": receipt.confirmation_id,
+                "proposal_sha256": receipt.proposal_sha256,
+                "base_request_sha256": receipt.base_request_sha256,
+                "confirmation_source": "explicit_canvas_user_action",
+            },
+        )
+        return receipt
+
+    def begin_mapping_execution(self) -> dict[str, Any]:
+        state = self.mapping_state
+        if state is None or state.status != "confirmed":
+            raise RuntimeError("Data mapping has no confirmed execution to start.")
+        state.status = "executing"
+        state.last_error = None
+        state.updated_at = self._now()
+        return self._set_mapping_state(
+            state,
+            event="assistant_data_mapping_execution_started",
+            evidence={
+                "confirmation_id": (state.confirmation or {}).get("confirmation_id"),
+                "output_root": state.output_root,
+            },
+        )
+
+    def fail_mapping_task(self, error: str) -> dict[str, Any]:
+        state = self.mapping_state
+        if state is None or state.status not in {"previewing", "executing"}:
+            raise RuntimeError("No data-mapping task is active.")
+        failed_stage = state.status
+        state.status = "confirmed" if failed_stage == "executing" else "source_required"
+        if failed_stage == "previewing":
+            state.preview = None
+            state.confirmation = None
+            state.output_root = None
+        state.last_error = str(error or "Data mapping task failed.")
+        state.updated_at = self._now()
+        return self._set_mapping_state(
+            state,
+            event="assistant_data_mapping_task_failed",
+            evidence={"failed_stage": failed_stage, "error": state.last_error},
+        )
+
+    def complete_mapping_execution(
+        self,
+        execution: dict[str, Any],
+        *,
+        mapped_document: Path,
+    ) -> dict[str, Any]:
+        state = self.mapping_state
+        proposal = self.mapping_proposal
+        if state is None or proposal is None or state.status != "executing":
+            raise RuntimeError("No confirmed data-mapping execution is active.")
+        execution_root = Path(str(execution.get("output_root") or ""))
+        manifest_path = execution_root / DATA_MAPPING_EXECUTION_FILENAME
+        verified = load_data_mapping_execution(manifest_path)
+        if verified.get("handoff_allowed") is not True:
+            raise ValueError(
+                "Executed mapping requires an explicit current confirmation before handoff."
+            )
+        receipt = DataMappingConfirmation.from_dict(dict(state.confirmation or {}))
+        expected_execution_root = (
+            Path(receipt.output_root) / proposal.proposal_id
+        ).resolve()
+        if execution_root.resolve() != expected_execution_root:
+            raise ValueError("Executed mapping output path changed after confirmation.")
+        if verified.get("proposal_sha256") != receipt.proposal_sha256:
+            raise ValueError("Executed mapping proposal hash changed.")
+        if verified.get("confirmation_id") != receipt.confirmation_id:
+            raise ValueError("Executed mapping confirmation changed.")
+        if verified.get("base_request_sha256") != proposal.base_request_sha256:
+            raise ValueError("Executed mapping request binding changed.")
+        if verified.get("raw_inputs_unchanged") is not True:
+            raise ValueError("Executed mapping did not prove raw-input immutability.")
+        document_path = mapped_document.expanduser().resolve()
+        if document_path != expected_execution_root / "studio" / "document.vsz":
+            raise ValueError("Mapped Canvas document path is not canonical.")
+        if not document_path.is_file():
+            raise FileNotFoundError(document_path)
+        state.status = "executed"
+        state.execution_manifest = str(manifest_path.resolve())
+        state.execution_manifest_sha256 = file_sha256(manifest_path)
+        state.mapped_document = str(document_path)
+        state.mapped_document_sha256 = file_sha256(document_path)
+        state.last_error = None
+        state.updated_at = self._now()
+        return self._set_mapping_state(
+            state,
+            event="assistant_data_mapping_execution_ready",
+            evidence={
+                "execution_manifest": state.execution_manifest,
+                "execution_manifest_sha256": state.execution_manifest_sha256,
+                "mapped_document": state.mapped_document,
+                "mapped_document_sha256": state.mapped_document_sha256,
+                "request_candidate": verified.get("request_candidate"),
+                "raw_inputs_unchanged": verified.get("raw_inputs_unchanged"),
+                "ready_to_use": verified.get("ready_to_use"),
+            },
+        )
+
+    def accept_mapping_handoff(self) -> dict[str, Any]:
+        transaction = self._require_transaction()
+        record = transaction.parsed_request_record
+        state = record.parsed_mapping_state if record is not None else None
+        if record is None or state is None or state.status != "executed":
+            raise RuntimeError("No verified mapped Canvas is ready to accept.")
+        original_document_sha256 = self.ensure_original_document_unchanged()
+        session_before = self.controller.session.to_dict()
+        record.mark_proposal_outcome(accepted=True)
+        transaction.set_request_record(record)
+        self.controller.session.set_state("ai_proposing")
+        return self._record_with_session_rollback(
+            session_before,
+            {
+                "event": "assistant_data_mapping_handoff_opened",
+                "provider": transaction.provider,
+                "transaction_id": transaction.transaction_id,
+                "request_id": record.parsed_request.request_id,
+                "revision": self.controller.session.revision,
+                "execution_manifest": state.execution_manifest,
+                "execution_manifest_sha256": state.execution_manifest_sha256,
+                "original_document_sha256": original_document_sha256,
+                "publication_document_changed": False,
+                "raw_inputs_mutated": False,
+            },
+        )
+
+    def reject_mapping(self, *, reason: str) -> dict[str, Any]:
+        transaction = self._require_transaction()
+        record = transaction.parsed_request_record
+        if record is None or record.parsed_mapping_state is None:
+            raise RuntimeError("No data-mapping proposal is pending.")
+        session_before = self.controller.session.to_dict()
+        record.mark_proposal_outcome(accepted=False)
+        transaction.set_request_record(record)
+        transaction.status = "paused"
+        transaction.updated_at = self._now()
+        self.controller.session.set_state("ai_proposing")
+        return self._record_with_session_rollback(
+            session_before,
+            {
+                "event": "assistant_data_mapping_rejected",
+                "provider": transaction.provider,
+                "transaction_id": transaction.transaction_id,
+                "request_id": record.parsed_request.request_id,
+                "revision": self.controller.session.revision,
+                "reason": str(reason or "").strip(),
+                "publication_document_changed": False,
+                "raw_inputs_mutated": False,
+            },
+        )
 
     def fail_request(self, error: str) -> dict[str, Any]:
         transaction = self._require_transaction()
@@ -664,6 +977,7 @@ class AssistantTransactionCoordinator:
                 "The document revision changed before transaction commit."
             )
             raise ValueError("Assistant transaction is stale at commit.")
+        self.ensure_original_document_unchanged()
         qa = self.controller.run_structural_qa()
         if qa.get("status") == "failed":
             session_before = self.controller.session.to_dict()
@@ -683,7 +997,6 @@ class AssistantTransactionCoordinator:
                 "Structural QA failed; repair or roll back the assistant turn."
             )
 
-        session_before = self.controller.session.to_dict()
         terminal = CanvasTransaction.from_dict(transaction.to_dict())
         if terminal is None:
             raise RuntimeError("Could not serialize the assistant transaction.")
@@ -697,13 +1010,14 @@ class AssistantTransactionCoordinator:
         baseline_clean = (
             transaction.baseline_saved_revision == transaction.base_revision
         )
+        canonical_sha256 = self.ensure_original_document_unchanged()
+        session_before = self.controller.session.to_dict()
         session = self.controller.session
         if unchanged and baseline_clean:
             session.saved_revision = session.revision
             session.exported_revision = (
                 session.revision
-                if transaction.baseline_exported_revision
-                == transaction.base_revision
+                if transaction.baseline_exported_revision == transaction.base_revision
                 else transaction.baseline_exported_revision
             )
             session.qa_summary = dict(transaction.baseline_qa_summary)
@@ -719,11 +1033,7 @@ class AssistantTransactionCoordinator:
             session.set_state("canvas_ready")
         canonical_unchanged = bool(
             transaction.baseline_document_sha256 is None
-            or (
-                self.controller.document_path.is_file()
-                and file_sha256(self.controller.document_path)
-                == transaction.baseline_document_sha256
-            )
+            or canonical_sha256 == transaction.baseline_document_sha256
         )
         return self._record_with_session_rollback(
             session_before,
@@ -750,6 +1060,27 @@ class AssistantTransactionCoordinator:
             outcome="rolled_back",
             reason=reason,
         )
+
+    def ensure_original_document_unchanged(self) -> str | None:
+        transaction = self._require_transaction()
+        baseline = transaction.baseline_document_sha256
+        if baseline is None:
+            return None
+        document_path = self.controller.document_path
+        if not document_path.is_file():
+            self._mark_conflict(
+                "The exact-current VSZ disappeared during the Assistant turn."
+            )
+            raise ValueError("The original exact-current VSZ is missing.")
+        current = file_sha256(document_path)
+        if current != baseline:
+            self._mark_conflict(
+                "The exact-current VSZ changed outside the active Assistant turn."
+            )
+            raise ValueError(
+                "The original exact-current VSZ changed; mapped handoff is blocked."
+            )
+        return current
 
     def reject_transaction(self, *, reason: str) -> dict[str, Any]:
         transaction = self._require_transaction()
@@ -782,9 +1113,7 @@ class AssistantTransactionCoordinator:
         if transaction is None:
             return
         if transaction.status in {"committed", "rejected", "rolled_back"}:
-            self._mark_conflict(
-                "A terminal transaction was persisted as active."
-            )
+            self._mark_conflict("A terminal transaction was persisted as active.")
             return
         if not transaction.baseline_complete:
             self._mark_conflict(
@@ -841,6 +1170,44 @@ class AssistantTransactionCoordinator:
                     "error": request_record.error,
                     "paused_for_review": True,
                     "publication_document_changed": False,
+                },
+            )
+            return
+        mapping_state = (
+            request_record.parsed_mapping_state if request_record is not None else None
+        )
+        if mapping_state is not None and mapping_state.status in {
+            "previewing",
+            "executing",
+        }:
+            session_before = self.controller.session.to_dict()
+            interrupted_stage = mapping_state.status
+            mapping_state.status = (
+                "confirmed" if interrupted_stage == "executing" else "source_required"
+            )
+            mapping_state.last_error = (
+                "The deterministic mapping task was interrupted when Canvas "
+                "closed. Retry uses the same verified proposal and confirmation."
+            )
+            mapping_state.updated_at = self._now()
+            request_record.set_mapping_state(mapping_state)
+            transaction.set_request_record(request_record)
+            transaction.status = "paused"
+            transaction.updated_at = self._now()
+            self.controller.session.set_state("needs_human_confirmation")
+            self._record_with_session_rollback(
+                session_before,
+                {
+                    "event": "assistant_data_mapping_task_interrupted",
+                    "provider": transaction.provider,
+                    "transaction_id": transaction.transaction_id,
+                    "request_id": request_record.parsed_request.request_id,
+                    "revision": self.controller.session.revision,
+                    "interrupted_stage": interrupted_stage,
+                    "recovery_state": mapping_state.status,
+                    "confirmation_preserved": (mapping_state.confirmation is not None),
+                    "publication_document_changed": False,
+                    "raw_inputs_mutated": False,
                 },
             )
             return

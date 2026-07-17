@@ -29,6 +29,7 @@ from sciplot_core.canvas.assistant_contract import (
     DataMappingProposal,
     DataSourceReference,
     DeclarativeTransformation,
+    LegacyDataMappingConfirmation,
 )
 from sciplot_core.materials_rules import convert_value
 from sciplot_core.publication import (
@@ -56,13 +57,9 @@ _SUPPORTED_TABLE_SUFFIXES = frozenset(
     {".csv", ".tsv", ".txt", ".dat", ".tab", ".xlsx", ".xls"}
 )
 _MISSING_STRINGS = frozenset({"", "na", "n/a", "nan", "null", "none"})
-_NUMERIC_COLUMN_ROLES = frozenset(
-    {"x", "y", "z", "value", "x_error", "y_error"}
-)
+_NUMERIC_COLUMN_ROLES = frozenset({"x", "y", "z", "value", "x_error", "y_error"})
 _PRIMARY_NUMERIC_COLUMN_ROLES = frozenset({"x", "y", "z", "value"})
-_DECIMAL_COMMA_NUMBER = re.compile(
-    r"^[+-]?(?:\d+(?:,\d*)?|,\d+)(?:[eE][+-]?\d+)?$"
-)
+_DECIMAL_COMMA_NUMBER = re.compile(r"^[+-]?(?:\d+(?:,\d*)?|,\d+)(?:[eE][+-]?\d+)?$")
 
 
 def _now() -> str:
@@ -105,21 +102,28 @@ def load_data_mapping_proposal(
         return value
     if isinstance(value, dict):
         return DataMappingProposal.from_dict(value)
-    return DataMappingProposal.from_dict(
-        _read_json(Path(value).expanduser().resolve())
-    )
+    return DataMappingProposal.from_dict(_read_json(Path(value).expanduser().resolve()))
 
 
 def load_data_mapping_confirmation(
-    value: DataMappingConfirmation | str | Path | dict[str, Any],
-) -> DataMappingConfirmation:
-    if isinstance(value, DataMappingConfirmation):
+    value: (
+        DataMappingConfirmation
+        | LegacyDataMappingConfirmation
+        | str
+        | Path
+        | dict[str, Any]
+    ),
+) -> DataMappingConfirmation | LegacyDataMappingConfirmation:
+    if isinstance(value, (DataMappingConfirmation, LegacyDataMappingConfirmation)):
         return value
-    if isinstance(value, dict):
-        return DataMappingConfirmation.from_dict(value)
-    return DataMappingConfirmation.from_dict(
-        _read_json(Path(value).expanduser().resolve())
+    payload = (
+        value
+        if isinstance(value, dict)
+        else _read_json(Path(value).expanduser().resolve())
     )
+    if payload.get("version") == 1:
+        return LegacyDataMappingConfirmation.from_dict(payload)
+    return DataMappingConfirmation.from_dict(payload)
 
 
 def _resolve_source_root(value: str | Path) -> Path:
@@ -159,9 +163,7 @@ def _resolve_source_path(
         )
     current_hash = file_sha256(candidate)
     if current_hash != reference.sha256:
-        raise ValueError(
-            f"Data mapping source hash changed: {reference.relative_path}"
-        )
+        raise ValueError(f"Data mapping source hash changed: {reference.relative_path}")
     return candidate
 
 
@@ -195,16 +197,22 @@ def create_data_mapping_confirmation(
     *,
     source_root: str | Path,
     request_path: str | Path,
+    output_root: str | Path,
     confirmed_by: str,
 ) -> DataMappingConfirmation:
     resolved = load_data_mapping_proposal(proposal)
-    _verify_request_binding(resolved, request_path=request_path)
-    verify_data_mapping_sources(resolved, source_root=source_root)
+    resolved_source_root = _resolve_source_root(source_root)
+    resolved_request_path = _verify_request_binding(resolved, request_path=request_path)
+    verify_data_mapping_sources(resolved, source_root=resolved_source_root)
+    resolved_output_root = Path(output_root).expanduser().resolve()
     return DataMappingConfirmation(
         proposal_id=resolved.proposal_id,
         proposal_sha256=data_mapping_proposal_sha256(resolved),
         base_request_sha256=resolved.base_request_sha256,
         source_hashes=resolved.source_hashes,
+        source_root=str(resolved_source_root),
+        request_path=str(resolved_request_path),
+        output_root=str(resolved_output_root),
         confirmed_by=confirmed_by,
     )
 
@@ -225,7 +233,7 @@ def write_data_mapping_confirmation(
 
 def _validate_confirmation(
     proposal: DataMappingProposal,
-    confirmation: DataMappingConfirmation,
+    confirmation: DataMappingConfirmation | LegacyDataMappingConfirmation,
 ) -> None:
     if confirmation.proposal_id != proposal.proposal_id:
         raise ValueError("Data mapping confirmation targets another proposal.")
@@ -235,6 +243,21 @@ def _validate_confirmation(
         raise ValueError("Data mapping confirmation request binding is stale.")
     if confirmation.source_hashes != proposal.source_hashes:
         raise ValueError("Data mapping confirmation source binding is stale.")
+
+
+def _validate_confirmation_paths(
+    confirmation: DataMappingConfirmation,
+    *,
+    source_root: Path,
+    request_path: Path,
+    output_root: Path,
+) -> None:
+    if Path(confirmation.source_root) != source_root.resolve():
+        raise ValueError("Data mapping confirmation source-root binding is stale.")
+    if Path(confirmation.request_path) != request_path.resolve():
+        raise ValueError("Data mapping confirmation request-path binding is stale.")
+    if Path(confirmation.output_root) != output_root.resolve():
+        raise ValueError("Data mapping confirmation output-root binding is stale.")
 
 
 @dataclass
@@ -348,9 +371,7 @@ def _column_mappings_for_source(
     source_id: str,
 ) -> tuple[DataColumnMapping, ...]:
     return tuple(
-        mapping
-        for mapping in proposal.columns
-        if mapping.source_id == source_id
+        mapping for mapping in proposal.columns if mapping.source_id == source_id
     )
 
 
@@ -376,10 +397,7 @@ def _map_columns(
                 f"found {actual_header!r}."
             )
         series = raw.frame.iloc[:, mapping.source_column_index].copy()
-        if (
-            raw.source.decimal == ","
-            and mapping.role in _NUMERIC_COLUMN_ROLES
-        ):
+        if raw.source.decimal == "," and mapping.role in _NUMERIC_COLUMN_ROLES:
             series = series.map(_normalize_decimal_comma)
         if mapping.required and series.notna().sum() == 0:
             raise ValueError(
@@ -470,29 +488,21 @@ def _apply_transformation(
     updated_units = dict(units)
 
     if operation == "rename":
-        columns = {
-            str(key): str(value)
-            for key, value in parameters["columns"].items()
-        }
+        columns = {str(key): str(value) for key, value in parameters["columns"].items()}
         _require_columns(result, list(columns), operation=operation)
-        targets = [
-            columns.get(str(column), str(column)) for column in result.columns
-        ]
+        targets = [columns.get(str(column), str(column)) for column in result.columns]
         if len(set(targets)) != len(targets):
             raise ValueError("rename would create duplicate output columns.")
         result = result.rename(columns=columns)
         updated_units = {
-            columns.get(column, column): unit
-            for column, unit in updated_units.items()
+            columns.get(column, column): unit for column, unit in updated_units.items()
         }
     elif operation == "select":
         columns = [str(column) for column in parameters["columns"]]
         _require_columns(result, columns, operation=operation)
         result = result.loc[:, columns]
         updated_units = {
-            column: unit
-            for column, unit in updated_units.items()
-            if column in columns
+            column: unit for column, unit in updated_units.items() if column in columns
         }
     elif operation == "exclude":
         if "columns" in parameters:
@@ -527,9 +537,7 @@ def _apply_transformation(
             result = result.loc[~combined]
         result = result.reset_index(drop=True)
     elif operation == "drop_missing":
-        columns = [
-            str(column) for column in parameters.get("columns", result.columns)
-        ]
+        columns = [str(column) for column in parameters.get("columns", result.columns)]
         _require_columns(result, columns, operation=operation)
         result = result.dropna(
             axis=0,
@@ -562,9 +570,7 @@ def _apply_transformation(
             )
         )
         if output != column and output in result.columns:
-            raise ValueError(
-                f"unit_convert output column already exists: {output!r}"
-            )
+            raise ValueError(f"unit_convert output column already exists: {output!r}")
         result[output] = converted
         updated_units[output] = str(parameters["to_unit"])
     elif operation == "derive_ratio":
@@ -580,20 +586,14 @@ def _apply_transformation(
         zero = denominator == 0.0
         if zero.any() and parameters.get("zero_policy", "error") == "error":
             rows = [int(index) for index in denominator.index[zero].tolist()[:8]]
-            raise ValueError(
-                f"derive_ratio denominator is zero at rows {rows}."
-            )
+            raise ValueError(f"derive_ratio denominator is zero at rows {rows}.")
         denominator = denominator.mask(zero)
-        result[output] = (
-            numerator / denominator * float(parameters.get("scale", 1.0))
-        )
+        result[output] = numerator / denominator * float(parameters.get("scale", 1.0))
     elif operation == "normalize_baseline":
         column = str(parameters["column"])
         output = str(parameters["output"])
         if output in result.columns:
-            raise ValueError(
-                f"normalize_baseline output column exists: {output!r}"
-            )
+            raise ValueError(f"normalize_baseline output column exists: {output!r}")
         numeric = _numeric_series(result, column, operation=operation)
         finite = numeric[numeric.map(math.isfinite)]
         if finite.empty:
@@ -606,9 +606,7 @@ def _apply_transformation(
         elif method == "max_abs":
             baseline = float(finite.abs().max())
         elif method == "mean_first_n":
-            baseline = float(
-                finite.iloc[: int(parameters["n"])].mean()
-            )
+            baseline = float(finite.iloc[: int(parameters["n"])].mean())
         else:
             baseline = float(parameters["value"])
         if not math.isfinite(baseline) or baseline == 0.0:
@@ -619,16 +617,10 @@ def _apply_transformation(
         updated_units[output] = "1"
     elif operation == "aggregate_replicates":
         group_by = [str(column) for column in parameters["group_by"]]
-        value_columns = [
-            str(column) for column in parameters["value_columns"]
-        ]
-        _require_columns(
-            result, [*group_by, *value_columns], operation=operation
-        )
+        value_columns = [str(column) for column in parameters["value_columns"]]
+        _require_columns(result, [*group_by, *value_columns], operation=operation)
         for column in value_columns:
-            result[column] = _numeric_series(
-                result, column, operation=operation
-            )
+            result[column] = _numeric_series(result, column, operation=operation)
         grouped = result.groupby(group_by, dropna=False, sort=False)
         method = str(parameters.get("method") or "mean")
         if method == "mean":
@@ -636,9 +628,7 @@ def _apply_transformation(
         else:
             result = grouped[value_columns].median().reset_index()
         if parameters.get("include_count", True):
-            count_column = str(
-                parameters.get("count_column") or "replicate_count"
-            )
+            count_column = str(parameters.get("count_column") or "replicate_count")
             if count_column in result.columns:
                 raise ValueError(
                     f"aggregate count column already exists: {count_column!r}"
@@ -658,25 +648,27 @@ def _apply_transformation(
     else:
         raise ValueError(f"Unsupported declarative transformation: {operation}")
 
-    return result, updated_units, {
-        "transformation_id": transformation.transformation_id,
-        "transformation_type": operation,
-        "source_ids": list(transformation.source_ids),
-        "parameters": json_safe(parameters),
-        "rows_before": before_rows,
-        "rows_after": int(result.shape[0]),
-        "columns_before": before_columns,
-        "columns_after": [str(column) for column in result.columns],
-    }
+    return (
+        result,
+        updated_units,
+        {
+            "transformation_id": transformation.transformation_id,
+            "transformation_type": operation,
+            "source_ids": list(transformation.source_ids),
+            "parameters": json_safe(parameters),
+            "rows_before": before_rows,
+            "rows_after": int(result.shape[0]),
+            "columns_before": before_columns,
+            "columns_after": [str(column) for column in result.columns],
+        },
+    )
 
 
 def _apply_source_mapping(
     proposal: DataMappingProposal,
     raw: _RawTable,
 ) -> tuple[pd.DataFrame, dict[str, str], list[dict[str, Any]]]:
-    mappings = _column_mappings_for_source(
-        proposal, raw.source.source_id
-    )
+    mappings = _column_mappings_for_source(proposal, raw.source.source_id)
     frame = _map_columns(raw, mappings)
     primary_numeric_columns = {
         mapping.output_column
@@ -695,32 +687,24 @@ def _apply_source_mapping(
             and raw.source.source_id not in transformation.source_ids
         ):
             continue
-        frame, units, event = _apply_transformation(
-            frame, units, transformation
-        )
+        frame, units, event = _apply_transformation(frame, units, transformation)
         parameters = transformation.parameters
         operation = transformation.transformation_type
         if operation == "rename":
             renamed = parameters["columns"]
             primary_numeric_columns = {
-                str(renamed.get(column, column))
-                for column in primary_numeric_columns
+                str(renamed.get(column, column)) for column in primary_numeric_columns
             }
         elif operation == "select":
             selected = {str(column) for column in parameters["columns"]}
             primary_numeric_columns &= selected
         elif operation == "exclude" and "columns" in parameters:
-            primary_numeric_columns -= {
-                str(column) for column in parameters["columns"]
-            }
+            primary_numeric_columns -= {str(column) for column in parameters["columns"]}
         elif operation == "unit_convert":
             source_column = str(parameters["column"])
             if source_column in primary_numeric_columns:
                 primary_numeric_columns.add(
-                    str(
-                        parameters.get("output_column")
-                        or source_column
-                    )
+                    str(parameters.get("output_column") or source_column)
                 )
         elif operation == "derive_ratio":
             if {
@@ -751,9 +735,7 @@ def _apply_source_mapping(
         raise ValueError(
             f"Data mapping removed every row from {raw.source.source_id!r}."
         )
-    primary_numeric_columns &= {
-        str(column) for column in frame.columns
-    }
+    primary_numeric_columns &= {str(column) for column in frame.columns}
     if not primary_numeric_columns:
         raise ValueError(
             "Data mapping removed every numeric x, y, z, or value column "
@@ -768,10 +750,7 @@ def _apply_source_mapping(
         )
         infinite = numeric.notna() & ~numeric.map(math.isfinite)
         if infinite.any():
-            rows = [
-                int(index)
-                for index in numeric.index[infinite].tolist()[:8]
-            ]
+            rows = [int(index) for index in numeric.index[infinite].tolist()[:8]]
             raise ValueError(
                 "Final data mapping validation found non-finite values "
                 f"in {column!r} at rows {rows}."
@@ -798,20 +777,14 @@ def _prepare_mapping_frames(
     dict[str, list[dict[str, Any]]],
     dict[str, tuple[str, ...]],
 ]:
-    resolved_sources = verify_data_mapping_sources(
-        proposal, source_root=source_root
-    )
+    resolved_sources = verify_data_mapping_sources(proposal, source_root=source_root)
     frames: dict[str, pd.DataFrame] = {}
     units: dict[str, dict[str, str]] = {}
     events: dict[str, list[dict[str, Any]]] = {}
     headers: dict[str, tuple[str, ...]] = {}
     for reference in proposal.sources:
-        raw = _read_raw_table(
-            reference, resolved_sources[reference.source_id]
-        )
-        mapped, mapped_units, mapped_events = _apply_source_mapping(
-            proposal, raw
-        )
+        raw = _read_raw_table(reference, resolved_sources[reference.source_id])
+        mapped, mapped_units, mapped_events = _apply_source_mapping(proposal, raw)
         frames[reference.source_id] = mapped
         units[reference.source_id] = mapped_units
         events[reference.source_id] = mapped_events
@@ -846,21 +819,16 @@ def preview_data_mapping_proposal(
                 "source_id": reference.source_id,
                 "relative_path": reference.relative_path,
                 "sha256": reference.sha256,
-                "source_size_bytes": sources[
-                    reference.source_id
-                ].stat().st_size,
+                "source_size_bytes": sources[reference.source_id].stat().st_size,
                 "detected_headers": list(headers[reference.source_id]),
                 "mapped_columns": [
-                    str(column)
-                    for column in frames[reference.source_id].columns
+                    str(column) for column in frames[reference.source_id].columns
                 ],
                 "row_count": int(frames[reference.source_id].shape[0]),
                 "column_count": int(frames[reference.source_id].shape[1]),
                 "units": dict(units[reference.source_id]),
                 "transformations": events[reference.source_id],
-                "sample_label": resolved.sample_labels.get(
-                    reference.source_id
-                ),
+                "sample_label": resolved.sample_labels.get(reference.source_id),
             }
             for reference in resolved.sources
         ],
@@ -893,9 +861,7 @@ def _safe_output_name(
     fallback = safe_filename(f"{stem}__{reference.source_id}.csv")
     index = 2
     while _filename_collision_key(fallback) in used:
-        fallback = safe_filename(
-            f"{stem}__{reference.source_id}_{index}.csv"
-        )
+        fallback = safe_filename(f"{stem}__{reference.source_id}_{index}.csv")
         index += 1
     used.add(_filename_collision_key(fallback))
     return fallback
@@ -933,10 +899,7 @@ def _rebase_paths(value: Any, *, source: Path, target: Path) -> Any:
             for key, item in value.items()
         }
     if isinstance(value, list):
-        return [
-            _rebase_paths(item, source=source, target=target)
-            for item in value
-        ]
+        return [_rebase_paths(item, source=source, target=target) for item in value]
     if isinstance(value, str):
         prefix = str(source)
         if value == prefix:
@@ -947,9 +910,7 @@ def _rebase_paths(value: Any, *, source: Path, target: Path) -> Any:
 
 
 def _stable_id(prefix: str, value: str, used: set[str]) -> str:
-    token = re.sub(
-        r"[^0-9A-Za-z]+", "_", str(value).strip().casefold()
-    ).strip("_")
+    token = re.sub(r"[^0-9A-Za-z]+", "_", str(value).strip().casefold()).strip("_")
     base = f"{prefix}_{token or 'item'}"
     candidate = base
     index = 2
@@ -1044,9 +1005,7 @@ def _rebind_study_model(
         for old_id in old_ids:
             old_to_new_sample[old_id] = sample_id
         replicates: list[dict[str, Any]] = []
-        for replicate_order, (_old_id, replicate) in enumerate(
-            members, start=1
-        ):
+        for replicate_order, (_old_id, replicate) in enumerate(members, start=1):
             item = deepcopy(replicate)
             replicate_id = str(item.get("id") or "")
             if not replicate_id or replicate_id in used_replicate_ids:
@@ -1078,9 +1037,9 @@ def _rebind_study_model(
     rebound["samples"] = samples
     rebound["sample_order"] = [sample["name"] for sample in samples]
     if "replicate_mode" in proposal.request_patch:
-        rebound.setdefault("replicate_policy", {})["mode"] = (
-            proposal.request_patch["replicate_mode"]
-        )
+        rebound.setdefault("replicate_policy", {})["mode"] = proposal.request_patch[
+            "replicate_mode"
+        ]
     valid_source_refs = {
         str(replicate.get("id"))
         for sample in samples
@@ -1097,14 +1056,10 @@ def _rebind_study_model(
             else {}
         )
         old_source_refs = [
-            str(item)
-            for item in evidence.get("source_refs", [])
-            if str(item)
+            str(item) for item in evidence.get("source_refs", []) if str(item)
         ]
         old_sample_refs = [
-            str(item)
-            for item in evidence.get("sample_refs", [])
-            if str(item)
+            str(item) for item in evidence.get("sample_refs", []) if str(item)
         ]
         evidence["source_refs"] = [
             item for item in old_source_refs if item in valid_source_refs
@@ -1168,9 +1123,7 @@ def _candidate_request(
             render_options["series_include"] = list(series_order)
         if render_options:
             request["render_options"] = render_options
-    rebound = _rebind_study_model(
-        request, proposal, source_root=source_root
-    )
+    rebound = _rebind_study_model(request, proposal, source_root=source_root)
     if rebound is not None:
         request["study_model"] = rebound
     notes = (
@@ -1196,9 +1149,7 @@ def _validate_existing_execution(
     request_path: Path,
 ) -> dict[str, Any]:
     manifest = load_data_mapping_execution(execution_path)
-    if manifest.get("proposal_sha256") != data_mapping_proposal_sha256(
-        proposal
-    ):
+    if manifest.get("proposal_sha256") != data_mapping_proposal_sha256(proposal):
         raise ValueError(
             "Existing data mapping output belongs to different proposal content."
         )
@@ -1216,7 +1167,7 @@ def _validate_existing_execution(
 
 def _mapping_step_parameters(
     proposal: DataMappingProposal,
-    confirmation: DataMappingConfirmation,
+    confirmation: DataMappingConfirmation | LegacyDataMappingConfirmation,
 ) -> dict[str, Any]:
     return {
         "proposal_id": proposal.proposal_id,
@@ -1225,12 +1176,9 @@ def _mapping_step_parameters(
         "confirmation_id": confirmation.confirmation_id,
         "confirmed_by": confirmation.confirmed_by,
         "source_hashes": proposal.source_hashes,
-        "column_mappings": [
-            mapping.to_dict() for mapping in proposal.columns
-        ],
+        "column_mappings": [mapping.to_dict() for mapping in proposal.columns],
         "transformations": [
-            transformation.to_dict()
-            for transformation in proposal.transformations
+            transformation.to_dict() for transformation in proposal.transformations
         ],
         "request_patch": proposal.request_patch,
         "raw_sources_preserved": True,
@@ -1240,7 +1188,13 @@ def _mapping_step_parameters(
 
 def execute_data_mapping_proposal(
     proposal: DataMappingProposal | str | Path | dict[str, Any],
-    confirmation: DataMappingConfirmation | str | Path | dict[str, Any],
+    confirmation: (
+        DataMappingConfirmation
+        | LegacyDataMappingConfirmation
+        | str
+        | Path
+        | dict[str, Any]
+    ),
     *,
     source_root: str | Path,
     request_path: str | Path,
@@ -1249,9 +1203,19 @@ def execute_data_mapping_proposal(
     resolved = load_data_mapping_proposal(proposal)
     receipt = load_data_mapping_confirmation(confirmation)
     _validate_confirmation(resolved, receipt)
+    if isinstance(receipt, LegacyDataMappingConfirmation):
+        raise ValueError(
+            "DataMappingConfirmation v1 is inspectable only; explicitly "
+            "reconfirm the normalized source, request, and output paths before execution."
+        )
     root = _resolve_source_root(source_root)
-    request_file = _verify_request_binding(
-        resolved, request_path=request_path
+    request_file = _verify_request_binding(resolved, request_path=request_path)
+    mapping_root = Path(output_root).expanduser().resolve()
+    _validate_confirmation_paths(
+        receipt,
+        source_root=root,
+        request_path=request_file,
+        output_root=mapping_root,
     )
     base_request = _read_json(request_file)
     preview = preview_data_mapping_proposal(
@@ -1262,7 +1226,6 @@ def execute_data_mapping_proposal(
     sources, frames, units, events, _headers = _prepare_mapping_frames(
         resolved, source_root=root
     )
-    mapping_root = Path(output_root).expanduser().resolve()
     mapping_root.mkdir(parents=True, exist_ok=True)
     final_root = mapping_root / resolved.proposal_id
     final_execution = final_root / DATA_MAPPING_EXECUTION_FILENAME
@@ -1290,9 +1253,7 @@ def execute_data_mapping_proposal(
         output_labels: list[str] = []
         output_paths: list[Path] = []
         for reference in resolved.sources:
-            filename = _safe_output_name(
-                reference, resolved, used=used_names
-            )
+            filename = _safe_output_name(reference, resolved, used=used_names)
             destination = data_dir / filename
             frame = frames[reference.source_id]
             _write_mapped_csv(destination, frame)
@@ -1308,18 +1269,14 @@ def execute_data_mapping_proposal(
                     "rows": int(frame.shape[0]),
                     "columns": [str(column) for column in frame.columns],
                     "units": dict(units[reference.source_id]),
-                    "sample_label": resolved.sample_labels.get(
-                        reference.source_id
-                    ),
+                    "sample_label": resolved.sample_labels.get(reference.source_id),
                     "transformations": events[reference.source_id],
                 }
             )
 
         if not output_paths:
             raise ValueError("Data mapping produced no output tables.")
-        effective_input = (
-            output_paths[0] if len(output_paths) == 1 else data_dir
-        )
+        effective_input = output_paths[0] if len(output_paths) == 1 else data_dir
         proposal_hash = data_mapping_proposal_sha256(resolved)
         step = build_transform_step(
             step_id=f"data_mapping_{resolved.proposal_id}",
@@ -1332,9 +1289,7 @@ def execute_data_mapping_proposal(
             ),
             parameters=_mapping_step_parameters(resolved, receipt),
         )
-        final_step = _rebase_paths(
-            step, source=temporary, target=final_root
-        )
+        final_step = _rebase_paths(step, source=temporary, target=final_root)
         study_model = (
             base_request.get("study_model")
             if isinstance(base_request.get("study_model"), dict)
@@ -1374,9 +1329,7 @@ def execute_data_mapping_proposal(
             superseded_ledger_path=superseded_ledger_path,
         )
         proposal_path = temporary / DATA_MAPPING_PROPOSAL_FILENAME
-        confirmation_path = (
-            temporary / DATA_MAPPING_CONFIRMATION_FILENAME
-        )
+        confirmation_path = temporary / DATA_MAPPING_CONFIRMATION_FILENAME
         preview_path = temporary / DATA_MAPPING_PREVIEW_FILENAME
         request_candidate_path = temporary / DATA_MAPPING_REQUEST_FILENAME
         request_seed_path = temporary / DATA_MAPPING_REQUEST_SEED_FILENAME
@@ -1398,17 +1351,12 @@ def execute_data_mapping_proposal(
         _write_json(request_seed_path, candidate)
         _write_json(request_candidate_path, candidate)
 
-        rebased_outputs = _rebase_paths(
-            outputs, source=temporary, target=final_root
-        )
+        rebased_outputs = _rebase_paths(outputs, source=temporary, target=final_root)
         raw_hashes_after = {
-            source_id: file_sha256(path)
-            for source_id, path in sources.items()
+            source_id: file_sha256(path) for source_id, path in sources.items()
         }
         if raw_hashes_after != raw_hashes_before:
-            raise RuntimeError(
-                "Raw source hash changed during data mapping execution."
-            )
+            raise RuntimeError("Raw source hash changed during data mapping execution.")
         manifest = {
             "kind": DATA_MAPPING_EXECUTION_KIND,
             "version": DATA_MAPPING_EXECUTION_VERSION,
@@ -1427,9 +1375,7 @@ def execute_data_mapping_proposal(
             "base_request_snapshot": str(
                 final_root / DATA_MAPPING_BASE_REQUEST_FILENAME
             ),
-            "base_request_snapshot_sha256": file_sha256(
-                base_request_path
-            ),
+            "base_request_snapshot_sha256": file_sha256(base_request_path),
             "source_root": str(root),
             "source_hashes": resolved.source_hashes,
             "raw_hashes_before": raw_hashes_before,
@@ -1441,22 +1387,12 @@ def execute_data_mapping_proposal(
                 str(effective_input), source=temporary, target=final_root
             ),
             "outputs": rebased_outputs,
-            "proposal": str(
-                final_root / DATA_MAPPING_PROPOSAL_FILENAME
-            ),
-            "confirmation": str(
-                final_root / DATA_MAPPING_CONFIRMATION_FILENAME
-            ),
+            "proposal": str(final_root / DATA_MAPPING_PROPOSAL_FILENAME),
+            "confirmation": str(final_root / DATA_MAPPING_CONFIRMATION_FILENAME),
             "preview": str(final_root / DATA_MAPPING_PREVIEW_FILENAME),
-            "request_candidate": str(
-                final_root / DATA_MAPPING_REQUEST_FILENAME
-            ),
-            "request_candidate_initial_sha256": file_sha256(
-                request_candidate_path
-            ),
-            "request_seed": str(
-                final_root / DATA_MAPPING_REQUEST_SEED_FILENAME
-            ),
+            "request_candidate": str(final_root / DATA_MAPPING_REQUEST_FILENAME),
+            "request_candidate_initial_sha256": file_sha256(request_candidate_path),
+            "request_seed": str(final_root / DATA_MAPPING_REQUEST_SEED_FILENAME),
             "request_seed_sha256": file_sha256(request_seed_path),
             "transform_ledger": str(final_root / "transform_ledger.json"),
             "transform_ledger_sha256": file_sha256(ledger_path),
@@ -1503,8 +1439,7 @@ def load_data_mapping_execution(
         or execution_version != DATA_MAPPING_EXECUTION_VERSION
     ):
         raise ValueError(
-            "Unsupported data mapping execution version: "
-            f"{execution_version!r}"
+            f"Unsupported data mapping execution version: {execution_version!r}"
         )
     if payload.get("status") != "passed":
         raise ValueError("Data mapping execution is not in passed state.")
@@ -1512,26 +1447,20 @@ def load_data_mapping_execution(
         return payload
     execution_root = path.parent.resolve()
     proposal_path = Path(str(payload.get("proposal") or "")).expanduser()
-    confirmation_path = Path(
-        str(payload.get("confirmation") or "")
-    ).expanduser()
+    confirmation_path = Path(str(payload.get("confirmation") or "")).expanduser()
     expected_paths = {
         "proposal": execution_root / DATA_MAPPING_PROPOSAL_FILENAME,
         "confirmation": execution_root / DATA_MAPPING_CONFIRMATION_FILENAME,
         "preview": execution_root / DATA_MAPPING_PREVIEW_FILENAME,
         "request_candidate": execution_root / DATA_MAPPING_REQUEST_FILENAME,
         "request_seed": execution_root / DATA_MAPPING_REQUEST_SEED_FILENAME,
-        "base_request_snapshot": (
-            execution_root / DATA_MAPPING_BASE_REQUEST_FILENAME
-        ),
+        "base_request_snapshot": (execution_root / DATA_MAPPING_BASE_REQUEST_FILENAME),
         "transform_ledger": execution_root / "transform_ledger.json",
     }
     for field, expected_path in expected_paths.items():
         recorded = Path(str(payload.get(field) or "")).expanduser().resolve()
         if recorded != expected_path.resolve():
-            raise ValueError(
-                f"Data mapping execution {field} path is not canonical."
-            )
+            raise ValueError(f"Data mapping execution {field} path is not canonical.")
         if not expected_path.is_file():
             raise FileNotFoundError(
                 f"Data mapping execution {field} is missing: {expected_path}"
@@ -1543,9 +1472,28 @@ def load_data_mapping_execution(
     proposal = load_data_mapping_proposal(proposal_path)
     confirmation = load_data_mapping_confirmation(confirmation_path)
     _validate_confirmation(proposal, confirmation)
-    if data_mapping_proposal_sha256(proposal) != payload.get(
-        "proposal_sha256"
-    ):
+    legacy_confirmation = isinstance(confirmation, LegacyDataMappingConfirmation)
+    manifest_source_root = (
+        Path(str(payload.get("source_root") or "")).expanduser().resolve()
+    )
+    manifest_request_path = (
+        Path(str(payload.get("base_request") or "")).expanduser().resolve()
+    )
+    if not legacy_confirmation:
+        _validate_confirmation_paths(
+            confirmation,
+            source_root=manifest_source_root,
+            request_path=manifest_request_path,
+            output_root=execution_root.parent,
+        )
+        expected_execution_root = (
+            Path(confirmation.output_root) / proposal.proposal_id
+        ).resolve()
+        if execution_root != expected_execution_root:
+            raise ValueError(
+                "Data mapping execution path does not match the confirmed output root."
+            )
+    if data_mapping_proposal_sha256(proposal) != payload.get("proposal_sha256"):
         raise ValueError("Data mapping execution proposal hash mismatch.")
     if confirmation.confirmation_id != payload.get("confirmation_id"):
         raise ValueError("Data mapping execution confirmation mismatch.")
@@ -1561,14 +1509,10 @@ def load_data_mapping_execution(
         str(payload.get("base_request_snapshot") or "")
     ).expanduser()
     if (
-        file_sha256(base_request_snapshot)
-        != proposal.base_request_sha256
-        or payload.get("base_request_snapshot_sha256")
-        != proposal.base_request_sha256
+        file_sha256(base_request_snapshot) != proposal.base_request_sha256
+        or payload.get("base_request_snapshot_sha256") != proposal.base_request_sha256
     ):
-        raise ValueError(
-            "Data mapping execution base-request snapshot hash mismatch."
-        )
+        raise ValueError("Data mapping execution base-request snapshot hash mismatch.")
     base_request_payload = _read_json(base_request_snapshot)
     if payload.get("source_hashes") != proposal.source_hashes:
         raise ValueError("Data mapping execution source binding mismatch.")
@@ -1599,16 +1543,12 @@ def load_data_mapping_execution(
             raise ValueError("Data mapping output record must be an object.")
         source_id = str(output.get("source_id") or "")
         if source_id in output_by_source:
-            raise ValueError(
-                f"Duplicate mapped output source ID: {source_id!r}"
-            )
+            raise ValueError(f"Duplicate mapped output source ID: {source_id!r}")
         output_by_source[source_id] = output
     if set(output_by_source) != {source.source_id for source in proposal.sources}:
         raise ValueError("Data mapping output source IDs do not match proposal.")
     data_dir = execution_root / "data"
-    if Path(str(payload.get("data_dir") or "")).expanduser().resolve() != (
-        data_dir
-    ):
+    if Path(str(payload.get("data_dir") or "")).expanduser().resolve() != (data_dir):
         raise ValueError("Data mapping execution data_dir is inconsistent.")
     used_names: set[str] = set()
     expected_output_paths: list[Path] = []
@@ -1621,22 +1561,16 @@ def load_data_mapping_execution(
         )
         output_path = Path(str(output.get("path") or "")).expanduser()
         if output_path.resolve() != expected_path.resolve():
-            raise ValueError(
-                f"Mapped output path changed for {reference.source_id!r}."
-            )
+            raise ValueError(f"Mapped output path changed for {reference.source_id!r}.")
         if not expected_path.is_file():
-            raise FileNotFoundError(
-                f"Mapped data output not found: {expected_path}"
-            )
+            raise FileNotFoundError(f"Mapped data output not found: {expected_path}")
         expected_frame = frames[reference.source_id]
         expected_hash = _mapped_csv_sha256(expected_frame)
         if (
             file_sha256(expected_path) != expected_hash
             or output.get("sha256") != expected_hash
         ):
-            raise ValueError(
-                f"Mapped data output does not reproduce: {expected_path}"
-            )
+            raise ValueError(f"Mapped data output does not reproduce: {expected_path}")
         expected_record = {
             "source_relative_path": reference.relative_path,
             "source_sha256": reference.sha256,
@@ -1654,19 +1588,15 @@ def load_data_mapping_execution(
                 )
         expected_output_paths.append(expected_path)
     expected_effective_input = (
-        expected_output_paths[0]
-        if len(expected_output_paths) == 1
-        else data_dir
+        expected_output_paths[0] if len(expected_output_paths) == 1 else data_dir
     )
-    if Path(
-        str(payload.get("effective_input") or "")
-    ).expanduser().resolve() != expected_effective_input.resolve():
+    if (
+        Path(str(payload.get("effective_input") or "")).expanduser().resolve()
+        != expected_effective_input.resolve()
+    ):
         raise ValueError("Data mapping execution effective_input is inconsistent.")
     seed = Path(str(payload.get("request_seed") or "")).expanduser()
-    if (
-        not seed.is_file()
-        or file_sha256(seed) != payload.get("request_seed_sha256")
-    ):
+    if not seed.is_file() or file_sha256(seed) != payload.get("request_seed_sha256"):
         raise ValueError("Immutable mapped request seed hash mismatch.")
     seed_payload = _read_json(seed)
     if payload.get("request_candidate_initial_sha256") != payload.get(
@@ -1678,13 +1608,9 @@ def load_data_mapping_execution(
     if seed_payload.get("data_mapping_execution") != str(path):
         raise ValueError("Immutable mapped request seed execution link mismatch.")
     if seed_payload.get("input") != base_request_payload.get("input"):
-        raise ValueError(
-            "Immutable mapped request seed changed raw input authority."
-        )
+        raise ValueError("Immutable mapped request seed changed raw input authority.")
     if seed_payload.get("data_mapping_proposal_id") != proposal.proposal_id:
-        raise ValueError(
-            "Immutable mapped request seed changed proposal identity."
-        )
+        raise ValueError("Immutable mapped request seed changed proposal identity.")
     if seed_payload.get("output") != str(execution_root / "run"):
         raise ValueError(
             "Immutable mapped request seed changed its isolated output root."
@@ -1695,9 +1621,8 @@ def load_data_mapping_execution(
                 f"Immutable mapped request seed changed confirmed field {key!r}."
             )
     ledger = Path(str(payload.get("transform_ledger") or "")).expanduser()
-    if (
-        not ledger.is_file()
-        or file_sha256(ledger) != payload.get("transform_ledger_sha256")
+    if not ledger.is_file() or file_sha256(ledger) != payload.get(
+        "transform_ledger_sha256"
     ):
         raise ValueError("Active data mapping transform ledger hash mismatch.")
     ledger_payload = _read_json(ledger)
@@ -1718,8 +1643,7 @@ def load_data_mapping_execution(
     mapping_step = transform_steps[0]
     if (
         mapping_step.get("id") != f"data_mapping_{proposal.proposal_id}"
-        or mapping_step.get("operation")
-        != "execute_confirmed_data_mapping_proposal"
+        or mapping_step.get("operation") != "execute_confirmed_data_mapping_proposal"
         or mapping_step.get("implementation_ref")
         != "sciplot_core.data_mapping.execute_data_mapping_proposal"
         or mapping_step.get("parameters")
@@ -1733,22 +1657,15 @@ def load_data_mapping_execution(
         not isinstance(step_inputs, list)
         or len(step_inputs) != 1
         or not isinstance(step_inputs[0], dict)
-        or Path(
-            str(step_inputs[0].get("path") or "")
-        ).expanduser().resolve()
+        or Path(str(step_inputs[0].get("path") or "")).expanduser().resolve()
         != source_root
     ):
-        raise ValueError(
-            "Active data mapping step changed its confirmed source root."
-        )
+        raise ValueError("Active data mapping step changed its confirmed source root.")
     step_outputs = mapping_step.get("output_artifacts")
-    if (
-        not isinstance(step_outputs, list)
-        or len(step_outputs) != len(expected_output_paths)
+    if not isinstance(step_outputs, list) or len(step_outputs) != len(
+        expected_output_paths
     ):
-        raise ValueError(
-            "Active data mapping step output inventory mismatch."
-        )
+        raise ValueError("Active data mapping step output inventory mismatch.")
     for artifact, expected_path in zip(
         step_outputs,
         expected_output_paths,
@@ -1756,34 +1673,24 @@ def load_data_mapping_execution(
     ):
         if (
             not isinstance(artifact, dict)
-            or Path(
-                str(artifact.get("path") or "")
-            ).expanduser().resolve()
+            or Path(str(artifact.get("path") or "")).expanduser().resolve()
             != expected_path
             or artifact.get("sha256") != file_sha256(expected_path)
         ):
-            raise ValueError(
-                "Active data mapping step output evidence mismatch."
-            )
+            raise ValueError("Active data mapping step output evidence mismatch.")
     if payload.get("raw_inputs_unchanged") is not True:
         raise ValueError(
             "Data mapping execution does not prove raw-input immutability."
         )
-    superseded_ledger_value = payload.get(
-        "superseded_base_transform_ledger"
-    )
+    superseded_ledger_value = payload.get("superseded_base_transform_ledger")
     base_transform_ledger = (
         base_request_payload.get("transform_ledger")
         if isinstance(base_request_payload.get("transform_ledger"), dict)
         else None
     )
     if base_transform_ledger is not None:
-        superseded_ledger = Path(
-            str(superseded_ledger_value or "")
-        ).expanduser()
-        expected_superseded = (
-            execution_root / DATA_MAPPING_BASE_LEDGER_FILENAME
-        )
+        superseded_ledger = Path(str(superseded_ledger_value or "")).expanduser()
+        expected_superseded = execution_root / DATA_MAPPING_BASE_LEDGER_FILENAME
         if (
             superseded_ledger.resolve() != expected_superseded.resolve()
             or not superseded_ledger.is_file()
@@ -1793,17 +1700,19 @@ def load_data_mapping_execution(
             or seed_payload.get("data_mapping_superseded_transform_ledger")
             != str(expected_superseded)
         ):
-            raise ValueError(
-                "Superseded base transform ledger hash mismatch."
-            )
+            raise ValueError("Superseded base transform ledger hash mismatch.")
     elif (
         superseded_ledger_value is not None
         or payload.get("superseded_base_transform_ledger_sha256") is not None
     ):
-        raise ValueError(
-            "Data mapping execution invented superseded base lineage."
-        )
-    return payload
+        raise ValueError("Data mapping execution invented superseded base lineage.")
+    verified = deepcopy(payload)
+    verified["confirmation_schema_version"] = 1 if legacy_confirmation else 2
+    verified["confirmation_migration_required"] = legacy_confirmation
+    verified["handoff_allowed"] = not legacy_confirmation
+    if legacy_confirmation:
+        verified["ready_to_use"] = False
+    return verified
 
 
 def resolve_data_mapping_request(
@@ -1820,9 +1729,12 @@ def resolve_data_mapping_request(
             Path(base_dir).expanduser().resolve() / execution_path
         ).resolve()
     execution = load_data_mapping_execution(execution_path)
-    seed_payload = _read_json(
-        Path(str(execution["request_seed"])).expanduser()
-    )
+    if execution.get("handoff_allowed") is not True:
+        raise ValueError(
+            "Mapped execution uses a path-unbound v1 confirmation; explicit "
+            "v2 reconfirmation is required before rendering or handoff."
+        )
+    seed_payload = _read_json(Path(str(execution["request_seed"])).expanduser())
     if request.get("input") != seed_payload.get("input"):
         raise ValueError(
             "Mapped project raw input no longer matches its immutable request seed."
@@ -1831,13 +1743,9 @@ def resolve_data_mapping_request(
         raise ValueError(
             "Mapped project proposal ID no longer matches its verified execution."
         )
-    effective_input = Path(
-        str(execution.get("effective_input") or "")
-    ).expanduser()
+    effective_input = Path(str(execution.get("effective_input") or "")).expanduser()
     if not effective_input.exists():
-        raise FileNotFoundError(
-            f"Mapped effective input not found: {effective_input}"
-        )
+        raise FileNotFoundError(f"Mapped effective input not found: {effective_input}")
     effective = deepcopy(request)
     effective.update(deepcopy(execution.get("request_patch") or {}))
     original_input = effective.get("input")
@@ -1848,9 +1756,7 @@ def resolve_data_mapping_request(
             "path": str(output.get("path") or ""),
             "sha256": str(output.get("sha256") or ""),
             "rows": int(output.get("rows") or 0),
-            "columns": [
-                str(column) for column in output.get("columns", [])
-            ],
+            "columns": [str(column) for column in output.get("columns", [])],
             "sample_label": (
                 str(output["sample_label"])
                 if output.get("sample_label") is not None

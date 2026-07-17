@@ -18,8 +18,15 @@ from sciplot_core.canvas._validation import (
 )
 
 CANVAS_SESSION_KIND = "sciplot_canvas_session"
-CANVAS_SESSION_VERSION = 5
-CANVAS_SESSION_COMPATIBLE_VERSIONS = {1, 2, 3, 4, CANVAS_SESSION_VERSION}
+CANVAS_SESSION_VERSION = 6
+CANVAS_SESSION_COMPATIBLE_VERSIONS = {
+    1,
+    2,
+    3,
+    4,
+    5,
+    CANVAS_SESSION_VERSION,
+}
 CANVAS_SESSION_STATES = {
     "preparing",
     "canvas_ready",

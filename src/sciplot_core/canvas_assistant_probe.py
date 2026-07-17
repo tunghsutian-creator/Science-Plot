@@ -13,6 +13,11 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core._utils import file_sha256, json_safe
+from sciplot_core.canvas.assistant_contract import (
+    DataColumnMapping,
+    DataMappingProposal,
+    DataSourceReference,
+)
 from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 from sciplot_core.canvas.persistence import read_operation_journal
 from sciplot_core.canvas.provider import (
@@ -239,11 +244,66 @@ class _DeterministicCanvasProvider:
             provider_id=request.provider_id,
             request_sha256=request.payload_sha256,
             status="proposal",
-            understanding=(
-                "A deliberately late proposal returned after cancellation."
-            ),
+            understanding=("A deliberately late proposal returned after cancellation."),
             proposal_kind="canvas_operation_batch",
             proposal=late_batch.to_dict(),
+        )
+
+
+class _DeterministicMappingProvider:
+    """Return one hash-bound DataMappingProposal for the real Canvas UI."""
+
+    def __init__(self) -> None:
+        self.descriptor = AssistantProviderDescriptor(
+            provider_id="assistant_probe_mapping_provider",
+            display_name="SciPlot Mapping Probe",
+            model_label="deterministic",
+            capabilities=("data_mapping_proposal",),
+        )
+        self.proposal: DataMappingProposal | None = None
+        self.worker_thread_ids: list[int] = []
+
+    def configure(self, proposal: DataMappingProposal) -> None:
+        restored = DataMappingProposal.from_dict(proposal.to_dict())
+        if restored.provider != self.descriptor.provider_id:
+            raise ValueError("Mapping proposal provider does not match descriptor.")
+        self.proposal = restored
+
+    def generate(
+        self,
+        request: AssistantRequest,
+        *,
+        emit_progress: Any,
+        cancellation: AssistantCancellationToken,
+    ) -> AssistantResponse:
+        if self.proposal is None:
+            raise RuntimeError("Deterministic mapping provider is not configured.")
+        self.worker_thread_ids.append(threading.get_ident())
+        emit_progress(
+            AssistantProgressEvent(
+                request_id=request.request_id,
+                provider_id=request.provider_id,
+                sequence=1,
+                stage="validating",
+                message="Preparing a closed data-mapping proposal.",
+                cancellable=False,
+                progress=0.8,
+            )
+        )
+        cancellation.raise_if_cancelled()
+        return AssistantResponse(
+            request_id=request.request_id,
+            transaction_id=request.transaction_id,
+            provider_id=request.provider_id,
+            request_sha256=request.payload_sha256,
+            status="proposal",
+            understanding=(
+                "Map the two declared source columns to wavenumber and "
+                "transmittance, then build a separate FTIR candidate project."
+            ),
+            proposal_kind="data_mapping_proposal",
+            proposal=self.proposal.to_dict(),
+            warnings=("This changes data meaning and requires a separate user click.",),
         )
 
 
@@ -299,9 +359,7 @@ def _capture_window(
             QtCore.QEventLoop.ProcessEventsFlag.AllEvents,
             50,
         )
-    image = (
-        window.grab().toImage().convertToFormat(QtGui.QImage.Format.Format_RGB888)
-    )
+    image = window.grab().toImage().convertToFormat(QtGui.QImage.Format.Format_RGB888)
     saved = image.save(str(path))
     black_pixels = 0
     sample_count = 0
@@ -348,6 +406,8 @@ def run_canvas_assistant_probe(
     provider_working_screenshot = run_root / "assistant_provider_working.png"
     provider_proposal_screenshot = run_root / "assistant_provider_proposal.png"
     provider_applied_screenshot = run_root / "assistant_provider_applied.png"
+    mapping_confirmation_screenshot = run_root / "assistant_mapping_confirmation.png"
+    mapping_canvas_screenshot = run_root / "assistant_mapping_canvas.png"
     stderr_log = run_root / "logs" / "canvas_assistant_stderr.log"
     progress_path = run_root / "progress.log"
     checks: list[dict[str, Any]] = []
@@ -362,7 +422,10 @@ def run_canvas_assistant_probe(
 
         from sciplot_core.studio import _capture_process_stderr
         from sciplot_gui.main_window import SciPlotCanvasWindow
-        from sciplot_gui.workspace import resolve_canvas_workspace
+        from sciplot_gui.workspace import (
+            default_data_mapping_output_root,
+            resolve_canvas_workspace,
+        )
 
         application = QtWidgets.QApplication.instance()
         if application is None:
@@ -394,10 +457,8 @@ def run_canvas_assistant_probe(
                 and window.inspector_tabs.count() == 3
                 and window.assistant_panel.state_chip.text() == "Idle"
             )
-            target_info = (
-                window.controller.adapter.first_visible_text_target(
-                    window.controller.session
-                )
+            target_info = window.controller.adapter.first_visible_text_target(
+                window.controller.session
             )
             setting_path = str(target_info["setting_path"])
             target_id = str(target_info["object_id"])
@@ -409,9 +470,7 @@ def run_canvas_assistant_probe(
 
             start = window.begin_assistant_transaction(
                 provider="assistant_probe_provider",
-                rationale=(
-                    "Verify the visible provider-neutral Canvas transaction."
-                ),
+                rationale=("Verify the visible provider-neutral Canvas transaction."),
             )
             context = start["context"]
             transaction = window.assistant.transaction
@@ -429,8 +488,7 @@ def run_canvas_assistant_probe(
                 baseline_vsz.is_file()
                 and file_sha256(baseline_vsz) == transaction.snapshot_sha256
                 and baseline_review.is_file()
-                and file_sha256(baseline_review)
-                == transaction.review_snapshot_sha256
+                and file_sha256(baseline_review) == transaction.review_snapshot_sha256
             )
             first_value = _edited_value(original_value, "[Assistant A]")
             first_batch = _setting_batch(
@@ -452,17 +510,14 @@ def run_canvas_assistant_probe(
                 window.controller.session.revision == baseline_revision
                 and window.controller.adapter.setting_value(setting_path)
                 == original_value
-                and window.controller.adapter.render_fingerprint()
-                == baseline_render
+                and window.controller.adapter.render_fingerprint() == baseline_render
                 and preview.get("publication_document_changed") is False
             )
             proposal_ui = {
                 "tab_index": window.inspector_tabs.currentIndex(),
                 "state_chip": window.assistant_panel.state_chip.text(),
                 "change_rows": window.assistant_panel.change_count,
-                "accept_enabled": (
-                    window.assistant_panel.accept_button.isEnabled()
-                ),
+                "accept_enabled": (window.assistant_panel.accept_button.isEnabled()),
                 "save_locked": not window.save_action.isEnabled(),
                 "edit_locked": not window.inspector_panel.isEnabled(),
             }
@@ -480,8 +535,7 @@ def run_canvas_assistant_probe(
             application.processEvents()
             first_render = window.controller.adapter.render_fingerprint()
             first_live = bool(
-                window.controller.adapter.setting_value(setting_path)
-                == first_value
+                window.controller.adapter.setting_value(setting_path) == first_value
                 and first_render != baseline_render
                 and first_accept["entry"]["revision"] == baseline_revision + 1
             )
@@ -506,10 +560,8 @@ def run_canvas_assistant_probe(
             )
             undo_entry = window.undo_assistant_batch()
             per_batch_undo = bool(
-                window.controller.adapter.setting_value(setting_path)
-                == first_value
-                and window.controller.adapter.render_fingerprint()
-                == first_render
+                window.controller.adapter.setting_value(setting_path) == first_value
+                and window.controller.adapter.render_fingerprint() == first_render
                 and undo_entry.get("batch_id") == second_batch.batch_id
             )
 
@@ -526,13 +578,10 @@ def run_canvas_assistant_probe(
             before_reject_render = window.controller.adapter.render_fingerprint()
             before_reject_revision = window.controller.session.revision
             window.propose_assistant_batch(rejected_batch)
-            reject_entry = window.reject_assistant_proposal(
-                reason="Probe rejection."
-            )
+            reject_entry = window.reject_assistant_proposal(reason="Probe rejection.")
             proposal_rejection_isolated = bool(
                 reject_entry.get("publication_document_changed") is False
-                and window.controller.session.revision
-                == before_reject_revision
+                and window.controller.session.revision == before_reject_revision
                 and window.controller.adapter.render_fingerprint()
                 == before_reject_render
             )
@@ -585,15 +634,12 @@ def run_canvas_assistant_probe(
                 window.controller.session.revision == mutation_guard_revision
                 and window.controller.adapter.render_fingerprint()
                 == mutation_guard_render
-                and window.controller.adapter.setting_value(setting_path)
-                == first_value
+                and window.controller.adapter.setting_value(setting_path) == first_value
             )
             applied_navigation_zoom = window.controller.set_zoom_factor(
                 float(baseline_viewport["zoom"]) + 0.35
             )
-            navigation_changed = (
-                applied_navigation_zoom != baseline_viewport["zoom"]
-            )
+            navigation_changed = applied_navigation_zoom != baseline_viewport["zoom"]
 
             transaction_id = transaction.transaction_id
             window.set_close_policy_for_test("keep_recovery")
@@ -606,18 +652,14 @@ def run_canvas_assistant_probe(
             reopened.show()
             application.processEvents()
             reopened_transaction = reopened.assistant.transaction
-            reopened_target = (
-                reopened.controller.adapter.first_visible_text_target(
-                    reopened.controller.session
-                )
+            reopened_target = reopened.controller.adapter.first_visible_text_target(
+                reopened.controller.session
             )
             reopened_setting_path = str(reopened_target["setting_path"])
             interruption_preserves_turn = bool(
                 reopened_transaction is not None
                 and reopened_transaction.transaction_id == transaction_id
-                and reopened.controller.adapter.setting_value(
-                    reopened_setting_path
-                )
+                and reopened.controller.adapter.setting_value(reopened_setting_path)
                 == first_value
             )
             rollback = reopened.rollback_assistant_transaction(
@@ -625,22 +667,15 @@ def run_canvas_assistant_probe(
             )
             rollback_exact = bool(
                 reopened.assistant.transaction is None
-                and reopened.controller.adapter.setting_value(
-                    reopened_setting_path
-                )
+                and reopened.controller.adapter.setting_value(reopened_setting_path)
                 == original_value
-                and reopened.controller.adapter.render_fingerprint()
-                == baseline_render
-                and rollback.get("verification", {}).get(
-                    "exact_baseline_render"
-                )
+                and reopened.controller.adapter.render_fingerprint() == baseline_render
+                and rollback.get("verification", {}).get("exact_baseline_render")
                 is True
                 and reopened.controller.session.current_page == baseline_page
-                and reopened.controller.session.viewport.to_dict()
-                == baseline_viewport
+                and reopened.controller.session.viewport.to_dict() == baseline_viewport
                 and navigation_changed
-                and file_sha256(workspace.document_path)
-                == document_hash_before
+                and file_sha256(workspace.document_path) == document_hash_before
             )
 
             commit_provider = "assistant_probe_commit_provider"
@@ -679,21 +714,62 @@ def run_canvas_assistant_probe(
             windows.append(committed)
             committed.show()
             application.processEvents()
-            committed_target = (
-                committed.controller.adapter.first_visible_text_target(
-                    committed.controller.session
-                )
+            committed_target = committed.controller.adapter.first_visible_text_target(
+                committed.controller.session
             )
             committed_setting_path = str(committed_target["setting_path"])
             commit_reopens_exact = bool(
-                committed.controller.adapter.setting_value(
-                    committed_setting_path
-                )
+                committed.controller.adapter.setting_value(committed_setting_path)
                 == commit_value
-                and committed.controller.adapter.render_fingerprint()
-                == accepted_render
+                and committed.controller.adapter.render_fingerprint() == accepted_render
                 and committed.controller.session.revision == accepted_revision
                 and not committed.controller.session.dirty
+            )
+
+            commit_race_document_bytes = workspace.document_path.read_bytes()
+            commit_race_document_hash = file_sha256(workspace.document_path)
+            committed.begin_assistant_transaction(
+                provider="assistant_probe_commit_race_provider",
+                rationale="Mutate the original VSZ from the commit QA boundary.",
+            )
+            original_commit_qa = committed.controller.run_structural_qa
+
+            def _mutate_original_after_commit_qa() -> dict[str, Any]:
+                qa = original_commit_qa()
+                workspace.document_path.write_bytes(
+                    commit_race_document_bytes
+                    + b"\n# injected commit-time authority race\n"
+                )
+                return qa
+
+            committed.controller.run_structural_qa = _mutate_original_after_commit_qa
+            commit_race_conflict_blocked = False
+            try:
+                committed.assistant.commit()
+            except ValueError:
+                commit_race_conflict_blocked = True
+            finally:
+                committed.controller.run_structural_qa = original_commit_qa
+                workspace.document_path.write_bytes(commit_race_document_bytes)
+            commit_race_transaction = committed.assistant.transaction
+            commit_race_conflict_blocked = bool(
+                commit_race_conflict_blocked
+                and commit_race_transaction is not None
+                and commit_race_transaction.status == "conflict"
+                and committed.controller.session.state == "conflict"
+                and file_sha256(workspace.document_path) == commit_race_document_hash
+            )
+            commit_race_rollback = committed.rollback_assistant_transaction(
+                reason="Restore after commit-time original-VSZ race probe."
+            )
+            commit_race_conflict_recovered = bool(
+                commit_race_conflict_blocked
+                and committed.assistant.transaction is None
+                and file_sha256(workspace.document_path) == commit_race_document_hash
+                and commit_race_rollback.get("verification", {}).get(
+                    "exact_baseline_render"
+                )
+                is True
             )
 
             committed.begin_assistant_transaction(
@@ -733,19 +809,15 @@ def run_canvas_assistant_probe(
                 and recovered_transaction.status == "paused"
                 and recovered_transaction.applying_batch_id is None
                 and recovered_transaction.pending_batch is not None
-                and interrupted.controller.adapter.setting_value(
-                    committed_setting_path
-                )
+                and interrupted.controller.adapter.setting_value(committed_setting_path)
                 == commit_value
             )
             interrupted.rollback_assistant_transaction(
                 reason="Finish interrupted apply probe."
             )
 
-            conflict_target = (
-                interrupted.controller.adapter.first_visible_text_target(
-                    interrupted.controller.session
-                )
+            conflict_target = interrupted.controller.adapter.first_visible_text_target(
+                interrupted.controller.session
             )
             conflict_setting_path = str(conflict_target["setting_path"])
             conflict_before = interrupted.controller.adapter.setting_value(
@@ -771,9 +843,7 @@ def run_canvas_assistant_probe(
             conflict_transaction.begin_applying()
             interrupted.controller.session.set_state("ai_applying")
             interrupted.controller.persist()
-            interrupted.assistant._mark_conflict(
-                "Simulated applying-marker conflict."
-            )
+            interrupted.assistant._mark_conflict("Simulated applying-marker conflict.")
             interrupted._sync_ui()
             conflicted = interrupted.assistant.transaction
             conflict_unlocks_rollback = bool(
@@ -789,9 +859,7 @@ def run_canvas_assistant_probe(
             conflict_rollback_safe = bool(
                 conflict_unlocks_rollback
                 and interrupted.assistant.transaction is None
-                and interrupted.controller.adapter.setting_value(
-                    conflict_setting_path
-                )
+                and interrupted.controller.adapter.setting_value(conflict_setting_path)
                 == conflict_before
                 and conflict_rollback.get("verification", {}).get(
                     "exact_baseline_render"
@@ -837,9 +905,7 @@ def run_canvas_assistant_probe(
             provider_baseline_render = (
                 provider_window.controller.adapter.render_fingerprint()
             )
-            provider_baseline_revision = (
-                provider_window.controller.session.revision
-            )
+            provider_baseline_revision = provider_window.controller.session.revision
             provider_document_hash_before = file_sha256(
                 provider_window.controller.document_path
             )
@@ -860,10 +926,7 @@ def run_canvas_assistant_probe(
                     provider.first_started.is_set()
                     and provider_window.assistant.request_record is not None
                     and provider_window.assistant.request_record.status == "running"
-                    and len(
-                        provider_window.assistant.request_record.events
-                    )
-                    == 1
+                    and len(provider_window.assistant.request_record.events) == 1
                 ),
             )
             if not provider_working:
@@ -893,18 +956,12 @@ def run_canvas_assistant_probe(
                 original_structural_status = str(
                     exposed_runner_request.context["qa"]["structural_status"]
                 )
-                exposed_runner_request.context["qa"][
-                    "structural_status"
-                ] = "tampered"
+                exposed_runner_request.context["qa"]["structural_status"] = "tampered"
                 second_runner_request = provider_window.assistant_runner.request
-                persisted_running_record = (
-                    provider_window.assistant.request_record
-                )
+                persisted_running_record = provider_window.assistant.request_record
                 runner_request_isolated = bool(
                     second_runner_request is not None
-                    and second_runner_request.context["qa"][
-                        "structural_status"
-                    ]
+                    and second_runner_request.context["qa"]["structural_status"]
                     == original_structural_status
                     and persisted_running_record is not None
                     and persisted_running_record.parsed_request.context["qa"][
@@ -918,8 +975,7 @@ def run_canvas_assistant_probe(
                 lambda: (
                     not provider_window.assistant_runner.active
                     and provider_window.assistant.transaction is not None
-                    and provider_window.assistant.transaction.pending_batch
-                    is not None
+                    and provider_window.assistant.transaction.pending_batch is not None
                 ),
             )
             if not provider_proposal_ready:
@@ -965,9 +1021,7 @@ def run_canvas_assistant_probe(
                     intent=provider_request.intent,
                     base_revision=provider_request.base_revision,
                     context=context,
-                    allowed_proposal_kinds=(
-                        provider_request.allowed_proposal_kinds
-                    ),
+                    allowed_proposal_kinds=(provider_request.allowed_proposal_kinds),
                 )
 
             hidden_array_context = copy.deepcopy(provider_request.context)
@@ -1028,14 +1082,10 @@ def run_canvas_assistant_probe(
                     lambda: request_with_context(declared_raw_context)
                 ),
                 "request_record_tamper_rejected": _rejects(
-                    lambda: AssistantRequestRecord.from_dict(
-                        tampered_record_payload
-                    )
+                    lambda: AssistantRequestRecord.from_dict(tampered_record_payload)
                 ),
                 "wrong_request_hash_rejected": _rejects(
-                    lambda: wrong_hash_response.validate_for_request(
-                        provider_request
-                    )
+                    lambda: wrong_hash_response.validate_for_request(provider_request)
                 ),
                 "wrong_base_revision_rejected": _rejects(
                     lambda: wrong_revision_response.validate_for_request(
@@ -1064,8 +1114,7 @@ def run_canvas_assistant_probe(
                 application,
                 lambda: (
                     provider_window.assistant.request_record is not None
-                    and provider_window.assistant.request_record.status
-                    == "applied"
+                    and provider_window.assistant.request_record.status == "applied"
                     and provider_window.controller.session.revision
                     == provider_baseline_revision + 1
                 ),
@@ -1101,13 +1150,9 @@ def run_canvas_assistant_probe(
                 ),
             )
             if not cancel_request_running:
-                raise RuntimeError(
-                    "The cancellable provider request did not start."
-                )
+                raise RuntimeError("The cancellable provider request did not start.")
             cancel_revision = provider_window.controller.session.revision
-            cancel_render = (
-                provider_window.controller.adapter.render_fingerprint()
-            )
+            cancel_render = provider_window.controller.adapter.render_fingerprint()
             provider_window.assistant_panel.cancel_request_button.click()
             cancellation_completed = _wait_until(
                 application,
@@ -1115,8 +1160,7 @@ def run_canvas_assistant_probe(
                     provider.cancellation_observed.is_set()
                     and not provider_window.assistant_runner.active
                     and provider_window.assistant.request_record is not None
-                    and provider_window.assistant.request_record.status
-                    == "cancelled"
+                    and provider_window.assistant.request_record.status == "cancelled"
                 ),
             )
             cancelled_record = provider_window.assistant.request_record
@@ -1135,8 +1179,7 @@ def run_canvas_assistant_probe(
                 )
                 and provider_window.assistant.transaction is not None
                 and provider_window.assistant.transaction.pending_batch is None
-                and provider_window.controller.session.revision
-                == cancel_revision
+                and provider_window.controller.session.revision == cancel_revision
                 and provider_window.controller.adapter.render_fingerprint()
                 == cancel_render
                 and provider_window.controller.adapter.setting_value(
@@ -1234,9 +1277,7 @@ def run_canvas_assistant_probe(
             windows.append(noncancellable_recovery)
             noncancellable_recovery.show()
             application.processEvents()
-            noncancellable_record = (
-                noncancellable_recovery.assistant.request_record
-            )
+            noncancellable_record = noncancellable_recovery.assistant.request_record
             noncancellable_cancelled = bool(
                 noncancellable_record is not None
                 and noncancellable_record.status == "cancelled"
@@ -1262,10 +1303,587 @@ def run_canvas_assistant_probe(
             application.processEvents()
             windows.remove(noncancellable_recovery)
 
-            journal = read_operation_journal(workspace.journal_path)
-            journal_events = {
-                str(entry.get("event") or "") for entry in journal
+            if workspace.project_dir is None or workspace.request_path is None:
+                raise RuntimeError(
+                    "Data-mapping Canvas acceptance requires a project workspace."
+                )
+            mapping_source_root = workspace.project_dir / "source"
+            mapping_source_files = sorted(
+                path
+                for path in mapping_source_root.iterdir()
+                if path.is_file() and path.suffix.casefold() == ".csv"
+            )
+            if len(mapping_source_files) != 1:
+                raise RuntimeError(
+                    "Mapping UI probe requires exactly one CSV source fixture."
+                )
+            mapping_source = mapping_source_files[0]
+            mapping_source_bytes = mapping_source.read_bytes()
+            mapping_source_hash = file_sha256(mapping_source)
+            mapping_request_bytes = workspace.request_path.read_bytes()
+            mapping_document_hash = file_sha256(workspace.document_path)
+            mapping_provider = _DeterministicMappingProvider()
+            mapping_window = SciPlotCanvasWindow(
+                workspace,
+                interactive=False,
+                assistant_provider=mapping_provider,
+            )
+            windows.append(mapping_window)
+            mapping_window.resize(1380, 860)
+            mapping_window.show()
+            application.processEvents()
+            mapping_proposal = DataMappingProposal(
+                proposal_id="canvas-mapping-confirmation-probe",
+                base_request_sha256=file_sha256(workspace.request_path),
+                provider=mapping_provider.descriptor.provider_id,
+                sources=(
+                    DataSourceReference(
+                        source_id="mapping_probe_ftir",
+                        relative_path=mapping_source.name,
+                        sha256=mapping_source_hash,
+                        header_row=None,
+                        delimiter=",",
+                    ),
+                ),
+                columns=(
+                    DataColumnMapping(
+                        source_id="mapping_probe_ftir",
+                        source_column_index=0,
+                        output_column="wavenumber",
+                        role="x",
+                    ),
+                    DataColumnMapping(
+                        source_id="mapping_probe_ftir",
+                        source_column_index=1,
+                        output_column="transmittance",
+                        role="y",
+                    ),
+                ),
+                sample_labels={"mapping_probe_ftir": "mapping_ui"},
+                unit_overrides={
+                    "wavenumber": "cm^-1",
+                    "transmittance": "%",
+                },
+                request_patch={
+                    "recipe": "auto",
+                    "rule_id": "ftir_spectrum",
+                    "template": "stacked_curve",
+                    "series_order": ["mapping_ui"],
+                },
+                confidence=1.0,
+                rationale=(
+                    "Exercise the real Canvas preview, confirmation, execution, "
+                    "and exact-current handoff path."
+                ),
+            )
+            mapping_provider.configure(mapping_proposal)
+            mapping_window.assistant_panel.request_editor.setPlainText(
+                "Use the declared two-column FTIR source and build a separate "
+                "mapped project."
+            )
+            mapping_window.assistant_panel.send_button.click()
+            mapping_proposal_arrived = _wait_until(
+                application,
+                lambda: (
+                    not mapping_window.assistant_runner.active
+                    and mapping_window.assistant.mapping_state is not None
+                    and mapping_window.assistant.mapping_state.status
+                    in {"source_required", "preview_ready"}
+                ),
+                timeout_seconds=10.0,
+            )
+            if not mapping_proposal_arrived:
+                raise RuntimeError(
+                    "DataMappingProposal did not reach the Canvas decision flow."
+                )
+            if mapping_window.assistant.mapping_state.status == "source_required":
+                mapping_window.select_data_mapping_source_root(mapping_source_root)
+            mapping_preview_ready = _wait_until(
+                application,
+                lambda: (
+                    not mapping_window.assistant_runner.active
+                    and not mapping_window.data_mapping_runner.active
+                    and mapping_window.assistant.mapping_state is not None
+                    and mapping_window.assistant.mapping_state.status == "preview_ready"
+                ),
+                timeout_seconds=15.0,
+            )
+            mapping_state = mapping_window.assistant.mapping_state
+            mapping_preview = (
+                dict(mapping_state.preview or {}) if mapping_state is not None else {}
+            )
+            mapping_preview_zero_write = bool(
+                mapping_preview_ready
+                and mapping_preview.get("writes_performed") is False
+                and mapping_preview.get("raw_values_in_preview") is False
+                and mapping_preview.get("requires_confirmation_receipt") is True
+                and file_sha256(mapping_source) == mapping_source_hash
+                and workspace.request_path.read_bytes() == mapping_request_bytes
+                and file_sha256(workspace.document_path) == mapping_document_hash
+            )
+            mapping_decision_text = "\n".join(
+                label.text()
+                for label in mapping_window.assistant_panel.change_list.findChildren(
+                    QtWidgets.QLabel
+                )
+            )
+            mapping_confirmation_ui = {
+                "state_chip": mapping_window.assistant_panel.state_chip.text(),
+                "primary_action": mapping_window.assistant_panel.accept_button.text(),
+                "primary_enabled": (
+                    mapping_window.assistant_panel.accept_button.isEnabled()
+                ),
+                "source_cards": mapping_window.assistant_panel.change_count,
+                "card_count": (
+                    mapping_window.assistant_panel.change_list_layout.count()
+                ),
+                "authority_paths_visible": all(
+                    value in mapping_decision_text
+                    for value in (
+                        str(mapping_source_root.resolve()),
+                        str(workspace.request_path.resolve()),
+                        str(default_data_mapping_output_root(workspace).resolve()),
+                    )
+                ),
+                "row_count": sum(
+                    int(item.get("row_count") or 0)
+                    for item in mapping_preview.get("sources", [])
+                    if isinstance(item, dict)
+                ),
             }
+            mapping_confirmation_capture = _capture_window(
+                mapping_window,
+                mapping_confirmation_screenshot,
+                application=application,
+            )
+
+            mapping_window.close()
+            application.processEvents()
+            windows.remove(mapping_window)
+            mapping_recovery = SciPlotCanvasWindow(
+                workspace,
+                interactive=False,
+                assistant_provider=mapping_provider,
+            )
+            windows.append(mapping_recovery)
+            mapping_recovery.resize(1380, 860)
+            mapping_recovery.show()
+            application.processEvents()
+            recovered_mapping_state = mapping_recovery.assistant.mapping_state
+            mapping_preview_reopened = bool(
+                recovered_mapping_state is not None
+                and recovered_mapping_state.status == "preview_ready"
+                and recovered_mapping_state.confirmation is None
+                and recovered_mapping_state.preview == mapping_preview
+                and mapping_recovery.assistant_panel.accept_button.text()
+                == "Confirm and Build Project"
+            )
+
+            mapping_source.write_bytes(mapping_source_bytes + b"# tamper\n")
+            stale_confirmation_rejected = False
+            try:
+                mapping_recovery.continue_data_mapping()
+            except ValueError:
+                stale_confirmation_rejected = True
+            finally:
+                mapping_source.write_bytes(mapping_source_bytes)
+            stale_state = mapping_recovery.assistant.mapping_state
+            stale_confirmation_rejected = bool(
+                stale_confirmation_rejected
+                and stale_state is not None
+                and stale_state.status == "preview_ready"
+                and stale_state.confirmation is None
+                and file_sha256(mapping_source) == mapping_source_hash
+            )
+
+            interrupted_receipt = mapping_recovery.assistant.confirm_mapping(
+                confirmed_by="local_canvas_user_explicit_click"
+            )
+            interrupted_confirmation_id = interrupted_receipt.confirmation_id
+            mapping_recovery.assistant.begin_mapping_execution()
+            mapping_recovery._refresh_assistant_panel()
+            mapping_recovery._sync_ui()
+            application.processEvents()
+            executing_state = mapping_recovery.assistant.mapping_state
+            duplicate_confirmation_blocked = bool(
+                executing_state is not None
+                and executing_state.status == "executing"
+                and not mapping_recovery.assistant_panel.accept_button.isEnabled()
+            )
+            try:
+                mapping_recovery.continue_data_mapping()
+            except RuntimeError:
+                duplicate_confirmation_blocked = bool(duplicate_confirmation_blocked)
+            else:
+                duplicate_confirmation_blocked = False
+            mapping_recovery.set_close_policy_for_test("keep_recovery")
+            mapping_recovery.close()
+            application.processEvents()
+            windows.remove(mapping_recovery)
+
+            mapping_recovery = SciPlotCanvasWindow(
+                workspace,
+                interactive=False,
+                assistant_provider=mapping_provider,
+            )
+            windows.append(mapping_recovery)
+            mapping_recovery.resize(1380, 860)
+            mapping_recovery.show()
+            application.processEvents()
+            reconciled_executing_state = mapping_recovery.assistant.mapping_state
+            executing_reopen_reconciled = bool(
+                reconciled_executing_state is not None
+                and reconciled_executing_state.status == "confirmed"
+                and (reconciled_executing_state.confirmation or {}).get(
+                    "confirmation_id"
+                )
+                == interrupted_confirmation_id
+                and "interrupted" in (reconciled_executing_state.last_error or "")
+            )
+            original_complete_mapping_execution = (
+                mapping_recovery.assistant.complete_mapping_execution
+            )
+
+            def _interrupt_after_candidate_creation(
+                _execution: dict[str, Any],
+                *,
+                mapped_document: Path,
+            ) -> dict[str, Any]:
+                _ = mapped_document
+                raise RuntimeError("injected crash after atomic candidate creation")
+
+            mapping_recovery.assistant.complete_mapping_execution = (
+                _interrupt_after_candidate_creation
+            )
+            mapping_recovery.continue_data_mapping()
+
+            mapping_execution_interrupted = _wait_until(
+                application,
+                lambda: (
+                    not mapping_recovery.data_mapping_runner.active
+                    and mapping_recovery.assistant.mapping_state is not None
+                    and mapping_recovery.assistant.mapping_state.status == "confirmed"
+                ),
+                timeout_seconds=30.0,
+            )
+            interrupted_mapping_state = mapping_recovery.assistant.mapping_state
+            interrupted_candidate_root = (
+                Path(interrupted_mapping_state.output_root)
+                / mapping_proposal.proposal_id
+                if interrupted_mapping_state is not None
+                and interrupted_mapping_state.output_root
+                else Path("/")
+            )
+            candidate_survived_interrupted_state = bool(
+                mapping_execution_interrupted
+                and interrupted_confirmation_id
+                and (interrupted_candidate_root / "execution.json").is_file()
+                and (interrupted_candidate_root / "studio" / "document.vsz").is_file()
+            )
+            mapping_recovery.assistant.complete_mapping_execution = (
+                original_complete_mapping_execution
+            )
+            mapping_recovery.close()
+            application.processEvents()
+            windows.remove(mapping_recovery)
+
+            mapping_resume = SciPlotCanvasWindow(
+                workspace,
+                interactive=False,
+                assistant_provider=mapping_provider,
+            )
+            windows.append(mapping_resume)
+            mapping_resume.resize(1380, 860)
+            mapping_resume.show()
+            application.processEvents()
+            resumed_confirmed_state = mapping_resume.assistant.mapping_state
+            same_receipt_reopened = bool(
+                resumed_confirmed_state is not None
+                and resumed_confirmed_state.status == "confirmed"
+                and (resumed_confirmed_state.confirmation or {}).get("confirmation_id")
+                == interrupted_confirmation_id
+            )
+            resumed_execution: dict[str, Any] = {}
+            original_resume_complete = (
+                mapping_resume.assistant.complete_mapping_execution
+            )
+
+            def _capture_reused_execution(
+                execution: dict[str, Any],
+                *,
+                mapped_document: Path,
+            ) -> dict[str, Any]:
+                resumed_execution.update(execution)
+                return original_resume_complete(
+                    execution,
+                    mapped_document=mapped_document,
+                )
+
+            def _interrupt_before_handoff() -> dict[str, Any]:
+                raise RuntimeError("injected crash before mapped Canvas handoff")
+
+            mapping_resume.assistant.complete_mapping_execution = (
+                _capture_reused_execution
+            )
+            mapping_resume.open_mapped_canvas = _interrupt_before_handoff
+            mapping_resume.continue_data_mapping()
+            mapping_executed_without_handoff = _wait_until(
+                application,
+                lambda: (
+                    not mapping_resume.data_mapping_runner.active
+                    and mapping_resume.assistant.mapping_state is not None
+                    and mapping_resume.assistant.mapping_state.status == "executed"
+                    and not mapping_resume._child_canvas_windows
+                ),
+                timeout_seconds=30.0,
+            )
+            executed_before_handoff_state = mapping_resume.assistant.mapping_state
+            receipt_reused_after_interruption = bool(
+                mapping_executed_without_handoff
+                and same_receipt_reopened
+                and resumed_execution.get("idempotent_reuse") is True
+                and executed_before_handoff_state is not None
+                and (executed_before_handoff_state.confirmation or {}).get(
+                    "confirmation_id"
+                )
+                == interrupted_confirmation_id
+            )
+            mapping_resume.close()
+            application.processEvents()
+            windows.remove(mapping_resume)
+
+            mapping_recovery = SciPlotCanvasWindow(
+                workspace,
+                interactive=False,
+                assistant_provider=mapping_provider,
+            )
+            windows.append(mapping_recovery)
+            mapping_recovery.resize(1380, 860)
+            mapping_recovery.show()
+            application.processEvents()
+            recovered_executed_state = mapping_recovery.assistant.mapping_state
+            if recovered_executed_state is None:
+                raise RuntimeError("Executed mapping state did not reopen.")
+            execution_manifest_path = Path(
+                str(recovered_executed_state.execution_manifest or "")
+            )
+            mapped_document_path = Path(
+                str(recovered_executed_state.mapped_document or "")
+            )
+            manifest_bytes = execution_manifest_path.read_bytes()
+            mapped_document_bytes = mapped_document_path.read_bytes()
+            manifest_tamper_rejected = False
+            execution_manifest_path.write_bytes(manifest_bytes + b"\n")
+            try:
+                mapping_recovery.continue_data_mapping()
+            except ValueError:
+                manifest_tamper_rejected = True
+            finally:
+                execution_manifest_path.write_bytes(manifest_bytes)
+            mapped_document_tamper_rejected = False
+            mapped_document_path.write_bytes(
+                mapped_document_bytes + b"\n# injected handoff tamper\n"
+            )
+            try:
+                mapping_recovery.continue_data_mapping()
+            except ValueError:
+                mapped_document_tamper_rejected = True
+            finally:
+                mapped_document_path.write_bytes(mapped_document_bytes)
+            executed_reject_blocked = bool(
+                not mapping_recovery.assistant_panel.reject_button.isVisible()
+            )
+            try:
+                mapping_recovery.assistant.reject_mapping(
+                    reason="Executed candidates retain evidence."
+                )
+            except ValueError:
+                executed_reject_blocked = bool(executed_reject_blocked)
+            else:
+                executed_reject_blocked = False
+
+            executed_open_button_ready = bool(
+                mapping_recovery.assistant_panel.accept_button.isVisible()
+                and mapping_recovery.assistant_panel.accept_button.isEnabled()
+                and mapping_recovery.assistant_panel.accept_button.text()
+                == "Open Mapped Canvas"
+            )
+            mapping_recovery.assistant_panel.accept_button.click()
+            application.processEvents()
+            mapping_handoff_ready = _wait_until(
+                application,
+                lambda: (
+                    not mapping_recovery.data_mapping_runner.active
+                    and mapping_recovery.assistant.transaction is None
+                    and len(mapping_recovery._child_canvas_windows) == 1
+                ),
+                timeout_seconds=30.0,
+            )
+            if not mapping_handoff_ready:
+                raise RuntimeError(
+                    "Confirmed mapping did not open a verified child Canvas."
+                )
+            mapped_window = mapping_recovery._child_canvas_windows[0]
+            windows.append(mapped_window)
+            mapped_workspace = mapped_window.workspace
+            if mapped_workspace.project_dir is None:
+                raise RuntimeError("Mapped Canvas did not resolve a project root.")
+            mapped_capture = _capture_window(
+                mapped_window,
+                mapping_canvas_screenshot,
+                application=application,
+            )
+            from sciplot_core.data_mapping import load_data_mapping_execution
+
+            mapping_execution = load_data_mapping_execution(
+                mapped_workspace.project_dir
+            )
+            mapping_receipt_path = Path(
+                str(mapping_execution.get("confirmation") or "")
+            )
+            mapping_receipt = json.loads(
+                mapping_receipt_path.read_text(encoding="utf-8")
+            )
+            mapping_ledger_path = Path(
+                str(mapping_execution.get("transform_ledger") or "")
+            )
+            mapping_ledger = json.loads(mapping_ledger_path.read_text(encoding="utf-8"))
+            mapping_operations = [
+                str(item.get("operation") or "")
+                for item in mapping_ledger.get("steps", [])
+                if isinstance(item, dict)
+            ]
+            mapping_execution_verified = bool(
+                mapping_execution.get("status") == "passed"
+                and mapping_execution.get("ready_to_use") is True
+                and mapping_execution.get("raw_inputs_unchanged") is True
+                and mapping_receipt.get("confirmed_by")
+                == "local_canvas_user_explicit_click"
+                and mapping_receipt.get("proposal_sha256")
+                == mapping_execution.get("proposal_sha256")
+                and mapping_receipt.get("source_root")
+                == str(mapping_source_root.resolve())
+                and mapping_receipt.get("request_path")
+                == str(workspace.request_path.resolve())
+                and mapping_receipt.get("output_root")
+                == str(default_data_mapping_output_root(workspace).resolve())
+                and mapping_operations
+                and mapping_operations[0] == "execute_confirmed_data_mapping_proposal"
+                and mapped_workspace.document_path.is_file()
+            )
+            mapping_original_unchanged = bool(
+                file_sha256(mapping_source) == mapping_source_hash
+                and workspace.request_path.read_bytes() == mapping_request_bytes
+                and file_sha256(workspace.document_path) == mapping_document_hash
+            )
+            mapping_window_separated = bool(
+                mapped_workspace.project_dir != workspace.project_dir
+                and mapped_workspace.document_path != workspace.document_path
+                and mapping_recovery.assistant.transaction is None
+                and mapped_window.controller.session.active_transaction is None
+            )
+            mapped_window.close()
+            application.processEvents()
+            windows.remove(mapped_window)
+
+            conflict_proposal_payload = mapping_proposal.to_dict()
+            conflict_proposal_payload["proposal_id"] = (
+                "canvas-mapping-original-vsz-conflict-probe"
+            )
+            conflict_proposal = DataMappingProposal.from_dict(conflict_proposal_payload)
+            mapping_provider.configure(conflict_proposal)
+            mapping_recovery.assistant_panel.request_editor.setPlainText(
+                "Build a second isolated mapping candidate and prove that an "
+                "external original-VSZ change blocks handoff."
+            )
+            mapping_recovery.assistant_panel.send_button.click()
+            conflict_proposal_arrived = _wait_until(
+                application,
+                lambda: (
+                    not mapping_recovery.assistant_runner.active
+                    and mapping_recovery.assistant.mapping_state is not None
+                    and mapping_recovery.assistant.mapping_state.status
+                    in {"source_required", "preview_ready"}
+                ),
+                timeout_seconds=10.0,
+            )
+            if not conflict_proposal_arrived:
+                raise RuntimeError("Conflict mapping proposal did not arrive.")
+            if mapping_recovery.assistant.mapping_state.status == "source_required":
+                mapping_recovery.select_data_mapping_source_root(mapping_source_root)
+            conflict_preview_ready = _wait_until(
+                application,
+                lambda: (
+                    not mapping_recovery.data_mapping_runner.active
+                    and mapping_recovery.assistant.mapping_state is not None
+                    and mapping_recovery.assistant.mapping_state.status
+                    == "preview_ready"
+                ),
+                timeout_seconds=15.0,
+            )
+            if not conflict_preview_ready:
+                raise RuntimeError("Conflict mapping preview did not complete.")
+            original_conflict_open = mapping_recovery.open_mapped_canvas
+
+            def _hold_executed_candidate() -> dict[str, Any]:
+                raise RuntimeError(
+                    "hold executed candidate for original-authority probe"
+                )
+
+            mapping_recovery.open_mapped_canvas = _hold_executed_candidate
+            mapping_recovery.continue_data_mapping()
+            conflict_candidate_executed = _wait_until(
+                application,
+                lambda: (
+                    not mapping_recovery.data_mapping_runner.active
+                    and mapping_recovery.assistant.mapping_state is not None
+                    and mapping_recovery.assistant.mapping_state.status == "executed"
+                ),
+                timeout_seconds=30.0,
+            )
+            mapping_recovery.open_mapped_canvas = original_conflict_open
+            original_vsz_bytes = workspace.document_path.read_bytes()
+            original_vsz_hash = file_sha256(workspace.document_path)
+            child_count_before_conflict = len(mapping_recovery._child_canvas_windows)
+            workspace.document_path.write_bytes(
+                original_vsz_bytes + b"\n# external concurrent edit\n"
+            )
+            original_vsz_conflict_blocked = False
+            try:
+                mapping_recovery.continue_data_mapping()
+            except ValueError:
+                original_vsz_conflict_blocked = True
+            finally:
+                workspace.document_path.write_bytes(original_vsz_bytes)
+            conflict_transaction = mapping_recovery.assistant.transaction
+            original_vsz_conflict_blocked = bool(
+                original_vsz_conflict_blocked
+                and conflict_candidate_executed
+                and conflict_transaction is not None
+                and conflict_transaction.status == "conflict"
+                and mapping_recovery.controller.session.state == "conflict"
+                and len(mapping_recovery._child_canvas_windows)
+                == child_count_before_conflict
+                and file_sha256(workspace.document_path) == original_vsz_hash
+            )
+            conflict_rollback = mapping_recovery.rollback_assistant_transaction(
+                reason="Restore after original-VSZ authority conflict probe."
+            )
+            original_vsz_conflict_recovered = bool(
+                original_vsz_conflict_blocked
+                and mapping_recovery.assistant.transaction is None
+                and file_sha256(workspace.document_path) == original_vsz_hash
+                and conflict_rollback.get("verification", {}).get(
+                    "exact_baseline_render"
+                )
+                is True
+            )
+            mapping_recovery.close()
+            application.processEvents()
+            windows.remove(mapping_recovery)
+
+            journal = read_operation_journal(workspace.journal_path)
+            journal_events = {str(entry.get("event") or "") for entry in journal}
             required_events = {
                 "assistant_transaction_started",
                 "assistant_batch_proposed",
@@ -1283,15 +1901,18 @@ def run_canvas_assistant_probe(
                 "assistant_request_progress",
                 "assistant_request_cancel_requested",
                 "assistant_response_received",
+                "assistant_data_mapping_proposed",
+                "assistant_data_mapping_preview_started",
+                "assistant_data_mapping_preview_ready",
+                "assistant_data_mapping_confirmed",
+                "assistant_data_mapping_execution_started",
+                "assistant_data_mapping_execution_ready",
+                "assistant_data_mapping_handoff_opened",
             }
             journal_event_ids = [
-                str(entry.get("event_id"))
-                for entry in journal
-                if entry.get("event_id")
+                str(entry.get("event_id")) for entry in journal if entry.get("event_id")
             ]
-            raw_hash_after = (
-                _tree_hash(raw_root) if raw_root is not None else None
-            )
+            raw_hash_after = _tree_hash(raw_root) if raw_root is not None else None
             source_hash_after = _tree_hash(source)
 
             checks.extend(
@@ -1304,8 +1925,7 @@ def run_canvas_assistant_probe(
                     _check(
                         "bounded_context_excludes_raw_values",
                         "Assistant context is structured and excludes raw dataset values",
-                        context.get("kind")
-                        == "sciplot_canvas_assistant_context"
+                        context.get("kind") == "sciplot_canvas_assistant_context"
                         and context.get("version") == 2
                         and context.get("raw_dataset_arrays_included") is False
                         and isinstance(context.get("document_inventory"), dict)
@@ -1445,6 +2065,107 @@ def run_canvas_assistant_probe(
                         },
                     ),
                     _check(
+                        "mapping_preview_confirmation_card",
+                        "A DataMappingProposal becomes a zero-write decision card with one explicit primary action",
+                        mapping_preview_zero_write
+                        and mapping_confirmation_ui["state_chip"] == "Confirm"
+                        and mapping_confirmation_ui["primary_action"]
+                        == "Confirm and Build Project"
+                        and mapping_confirmation_ui["primary_enabled"]
+                        and mapping_confirmation_ui["source_cards"] == 1
+                        and mapping_confirmation_ui["card_count"] == 2
+                        and mapping_confirmation_ui["authority_paths_visible"]
+                        and mapping_confirmation_ui["row_count"] > 0,
+                        {
+                            "ui": mapping_confirmation_ui,
+                            "preview": mapping_preview,
+                        },
+                    ),
+                    _check(
+                        "mapping_preview_reopens_before_confirmation",
+                        "A preview-ready mapping survives close and reopen without inventing consent",
+                        mapping_preview_reopened,
+                    ),
+                    _check(
+                        "mapping_confirmation_is_fresh_and_single",
+                        "Source tampering blocks confirmation and repeated confirmation cannot start a second execution",
+                        stale_confirmation_rejected and duplicate_confirmation_blocked,
+                        {
+                            "stale_source_rejected": stale_confirmation_rejected,
+                            "duplicate_action_blocked": (
+                                duplicate_confirmation_blocked
+                            ),
+                        },
+                    ),
+                    _check(
+                        "mapping_execution_recovers_with_same_receipt",
+                        "A persisted executing state and a completed candidate both recover with the exact receipt",
+                        executing_reopen_reconciled
+                        and candidate_survived_interrupted_state
+                        and receipt_reused_after_interruption,
+                        {
+                            "executing_reopen_reconciled": (
+                                executing_reopen_reconciled
+                            ),
+                            "candidate_root": str(interrupted_candidate_root),
+                            "confirmation_id": interrupted_confirmation_id,
+                            "idempotent_reuse": resumed_execution.get(
+                                "idempotent_reuse"
+                            ),
+                        },
+                    ),
+                    _check(
+                        "mapping_handoff_revalidates_execution_and_vsz",
+                        "An executed handoff rejects changed manifest or mapped VSZ bytes before opening a Canvas",
+                        manifest_tamper_rejected and mapped_document_tamper_rejected,
+                    ),
+                    _check(
+                        "mapping_executed_candidate_is_not_rejectable",
+                        "Executed mapping evidence exposes Open only and cannot be relabeled as an unexecuted rejection",
+                        executed_reject_blocked,
+                    ),
+                    _check(
+                        "mapping_executed_primary_action_opens_canvas",
+                        "The reopened executed-state primary button opens the verified mapped Canvas",
+                        executed_open_button_ready and mapping_handoff_ready,
+                    ),
+                    _check(
+                        "mapping_original_vsz_conflict_blocks_handoff",
+                        "An external original-VSZ change enters conflict, opens no new candidate, and retains exact rollback",
+                        original_vsz_conflict_recovered,
+                    ),
+                    _check(
+                        "mapping_execution_opens_exact_current_canvas",
+                        "The explicit receipt atomically builds and opens a separate verified mapped Canvas",
+                        mapping_execution_verified and mapping_window_separated,
+                        {
+                            "execution": mapping_execution,
+                            "mapped_workspace": mapped_workspace.to_dict(),
+                            "separate_window": mapping_window_separated,
+                        },
+                    ),
+                    _check(
+                        "mapping_preserves_original_authority",
+                        "Confirmed mapping leaves the original request, VSZ, and raw source byte-for-byte unchanged",
+                        mapping_original_unchanged,
+                    ),
+                    _check(
+                        "mapping_ui_screenshots",
+                        "Confirmation and mapped-Canvas states render as stable, non-empty screenshots",
+                        mapping_confirmation_capture["visually_plausible"]
+                        and mapped_capture["visually_plausible"],
+                        {
+                            "confirmation": {
+                                "path": str(mapping_confirmation_screenshot),
+                                **mapping_confirmation_capture,
+                            },
+                            "mapped_canvas": {
+                                "path": str(mapping_canvas_screenshot),
+                                **mapped_capture,
+                            },
+                        },
+                    ),
+                    _check(
                         "pause_blocks_apply",
                         "Pausing prevents a proposal from being accepted",
                         paused_accept_rejected,
@@ -1463,9 +2184,7 @@ def run_canvas_assistant_probe(
                         "The latest accepted Assistant batch undoes independently",
                         per_batch_undo,
                         {
-                            "second_revision": second_accept["entry"][
-                                "revision"
-                            ],
+                            "second_revision": second_accept["entry"]["revision"],
                             "second_render": second_render,
                             "undo": undo_entry,
                         },
@@ -1484,13 +2203,9 @@ def run_canvas_assistant_probe(
                         and invalid_no_partial_mutation,
                         {
                             "stale_rejected": stale_rejected,
-                            "invalid_target_rejected": (
-                                invalid_target_rejected
-                            ),
+                            "invalid_target_rejected": (invalid_target_rejected),
                             "manual_bypass_rejected": manual_bypass_rejected,
-                            "no_partial_mutation": (
-                                invalid_no_partial_mutation
-                            ),
+                            "no_partial_mutation": (invalid_no_partial_mutation),
                         },
                     ),
                     _check(
@@ -1519,6 +2234,15 @@ def run_canvas_assistant_probe(
                         "committed_save_reopen_exact",
                         "Committed Assistant output saves and reopens at the accepted revision",
                         commit_reopens_exact,
+                    ),
+                    _check(
+                        "commit_rechecks_original_vsz_after_qa",
+                        "A VSZ change injected inside structural QA blocks commit and retains exact rollback",
+                        commit_race_conflict_recovered,
+                        {
+                            "conflict_blocked": commit_race_conflict_blocked,
+                            "rollback": commit_race_rollback,
+                        },
                     ),
                     _check(
                         "committed_export_qa",
@@ -1600,6 +2324,24 @@ def run_canvas_assistant_probe(
                 "provider_contract_guards": provider_contract_guards,
                 "provider_late_result_discarded": late_result_discarded,
                 "provider_rollback_exact": provider_rollback_exact,
+                "mapping_confirmation_ui": mapping_confirmation_ui,
+                "mapping_execution": json_safe(mapping_execution),
+                "mapping_recovery": {
+                    "confirmation_id": interrupted_confirmation_id,
+                    "candidate_survived_interruption": (
+                        candidate_survived_interrupted_state
+                    ),
+                    "idempotent_reuse": resumed_execution.get("idempotent_reuse"),
+                    "manifest_tamper_rejected": manifest_tamper_rejected,
+                    "mapped_document_tamper_rejected": (
+                        mapped_document_tamper_rejected
+                    ),
+                    "executed_reject_blocked": executed_reject_blocked,
+                    "original_vsz_conflict_recovered": (
+                        original_vsz_conflict_recovered
+                    ),
+                },
+                "mapping_original_unchanged": mapping_original_unchanged,
                 "export": json_safe(export_payload),
                 "source_hash_before": source_hash_before,
                 "source_hash_after": source_hash_after,
@@ -1625,9 +2367,7 @@ def run_canvas_assistant_probe(
                 except Exception:
                     pass
 
-    failed_ids = [
-        str(check["id"]) for check in checks if check["status"] == "failed"
-    ]
+    failed_ids = [str(check["id"]) for check in checks if check["status"] == "failed"]
     payload = {
         "kind": CANVAS_ASSISTANT_PROBE_KIND,
         "version": CANVAS_ASSISTANT_PROBE_VERSION,
@@ -1635,9 +2375,7 @@ def run_canvas_assistant_probe(
         "status": "passed" if checks and not failed_ids else "failed",
         "summary": {
             "check_count": len(checks),
-            "passed_count": sum(
-                check["status"] == "passed" for check in checks
-            ),
+            "passed_count": sum(check["status"] == "passed" for check in checks),
             "failed_ids": failed_ids,
         },
         "checks": checks,
@@ -1647,15 +2385,11 @@ def run_canvas_assistant_probe(
             "summary": str(summary_path),
             "proposal_screenshot": str(proposal_screenshot),
             "applied_screenshot": str(applied_screenshot),
-            "provider_working_screenshot": str(
-                provider_working_screenshot
-            ),
-            "provider_proposal_screenshot": str(
-                provider_proposal_screenshot
-            ),
-            "provider_applied_screenshot": str(
-                provider_applied_screenshot
-            ),
+            "provider_working_screenshot": str(provider_working_screenshot),
+            "provider_proposal_screenshot": str(provider_proposal_screenshot),
+            "provider_applied_screenshot": str(provider_applied_screenshot),
+            "mapping_confirmation_screenshot": str(mapping_confirmation_screenshot),
+            "mapping_canvas_screenshot": str(mapping_canvas_screenshot),
             "stderr_log": str(stderr_log),
             "progress_log": str(progress_path),
         },
@@ -1663,9 +2397,8 @@ def run_canvas_assistant_probe(
         "limitations": [
             "This probe uses an injected deterministic provider and does not call "
             "a production model endpoint.",
-            "It proves the threaded CanvasOperationBatch provider UI loop. "
-            "Deterministic DataMappingProposal execution is validated separately; "
-            "its Canvas confirmation UI remains follow-on work.",
+            "It proves the threaded CanvasOperationBatch and deterministic "
+            "DataMappingProposal confirmation UI loops with injected providers.",
             "Automated probes do not count as real human daily-use sessions.",
         ],
     }

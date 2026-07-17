@@ -10,6 +10,7 @@ from sciplot_core.canvas.assistant_contract import (
     DataMappingProposal,
     DataSourceReference,
     DeclarativeTransformation,
+    LegacyDataMappingConfirmation,
 )
 from sciplot_core.canvas.model import (
     CanvasDataPointSelection,
@@ -22,6 +23,7 @@ from sciplot_core.canvas.model import (
 )
 from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 from sciplot_core.canvas.provider import (
+    AssistantDataMappingState,
     ASSISTANT_MAX_INTENT_LENGTH,
     AssistantCancellationToken,
     AssistantCancelled,
@@ -48,6 +50,7 @@ __all__ = [
     "AssistantProgressEvent",
     "AssistantProvider",
     "AssistantProviderDescriptor",
+    "AssistantDataMappingState",
     "AssistantRequest",
     "AssistantRequestRecord",
     "AssistantResponse",
@@ -56,6 +59,7 @@ __all__ = [
     "DataMappingProposal",
     "DataSourceReference",
     "DeclarativeTransformation",
+    "LegacyDataMappingConfirmation",
     "ObjectIdentityRegistry",
     "ReviewAnnotation",
     "ReviewAnnotationStyle",

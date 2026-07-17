@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from sciplot_core._utils import json_safe
+from sciplot_core.canvas.assistant_contract import DataMappingProposal
+from sciplot_core.data_mapping import verify_data_mapping_sources
 from sciplot_core.studio import (
     export_studio_document,
     prepare_studio_document,
@@ -47,6 +50,132 @@ class CanvasWorkspace:
             "request": str(self.request_path) if self.request_path else None,
             "has_project_delivery": self.has_project_delivery,
         }
+
+
+def _request_path_candidate(value: object, *, base_dir: Path) -> Path | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        candidate = base_dir / candidate
+    return candidate.resolve()
+
+
+def _mapping_source_candidates(workspace: CanvasWorkspace) -> list[Path]:
+    if workspace.request_path is None or workspace.project_dir is None:
+        return []
+    request_path = workspace.request_path.resolve()
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    if not isinstance(request, dict):
+        raise ValueError("Canvas plot_request.json must contain a JSON object.")
+    candidates: list[Path] = []
+
+    input_path = _request_path_candidate(
+        request.get("input"), base_dir=request_path.parent
+    )
+    if input_path is not None:
+        candidates.append(input_path if input_path.is_dir() else input_path.parent)
+    candidates.extend(
+        (
+            workspace.project_dir / "source",
+            workspace.project_dir / "raw",
+            request_path.parent,
+        )
+    )
+
+    study_model = request.get("study_model")
+    samples = (
+        study_model.get("samples")
+        if isinstance(study_model, dict)
+        and isinstance(study_model.get("samples"), list)
+        else []
+    )
+    for sample in samples:
+        replicates = (
+            sample.get("replicates")
+            if isinstance(sample, dict)
+            and isinstance(sample.get("replicates"), list)
+            else []
+        )
+        for replicate in replicates:
+            source_file = (
+                replicate.get("source_file")
+                if isinstance(replicate, dict)
+                and isinstance(replicate.get("source_file"), dict)
+                else {}
+            )
+            for key in ("raw_path", "source_path"):
+                candidate = _request_path_candidate(
+                    source_file.get(key), base_dir=request_path.parent
+                )
+                if candidate is not None:
+                    candidates.append(
+                        candidate if candidate.is_dir() else candidate.parent
+                    )
+
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.expanduser().resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique.append(resolved)
+    return unique
+
+
+def resolve_data_mapping_source_root(
+    workspace: CanvasWorkspace,
+    proposal: DataMappingProposal,
+    *,
+    selected_root: Path | None = None,
+) -> Path:
+    """Resolve one hash-valid source root without guessing between copies."""
+
+    if not workspace.has_project_delivery:
+        raise ValueError(
+            "Data mapping requires a SciPlot project with plot_request.json; "
+            "a standalone VSZ has no raw-data authority to confirm."
+        )
+    if selected_root is not None:
+        selected = selected_root.expanduser().resolve()
+        verify_data_mapping_sources(proposal, source_root=selected)
+        return selected
+
+    matches: list[tuple[Path, tuple[str, ...]]] = []
+    for candidate in _mapping_source_candidates(workspace):
+        try:
+            resolved = verify_data_mapping_sources(
+                proposal, source_root=candidate
+            )
+        except (FileNotFoundError, ValueError):
+            continue
+        matches.append(
+            (
+                candidate,
+                tuple(
+                    str(resolved[source.source_id].resolve())
+                    for source in proposal.sources
+                ),
+            )
+        )
+    if not matches:
+        raise FileNotFoundError(
+            "SciPlot could not locate every hash-matched source from the current "
+            "project. Choose the folder that contains the proposal's relative paths."
+        )
+    source_sets = {paths for _root, paths in matches}
+    if len(source_sets) != 1:
+        raise ValueError(
+            "More than one different source tree matches this proposal. Choose "
+            "the intended source folder explicitly."
+        )
+    return matches[0][0]
+
+
+def default_data_mapping_output_root(workspace: CanvasWorkspace) -> Path:
+    if workspace.project_dir is None:
+        raise ValueError("Standalone VSZ workspaces cannot create mapped projects.")
+    return (workspace.project_dir.parent / "mapped_projects").resolve()
 
 
 def _standalone_session_root(document_path: Path) -> Path:
@@ -158,6 +287,8 @@ def export_canvas_workspace(
 
 __all__ = [
     "CanvasWorkspace",
+    "default_data_mapping_output_root",
     "export_canvas_workspace",
+    "resolve_data_mapping_source_root",
     "resolve_canvas_workspace",
 ]

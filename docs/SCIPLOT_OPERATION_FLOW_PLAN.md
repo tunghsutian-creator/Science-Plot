@@ -5,9 +5,10 @@ are in progress. The adaptive visual, contextual editing, and non-exported
 review/promotion kernels are implemented. The first provider-neutral M3
 Assistant transaction kernel and deterministic M3 data-mapping executor are
 also implemented. The provider-neutral request/progress/cancellation boundary
-and injected-provider request UI are now implemented. Real-session cutover, a
-production model adapter, Canvas execution of confirmed data mappings,
-composition, and the default `studio` migration remain active work.
+and injected-provider request UI are now implemented. Confirmed data mappings
+now execute from the Canvas decision card into a separate candidate Canvas.
+Real-session cutover, a production model adapter, native composition, and the
+default `studio` migration remain active work.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -195,11 +196,12 @@ baseline into the existing `Document` and `PlotWindow`, restores the baseline
 page and zoom, and verifies the exact render before closing the transaction.
 
 AI is a participant in the document, not a separate hidden renderer.
-Deterministic `DataMappingProposal` execution now exists behind the CLI and
-typed contract, but the real model/provider connection and Canvas
-request/confirmation UI remain later M3 increments. The current UI
-intentionally does not imitate a working chat box before that lifecycle is
-real.
+Deterministic `DataMappingProposal` execution is available from the Assistant
+decision card. SciPlot first shows a zero-write, raw-value-free preview; a
+separate user click creates a hash-bound receipt and starts background atomic
+execution. Ambiguous source roots stop at a source chooser. Success opens an
+isolated mapped project in a new Canvas while the current Canvas and VSZ remain
+unchanged. A real model/provider connection remains later M3 work.
 
 ### Compose
 
@@ -321,7 +323,7 @@ accessibility QA, not by application chrome tokens.
   dock on wider windows;
 - inspector visibility, bounded width, contrast preference, active inspector,
   stable-object selection, XY point selection, and structural-QA state persist
-  in `CanvasSession` version 5, with safe version-1 through version-4
+  in `CanvasSession` version 6, with safe version-1 through version-5
   migration;
 - `Tab`, `Esc`, `F9`, menus, shortcuts, focus indication, and accessible
   control names are covered by the native application probe;
@@ -363,7 +365,7 @@ accessibility QA, not by application chrome tokens.
   provider-optional empty state, current-turn summary, bounded context,
   complete wrapping Before/After cards, and pause, accept, reject, undo,
   commit, and whole-turn rollback actions;
-- `CanvasSession` version 5 persists a closed transaction state machine,
+- `CanvasSession` version 6 persists a closed transaction state machine,
   verified baseline artifacts, baseline page/viewport, durable journal
   outbox, apply marker, and complete batch history;
 - pending previews are identity-bound to the exact typed batch and cannot be
@@ -415,8 +417,10 @@ accessibility QA, not by application chrome tokens.
 - registered headerless FTIR and two-workbook Agilent GPC/SEC sources complete
   VSZ, PDF/TIFF, artifact QA, publication QA, and delivery with
   `ready_to_use=true`;
-- the adversarial mapping probe passes `50/50`; runtime smoke version 13
-  passes `30/30`, including the mapped-project Studio lifecycle;
+- the adversarial mapping probe passes `55/55`, including normalized path
+  rebinding rejection and legacy-v1 inspection-only migration; runtime smoke
+  version 15 passes `30/30`, including the
+  mapped-project Studio lifecycle;
 - these non-interactive engineering receipts do not count as user confirmation
   or human daily-use sessions.
 
@@ -447,13 +451,29 @@ accessibility QA, not by application chrome tokens.
 - window close remains bounded when a provider does not expose Stop, and the
   persisted cancellation state prevents a late result from being accepted;
 - the provider-disabled Canvas remains fully usable;
-- the pure Canvas contract passes `32/32`, the threaded Assistant lifecycle
-  and adversarial probe passes `29/29`, and runtime smoke version 14 passes
-  `30/30`.
+- `DataMappingProposal` uses the same Assistant workspace for source discovery,
+  zero-write preview, explicit confirmation, progress, retry, rejection, and
+  verified handoff;
+- source ambiguity requires a visible folder choice; source or request changes
+  invalidate confirmation before a write;
+- confirmed mapping runs outside the GUI thread, reuses one immutable receipt
+  after interruption, writes only an isolated candidate, and opens the result
+  in a separate Canvas without changing the original Canvas or VSZ;
+- the receipt binds normalized source, request, and output paths. Reopen
+  reconciles a persisted `executing` state to the same confirmed receipt, and
+  a completed candidate is replay-verified before idempotent reuse;
+- an executed handoff rechecks the manifest, mapped VSZ, and original VSZ. A
+  concurrent original-VSZ change during structural QA is checked again before
+  commit and becomes a recoverable conflict;
+- path-unbound v1 receipts remain inspectable but cannot execute, render, or
+  hand off; only an explicit fresh v2 confirmation into a new output root
+  restores authority;
+- the pure Canvas contract passes `36/36`, the threaded Assistant lifecycle
+  and adversarial probe passes `41/41`, deterministic mapping passes `55/55`,
+  and runtime smoke version 15 passes `30/30`.
 
 The current engineering provider is deterministic and injected. A production
-model adapter, Canvas execution of the `DataMappingProposal` decision card,
-and canonical natural-language acceptance tasks remain M3 work.
+model adapter and canonical natural-language acceptance tasks remain M3 work.
 
 ## M2 implementation order
 

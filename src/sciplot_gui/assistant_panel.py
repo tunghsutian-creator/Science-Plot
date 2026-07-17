@@ -7,6 +7,7 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from sciplot_core.canvas.model import CanvasTransaction
 from sciplot_core.canvas.provider import (
     ASSISTANT_MAX_INTENT_LENGTH,
+    AssistantDataMappingState,
     AssistantProviderDescriptor,
     AssistantRequestRecord,
 )
@@ -63,6 +64,9 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         self._request_record: AssistantRequestRecord | None = None
         self._can_undo = False
         self._busy = False
+        self._mapping_active = False
+        self._mapping_stage = ""
+        self._mapping_message = ""
         self._trimming_request = False
         self._build()
         self.set_transaction(None, context={}, can_undo=False)
@@ -135,8 +139,7 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         self.connected_provider_label.setObjectName("assistantMeta")
         self.connected_provider_label.setMaximumWidth(140)
         self.connected_provider_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignRight
-            | QtCore.Qt.AlignmentFlag.AlignVCenter
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
         )
         composer_header.addWidget(composer_title)
         composer_header.addStretch(1)
@@ -313,7 +316,7 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         proposal_actions.setSpacing(8)
         self.reject_button = QtWidgets.QPushButton("Reject Proposal")
         self.reject_button.setObjectName("assistantSecondaryButton")
-        self.accept_button = QtWidgets.QPushButton("Accept & Apply")
+        self.accept_button = QtWidgets.QPushButton("Accept and Apply")
         self.accept_button.setObjectName("assistantPrimaryButton")
         proposal_actions.addWidget(self.reject_button)
         proposal_actions.addWidget(self.accept_button, 1)
@@ -404,6 +407,19 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         self._busy = bool(busy)
         self._sync_actions()
 
+    def set_mapping_activity(
+        self,
+        active: bool,
+        *,
+        stage: str = "",
+        message: str = "",
+    ) -> None:
+        self._mapping_active = bool(active)
+        self._mapping_stage = str(stage or "")
+        self._mapping_message = str(message or "")
+        self._sync_request_response()
+        self._sync_actions()
+
     def mark_request_submitted(self) -> None:
         self.request_editor.clear()
         self._sync_actions()
@@ -458,7 +474,9 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         self._sync_context(context)
         self._sync_request_response()
 
-        pending_preview = transaction.pending_preview if transaction is not None else None
+        pending_preview = (
+            transaction.pending_preview if transaction is not None else None
+        )
         response = (
             self._request_record.parsed_response
             if self._request_record is not None
@@ -475,14 +493,17 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
             self.proposal_title.setText("Review proposal")
             self._set_preview(pending_preview)
         elif mapping_proposal is not None:
-            self.proposal_title.setText("Data mapping proposal")
-            self._set_mapping_proposal(mapping_proposal)
+            self.proposal_title.setText("Confirm data meaning")
+            self._set_mapping_proposal(
+                mapping_proposal,
+                self._request_record.parsed_mapping_state
+                if self._request_record is not None
+                else None,
+            )
         else:
             self._clear_preview_cards()
             self.operation_count.clear()
-        has_proposal = (
-            pending_preview is not None or mapping_proposal is not None
-        )
+        has_proposal = pending_preview is not None or mapping_proposal is not None
         self.proposal_card.setVisible(has_proposal)
         self.context_card.setVisible(active and not has_proposal)
 
@@ -506,12 +527,26 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
             state_text, state_key = "Working", "applying"
         elif record_status == "cancel_requested":
             state_text, state_key = "Stopping", "paused"
+        elif self._mapping_active:
+            state_text, state_key = "Working", "applying"
         elif transaction.applying_batch_id:
             state_text, state_key = "Applying", "applying"
         elif transaction.status == "conflict":
             state_text, state_key = "Conflict", "conflict"
         elif transaction.pending_batch is not None:
             state_text, state_key = "Proposal", "proposal"
+        elif self._request_record is not None and (
+            self._request_record.parsed_mapping_state is not None
+        ):
+            mapping_status = self._request_record.parsed_mapping_state.status
+            if mapping_status == "executed":
+                state_text, state_key = "Mapped", "active"
+            elif mapping_status == "preview_ready":
+                state_text, state_key = "Confirm", "proposal"
+            elif mapping_status in {"confirmed", "executing"}:
+                state_text, state_key = "Building", "applying"
+            else:
+                state_text, state_key = "Sources", "paused"
         elif transaction.status == "paused":
             state_text, state_key = "Paused", "paused"
         else:
@@ -558,9 +593,7 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
             else 0
         )
         review_count = (
-            int(review.get("active_count") or 0)
-            if isinstance(review, dict)
-            else 0
+            int(review.get("active_count") or 0) if isinstance(review, dict) else 0
         )
         qa_status = (
             str(qa.get("structural_status") or "not run")
@@ -575,8 +608,7 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         )
         if self._provider is not None:
             scope = (
-                self.selection_label.text()
-                + " · structure, review notes, and QA only"
+                self.selection_label.text() + " · structure, review notes, and QA only"
             )
             self.request_scope_label.setText(scope)
         else:
@@ -585,7 +617,7 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
     def _sync_request_response(self) -> None:
         record = self._request_record
         running = record is not None and record.provider_running
-        self.progress_card.setVisible(running)
+        self.progress_card.setVisible(running or self._mapping_active)
         response = record.parsed_response if record is not None else None
         self.understanding_card.setVisible(response is not None)
         if response is not None:
@@ -597,6 +629,19 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
             self.understanding_label.clear()
             self.warning_label.clear()
             self.warning_label.hide()
+        if self._mapping_active:
+            self.progress_stage_label.setText(
+                (self._mapping_stage or "deterministic mapping")
+                .replace("_", " ")
+                .title()
+            )
+            self.progress_message.setText(
+                self._mapping_message or "Verifying the deterministic mapping contract."
+            )
+            self.progress_bar.setRange(0, 0)
+            self.cancel_request_button.hide()
+            return
+        self.cancel_request_button.show()
         if not running:
             return
         latest = record.latest_event
@@ -652,17 +697,53 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         elif transaction.pending_batch is not None:
             self.status_copy.setText(
                 "Review the complete Before/After proposal. The figure changes "
-                "only after you choose Accept & Apply."
+                "only after you choose Accept and Apply."
             )
-        elif (
-            response is not None
-            and response.proposal_kind == "data_mapping_proposal"
-        ):
-            self.status_copy.setText(
-                "This changes data meaning, so it remains paused until SciPlot "
-                "can run the deterministic mapping preview and obtain a separate "
-                "user confirmation."
-            )
+        elif response is not None and response.proposal_kind == "data_mapping_proposal":
+            state = record.parsed_mapping_state if record is not None else None
+            if state is None:
+                self.status_copy.setText(
+                    "This changes data meaning and requires deterministic preview "
+                    "plus a separate user confirmation."
+                )
+            elif state.status == "source_required":
+                self.status_copy.setText(
+                    (state.last_error or "Choose the source folder to continue.")
+                    + " No data or figure files were changed."
+                )
+            elif state.status == "previewing":
+                self.status_copy.setText(
+                    "SciPlot is verifying source and request hashes without writing "
+                    "files."
+                )
+            elif state.status == "preview_ready":
+                self.status_copy.setText(
+                    "Review the source roles, row counts, units, transformations, "
+                    "and routing. Confirm and Build is the only action that issues a "
+                    "receipt and writes an isolated candidate project."
+                )
+            elif state.status == "confirmed":
+                self.status_copy.setText(
+                    (state.last_error + " " if state.last_error else "")
+                    + "The confirmation receipt is preserved. Resume Build will "
+                    "reuse that exact receipt."
+                )
+            elif state.status == "executing":
+                self.status_copy.setText(
+                    "Building an isolated candidate project. The original VSZ, "
+                    "request, and raw sources remain unchanged."
+                )
+            elif state.status == "executed":
+                self.status_copy.setText(
+                    "The verified candidate is ready. Open Mapped Canvas keeps the "
+                    "original Canvas unchanged and opens the new exact-current VSZ. "
+                    "Its execution evidence cannot be relabeled as rejected."
+                )
+            else:
+                self.status_copy.setText(
+                    "This mapping proposal remains paused until its source authority "
+                    "and user decision are explicit."
+                )
         elif record is not None and record.status == "needs_human_confirmation":
             self.status_copy.setText(
                 "The provider found scientific ambiguity. No figure change was "
@@ -725,7 +806,11 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
                 tooltip=tooltip,
             )
 
-    def _set_mapping_proposal(self, proposal: dict[str, Any]) -> None:
+    def _set_mapping_proposal(
+        self,
+        proposal: dict[str, Any],
+        state: AssistantDataMappingState | None,
+    ) -> None:
         self._clear_preview_cards()
         sources = proposal.get("sources")
         columns = proposal.get("columns")
@@ -737,9 +822,21 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         if not isinstance(transformations, list):
             transformations = []
         self.change_count = len(sources)
-        self.operation_count.setText(
-            f"{len(sources)} source" + ("" if len(sources) == 1 else "s")
+        preview_payload = (
+            state.preview if state is not None and state.preview is not None else {}
         )
+        preview_sources = {
+            str(item.get("source_id") or ""): item
+            for item in (preview_payload.get("sources") or [])
+            if isinstance(item, dict)
+        }
+        row_count = sum(
+            int(item.get("row_count") or 0) for item in preview_sources.values()
+        )
+        count_text = f"{len(sources)} source" + ("" if len(sources) == 1 else "s")
+        if row_count:
+            count_text += f" · {row_count} rows"
+        self.operation_count.setText(count_text)
         labels = proposal.get("sample_labels")
         if not isinstance(labels, dict):
             labels = {}
@@ -752,22 +849,67 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
                 for item in columns
                 if isinstance(item, dict) and item.get("source_id") == source_id
             ]
-            before = ", ".join(
-                f"column {item.get('source_column_index')}"
-                for item in mapped
-            ) or "No columns"
-            after = ", ".join(
-                f"{item.get('role')} → {item.get('output_column')}"
-                for item in mapped
-            ) or "No mapped roles"
+            before = (
+                ", ".join(
+                    f"column {item.get('source_column_index')}" for item in mapped
+                )
+                or "No columns"
+            )
+            after = (
+                ", ".join(
+                    f"{item.get('role')} → {item.get('output_column')}"
+                    for item in mapped
+                )
+                or "No mapped roles"
+            )
             sample = str(labels.get(source_id) or source_id)
+            preview = preview_sources.get(source_id, {})
+            if preview:
+                units = preview.get("units")
+                unit_text = (
+                    ", ".join(f"{key}: {value}" for key, value in units.items())
+                    if isinstance(units, dict) and units
+                    else "units unchanged"
+                )
+                after += f" · {preview.get('row_count', 0)} rows · {unit_text}"
+                transform_names = [
+                    str(item.get("transformation_type") or "transformation")
+                    for item in preview.get("transformations", [])
+                    if isinstance(item, dict)
+                ]
+                tooltip = (
+                    ", ".join(transform_names)
+                    if transform_names
+                    else "No declared transformations"
+                )
+            else:
+                tooltip = f"{len(transformations)} declared transformation" + (
+                    "" if len(transformations) == 1 else "s"
+                )
             self._add_change_card(
                 target=f"{sample} · {source.get('relative_path', '')}",
                 before=before,
                 after=after,
+                tooltip=tooltip,
+            )
+        if state is not None and (
+            state.source_root or state.output_root or preview_payload.get("base_request")
+        ):
+            source_root = state.source_root or "Not resolved"
+            request_path = str(
+                preview_payload.get("base_request") or "Not resolved"
+            )
+            output_root = state.output_root or "Not resolved"
+            self._add_change_card(
+                target="Authority paths bound by confirmation",
+                before=(
+                    f"Source root: {source_root}\n"
+                    f"Request: {request_path}"
+                ),
+                after=f"Candidate parent: {output_root}",
                 tooltip=(
-                    f"{len(transformations)} declared transformation"
-                    + ("" if len(transformations) == 1 else "s")
+                    "These normalized paths are visible before confirmation and "
+                    "are bound into the immutable receipt."
                 ),
             )
 
@@ -840,11 +982,19 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
         applying = bool(
             transaction is not None and transaction.applying_batch_id is not None
         )
+        mapping_state = record.parsed_mapping_state if record is not None else None
+        mapping_pending = bool(
+            record is not None
+            and record.status == "proposal_ready"
+            and mapping_state is not None
+            and mapping_state.status != "rejected"
+        )
         unresolved_non_canvas = bool(
             record is not None
             and record.status
             in {"proposal_ready", "needs_human_confirmation", "needs_rule_repair"}
             and not pending
+            and not mapping_pending
         )
         request_resolved = record is None or record.status in {
             "applied",
@@ -858,6 +1008,7 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
             and not self._busy
             and not running
             and not pending
+            and not mapping_pending
             and not unresolved_non_canvas
             and (transaction is None or active)
             and request_resolved
@@ -889,15 +1040,51 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
 
         has_transaction_actions = transaction is not None and not running
         self.action_bar.setVisible(has_transaction_actions)
-        self.proposal_action_widget.setVisible(bool(pending))
+        self.proposal_action_widget.setVisible(bool(pending or mapping_pending))
+        mapping_executed = bool(
+            mapping_pending
+            and mapping_state is not None
+            and mapping_state.status == "executed"
+        )
+        self.reject_button.setVisible(not mapping_executed)
         self.turn_action_widget.setVisible(
-            bool(not pending and not unresolved_non_canvas)
+            bool(not pending and not mapping_pending and not unresolved_non_canvas)
         )
         self.safety_action_widget.setVisible(has_transaction_actions)
         enabled = not self._busy and transaction is not None
-        self.accept_button.setEnabled(enabled and active and pending and not applying)
+        if mapping_pending and mapping_state is not None:
+            mapping_labels = {
+                "proposed": "Locate Sources",
+                "source_required": "Choose Source Folder",
+                "previewing": "Checking Sources…",
+                "preview_ready": "Confirm and Build Project",
+                "confirmed": "Resume Build",
+                "executing": "Building Project…",
+                "executed": "Open Mapped Canvas",
+            }
+            self.accept_button.setText(
+                mapping_labels.get(mapping_state.status, "Continue")
+            )
+        else:
+            self.accept_button.setText("Accept and Apply")
+        mapping_accept_ready = bool(
+            mapping_pending
+            and mapping_state is not None
+            and mapping_state.status
+            in {"proposed", "source_required", "preview_ready", "confirmed", "executed"}
+        )
+        self.accept_button.setEnabled(
+            enabled
+            and not self._mapping_active
+            and ((active and pending and not applying) or mapping_accept_ready)
+        )
         self.reject_button.setEnabled(
-            enabled and (active or paused) and pending and not applying
+            enabled
+            and not self._mapping_active
+            and (
+                ((active or paused) and pending and not applying)
+                or (mapping_pending and not mapping_executed)
+            )
         )
         self.undo_button.setEnabled(
             enabled
@@ -915,12 +1102,19 @@ class AssistantTransactionPanel(QtWidgets.QWidget):
             and not unresolved_non_canvas
         )
         conflict = transaction is not None and transaction.status == "conflict"
-        self.pause_button.setVisible(not conflict and not unresolved_non_canvas)
+        self.pause_button.setVisible(
+            not conflict and not unresolved_non_canvas and not mapping_pending
+        )
         self.pause_button.setText("Resume Turn" if paused else "Pause Turn")
         self.pause_button.setEnabled(
-            enabled and not applying and (active or paused) and not unresolved_non_canvas
+            enabled
+            and not applying
+            and (active or paused)
+            and not unresolved_non_canvas
         )
-        self.rollback_button.setEnabled(enabled and not applying)
+        self.rollback_button.setEnabled(
+            enabled and not applying and not self._mapping_active
+        )
 
 
 __all__ = ["AssistantTransactionPanel"]

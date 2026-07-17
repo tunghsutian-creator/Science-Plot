@@ -16,6 +16,7 @@ from sciplot_core.canvas import (
     DataMappingProposal,
     DataSourceReference,
     DeclarativeTransformation,
+    LegacyDataMappingConfirmation,
 )
 from sciplot_core.data_mapping import (
     DATA_MAPPING_BASE_LEDGER_FILENAME,
@@ -23,6 +24,7 @@ from sciplot_core.data_mapping import (
     DATA_MAPPING_REQUEST_SEED_FILENAME,
     create_data_mapping_confirmation,
     execute_data_mapping_proposal,
+    load_data_mapping_confirmation,
     load_data_mapping_execution,
     preview_data_mapping_proposal,
     resolve_data_mapping_request,
@@ -182,9 +184,7 @@ def _primary_proposal(
             DeclarativeTransformation(
                 transformation_id="select_plot_columns",
                 transformation_type="select",
-                parameters={
-                    "columns": ["time_ms", "signal_norm", "ratio"]
-                },
+                parameters={"columns": ["time_ms", "signal_norm", "ratio"]},
             ),
             DeclarativeTransformation(
                 transformation_id="sort_time",
@@ -221,9 +221,7 @@ def _aggregate_proposal(
             DataColumnMapping(
                 "replicates", 0, "sample", "sample", expected_header="sample"
             ),
-            DataColumnMapping(
-                "replicates", 1, "x", "x", expected_header="x"
-            ),
+            DataColumnMapping("replicates", 1, "x", "x", expected_header="x"),
             DataColumnMapping(
                 "replicates", 2, "value", "value", expected_header="value"
             ),
@@ -271,26 +269,17 @@ def run_data_mapping_probe(
     )
     aggregate_source = source / "replicates.csv"
     aggregate_source.write_text(
-        "sample,x,value\n"
-        "A,0,1\n"
-        "A,0,3\n"
-        "A,1,5\n"
-        "A,1,7\n",
+        "sample,x,value\nA,0,1\nA,0,3\nA,1,5\nA,1,7\n",
         encoding="utf-8",
     )
     decimal_source = source / "decimal_comma.csv"
     decimal_source.write_text(
-        "x;y\n"
-        "10,0;20,0\n"
-        "2,5;5,0\n"
-        "1,25;2,5\n",
+        "x;y\n10,0;20,0\n2,5;5,0\n1,25;2,5\n",
         encoding="utf-8",
     )
     nonnumeric_source = source / "nonnumeric.csv"
     nonnumeric_source.write_text(
-        "x,y\n"
-        "alpha,beta\n"
-        "gamma,delta\n",
+        "x,y\nalpha,beta\ngamma,delta\n",
         encoding="utf-8",
     )
     request = root / "plot_request.json"
@@ -311,8 +300,43 @@ def run_data_mapping_probe(
         proposal,
         source_root=source,
         request_path=request,
+        output_root=root / "mappings",
         confirmed_by="probe_user",
     )
+    alternate_source = root / "alternate_source"
+    alternate_source.mkdir()
+    shutil.copy2(primary_source, alternate_source / primary_source.name)
+    alternate_request = root / "alternate_plot_request.json"
+    shutil.copy2(request, alternate_request)
+    rebound_output = root / "rebound_output"
+    source_root_rebind_rejected = _raises_value_error(
+        lambda: execute_data_mapping_proposal(
+            proposal,
+            confirmation,
+            source_root=alternate_source,
+            request_path=request,
+            output_root=root / "mappings",
+        )
+    )
+    request_path_rebind_rejected = _raises_value_error(
+        lambda: execute_data_mapping_proposal(
+            proposal,
+            confirmation,
+            source_root=source,
+            request_path=alternate_request,
+            output_root=root / "mappings",
+        )
+    )
+    output_root_rebind_rejected = _raises_value_error(
+        lambda: execute_data_mapping_proposal(
+            proposal,
+            confirmation,
+            source_root=source,
+            request_path=request,
+            output_root=rebound_output,
+        )
+    )
+    rebound_paths_zero_write = not rebound_output.exists()
     primary_hash = file_sha256(primary_source)
     result = execute_data_mapping_proposal(
         proposal,
@@ -327,15 +351,81 @@ def run_data_mapping_probe(
     superseded_ledger_path = (
         Path(result["output_root"]) / DATA_MAPPING_BASE_LEDGER_FILENAME
     )
-    superseded_ledger = json.loads(
-        superseded_ledger_path.read_text(encoding="utf-8")
-    )
+    superseded_ledger = json.loads(superseded_ledger_path.read_text(encoding="utf-8"))
     execution_reuse = execute_data_mapping_proposal(
         proposal,
         confirmation,
         source_root=source,
         request_path=request,
         output_root=root / "mappings",
+    )
+
+    legacy_confirmation_payload = confirmation.to_dict()
+    legacy_confirmation_payload["version"] = 1
+    for field in ("source_root", "request_path", "output_root"):
+        legacy_confirmation_payload.pop(field)
+    legacy_fixture_path = root / "committed_confirmation_v1.json"
+    legacy_fixture_path.write_text(
+        json.dumps(legacy_confirmation_payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    legacy_confirmation = load_data_mapping_confirmation(legacy_fixture_path)
+    legacy_execution_rejected = _raises_value_error(
+        lambda: execute_data_mapping_proposal(
+            proposal,
+            legacy_confirmation,
+            source_root=source,
+            request_path=request,
+            output_root=root / "legacy_execution_blocked",
+        )
+    )
+    committed_confirmation_path = Path(result["confirmation"])
+    committed_confirmation_bytes = committed_confirmation_path.read_bytes()
+    committed_confirmation_path.write_text(
+        json.dumps(legacy_confirmation_payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    try:
+        legacy_execution = load_data_mapping_execution(result["output_root"])
+        legacy_handoff_rejected = _raises_value_error(
+            lambda: resolve_data_mapping_request(
+                candidate,
+                base_dir=candidate_path.parent,
+            )
+        )
+    finally:
+        committed_confirmation_path.write_bytes(committed_confirmation_bytes)
+    legacy_execution_inspectable = bool(
+        isinstance(legacy_confirmation, LegacyDataMappingConfirmation)
+        and legacy_execution.get("confirmation_schema_version") == 1
+        and legacy_execution.get("confirmation_migration_required") is True
+        and legacy_execution.get("handoff_allowed") is False
+        and legacy_execution.get("ready_to_use") is False
+    )
+    reconfirmed = create_data_mapping_confirmation(
+        proposal,
+        source_root=source,
+        request_path=request,
+        output_root=root / "legacy_reconfirmed_mappings",
+        confirmed_by="legacy_v1_explicit_reconfirmation_probe",
+    )
+    reconfirmed_result = execute_data_mapping_proposal(
+        proposal,
+        reconfirmed,
+        source_root=source,
+        request_path=request,
+        output_root=root / "legacy_reconfirmed_mappings",
+    )
+    reconfirmed_execution = load_data_mapping_execution(
+        reconfirmed_result["output_root"]
+    )
+    legacy_reconfirmation_restores_authority = bool(
+        reconfirmed.to_dict()["version"] == 2
+        and reconfirmed.confirmation_id != legacy_confirmation.confirmation_id
+        and reconfirmed_execution.get("confirmation_schema_version") == 2
+        and reconfirmed_execution.get("confirmation_migration_required") is False
+        and reconfirmed_execution.get("handoff_allowed") is True
+        and reconfirmed_execution.get("ready_to_use") is True
     )
 
     candidate["review_notes"] = [
@@ -347,8 +437,7 @@ def run_data_mapping_probe(
         encoding="utf-8",
     )
     evolving_candidate_valid = (
-        load_data_mapping_execution(result["output_root"])["status"]
-        == "passed"
+        load_data_mapping_execution(result["output_root"])["status"] == "passed"
     )
     candidate_with_wrong_raw_input = dict(candidate)
     candidate_with_wrong_raw_input["input"] = str(aggregate_source)
@@ -412,9 +501,7 @@ def run_data_mapping_probe(
     coordinated_manifest = json.loads(execution_bytes)
     coordinated_seed_hash = file_sha256(seed_path)
     coordinated_manifest["request_seed_sha256"] = coordinated_seed_hash
-    coordinated_manifest["request_candidate_initial_sha256"] = (
-        coordinated_seed_hash
-    )
+    coordinated_manifest["request_candidate_initial_sha256"] = coordinated_seed_hash
     execution_path.write_text(
         json.dumps(coordinated_manifest, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -436,17 +523,13 @@ def run_data_mapping_probe(
         encoding="utf-8",
     )
     coordinated_manifest = json.loads(execution_bytes)
-    coordinated_manifest["superseded_base_transform_ledger"] = str(
+    coordinated_manifest["superseded_base_transform_ledger"] = str(redirected_ledger)
+    coordinated_manifest["superseded_base_transform_ledger_sha256"] = file_sha256(
         redirected_ledger
-    )
-    coordinated_manifest["superseded_base_transform_ledger_sha256"] = (
-        file_sha256(redirected_ledger)
     )
     coordinated_seed_hash = file_sha256(seed_path)
     coordinated_manifest["request_seed_sha256"] = coordinated_seed_hash
-    coordinated_manifest["request_candidate_initial_sha256"] = (
-        coordinated_seed_hash
-    )
+    coordinated_manifest["request_candidate_initial_sha256"] = coordinated_seed_hash
     execution_path.write_text(
         json.dumps(coordinated_manifest, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -458,9 +541,7 @@ def run_data_mapping_probe(
     execution_path.write_bytes(execution_bytes)
 
     coordinated_ledger = json.loads(active_ledger_bytes)
-    coordinated_ledger["steps"][0]["parameters"]["provider"] = (
-        "forged_provider"
-    )
+    coordinated_ledger["steps"][0]["parameters"]["provider"] = "forged_provider"
     active_ledger_path.write_text(
         json.dumps(coordinated_ledger, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -473,14 +554,10 @@ def run_data_mapping_probe(
     )
     coordinated_manifest = json.loads(execution_bytes)
     coordinated_manifest["transform_steps"] = coordinated_ledger["steps"]
-    coordinated_manifest["transform_ledger_sha256"] = file_sha256(
-        active_ledger_path
-    )
+    coordinated_manifest["transform_ledger_sha256"] = file_sha256(active_ledger_path)
     coordinated_seed_hash = file_sha256(seed_path)
     coordinated_manifest["request_seed_sha256"] = coordinated_seed_hash
-    coordinated_manifest["request_candidate_initial_sha256"] = (
-        coordinated_seed_hash
-    )
+    coordinated_manifest["request_candidate_initial_sha256"] = coordinated_seed_hash
     execution_path.write_text(
         json.dumps(coordinated_manifest, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -544,6 +621,9 @@ def run_data_mapping_probe(
         proposal_sha256="f" * 64,
         base_request_sha256=proposal.base_request_sha256,
         source_hashes=proposal.source_hashes,
+        source_root=str(source.resolve()),
+        request_path=str(request.resolve()),
+        output_root=str((root / "forged").resolve()),
         confirmed_by="forged",
     )
     forged_confirmation_rejected = _raises_value_error(
@@ -587,18 +667,12 @@ def run_data_mapping_probe(
     confirmation_without_timestamp = confirmation.to_dict()
     confirmation_without_timestamp.pop("confirmed_at")
     missing_confirmation_timestamp_rejected = _raises_value_error(
-        lambda: DataMappingConfirmation.from_dict(
-            confirmation_without_timestamp
-        )
+        lambda: DataMappingConfirmation.from_dict(confirmation_without_timestamp)
     )
     proposal_without_transformation_id = proposal.to_dict()
-    proposal_without_transformation_id["transformations"][0].pop(
-        "transformation_id"
-    )
+    proposal_without_transformation_id["transformations"][0].pop("transformation_id")
     missing_transformation_id_rejected = _raises_value_error(
-        lambda: DataMappingProposal.from_dict(
-            proposal_without_transformation_id
-        )
+        lambda: DataMappingProposal.from_dict(proposal_without_transformation_id)
     )
     non_string_provider = proposal.to_dict()
     non_string_provider["provider"] = True
@@ -754,6 +828,7 @@ def run_data_mapping_probe(
         aggregate_proposal,
         source_root=source,
         request_path=request,
+        output_root=root / "aggregate_mappings",
         confirmed_by="probe_user",
     )
     aggregate_result = execute_data_mapping_proposal(
@@ -779,12 +854,8 @@ def run_data_mapping_probe(
             ),
         ),
         columns=(
-            DataColumnMapping(
-                "decimal", 0, "x", "x", expected_header="x"
-            ),
-            DataColumnMapping(
-                "decimal", 1, "y", "y", expected_header="y"
-            ),
+            DataColumnMapping("decimal", 0, "x", "x", expected_header="x"),
+            DataColumnMapping("decimal", 1, "y", "y", expected_header="y"),
         ),
         transformations=(
             DeclarativeTransformation(
@@ -799,6 +870,7 @@ def run_data_mapping_probe(
         decimal_proposal,
         source_root=source,
         request_path=request,
+        output_root=root / "decimal_mappings",
         confirmed_by="probe_user",
     )
     decimal_result = execute_data_mapping_proposal(
@@ -828,18 +900,10 @@ def run_data_mapping_probe(
             ),
         ),
         columns=(
-            DataColumnMapping(
-                "first", 0, "x", "x", expected_header="time_ms"
-            ),
-            DataColumnMapping(
-                "first", 1, "y", "y", expected_header="signal"
-            ),
-            DataColumnMapping(
-                "second", 0, "x", "x", expected_header="x"
-            ),
-            DataColumnMapping(
-                "second", 1, "y", "y", expected_header="y"
-            ),
+            DataColumnMapping("first", 0, "x", "x", expected_header="time_ms"),
+            DataColumnMapping("first", 1, "y", "y", expected_header="signal"),
+            DataColumnMapping("second", 0, "x", "x", expected_header="x"),
+            DataColumnMapping("second", 1, "y", "y", expected_header="y"),
         ),
         sample_labels={
             "first": "Sample",
@@ -847,10 +911,12 @@ def run_data_mapping_probe(
         },
         confidence=0.8,
     )
+    atomic_root = root / "atomic_mappings"
     atomic_confirmation = create_data_mapping_confirmation(
         atomic_proposal,
         source_root=source,
         request_path=request,
+        output_root=atomic_root,
         confirmed_by="probe_user",
     )
     call_count = 0
@@ -863,7 +929,6 @@ def run_data_mapping_probe(
         path.parent.mkdir(parents=True, exist_ok=True)
         frame.to_csv(path, index=False)
 
-    atomic_root = root / "atomic_mappings"
     with patch(
         "sciplot_core.data_mapping._write_mapped_csv",
         side_effect=_faulting_write,
@@ -877,19 +942,25 @@ def run_data_mapping_probe(
                 output_root=atomic_root,
             )
         )
-    atomic_final_absent = not (
-        atomic_root / atomic_proposal.proposal_id
-    ).exists()
+    atomic_final_absent = not (atomic_root / atomic_proposal.proposal_id).exists()
     atomic_temps_absent = not any(
         path.name.startswith(f".{atomic_proposal.proposal_id}.tmp-")
         for path in atomic_root.iterdir()
     )
-    collision_result = execute_data_mapping_proposal(
+    collision_root = root / "casefold_mappings"
+    collision_confirmation = create_data_mapping_confirmation(
         atomic_proposal,
-        atomic_confirmation,
         source_root=source,
         request_path=request,
-        output_root=root / "casefold_mappings",
+        output_root=collision_root,
+        confirmed_by="probe_user",
+    )
+    collision_result = execute_data_mapping_proposal(
+        atomic_proposal,
+        collision_confirmation,
+        source_root=source,
+        request_path=request,
+        output_root=collision_root,
     )
     collision_output_names = [
         Path(str(output["path"])).name
@@ -1042,26 +1113,59 @@ def run_data_mapping_probe(
         _check(
             "preview_is_zero_write",
             "Preview validates and executes in memory without changing the workspace",
-            preview["writes_performed"] is False
-            and preview_tree == initial_tree,
+            preview["writes_performed"] is False and preview_tree == initial_tree,
         ),
         _check(
             "preview_excludes_raw_values",
             "Preview exposes shape, columns, units, and transforms but no raw values",
             preview["raw_values_in_preview"] is False
-            and not (
-                {"values", "records", "data"}
-                & set(preview["sources"][0])
-            ),
+            and not ({"values", "records", "data"} & set(preview["sources"][0])),
         ),
         _check(
             "confirmation_binds_proposal",
-            "User confirmation binds the exact proposal, request, and source hashes",
-            confirmation.proposal_sha256
-            == result["proposal_sha256"]
-            and confirmation.base_request_sha256
-            == proposal.base_request_sha256
-            and confirmation.source_hashes == proposal.source_hashes,
+            "User confirmation binds the exact proposal, request, source hashes, and normalized read/write paths",
+            confirmation.proposal_sha256 == result["proposal_sha256"]
+            and confirmation.base_request_sha256 == proposal.base_request_sha256
+            and confirmation.source_hashes == proposal.source_hashes
+            and confirmation.source_root == str(source.resolve())
+            and confirmation.request_path == str(request.resolve())
+            and confirmation.output_root == str((root / "mappings").resolve()),
+        ),
+        _check(
+            "confirmation_source_root_is_bound",
+            "An identical source tree at another path cannot reuse the confirmation receipt",
+            source_root_rebind_rejected,
+        ),
+        _check(
+            "confirmation_request_path_is_bound",
+            "Identical request bytes at another path cannot reuse the confirmation receipt",
+            request_path_rebind_rejected,
+        ),
+        _check(
+            "confirmation_output_root_is_bound",
+            "A confirmed execution cannot be redirected to another write root",
+            output_root_rebind_rejected and rebound_paths_zero_write,
+        ),
+        _check(
+            "legacy_v1_confirmation_is_inspection_only",
+            "A committed-format v1 receipt remains inspectable but cannot execute, render, or hand off",
+            legacy_execution_inspectable
+            and legacy_execution_rejected
+            and legacy_handoff_rejected,
+            {
+                "fixture": str(legacy_fixture_path),
+                "execution": legacy_execution,
+            },
+        ),
+        _check(
+            "legacy_v1_requires_explicit_v2_reconfirmation",
+            "A fresh explicit v2 receipt restores normalized-path execution authority in a new output root",
+            legacy_reconfirmation_restores_authority,
+            {
+                "legacy_confirmation_id": legacy_confirmation.confirmation_id,
+                "current_confirmation_id": reconfirmed.confirmation_id,
+                "execution": reconfirmed_execution,
+            },
         ),
         _check(
             "forged_confirmation_rejected",
@@ -1081,8 +1185,7 @@ def run_data_mapping_probe(
         _check(
             "explicit_exclusion_only",
             "Only the explicitly confirmed bad-quality row is removed",
-            mapped.shape[0] == 3
-            and mapped["time_ms"].tolist() == [0.0, 1.0, 3.0],
+            mapped.shape[0] == 3 and mapped["time_ms"].tolist() == [0.0, 1.0, 3.0],
         ),
         _check(
             "unit_conversion_is_deterministic",
@@ -1116,10 +1219,8 @@ def run_data_mapping_probe(
                     result["preview"],
                     result["transform_ledger"],
                     result["request_candidate"],
-                    Path(result["output_root"])
-                    / DATA_MAPPING_REQUEST_SEED_FILENAME,
-                    Path(result["output_root"])
-                    / DATA_MAPPING_BASE_REQUEST_FILENAME,
+                    Path(result["output_root"]) / DATA_MAPPING_REQUEST_SEED_FILENAME,
+                    Path(result["output_root"]) / DATA_MAPPING_BASE_REQUEST_FILENAME,
                     superseded_ledger_path,
                 )
             ),
@@ -1128,8 +1229,7 @@ def run_data_mapping_probe(
             "base_request_snapshot_is_confirmed",
             "The transaction carries the exact base-request bytes anchored by the proposal and confirmation hash",
             file_sha256(
-                Path(result["output_root"])
-                / DATA_MAPPING_BASE_REQUEST_FILENAME
+                Path(result["output_root"]) / DATA_MAPPING_BASE_REQUEST_FILENAME
             )
             == proposal.base_request_sha256
             == result["base_request_snapshot_sha256"],
@@ -1149,10 +1249,7 @@ def run_data_mapping_probe(
         _check(
             "ledger_records_mapping",
             "The candidate transform ledger records the confirmed mapping and no false identity step",
-            [
-                step.get("operation")
-                for step in candidate["transform_ledger"]["steps"]
-            ]
+            [step.get("operation") for step in candidate["transform_ledger"]["steps"]]
             == ["execute_confirmed_data_mapping_proposal"]
             and all(
                 step.get("id") != "identity_source"
@@ -1164,18 +1261,14 @@ def run_data_mapping_probe(
             "A previous branch ledger is hash-preserved as superseded evidence and cannot appear before the new mapping step",
             result.get("superseded_base_transform_ledger")
             == str(superseded_ledger_path)
-            and [
-                step.get("operation")
-                for step in superseded_ledger.get("steps", [])
-            ]
+            and [step.get("operation") for step in superseded_ledger.get("steps", [])]
             == ["legacy_semantic_preparation"],
         ),
         _check(
             "execution_is_idempotent",
             "Repeating the same confirmed execution reuses the verified result",
             execution_reuse.get("idempotent_reuse") is True
-            and execution_reuse["proposal_sha256"]
-            == result["proposal_sha256"],
+            and execution_reuse["proposal_sha256"] == result["proposal_sha256"],
         ),
         _check(
             "candidate_can_evolve",
@@ -1259,9 +1352,7 @@ def run_data_mapping_probe(
         _check(
             "partial_execution_is_cleaned",
             "Injected multi-output failure leaves neither a final result nor a temporary transaction",
-            atomic_failure_rejected
-            and atomic_final_absent
-            and atomic_temps_absent,
+            atomic_failure_rejected and atomic_final_absent and atomic_temps_absent,
         ),
         _check(
             "case_insensitive_output_names_do_not_collide",
@@ -1280,11 +1371,8 @@ def run_data_mapping_probe(
             "request_only_project_has_complete_semantics",
             "A standard mapping project recovers complete axis and analysis semantics from its persisted rule without an intake manifest",
             request_only_semantic.get("rule_id") == "ftir_spectrum"
-            and set(request_only_semantic.get("axis_plan") or {})
-            == {"x", "y"}
-            and isinstance(
-                request_only_semantic.get("analysis_plan"), list
-            ),
+            and set(request_only_semantic.get("axis_plan") or {}) == {"x", "y"}
+            and isinstance(request_only_semantic.get("analysis_plan"), list),
         ),
         _check(
             "numeric_sample_labels_survive_unit_rows",

@@ -357,6 +357,12 @@ def _build_parser() -> argparse.ArgumentParser:
     mapping_confirm_parser.add_argument("proposal", type=Path)
     mapping_confirm_parser.add_argument("--source-root", type=Path, required=True)
     mapping_confirm_parser.add_argument("--request", type=Path, required=True)
+    mapping_confirm_parser.add_argument(
+        "--execution-root",
+        type=Path,
+        required=True,
+        help="Exact parent directory where confirmed execution may write its candidate.",
+    )
     mapping_confirm_parser.add_argument("--by", required=True)
     mapping_confirm_parser.add_argument("--out", type=Path)
     mapping_confirm_parser.add_argument("--json", action="store_true")
@@ -933,6 +939,7 @@ def main(argv: list[str] | None = None) -> int:
                         args.request,
                         kind="Plot request",
                     ),
+                    output_root=args.execution_root.expanduser().resolve(),
                     confirmed_by=args.by,
                 )
                 destination = (
