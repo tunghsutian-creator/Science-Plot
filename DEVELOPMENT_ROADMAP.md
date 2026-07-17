@@ -133,12 +133,19 @@ artifacts, production QA/delivery, three interrupted-append recoveries, and
 negative rejection of fake artifacts, forged classification, covert nested
 fields, duplicate natural tasks, cross-transaction AI evidence, mixed rounds,
 overfilled cohorts, and a dirty/unverified frozen-build claim. These fixtures
-remain synthetic and count as zero M3/M6 sessions. Independent re-review now
-reports no P0/P1 findings. E0 is not marked closed until the clean committed
-wheel/install check passes. That final install check uses the synthetic-only,
-non-counting `formal_contract_probe` scope, which still requires the exact
-clean commit, verified wheel, explicit checkout, Veusz runtime identity,
-reopen witness, and completed artifact chain.
+remain synthetic and count as zero M3/M6 sessions. Independent re-review
+reports no P0/P1 findings.
+
+E0 status: **closed**. The clean frozen-wheel installation gate passed the
+synthetic-only, non-counting `formal_contract_probe` from an isolated install:
+the exact commit, wheel `RECORD`, active package bytes, explicit checkout,
+Veusz/Qt runtime identity, Canvas review/promotion lifecycle, native
+composition lifecycle, reopen witnesses, QA/delivery, completion, and
+negative attacks all verified. The installed run passed 13/13 while recording
+one `formal_contract_probe` and zero M3/M6 sessions. The authoritative closure
+commit and wheel hashes live in `frozen_build.json` and the development log so
+an older diagnostic wheel cannot be mistaken for the candidate. E1 is the
+next active phase.
 
 ### E1 — Close the M5a promotion mechanism
 
