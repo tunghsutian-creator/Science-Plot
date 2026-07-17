@@ -41,7 +41,7 @@ from sciplot_core.session_evidence import (
 from sciplot_core.session_evidence_artifacts import verify_regular_production_qa
 
 SESSION_EVIDENCE_PROBE_KIND = "sciplot_session_evidence_probe"
-SESSION_EVIDENCE_PROBE_VERSION = 2
+SESSION_EVIDENCE_PROBE_VERSION = 3
 
 
 def _check(
@@ -96,7 +96,7 @@ def _real_canvas_case(
     if frozen_build_artifact is None:
         if repo_root is not None or veusz_root is not None:
             raise ValueError("repo_root and veusz_root require frozen_build_artifact.")
-        build_artifact = run_root / "build" / "synthetic_probe_build.whl"
+        build_artifact = run_root / "build" / "synthetic_canvas_probe_build.whl"
         build_artifact.parent.mkdir(parents=True, exist_ok=True)
         build_artifact.write_bytes(b"SciPlot E0 synthetic build identity probe\n")
         scope = "synthetic_probe"
@@ -222,7 +222,9 @@ def _real_composition_case(
 ) -> dict[str, Any]:
     from sciplot_core.composition_probe import run_composition_probe
 
-    build_artifact = run_root / "build" / "synthetic_probe_build.whl"
+    build_artifact = run_root / "build" / "synthetic_composition_probe_build.whl"
+    build_artifact.parent.mkdir(parents=True, exist_ok=True)
+    build_artifact.write_bytes(b"SciPlot E0 synthetic build identity probe\n")
     registration: dict[str, Any] = {}
 
     def preregister_before_actions(
