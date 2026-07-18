@@ -18,6 +18,7 @@ from html import escape
 from io import StringIO
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pandas as pd
 
@@ -470,6 +471,9 @@ def run_studio_command(
                 request_path=Path(payload["request"]),
                 document_path=document_path,
                 exports=payload["exports"],
+                export_document_sha256=str(
+                    export_payload["document_sha256"]
+                ),
             )
             payload["studio_run"] = studio_run
             _register_studio_exports(Path(payload["project_dir"]), payload["exports"], studio_run=studio_run)
@@ -479,6 +483,9 @@ def run_studio_command(
                 requested_formats=requested_formats,
                 exports=payload["exports"],
                 artifact_root=standalone_root,
+                export_document_sha256=str(
+                    export_payload["document_sha256"]
+                ),
             )
             payload["standalone_export"] = receipt
             payload["status"] = receipt["status"]
@@ -730,41 +737,45 @@ def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
     if document_path is None:
         return
     try:
-        from PyQt6 import QtGui, QtWidgets
+        from PyQt6 import QtGui
     except Exception:
         return
 
     context = _project_context_for_document(document_path)
     menu = window.menuBar().addMenu("SciPlot")
-    export_action = QtGui.QAction("Save And Export PDF/TIFF Through SciPlot QA", window)
-    export_action.setEnabled(context is not None)
+    actions: list[Any] = []
+    try:
+        from sciplot_gui.studio_project import attach_studio_project
 
-    def export_current_document() -> None:
-        if context is None:
-            return
-        try:
-            window.document.save(str(document_path))
-            exports = export_studio_document(document_path, formats=["pdf", "tiff_300"])["exports"]
-            studio_run = publish_studio_export_run(
-                project_dir=context["project_dir"],
-                request_path=context["request_path"],
-                document_path=document_path,
-                exports=exports,
-            )
-            _register_studio_exports(context["project_dir"], exports, studio_run=studio_run)
-            QtWidgets.QMessageBox.information(
-                window,
-                "SciPlot Studio",
-                f"Exported through SciPlot QA:\n{studio_run['output']}",
-            )
-        except Exception as exc:
-            QtWidgets.QMessageBox.critical(window, "SciPlot Studio", str(exc))
-
-    export_action.triggered.connect(export_current_document)
-    menu.addAction(export_action)
-    if context is None:
-        export_action.setToolTip("Open a SciPlot project package to enable SciPlot QA export.")
-    actions = [export_action]
+        project = attach_studio_project(
+            window,
+            document_path,
+            project_dir=context["project_dir"] if context is not None else None,
+            request_path=context["request_path"] if context is not None else None,
+        )
+        export_action = QtGui.QAction(
+            "Save And Export Exact-Current PDF/TIFF",
+            window,
+        )
+        export_action.triggered.connect(project.export_current_document)
+        menu.addAction(export_action)
+        export_action.setToolTip(
+            "Save the current Veusz document, export PDF/TIFF, and run SciPlot "
+            "artifact QA. Project packages also build the portable delivery."
+        )
+        project_action = project.dock.toggleViewAction()
+        project_action.setText("Show SciPlot Project")
+        menu.addAction(project_action)
+        actions.extend([export_action, project_action])
+    except Exception as exc:
+        project_unavailable = QtGui.QAction(
+            f"SciPlot Project unavailable: {type(exc).__name__}",
+            window,
+        )
+        project_unavailable.setEnabled(False)
+        project_unavailable.setToolTip(str(exc))
+        menu.addAction(project_unavailable)
+        actions.append(project_unavailable)
     try:
         from sciplot_gui.studio_assistant import attach_studio_assistant
 
@@ -844,6 +855,11 @@ def export_studio_document(
 ) -> dict[str, Any]:
     from sciplot_core.veusz_runtime import needs_veusz_worker_process, veusz_worker_environment
 
+    normalized_formats = list(
+        dict.fromkeys(_normalize_export_format(item) for item in formats)
+    )
+    if not normalized_formats:
+        raise ValueError("At least one export format is required.")
     resolved_output_dir = output_dir.expanduser().resolve() if output_dir is not None else None
     if needs_veusz_worker_process():
         command = [
@@ -853,7 +869,7 @@ def export_studio_document(
             "export-document",
             str(document_path),
             "--formats",
-            ",".join(formats),
+            ",".join(normalized_formats),
         ]
         if resolved_output_dir is not None:
             command.extend(["--out", str(resolved_output_dir)])
@@ -869,50 +885,529 @@ def export_studio_document(
     log_root = export_dir.parent if resolved_output_dir is not None else document_path.parent
     stderr_log = log_root / "logs" / "veusz_export_stderr.log"
     exports: list[dict[str, Any]] = []
-    with _capture_process_stderr(stderr_log):
-        _prefer_offscreen_export_platform()
-        _ensure_veusz_on_path()
-        from PyQt6 import QtWidgets
-        from veusz import dataimport, document, widgets
-        from veusz.document import CommandInterface
+    pending_exports: list[dict[str, Any]] = []
+    cleanup_warnings: list[str] = []
+    document_sha256_before = existing_file_sha256(document_path)
+    document_sha256_after = document_sha256_before
+    try:
+        with _capture_process_stderr(stderr_log):
+            _prefer_offscreen_export_platform()
+            _ensure_veusz_on_path()
+            from PyQt6 import QtWidgets
+            from veusz import dataimport, document, widgets
+            from veusz.document import CommandInterface
 
-        _ = dataimport, widgets
-        existing_app = QtWidgets.QApplication.instance()
-        app = existing_app or QtWidgets.QApplication([])
+            _ = dataimport, widgets
+            existing_app = QtWidgets.QApplication.instance()
+            app = existing_app or QtWidgets.QApplication([])
+            try:
+                doc = document.Document()
+                doc.load(str(document_path))
+                interface = CommandInterface(doc)
+                export_dir.mkdir(parents=True, exist_ok=True)
+                for fmt in normalized_formats:
+                    suffix, dpi = _export_suffix(fmt)
+                    output_path = export_dir / f"{document_path.stem}{suffix}"
+                    temporary_path = export_dir / (
+                        f".{document_path.stem}.{uuid4().hex}{suffix}"
+                    )
+                    kwargs: dict[str, Any] = {"page": [0]}
+                    if dpi is not None:
+                        kwargs["dpi"] = dpi
+                    if fmt == "pdf":
+                        kwargs["pdfdpi"] = 72
+                    interface.Export(str(temporary_path), **kwargs)
+                    if (
+                        not temporary_path.is_file()
+                        or temporary_path.stat().st_size <= 0
+                    ):
+                        raise RuntimeError(
+                            f"Veusz did not create a non-empty {fmt} export."
+                        )
+                    pending_exports.append(
+                        {
+                            "format": fmt,
+                            "temporary_path": temporary_path,
+                            "output_path": output_path,
+                            "sha256": existing_file_sha256(temporary_path),
+                        }
+                    )
+            finally:
+                if existing_app is None:
+                    app.quit()
+        document_sha256_after = existing_file_sha256(document_path)
+        if document_sha256_before != document_sha256_after:
+            raise RuntimeError(
+                "The Veusz document changed while SciPlot was exporting it; "
+                "the generated files were not accepted as exact-current evidence."
+            )
+        replacements: list[dict[str, Any]] = []
         try:
-            doc = document.Document()
-            doc.load(str(document_path))
-            interface = CommandInterface(doc)
-            export_dir.mkdir(parents=True, exist_ok=True)
-            for fmt in formats:
-                suffix, dpi = _export_suffix(fmt)
-                output_path = export_dir / f"{document_path.stem}{suffix}"
-                kwargs: dict[str, Any] = {"page": [0]}
-                if dpi is not None:
-                    kwargs["dpi"] = dpi
-                if fmt == "pdf":
-                    kwargs["pdfdpi"] = 72
-                interface.Export(str(output_path), **kwargs)
+            for pending in pending_exports:
+                temporary_path = pending["temporary_path"]
+                output_path = pending["output_path"]
+                backup_path = (
+                    export_dir
+                    / f".{output_path.name}.{uuid4().hex}.previous"
+                    if output_path.exists()
+                    else None
+                )
+                replacement = {
+                    "output_path": output_path,
+                    "backup_path": backup_path,
+                    "installed": False,
+                }
+                replacements.append(replacement)
+                if backup_path is not None:
+                    output_path.replace(backup_path)
+                temporary_path.replace(output_path)
+                replacement["installed"] = True
+                actual_hash = existing_file_sha256(output_path)
+                if (
+                    not output_path.is_file()
+                    or output_path.stat().st_size <= 0
+                    or actual_hash != pending["sha256"]
+                ):
+                    raise RuntimeError(
+                        f"Installed {pending['format']} export failed its "
+                        "post-replacement hash check."
+                    )
                 exports.append(
                     {
-                        "format": fmt,
+                        "format": pending["format"],
                         "path": str(output_path),
-                        "exists": output_path.exists(),
-                        "size_bytes": output_path.stat().st_size if output_path.exists() else 0,
+                        "exists": True,
+                        "size_bytes": output_path.stat().st_size,
+                        "sha256": actual_hash,
                     }
                 )
-        finally:
-            if existing_app is None:
-                app.quit()
+            if existing_file_sha256(document_path) != document_sha256_before:
+                raise RuntimeError(
+                    "The Veusz document changed while SciPlot was publishing "
+                    "the export set; the prior canonical files were restored."
+                )
+        except Exception:
+            exports.clear()
+            for replacement in reversed(replacements):
+                output_path = replacement["output_path"]
+                backup_path = replacement["backup_path"]
+                if replacement["installed"] and output_path.exists():
+                    output_path.unlink()
+                if backup_path is not None and backup_path.exists():
+                    backup_path.replace(output_path)
+            raise
+        else:
+            for replacement in replacements:
+                backup_path = replacement["backup_path"]
+                if backup_path is not None and backup_path.exists():
+                    try:
+                        backup_path.unlink()
+                    except OSError as exc:
+                        cleanup_warnings.append(
+                            f"Could not remove committed export backup "
+                            f"{backup_path}: {exc}"
+                        )
+    finally:
+        for pending in pending_exports:
+            temporary_path = pending["temporary_path"]
+            if temporary_path.exists():
+                try:
+                    temporary_path.unlink()
+                except OSError as exc:
+                    cleanup_warnings.append(
+                        f"Could not remove uncommitted export temporary file "
+                        f"{temporary_path}: {exc}"
+                    )
     payload: dict[str, Any] = {
         "kind": "sciplot_studio_export",
         "document": str(document_path),
+        "document_sha256": document_sha256_after,
         "export_dir": str(export_dir),
         "exports": exports,
     }
     if stderr_log.exists():
         payload["stderr_log"] = str(stderr_log)
+    if cleanup_warnings:
+        payload["cleanup_warnings"] = cleanup_warnings
     return payload
+
+
+def _verify_exact_current_export_binding(
+    *,
+    document_path: Path,
+    export_document_sha256: str,
+    exports: list[dict[str, Any]],
+) -> None:
+    expected_document_hash = str(export_document_sha256 or "").strip()
+    current_document_hash = existing_file_sha256(document_path)
+    if (
+        not expected_document_hash
+        or current_document_hash != expected_document_hash
+    ):
+        raise RuntimeError(
+            "The current VSZ hash no longer matches the document that produced "
+            "these exports."
+        )
+    if not exports:
+        raise RuntimeError("Exact-current export produced no artifact records.")
+    seen_formats: set[str] = set()
+    seen_paths: set[Path] = set()
+    for item in exports:
+        path_value = item.get("path") if isinstance(item, dict) else None
+        raw_format = (
+            str(item.get("format") or "").strip()
+            if isinstance(item, dict)
+            else ""
+        )
+        expected_hash = (
+            str(item.get("sha256") or "").strip()
+            if isinstance(item, dict)
+            else ""
+        )
+        try:
+            normalized_format = _normalize_export_format(raw_format)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Exact-current export record has an invalid format: {raw_format!r}."
+            ) from exc
+        if raw_format != normalized_format:
+            raise RuntimeError(
+                "Exact-current export records must use canonical format names; "
+                f"received {raw_format!r}, expected {normalized_format!r}."
+            )
+        if normalized_format in seen_formats:
+            raise RuntimeError(
+                f"Exact-current export has duplicate {normalized_format} records."
+            )
+        if not isinstance(path_value, str) or not path_value.strip():
+            raise RuntimeError("Exact-current export record has no artifact path.")
+        artifact_path = Path(path_value).expanduser().resolve()
+        if artifact_path in seen_paths:
+            raise RuntimeError(
+                f"Exact-current export reuses one artifact path: {artifact_path}"
+            )
+        expected_suffix, _dpi = _export_suffix(normalized_format)
+        actual_hash = existing_file_sha256(artifact_path)
+        actual_size = (
+            artifact_path.stat().st_size if artifact_path.is_file() else 0
+        )
+        if (
+            not artifact_path.is_file()
+            or actual_size <= 0
+            or item.get("exists") is not True
+            or int(item.get("size_bytes") or 0) != actual_size
+            or not expected_hash
+            or actual_hash != expected_hash
+            or not artifact_path.name.endswith(expected_suffix)
+        ):
+            raise RuntimeError(
+                "An exported artifact is missing or changed before its "
+                f"receipt was published: {artifact_path}"
+            )
+        seen_formats.add(normalized_format)
+        seen_paths.add(artifact_path)
+
+
+def _verify_qa_artifact_hashes(
+    qa: dict[str, Any],
+    *,
+    exports: list[dict[str, Any]],
+    covered_formats: set[str],
+) -> None:
+    canonical_covered = {
+        _normalize_export_format(item) for item in covered_formats
+    }
+    expected_records: Counter[tuple[str, str, str]] = Counter()
+    for item in exports:
+        if not isinstance(item, dict):
+            continue
+        try:
+            normalized_format = _normalize_export_format(
+                str(item.get("format") or "")
+            )
+        except ValueError:
+            continue
+        if normalized_format not in canonical_covered:
+            continue
+        path_value = str(item.get("path") or "")
+        expected_records[
+            (
+                normalized_format,
+                Path(path_value).name,
+                str(item.get("sha256") or ""),
+            )
+        ] += 1
+
+    actual_records: Counter[tuple[str, str, str]] = Counter()
+    for qa_key, normalized_format in (
+        ("pdfs", "pdf"),
+        ("tiffs", "tiff_300"),
+    ):
+        records = qa.get(qa_key)
+        if normalized_format not in canonical_covered or not isinstance(
+            records, list
+        ):
+            continue
+        for item in records:
+            if not isinstance(item, dict):
+                continue
+            actual_records[
+                (
+                    normalized_format,
+                    Path(str(item.get("path") or "")).name,
+                    str(item.get("sha256") or ""),
+                )
+            ] += 1
+
+    if (
+        not expected_records
+        or any(not record[2] for record in expected_records)
+        or expected_records != actual_records
+    ):
+        raise RuntimeError(
+            "Artifact QA hashes do not match the exact-current exports."
+        )
+
+
+def _write_json_atomic(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.parent / f".{path.name}.{uuid4().hex}.tmp"
+    try:
+        temporary_path.write_text(
+            json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        temporary_path.replace(path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
+def _verify_studio_delivery_binding(
+    delivery: object,
+    *,
+    exports: list[dict[str, Any]],
+    export_document_sha256: str,
+) -> dict[str, Any]:
+    issues: list[str] = []
+    if not isinstance(delivery, dict):
+        return {
+            "kind": "sciplot_studio_delivery_verification",
+            "status": "failed",
+            "passed": False,
+            "issues": ["The delivery package record is missing."],
+        }
+    root_value = delivery.get("path")
+    try:
+        delivery_root = Path(str(root_value)).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError) as exc:
+        return {
+            "kind": "sciplot_studio_delivery_verification",
+            "status": "failed",
+            "passed": False,
+            "issues": [f"The delivery root is invalid: {exc}"],
+        }
+
+    def delivery_file(value: object, *, role: str) -> Path | None:
+        if not isinstance(value, str) or not value.strip():
+            issues.append(f"The delivery {role} path is missing.")
+            return None
+        try:
+            candidate = Path(value).expanduser().resolve()
+            candidate.relative_to(delivery_root)
+        except (OSError, RuntimeError, ValueError):
+            issues.append(
+                f"The delivery {role} is outside its package root: {value}"
+            )
+            return None
+        try:
+            if not candidate.is_file() or candidate.stat().st_size <= 0:
+                issues.append(
+                    f"The delivery {role} is missing or empty: {candidate}"
+                )
+                return None
+        except OSError as exc:
+            issues.append(
+                f"The delivery {role} could not be inspected: {exc}"
+            )
+            return None
+        return candidate
+
+    expected_exports: dict[Path, tuple[str, str]] = {}
+    for item in exports:
+        try:
+            source = Path(str(item["path"])).expanduser().resolve()
+            export_format = _normalize_export_format(
+                str(item.get("format") or "")
+            )
+        except (KeyError, OSError, RuntimeError, ValueError):
+            issues.append("An exact-current export record is invalid.")
+            continue
+        expected_hash = str(item.get("sha256") or "").strip()
+        if not expected_hash:
+            issues.append(f"Export {source} has no SHA-256.")
+            continue
+        expected_exports[source] = (export_format, expected_hash)
+
+    matched_sources: set[Path] = set()
+    figure_records = (
+        delivery.get("figures")
+        if isinstance(delivery.get("figures"), list)
+        else []
+    )
+    for record in figure_records:
+        if not isinstance(record, dict):
+            issues.append("A delivery figure record is invalid.")
+            continue
+        try:
+            source = Path(str(record.get("source") or "")).expanduser().resolve()
+        except (OSError, RuntimeError, ValueError):
+            issues.append("A delivery figure source path is invalid.")
+            continue
+        expected = expected_exports.get(source)
+        if expected is None:
+            issues.append(
+                f"Delivery figure is not bound to an exact-current export: {source}"
+            )
+            continue
+        if source in matched_sources:
+            issues.append(
+                f"Delivery figure source is recorded more than once: {source}"
+            )
+            continue
+        export_format, expected_hash = expected
+        try:
+            recorded_format = _normalize_export_format(
+                str(
+                    record.get("export_format")
+                    or record.get("format")
+                    or ""
+                )
+            )
+        except ValueError:
+            recorded_format = ""
+        destination = delivery_file(
+            record.get("path"),
+            role=f"{export_format} figure",
+        )
+        source_hash = existing_file_sha256(source)
+        destination_hash = (
+            existing_file_sha256(destination)
+            if destination is not None
+            else None
+        )
+        if (
+            recorded_format != export_format
+            or source_hash != expected_hash
+            or destination_hash != expected_hash
+            or str(record.get("source_sha256") or "") != expected_hash
+            or str(record.get("delivery_sha256") or "") != expected_hash
+            or record.get("copy_hash_matches") is not True
+        ):
+            issues.append(
+                f"Delivery figure hash or format binding failed: {source}"
+            )
+            continue
+        matched_sources.add(source)
+    if set(expected_exports) != matched_sources:
+        issues.append(
+            "The delivery figures do not cover every exact-current export "
+            "exactly once."
+        )
+
+    data_records = (
+        delivery.get("data_csvs")
+        if isinstance(delivery.get("data_csvs"), list)
+        else []
+    )
+    if not data_records:
+        issues.append("The delivery contains no recorded data CSV.")
+    for record in data_records:
+        if not isinstance(record, dict):
+            issues.append("A delivery data record is invalid.")
+            continue
+        destination = delivery_file(record.get("path"), role="data CSV")
+        expected_hash = str(record.get("sha256") or "").strip()
+        if (
+            destination is None
+            or not expected_hash
+            or existing_file_sha256(destination) != expected_hash
+        ):
+            issues.append("A delivery data CSV failed its SHA-256 binding.")
+
+    project_records = (
+        delivery.get("project_documents")
+        if isinstance(delivery.get("project_documents"), list)
+        else []
+    )
+    if not project_records:
+        issues.append("The delivery contains no editable Veusz document.")
+    for record in project_records:
+        if not isinstance(record, dict):
+            issues.append("A delivery project-document record is invalid.")
+            continue
+        destination = delivery_file(
+            record.get("path"),
+            role="editable Veusz document",
+        )
+        destination_hash = (
+            existing_file_sha256(destination)
+            if destination is not None
+            else None
+        )
+        if (
+            destination_hash != export_document_sha256
+            or str(record.get("source_sha256") or "")
+            != export_document_sha256
+            or str(record.get("delivery_sha256") or "")
+            != export_document_sha256
+            or record.get("copy_hash_matches") is not True
+            or record.get("hash_matches_export") is not True
+        ):
+            issues.append(
+                "An editable Veusz delivery copy is not bound to the "
+                "exported document SHA-256."
+            )
+
+    editable = (
+        delivery.get("editable_vsz")
+        if isinstance(delivery.get("editable_vsz"), dict)
+        else {}
+    )
+    editable_path = delivery_file(
+        editable.get("path"),
+        role="authoritative editable Veusz document",
+    )
+    if (
+        editable_path is None
+        or existing_file_sha256(editable_path) != export_document_sha256
+        or str(editable.get("expected_hash") or "")
+        != export_document_sha256
+        or str(editable.get("actual_hash") or "")
+        != export_document_sha256
+        or editable.get("hash_matches_export") is not True
+    ):
+        issues.append(
+            "The authoritative editable Veusz delivery record is not current."
+        )
+
+    delivery_file(
+        delivery.get("open_in_veusz"),
+        role="Open_in_Veusz launcher",
+    )
+    if delivery.get("complete") is not True:
+        issues.append("The delivery package contract is incomplete.")
+    passed = not issues
+    return {
+        "kind": "sciplot_studio_delivery_verification",
+        "status": "passed" if passed else "failed",
+        "passed": passed,
+        "delivery_root": str(delivery_root),
+        "verified_export_count": len(matched_sources),
+        "verified_data_csv_count": len(data_records),
+        "verified_project_document_count": len(project_records),
+        "issues": issues,
+    }
 
 
 def publish_standalone_export_receipt(
@@ -921,28 +1416,74 @@ def publish_standalone_export_receipt(
     requested_formats: list[str],
     exports: list[dict[str, Any]],
     artifact_root: Path,
+    export_document_sha256: str,
 ) -> dict[str, Any]:
     resolved_root = artifact_root.expanduser().resolve()
     resolved_root.mkdir(parents=True, exist_ok=True)
-    normalized_formats = list(dict.fromkeys(str(item).strip().casefold() for item in requested_formats if item))
+    _verify_exact_current_export_binding(
+        document_path=document_path,
+        export_document_sha256=export_document_sha256,
+        exports=exports,
+    )
+    normalized_formats = list(
+        dict.fromkeys(
+            _normalize_export_format(item)
+            for item in requested_formats
+            if str(item).strip()
+        )
+    )
+    if not normalized_formats:
+        raise ValueError(
+            "A standalone export receipt requires at least one format."
+        )
     successful_formats = {
-        str(item.get("format") or "").casefold()
+        _normalize_export_format(str(item.get("format") or ""))
         for item in exports
         if isinstance(item, dict)
+        and str(item.get("format") or "").strip()
         and item.get("exists") is True
         and int(item.get("size_bytes") or 0) > 0
     }
     requested_exports_complete = set(normalized_formats) <= successful_formats
-    export_paths = [
-        Path(str(item["path"])).expanduser().resolve()
-        for item in exports
-        if isinstance(item, dict) and isinstance(item.get("path"), str)
-    ]
-    export_dirs = {path.parent for path in export_paths}
-    qa_required = "pdf" in normalized_formats
-    if qa_required and requested_exports_complete and len(export_dirs) == 1:
+    qa_covered_formats = (
+        {
+            item
+            for item in normalized_formats
+            if item in {"pdf", "tiff_300"}
+        }
+        if "pdf" in normalized_formats
+        else set()
+    )
+    qa_uncovered_formats = sorted(
+        set(normalized_formats) - qa_covered_formats
+    )
+    qa_required = bool(qa_covered_formats)
+    if qa_required and requested_exports_complete:
+        qa_input_dir = (
+            resolved_root / "qa_inputs" / uuid4().hex
+        )
+        qa_input_dir.mkdir(parents=True, exist_ok=False)
         try:
-            qa = run_qa(next(iter(export_dirs)))
+            for item in exports:
+                if (
+                    not isinstance(item, dict)
+                    or str(item.get("format") or "")
+                    not in qa_covered_formats
+                ):
+                    continue
+                source = Path(str(item["path"])).expanduser().resolve()
+                destination = qa_input_dir / source.name
+                shutil.copy2(source, destination)
+                if existing_file_sha256(destination) != item.get("sha256"):
+                    raise RuntimeError(
+                        "Standalone QA input hash does not match its export."
+                    )
+            qa = run_qa(qa_input_dir)
+            _verify_qa_artifact_hashes(
+                qa,
+                exports=exports,
+                covered_formats=qa_covered_formats,
+            )
         except (OSError, RuntimeError, ValueError) as exc:
             qa = {
                 "kind": "sciplot_artifact_qa",
@@ -953,50 +1494,90 @@ def publish_standalone_export_receipt(
         qa = {
             "kind": "sciplot_artifact_qa",
             "status": "not_run",
-            "reason": "Requested standalone exports were incomplete or did not share one artifact directory.",
+            "reason": "Requested standalone exports were incomplete.",
         }
     else:
         qa = {
             "kind": "sciplot_artifact_qa",
             "status": "not_required",
-            "reason": "No PDF was requested; run `sciplot qa` on a later PDF/TIFF pair.",
+            "reason": (
+                "The requested format set has no PDF anchor for SciPlot's "
+                "PDF/TIFF artifact-QA profile; every file's existence and "
+                "hash were still verified."
+            ),
         }
+    binding_error: str | None = None
+    try:
+        _verify_exact_current_export_binding(
+            document_path=document_path,
+            export_document_sha256=export_document_sha256,
+            exports=exports,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        binding_error = str(exc)
     qa_passed = qa.get("status") in {"passed", "not_required"}
-    export_ready = bool(requested_exports_complete and qa_passed)
+    export_ready = bool(
+        requested_exports_complete
+        and qa_passed
+        and binding_error is None
+    )
     spec_reference = _veusz_spec_reference(document_path)
     receipt_path = resolved_root / "standalone_export_receipt.json"
     qa_path = resolved_root / "qa_report.json"
-    qa_path.write_text(json.dumps(json_safe(qa), indent=2, ensure_ascii=False), encoding="utf-8")
+    _write_json_atomic(qa_path, qa)
+    if binding_error is not None:
+        failure_stage = "exact_current_binding"
+        failure_reason = binding_error
+    elif not requested_exports_complete:
+        failure_stage = "export"
+        failure_reason = "One or more requested export files were missing or empty."
+    elif not qa_passed:
+        failure_stage = "artifact_qa"
+        failure_reason = str(
+            qa.get("reason")
+            or "The standalone PDF/TIFF artifact QA did not pass."
+        )
+    else:
+        failure_stage = None
+        failure_reason = None
     receipt = {
         "kind": "sciplot_standalone_vsz_export",
         "version": 1,
         "status": "passed" if export_ready else "failed",
-        "state": "exported_exact_current" if export_ready else "needs_rule_repair",
+        "state": (
+            "exported_exact_current"
+            if export_ready
+            else "needs_artifact_review"
+        ),
         "scope": "standalone_exact_current_export",
         "document": str(document_path),
-        "document_sha256": existing_file_sha256(document_path),
+        "document_sha256": export_document_sha256,
         "document_authority": "veusz_document",
         "spec_reference": spec_reference,
         "requested_formats": normalized_formats,
         "exports": json_safe(exports),
         "requested_exports_complete": requested_exports_complete,
+        "exact_current_binding_current": binding_error is None,
         "artifact_qa": json_safe(qa),
         "artifact_qa_path": str(qa_path),
+        "qa_covered_formats": sorted(qa_covered_formats),
+        "qa_uncovered_formats": qa_uncovered_formats,
         "export_ready": export_ready,
+        "failure_stage": failure_stage,
+        "failure_reason": failure_reason,
         "project_delivery_complete": False,
         "provenance_complete": False,
         "journal_compliance_established": False,
         "receipt_path": str(receipt_path),
         "limitations": [
-            "This receipt proves exact-current VSZ export and artifact QA only.",
-            "A standalone VSZ has no SciPlot request, raw-data archive, transform ledger, or portable project delivery.",
+            "This receipt binds every requested export hash to the exact-current "
+            "VSZ; artifact QA applies only to qa_covered_formats.",
+            "This standalone receipt does not attest a SciPlot request, raw-data "
+            "archive, transform ledger, or portable project delivery.",
             "An optional SciPlot spec sidecar is not required to reopen or export the exact current VSZ.",
         ],
     }
-    receipt_path.write_text(
-        json.dumps(json_safe(receipt), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    _write_json_atomic(receipt_path, receipt)
     return receipt
 
 
@@ -1006,7 +1587,13 @@ def publish_studio_export_run(
     request_path: Path,
     document_path: Path,
     exports: list[dict[str, Any]],
+    export_document_sha256: str,
 ) -> dict[str, Any]:
+    _verify_exact_current_export_binding(
+        document_path=document_path,
+        export_document_sha256=export_document_sha256,
+        exports=exports,
+    )
     request = _read_json(request_path)
     effective_request, data_mapping_application = resolve_data_mapping_request(
         request,
@@ -1016,6 +1603,11 @@ def publish_studio_export_run(
         document_path,
         generated_hash=_registered_generated_hash(project_dir),
     )
+    if document_state.get("current_hash") != export_document_sha256:
+        raise RuntimeError(
+            "The Veusz document changed before the project run could bind "
+            "its exact-current document state."
+        )
     output_dir = _next_studio_run_dir(project_dir)
     figures_dir = output_dir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
@@ -1024,18 +1616,34 @@ def publish_studio_export_run(
     figures: list[str] = []
     for item in exports:
         source_value = item.get("path")
-        if not isinstance(source_value, str):
-            continue
+        if not isinstance(source_value, str) or not source_value.strip():
+            raise RuntimeError("A project export record has no artifact path.")
         source = Path(source_value).expanduser()
         if not source.exists() or not source.is_file():
-            continue
+            raise RuntimeError(
+                f"A project export disappeared before packaging: {source}"
+            )
+        expected_hash = str(item.get("sha256") or "")
+        if (
+            not expected_hash
+            or existing_file_sha256(source) != expected_hash
+        ):
+            raise RuntimeError(
+                "A project export changed before it could be copied into the "
+                f"run: {source}"
+            )
         destination = figures_dir / source.name
         shutil.copy2(source, destination)
+        if existing_file_sha256(destination) != expected_hash:
+            raise RuntimeError(
+                f"Copied project export hash mismatch: {destination}"
+            )
         copied = {
             **item,
             "source": str(source),
             "path": str(destination),
             "relative_path": str(destination.relative_to(output_dir)),
+            "sha256": expected_hash,
         }
         copied_exports.append(copied)
         figures.append(str(destination))
@@ -1153,6 +1761,12 @@ def publish_studio_export_run(
         strict_publication=bool(request.get("publication_strict")),
         veusz_documents=[document_path],
     )
+    if qa.get("status") == "passed":
+        _verify_qa_artifact_hashes(
+            qa,
+            exports=copied_exports,
+            covered_formats={"pdf", "tiff_300"},
+        )
     semantic = _semantic_payload_with_exact_current_axes(
         semantic,
         qa=qa,
@@ -1183,7 +1797,7 @@ def publish_studio_export_run(
         "veusz_document": str(document_path),
         "veusz_spec": str(_veusz_spec_path(document_path)),
         "document_authority": document_state["authority"],
-        "exported_document_hash": document_state["current_hash"],
+        "exported_document_hash": export_document_sha256,
         "manual_edit_detected": document_state["manual_edit_detected"],
         "export_formats": [str(item.get("format")) for item in copied_exports if item.get("format")],
         "exports": copied_exports,
@@ -1233,9 +1847,9 @@ def publish_studio_export_run(
         "qa_target": "veusz_export",
         "veusz_document": str(document_path),
         "veusz_spec": str(_veusz_spec_path(document_path)),
-        "manual_edit_hash": existing_file_sha256(document_path),
+        "manual_edit_hash": export_document_sha256,
         "document_authority": document_state["authority"],
-        "exported_document_hash": document_state["current_hash"],
+        "exported_document_hash": export_document_sha256,
         "manual_edit_detected": document_state["manual_edit_detected"],
         "document_state": document_state,
         "layout_policy": {
@@ -1255,9 +1869,9 @@ def publish_studio_export_run(
             "qa_target": "veusz_export",
             "document": str(document_path),
             "spec": str(_veusz_spec_path(document_path)),
-            "manual_edit_hash": existing_file_sha256(document_path),
+            "manual_edit_hash": export_document_sha256,
             "document_authority": document_state["authority"],
-            "exported_document_hash": document_state["current_hash"],
+            "exported_document_hash": export_document_sha256,
             "manual_edit_detected": document_state["manual_edit_detected"],
             "document_state": document_state,
             "upstream": upstream_status()["veusz"],
@@ -1271,23 +1885,59 @@ def publish_studio_export_run(
         shutil.rmtree(studio_snapshot)
     if document_path.parent.exists():
         shutil.copytree(document_path.parent, studio_snapshot)
-    (output_dir / "manifest.json").write_text(
-        json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    manifest["package_contract"] = build_output_package_contract(output_dir, manifest=manifest)
-    manifest["delivery_package"] = build_delivery_package(output_dir, manifest=manifest)
+    manifest["state"] = "publishing"
+    manifest["ready_to_use"] = False
+    manifest["publish_complete"] = False
+    _write_json_atomic(output_dir / "manifest.json", manifest)
+    failure_stage = "package_delivery_finalization"
+    try:
+        manifest["package_contract"] = build_output_package_contract(
+            output_dir,
+            manifest=manifest,
+        )
+        manifest["delivery_package"] = build_delivery_package(
+            output_dir,
+            manifest=manifest,
+        )
+        manifest["delivery_verification"] = (
+            _verify_studio_delivery_binding(
+                manifest["delivery_package"],
+                exports=copied_exports,
+                export_document_sha256=export_document_sha256,
+            )
+        )
+        failure_stage = "exact_current_binding"
+        _verify_exact_current_export_binding(
+            document_path=document_path,
+            export_document_sha256=export_document_sha256,
+            exports=copied_exports,
+        )
+    except Exception as exc:
+        manifest["state"] = "failed"
+        manifest["ready_to_use"] = False
+        manifest["publish_complete"] = False
+        manifest["failure_stage"] = failure_stage
+        manifest["failure_reason"] = str(exc)
+        _write_json_atomic(output_dir / "manifest.json", manifest)
+        raise
     ready_to_use = bool(
         qa.get("status") == "passed"
         and manifest["package_contract"].get("complete") is True
         and manifest["delivery_package"].get("complete") is True
+        and manifest["delivery_verification"].get("passed") is True
     )
     manifest["state"] = "ready" if ready_to_use else "needs_rule_repair"
     manifest["ready_to_use"] = ready_to_use
-    (output_dir / "manifest.json").write_text(
-        json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
-        encoding="utf-8",
+    manifest["publish_complete"] = True
+    manifest["failure_stage"] = (
+        None if ready_to_use else "quality_or_delivery_gate"
     )
+    manifest["failure_reason"] = (
+        None
+        if ready_to_use
+        else "One or more QA, package, or delivery verification gates failed."
+    )
+    _write_json_atomic(output_dir / "manifest.json", manifest)
     _register_studio_run(project_dir, manifest)
     return {
         "kind": "sciplot_studio_export_run",
@@ -1299,6 +1949,7 @@ def publish_studio_export_run(
         "qa": qa,
         "package_contract": manifest["package_contract"],
         "delivery_package": manifest["delivery_package"],
+        "delivery_verification": manifest["delivery_verification"],
         "state": manifest["state"],
         "ready_to_use": ready_to_use,
     }
@@ -1873,9 +2524,12 @@ def _next_studio_run_dir(project_dir: Path) -> Path:
     index = 1
     while True:
         candidate = runs_dir / f"studio_{index:03d}"
-        if not candidate.exists():
+        try:
+            candidate.mkdir(exist_ok=False)
+        except FileExistsError:
+            index += 1
+        else:
             return candidate
-        index += 1
 
 
 def _resolve_request_input(request: dict[str, Any], *, base_dir: Path) -> Path | None:
@@ -2325,7 +2979,7 @@ def _scalar_field_role_columns(
 
 
 def _scalar_field_from_frames(
-    frames: list[StudioSourceFrame],
+    frames: list[StudioSourceFrame | tuple[str, pd.DataFrame]],
     *,
     render_options: dict[str, Any],
 ) -> tuple[list[StudioSeries], dict[str, Any]]:
@@ -2335,7 +2989,21 @@ def _scalar_field_from_frames(
             "Scalar-field rendering currently accepts one plot-ready X/Y/Z table per figure.",
         )
     source_frame = frames[0]
-    frame = source_frame.frame
+    if isinstance(source_frame, StudioSourceFrame):
+        frame = source_frame.frame
+        source_artifacts = [
+            {
+                "path": str(source_frame.path),
+                "sha256": source_frame.sha256,
+            }
+        ]
+        series_source_artifacts = (
+            (str(source_frame.path), source_frame.sha256),
+        )
+    else:
+        _label, frame = source_frame
+        source_artifacts = []
+        series_source_artifacts = ()
     x_column, y_column, z_column = _scalar_field_role_columns(frame, render_options=render_options)
     numeric = _coerced_numeric_frame(frame)
     field = numeric[[x_column, y_column, z_column]].dropna().copy()
@@ -2400,12 +3068,7 @@ def _scalar_field_from_frames(
         "z_data_min": min(value for row in z_values for value in row),
         "z_data_max": max(value for row in z_values for value in row),
         "grid_shape": [len(y_values), len(x_values)],
-        "source_artifacts": [
-            {
-                "path": str(source_frame.path),
-                "sha256": source_frame.sha256,
-            }
-        ],
+        "source_artifacts": source_artifacts,
     }
     surrogate = StudioSeries(
         label=z_label,
@@ -2416,7 +3079,7 @@ def _scalar_field_from_frames(
         color=DEFAULT_PALETTE[0],
         marker="none",
         presentation_kind="scalar_field",
-        source_artifacts=((str(source_frame.path), source_frame.sha256),),
+        source_artifacts=series_source_artifacts,
     )
     return [surrogate], {
         "x_label": x_label,
@@ -5122,11 +5785,12 @@ def _scalar_field_plot_contract(
     *,
     render_options: dict[str, Any],
     template_id: str,
-    style: _VeuszStyleContract,
+    style: _VeuszStyleContract | None = None,
 ) -> dict[str, Any] | None:
     source = axis_info.get("scalar_field")
     if template_id not in SCALAR_FIELD_TEMPLATE_IDS or not isinstance(source, dict):
         return None
+    style = style or _veusz_style_contract(render_options)
     data_min = float(source["z_data_min"])
     data_max = float(source["z_data_max"])
     z_min = _optional_float(render_options.get("z_min"))
@@ -5474,7 +6138,7 @@ def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str,
             raise ValueError(
                 f"Reference guide {index} transparency must be an integer."
             ) from exc
-        minimum_transparency = 70 if kind == "band" else 20
+        minimum_transparency = 0
         if not minimum_transparency <= transparency <= 95:
             raise ValueError(
                 f"Reference guide {index} transparency must be between "
@@ -7255,21 +7919,50 @@ def _qt_framework_paths() -> list[Path]:
 
 
 def _split_formats(value: str) -> list[str]:
-    formats = [item.strip() for item in value.split(",") if item.strip()]
+    formats = [
+        _normalize_export_format(item)
+        for item in value.split(",")
+        if item.strip()
+    ]
     return formats or ["pdf"]
 
 
+def _normalize_export_format(fmt: str) -> str:
+    normalized = str(fmt).strip().casefold()
+    aliases = {
+        "pdf": "pdf",
+        "tif_300": "tiff_300",
+        "tiff": "tiff_300",
+        "tiff_300": "tiff_300",
+        "png": "png_300",
+        "png_300": "png_300",
+        "png_600": "png_600",
+        "svg": "svg",
+    }
+    try:
+        return aliases[normalized]
+    except KeyError as exc:
+        supported = ", ".join(
+            ("pdf", "tiff_300", "png_300", "png_600", "svg")
+        )
+        raise ValueError(
+            f"Unsupported export format {fmt!r}. Supported formats: {supported}."
+        ) from exc
+
+
 def _export_suffix(fmt: str) -> tuple[str, int | None]:
-    normalized = fmt.casefold()
-    if normalized in {"tiff_300", "tif_300", "tiff"}:
+    normalized = _normalize_export_format(fmt)
+    if normalized == "tiff_300":
         return "_300dpi.tiff", 300
-    if normalized in {"png", "png_300"}:
+    if normalized == "png_300":
         return "_300dpi.png", 300
     if normalized == "png_600":
         return "_600dpi.png", 600
     if normalized == "svg":
         return ".svg", None
-    return ".pdf", None
+    if normalized == "pdf":
+        return ".pdf", None
+    raise AssertionError(f"Unhandled normalized export format: {normalized}")
 
 
 def _size_mm(value: str) -> tuple[int, int]:

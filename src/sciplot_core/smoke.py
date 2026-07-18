@@ -707,6 +707,7 @@ def _data_mapping_studio_lifecycle_probe(
         request_path=Path(str(prepared["request"])),
         document_path=document_path,
         exports=list(exported.get("exports") or []),
+        export_document_sha256=str(exported["document_sha256"]),
     )
     manifest_path = Path(str(published["manifest"]))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -3103,6 +3104,29 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 detail=mapped_studio_probe,
             )
         )
+        from sciplot_core.studio_project_probe import (
+            run_studio_project_probe,
+        )
+
+        studio_project_probe = run_studio_project_probe(
+            project_dir,
+            output_root=run_root / "studio_project",
+            mapped_document=Path(str(mapped_studio_probe["document"])),
+        )
+        checks.append(
+            _check(
+                "veusz_mainwindow_project_integration",
+                "One native Veusz MainWindow keeps Project and AI docks opt-in, "
+                "tracks live VSZ/source/mapping/QA truth, rejects stale QA, and "
+                "exports both project and standalone exact-current receipts",
+                studio_project_probe.get("status") == "passed",
+                detail={
+                    "status": studio_project_probe.get("status"),
+                    "summary": studio_project_probe.get("summary"),
+                    "artifacts": studio_project_probe.get("artifacts"),
+                },
+            )
+        )
         from sciplot_core.canvas_probe import run_canvas_characterization
 
         canvas_characterization = run_canvas_characterization(
@@ -3373,6 +3397,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             request_path=request_path,
             document_path=document_path,
             exports=exports,
+            export_document_sha256=str(
+                export_payload["document_sha256"]
+            ),
         )
         manifest_path = Path(str(studio_run["manifest"]))
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

@@ -230,14 +230,19 @@ def _run_rule_lifecycle_acceptance(
         request_path = Path(str(prepared["request"]))
         document_path = Path(str(prepared["document"]))
         marker = _manual_edit_probe(document_path, rule_id=rule.rule_id)
-        exports = export_studio_document(document_path, formats=["pdf", "tiff_300"])[
-            "exports"
-        ]
+        export_payload = export_studio_document(
+            document_path,
+            formats=["pdf", "tiff_300"],
+        )
+        exports = export_payload["exports"]
         studio_run = publish_studio_export_run(
             project_dir=project_dir,
             request_path=request_path,
             document_path=document_path,
             exports=exports,
+            export_document_sha256=str(
+                export_payload["document_sha256"]
+            ),
         )
         manifest_path = Path(str(studio_run["manifest"]))
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

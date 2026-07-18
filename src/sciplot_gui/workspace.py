@@ -248,6 +248,9 @@ def export_canvas_workspace(
             request_path=workspace.request_path,
             document_path=workspace.document_path,
             exports=exports,
+            export_document_sha256=str(
+                export_payload["document_sha256"]
+            ),
         )
         return {
             "kind": "sciplot_canvas_export",
@@ -256,6 +259,7 @@ def export_canvas_workspace(
             "status": "passed" if run.get("ready_to_use") is True else "failed",
             "state": run.get("state"),
             "ready_to_use": run.get("ready_to_use") is True,
+            "export": json_safe(export_payload),
             "exports": json_safe(exports),
             "studio_run": json_safe(run),
         }
@@ -272,6 +276,9 @@ def export_canvas_workspace(
         requested_formats=requested_formats,
         exports=exports,
         artifact_root=artifact_root,
+        export_document_sha256=str(
+            export_payload["document_sha256"]
+        ),
     )
     return {
         "kind": "sciplot_canvas_export",
@@ -280,6 +287,7 @@ def export_canvas_workspace(
         "status": receipt.get("status"),
         "state": receipt.get("state"),
         "ready_to_use": receipt.get("export_ready") is True,
+        "export": json_safe(export_payload),
         "exports": json_safe(exports),
         "standalone_export": json_safe(receipt),
     }

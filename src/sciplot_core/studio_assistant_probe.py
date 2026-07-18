@@ -542,6 +542,8 @@ def run_studio_assistant_probe(
                 and int(request.visual_preview["width"]) == before_capture["width"]
                 and int(request.visual_preview["height"]) == before_capture["height"]
                 and int(request.visual_preview["revision"]) == request.base_revision
+                and request.context.get("raw_dataset_arrays_included") is False
+                and "datasets" not in request.context
                 and request_capability["setting_path"] == setting_path
                 and json_safe(request_capability["current_value"]) == original_label,
                 request_visual,
