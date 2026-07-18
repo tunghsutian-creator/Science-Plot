@@ -379,6 +379,105 @@ def run_studio_assistant_probe(
                 identity,
             )
         )
+
+        assistant_action = bridge.dock.toggleViewAction()
+        sciplot_menu = next(
+            (
+                action.menu()
+                for action in window.menuBar().actions()
+                if action.menu() is not None
+                and action.text().replace("&", "") == "SciPlot"
+            ),
+            None,
+        )
+        native_identity_before = {
+            "document": id(window.document),
+            "plot": id(window.plot),
+            "treeedit": id(window.treeedit),
+            "propdock": id(window.propdock),
+            "formatdock": id(window.formatdock),
+            "datadock": id(window.datadock),
+            "undo_action": id(window.vzactions["edit.undo"]),
+            "redo_action": id(window.vzactions["edit.redo"]),
+            "undo_shortcut": window.vzactions["edit.undo"].shortcut().toString(),
+            "redo_shortcut": window.vzactions["edit.redo"].shortcut().toString(),
+        }
+        native_plot_geometry_before = window.plot.geometry().getRect()
+        dock_default_hidden = (
+            not bridge.dock.isVisible()
+            and not assistant_action.isChecked()
+        )
+        action_in_sciplot_menu = (
+            sciplot_menu is not None
+            and assistant_action in sciplot_menu.actions()
+        )
+        assistant_action.trigger()
+        dock_shown = _wait_until(
+            application,
+            lambda: bridge.dock.isVisible() and assistant_action.isChecked(),
+            timeout_ms=2000,
+        )
+        identity_while_shown = {
+            "document": id(window.document),
+            "plot": id(window.plot),
+            "treeedit": id(window.treeedit),
+            "propdock": id(window.propdock),
+            "formatdock": id(window.formatdock),
+            "datadock": id(window.datadock),
+            "undo_action": id(window.vzactions["edit.undo"]),
+            "redo_action": id(window.vzactions["edit.redo"]),
+            "undo_shortcut": window.vzactions["edit.undo"].shortcut().toString(),
+            "redo_shortcut": window.vzactions["edit.redo"].shortcut().toString(),
+        }
+        assistant_action.trigger()
+        dock_hidden_again = _wait_until(
+            application,
+            lambda: not bridge.dock.isVisible()
+            and not assistant_action.isChecked(),
+            timeout_ms=2000,
+        )
+        native_identity_after = {
+            "document": id(window.document),
+            "plot": id(window.plot),
+            "treeedit": id(window.treeedit),
+            "propdock": id(window.propdock),
+            "formatdock": id(window.formatdock),
+            "datadock": id(window.datadock),
+            "undo_action": id(window.vzactions["edit.undo"]),
+            "redo_action": id(window.vzactions["edit.redo"]),
+            "undo_shortcut": window.vzactions["edit.undo"].shortcut().toString(),
+            "redo_shortcut": window.vzactions["edit.redo"].shortcut().toString(),
+        }
+        native_plot_geometry_after = window.plot.geometry().getRect()
+        dock_behavior = {
+            "default_hidden": dock_default_hidden,
+            "action_in_sciplot_menu": action_in_sciplot_menu,
+            "shown_by_toggle": dock_shown,
+            "hidden_by_toggle": dock_hidden_again,
+            "dock_area": int(window.dockWidgetArea(bridge.dock).value),
+            "dock_floating": bridge.dock.isFloating(),
+            "native_identity_before": native_identity_before,
+            "identity_while_shown": identity_while_shown,
+            "native_identity_after": native_identity_after,
+            "native_plot_geometry_before": native_plot_geometry_before,
+            "native_plot_geometry_after": native_plot_geometry_after,
+        }
+        checks.append(
+            _check(
+                "veusz_native_layout_opt_in_dock",
+                "The SciPlot AI dock starts hidden and the SciPlot menu toggles it without replacing Veusz",
+                dock_default_hidden
+                and action_in_sciplot_menu
+                and dock_shown
+                and dock_hidden_again
+                and not bridge.dock.isFloating()
+                and native_identity_before
+                == identity_while_shown
+                == native_identity_after
+                and native_plot_geometry_before == native_plot_geometry_after,
+                dock_behavior,
+            )
+        )
         checks.append(
             _check(
                 "axis_selected",
@@ -668,6 +767,7 @@ def run_studio_assistant_probe(
 
         evidence = {
             "document_identity": identity,
+            "dock_behavior": dock_behavior,
             "axis_path": str(axis.path),
             "setting_path": setting_path,
             "original_label": original_label,

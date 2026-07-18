@@ -75,6 +75,11 @@ class StudioAssistantBridge(QtCore.QObject):
         self._last_render_sha256: str | None = None
 
         self.dock = self._build_dock()
+        # SciPlot augments the native Veusz MainWindow; it must not claim space
+        # or rearrange the user's established Veusz dock layout on startup.
+        # The SciPlot menu exposes QDockWidget.toggleViewAction(), so the panel
+        # remains one reversible, opt-in native dock when it is needed.
+        self.dock.hide()
         self.window.addDockWidget(
             QtCore.Qt.DockWidgetArea.RightDockWidgetArea,
             self.dock,

@@ -1,49 +1,46 @@
 # SciPlot Operation Flow and Visual System
 
-Status: active frontend source of truth, 2026-07-18. M1 is complete; M2 and M3
-are in progress. M4's automated native-composition engineering baseline is
-implemented. The adaptive visual, contextual editing, and non-exported
-review/promotion kernels are implemented. The first provider-neutral M3
-Assistant transaction kernel and deterministic M3 data-mapping executor are
-also implemented. The provider-neutral request/progress/cancellation boundary,
-production OpenAI Responses adapter, and visible request UI are implemented.
-Confirmed data mappings now execute from the Canvas decision card into a
-separate candidate Canvas. Live-model canonical-task evaluation, real-session
-cutover, mixed-family composition acceptance, and the default `studio`
-migration remain active work. M5 now provides source-controlled validated
-envelopes for all 23 ready rules and binds recognition, semantic/render,
-source/mapping, strict QA, delivery, and one-step/autoplot state before
-`ready_to_use=true`; the learning/promotion loop remains active work.
-The product has not restarted: it remains at M5 while the accepted-result to
-reviewed-rule loop is being closed. G0 through G7 below are delivery-gate
-labels nested across the existing M5 and M6 roadmap, not replacement product
-milestones. G0 is closed; G1 is the current M5 gate; no M3 or M6 real session
-has been counted. The active cutover sequence is evidence contract, promotion
-infrastructure, canonical-task/capability closure, live-model truth, five-lane
-discovery, evidence-backed gap closure, release-candidate freeze, fifteen
-qualifying frozen-build completions, and an explicit owner-approved
-default-entrypoint change. Distribution remains outside this personal-product
-objective.
+Status: active frontend source of truth, revised 2026-07-18. The default and
+daily frontend is the original Veusz `MainWindow`. Its object tree, property
+editor, Datasets pane, menus, shortcuts, Undo/Redo, `Document`, and VSZ
+authority remain intact. SciPlot additions enter only through a dedicated
+menu, optional closable docks, and lightweight status integration.
 
-This document owns the product flow and visual direction for the native
-SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
-gates. When they differ, preserve the roadmap's safety and evidence contracts,
-then update both documents explicitly.
+M1 is complete; the M2/M3 Canvas, Review, typed-operation, Assistant,
+data-mapping, provider, and QA implementations remain valid engineering
+assets and probe history. The earlier plan to promote the standalone Canvas
+to the default frontend is **superseded**. Canvas is now an experimental
+entrypoint and a source of reusable components; it is not a replacement shell.
+M4's automated native-composition baseline and M5's source-controlled
+validated envelopes remain historical and technical facts. G0 through G7
+continue to describe evidence and promotion gates where useful, but no gate
+authorizes a Canvas-default cutover. Distribution remains outside this
+personal-product objective.
+
+This document owns the product flow and visual direction for SciPlot's Veusz
+integration. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit gates.
+When older roadmap text still describes a Canvas-default future, this
+2026-07-18 Veusz-first decision supersedes only that frontend choice; preserve
+the roadmap's safety, evidence, exact-current, and lifecycle contracts.
 
 ## Product promise
 
-SciPlot is a scientific-figure workbench, not a wrapper around the Veusz
-application. The primary surface is the exact-current figure canvas. Data
-confirmation, editing, review, AI assistance, QA, export, and composition
-support that canvas without displacing it.
+SciPlot is a scientific-figure workflow integrated into Veusz, not a second
+general-purpose editor layered beside it. The primary surface is the original
+Veusz `MainWindow` and its exact-current figure. SciPlot's data confirmation,
+AI assistance, QA, export, provenance, and delivery support that surface
+without displacing its established interaction model.
 
 The user should be able to:
 
 1. open raw data, an existing project, or a standalone VSZ;
-2. see the real figure as soon as a deterministic document exists;
-3. select what is visible and change it through bounded controls;
+2. see the real figure in the original Veusz window as soon as a deterministic
+   document exists;
+3. use the familiar object tree, property editor, Datasets pane, menus,
+   shortcuts, and canvas interactions without relearning the application;
 4. leave review marks without contaminating publication output;
-5. ask AI for help and watch typed operations arrive on the same canvas;
+5. ask AI for help from an optional dock and watch typed operations arrive in
+   the same Veusz `Document`;
 6. undo or roll back accepted work;
 7. export the exact current VSZ to QA-checked PDF/TIFF and delivery artifacts.
 
@@ -52,29 +49,30 @@ user invokes it or the deterministic pipeline stops honestly.
 
 ## First-principles visual decisions
 
-1. **The figure is the hero.** The canvas receives the largest stable region.
-   Tool chrome stays quiet and subordinate.
-2. **Frequent actions are visible; recovery actions are available.** Save,
-   undo, redo, navigation, zoom, and export belong in the main toolbar.
-   Advanced Editor and infrequent or not-yet-supported commands belong in an
-   overflow menu.
-3. **Selection drives the inspector.** The trailing pane changes with the
-   selected page, graph, axis, series, legend, or annotation. It is not a
-   permanent reproduction of Veusz's full object tree.
-4. **Spatial work stays spatial.** Move, align, resize, annotate, and compose
-   on the canvas. Do not make the user describe coordinates repeatedly.
+1. **Veusz interaction is the baseline.** Preserve the original object tree,
+   property editor, Datasets pane, menu organization, shortcuts, canvas
+   behavior, and Undo/Redo semantics.
+2. **Add; do not replace.** SciPlot owns one top-level menu, optional closable
+   docks, and lightweight status messages. It does not reorder or hide Veusz
+   controls to make itself look like a new application.
+3. **One document authority.** Manual and AI actions address the same active
+   Veusz `Document`, share its Undo/Redo history, and save to the same
+   exact-current VSZ. No parallel visual model or shadow document is allowed.
+4. **Spatial work stays in Veusz.** Selection, alignment, property edits, and
+   other direct manipulation continue to use the original canvas and panels.
 5. **State must be readable without color.** Every state uses text and, where
    useful, an icon or shape in addition to color: `ready`, `editing`,
    `needs_human_confirmation`, `needs_rule_repair`, and `conflict`.
 6. **The exact-current VSZ remains authoritative.** UI simplification must not
    introduce a second visual model or silently regenerate an edited document.
-7. **The interface adapts before it shrinks.** The inspector collapses or
-   overlays at narrow widths; the canvas is not squeezed into illegibility.
-8. **Power grows progressively.** The default view is focused. More advanced
-   controls appear in contextual sections, menus, and task workspaces.
-9. **System conventions beat decorative novelty.** Use the platform font,
-   palette, focus indication, shortcuts, menus, and accessible names before
-   inventing custom chrome.
+7. **Optional additions stay optional.** SciPlot docks open only on request or
+   when a deterministic path must surface a decision, and can always be
+   closed without changing the document.
+8. **Power grows progressively.** Keep ordinary Veusz operation unchanged;
+   expose SciPlot-specific detail within its own menu and docks.
+9. **Micro-adjust before restyling.** Use Veusz and platform fonts, palette,
+   focus indication, shortcuts, menus, and accessible names. Limit visual
+   changes to spacing, labels, status clarity, and SciPlot-owned surfaces.
 
 ## Reference principles
 
@@ -133,11 +131,10 @@ Open
   -> deterministic inspect and semantic mapping
   -> confirm only unresolved sample/data meaning
   -> create or load exact-current VSZ
-  -> Canvas
-       -> select and edit
-       -> review and annotate
-       -> optional AI transaction
-       -> optional native composition
+  -> original Veusz MainWindow
+       -> select and edit with native object/property/data controls
+       -> optional SciPlot Review dock
+       -> optional SciPlot AI transaction dock
   -> structural QA
   -> exact-current PDF/TIFF export
   -> artifact QA and delivery
@@ -159,24 +156,28 @@ and artifact QA, but does not claim project provenance or transform lineage.
 
 These are data-confirmation stages, not empty plot-preview stages. Show them
 only when scientific meaning is unresolved. A high-confidence ready rule
-should proceed directly to the generated Canvas.
+should proceed directly to the generated VSZ in Veusz.
 
-### Canvas
+### Veusz document surface
 
-The Canvas is the normal document surface:
+The original Veusz `MainWindow` is the normal document surface:
 
-- embedded Veusz `PlotWindow`;
+- native object tree, property editor, Datasets pane, menus, and shortcuts;
+- native `PlotWindow`, page navigation, zoom, selection, and editing;
+- native Undo/Redo actions and history;
 - exact-current page and zoom;
-- persistent SciPlot selection;
-- typed user and AI operations through `DocumentController`;
+- optional SciPlot selection context where a typed feature needs it;
+- typed AI operations applied to the same active `Document`;
 - visible dirty, exported, QA, recovery, and conflict state;
-- no Veusz `MainWindow`.
+- exactly one active `Document`/VSZ authority per editing window.
 
 ### Review
 
-M2 provides a non-exported review layer. `Ctrl+Shift+R` opens the Review
-workspace with Select, Note, Arrow, Box, Oval, and Pen tools. Marks bind to the
-page, normalized page, graph, data coordinates, or a selected stable object.
+M2 provides a non-exported review layer. Its existing implementation is a
+reusable capability; when integrated into Veusz it opens as an optional,
+closable SciPlot dock rather than replacing the object/property panels. Marks
+bind to the page, normalized page, graph, data coordinates, or a selected
+stable object.
 
 Review-only marks persist in `.sciplot_canvas/review_annotations.json`; they
 do not advance the publication revision, mutate VSZ, or appear in PDF/TIFF.
@@ -186,8 +187,10 @@ review-only because no equivalent bounded native Veusz object exists.
 
 ### AI transaction
 
-M3 uses a third tab in the existing adaptive Inspector utility pane. This
-keeps the figure dominant and avoids a second sidebar. The panel shows:
+M3's standalone Canvas implementation used a third Inspector tab. That is
+historical implementation detail. In the current direction, the same
+transaction UI becomes an optional, closable SciPlot dock in `MainWindow`
+without moving the native Veusz panels. It shows:
 
 - what the assistant understood;
 - affected stable object IDs;
@@ -211,21 +214,23 @@ preserve whole-turn rollback. Cross-process rollback reloads the verified
 baseline into the existing `Document` and `PlotWindow`, restores the baseline
 page and zoom, and verifies the exact render before closing the transaction.
 
-AI is a participant in the document, not a separate hidden renderer.
+AI is a participant in the Veusz document, not a separate hidden renderer or
+shadow editor.
 Deterministic `DataMappingProposal` execution is available from the Assistant
 decision card. SciPlot first shows a zero-write, raw-value-free preview; a
 separate user click creates a hash-bound receipt and starts background atomic
 execution. Ambiguous source roots stop at a source chooser. Success opens an
-isolated mapped project in a new Canvas while the current Canvas and VSZ remain
-unchanged.
+isolated mapped project through the standard Veusz entry while the current
+window and VSZ remain unchanged.
 
 When an API key is available, the production OpenAI Responses adapter appears
-through this same provider-neutral panel without a mode switch. Context version
+through this same provider-neutral dock without a mode switch. Context version
 3 gives the model only the selected object's exact bounded Inspector operation
 catalog; the model cannot invent another target or setting path. SciPlot owns
 IDs, expected old values, revision binding, validation, preview, acceptance,
-application, and rollback. With no key, every deterministic Canvas workflow
-remains available and the Assistant shows its honest optional state.
+application, and rollback. With no key, ordinary Veusz editing and every
+deterministic SciPlot workflow remain available; the Assistant dock stays
+absent or shows its honest optional state.
 
 ### Compose
 
@@ -293,11 +298,16 @@ This default path requires no AI provider and no routine AI image inspection.
 AI remains available for novel meaning, explicit refinement, or rule repair;
 it cannot override a failed deterministic gate.
 
-## Active personal cutover protocol
+## Evidence protocol and superseded Canvas cutover
 
-The remaining frontend work is evidence-driven rather than feature-count
-driven. The numbered list below maps to delivery gates G0 through G7 while
-preserving the M0 through M6 product roadmap:
+The earlier protocol used G0 through G7 to decide whether a standalone Canvas
+could replace Veusz as the default frontend. That cutover objective is
+superseded. Its session ledger, frozen-build, rollback, scientific-quality,
+QA, export, and delivery controls remain useful evidence; they no longer
+authorize changing the default away from Veusz.
+
+The former Canvas-default sequence is retained below as historical milestone
+context:
 
 1. establish the local, hash-chained session ledger and counting contract
    before any live-model or owner-session result can count;
@@ -319,25 +329,26 @@ preserving the M0 through M6 product roadmap:
    mechanical/categorical/swelling, and scalar-field/review/composition;
 6. fix every authority, data-loss, rollback, stale-export/QA, false-Ready, or
    ordinary/high-frequency Canvas gap, process any naturally eligible M5
-   candidate, then freeze one exact release candidate that already contains
-   the final Canvas-default entrypoint and obsolete normal-path cleanup;
+   candidate, then freeze one exact release candidate. Its former requirement
+   to contain a Canvas-default entrypoint is superseded;
 7. collect at least fifteen qualifying real completions on that unchanged
    candidate, at least three per lane. The M2 ten-session gate is an
-   intermediate subset and never authorizes cutover;
+   intermediate evidence subset and does not authorize a frontend cutover;
 8. present the evidence to the owner and promote that identical commit/package
-   to the normal workspace/install only after explicit approval; run a
-   reversible entrypoint canary and make no post-canary source/package cleanup.
+   only after explicit approval. In the current direction, any canary tests
+   additive Veusz integration, not a replacement entrypoint.
 
 A qualifying session is owner-operated, real-project work that ends with a
 saved and reopened exact-current VSZ, QA-checked PDF/TIFF, complete delivery,
 and an explicit outcome. Automated probes, synthetic fixtures, injected
 providers, copied outputs, agent-only review, failed attempts, and sessions
-that require Veusz MainWindow for an ordinary task do not count. Failed
-attempts and Advanced Editor fallbacks stay in the ledger with concrete
-reasons so they can drive the next smallest shared-code fix. Discovery
-attempts are not part of the final fifteen. Any runtime, rule, policy, adapter,
-renderer, package, or runtime-identity change after freeze creates a new
-candidate and restarts the formal count.
+do not count. Ordinary use of Veusz `MainWindow` is expected, not a fallback.
+Sessions that reveal a SciPlot dock disrupting native selection, object
+editing, datasets, shortcuts, or Undo/Redo must fail and drive the next
+smallest shared-code fix. Discovery attempts are not part of the final
+fifteen. Any runtime, rule, policy, adapter, renderer, package, or
+runtime-identity change after freeze creates a new candidate and restarts the
+formal count.
 
 The final fifteen also cover the workflows orthogonally: one provider-disabled
 completion in every lane; at least three accepted real-AI completions across
@@ -356,7 +367,7 @@ independently and cannot be combined into a pass. The sequence is:
 sessions preregister
   -> owner performs the declared natural task
   -> exact-current save + PDF/TIFF + QA + delivery
-  -> owner actually closes and reopens Canvas/Composition Board
+  -> owner actually closes and reopens the declared Veusz/experimental surface
   -> sessions witness
   -> sessions complete
   -> sessions status
@@ -389,62 +400,57 @@ their initial authority. Their final ledger must retain the byte-identical
 confirmed mapping step as its prefix and the plotted table as its terminal
 snapshot; a proposal ID without this causal chain is not evidence.
 
-The normal Canvas owns high-frequency scientific editing. The Advanced Editor
-remains the low-frequency, unsupported-property, and recovery surface. A gap
-in that boundary is not permission to build a second general Veusz property
-editor or renderer.
+The normal Veusz `MainWindow` owns high-frequency and low-frequency document
+editing. SciPlot owns only capabilities Veusz does not provide: deterministic
+data preparation, AI transaction review, provenance, QA, export orchestration,
+and delivery. A gap in those additions is not permission to build a second
+general Veusz property editor, canvas, document model, or renderer.
 
 ## Window anatomy
 
-### Main toolbar
+### Native Veusz chrome
 
-Keep visible:
+Keep the existing `MainWindow` structure and interaction positions:
 
-- document title and explicit state;
-- Save, Undo, Redo;
-- page navigation;
-- zoom out, zoom in, Fit, and 100%;
-- Review and Assist workspace entry;
-- Export + QA;
-- More.
+- menu bar and native actions;
+- document/object tree;
+- property editor;
+- Datasets pane;
+- native toolbars, page navigation, zoom, selection, and canvas;
+- native Save, Undo, Redo, keyboard shortcuts, and status behavior.
 
-`More` contains the inspector toggle, the explicit Advanced Editor route for
-infrequent/unsupported properties and recovery, and future infrequent document
-commands. Every toolbar action must also have a shortcut or menu route so the
-toolbar can adapt or be hidden.
+SciPlot must not rename, reorder, hide, or duplicate these controls as part of
+ordinary launch. Any upstream Veusz layout reset remains available.
 
-### Canvas well
+### SciPlot menu
 
-- neutral system-derived background;
-- centered white page with a subtle boundary or shadow;
-- smooth pan and zoom;
-- visible stable-object selection and direct-manipulation affordances;
-- XY data-point picking with a persistent redraw-safe marker;
-- native label dragging routed through the typed operation gateway;
-- no fake placeholder canvas during import;
-- `Tab` Canvas-only mode with `Esc` recovery.
+Add one clearly named top-level menu for SciPlot-owned actions such as AI
+Assist, Review, QA, exact-current export/delivery, provenance, and diagnostics.
+Actions use ordinary Qt shortcuts only where they do not conflict with Veusz.
+Closing every SciPlot dock must return the window to normal Veusz interaction.
 
-### Contextual inspector
+### Optional SciPlot docks
 
-The inspector is a trailing utility pane, resizable and toggled by `F9`.
+AI, Review, QA, and provenance surfaces are independent, resizable, closable
+docks. They open only when invoked or when the deterministic workflow must
+surface a blocking decision. They do not replace the object tree, property
+editor, or Datasets pane and do not automatically move those panels.
 
-It starts with:
+Each dock starts with:
 
-- user-facing object name and type;
-- compact structural breadcrumb;
-- sections relevant to the selection;
-- immediate preview where safe;
-- Apply/Revert semantics where a commit boundary is needed.
+- a clear task/status label;
+- only the current task's bounded context;
+- complete preview and explicit commit/rollback where a document mutation is
+  proposed;
+- a direct close action that does not mutate the document.
 
-The bounded M2 object set is page, graph, axis, XY series, box plot, legend,
-image, contour, colorbar, and native label. Dataset mappings are visible but
-read-only in this visual editor. Changing data authority belongs to the
-validated mapping path, not to a color/style inspector.
-
-Safe booleans and closed choices may apply immediately. Text, numbers,
-distances, colors, ranges, and lists remain staged until Apply. A staged field
-must be applied, reverted, or cancelled before changing object/page, saving,
-exporting, or closing; no navigation path may silently discard it.
+The standalone M2 prototype covered page, graph, axis, XY series, box plot,
+legend, image, contour, colorbar, and native label. That remains a capability
+inventory, not a plan to reproduce those property editors inside SciPlot
+docks. Native Veusz continues to own ordinary object and dataset editing.
+Extracted AI/Review components may use the bounded catalog for context and
+typed previews, but a proposed mutation stays staged until explicit acceptance
+and then enters the native document history.
 
 Do not lead with absolute filesystem paths or expose every arbitrary Veusz
 property. Full paths and technical IDs belong in disclosure, tooltips, or
@@ -461,21 +467,22 @@ developer diagnostics.
 
 ## Adaptive behavior
 
-- **Wide, 1280 px and above:** canvas plus 320-380 px inspector.
-- **Medium, 980-1279 px:** inspector remains available but can collapse; long
-  titles elide in the middle; low-frequency toolbar actions overflow.
-- **Narrow, below 980 px:** inspector becomes on-demand overlay or separate
-  contextual view; status-bar details may move into a popover; the canvas
-  remains the primary readable region.
-- **Canvas only:** `Tab` hides toolbar, menu, status, and inspector without
-  changing the exact-current figure; `Esc` restores chrome and `F9` toggles
-  the inspector.
+- Never change the native Veusz panel arrangement solely because the window
+  crosses a SciPlot width breakpoint.
+- SciPlot docks remember their own size and visibility, respect Qt's native
+  docking behavior, and may be closed when space is limited.
+- Long SciPlot labels elide or wrap within their dock; they do not force the
+  native object/property/data panes to move.
+- Existing Veusz full-screen, toolbar, panel, and shortcut behaviors remain
+  authoritative. The standalone Canvas `Tab`/`F9` behavior is experimental
+  history and is not installed over Veusz shortcuts.
 
 Test full screen, half-screen, two-thirds, and minimum supported window sizes.
 
-## Visual tokens for M2
+## Visual tokens for SciPlot-owned surfaces
 
-The M2 foundation now uses a palette-backed token layer:
+The existing M2 palette-backed token layer can be reused inside SciPlot menus,
+docks, and messages:
 
 - system UI font; ordinary interface text at or above the platform minimum;
 - spacing scale: 4, 8, 12, 16, and 24 px;
@@ -483,14 +490,19 @@ The M2 foundation now uses a palette-backed token layer:
 - semantic colors derived from `QPalette` with light, dark, and increased
   contrast variants;
 - positive, neutral, warning, negative, and selection roles;
-- toolbar and inspector icons from the platform or a coherent theme;
+- dock and menu icons from the platform or a coherent theme;
 - visible keyboard focus for every interactive control;
 - accessible names for symbol-only page and zoom actions.
 
 The scientific figure's own colors remain governed by SciPlot publication and
-accessibility QA, not by application chrome tokens.
+accessibility QA, not by application chrome tokens. These tokens must not
+apply a wholesale restyle to Veusz.
 
-## M2 visual and editing kernel delivered
+## Historical M2 visual and editing kernel delivered
+
+The facts below describe the standalone Canvas implementation and its probes.
+They remain useful regression evidence and component inventory, but do not
+define the default frontend or justify replacing Veusz interaction.
 
 - application chrome is generated from the active `QPalette`, including real
   dark-palette and increased-contrast variants;
@@ -534,7 +546,7 @@ accessibility QA, not by application chrome tokens.
   lifecycles pass `120/120` aggregate checks without mutating their source
   projects or transferring stable IDs away from existing objects.
 
-## M3 reversible Assistant transaction kernel delivered
+## Historical M3 reversible Assistant transaction kernel delivered
 
 - the Assistant is a compact third Inspector tab with an explicit
   provider-optional empty state, current-turn summary, bounded context,
@@ -558,7 +570,7 @@ accessibility QA, not by application chrome tokens.
 - automated probes use a typed provider stub and do not count as human
   sessions or prove real model quality.
 
-## M3 deterministic data-mapping executor delivered
+## Historical M3 deterministic data-mapping executor delivered
 
 - `DataMappingProposal` version 2 declares exact source hashes, relative
   paths, workbook sheet/header choices, source-column indices, expected
@@ -599,7 +611,7 @@ accessibility QA, not by application chrome tokens.
 - these non-interactive engineering receipts do not count as user confirmation
   or human daily-use sessions.
 
-## M3 provider lifecycle and visible request UI delivered
+## Historical M3 provider lifecycle and visible request UI delivered
 
 - closed provider descriptors advertise typed proposal and cancellation
   capabilities without coupling SciPlot to a model vendor;
@@ -644,7 +656,7 @@ accessibility QA, not by application chrome tokens.
   hand off; only an explicit fresh v2 confirmation into a new output root
   restores authority;
 
-## M3 production OpenAI Responses adapter delivered
+## Historical M3 production OpenAI Responses adapter delivered
 
 - Assistant context version 3 advertises only the selected object's exact
   editable setting paths, current values, editor types, choices, and bounds;
@@ -677,7 +689,7 @@ accessibility QA, not by application chrome tokens.
 Live-endpoint execution, live-model scientific-quality evaluation, and the six
 canonical natural-language acceptance tasks remain M3 work.
 
-## M2 implementation order
+## Historical M2 implementation order
 
 Completed M2 increments:
 
@@ -695,22 +707,28 @@ Completed M2 increments:
 8. Add typed review-to-native promotion, undo/redo sidecar recovery, reopen,
    export-isolation, and audit gates.
 
-Remaining M2 work:
-
-1. Run at least ten representative real sessions across five figure families.
-2. Treat those ten sessions only as an intermediate evidence checkpoint. The
-   normal `studio` entrypoint can migrate only after the M6 frozen-candidate
-   fifteen-session gate and explicit owner approval.
+The former remaining item was to run representative sessions and then migrate
+the normal `studio` entrypoint to Canvas. That migration is superseded. The
+current work is to inventory these delivered components, extract only the
+valuable AI/Review/QA pieces, and prove that their Veusz docks preserve native
+interaction and exact-current authority.
 
 ## Design acceptance
 
-M2 is not visually complete because a screenshot looks polished. It must prove:
+The Veusz integration is not acceptable because a screenshot looks polished.
+It must prove:
 
-- common edits are easier to discover and execute than in the Veusz frontend;
-- the canvas remains usable at supported window sizes;
-- keyboard-only editing covers the primary flow;
+- original object-tree, property, Datasets, menu, shortcut, and canvas
+  interactions remain available in their familiar locations;
+- ordinary Veusz editing works with every SciPlot dock closed;
+- AI and manual edits mutate the same `Document` and participate in one
+  coherent Undo/Redo history;
+- optional docks remain usable at supported window sizes without silently
+  moving native panels;
+- keyboard-only operation preserves Veusz shortcuts and covers SciPlot-owned
+  actions without conflicts;
 - state and errors remain understandable without color;
 - review marks never leak into publication export unless promoted;
 - no accepted document change is lost;
-- Advanced Editor is visibly a low-frequency/unsupported-property and recovery
-  route, not the expected workflow.
+- exact-current VSZ remains the sole visual authority;
+- no user-facing independent/AI mode switch is introduced.
