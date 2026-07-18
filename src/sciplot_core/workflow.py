@@ -43,6 +43,9 @@ from sciplot_core.publication import (
 from sciplot_core.qa import run_qa
 from sciplot_core.render import render_to_dir
 from sciplot_core.semantic import build_intervention_request, classify_source, prepare_semantic_source
+from sciplot_core.source_coverage import (
+    verify_rendered_mapping_source_coverage,
+)
 from sciplot_core.split import (
     DEFAULT_STACK_SPLIT_POLICY,
     STACKED_TALL_FIGURE_HEIGHT_MM,
@@ -81,6 +84,62 @@ def _resolve_optional_request_path(value: object, *, base_dir: Path) -> Path | N
     if not path.is_absolute():
         path = base_dir / path
     return path
+
+
+def _bind_result_data_snapshots(
+    result: dict[str, Any],
+    *,
+    plotted_source: Path,
+    mapping_application: dict[str, Any] | None,
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    resolved_source = plotted_source.expanduser().resolve()
+    snapshot_paths = [resolved_source]
+    if mapping_application is not None:
+        effective_input = Path(
+            str(mapping_application.get("effective_input") or "")
+        ).expanduser().resolve()
+        if resolved_source == effective_input and resolved_source.is_dir():
+            snapshot_paths = sorted(
+                {
+                    Path(str(record.get("path") or "")).expanduser().resolve()
+                    for record in mapping_application.get("mapped_outputs", [])
+                    if isinstance(record, dict)
+                    and isinstance(record.get("path"), str)
+                    and str(record["path"]).strip()
+                },
+                key=str,
+            )
+            if not snapshot_paths:
+                raise ValueError(
+                    "A mapped directory render has no concrete plotted tables."
+                )
+            for path in snapshot_paths:
+                try:
+                    path.relative_to(resolved_source)
+                except ValueError as exc:
+                    raise ValueError(
+                        "A mapped plotted table is outside the effective input "
+                        "directory."
+                    ) from exc
+                if not path.is_file():
+                    raise FileNotFoundError(
+                        f"Mapped plotted table not found: {path}"
+                    )
+    result["data_snapshot_sources"] = [str(path) for path in snapshot_paths]
+    if len(snapshot_paths) == 1:
+        result["data_snapshot_source"] = str(snapshot_paths[0])
+    else:
+        result.pop("data_snapshot_source", None)
+    if mapping_application is not None:
+        result["rendered_source_coverage"] = (
+            verify_rendered_mapping_source_coverage(
+                result,
+                mapping_application=mapping_application,
+                request=request,
+            )
+        )
+    return result
 
 
 def _clear_managed_artifacts(output_dir: Path) -> None:
@@ -658,6 +717,7 @@ def _render_veusz_tensile_bundle(
     combined_reports: list[dict[str, Any]] = []
     combined_documents: list[str] = []
     combined_specs: list[str] = []
+    combined_terminal_requests: list[dict[str, Any]] = []
     for metric_id, metric_source, template, metric_options in render_jobs:
         metric_dir = figures_dir / f"_{metric_id}_render"
         payload = render_to_dir(
@@ -697,6 +757,11 @@ def _render_veusz_tensile_bundle(
                 mapped_specs.append(str(destination))
         combined_documents.extend(mapped_documents)
         combined_specs.extend(mapped_specs)
+        combined_terminal_requests.extend(
+            item
+            for item in payload.get("terminal_render_requests", [])
+            if isinstance(item, dict)
+        )
         for report in payload.get("qa_reports", []):
             if not isinstance(report, dict):
                 continue
@@ -724,6 +789,7 @@ def _render_veusz_tensile_bundle(
         "qa_reports": combined_reports,
         "veusz_documents": combined_documents,
         "veusz_specs": combined_specs,
+        "terminal_render_requests": combined_terminal_requests,
         "multi_metric_bundle": {
             "kind": "tensile_curve_and_summary_bundle",
             "metric_ids": [metric_id for metric_id, _source, _template, _options in render_jobs],
@@ -749,6 +815,7 @@ def _render_veusz_sweep_bundle(
     combined_reports: list[dict[str, Any]] = []
     combined_documents: list[str] = []
     combined_specs: list[str] = []
+    combined_terminal_requests: list[dict[str, Any]] = []
     for metric_id, metric_source, metric_options in metric_sources:
         metric_dir = figures_dir / f"_{metric_id}_render"
         metric_render_options = {**options, **metric_options}
@@ -789,6 +856,11 @@ def _render_veusz_sweep_bundle(
                 mapped_specs.append(str(destination))
         combined_documents.extend(mapped_documents)
         combined_specs.extend(mapped_specs)
+        combined_terminal_requests.extend(
+            item
+            for item in payload.get("terminal_render_requests", [])
+            if isinstance(item, dict)
+        )
         for report in payload.get("qa_reports", []):
             if not isinstance(report, dict):
                 continue
@@ -816,6 +888,7 @@ def _render_veusz_sweep_bundle(
         "qa_reports": combined_reports,
         "veusz_documents": combined_documents,
         "veusz_specs": combined_specs,
+        "terminal_render_requests": combined_terminal_requests,
         "multi_metric_bundle": {
             "kind": "rheology_sweep_metric_bundle",
             "metric_ids": [metric_id for metric_id, _source, _options in metric_sources],
@@ -858,6 +931,7 @@ def _render_with_auto_split(
         options=options,
         export_formats=export_formats,
         split_policy=request.get("split_policy"),
+        request_context=request,
     )
     layout_quality = _layout_quality_from_result(result)
     policy = _auto_split_policy_for_result(request=request, template=template, layout_quality=layout_quality)
@@ -874,6 +948,7 @@ def _render_with_auto_split(
         options=split_options,
         export_formats=export_formats,
         split_policy=policy,
+        request_context=request,
     )
     split_result["auto_split"] = {
         "applied": True,
@@ -1167,6 +1242,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
         else:
             failure = "SciPlot could not auto-detect this input."
         raise ValueError(f"{failure} Intervention request written to {output_dir / 'intervention_request.json'}.")
+    plotted_data_source: Path
     if use_auto:
         route = "auto"
         final_recipe = semantic.get("recommended_recipe")
@@ -1208,6 +1284,7 @@ def run_request(request_path: Path) -> dict[str, Any]:
             export_formats=request.get("exports"),
             request=effective_render_request,
         )
+        plotted_data_source = Path(str(prepared["source"]))
         processed_source = Path(str(prepared["processed_source"])) if prepared["processed_source"] else None
         analysis_metrics = compute_analysis_metrics(
             source_path=input_path,
@@ -1240,6 +1317,9 @@ def run_request(request_path: Path) -> dict[str, Any]:
             output_dir=output_dir,
             options=_request_options(request),
         )
+        plotted_data_source = Path(
+            str(result.get("processed_source") or input_path)
+        )
         transform_steps.extend(step for step in result.get("transform_steps", []) if isinstance(step, dict))
     else:
         route = "render"
@@ -1255,8 +1335,15 @@ def run_request(request_path: Path) -> dict[str, Any]:
             export_formats=request.get("exports"),
             request=request,
         )
+        plotted_data_source = input_path
         _write_render_report(output_dir, request=request, result=result)
 
+    result = _bind_result_data_snapshots(
+        result,
+        plotted_source=plotted_data_source,
+        mapping_application=mapping_application,
+        request=request,
+    )
     transform_ledger = build_transform_ledger(
         study_model,
         request=request,

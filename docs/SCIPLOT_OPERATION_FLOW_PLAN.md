@@ -1,6 +1,6 @@
 # SciPlot Operation Flow and Visual System
 
-Status: active frontend source of truth, 2026-07-17. M1 is complete; M2 and M3
+Status: active frontend source of truth, 2026-07-18. M1 is complete; M2 and M3
 are in progress. M4's automated native-composition engineering baseline is
 implemented. The adaptive visual, contextual editing, and non-exported
 review/promotion kernels are implemented. The first provider-neutral M3
@@ -14,11 +14,16 @@ migration remain active work. M5 now provides source-controlled validated
 envelopes for all 23 ready rules and binds recognition, semantic/render,
 source/mapping, strict QA, delivery, and one-step/autoplot state before
 `ready_to_use=true`; the learning/promotion loop remains active work.
-The active cutover sequence is evidence contract, promotion infrastructure,
-canonical-task/capability closure, live-model truth, five-lane discovery,
-evidence-backed gap closure, release-candidate freeze, fifteen qualifying
-frozen-build completions, and an explicit owner-approved default-entrypoint
-change. Distribution remains outside this personal-product objective.
+The product has not restarted: it remains at M5 while the accepted-result to
+reviewed-rule loop is being closed. G0 through G7 below are delivery-gate
+labels nested across the existing M5 and M6 roadmap, not replacement product
+milestones. G0 is closed; G1 is the current M5 gate; no M3 or M6 real session
+has been counted. The active cutover sequence is evidence contract, promotion
+infrastructure, canonical-task/capability closure, live-model truth, five-lane
+discovery, evidence-backed gap closure, release-candidate freeze, fifteen
+qualifying frozen-build completions, and an explicit owner-approved
+default-entrypoint change. Distribution remains outside this personal-product
+objective.
 
 This document owns the product flow and visual direction for the native
 SciPlot workbench. `DEVELOPMENT_ROADMAP.md` owns milestone scope and exit
@@ -291,7 +296,8 @@ it cannot override a failed deterministic gate.
 ## Active personal cutover protocol
 
 The remaining frontend work is evidence-driven rather than feature-count
-driven:
+driven. The numbered list below maps to delivery gates G0 through G7 while
+preserving the M0 through M6 product roadmap:
 
 1. establish the local, hash-chained session ledger and counting contract
    before any live-model or owner-session result can count;
@@ -341,7 +347,7 @@ create/edit/reopen/export lifecycle. The ledger binds
 `review_annotations.json`, mapping execution/ledger evidence, or
 `composition.json` whenever that state is authoritative.
 
-The E0 implementation is the `sciplot sessions` command family. Every formal
+The delivery-gate G0 implementation is the `sciplot sessions` command family. Every formal
 M3 or M6 run uses one explicit shared ledger and one `round_id`; separate
 rounds, provider/model identities, or frozen build identities are reported
 independently and cannot be combined into a pass. The sequence is:
@@ -661,8 +667,9 @@ accessibility QA, not by application chrome tokens.
 - the six-document Inspector matrix remains `8/8` across 87 objects and now
   verifies that every one of the ten bounded object types produces an exact,
   raw-array-free context-v3 capability catalog;
-- runtime smoke version 16 passes `32/32`, including Canvas contract `36/36`,
-  deterministic mapping `55/55`, and Assistant lifecycle `41/41`;
+- runtime smoke version 21 passes `37/37`, including Canvas contract `37/37`,
+  deterministic mapping `58/58`, session evidence `14/14`, Assistant
+  lifecycle `41/41`, and reviewed promotion `28/28`;
 - the protocol and UI gates use an in-memory Responses/SSE wire fixture. No API
   key was available, so they do not claim a live API call or production-model
   scientific quality.

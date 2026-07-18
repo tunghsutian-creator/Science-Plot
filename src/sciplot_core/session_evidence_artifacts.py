@@ -10,6 +10,9 @@ from typing import Any
 from sciplot_core._utils import file_sha256
 from sciplot_core.data_mapping import load_data_mapping_execution
 from sciplot_core.qa import run_qa
+from sciplot_core.source_coverage import (
+    verify_rendered_mapping_source_coverage,
+)
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
 
@@ -264,6 +267,70 @@ def _verify_mapping_lineage(
         )
 
 
+def _verify_terminal_data_snapshots(
+    result: dict[str, Any],
+    *,
+    final_outputs: set[tuple[str, str, str]],
+) -> list[dict[str, Any]]:
+    values = result.get("data_snapshot_sources")
+    scalar = result.get("data_snapshot_source")
+    if values is None:
+        if not isinstance(scalar, str) or not scalar.strip():
+            raise ValueError(
+                "Final manifest does not identify the plotted data snapshot."
+            )
+        raw_paths = [scalar]
+    else:
+        if (
+            not isinstance(values, list)
+            or not values
+            or any(
+                not isinstance(value, str) or not value.strip()
+                for value in values
+            )
+        ):
+            raise ValueError(
+                "Final manifest plotted data snapshots must be a non-empty "
+                "path list."
+            )
+        raw_paths = list(values)
+        if scalar is not None:
+            if (
+                not isinstance(scalar, str)
+                or len(raw_paths) != 1
+                or Path(scalar).expanduser().resolve()
+                != Path(raw_paths[0]).expanduser().resolve()
+            ):
+                raise ValueError(
+                    "Scalar and plural plotted data snapshot identities disagree."
+                )
+    resolved_paths = [
+        Path(value).expanduser().resolve()
+        for value in raw_paths
+    ]
+    if len(set(resolved_paths)) != len(resolved_paths):
+        raise ValueError("Final manifest repeats a plotted data snapshot.")
+    snapshots = sorted(
+        (artifact_content_record(path) for path in resolved_paths),
+        key=lambda record: (
+            str(record["kind"]),
+            str(record["path"]),
+            str(record["sha256"]),
+        ),
+    )
+    snapshot_keys = {_artifact_key(record) for record in snapshots}
+    if not snapshot_keys <= final_outputs:
+        raise ValueError(
+            "A final plotted data snapshot is not a terminal transform output."
+        )
+    if len(final_outputs) > 1 and snapshot_keys != final_outputs:
+        raise ValueError(
+            "A multi-table plot must bind every terminal transform output; "
+            "silent source omission is forbidden."
+        )
+    return snapshots
+
+
 def verify_regular_source_lineage(
     payload: dict[str, Any],
     *,
@@ -406,23 +473,39 @@ def verify_regular_source_lineage(
             )
     result = payload.get("result")
     result = result if isinstance(result, dict) else {}
-    snapshot_value = result.get("data_snapshot_source")
-    if not isinstance(snapshot_value, str) or not snapshot_value.strip():
-        raise ValueError("Final manifest does not identify the plotted data snapshot.")
-    snapshot = artifact_content_record(Path(snapshot_value))
-    if _artifact_key(snapshot) not in final_outputs:
-        raise ValueError(
-            "The final plotted data snapshot is not the terminal transform output."
+    rendered_source_coverage: dict[str, Any] | None = None
+    if mapping_application is not None:
+        request = payload.get("request")
+        if not isinstance(request, dict):
+            raise ValueError(
+                "Final mapped manifest has no authoritative request."
+            )
+        rendered_source_coverage = verify_rendered_mapping_source_coverage(
+            result,
+            mapping_application=mapping_application,
+            request=request,
         )
+        if result.get("rendered_source_coverage") != rendered_source_coverage:
+            raise ValueError(
+                "Final manifest renderer-source coverage is stale or "
+                "self-attested rather than replayable."
+            )
+    snapshots = _verify_terminal_data_snapshots(
+        result,
+        final_outputs=final_outputs,
+    )
     return {
         "kind": "sciplot_verified_source_lineage",
         "version": 1,
         "source_count": len(source_records),
         "initial_input_count": len(initial_inputs),
         "step_count": len(steps),
-        "terminal_snapshot": snapshot,
+        "terminal_snapshot": snapshots[0],
+        "terminal_snapshots": snapshots,
+        "terminal_snapshot_count": len(snapshots),
         "transform_ledger_sha256": _canonical_sha256(ledger),
         "mapping_bound": mapping_application is not None,
+        "rendered_source_coverage": rendered_source_coverage,
         "raw_archive_bound": mapping_application is None,
     }
 

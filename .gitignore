@@ -39,6 +39,7 @@ ftir_output/
 /docs/*
 !/docs/THIRD_PARTY_NOTICES.md
 !/docs/SESSION_EVIDENCE.md
+!/docs/SCIPLOT_REVIEWED_PROMOTION.md
 
 # Vendored Veusz runtime only; upstream development material is local-only.
 /third_party/veusz/tests/

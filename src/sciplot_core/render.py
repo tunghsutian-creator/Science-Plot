@@ -13,6 +13,7 @@ from sciplot_core.ingest import normalized_source
 from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY
 from sciplot_core.semantic import classify_source
 from sciplot_core.split import SUPPORTED_SPLIT_TEMPLATES, build_split_plan, normalize_split_policy
+from sciplot_core.terminal_request import project_terminal_render_request
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
 ensure_legacy_core()
@@ -448,14 +449,26 @@ def _render_veusz_panel(
     options: dict[str, Any],
     export_formats: tuple[str, ...],
     split_panel: dict[str, Any] | None = None,
-) -> tuple[list[Path], list[dict[str, Any]], dict[str, Any], Path, Path]:
+    request_context: dict[str, Any] | None = None,
+) -> tuple[
+    list[Path],
+    list[dict[str, Any]],
+    dict[str, Any],
+    Path,
+    Path,
+    dict[str, Any],
+]:
     panel_dir.mkdir(parents=True, exist_ok=True)
+    terminal_request = project_terminal_render_request(
+        template=template,
+        render_options=options,
+        request_context=request_context,
+    )
     request = {
         "input": str(source.resolve()),
-        "template": template,
         "output": str(output_dir),
         "exports": list(export_formats),
-        "render_options": dict(options),
+        **terminal_request,
     }
     request_path = panel_dir / "plot_request.json"
     request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
@@ -472,7 +485,7 @@ def _render_veusz_panel(
         split_panel=split_panel,
     )
     _cleanup_worker_exports(panel_dir)
-    return outputs, export_records, report, document, spec
+    return outputs, export_records, report, document, spec, terminal_request
 
 
 def _render_to_dir_veusz(
@@ -484,6 +497,7 @@ def _render_to_dir_veusz(
     options: dict[str, Any] | None = None,
     export_formats: list[str] | tuple[str, ...] | None = None,
     split_policy: dict[str, Any] | None = None,
+    request_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     options = dict(options or {})
     normalized_exports = _normalize_export_formats(export_formats)
@@ -499,6 +513,7 @@ def _render_to_dir_veusz(
     reports: list[dict[str, Any]] = []
     documents: list[str] = []
     specs: list[str] = []
+    terminal_requests: list[dict[str, Any]] = []
     with normalized_source(input_path) as source:
         split_plan: dict[str, Any] | None = None
         panels: list[tuple[int | None, list[str] | None]]
@@ -523,7 +538,14 @@ def _render_to_dir_veusz(
                     "policy": dict(normalized_split_policy or {}),
                 }
             output_base = _veusz_target_base(source, template, panel_index=panel_index)
-            outputs, export_records, report, document, spec = _render_veusz_panel(
+            (
+                outputs,
+                export_records,
+                report,
+                document,
+                spec,
+                terminal_request,
+            ) = _render_veusz_panel(
                 source,
                 template=template,
                 output_dir=output_dir,
@@ -532,12 +554,14 @@ def _render_to_dir_veusz(
                 options=panel_options,
                 export_formats=normalized_exports,
                 split_panel=split_panel,
+                request_context=request_context,
             )
             all_outputs.extend(outputs)
             all_exports.extend(export_records)
             reports.append(report)
             documents.append(str(document))
             specs.append(str(spec))
+            terminal_requests.append(terminal_request)
 
     payload = {
         "kind": "sciplot_render_result",
@@ -552,6 +576,7 @@ def _render_to_dir_veusz(
         "qa_reports": reports,
         "veusz_documents": documents,
         "veusz_specs": specs,
+        "terminal_render_requests": terminal_requests,
     }
     if split_plan is not None:
         payload["split_plan"] = json_safe(split_plan)
@@ -567,6 +592,7 @@ def render_to_dir(
     options: dict[str, Any] | None = None,
     export_formats: list[str] | tuple[str, ...] | None = None,
     split_policy: dict[str, Any] | None = None,
+    request_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     template = validate_template_name(template)
     return _render_to_dir_veusz(
@@ -577,6 +603,7 @@ def render_to_dir(
         options=options,
         export_formats=export_formats,
         split_policy=split_policy,
+        request_context=request_context,
     )
 
 

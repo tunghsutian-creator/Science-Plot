@@ -129,6 +129,78 @@ def _build_parser() -> argparse.ArgumentParser:
     readiness_certify_parser.add_argument("--out", type=Path, required=True)
     readiness_certify_parser.add_argument("--json", action="store_true")
 
+    learning_parser = subparsers.add_parser(
+        "learning",
+        help="Build powerless, owner-reviewed promotion evidence from real sessions.",
+    )
+    learning_subparsers = learning_parser.add_subparsers(
+        dest="learning_command",
+        required=True,
+    )
+    learning_collect_parser = learning_subparsers.add_parser(
+        "collect",
+        help="Replay completed session evidence and collect committed decisions.",
+    )
+    learning_collect_parser.add_argument("ledger", nargs="+", type=Path)
+    learning_collect_parser.add_argument("--out", type=Path, required=True)
+    learning_collect_parser.add_argument("--json", action="store_true")
+    learning_build_parser = learning_subparsers.add_parser(
+        "build",
+        help="Group canonical decisions without granting runtime authority.",
+    )
+    learning_build_parser.add_argument("collection", type=Path)
+    learning_build_parser.add_argument("--out", type=Path, required=True)
+    learning_build_parser.add_argument("--json", action="store_true")
+    learning_decide_parser = learning_subparsers.add_parser(
+        "decide",
+        help="Validate an externally authored explicit owner decision receipt.",
+    )
+    learning_decide_parser.add_argument("candidate_set", type=Path)
+    learning_decide_parser.add_argument("receipt", type=Path)
+    learning_decide_parser.add_argument("--out", type=Path, required=True)
+    learning_decide_parser.add_argument("--json", action="store_true")
+    learning_plan_parser = learning_subparsers.add_parser(
+        "plan",
+        help="Bind an approved candidate to a clean source baseline and gates.",
+    )
+    learning_plan_parser.add_argument("decision", type=Path)
+    learning_plan_parser.add_argument("--repo", type=Path, required=True)
+    learning_plan_parser.add_argument("--out", type=Path, required=True)
+    learning_plan_parser.add_argument("--json", action="store_true")
+    learning_session_binding_parser = learning_subparsers.add_parser(
+        "session-binding",
+        help=(
+            "Print the exact ledger-prefix, event, and authority hashes an "
+            "owner verification receipt must sign."
+        ),
+    )
+    learning_session_binding_parser.add_argument("ledger", type=Path)
+    learning_session_binding_parser.add_argument("session_id")
+    learning_session_binding_parser.add_argument(
+        "--json",
+        action="store_true",
+    )
+    learning_verify_parser = learning_subparsers.add_parser(
+        "verify",
+        help="Verify reviewed source, probe, and provider-disabled real evidence.",
+    )
+    learning_verify_parser.add_argument("plan", type=Path)
+    learning_verify_parser.add_argument("receipt", type=Path)
+    learning_verify_parser.add_argument("--repo", type=Path, required=True)
+    learning_verify_parser.add_argument("--out", type=Path, required=True)
+    learning_verify_parser.add_argument("--json", action="store_true")
+    learning_status_parser = learning_subparsers.add_parser(
+        "status",
+        help="Validate one powerless promotion artifact.",
+    )
+    learning_status_parser.add_argument("artifact", type=Path)
+    learning_status_parser.add_argument("--json", action="store_true")
+    learning_schema_parser = learning_subparsers.add_parser(
+        "schema",
+        help="Print thresholds, receipt contracts, and trust boundaries.",
+    )
+    learning_schema_parser.add_argument("--json", action="store_true")
+
     smoke_parser = subparsers.add_parser(
         "smoke",
         help="Run the fixture-free Studio lifecycle and delivery change gate.",
@@ -243,6 +315,29 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=CANONICAL_MODEL_TASKS,
     )
     sessions_preregister_parser.add_argument("--attempt", type=int)
+    sessions_preregister_parser.add_argument(
+        "--promotion-candidate-id",
+        help=(
+            "Candidate hash for a preregistered provider-disabled promotion "
+            "verification lifecycle."
+        ),
+    )
+    sessions_preregister_parser.add_argument(
+        "--promotion-decision-sha256",
+        help="Approved promotion decision hash; requires the other promotion bindings.",
+    )
+    sessions_preregister_parser.add_argument(
+        "--promotion-plan-sha256",
+        help="Promotion implementation-plan hash; requires the other promotion bindings.",
+    )
+    sessions_preregister_parser.add_argument(
+        "--promotion-assertion-id",
+        action="append",
+        help=(
+            "Owner-approved lifecycle assertion hash; repeat for every assertion "
+            "assigned to this lane."
+        ),
+    )
     sessions_preregister_parser.add_argument("--session-id")
     sessions_preregister_parser.add_argument("--json", action="store_true")
 
@@ -495,6 +590,27 @@ def _build_parser() -> argparse.ArgumentParser:
         default=Path(".tmp_verify") / "readiness_probe",
     )
     readiness_probe_parser.add_argument("--json", action="store_true")
+    promotion_probe_parser = subparsers.add_parser(
+        "promotion-probe",
+        help=argparse.SUPPRESS,
+    )
+    promotion_probe_parser.add_argument("--ledger", type=Path, required=True)
+    promotion_probe_parser.add_argument(
+        "--mapping-execution",
+        type=Path,
+        required=True,
+    )
+    promotion_probe_parser.add_argument(
+        "--canvas-project",
+        type=Path,
+        required=True,
+    )
+    promotion_probe_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(".tmp_verify") / "promotion_probe",
+    )
+    promotion_probe_parser.add_argument("--json", action="store_true")
     canvas_inspector_probe_parser = subparsers.add_parser(
         "canvas-inspector-probe",
         help=argparse.SUPPRESS,
@@ -1171,6 +1287,76 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"SciPlot readiness certification: {payload['status']}")
                 print(payload["registry"])
             return 0 if payload["status"] == "ready" else 1
+        if args.command == "learning":
+            from sciplot_core.promotion import (
+                build_promotion_candidates,
+                build_promotion_session_binding,
+                collect_promotion_observations,
+                decide_promotion_candidate,
+                plan_promotion_implementation,
+                promotion_schema,
+                promotion_status,
+                verify_promotion_implementation,
+            )
+
+            if args.learning_command == "collect":
+                payload = collect_promotion_observations(
+                    args.ledger,
+                    output_path=args.out,
+                )
+            elif args.learning_command == "build":
+                payload = build_promotion_candidates(
+                    args.collection,
+                    output_path=args.out,
+                )
+            elif args.learning_command == "decide":
+                payload = decide_promotion_candidate(
+                    args.candidate_set,
+                    args.receipt,
+                    output_path=args.out,
+                )
+            elif args.learning_command == "plan":
+                payload = plan_promotion_implementation(
+                    args.decision,
+                    repo_root=args.repo,
+                    output_path=args.out,
+                )
+            elif args.learning_command == "session-binding":
+                payload = build_promotion_session_binding(
+                    args.ledger,
+                    args.session_id,
+                )
+            elif args.learning_command == "verify":
+                payload = verify_promotion_implementation(
+                    args.plan,
+                    args.receipt,
+                    repo_root=args.repo,
+                    output_path=args.out,
+                )
+            elif args.learning_command == "status":
+                payload = promotion_status(args.artifact)
+            else:
+                payload = promotion_schema()
+            if args.json or args.learning_command == "session-binding":
+                _print_json(payload)
+            else:
+                print(
+                    "SciPlot reviewed learning: "
+                    f"{payload.get('status', 'unknown')}"
+                )
+                if isinstance(payload.get("summary"), dict):
+                    summary = payload["summary"]
+                    print(
+                        "Candidates ready for review: "
+                        f"{summary.get('ready_for_review_count', 0)}"
+                    )
+                print("Runtime effect: none")
+            return (
+                0
+                if args.learning_command == "session-binding"
+                or payload.get("status") in {"passed", "ready"}
+                else 1
+            )
         if args.command == "smoke":
             from sciplot_core.studio import maybe_reexec_with_qt_runtime
 
@@ -1223,6 +1409,12 @@ def main(argv: list[str] | None = None) -> int:
                     model=args.model,
                     canonical_task=args.canonical_task,
                     attempt=args.attempt,
+                    promotion_candidate_id=args.promotion_candidate_id,
+                    promotion_decision_sha256=(
+                        args.promotion_decision_sha256
+                    ),
+                    promotion_plan_sha256=args.promotion_plan_sha256,
+                    promotion_assertion_ids=args.promotion_assertion_id,
                     session_id=args.session_id,
                 )
             elif args.sessions_command == "witness":
@@ -1510,6 +1702,21 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(f"SciPlot readiness probe: {payload['status']}")
+                print(payload["artifacts"]["summary"])
+            return 0 if payload["status"] == "passed" else 1
+        if args.command == "promotion-probe":
+            from sciplot_core.promotion_probe import run_promotion_probe
+
+            payload = run_promotion_probe(
+                output_root=args.out,
+                synthetic_session_ledger=args.ledger,
+                mapping_execution=args.mapping_execution,
+                canvas_project=args.canvas_project,
+            )
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"SciPlot promotion probe: {payload['status']}")
                 print(payload["artifacts"]["summary"])
             return 0 if payload["status"] == "passed" else 1
         if args.command == "canvas-inspector-probe":

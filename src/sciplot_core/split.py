@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -53,6 +54,17 @@ def series_chunks(labels: Sequence[str], *, max_series_per_panel: int) -> list[l
     cleaned = [str(label).strip() for label in labels if str(label).strip()]
     if not cleaned:
         return []
+    duplicate_labels = sorted(
+        label
+        for label, count in Counter(cleaned).items()
+        if count > 1
+    )
+    if duplicate_labels:
+        raise ValueError(
+            "Split series labels must be unique before label-based panel "
+            "selection: "
+            + ", ".join(duplicate_labels)
+        )
     return [
         cleaned[index : index + max_series_per_panel]
         for index in range(0, len(cleaned), max_series_per_panel)
