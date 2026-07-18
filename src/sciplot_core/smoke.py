@@ -5,6 +5,7 @@ import csv
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -12,15 +13,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sciplot_core._paths import VENDORED_CORE_ROOT
+from sciplot_core._paths import (
+    VEUSZ_ROOT,
+    VEUSZ_UPSTREAM_COMMIT,
+    VENDORED_CORE_ROOT,
+)
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 9
+RUNTIME_SMOKE_VERSION = 20
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 
 
-def _check(check_id: str, label: str, passed: bool, *, detail: Any = None) -> dict[str, Any]:
+def _check(
+    check_id: str, label: str, passed: bool, *, detail: Any = None
+) -> dict[str, Any]:
     return {
         "id": check_id,
         "label": label,
@@ -30,7 +37,9 @@ def _check(check_id: str, label: str, passed: bool, *, detail: Any = None) -> di
 
 
 def _delivery_artifact(delivery: dict[str, Any], artifact_id: str) -> dict[str, Any]:
-    artifacts = delivery.get("artifacts") if isinstance(delivery.get("artifacts"), list) else []
+    artifacts = (
+        delivery.get("artifacts") if isinstance(delivery.get("artifacts"), list) else []
+    )
     for item in artifacts:
         if isinstance(item, dict) and item.get("id") == artifact_id:
             return item
@@ -200,6 +209,45 @@ def _package_import_probe() -> dict[str, Any]:
     }
 
 
+def _source_checkout_wrapper_probe() -> dict[str, Any]:
+    """Prove a checkout wrapper or installed CLI starts without import leakage."""
+
+    source_root = Path(__file__).resolve().parents[2]
+    wrapper = source_root / "skill" / "scripts" / "sciplot"
+    installed_cli = shutil.which("sciplot")
+    command = str(wrapper) if wrapper.is_file() else installed_cli
+    if command is None:
+        return {
+            "passed": False,
+            "mode": "unavailable",
+            "wrapper": str(wrapper),
+            "installed_cli": installed_cli,
+        }
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    env["SCIPLOT_PYTHON"] = sys.executable
+    env["SCIPLOT_REPO"] = str(source_root)
+    env["SCIPLOT_SOURCE_ROOT"] = str(source_root / "src")
+    completed = subprocess.run(
+        [command, "--help"],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=env,
+        timeout=30,
+    )
+    return {
+        "passed": completed.returncode == 0
+        and "Local SciPlot plotting" in completed.stdout,
+        "mode": "source_checkout_wrapper" if wrapper.is_file() else "installed_cli",
+        "wrapper": str(wrapper),
+        "installed_cli": installed_cli,
+        "returncode": completed.returncode,
+        "source_root": str(source_root / "src"),
+        "stderr": completed.stderr.strip(),
+    }
+
+
 def _qt_mainwindow_probe(document_path: Path | None = None) -> dict[str, Any]:
     """Construct the complete Veusz editor without requiring an Aqua session."""
     env = os.environ.copy()
@@ -249,6 +297,182 @@ def _qt_mainwindow_probe(document_path: Path | None = None) -> dict[str, Any]:
     }
 
 
+def _portable_launcher_probe(
+    project_dir: Path,
+    *,
+    ignore_runtime_overrides: bool = False,
+) -> dict[str, Any]:
+    """Exercise generated launcher discovery without starting an interactive GUI."""
+
+    results: list[dict[str, Any]] = []
+    env = os.environ.copy()
+    if ignore_runtime_overrides:
+        for key in (
+            "SCIPLOT_REPO",
+            "SCIPLOT_RUNTIME_REPO",
+            "SCIPLOT_VEUSZ_ROOT",
+            "SCIPLOT_SOURCE_ROOT",
+            "SCIPLOT_PYTHON",
+        ):
+            env.pop(key, None)
+    for name in (
+        "Open_in_SciPlot_Studio.command",
+        "Open_in_Veusz.command",
+        "Export_Edited_Veusz.command",
+    ):
+        launcher = project_dir / name
+        completed = subprocess.run(
+            [str(launcher), "--check"],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=env,
+            timeout=30,
+        )
+        settings_noise = "Error interpreting item" in completed.stderr
+        results.append(
+            {
+                "launcher": str(launcher),
+                "exists": launcher.is_file(),
+                "returncode": completed.returncode,
+                "qt_smoke_passed": '"status": "passed"' in completed.stdout,
+                "settings_noise": settings_noise,
+                "stderr": completed.stderr.strip(),
+            }
+        )
+    return {
+        "passed": bool(results)
+        and all(
+            item["exists"]
+            and item["returncode"] == 0
+            and item["qt_smoke_passed"]
+            and not item["settings_noise"]
+            for item in results
+        ),
+        "launchers": results,
+    }
+
+
+def _relocated_delivery_launcher_probe(
+    run_root: Path, delivery: dict[str, Any]
+) -> dict[str, Any]:
+    """Copy an editable delivery elsewhere and prove its launchers still load the VSZ."""
+
+    projects = (
+        delivery.get("editable_vsz_projects")
+        if isinstance(delivery.get("editable_vsz_projects"), list)
+        else []
+    )
+    project = projects[0] if projects and isinstance(projects[0], dict) else {}
+    source_value = project.get("path")
+    if not source_value:
+        return {
+            "passed": False,
+            "reason": "Delivery did not publish an editable VSZ project.",
+        }
+    source = Path(str(source_value)).expanduser().resolve()
+    relocated = run_root / "relocated_delivery" / source.name
+    if relocated.exists():
+        shutil.rmtree(relocated)
+    relocated.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source, relocated)
+    probe = _portable_launcher_probe(relocated, ignore_runtime_overrides=True)
+    probe.update(
+        {
+            "source": str(source),
+            "relocated": str(relocated),
+            "runtime_overrides_ignored": True,
+        }
+    )
+    return probe
+
+
+def _standalone_export_probe(run_root: Path, document_path: Path) -> dict[str, Any]:
+    """Reproduce the real-world standalone-VSZ export path without a spec sidecar."""
+
+    probe_root = run_root / "standalone_vsz_export"
+    source_dir = probe_root / "source"
+    artifact_root = probe_root / "artifacts"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    standalone_document = source_dir / "standalone_exact_current.vsz"
+    shutil.copy2(document_path, standalone_document)
+    expected_spec = standalone_document.with_suffix(".spec.json")
+    if expected_spec.exists():
+        expected_spec.unlink()
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "sciplot_core.cli",
+            "studio",
+            str(standalone_document),
+            "--out",
+            str(artifact_root),
+            "--export",
+            "pdf,tiff_300",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=os.environ.copy(),
+        timeout=60,
+    )
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        payload = {}
+    receipt = (
+        payload.get("standalone_export")
+        if isinstance(payload.get("standalone_export"), dict)
+        else {}
+    )
+    spec_reference = (
+        receipt.get("spec_reference")
+        if isinstance(receipt.get("spec_reference"), dict)
+        else {}
+    )
+    exports = receipt.get("exports") if isinstance(receipt.get("exports"), list) else []
+    export_paths = [
+        Path(str(item.get("path"))).expanduser().resolve()
+        for item in exports
+        if isinstance(item, dict) and item.get("path")
+    ]
+    receipt_path = Path(str(receipt.get("receipt_path") or ""))
+    qa_path = Path(str(receipt.get("artifact_qa_path") or ""))
+    passed = (
+        completed.returncode == 0
+        and receipt.get("status") == "passed"
+        and receipt.get("state") == "exported_exact_current"
+        and receipt.get("export_ready") is True
+        and receipt.get("requested_exports_complete") is True
+        and (receipt.get("artifact_qa") or {}).get("status") == "passed"
+        and receipt.get("project_delivery_complete") is False
+        and spec_reference.get("exists") is False
+        and spec_reference.get("path") is None
+        and spec_reference.get("required_for_exact_current_export") is False
+        and len(export_paths) == 2
+        and all(
+            path.is_file() and path.parent == (artifact_root / "figures").resolve()
+            for path in export_paths
+        )
+        and receipt_path.is_file()
+        and qa_path.is_file()
+    )
+    return {
+        "passed": bool(passed),
+        "returncode": completed.returncode,
+        "document": str(standalone_document),
+        "document_sha256": file_sha256(standalone_document),
+        "spec_reference": spec_reference,
+        "artifact_root": str(artifact_root),
+        "exports": [str(path) for path in export_paths],
+        "receipt": str(receipt_path),
+        "qa_report": str(qa_path),
+        "stderr": completed.stderr.strip(),
+    }
+
+
 def _write_synthetic_ftir(path: Path) -> dict[str, Any]:
     """Write a deterministic contract fixture; this is never real-data evidence."""
 
@@ -257,10 +481,10 @@ def _write_synthetic_ftir(path: Path) -> dict[str, Any]:
     for wavenumber in range(4000, 399, -50):
         transmittance = (
             97.5
-            - 30.0 * math.exp(-((wavenumber - 3300.0) / 145.0) ** 2)
-            - 18.0 * math.exp(-((wavenumber - 1715.0) / 75.0) ** 2)
-            - 12.0 * math.exp(-((wavenumber - 1250.0) / 95.0) ** 2)
-            - 8.0 * math.exp(-((wavenumber - 760.0) / 65.0) ** 2)
+            - 30.0 * math.exp(-(((wavenumber - 3300.0) / 145.0) ** 2))
+            - 18.0 * math.exp(-(((wavenumber - 1715.0) / 75.0) ** 2))
+            - 12.0 * math.exp(-(((wavenumber - 1250.0) / 95.0) ** 2))
+            - 8.0 * math.exp(-(((wavenumber - 760.0) / 65.0) ** 2))
         )
         rows.append((float(wavenumber), transmittance))
     path.write_text(
@@ -278,8 +502,229 @@ def _write_synthetic_ftir(path: Path) -> dict[str, Any]:
     }
 
 
+def _data_mapping_studio_lifecycle_probe(
+    *,
+    run_root: Path,
+    source_path: Path,
+    base_request_path: Path,
+) -> dict[str, Any]:
+    from sciplot_core.canvas import (
+        DataColumnMapping,
+        DataMappingProposal,
+        DataSourceReference,
+    )
+    from sciplot_core.data_mapping import (
+        create_data_mapping_confirmation,
+        execute_data_mapping_proposal,
+        preview_data_mapping_proposal,
+    )
+    from sciplot_core.session_evidence_artifacts import (
+        artifact_content_record,
+        verify_regular_source_lineage,
+    )
+    from sciplot_core.studio import (
+        export_studio_document,
+        prepare_studio_document,
+        publish_studio_export_run,
+    )
+
+    raw_hash_before = file_sha256(source_path)
+    proposal = DataMappingProposal(
+        proposal_id="runtime-smoke-mapping",
+        base_request_sha256=file_sha256(base_request_path),
+        provider="runtime_smoke_typed_provider",
+        sources=(
+            DataSourceReference(
+                source_id="runtime_ftir",
+                relative_path=source_path.name,
+                sha256=raw_hash_before,
+                header_row=None,
+                delimiter=",",
+            ),
+        ),
+        columns=(
+            DataColumnMapping(
+                source_id="runtime_ftir",
+                source_column_index=0,
+                output_column="wavenumber",
+                role="x",
+            ),
+            DataColumnMapping(
+                source_id="runtime_ftir",
+                source_column_index=1,
+                output_column="transmittance",
+                role="y",
+            ),
+        ),
+        sample_labels={"runtime_ftir": "runtime_ftir"},
+        unit_overrides={
+            "wavenumber": "cm^-1",
+            "transmittance": "%",
+        },
+        request_patch={
+            "recipe": "auto",
+            "rule_id": "ftir_spectrum",
+            "template": "stacked_curve",
+            "series_order": ["runtime_ftir"],
+        },
+        confidence=1.0,
+        rationale="Synthetic runtime mapping lifecycle fixture.",
+    )
+    preview = preview_data_mapping_proposal(
+        proposal,
+        source_root=source_path.parent,
+        request_path=base_request_path,
+    )
+    confirmation = create_data_mapping_confirmation(
+        proposal,
+        source_root=source_path.parent,
+        request_path=base_request_path,
+        output_root=run_root / "mapped_projects",
+        confirmed_by="runtime_smoke_noninteractive_operator",
+    )
+    execution = execute_data_mapping_proposal(
+        proposal,
+        confirmation,
+        source_root=source_path.parent,
+        request_path=base_request_path,
+        output_root=run_root / "mapped_projects",
+    )
+    project_dir = Path(str(execution["output_root"]))
+    prepared = prepare_studio_document(project_dir)
+    document_path = Path(str(prepared["document"]))
+    exported = export_studio_document(
+        document_path,
+        formats=["pdf", "tiff_300"],
+    )
+    published = publish_studio_export_run(
+        project_dir=project_dir,
+        request_path=Path(str(prepared["request"])),
+        document_path=document_path,
+        exports=list(exported.get("exports") or []),
+    )
+    manifest_path = Path(str(published["manifest"]))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    coverage = (
+        manifest.get("data_mapping_coverage")
+        if isinstance(manifest.get("data_mapping_coverage"), dict)
+        else {}
+    )
+    transform = (
+        manifest.get("transform_ledger")
+        if isinstance(manifest.get("transform_ledger"), dict)
+        else {}
+    )
+    operations = [
+        str(step.get("operation") or "")
+        for step in transform.get("steps", [])
+        if isinstance(step, dict)
+    ]
+    mapping_execution_path = project_dir / "execution.json"
+    mapping_execution = json.loads(mapping_execution_path.read_text(encoding="utf-8"))
+    source_record = artifact_content_record(source_path.parent)
+    source_evidence = {
+        "source_id": "source_01",
+        "kind": "directory",
+        "path": source_record["path"],
+        "file_count": source_record["member_count"],
+        "size_bytes": source_record["size_bytes"],
+        "tree_sha256": "",
+        "artifact_sha256": source_record["sha256"],
+        "members": source_record["members"],
+    }
+    witnessed_mapping = {
+        "path": str(mapping_execution_path.resolve()),
+        "sha256": file_sha256(mapping_execution_path),
+        "proposal_id": mapping_execution["proposal_id"],
+        "proposal_sha256": mapping_execution["proposal_sha256"],
+        "provider": mapping_execution["provider"],
+        "confirmation_id": mapping_execution["confirmation_id"],
+        "transform_ledger_sha256": mapping_execution["transform_ledger_sha256"],
+        "raw_inputs_unchanged": True,
+        "handoff_allowed": True,
+    }
+    try:
+        verified_lineage = verify_regular_source_lineage(
+            manifest,
+            preregistration={
+                "sources": [source_evidence],
+                "expected_evidence": ["data_mapping"],
+            },
+            witnessed_mapping=witnessed_mapping,
+        )
+        lineage_error = None
+    except (OSError, TypeError, ValueError) as exc:
+        verified_lineage = None
+        lineage_error = str(exc)
+    forged_manifest = copy.deepcopy(manifest)
+    forged_steps = (forged_manifest.get("transform_ledger") or {}).get("steps")
+    if isinstance(forged_steps, list) and forged_steps:
+        forged_steps[0]["operation"] = "forged_mapping_operation"
+    try:
+        verify_regular_source_lineage(
+            forged_manifest,
+            preregistration={
+                "sources": [source_evidence],
+                "expected_evidence": ["data_mapping"],
+            },
+            witnessed_mapping=witnessed_mapping,
+        )
+    except ValueError:
+        forged_mapping_rejected = True
+    else:
+        forged_mapping_rejected = False
+    raw_hash_after = file_sha256(source_path)
+    passed = bool(
+        preview.get("writes_performed") is False
+        and execution.get("raw_inputs_unchanged") is True
+        and raw_hash_before == raw_hash_after
+        and Path(str(execution["request_candidate"])).name == "plot_request.json"
+        and int(prepared.get("series_count") or 0) == 1
+        and coverage.get("status") == "passed"
+        and coverage.get("actual_series_labels") == ["runtime_ftir"]
+        and operations[:2]
+        == [
+            "execute_confirmed_data_mapping_proposal",
+            "reformat_and_order_ftir_spectra",
+        ]
+        and manifest.get("ready_to_use") is True
+        and (manifest.get("qa") or {}).get("status") == "passed"
+        and (manifest.get("delivery_package") or {}).get("complete") is True
+        and isinstance(verified_lineage, dict)
+        and verified_lineage.get("mapping_bound") is True
+        and forged_mapping_rejected
+    )
+    return {
+        "passed": passed,
+        "preview_status": preview.get("status"),
+        "execution": str(project_dir / "execution.json"),
+        "request_candidate": execution.get("request_candidate"),
+        "document": str(document_path),
+        "manifest": str(manifest_path),
+        "raw_hash_before": raw_hash_before,
+        "raw_hash_after": raw_hash_after,
+        "series_count": prepared.get("series_count"),
+        "coverage": coverage,
+        "operations": operations,
+        "verified_lineage": verified_lineage,
+        "lineage_error": lineage_error,
+        "forged_mapping_rejected": forged_mapping_rejected,
+        "qa_status": (manifest.get("qa") or {}).get("status"),
+        "publication_status": ((manifest.get("qa") or {}).get("publication") or {}).get(
+            "status"
+        ),
+        "delivery_complete": (manifest.get("delivery_package") or {}).get("complete"),
+        "ready_to_use": manifest.get("ready_to_use"),
+        "real_data_evidence": False,
+    }
+
+
 def _transform_parameters(result: dict[str, Any]) -> dict[str, Any]:
-    steps = result.get("transform_steps") if isinstance(result.get("transform_steps"), list) else []
+    steps = (
+        result.get("transform_steps")
+        if isinstance(result.get("transform_steps"), list)
+        else []
+    )
     first = steps[0] if steps and isinstance(steps[0], dict) else {}
     parameters = first.get("parameters")
     return parameters if isinstance(parameters, dict) else {}
@@ -290,6 +735,7 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
 
     import pandas as pd
 
+    from sciplot_core.materials_rules import compute_analysis_metrics
     from sciplot_core.semantic import classify_source, prepare_semantic_source
     from sciplot_core.studio import StudioSeries, _apply_series_options
 
@@ -359,6 +805,12 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         semantic=impact_semantic,
     )
     impact_parameters = _transform_parameters(impact_result)
+    impact_metric_rows = compute_analysis_metrics(
+        source_path=impact_source,
+        processed_source=impact_source,
+        semantic=impact_semantic,
+        output_dir=contracts / "impact_metrics",
+    )
 
     swelling_source = contracts / "explicit_rule" / "parallel_blocks.csv"
     swelling_source.parent.mkdir(parents=True, exist_ok=True)
@@ -390,21 +842,69 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
     for point_index in range(5):
         row: list[object] = [""]
         for series_index in range(9):
-            row.extend([point_index * 100 + series_index * 5, 1.0 + point_index * 0.03 + series_index * 0.001])
+            row.extend(
+                [
+                    point_index * 100 + series_index * 5,
+                    1.0 + point_index * 0.03 + series_index * 0.001,
+                ]
+            )
         swelling_rows.append(row)
     swelling_rows.extend(
         [
             [""] * 19,
             [""] * 19,
-            ["", "", "", "", "", "", 72000, 72.6, "", "", "", "", "", "", "", "", "", "", ""],
-            ["", "", "", "", "", "", 73000, 72.7, "", "", "", "", "", "", "", "", "", "", ""],
+            [
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                72000,
+                72.6,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ],
+            [
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                73000,
+                72.7,
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ],
         ]
     )
     swelling_source.write_text(
-        "\n".join(",".join(str(value) for value in row) for row in swelling_rows) + "\n",
+        "\n".join(",".join(str(value) for value in row) for row in swelling_rows)
+        + "\n",
         encoding="utf-8",
     )
-    swelling_semantic = classify_source(swelling_source, requested_rule_id="swelling_curve")
+    swelling_semantic = classify_source(
+        swelling_source, requested_rule_id="swelling_curve"
+    )
     swelling_result = prepare_semantic_source(
         swelling_source,
         output_dir=contracts / "swelling_output",
@@ -421,15 +921,25 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
                 y_values=(1.0, 1.1),
                 color="#000000",
             )
-            for index, label in enumerate(swelling_parameters.get("series_order") or [], start=1)
+            for index, label in enumerate(
+                swelling_parameters.get("series_order") or [], start=1
+            )
         ],
         render_options=dict(swelling_semantic.get("render_options") or {}),
         request={"template": "point_line", "rule_id": "swelling_curve"},
     )
-    swelling_non_color_signatures = [(item.line_style, str(item.marker)) for item in styled_swelling_series]
+    swelling_non_color_signatures = [
+        (item.line_style, str(item.marker)) for item in styled_swelling_series
+    ]
 
     expected_saxs_order = ["HDPE", "2 wt% UDC 3"]
     expected_impact_order = ["V-PA (2 mm)", "E-PA (2 mm)", "V-PA (4 mm)", "E-PA (4 mm)"]
+    expected_impact_metric_names = {
+        f"impact_group_{metric}[{sample}]"
+        for sample in expected_impact_order
+        for metric in ("n", "median", "iqr")
+    }
+    impact_metric_names = {str(row.get("metric") or "") for row in impact_metric_rows}
     expected_swelling_order = [
         f"{condition} replicate {replicate}"
         for condition in ("SH DI water", "SH 1000 mM NaCl", "SH 0.1 wt% PAA")
@@ -448,17 +958,23 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         and gpc_semantic.get("rule_id") == "gpc_sec_chromatogram"
         and gpc_parameters.get("series_order") == ["Sample 8"]
         and gpc_parameters.get("source_point_counts") == [4]
-        and (gpc_parameters.get("source_selections") or [{}])[0].get("detector_unit") == "mV"
+        and (gpc_parameters.get("source_selections") or [{}])[0].get("detector_unit")
+        == "mV"
         and impact_semantic.get("rule_id") == "impact_metric"
         and impact_parameters.get("sample_order") == expected_impact_order
         and impact_parameters.get("replicate_count_total") == 12
+        and impact_metric_names == expected_impact_metric_names
+        and all(row.get("status") == "ok" for row in impact_metric_rows)
         and swelling_semantic.get("rule_id") == "swelling_curve"
         and swelling_semantic.get("confidence") == 100.0
         and swelling_parameters.get("series_order") == expected_swelling_order
         and swelling_parameters.get("source_point_counts") == [5] * 9
-        and first_swelling_block.get("selection_policy") == "contiguous_labeled_swelling_block"
+        and first_swelling_block.get("selection_policy")
+        == "contiguous_labeled_swelling_block"
         and first_swelling_block.get("excluded_disconnected_rows") == 2
-        and math.isclose(float(first_time_conversion.get("factor") or 0.0), 1.0 / 3600.0)
+        and math.isclose(
+            float(first_time_conversion.get("factor") or 0.0), 1.0 / 3600.0
+        )
         and len(set(swelling_non_color_signatures)) == 9
     )
     return {
@@ -480,6 +996,8 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
             "rule_id": impact_semantic.get("rule_id"),
             "sample_order": impact_parameters.get("sample_order"),
             "replicate_count_total": impact_parameters.get("replicate_count_total"),
+            "analysis_metric_names": sorted(impact_metric_names),
+            "analysis_metric_count": len(impact_metric_rows),
         },
         "swelling": {
             "rule_id": swelling_semantic.get("rule_id"),
@@ -533,7 +1051,11 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
     colorbar_index = document_text.find("Add('colorbar', name='field_colorbar'")
     contour_index = document_text.find("Add('contour', name='field_contours'")
     image_index = document_text.find("Add('image', name='field_image'")
-    qa_reports = rendered.get("qa_reports") if isinstance(rendered.get("qa_reports"), list) else []
+    qa_reports = (
+        rendered.get("qa_reports")
+        if isinstance(rendered.get("qa_reports"), list)
+        else []
+    )
     passed = (
         rendered.get("render_engine") == "veusz"
         and outputs
@@ -543,7 +1065,11 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
         and 0 <= contour_index < image_index
         and "Set('widgetName', 'field_image')" in document_text
         and "Add('rect', name='page_export_background'" in document_text
-        and all(not report.get("issues") for report in qa_reports if isinstance(report, dict))
+        and all(
+            not report.get("issues")
+            for report in qa_reports
+            if isinstance(report, dict)
+        )
     )
     return {
         "passed": bool(passed),
@@ -560,20 +1086,25 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
             "colorbar_before_image_in_object_tree": 0 <= colorbar_index < image_index,
             "contours_before_image_in_object_tree": 0 <= contour_index < image_index,
         },
-        "opaque_page_background": "Add('rect', name='page_export_background'" in document_text,
+        "opaque_page_background": "Add('rect', name='page_export_background'"
+        in document_text,
         "real_data_evidence": False,
         "evidence_tier": "generated_synthetic_contract_fixture",
     }
 
 
-def _run_hash_failure_probe(output_dir: Path, manifest: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+def _run_hash_failure_probe(
+    output_dir: Path, manifest: dict[str, Any]
+) -> tuple[bool, dict[str, Any]]:
     from sciplot_core.delivery import build_delivery_package
 
     mismatched_manifest = copy.deepcopy(manifest)
     mismatched_manifest["exported_document_hash"] = "0" * 64
     rejected = build_delivery_package(output_dir, manifest=mismatched_manifest)
     hash_gate = _delivery_artifact(rejected, "editable_vsz_hash_match")
-    rejected_as_expected = rejected.get("complete") is False and hash_gate.get("exists") is False
+    rejected_as_expected = (
+        rejected.get("complete") is False and hash_gate.get("exists") is False
+    )
 
     restored = build_delivery_package(output_dir, manifest=manifest)
     restored_successfully = restored.get("complete") is True
@@ -587,6 +1118,7 @@ def _run_hash_failure_probe(output_dir: Path, manifest: dict[str, Any]) -> tuple
 def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
     """Run a fixture-free end-to-end Studio lifecycle and delivery failure probe."""
 
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
     resolved_output = output_root.expanduser().resolve()
     resolved_output.mkdir(parents=True, exist_ok=True)
     run_root = Path(tempfile.mkdtemp(prefix="runtime_smoke_", dir=resolved_output))
@@ -605,6 +1137,177 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 "Importing sciplot_core does not activate the migrated compatibility path",
                 import_probe.get("passed") is True,
                 detail=import_probe,
+            )
+        )
+        wrapper_probe = _source_checkout_wrapper_probe()
+        checks.append(
+            _check(
+                "source_checkout_wrapper_bootstraps",
+                "The source wrapper or installed CLI starts without relying on an editable import leak",
+                wrapper_probe.get("passed") is True,
+                detail=wrapper_probe,
+            )
+        )
+        from sciplot_core.canvas_probe import run_canvas_contract_probe
+
+        canvas_contract_probe = run_canvas_contract_probe(
+            output_root=run_root / "canvas_contract"
+        )
+        checks.append(
+            _check(
+                "canvas_contract_v7",
+                "CanvasSession, hash-bound provider requests and responses, "
+                "active Assistant transactions, journal outbox, contextual "
+                "inspector, typed edits, native review promotion, point "
+                "selection, and mapping proposals roundtrip without Qt",
+                canvas_contract_probe.get("status") == "passed",
+                detail=canvas_contract_probe,
+            )
+        )
+        from sciplot_core.data_mapping_probe import run_data_mapping_probe
+
+        data_mapping_probe = run_data_mapping_probe(
+            output_root=run_root / "data_mapping"
+        )
+        checks.append(
+            _check(
+                "deterministic_data_mapping_lifecycle",
+                "DataMappingProposal v2 previews without writes, requires an "
+                "external confirmation receipt, executes atomically, preserves "
+                "raw sources, records transform lineage, and rejects stale or "
+                "tampered state",
+                data_mapping_probe.get("status") == "passed",
+                detail=data_mapping_probe,
+            )
+        )
+        from sciplot_core.readiness_probe import run_readiness_probe
+
+        readiness_probe = run_readiness_probe(output_root=run_root / "readiness")
+        readiness_registry = readiness_probe.get("registry_status") or {}
+        checks.append(
+            _check(
+                "validated_ready_envelopes",
+                "All current accepted rule contracts remain bound to authorized "
+                "real-data evidence, reject contract drift and provider-authored "
+                "ready flags, and gate one-step readiness",
+                readiness_probe.get("status") == "passed",
+                detail={
+                    "status": readiness_probe.get("status"),
+                    "passed_count": readiness_probe.get("passed_count"),
+                    "check_count": readiness_probe.get("check_count"),
+                    "ready_without_ai_rule_count": readiness_registry.get(
+                        "ready_without_ai_rule_count"
+                    ),
+                    "evidence_strength_counts": readiness_registry.get(
+                        "evidence_strength_counts"
+                    ),
+                    "artifacts": readiness_probe.get("artifacts"),
+                },
+            )
+        )
+
+        from sciplot_core.session_evidence_probe import (
+            run_session_evidence_probe,
+        )
+
+        session_evidence_probe = run_session_evidence_probe(
+            output_root=run_root / "session_evidence"
+        )
+        checks.append(
+            _check(
+                "session_evidence_contract_v1",
+                "Preregistered natural-task evidence is hash-chained, "
+                "reopen-witnessed, final-authority bound, duplicate-safe, "
+                "tamper-evident, and unable to promote synthetic probes into "
+                "M3/M6 counts",
+                session_evidence_probe.get("status") == "passed",
+                detail={
+                    "status": session_evidence_probe.get("status"),
+                    "summary": session_evidence_probe.get("summary"),
+                    "artifacts": session_evidence_probe.get("artifacts"),
+                    "limitations": session_evidence_probe.get("limitations"),
+                },
+            )
+        )
+
+        from sciplot_core.session_evidence_runtime import (
+            _linked_qt_binaries,
+            runtime_identity,
+        )
+
+        frozen_runtime = runtime_identity(
+            veusz_root=VEUSZ_ROOT,
+            veusz_upstream_commit=VEUSZ_UPSTREAM_COMMIT,
+        )
+        linked_qt = frozen_runtime.get("linked_qt_binaries")
+        linked_qt = linked_qt if isinstance(linked_qt, dict) else {}
+        linked_qt_binaries = linked_qt.get("binaries")
+        linked_qt_binaries = (
+            linked_qt_binaries if isinstance(linked_qt_binaries, list) else []
+        )
+        helper_count = len(list((VEUSZ_ROOT / "veusz" / "helpers").glob("*.so")))
+        no_helper_veusz_root = run_root / "runtime_identity_no_helpers"
+        no_helper_package = no_helper_veusz_root / "veusz"
+        no_helper_package.mkdir(parents=True, exist_ok=True)
+        (no_helper_package / "__init__.py").write_text(
+            "# Runtime identity no-helper contract fixture.\n",
+            encoding="utf-8",
+        )
+        no_helper_runtime = runtime_identity(
+            veusz_root=no_helper_veusz_root,
+            veusz_upstream_commit=VEUSZ_UPSTREAM_COMMIT,
+        )
+        no_helper_linked = (no_helper_runtime.get("linked_qt_binaries") or {}).get(
+            "binaries"
+        )
+        no_helper_linked = (
+            no_helper_linked if isinstance(no_helper_linked, list) else []
+        )
+        unresolved_qt_rejected = True
+        if sys.platform == "darwin":
+            try:
+                _linked_qt_binaries(
+                    no_helper_veusz_root,
+                    qt_binding_root=run_root / "missing_pyqt_runtime",
+                )
+            except ValueError:
+                pass
+            else:
+                unresolved_qt_rejected = False
+        checks.append(
+            _check(
+                "frozen_runtime_identity",
+                "The evidence candidate fingerprints active Veusz, every "
+                "PyQt/Qt binary, linked Qt helper runtimes, Python, platform, "
+                "and installed dependency versions",
+                bool(frozen_runtime.get("identity_sha256"))
+                and int((frozen_runtime.get("veusz") or {}).get("file_count") or 0) > 0
+                and int((frozen_runtime.get("qt_binding") or {}).get("file_count") or 0)
+                > 0
+                and (
+                    sys.platform != "darwin"
+                    or (
+                        bool(linked_qt_binaries)
+                        and bool(no_helper_linked)
+                        and unresolved_qt_rejected
+                    )
+                ),
+                detail={
+                    "identity_sha256": frozen_runtime.get("identity_sha256"),
+                    "veusz_file_count": (frozen_runtime.get("veusz") or {}).get(
+                        "file_count"
+                    ),
+                    "qt_binary_count": (frozen_runtime.get("qt_binding") or {}).get(
+                        "file_count"
+                    ),
+                    "veusz_helper_count": helper_count,
+                    "linked_qt_binary_count": len(linked_qt_binaries),
+                    "no_helper_linked_qt_binary_count": len(no_helper_linked),
+                    "unresolved_qt_rejected": unresolved_qt_rejected,
+                    "dependency_count": (frozen_runtime.get("dependencies") or {}).get(
+                        "count"
+                    ),
+                },
             )
         )
 
@@ -699,7 +1402,11 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 detail=qt_mainwindow_probe,
             )
         )
-        normal_mode = doctor.get("normal_mode") if isinstance(doctor.get("normal_mode"), dict) else {}
+        normal_mode = (
+            doctor.get("normal_mode")
+            if isinstance(doctor.get("normal_mode"), dict)
+            else {}
+        )
         checks.append(
             _check(
                 "independent_mode",
@@ -747,13 +1454,18 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             "veusz_label": r"LS\_5CRW\_20W\_t1",
             "pdf_label": "LS_5CRW_20W_t1",
         }
-        qa_label_probe["normalized_veusz_label"] = _normalized_label(qa_label_probe["veusz_label"])
-        qa_label_probe["normalized_pdf_label"] = _normalized_label(qa_label_probe["pdf_label"])
+        qa_label_probe["normalized_veusz_label"] = _normalized_label(
+            qa_label_probe["veusz_label"]
+        )
+        qa_label_probe["normalized_pdf_label"] = _normalized_label(
+            qa_label_probe["pdf_label"]
+        )
         checks.append(
             _check(
                 "veusz_pdf_label_equivalence",
                 "Escaped Veusz labels match their rendered PDF text",
-                qa_label_probe["normalized_veusz_label"] == qa_label_probe["normalized_pdf_label"],
+                qa_label_probe["normalized_veusz_label"]
+                == qa_label_probe["normalized_pdf_label"],
                 detail=qa_label_probe,
             )
         )
@@ -773,8 +1485,12 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 "explicit_render_option_provenance",
                 "A user-selected render option becomes authoritative without promoting semantic defaults",
                 option_provenance_probe.get("explicit_render_option_keys") == ["size"]
-                and (option_provenance_probe.get("render_options") or {}).get("size") == "120x55"
-                and (option_provenance_probe.get("render_options") or {}).get("legend_position") == "auto",
+                and (option_provenance_probe.get("render_options") or {}).get("size")
+                == "120x55"
+                and (option_provenance_probe.get("render_options") or {}).get(
+                    "legend_position"
+                )
+                == "auto",
                 detail=option_provenance_probe,
             )
         )
@@ -810,7 +1526,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             request_path=override_request_path,
             rule_id="saxs_profile",
         )
-        overridden_request = json.loads(override_request_path.read_text(encoding="utf-8"))
+        overridden_request = json.loads(
+            override_request_path.read_text(encoding="utf-8")
+        )
         overridden_options = overridden_request.get("render_options") or {}
         checks.append(
             _check(
@@ -839,11 +1557,236 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         project_dir = Path(str(prepared["project_dir"]))
         request_path = Path(str(prepared["request"]))
         document_path = Path(str(prepared["document"]))
+        mapped_studio_probe = _data_mapping_studio_lifecycle_probe(
+            run_root=run_root,
+            source_path=fixture_path,
+            base_request_path=request_path,
+        )
+        checks.append(
+            _check(
+                "mapped_project_studio_lifecycle",
+                "A confirmed mapping candidate uses the standard project "
+                "entrypoint, preserves raw input, retains every mapped sample, "
+                "records causal lineage, and completes VSZ, QA, and delivery",
+                mapped_studio_probe.get("passed") is True,
+                detail=mapped_studio_probe,
+            )
+        )
+        from sciplot_core.canvas_probe import run_canvas_characterization
+
+        canvas_characterization = run_canvas_characterization(
+            document_path,
+            output_root=run_root / "canvas_characterization",
+        )
+        checks.append(
+            _check(
+                "embedded_canvas_characterization",
+                "Embedded PlotWindow supports live typed redraw, interaction, history, recovery, conflict detection, save/reopen, and exact export",
+                canvas_characterization.get("status") == "passed",
+                detail=canvas_characterization,
+            )
+        )
+        from sciplot_core.canvas_app_probe import run_canvas_app_probe
+
+        canvas_app_probe = run_canvas_app_probe(
+            project_dir,
+            output_root=run_root / "canvas_app",
+            operation_count=50,
+        )
+        canvas_app_evidence = canvas_app_probe.get("evidence")
+        canvas_app_evidence = (
+            canvas_app_evidence if isinstance(canvas_app_evidence, dict) else {}
+        )
+        checks.append(
+            _check(
+                "native_canvas_app_lifecycle",
+                "The SciPlot-owned Canvas completes contextual edits, point "
+                "selection, structural QA, 50 live redraws, save/reopen, exact "
+                "export, project delivery, and explicit recovery",
+                canvas_app_probe.get("status") == "passed",
+                detail={
+                    "status": canvas_app_probe.get("status"),
+                    "summary": canvas_app_probe.get("summary"),
+                    "operation_count": canvas_app_evidence.get("operation_count"),
+                    "revision": canvas_app_evidence.get("revision_after_operations"),
+                    "render_changes": canvas_app_evidence.get("render_changes"),
+                    "reopened_state": canvas_app_evidence.get("reopened_state"),
+                    "recovered_state": canvas_app_evidence.get("recovered_state"),
+                    "export": canvas_app_evidence.get("export"),
+                    "source_immutable": canvas_app_evidence.get("source_immutable"),
+                    "artifacts": canvas_app_probe.get("artifacts"),
+                },
+            )
+        )
+        session_runtime_probes = session_evidence_probe.get("runtime_probes")
+        session_runtime_probes = (
+            session_runtime_probes if isinstance(session_runtime_probes, dict) else {}
+        )
+        canvas_review_probe = session_runtime_probes.get("canvas_review")
+        if not isinstance(canvas_review_probe, dict):
+            from sciplot_core.canvas_review_probe import run_canvas_review_probe
+
+            canvas_review_probe = run_canvas_review_probe(
+                project_dir,
+                output_root=run_root / "canvas_review",
+            )
+        checks.append(
+            _check(
+                "native_canvas_review_lifecycle",
+                "The SciPlot-owned Canvas persists five review tools outside "
+                "publication exports, promotes four typed native annotations, "
+                "and preserves undo, reopen, QA, and audit semantics",
+                canvas_review_probe.get("status") == "passed",
+                detail={
+                    "status": canvas_review_probe.get("status"),
+                    "summary": canvas_review_probe.get("summary"),
+                    "evidence": canvas_review_probe.get("evidence"),
+                    "artifacts": canvas_review_probe.get("artifacts"),
+                },
+            )
+        )
+        composition_probe = session_runtime_probes.get("composition")
+        if not isinstance(composition_probe, dict):
+            from sciplot_core.composition_probe import run_composition_probe
+
+            composition_probe = run_composition_probe(
+                [document_path],
+                output_root=run_root / "composition",
+            )
+        checks.append(
+            _check(
+                "native_composition_lifecycle",
+                "The 183 mm Composition Board compiles all five native layouts, "
+                "routes a real drag through typed reversible operations, protects "
+                "manual edits, keeps variants and source VSZ files independent, "
+                "and passes exact-current PDF/TIFF delivery QA",
+                composition_probe.get("status") == "passed",
+                detail={
+                    "status": composition_probe.get("status"),
+                    "check_count": composition_probe.get("check_count"),
+                    "passed_count": composition_probe.get("passed_count"),
+                    "artifacts": composition_probe.get("artifacts"),
+                },
+            )
+        )
+        from sciplot_core.canvas_assistant_probe import (
+            run_canvas_assistant_probe,
+        )
+
+        canvas_assistant_probe = run_canvas_assistant_probe(
+            project_dir,
+            output_root=run_root / "canvas_assistant",
+        )
+        canvas_assistant_evidence = canvas_assistant_probe.get("evidence")
+        canvas_assistant_evidence = (
+            canvas_assistant_evidence
+            if isinstance(canvas_assistant_evidence, dict)
+            else {}
+        )
+        checks.append(
+            _check(
+                "native_canvas_assistant_transaction",
+                "The SciPlot-owned Canvas accepts a bounded provider request "
+                "off the GUI thread, shows progress, previews hash-bound typed "
+                "diffs without mutation, discards late cancelled results, "
+                "applies live, undoes, commits, rolls back exactly, and "
+                "recovers interrupted work; DataMappingProposal additionally "
+                "requires a zero-write preview and an explicit receipt before "
+                "building a separate mapped Canvas",
+                canvas_assistant_probe.get("status") == "passed",
+                detail={
+                    "status": canvas_assistant_probe.get("status"),
+                    "summary": canvas_assistant_probe.get("summary"),
+                    "first_apply_latency_ms": canvas_assistant_evidence.get(
+                        "first_apply_latency_ms"
+                    ),
+                    "journal_event_count": canvas_assistant_evidence.get(
+                        "journal_event_count"
+                    ),
+                    "provider_request_count": canvas_assistant_evidence.get(
+                        "provider_request_count"
+                    ),
+                    "provider_contract_guards": canvas_assistant_evidence.get(
+                        "provider_contract_guards"
+                    ),
+                    "provider_late_result_discarded": (
+                        canvas_assistant_evidence.get("provider_late_result_discarded")
+                    ),
+                    "source_hash_before": canvas_assistant_evidence.get(
+                        "source_hash_before"
+                    ),
+                    "source_hash_after": canvas_assistant_evidence.get(
+                        "source_hash_after"
+                    ),
+                    "artifacts": canvas_assistant_probe.get("artifacts"),
+                    "limitations": canvas_assistant_probe.get("limitations"),
+                },
+            )
+        )
+        from sciplot_core.openai_provider_probe import run_openai_provider_probe
+
+        openai_provider_probe = run_openai_provider_probe(
+            output_root=run_root / "openai_provider",
+        )
+        checks.append(
+            _check(
+                "openai_responses_provider_boundary",
+                "The production Responses adapter streams strict structured output, "
+                "enforces the selected-object capability catalog, cancels safely, "
+                "and redacts credentials",
+                openai_provider_probe.get("status") == "passed",
+                detail={
+                    "status": openai_provider_probe.get("status"),
+                    "summary": openai_provider_probe.get("summary"),
+                    "artifacts": openai_provider_probe.get("artifacts"),
+                    "limitations": openai_provider_probe.get("limitations"),
+                },
+            )
+        )
+        from sciplot_core.canvas_openai_provider_probe import (
+            run_canvas_openai_provider_probe,
+        )
+
+        canvas_openai_probe = run_canvas_openai_provider_probe(
+            project_dir,
+            output_root=run_root / "canvas_openai_provider",
+        )
+        checks.append(
+            _check(
+                "native_canvas_openai_provider_lifecycle",
+                "A natural-language request reaches the production adapter from "
+                "the visible Canvas, previews without mutation, applies through "
+                "the typed gateway, and rolls back exactly",
+                canvas_openai_probe.get("status") == "passed",
+                detail={
+                    "status": canvas_openai_probe.get("status"),
+                    "summary": canvas_openai_probe.get("summary"),
+                    "evidence": canvas_openai_probe.get("evidence"),
+                    "artifacts": canvas_openai_probe.get("artifacts"),
+                    "limitations": canvas_openai_probe.get("limitations"),
+                },
+            )
+        )
+        launcher_probe = _portable_launcher_probe(project_dir)
+        checks.append(
+            _check(
+                "portable_project_launchers",
+                "Generated Studio, Veusz, and exact-export launchers locate and load the moved project",
+                launcher_probe.get("passed") is True,
+                detail=launcher_probe,
+            )
+        )
         with document_path.open("a", encoding="utf-8") as handle:
             handle.write(f"\n{MANUAL_EDIT_MARKER}\n")
 
-        export_payload = export_studio_document(document_path, formats=["pdf", "tiff_300"])
-        exports = export_payload.get("exports") if isinstance(export_payload.get("exports"), list) else []
+        export_payload = export_studio_document(
+            document_path, formats=["pdf", "tiff_300"]
+        )
+        exports = (
+            export_payload.get("exports")
+            if isinstance(export_payload.get("exports"), list)
+            else []
+        )
         studio_run = publish_studio_export_run(
             project_dir=project_dir,
             request_path=request_path,
@@ -852,19 +1795,46 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         )
         manifest_path = Path(str(studio_run["manifest"]))
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        semantic = manifest.get("semantic") if isinstance(manifest.get("semantic"), dict) else {}
-        transform = manifest.get("transform_ledger") if isinstance(manifest.get("transform_ledger"), dict) else {}
-        publication_intent = (
-            manifest.get("publication_intent") if isinstance(manifest.get("publication_intent"), dict) else {}
+        semantic = (
+            manifest.get("semantic")
+            if isinstance(manifest.get("semantic"), dict)
+            else {}
         )
-        delivery = manifest.get("delivery_package") if isinstance(manifest.get("delivery_package"), dict) else {}
-        editable_vsz = delivery.get("editable_vsz") if isinstance(delivery.get("editable_vsz"), dict) else {}
-        editable_path = Path(str(editable_vsz["path"])) if editable_vsz.get("path") else None
+        transform = (
+            manifest.get("transform_ledger")
+            if isinstance(manifest.get("transform_ledger"), dict)
+            else {}
+        )
+        publication_intent = (
+            manifest.get("publication_intent")
+            if isinstance(manifest.get("publication_intent"), dict)
+            else {}
+        )
+        delivery = (
+            manifest.get("delivery_package")
+            if isinstance(manifest.get("delivery_package"), dict)
+            else {}
+        )
+        relocated_delivery_probe = _relocated_delivery_launcher_probe(
+            run_root, delivery
+        )
+        editable_vsz = (
+            delivery.get("editable_vsz")
+            if isinstance(delivery.get("editable_vsz"), dict)
+            else {}
+        )
+        editable_path = (
+            Path(str(editable_vsz["path"])) if editable_vsz.get("path") else None
+        )
         raw_archive_value = (manifest.get("raw_archive") or {}).get("path")
         raw_archive_path = Path(str(raw_archive_value)) if raw_archive_value else None
-        exported_formats = {str(item.get("format")) for item in exports if isinstance(item, dict)}
+        exported_formats = {
+            str(item.get("format")) for item in exports if isinstance(item, dict)
+        }
         exports_exist = all(
-            isinstance(item, dict) and item.get("exists") is True and int(item.get("size_bytes") or 0) > 0
+            isinstance(item, dict)
+            and item.get("exists") is True
+            and int(item.get("size_bytes") or 0) > 0
             for item in exports
         )
         delivery_layout = _delivery_layout_probe(delivery)
@@ -875,7 +1845,10 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     "semantic_rule_selected",
                     "Synthetic FTIR input selects the ready FTIR rule",
                     semantic.get("rule_id") == EXPECTED_RULE_ID,
-                    detail={"selected": semantic.get("rule_id"), "expected": EXPECTED_RULE_ID},
+                    detail={
+                        "selected": semantic.get("rule_id"),
+                        "expected": EXPECTED_RULE_ID,
+                    },
                 ),
                 _check(
                     "vsz_reopen_export",
@@ -900,7 +1873,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     and MANUAL_EDIT_MARKER in editable_path.read_text(encoding="utf-8"),
                     detail={
                         "manual_edit_detected": manifest.get("manual_edit_detected"),
-                        "editable_vsz": str(editable_path) if editable_path is not None else None,
+                        "editable_vsz": str(editable_path)
+                        if editable_path is not None
+                        else None,
                     },
                 ),
                 _check(
@@ -909,7 +1884,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     manifest.get("exported_document_hash") == file_sha256(document_path)
                     and editable_vsz.get("hash_matches_export") is True,
                     detail={
-                        "exported_document_hash": manifest.get("exported_document_hash"),
+                        "exported_document_hash": manifest.get(
+                            "exported_document_hash"
+                        ),
                         "current_document_hash": file_sha256(document_path),
                         "delivery_document_hash": editable_vsz.get("actual_hash"),
                     },
@@ -917,7 +1894,10 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 _check(
                     "canonical_pdf_tiff_pair",
                     "Delivery contains a canonical PDF and 300 dpi TIFF pair",
-                    _delivery_artifact(delivery, "canonical_pdf_tiff_pairs").get("exists") is True,
+                    _delivery_artifact(delivery, "canonical_pdf_tiff_pairs").get(
+                        "exists"
+                    )
+                    is True,
                     detail=_delivery_artifact(delivery, "canonical_pdf_tiff_pairs"),
                 ),
                 _check(
@@ -930,17 +1910,31 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     "qa_and_delivery_hashes",
                     "Artifact QA passes and its hashes match the delivery copies",
                     (manifest.get("qa") or {}).get("status") == "passed"
-                    and _delivery_artifact(delivery, "qa_artifact_hashes_match_delivery").get("exists") is True,
+                    and _delivery_artifact(
+                        delivery, "qa_artifact_hashes_match_delivery"
+                    ).get("exists")
+                    is True,
                     detail={
                         "qa_status": (manifest.get("qa") or {}).get("status"),
-                        "hash_gate": _delivery_artifact(delivery, "qa_artifact_hashes_match_delivery"),
+                        "hash_gate": _delivery_artifact(
+                            delivery, "qa_artifact_hashes_match_delivery"
+                        ),
                     },
                 ),
                 _check(
                     "delivery_complete",
                     "The portable delivery package is complete",
                     delivery.get("complete") is True,
-                    detail={"path": delivery.get("path"), "complete": delivery.get("complete")},
+                    detail={
+                        "path": delivery.get("path"),
+                        "complete": delivery.get("complete"),
+                    },
+                ),
+                _check(
+                    "relocated_delivery_launchers",
+                    "A copied editable delivery locates SciPlot and loads its exact VSZ without runtime overrides",
+                    relocated_delivery_probe.get("passed") is True,
+                    detail=relocated_delivery_probe,
                 ),
                 _check(
                     "runtime_lineage_recorded",
@@ -952,10 +1946,22 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     detail={
                         "transform_status": transform.get("status"),
                         "publication_kind": publication_intent.get("kind"),
-                        "raw_archive": str(raw_archive_path) if raw_archive_path is not None else None,
+                        "raw_archive": str(raw_archive_path)
+                        if raw_archive_path is not None
+                        else None,
                     },
                 ),
             ]
+        )
+
+        standalone_probe = _standalone_export_probe(run_root, document_path)
+        checks.append(
+            _check(
+                "standalone_vsz_exact_export",
+                "A standalone VSZ without a spec sidecar exports to --out, passes artifact QA, and exits zero",
+                standalone_probe.get("passed") is True,
+                detail=standalone_probe,
+            )
         )
 
         failure_probe_passed, failure_probe = _run_hash_failure_probe(
@@ -981,7 +1987,11 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             )
         )
 
-    status = "passed" if checks and all(item["status"] == "passed" for item in checks) else "failed"
+    status = (
+        "passed"
+        if checks and all(item["status"] == "passed" for item in checks)
+        else "failed"
+    )
     payload = {
         "kind": "sciplot_runtime_smoke",
         "version": RUNTIME_SMOKE_VERSION,
@@ -1005,8 +2015,13 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         "limitations": [
             "The generated FTIR and scalar-field tables are synthetic contract fixtures, "
             "not real-data evidence.",
-            "This smoke proves one representative Studio lifecycle and a delivery hash failure path; "
+            "This smoke proves one representative Studio lifecycle, project and relocated-delivery "
+            "launcher checks, a standalone exact-current export, and a delivery hash failure path; "
             "it does not replace the complete ready-rule acceptance matrix.",
+            "The OpenAI provider gates use an in-memory HTTP/SSE wire fixture and do not "
+            "claim live-model quality or a successful paid API call.",
+            "The session-evidence gate uses synthetic contracts and adversarial "
+            "mutations; it never counts as owner-operated M3/M6 evidence.",
             "Lifecycle success and artifact QA do not establish blanket journal compliance.",
         ],
     }

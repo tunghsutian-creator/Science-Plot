@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 from collections.abc import Iterable
 from copy import deepcopy
 from pathlib import Path
@@ -11,6 +10,15 @@ from typing import Any
 import pandas as pd
 
 from sciplot_core._utils import file_sha256
+from sciplot_core.canvas.composition import (
+    COMPOSITE_CANVAS_WIDTH_MM,
+    COMPOSITE_LAYOUT_KIND,
+    COMPOSITE_LAYOUT_VERSION,
+    COMPOSITE_NOMINAL_CONTENT_WIDTH_MM,
+    build_composite_layout,
+    composite_layout_ids,
+    list_composite_layouts,
+)
 
 PUBLICATION_PROFILE_KIND = "sciplot_publication_profile"
 PUBLICATION_PROFILE_VERSION = 1
@@ -18,56 +26,16 @@ PUBLICATION_INTENT_KIND = "sciplot_publication_intent"
 PUBLICATION_INTENT_VERSION = 1
 TRANSFORM_LEDGER_KIND = "sciplot_transform_ledger"
 TRANSFORM_LEDGER_VERSION = 1
-COMPOSITE_LAYOUT_KIND = "sciplot_composite_layout"
-COMPOSITE_LAYOUT_VERSION = 1
 COMPOSITION_PLAN_KIND = "sciplot_publication_composition_plan"
 COMPOSITION_PLAN_VERSION = 1
 
-COMPOSITE_CANVAS_WIDTH_MM = 183.0
-COMPOSITE_NOMINAL_CONTENT_WIDTH_MM = 180.0
 DEFAULT_STANDALONE_PROFILE_ID = "sciplot_single_panel_v1"
 DEFAULT_COMPOSITE_PROFILE_ID = "sciplot_composite_183_v1"
 
-_COMPOSITE_LAYOUTS: dict[str, dict[str, Any]] = {
-    "single_180": {
-        "label": "Single 180 mm panel",
-        "panel_widths_mm": (180.0,),
-        "gaps_mm": (),
-        "outer_left_mm": 1.5,
-        "outer_right_mm": 1.5,
-    },
-    "double_equal_90": {
-        "label": "Two equal 90 mm panels",
-        "panel_widths_mm": (90.0, 90.0),
-        "gaps_mm": (3.0,),
-        "outer_left_mm": 0.0,
-        "outer_right_mm": 0.0,
-    },
-    "double_120_60": {
-        "label": "120 mm primary plus 60 mm supporting panel",
-        "panel_widths_mm": (120.0, 60.0),
-        "gaps_mm": (3.0,),
-        "outer_left_mm": 0.0,
-        "outer_right_mm": 0.0,
-    },
-    "double_60_120": {
-        "label": "60 mm supporting plus 120 mm primary panel",
-        "panel_widths_mm": (60.0, 120.0),
-        "gaps_mm": (3.0,),
-        "outer_left_mm": 0.0,
-        "outer_right_mm": 0.0,
-    },
-    "triple_equal_60": {
-        "label": "Three equal 60 mm panels",
-        "panel_widths_mm": (60.0, 60.0, 60.0),
-        "gaps_mm": (1.5, 1.5),
-        "outer_left_mm": 0.0,
-        "outer_right_mm": 0.0,
-    },
-}
-
 _NATURE_FIGURE_GUIDE = "https://research-figure-guide.nature.com/figures/building-and-exporting-figure-panels/"
-_NATURE_INITIAL_SUBMISSION = "https://www.nature.com/nature/for-authors/initial-submission"
+_NATURE_INITIAL_SUBMISSION = (
+    "https://www.nature.com/nature/for-authors/initial-submission"
+)
 _NATURE_FINAL_SUBMISSION = "https://www.nature.com/nature/for-authors/final-submission"
 
 _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
@@ -121,7 +89,7 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
             "silent_data_omission_allowed": False,
             "statistics_must_be_explicit": True,
         },
-        "composite_layout_ids": list(_COMPOSITE_LAYOUTS),
+        "composite_layout_ids": list(composite_layout_ids()),
     },
     "nature_flagship_research_2026_v1": {
         "kind": PUBLICATION_PROFILE_KIND,
@@ -198,7 +166,7 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
             "silent_data_omission_allowed": False,
             "statistics_must_be_explicit": True,
         },
-        "composite_layout_ids": list(_COMPOSITE_LAYOUTS),
+        "composite_layout_ids": list(composite_layout_ids()),
     },
 }
 
@@ -221,81 +189,6 @@ _standalone_profile.update(
     }
 )
 _PUBLICATION_PROFILES[DEFAULT_STANDALONE_PROFILE_ID] = _standalone_profile
-
-
-def _rounded(value: float) -> float:
-    return round(float(value), 6)
-
-
-def _layout_total(spec: dict[str, Any]) -> float:
-    return (
-        float(spec["outer_left_mm"])
-        + sum(spec["panel_widths_mm"])
-        + sum(spec["gaps_mm"])
-        + float(spec["outer_right_mm"])
-    )
-
-
-def build_composite_layout(layout_id: str, *, canvas_height_mm: float = 55.0) -> dict[str, Any]:
-    if layout_id not in _COMPOSITE_LAYOUTS:
-        known = ", ".join(sorted(_COMPOSITE_LAYOUTS))
-        raise ValueError(f"Unknown composite layout `{layout_id}`. Available: {known}.")
-    height = float(canvas_height_mm)
-    if not math.isfinite(height) or height <= 0:
-        raise ValueError("Composite canvas height must be a positive finite number.")
-    spec = deepcopy(_COMPOSITE_LAYOUTS[layout_id])
-    total = _layout_total(spec)
-    if not math.isclose(total, COMPOSITE_CANVAS_WIDTH_MM, abs_tol=1e-9):
-        raise RuntimeError(f"Composite layout `{layout_id}` closes to {total} mm, not 183 mm.")
-
-    x_mm = float(spec["outer_left_mm"])
-    slots: list[dict[str, Any]] = []
-    for index, width in enumerate(spec["panel_widths_mm"]):
-        slots.append(
-            {
-                "id": f"panel_{chr(ord('a') + index)}",
-                "order": index + 1,
-                "panel_label": chr(ord("a") + index),
-                "x_mm": _rounded(x_mm),
-                "y_mm": 0.0,
-                "width_mm": _rounded(float(width)),
-                "height_mm": _rounded(height),
-                "x_fraction": _rounded(x_mm / COMPOSITE_CANVAS_WIDTH_MM),
-                "width_fraction": _rounded(float(width) / COMPOSITE_CANVAS_WIDTH_MM),
-            }
-        )
-        if index < len(spec["gaps_mm"]):
-            x_mm += float(width) + float(spec["gaps_mm"][index])
-        else:
-            x_mm += float(width)
-
-    return {
-        "kind": COMPOSITE_LAYOUT_KIND,
-        "version": COMPOSITE_LAYOUT_VERSION,
-        "id": layout_id,
-        "label": spec["label"],
-        "authority": "sciplot_composite_layout_definition",
-        "canvas_width_mm": COMPOSITE_CANVAS_WIDTH_MM,
-        "canvas_height_mm": _rounded(height),
-        "nominal_content_width_mm": COMPOSITE_NOMINAL_CONTENT_WIDTH_MM,
-        "spare_width_mm": _rounded(COMPOSITE_CANVAS_WIDTH_MM - COMPOSITE_NOMINAL_CONTENT_WIDTH_MM),
-        "panel_widths_mm": list(spec["panel_widths_mm"]),
-        "gaps_mm": list(spec["gaps_mm"]),
-        "outer_left_mm": float(spec["outer_left_mm"]),
-        "outer_right_mm": float(spec["outer_right_mm"]),
-        "geometry_total_mm": _rounded(total),
-        "slots": slots,
-        "renderer_contract": {
-            "engine": "veusz",
-            "future_widget_tree": "page/grid/native_graphs",
-            "raster_panel_composition_allowed": False,
-            "grid_outer_margins_must_be_explicit": True,
-        },
-    }
-
-
-def list_composite_layouts() -> list[dict[str, Any]]:
-    return [build_composite_layout(layout_id) for layout_id in _COMPOSITE_LAYOUTS]
 
 
 def _composition_signature(value: object) -> str:
@@ -321,11 +214,15 @@ def _normalized_legend_signature(value: object) -> list[dict[str, Any]]:
     ]
 
 
-def _composition_axis_groups(modules: list[dict[str, Any]], axis: str) -> list[dict[str, Any]]:
+def _composition_axis_groups(
+    modules: list[dict[str, Any]], axis: str
+) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for module in modules:
         axis_signature = module.get("axis_signature")
-        signature = axis_signature.get(axis) if isinstance(axis_signature, dict) else None
+        signature = (
+            axis_signature.get(axis) if isinstance(axis_signature, dict) else None
+        )
         if not isinstance(signature, dict) or not signature:
             continue
         grouped.setdefault(_composition_signature(signature), []).append(module)
@@ -354,7 +251,9 @@ def build_publication_composition_plan(
 
     normalized_policy = str(legend_policy or "auto").strip().casefold()
     if normalized_policy not in {"auto", "shared_when_equivalent", "per_panel"}:
-        raise ValueError("Legend policy must be `auto`, `shared_when_equivalent`, or `per_panel`.")
+        raise ValueError(
+            "Legend policy must be `auto`, `shared_when_equivalent`, or `per_panel`."
+        )
     layout = build_composite_layout(layout_id, canvas_height_mm=canvas_height_mm)
     source_modules = [deepcopy(item) for item in modules if isinstance(item, dict)]
     slots = [item for item in layout["slots"] if isinstance(item, dict)]
@@ -367,17 +266,27 @@ def build_publication_composition_plan(
     used_slots: set[str] = set()
     used_module_ids: set[str] = set()
     normalized_modules: list[dict[str, Any]] = []
-    for index, (module, default_slot) in enumerate(zip(source_modules, slots, strict=True), start=1):
-        module_id = str(module.get("module_id") or module.get("id") or f"module_{index}").strip()
+    for index, (module, default_slot) in enumerate(
+        zip(source_modules, slots, strict=True), start=1
+    ):
+        module_id = str(
+            module.get("module_id") or module.get("id") or f"module_{index}"
+        ).strip()
         if not module_id or module_id in used_module_ids:
             raise ValueError("Composition module ids must be non-empty and unique.")
         slot_ref = str(module.get("slot_ref") or default_slot["id"]).strip()
         if slot_ref not in slot_by_id or slot_ref in used_slots:
-            raise ValueError("Composition module slot refs must be unique ids from the selected layout.")
+            raise ValueError(
+                "Composition module slot refs must be unique ids from the selected layout."
+            )
         used_module_ids.add(module_id)
         used_slots.add(slot_ref)
         slot = slot_by_id[slot_ref]
-        axis_signature = module.get("axis_signature") if isinstance(module.get("axis_signature"), dict) else {}
+        axis_signature = (
+            module.get("axis_signature")
+            if isinstance(module.get("axis_signature"), dict)
+            else {}
+        )
         relationship_tags = module.get("relationship_tags")
         normalized_modules.append(
             {
@@ -386,9 +295,14 @@ def build_publication_composition_plan(
                 "panel_label": str(slot.get("panel_label") or ""),
                 "target_size_mm": [float(slot["width_mm"]), float(slot["height_mm"])],
                 "source_vsz": str(module.get("source_vsz") or "").strip() or None,
-                "source_request_ref": str(module.get("source_request_ref") or "").strip() or None,
+                "source_request_ref": str(
+                    module.get("source_request_ref") or ""
+                ).strip()
+                or None,
                 "legend_group": str(module.get("legend_group") or "").strip() or None,
-                "legend_signature": _normalized_legend_signature(module.get("legend_signature")),
+                "legend_signature": _normalized_legend_signature(
+                    module.get("legend_signature")
+                ),
                 "axis_signature": deepcopy(axis_signature),
                 "relationship_tags": (
                     [str(item) for item in relationship_tags if str(item).strip()]
@@ -414,15 +328,29 @@ def build_publication_composition_plan(
     legend_groups: list[dict[str, Any]] = []
     legend_action_by_module: dict[str, str] = {}
     for index, members in enumerate(legend_buckets.values(), start=1):
-        signatures = [_composition_signature(member["legend_signature"]) for member in members]
-        signatures_are_equivalent = bool(members[0]["legend_signature"]) and len(set(signatures)) == 1
-        shared = normalized_policy != "per_panel" and len(members) > 1 and signatures_are_equivalent
-        mode = "shared" if shared else ("per_panel_aligned" if len(members) > 1 else "per_panel")
+        signatures = [
+            _composition_signature(member["legend_signature"]) for member in members
+        ]
+        signatures_are_equivalent = (
+            bool(members[0]["legend_signature"]) and len(set(signatures)) == 1
+        )
+        shared = (
+            normalized_policy != "per_panel"
+            and len(members) > 1
+            and signatures_are_equivalent
+        )
+        mode = (
+            "shared"
+            if shared
+            else ("per_panel_aligned" if len(members) > 1 else "per_panel")
+        )
         group = {
             "id": f"legend_group_{index}",
             "mode": mode,
             "member_module_ids": [str(member["module_id"]) for member in members],
-            "signature": deepcopy(members[0]["legend_signature"]) if signatures_are_equivalent else [],
+            "signature": deepcopy(members[0]["legend_signature"])
+            if signatures_are_equivalent
+            else [],
             "equivalence_rule": "exact_ordered_series_visual_signature",
             "merge_allowed": shared,
             "alignment_policy": "same_anchor_and_row_geometry_at_final_size",
@@ -436,7 +364,9 @@ def build_publication_composition_plan(
             action = "late_bound_shared_host"
         else:
             group["reason_not_shared"] = (
-                "single_module" if len(members) == 1 else "legend_signatures_differ_or_are_incomplete"
+                "single_module"
+                if len(members) == 1
+                else "legend_signatures_differ_or_are_incomplete"
             )
             action = "keep_and_align"
         legend_groups.append(group)
@@ -464,7 +394,9 @@ def build_publication_composition_plan(
         "legend_groups": legend_groups,
         "alignment_groups": {
             "plot_frames": {
-                "member_module_ids": [str(module["module_id"]) for module in normalized_modules],
+                "member_module_ids": [
+                    str(module["module_id"]) for module in normalized_modules
+                ],
                 "align_outer_frames": True,
                 "synchronize_typography_and_strokes": True,
             },
@@ -509,11 +441,15 @@ def list_publication_profiles() -> list[dict[str, Any]]:
 def get_publication_profile(profile_id: str) -> dict[str, Any]:
     if profile_id not in _PUBLICATION_PROFILES:
         known = ", ".join(sorted(_PUBLICATION_PROFILES))
-        raise ValueError(f"Unknown publication profile `{profile_id}`. Available: {known}.")
+        raise ValueError(
+            f"Unknown publication profile `{profile_id}`. Available: {known}."
+        )
     return deepcopy(_PUBLICATION_PROFILES[profile_id])
 
 
-def resolve_publication_profile(value: str | Path | dict[str, Any] | None) -> dict[str, Any] | None:
+def resolve_publication_profile(
+    value: str | Path | dict[str, Any] | None,
+) -> dict[str, Any] | None:
     if value is None:
         return None
     if isinstance(value, dict):
@@ -527,14 +463,20 @@ def resolve_publication_profile(value: str | Path | dict[str, Any] | None) -> di
     if not isinstance(profile, dict):
         raise ValueError("Publication profile must be a JSON object.")
     if profile.get("kind") != PUBLICATION_PROFILE_KIND:
-        raise ValueError(f"Publication profile kind must be `{PUBLICATION_PROFILE_KIND}`.")
+        raise ValueError(
+            f"Publication profile kind must be `{PUBLICATION_PROFILE_KIND}`."
+        )
     if not isinstance(profile.get("id"), str) or not str(profile["id"]).strip():
         raise ValueError("Publication profile needs a non-empty `id`.")
     return profile
 
 
 def _figure_height_mm(request: dict[str, Any]) -> float:
-    options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
+    options = (
+        request.get("render_options")
+        if isinstance(request.get("render_options"), dict)
+        else {}
+    )
     size = options.get("size")
     if isinstance(size, str) and "x" in size.casefold():
         try:
@@ -547,9 +489,13 @@ def _figure_height_mm(request: dict[str, Any]) -> float:
 def _statistics_contract_for_figure(figure: dict[str, Any]) -> dict[str, Any]:
     template = str(figure.get("default_template") or "").casefold()
     figure_id = str(figure.get("id") or "").casefold()
-    needs_method = template in {"bar", "box", "box_strip", "violin", "point_interval"} or (
-        "statistics" in figure_id
-    )
+    needs_method = template in {
+        "bar",
+        "box",
+        "box_strip",
+        "violin",
+        "point_interval",
+    } or ("statistics" in figure_id)
     return {
         "kind": "sciplot_statistics_method_contract",
         "version": 1,
@@ -573,7 +519,9 @@ def _explicit_request_text(request: dict[str, Any], key: str) -> tuple[bool, str
     return True, str(request.get(key) or "").strip()
 
 
-def _merge_existing(defaults: dict[str, Any], existing: dict[str, Any] | None) -> dict[str, Any]:
+def _merge_existing(
+    defaults: dict[str, Any], existing: dict[str, Any] | None
+) -> dict[str, Any]:
     """Merge an existing contract additively, with existing values authoritative."""
 
     merged = deepcopy(defaults)
@@ -594,7 +542,9 @@ def _merge_keyed_contracts(
     id_key: str,
 ) -> list[dict[str, Any]]:
     existing_items = (
-        [deepcopy(item) for item in existing if isinstance(item, dict)] if isinstance(existing, list) else []
+        [deepcopy(item) for item in existing if isinstance(item, dict)]
+        if isinstance(existing, list)
+        else []
     )
     existing_by_id = {
         str(item.get(id_key)): item
@@ -612,7 +562,8 @@ def _merge_keyed_contracts(
     merged.extend(
         item
         for item in existing_items
-        if not isinstance(item.get(id_key), str) or str(item.get(id_key)) not in consumed
+        if not isinstance(item.get(id_key), str)
+        or str(item.get(id_key)) not in consumed
     )
     return merged
 
@@ -622,14 +573,24 @@ def _reference_list(payload: dict[str, Any], key: str) -> list[Any]:
     return deepcopy(value) if isinstance(value, list) else []
 
 
-def _figure_contracts(study_model: dict[str, Any], existing: dict[str, Any]) -> list[dict[str, Any]]:
-    figures = study_model.get("figure_queue") if isinstance(study_model.get("figure_queue"), list) else []
+def _figure_contracts(
+    study_model: dict[str, Any], existing: dict[str, Any]
+) -> list[dict[str, Any]]:
+    figures = (
+        study_model.get("figure_queue")
+        if isinstance(study_model.get("figure_queue"), list)
+        else []
+    )
     defaults: list[dict[str, Any]] = []
     for index, figure in enumerate(figures, start=1):
         if not isinstance(figure, dict):
             continue
         figure_id = str(figure.get("id") or f"figure_{index}")
-        evidence = figure.get("evidence_contract") if isinstance(figure.get("evidence_contract"), dict) else {}
+        evidence = (
+            figure.get("evidence_contract")
+            if isinstance(figure.get("evidence_contract"), dict)
+            else {}
+        )
         defaults.append(
             {
                 "figure_id": figure_id,
@@ -643,7 +604,9 @@ def _figure_contracts(study_model: dict[str, Any], existing: dict[str, Any]) -> 
                 "sample_refs": _reference_list(evidence, "sample_refs"),
                 "source_refs": _reference_list(evidence, "source_refs"),
                 "transform_step_refs": _reference_list(evidence, "transform_step_refs"),
-                "confirmation_status": str(evidence.get("confirmation_status") or "pending"),
+                "confirmation_status": str(
+                    evidence.get("confirmation_status") or "pending"
+                ),
                 "statistics_method": deepcopy(
                     figure.get("statistics_method")
                     if isinstance(figure.get("statistics_method"), dict)
@@ -664,7 +627,11 @@ def _panel_defaults_for_layout(
 ) -> list[dict[str, Any]]:
     if not isinstance(layout, dict):
         return []
-    prior = [item for item in existing_panels if isinstance(item, dict)] if isinstance(existing_panels, list) else []
+    prior = (
+        [item for item in existing_panels if isinstance(item, dict)]
+        if isinstance(existing_panels, list)
+        else []
+    )
     defaults: list[dict[str, Any]] = []
     for index, slot in enumerate(layout.get("slots", []), start=1):
         if not isinstance(slot, dict):
@@ -675,7 +642,9 @@ def _panel_defaults_for_layout(
             {
                 "panel_id": panel_id,
                 "order": index,
-                "panel_label": str(slot.get("panel_label") or chr(ord("a") + index - 1)),
+                "panel_label": str(
+                    slot.get("panel_label") or chr(ord("a") + index - 1)
+                ),
                 "role": "primary_evidence" if index == 1 else "supporting_evidence",
                 "slot_ref": str(slot.get("id") or ""),
                 "question": "",
@@ -699,16 +668,26 @@ def build_publication_intent(
 ) -> dict[str, Any]:
     request = request if isinstance(request, dict) else {}
     existing = deepcopy(existing) if isinstance(existing, dict) else {}
-    layout_is_explicit, explicit_layout = _explicit_request_text(request, "publication_layout")
+    layout_is_explicit, explicit_layout = _explicit_request_text(
+        request, "publication_layout"
+    )
     if layout_is_explicit:
         layout_id = explicit_layout or None
         layout_status = "confirmed" if layout_id else "pending"
     else:
         layout_id = str(existing.get("layout_id") or "").strip() or None
-        layout_status = str(existing.get("layout_status") or ("inferred" if layout_id else "pending"))
-    layout = build_composite_layout(layout_id, canvas_height_mm=_figure_height_mm(request)) if layout_id else None
+        layout_status = str(
+            existing.get("layout_status") or ("inferred" if layout_id else "pending")
+        )
+    layout = (
+        build_composite_layout(layout_id, canvas_height_mm=_figure_height_mm(request))
+        if layout_id
+        else None
+    )
 
-    profile_is_explicit, explicit_profile = _explicit_request_text(request, "publication_profile")
+    profile_is_explicit, explicit_profile = _explicit_request_text(
+        request, "publication_profile"
+    )
     existing_profile = str(existing.get("target_profile_id") or "").strip()
     existing_target_status = str(existing.get("target_status") or "").strip().casefold()
     if profile_is_explicit and explicit_profile:
@@ -727,22 +706,36 @@ def build_publication_intent(
         profile_id = DEFAULT_STANDALONE_PROFILE_ID
     profile = get_publication_profile(str(profile_id))
 
-    question_is_explicit, explicit_question = _explicit_request_text(request, "scientific_question")
-    question = explicit_question if question_is_explicit else str(existing.get("scientific_question") or "").strip()
+    question_is_explicit, explicit_question = _explicit_request_text(
+        request, "scientific_question"
+    )
+    question = (
+        explicit_question
+        if question_is_explicit
+        else str(existing.get("scientific_question") or "").strip()
+    )
     question_status = (
         ("confirmed" if question else "pending")
         if question_is_explicit
-        else str(existing.get("question_status") or ("inferred" if question else "pending"))
+        else str(
+            existing.get("question_status") or ("inferred" if question else "pending")
+        )
     )
     claim_is_explicit, explicit_claim = _explicit_request_text(request, "core_claim")
-    claim = explicit_claim if claim_is_explicit else str(existing.get("core_claim") or "").strip()
+    claim = (
+        explicit_claim
+        if claim_is_explicit
+        else str(existing.get("core_claim") or "").strip()
+    )
     claim_status = (
         ("confirmed" if claim else "pending")
         if claim_is_explicit
         else str(existing.get("claim_status") or ("inferred" if claim else "pending"))
     )
     target_status = (
-        "confirmed" if profile_is_explicit and explicit_profile else str(existing.get("target_status") or "inferred")
+        "confirmed"
+        if profile_is_explicit and explicit_profile
+        else str(existing.get("target_status") or "inferred")
     )
 
     figure_contracts = _figure_contracts(study_model, existing)
@@ -759,7 +752,9 @@ def build_publication_intent(
             "define_n_and_error_representation": True,
             "state_data_transformations": True,
         },
-        existing.get("caption_contract") if isinstance(existing.get("caption_contract"), dict) else None,
+        existing.get("caption_contract")
+        if isinstance(existing.get("caption_contract"), dict)
+        else None,
     )
     palette_policy = _merge_existing(
         {
@@ -768,14 +763,22 @@ def build_publication_intent(
             "grayscale_review_required": True,
             "library_default_palette_allowed": False,
         },
-        existing.get("palette_policy") if isinstance(existing.get("palette_policy"), dict) else None,
+        existing.get("palette_policy")
+        if isinstance(existing.get("palette_policy"), dict)
+        else None,
     )
-    render_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
+    render_options = (
+        request.get("render_options")
+        if isinstance(request.get("render_options"), dict)
+        else {}
+    )
     if "palette_preset" in render_options:
         palette_policy["palette_id"] = render_options.get("palette_preset")
 
     existing_composition = (
-        existing.get("composition_plan") if isinstance(existing.get("composition_plan"), dict) else None
+        existing.get("composition_plan")
+        if isinstance(existing.get("composition_plan"), dict)
+        else None
     )
     if "composition_modules" in request:
         composition_modules = request.get("composition_modules")
@@ -788,9 +791,13 @@ def build_publication_intent(
         composition_plan = build_publication_composition_plan(
             layout_id,
             composition_modules,
-            canvas_height_mm=float(layout["canvas_height_mm"]) if layout else _figure_height_mm(request),
+            canvas_height_mm=float(layout["canvas_height_mm"])
+            if layout
+            else _figure_height_mm(request),
             legend_policy=str(
-                request.get("composition_legend_policy") or (existing_composition or {}).get("legend_policy") or "auto"
+                request.get("composition_legend_policy")
+                or (existing_composition or {}).get("legend_policy")
+                or "auto"
             ),
         )
 
@@ -814,7 +821,11 @@ def build_publication_intent(
             and figure["statistics_method"].get("status") == "pending"
         ],
     }
-    for key, value in (existing.get("review_risk") if isinstance(existing.get("review_risk"), dict) else {}).items():
+    for key, value in (
+        existing.get("review_risk")
+        if isinstance(existing.get("review_risk"), dict)
+        else {}
+    ).items():
         if key not in review_risk:
             review_risk[key] = deepcopy(value)
 
@@ -920,13 +931,21 @@ def build_transform_step(
     parameters: dict[str, Any] | None = None,
     additional_outputs: Iterable[str | Path] = (),
 ) -> dict[str, Any]:
-    input_artifact = artifact_record(input_path, artifact_id=f"{step_id}_input", role="input")
+    input_artifact = artifact_record(
+        input_path, artifact_id=f"{step_id}_input", role="input"
+    )
     output_artifacts: list[dict[str, Any]] = []
     if output_path is not None:
-        output_artifacts.append(artifact_record(output_path, artifact_id=f"{step_id}_output", role="output"))
+        output_artifacts.append(
+            artifact_record(output_path, artifact_id=f"{step_id}_output", role="output")
+        )
     for index, path in enumerate(additional_outputs, start=1):
         output_artifacts.append(
-            artifact_record(path, artifact_id=f"{step_id}_output_{index + 1}", role="supporting_output")
+            artifact_record(
+                path,
+                artifact_id=f"{step_id}_output_{index + 1}",
+                role="supporting_output",
+            )
         )
     return {
         "id": step_id,
@@ -938,7 +957,9 @@ def build_transform_step(
         "output_artifacts": output_artifacts,
         "parameters": deepcopy(parameters or {}),
         "input_shape": input_artifact.get("table_shape"),
-        "output_shape": output_artifacts[0].get("table_shape") if output_artifacts else None,
+        "output_shape": output_artifacts[0].get("table_shape")
+        if output_artifacts
+        else None,
         "confirmation_status": "runtime_recorded",
         "silent_omission_allowed": False,
         "outcome_strength_gate_applied": False,
@@ -957,7 +978,9 @@ def build_transform_ledger(
     existing = deepcopy(existing) if isinstance(existing, dict) else {}
     recorded_steps = [deepcopy(step) for step in steps if isinstance(step, dict)]
     if not recorded_steps and isinstance(existing.get("steps"), list):
-        recorded_steps = [deepcopy(step) for step in existing["steps"] if isinstance(step, dict)]
+        recorded_steps = [
+            deepcopy(step) for step in existing["steps"] if isinstance(step, dict)
+        ]
     if not recorded_steps:
         recorded_steps = [
             build_transform_step(
@@ -966,7 +989,9 @@ def build_transform_ledger(
                 input_path=input_path,
                 output_path=input_path,
                 implementation_ref="sciplot_core.workflow.run_request",
-                parameters={"reason": "No deterministic data transformation was applied before rendering."},
+                parameters={
+                    "reason": "No deterministic data transformation was applied before rendering."
+                },
             )
         ]
     unresolved_step_ids = [
@@ -975,11 +1000,28 @@ def build_transform_ledger(
         if str(step.get("confirmation_status") or "runtime_recorded")
         not in {"runtime_recorded", "confirmed", "not_applicable"}
     ]
+    first_step_inputs = (
+        recorded_steps[0].get("input_artifacts")
+        if isinstance(recorded_steps[0].get("input_artifacts"), list)
+        else []
+    )
+    first_source_path = next(
+        (
+            str(artifact.get("path"))
+            for artifact in first_step_inputs
+            if isinstance(artifact, dict)
+            and isinstance(artifact.get("path"), str)
+            and str(artifact.get("path")).strip()
+        ),
+        str(Path(input_path).expanduser().resolve()),
+    )
     payload = {
         "kind": TRANSFORM_LEDGER_KIND,
         "version": TRANSFORM_LEDGER_VERSION,
-        "status": "needs_human_confirmation" if unresolved_step_ids else "runtime_recorded",
-        "source_root": str(Path(input_path).expanduser().resolve()),
+        "status": "needs_human_confirmation"
+        if unresolved_step_ids
+        else "runtime_recorded",
+        "source_root": str(Path(first_source_path).expanduser().resolve()),
         "replicate_policy": deepcopy(study_model.get("replicate_policy") or {}),
         "column_confirmations": deepcopy(request.get("column_confirmations") or []),
         "steps": recorded_steps,
@@ -1009,18 +1051,28 @@ def link_intent_to_transform_ledger(
 ) -> dict[str, Any]:
     linked = deepcopy(publication_intent)
     step_refs = [
-        str(step.get("id")) for step in transform_ledger.get("steps", []) if isinstance(step, dict) and step.get("id")
+        str(step.get("id"))
+        for step in transform_ledger.get("steps", [])
+        if isinstance(step, dict) and step.get("id")
     ]
     valid_refs = set(step_refs)
     for contract_key in ("panels", "figure_contracts"):
-        contracts = linked.get(contract_key) if isinstance(linked.get(contract_key), list) else []
+        contracts = (
+            linked.get(contract_key)
+            if isinstance(linked.get(contract_key), list)
+            else []
+        )
         structured = [contract for contract in contracts if isinstance(contract, dict)]
         for contract in structured:
             existing_refs = contract.get("transform_step_refs")
             if isinstance(existing_refs, list) and existing_refs:
-                contract["transform_step_refs"] = [str(ref) for ref in existing_refs if str(ref) in valid_refs]
+                contract["transform_step_refs"] = [
+                    str(ref) for ref in existing_refs if str(ref) in valid_refs
+                ]
                 contract["transform_binding_status"] = (
-                    "explicit_validated" if contract["transform_step_refs"] else "pending_explicit_binding"
+                    "explicit_validated"
+                    if contract["transform_step_refs"]
+                    else "pending_explicit_binding"
                 )
             elif len(structured) == 1 and step_refs:
                 contract["transform_step_refs"] = step_refs
@@ -1055,7 +1107,10 @@ def write_publication_artifacts(
         artifacts["publication_qa"] = output_dir / "publication_qa.json"
         payloads["publication_qa"] = publication_qa
     for key, path in artifacts.items():
-        path.write_text(json.dumps(payloads[key], indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        path.write_text(
+            json.dumps(payloads[key], indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
     return {key: str(path) for key, path in artifacts.items()}
 
 

@@ -7,6 +7,7 @@ from sciplot_core._bootstrap import ensure_legacy_core
 from sciplot_core.policy import (
     DEFAULT_EXPORT_FORMATS_POLICY,
     RENDER_OPTION_KEYS,
+    SUPPORTED_EXPORT_FORMATS,
     UNIFIED_HARD_OPTION_KEYS,
     normalize_categorical_summary,
     normalize_raw_point_jitter_fraction,
@@ -19,7 +20,7 @@ ensure_legacy_core()
 from src.plot_contract import load_plot_contract, template_contract  # noqa: E402
 
 _RENDER_PARAMETER_NAMES = RENDER_OPTION_KEYS
-_INTAKE_EXPORT_FORMATS = frozenset({"pdf", "svg", "png", "png_300", "png_600", "tiff", "tiff_300"})
+_INTAKE_EXPORT_FORMATS = SUPPORTED_EXPORT_FORMATS
 
 
 def normalize_exports(exports: object) -> list[str]:
@@ -31,7 +32,9 @@ def normalize_exports(exports: object) -> list[str]:
     unknown = [item for item in selected if item not in _INTAKE_EXPORT_FORMATS]
     if unknown:
         known = ", ".join(sorted(_INTAKE_EXPORT_FORMATS))
-        raise ValueError(f"Unsupported export format(s): {', '.join(unknown)}. Available exports: {known}.")
+        raise ValueError(
+            f"Unsupported export format(s): {', '.join(unknown)}. Available exports: {known}."
+        )
     return selected
 
 
@@ -53,14 +56,18 @@ def _selected_series_labels(*values: object) -> list[str]:
     return labels
 
 
-def _validate_template_render_option_keys(keys: set[str], *, template: str | None) -> None:
+def _validate_template_render_option_keys(
+    keys: set[str], *, template: str | None
+) -> None:
     if not template:
         return
     contract = load_plot_contract()
     resolved_template = str(template).strip()
     if resolved_template not in contract.templates:
         known = ", ".join(sorted(contract.templates))
-        raise ValueError(f"Unknown template: {resolved_template}. Supported templates: {known}")
+        raise ValueError(
+            f"Unknown template: {resolved_template}. Supported templates: {known}"
+        )
     spec = (
         contract.templates[resolved_template]
         if resolved_template in contract.templates
@@ -71,7 +78,13 @@ def _validate_template_render_option_keys(keys: set[str], *, template: str | Non
         for key in keys
         if key not in spec.editable_options
         and key not in UNIFIED_HARD_OPTION_KEYS
-        and key not in {"fit_options", "custom_theme_id", "custom_theme_draft", "visual_theme_id"}
+        and key
+        not in {
+            "fit_options",
+            "custom_theme_id",
+            "custom_theme_draft",
+            "visual_theme_id",
+        }
     )
     if unsupported:
         allowed = ", ".join(spec.editable_options)
@@ -104,7 +117,9 @@ def normalize_render_options(
     unknown = sorted(key for key in selected if key not in _RENDER_PARAMETER_NAMES)
     if unknown:
         known = ", ".join(sorted(_RENDER_PARAMETER_NAMES))
-        raise ValueError(f"Unsupported render option(s): {', '.join(unknown)}. Supported options: {known}.")
+        raise ValueError(
+            f"Unsupported render option(s): {', '.join(unknown)}. Supported options: {known}."
+        )
 
     size = selected.get("size")
     contract = load_plot_contract()
@@ -114,7 +129,9 @@ def normalize_render_options(
         raise ValueError(f"Unsupported figure size `{size}`. Allowed sizes: {allowed}.")
 
     if "summary_statistic" in selected:
-        selected["summary_statistic"] = normalize_categorical_summary(selected["summary_statistic"])
+        selected["summary_statistic"] = normalize_categorical_summary(
+            selected["summary_statistic"]
+        )
     if "raw_point_jitter_fraction" in selected:
         selected["raw_point_jitter_fraction"] = normalize_raw_point_jitter_fraction(
             selected["raw_point_jitter_fraction"]
@@ -162,18 +179,28 @@ def apply_request_patch(
     review_note: str | None = None,
 ) -> dict[str, Any]:
     patched = dict(request)
-    selected_exports = normalize_exports(exports if exports is not None else patched.get("exports"))
-    current_render_options = patched.get("render_options") if isinstance(patched.get("render_options"), dict) else {}
+    selected_exports = normalize_exports(
+        exports if exports is not None else patched.get("exports")
+    )
+    current_render_options = (
+        patched.get("render_options")
+        if isinstance(patched.get("render_options"), dict)
+        else {}
+    )
     explicit_key_payload = patched.get("explicit_render_option_keys")
     explicit_keys = (
         {str(key) for key in explicit_key_payload if str(key) in current_render_options}
         if isinstance(explicit_key_payload, list | tuple | set)
         else set(current_render_options)
     )
-    clear_keys = set(normalize_clear_render_options(clear_render_options, template=template))
+    clear_keys = set(
+        normalize_clear_render_options(clear_render_options, template=template)
+    )
     explicit_keys -= clear_keys
     current_render_options = {
-        key: value for key, value in current_render_options.items() if key not in clear_keys
+        key: value
+        for key, value in current_render_options.items()
+        if key not in clear_keys
     }
     normalized_patch = normalize_render_options(render_options, template=template)
     selected_series = _selected_series_labels(series_order)
@@ -199,7 +226,9 @@ def apply_request_patch(
     if selected_series:
         patched["series_order"] = selected_series
         synced_study_model = sync_study_model_samples(
-            patched.get("study_model") if isinstance(patched.get("study_model"), dict) else None,
+            patched.get("study_model")
+            if isinstance(patched.get("study_model"), dict)
+            else None,
             sample_order=selected_series,
         )
         if isinstance(synced_study_model, dict):
@@ -219,7 +248,11 @@ def apply_request_patch(
 
     note = (review_note or "").strip()
     if note:
-        notes = patched.get("review_notes") if isinstance(patched.get("review_notes"), list) else []
+        notes = (
+            patched.get("review_notes")
+            if isinstance(patched.get("review_notes"), list)
+            else []
+        )
         patched["review_notes"] = [*notes, f"GUI refine: {note}"]
     return patched
 

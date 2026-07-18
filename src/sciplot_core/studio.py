@@ -4,11 +4,13 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from html import escape
@@ -18,9 +20,11 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core._paths import REPO_ROOT, VEUSZ_ROOT, VEUSZ_UPSTREAM_COMMIT
+from sciplot_core._paths import VEUSZ_ROOT, VEUSZ_UPSTREAM_COMMIT
 from sciplot_core._utils import decode_text, existing_file_sha256, json_safe
+from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.delivery import build_delivery_package
+from sciplot_core.launchers import portable_sciplot_prelude, portable_vsz_finder
 from sciplot_core.materials_rules import compute_analysis_metrics, get_rule, semantic_payload_from_rule
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import (
@@ -267,6 +271,14 @@ def prepare_studio_document(
         project_name=project_name,
     )
     request = _read_json(request_path)
+    effective_request, data_mapping_application = resolve_data_mapping_request(
+        request,
+        base_dir=request_path.parent,
+    )
+    if data_mapping_application is not None:
+        request["transform_ledger"] = deepcopy(
+            effective_request["transform_ledger"]
+        )
     document_path = project_dir / "studio" / "document.vsz"
     document_path.parent.mkdir(parents=True, exist_ok=True)
     _archive_manual_document_if_needed(project_dir, document_path)
@@ -274,6 +286,10 @@ def prepare_studio_document(
         request,
         base_dir=request_path.parent,
     )
+    if isinstance(axis_info.get("data_mapping_coverage"), dict):
+        request["data_mapping_coverage"] = json_safe(
+            axis_info["data_mapping_coverage"]
+        )
     study_model = normalize_study_model(
         request.get("study_model")
         if isinstance(request.get("study_model"), dict)
@@ -406,7 +422,19 @@ def run_studio_command(
     )
     document_path = Path(payload["document"])
     if export:
-        export_payload = export_studio_document(document_path, formats=_split_formats(export))
+        requested_formats = _split_formats(export)
+        standalone_export = payload.get("mode") == "vsz"
+        standalone_root = (
+            output_root.expanduser().resolve()
+            if standalone_export and output_root is not None
+            else document_path.parent / "exports"
+        )
+        export_dir = standalone_root / "figures" if standalone_export and output_root is not None else None
+        export_payload = export_studio_document(
+            document_path,
+            formats=requested_formats,
+            output_dir=export_dir,
+        )
         payload["exports"] = export_payload["exports"]
         if payload.get("project_dir"):
             studio_run = publish_studio_export_run(
@@ -417,12 +445,27 @@ def run_studio_command(
             )
             payload["studio_run"] = studio_run
             _register_studio_exports(Path(payload["project_dir"]), payload["exports"], studio_run=studio_run)
+        elif standalone_export:
+            receipt = publish_standalone_export_receipt(
+                document_path=document_path,
+                requested_formats=requested_formats,
+                exports=payload["exports"],
+                artifact_root=standalone_root,
+            )
+            payload["standalone_export"] = receipt
+            payload["status"] = receipt["status"]
+            payload["state"] = receipt["state"]
+            payload["export_ready"] = receipt["export_ready"]
 
     if json_output or prepare_only or export:
         print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
         if export:
             studio_run = payload.get("studio_run")
-            if not isinstance(studio_run, dict) or studio_run.get("ready_to_use") is not True:
+            standalone_receipt = payload.get("standalone_export")
+            if isinstance(studio_run, dict):
+                if studio_run.get("ready_to_use") is not True:
+                    return 1
+            elif not isinstance(standalone_receipt, dict) or standalone_receipt.get("export_ready") is not True:
                 return 1
         return 0
 
@@ -509,7 +552,7 @@ def launch_sciplot_studio(
 
 
 def _create_veusz_window(document_path: Path | None) -> Any:
-    _ensure_veusz_qsettings_compat()
+    ensure_veusz_qsettings_compat()
     from veusz.windows.mainwindow import MainWindow
 
     _ensure_veusz_loader_compat()
@@ -525,7 +568,7 @@ def _create_veusz_window(document_path: Path | None) -> Any:
     return window
 
 
-def _ensure_veusz_qsettings_compat() -> None:
+def ensure_veusz_qsettings_compat() -> None:
     """Keep Veusz settings scoped to Veusz on macOS.
 
     Native QSettings includes the macOS global preference domain as a fallback.
@@ -745,9 +788,15 @@ def _count_veusz_series(document_path: Path) -> int:
     return max(count - text.count("Add('xy', name='category_axis_label_provider'"), 0)
 
 
-def export_studio_document(document_path: Path, *, formats: list[str]) -> dict[str, Any]:
+def export_studio_document(
+    document_path: Path,
+    *,
+    formats: list[str],
+    output_dir: Path | None = None,
+) -> dict[str, Any]:
     from sciplot_core.veusz_runtime import needs_veusz_worker_process, veusz_worker_environment
 
+    resolved_output_dir = output_dir.expanduser().resolve() if output_dir is not None else None
     if needs_veusz_worker_process():
         command = [
             sys.executable,
@@ -758,6 +807,8 @@ def export_studio_document(document_path: Path, *, formats: list[str]) -> dict[s
             "--formats",
             ",".join(formats),
         ]
+        if resolved_output_dir is not None:
+            command.extend(["--out", str(resolved_output_dir)])
         result = subprocess.run(
             command,
             text=True,
@@ -766,7 +817,9 @@ def export_studio_document(document_path: Path, *, formats: list[str]) -> dict[s
             env=veusz_worker_environment(),
         )
         return json.loads(result.stdout)
-    stderr_log = document_path.parent / "logs" / "veusz_export_stderr.log"
+    export_dir = resolved_output_dir or document_path.parent / "exports"
+    log_root = export_dir.parent if resolved_output_dir is not None else document_path.parent
+    stderr_log = log_root / "logs" / "veusz_export_stderr.log"
     exports: list[dict[str, Any]] = []
     with _capture_process_stderr(stderr_log):
         _prefer_offscreen_export_platform()
@@ -782,7 +835,6 @@ def export_studio_document(document_path: Path, *, formats: list[str]) -> dict[s
             doc = document.Document()
             doc.load(str(document_path))
             interface = CommandInterface(doc)
-            export_dir = document_path.parent / "exports"
             export_dir.mkdir(parents=True, exist_ok=True)
             for fmt in formats:
                 suffix, dpi = _export_suffix(fmt)
@@ -804,10 +856,100 @@ def export_studio_document(document_path: Path, *, formats: list[str]) -> dict[s
         finally:
             if existing_app is None:
                 app.quit()
-    payload: dict[str, Any] = {"kind": "sciplot_studio_export", "document": str(document_path), "exports": exports}
+    payload: dict[str, Any] = {
+        "kind": "sciplot_studio_export",
+        "document": str(document_path),
+        "export_dir": str(export_dir),
+        "exports": exports,
+    }
     if stderr_log.exists():
         payload["stderr_log"] = str(stderr_log)
     return payload
+
+
+def publish_standalone_export_receipt(
+    *,
+    document_path: Path,
+    requested_formats: list[str],
+    exports: list[dict[str, Any]],
+    artifact_root: Path,
+) -> dict[str, Any]:
+    resolved_root = artifact_root.expanduser().resolve()
+    resolved_root.mkdir(parents=True, exist_ok=True)
+    normalized_formats = list(dict.fromkeys(str(item).strip().casefold() for item in requested_formats if item))
+    successful_formats = {
+        str(item.get("format") or "").casefold()
+        for item in exports
+        if isinstance(item, dict)
+        and item.get("exists") is True
+        and int(item.get("size_bytes") or 0) > 0
+    }
+    requested_exports_complete = set(normalized_formats) <= successful_formats
+    export_paths = [
+        Path(str(item["path"])).expanduser().resolve()
+        for item in exports
+        if isinstance(item, dict) and isinstance(item.get("path"), str)
+    ]
+    export_dirs = {path.parent for path in export_paths}
+    qa_required = "pdf" in normalized_formats
+    if qa_required and requested_exports_complete and len(export_dirs) == 1:
+        try:
+            qa = run_qa(next(iter(export_dirs)))
+        except (OSError, RuntimeError, ValueError) as exc:
+            qa = {
+                "kind": "sciplot_artifact_qa",
+                "status": "failed",
+                "reason": str(exc),
+            }
+    elif qa_required:
+        qa = {
+            "kind": "sciplot_artifact_qa",
+            "status": "not_run",
+            "reason": "Requested standalone exports were incomplete or did not share one artifact directory.",
+        }
+    else:
+        qa = {
+            "kind": "sciplot_artifact_qa",
+            "status": "not_required",
+            "reason": "No PDF was requested; run `sciplot qa` on a later PDF/TIFF pair.",
+        }
+    qa_passed = qa.get("status") in {"passed", "not_required"}
+    export_ready = bool(requested_exports_complete and qa_passed)
+    spec_reference = _veusz_spec_reference(document_path)
+    receipt_path = resolved_root / "standalone_export_receipt.json"
+    qa_path = resolved_root / "qa_report.json"
+    qa_path.write_text(json.dumps(json_safe(qa), indent=2, ensure_ascii=False), encoding="utf-8")
+    receipt = {
+        "kind": "sciplot_standalone_vsz_export",
+        "version": 1,
+        "status": "passed" if export_ready else "failed",
+        "state": "exported_exact_current" if export_ready else "needs_rule_repair",
+        "scope": "standalone_exact_current_export",
+        "document": str(document_path),
+        "document_sha256": existing_file_sha256(document_path),
+        "document_authority": "veusz_document",
+        "spec_reference": spec_reference,
+        "requested_formats": normalized_formats,
+        "exports": json_safe(exports),
+        "requested_exports_complete": requested_exports_complete,
+        "artifact_qa": json_safe(qa),
+        "artifact_qa_path": str(qa_path),
+        "export_ready": export_ready,
+        "project_delivery_complete": False,
+        "provenance_complete": False,
+        "journal_compliance_established": False,
+        "receipt_path": str(receipt_path),
+        "limitations": [
+            "This receipt proves exact-current VSZ export and artifact QA only.",
+            "A standalone VSZ has no SciPlot request, raw-data archive, transform ledger, or portable project delivery.",
+            "An optional SciPlot spec sidecar is not required to reopen or export the exact current VSZ.",
+        ],
+    }
+    receipt_path.write_text(
+        json.dumps(json_safe(receipt), indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return receipt
 
 
 def publish_studio_export_run(
@@ -818,6 +960,10 @@ def publish_studio_export_run(
     exports: list[dict[str, Any]],
 ) -> dict[str, Any]:
     request = _read_json(request_path)
+    effective_request, data_mapping_application = resolve_data_mapping_request(
+        request,
+        base_dir=request_path.parent,
+    )
     document_state = _studio_document_state(
         document_path,
         generated_hash=_registered_generated_hash(project_dir),
@@ -853,8 +999,11 @@ def publish_studio_export_run(
     )
     input_path = _resolve_request_input(request, base_dir=request_path.parent)
     raw_archive = _archive_studio_input(input_path, output_dir) if input_path is not None else {}
-    existing_transform_ledger = (
-        request.get("transform_ledger") if isinstance(request.get("transform_ledger"), dict) else None
+    existing_transform_ledger = _verified_mapping_ledger_extension(
+        request.get("transform_ledger"),
+        effective_request.get("transform_ledger")
+        if data_mapping_application is not None
+        else None,
     )
     snapshot_source = _studio_snapshot_source(
         input_path,
@@ -864,17 +1013,10 @@ def publish_studio_export_run(
     processed_source = _write_studio_data_snapshot(snapshot_source, output_dir) if snapshot_source is not None else None
     intake_manifest_path = project_dir / "intake_manifest.json"
     intake_manifest = _read_json(intake_manifest_path) if intake_manifest_path.exists() else {}
-    recognition = intake_manifest.get("recognition") if isinstance(intake_manifest.get("recognition"), dict) else {}
-    semantic = {
-        **recognition,
-        "semantic_family": recognition.get("semantic_family")
-        or intake_manifest.get("experiment", {}).get("id")
-        or request.get("rule_id")
-        or "unknown",
-        "rule_id": recognition.get("rule_id") or request.get("rule_id"),
-        "reason": recognition.get("reason") or "Exported from the canonical SciPlot Veusz document.",
-        "route": "studio",
-    }
+    semantic = _studio_export_semantic_payload(
+        request=request,
+        intake_manifest=intake_manifest,
+    )
     metric_source = _studio_metric_source(snapshot_source if snapshot_source is not None else input_path)
     analysis_metrics = (
         compute_analysis_metrics(
@@ -993,6 +1135,10 @@ def publish_studio_export_run(
         "analysis_metrics": analysis_metrics,
         "template": request.get("template") or request.get("recipe") or "veusz_document",
         "operation_mode": normal_mode_payload(route="studio"),
+        "data_mapping_application": json_safe(data_mapping_application),
+        "data_mapping_coverage": json_safe(
+            request.get("data_mapping_coverage")
+        ),
     }
     manifest = {
         "kind": "sciplot_run",
@@ -1030,6 +1176,10 @@ def publish_studio_export_run(
         },
         "layout_quality": layout_quality,
         "operation_mode": normal_mode_payload(route="studio"),
+        "data_mapping_application": json_safe(data_mapping_application),
+        "data_mapping_coverage": json_safe(
+            request.get("data_mapping_coverage")
+        ),
         "studio": {
             "engine": "veusz",
             "render_engine": "veusz",
@@ -1082,6 +1232,83 @@ def publish_studio_export_run(
         "delivery_package": manifest["delivery_package"],
         "state": manifest["state"],
         "ready_to_use": ready_to_use,
+    }
+
+
+def _verified_mapping_ledger_extension(
+    current: object,
+    verified_base: object,
+) -> dict[str, Any] | None:
+    if not isinstance(verified_base, dict):
+        return deepcopy(current) if isinstance(current, dict) else None
+    if not isinstance(current, dict):
+        return deepcopy(verified_base)
+    base_steps = (
+        verified_base.get("steps")
+        if isinstance(verified_base.get("steps"), list)
+        else []
+    )
+    current_steps = (
+        current.get("steps")
+        if isinstance(current.get("steps"), list)
+        else []
+    )
+    if current_steps[: len(base_steps)] != base_steps:
+        raise ValueError(
+            "Studio transform lineage no longer extends the verified "
+            "DataMappingProposal ledger."
+        )
+    return deepcopy(current)
+
+
+def _studio_export_semantic_payload(
+    *,
+    request: dict[str, Any],
+    intake_manifest: dict[str, Any],
+) -> dict[str, Any]:
+    recognition = (
+        intake_manifest.get("recognition")
+        if isinstance(intake_manifest.get("recognition"), dict)
+        else {}
+    )
+    rule_id = str(
+        recognition.get("rule_id") or request.get("rule_id") or ""
+    ).strip()
+    rule = get_rule(rule_id) if rule_id else None
+    rule_payload = (
+        semantic_payload_from_rule(
+            rule,
+            confidence=100.0,
+            reason=(
+                recognition.get("reason")
+                or "Resolved from the persisted request rule for Studio export."
+            ),
+        )
+        if rule is not None
+        else {}
+    )
+    experiment = (
+        intake_manifest.get("experiment")
+        if isinstance(intake_manifest.get("experiment"), dict)
+        else {}
+    )
+    return {
+        **rule_payload,
+        **recognition,
+        "semantic_family": (
+            recognition.get("semantic_family")
+            or rule_payload.get("semantic_family")
+            or experiment.get("id")
+            or rule_id
+            or "unknown"
+        ),
+        "rule_id": recognition.get("rule_id") or rule_id or None,
+        "reason": (
+            recognition.get("reason")
+            or rule_payload.get("reason")
+            or "Exported from the canonical SciPlot Veusz document."
+        ),
+        "route": "studio",
     }
 
 
@@ -1276,6 +1503,7 @@ def _apply_studio_request_overrides(
 
 
 def _existing_document_payload(document_path: Path) -> dict[str, Any]:
+    spec_reference = _veusz_spec_reference(document_path)
     return {
         "kind": "sciplot_studio_prepare",
         "mode": "vsz",
@@ -1287,7 +1515,8 @@ def _existing_document_payload(document_path: Path) -> dict[str, Any]:
             "render_engine": "veusz",
             "qa_target": "veusz_export",
             "document": str(document_path),
-            "spec": str(_veusz_spec_path(document_path)),
+            "spec": spec_reference["path"],
+            "spec_reference": spec_reference,
             "manual_edit_hash": existing_file_sha256(document_path),
             "upstream": upstream_status()["veusz"],
             "operation_mode": normal_mode_payload(route="studio"),
@@ -1814,8 +2043,35 @@ def _series_from_request(
     if not source.is_absolute():
         source = (base_dir / source).resolve()
     source_root = source
+    effective_request, mapping_application = resolve_data_mapping_request(
+        request,
+        base_dir=base_dir,
+    )
+    effective_input = effective_request.get("input")
+    if not isinstance(effective_input, str) or not effective_input.strip():
+        raise ValueError(
+            "Resolved data mapping request has no effective input path."
+        )
+    source = Path(effective_input).expanduser()
+    if not source.is_absolute():
+        source = (base_dir / source).resolve()
+    request = effective_request
     render_options = _effective_render_options(request)
-    source, transform_steps = _studio_source_for_request(source, request=request, base_dir=base_dir)
+    transform_steps = [
+        dict(step)
+        for step in (
+            mapping_application.get("transform_steps", [])
+            if mapping_application is not None
+            else []
+        )
+        if isinstance(step, dict)
+    ]
+    source, semantic_steps = _studio_source_for_request(
+        source,
+        request=request,
+        base_dir=base_dir,
+    )
+    transform_steps.extend(semantic_steps)
     frames = _read_source_frames(source, request=request)
     raw_series: list[StudioSeries] = []
     axis_info: dict[str, Any] = {"x_label": "x", "y_label": "y"}
@@ -1873,9 +2129,77 @@ def _series_from_request(
         axis_info["category_positions"] = [float(index) for index in range(1, len(styled) + 1)]
         axis_info["raw_replicate_count"] = sum(len(item.y_values) for item in styled)
     styled = _apply_template_series_transforms(styled, request=request, render_options=render_options)
+    if mapping_application is not None:
+        axis_info["data_mapping_coverage"] = _mapping_series_coverage(
+            styled,
+            mapping_application=mapping_application,
+            request=request,
+        )
     axis_info["x_label"] = _veusz_axis_label(render_options.get("x_label_override") or axis_info["x_label"])
     axis_info["y_label"] = _veusz_axis_label(render_options.get("y_label_override") or axis_info["y_label"])
     return styled, axis_info, transform_steps, source_root
+
+
+def _mapping_series_coverage(
+    series: list[StudioSeries],
+    *,
+    mapping_application: dict[str, Any],
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    expected_labels = [
+        str(label).strip()
+        for label in mapping_application.get("expected_sample_labels", [])
+        if str(label).strip()
+    ]
+    expected_count = int(
+        mapping_application.get("expected_series_count_min")
+        or len(expected_labels)
+    )
+    actual_labels = [str(item.label).strip() for item in series]
+    missing_labels = [
+        expected
+        for expected in expected_labels
+        if not any(
+            _mapping_label_matches(actual, expected)
+            for actual in actual_labels
+        )
+    ]
+    passed = len(series) >= expected_count and not missing_labels
+    coverage = {
+        "kind": "sciplot_data_mapping_series_coverage",
+        "version": 1,
+        "status": "passed" if passed else "failed",
+        "proposal_id": mapping_application.get("proposal_id"),
+        "template": _request_template(request),
+        "expected_sample_labels": expected_labels,
+        "actual_series_labels": actual_labels,
+        "expected_series_count_min": expected_count,
+        "actual_series_count": len(series),
+        "missing_sample_labels": missing_labels,
+        "silent_omission_detected": not passed,
+    }
+    if not passed:
+        missing = ", ".join(missing_labels) or "unknown mapped source"
+        raise StudioPreparationBlocked(
+            "mapped_source_coverage_incomplete",
+            "Studio would omit confirmed mapped sources "
+            f"({missing}); expected at least {expected_count} series but "
+            f"prepared {len(series)}.",
+        )
+    return coverage
+
+
+def _mapping_label_matches(actual: str, expected: str) -> bool:
+    actual_key = " ".join(actual.casefold().split())
+    expected_key = " ".join(expected.casefold().split())
+    if actual_key == expected_key:
+        return True
+    separators = (" ", " (", " [", " /", " -", " —", ":")
+    return any(
+        actual_key.startswith(expected_key + separator)
+        or actual_key.endswith(separator + expected_key)
+        for separator in separators
+    )
 
 
 def _veusz_axis_label(value: object) -> str:
@@ -2118,9 +2442,45 @@ def _read_table(path: Path) -> pd.DataFrame:
 
 
 def _coerced_numeric_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    numeric = frame.apply(pd.to_numeric, errors="coerce")
+    metadata_rows = _structured_metadata_prefix_rows(frame)
+    numeric = frame.iloc[metadata_rows:].apply(
+        pd.to_numeric,
+        errors="coerce",
+    )
     useful_columns = [column for column in numeric.columns if numeric[column].notna().sum() >= 2]
     return numeric[useful_columns].dropna(how="all")
+
+
+def _structured_metadata_prefix_rows(frame: pd.DataFrame) -> int:
+    if frame.shape[0] < 3:
+        return 0
+    for row_index in range(min(2, frame.shape[0])):
+        values = [
+            str(value).strip().casefold()
+            for value in frame.iloc[row_index].tolist()
+            if not pd.isna(value) and str(value).strip()
+        ]
+        if not values:
+            continue
+        unit_values = [value for value in values if _is_unit_label(value)]
+        nonnumeric_units = [
+            value
+            for value in unit_values
+            if not _is_finite_numeric_text(value)
+        ]
+        if (
+            len(unit_values) >= max(1, math.ceil(len(values) * 0.5))
+            and nonnumeric_units
+        ):
+            return min(2, frame.shape[0])
+    return 0
+
+
+def _is_finite_numeric_text(value: str) -> bool:
+    try:
+        return math.isfinite(float(value))
+    except ValueError:
+        return False
 
 
 def _xy_pairs_for_request(numeric: pd.DataFrame, *, request: dict[str, Any]) -> list[tuple[Any, Any]]:
@@ -2275,14 +2635,16 @@ def _unit_label_from_column(values: pd.Series) -> str:
 def _series_label_from_column(values: pd.Series, *, fallback: str) -> str:
     leading = [str(value).strip() for value in values.tolist()[:4] if not pd.isna(value) and str(value).strip()]
     if len(leading) >= 2:
-        try:
-            float(leading[0])
-        except ValueError:
-            if _is_unit_label(leading[1].casefold()):
-                # Comparison workbooks store the sample label immediately
-                # above the unit.  Preserve labels such as `PA` even though
-                # their case-folded spelling is indistinguishable from `Pa`.
-                return leading[0]
+        first_is_unit = _is_unit_label(leading[0].casefold())
+        second_is_unit = _is_unit_label(leading[1].casefold())
+        if second_is_unit:
+            # Comparison workbooks may store the sample label immediately
+            # above the unit. Preserve numeric sample IDs and labels such as
+            # `PA`, whose case-folded spelling is also the unit `Pa`.
+            return leading[0]
+        if first_is_unit and not second_is_unit:
+            # Semantic tables may store unit first and sample second.
+            return leading[1]
     strings: list[str] = []
     for value in values.tolist():
         if pd.isna(value):
@@ -2307,14 +2669,23 @@ def _is_unit_label(label: str) -> bool:
     return unit in {
         "1",
         "%",
+        "a.u.",
+        "au",
         "c",
+        "cm^-1",
+        "count",
+        "degree",
         "degc",
         "hz",
+        "kj/m2",
+        "min",
+        "mins",
         "mv",
         "mn·m",
         "mpa",
         "mpa·s",
         "nm",
+        "nm^-1",
         "pa",
         "pa·s",
         "rad/s",
@@ -2325,6 +2696,7 @@ def _is_unit_label(label: str) -> bool:
         "µm",
         "μm",
         "°c",
+        "w/g",
     }
 
 
@@ -4862,18 +5234,18 @@ def _prefer_offscreen_export_platform() -> None:
 
 def _write_studio_launcher(project_dir: Path) -> Path:
     launcher = project_dir / "Open_in_SciPlot_Studio.command"
+    lines = [
+        *portable_sciplot_prelude(),
+        *portable_vsz_finder(),
+        "",
+        'DOCUMENT="$(find_vsz document.vsz)" || die "Cannot locate studio/document.vsz."',
+        'if [[ "${1:-}" == "--check" ]]; then',
+        '  exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --qt-smoke',
+        "fi",
+        'exec "${SCIPLOT_CMD}" studio "${PROJECT_DIR}"',
+    ]
     launcher.write_text(
-        "\n".join(
-            [
-                "#!/bin/zsh",
-                "set -euo pipefail",
-                'PROJECT_DIR="${0:A:h}"',
-                "unset QT_QPA_PLATFORM || true",
-                f'cd "{REPO_ROOT}"',
-                'skill/scripts/sciplot studio "${PROJECT_DIR}"',
-            ]
-        )
-        + "\n",
+        "\n".join(lines) + "\n",
         encoding="utf-8",
     )
     launcher.chmod(0o755)
@@ -4882,26 +5254,21 @@ def _write_studio_launcher(project_dir: Path) -> Path:
 
 def _write_veusz_launcher(project_dir: Path, document_path: Path) -> Path:
     launcher = project_dir / "Open_in_Veusz.command"
-    resolved_project = project_dir.expanduser().resolve()
     resolved_document = document_path.expanduser().resolve()
-    try:
-        relative_document = resolved_document.relative_to(resolved_project)
-    except ValueError:
-        document_argument = f'"{resolved_document}"'
-    else:
-        document_argument = f'"${{PROJECT_DIR}}/{relative_document}"'
+    document_name = shlex.quote(resolved_document.name)
+    lines = [
+        *portable_sciplot_prelude(),
+        *portable_vsz_finder(extra_candidates=[resolved_document]),
+        "",
+        f"DOCUMENT_NAME={document_name}",
+        'DOCUMENT="$(find_vsz "${DOCUMENT_NAME}")" || die "Cannot locate ${DOCUMENT_NAME}."',
+        'if [[ "${1:-}" == "--check" ]]; then',
+        '  exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --qt-smoke',
+        "fi",
+        'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --advanced-editor',
+    ]
     launcher.write_text(
-        "\n".join(
-            [
-                "#!/bin/zsh",
-                "set -euo pipefail",
-                'PROJECT_DIR="${0:A:h}"',
-                "unset QT_QPA_PLATFORM || true",
-                f'cd "{REPO_ROOT}"',
-                f"exec skill/scripts/sciplot studio {document_argument} --advanced-editor",
-            ]
-        )
-        + "\n",
+        "\n".join(lines) + "\n",
         encoding="utf-8",
     )
     launcher.chmod(0o755)
@@ -4910,17 +5277,18 @@ def _write_veusz_launcher(project_dir: Path, document_path: Path) -> Path:
 
 def _write_export_edited_launcher(project_dir: Path) -> Path:
     launcher = project_dir / "Export_Edited_Veusz.command"
+    lines = [
+        *portable_sciplot_prelude(),
+        *portable_vsz_finder(),
+        "",
+        'DOCUMENT="$(find_vsz document.vsz)" || die "Cannot locate studio/document.vsz."',
+        'if [[ "${1:-}" == "--check" ]]; then',
+        '  exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --qt-smoke',
+        "fi",
+        'exec "${SCIPLOT_CMD}" studio "${PROJECT_DIR}" --export pdf,tiff_300 --json',
+    ]
     launcher.write_text(
-        "\n".join(
-            [
-                "#!/bin/zsh",
-                "set -euo pipefail",
-                'PROJECT_DIR="${0:A:h}"',
-                f'cd "{REPO_ROOT}"',
-                'skill/scripts/sciplot studio "${PROJECT_DIR}" --export pdf,tiff_300 --json',
-            ]
-        )
-        + "\n",
+        "\n".join(lines) + "\n",
         encoding="utf-8",
     )
     launcher.chmod(0o755)
@@ -4931,6 +5299,20 @@ def _veusz_spec_path(document_path: Path) -> Path:
     if document_path.name == "document.vsz":
         return document_path.parent / "spec.json"
     return document_path.with_suffix(".spec.json")
+
+
+def _veusz_spec_reference(document_path: Path) -> dict[str, Any]:
+    expected_path = _veusz_spec_path(document_path)
+    exists = expected_path.is_file()
+    return {
+        "kind": "sciplot_veusz_spec_reference",
+        "path": str(expected_path) if exists else None,
+        "expected_path": str(expected_path),
+        "exists": exists,
+        "required_for_exact_current_export": False,
+        "required_for_regeneration": True,
+        "role": "optional_sciplot_generation_metadata",
+    }
 
 
 def _studio_document_state(document_path: Path, *, generated_hash: str | None) -> dict[str, Any]:
@@ -5220,9 +5602,12 @@ def _log_minor_ticks(
 
 
 __all__ = [
+    "ensure_veusz_qsettings_compat",
     "export_studio_document",
     "maybe_reexec_with_qt_runtime",
     "prepare_studio_document",
+    "publish_standalone_export_receipt",
+    "publish_studio_export_run",
     "qt_smoke_payload",
     "run_studio_command",
     "upstream_status",

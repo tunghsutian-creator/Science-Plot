@@ -9,6 +9,21 @@ Use the repository CLI. Do not make one-off Matplotlib figures or copy style,
 axis, legend, unit or extraction constants into ad-hoc scripts. Veusz is the
 only production renderer; `studio/document.vsz` is the advanced-editing truth.
 
+## Active development direction
+
+For product-development work, read `DEVELOPMENT_ROADMAP.md` and
+`docs/SCIPLOT_OPERATION_FLOW_PLAN.md` before changing the GUI, AI integration,
+annotations, composition, or Studio ownership. The current Veusz MainWindow
+and browser Result Review are protected transition baselines, not the final
+frontend.
+
+The target is a focused native SciPlot Canvas that embeds Veusz `Document` and
+`PlotWindow`, sends both user and AI edits through typed operations, and keeps
+the current VSZ as visual authority. Do not rebuild every arbitrary Veusz
+property, add a second renderer, automate the Veusz GUI with mouse clicks, or
+remove the Advanced Editor recovery route before the roadmap's real-use
+retirement gate passes.
+
 ## Daily route
 
 1. Check readiness:
@@ -52,6 +67,35 @@ only production renderer; `studio/document.vsz` is the advanced-editing truth.
    skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
    ```
 
+   For a standalone Veusz master without a SciPlot request, use:
+
+   ```bash
+   skill/scripts/sciplot studio FIGURE.vsz \
+     --out outputs/standalone_export \
+     --export pdf,tiff_300 \
+     --json
+   ```
+
+   Require `standalone_export.status=passed` and `export_ready=true`. Read
+   `standalone_export_receipt.json` and `qa_report.json`. A missing optional
+   `.spec.json` must be reported as absent, not treated as an export failure.
+   This route proves exact-current export only; it does not establish source
+   provenance, transform lineage, or a complete SciPlot project delivery.
+
+   For the experimental M2-foundation native editor, use:
+
+   ```bash
+   skill/scripts/sciplot canvas PROJECT_OR_VSZ
+   ```
+
+   It embeds the exact-current Veusz PlotWindow in the SciPlot Qt shell and
+   provides selection, bounded visible-text editing, Save/Undo/Redo,
+   Export + QA, explicit recovery, palette-backed light/dark/high-contrast
+   chrome, adaptive inspector docking, `F9` inspector toggle, and `Tab`
+   Canvas-only mode. Advanced Editor is under `More` as a recovery route. Do
+   not describe this foundation as the complete M2 daily editor or switch the
+   normal `studio` entrypoint yet.
+
 4. Before reporting success, read the returned state, current VSZ hash,
    `manifest.json`, `review.html`, figures, `tables/analysis_metrics.csv`, QA and
    `delivery/`. Require `state=ready`, `qa.status=passed` and
@@ -72,6 +116,15 @@ only production renderer; `studio/document.vsz` is the advanced-editing truth.
    Runtime manifests, raw archives, analysis metrics, QA reports, and
    provenance remain in the run output rather than being copied into this
    handoff surface.
+
+ Generated `.command` launchers support `--check` for a non-interactive real
+ Veusz load check. They resolve SciPlot through `SCIPLOT_REPO`, an enclosing
+checkout, the generation-time fallback, or an installed `sciplot` command.
+For an isolated development worktree, keep `SCIPLOT_REPO`/`SCIPLOT_SOURCE_ROOT`
+on the development source and set `SCIPLOT_RUNTIME_REPO` to the trusted
+checkout that owns the compiled Veusz helpers and virtual environment. On
+macOS, use the wrapper rather than a bare Python invocation so its Qt framework
+ bootstrap runs; require the `veusz_qt_runtime` doctor check to pass.
 
 ## State handling
 

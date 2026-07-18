@@ -20,12 +20,23 @@ def export_request(request_path: Path, *, formats: list[str]) -> dict[str, Any]:
     return payload
 
 
-def export_document(document_path: Path, *, formats: list[str]) -> dict[str, Any]:
+def export_document(
+    document_path: Path,
+    *,
+    formats: list[str],
+    output_dir: Path | None = None,
+) -> dict[str, Any]:
     """Export the exact current VSZ without regenerating it."""
 
     from sciplot_core.studio import export_studio_document
 
-    return export_studio_document(document_path.expanduser().resolve(), formats=formats)
+    return export_studio_document(
+        document_path.expanduser().resolve(),
+        formats=formats,
+        output_dir=output_dir.expanduser().resolve()
+        if output_dir is not None
+        else None,
+    )
 
 
 def audit_documents(document_paths: list[Path]) -> dict[str, Any]:
@@ -45,10 +56,30 @@ def audit_documents(document_paths: list[Path]) -> dict[str, Any]:
     try:
         from sciplot_core.veusz_audit import audit_veusz_documents
 
-        return audit_veusz_documents([path.expanduser().resolve() for path in document_paths])
+        return audit_veusz_documents(
+            [path.expanduser().resolve() for path in document_paths]
+        )
     finally:
         if existing_app is None:
             app.quit()
+
+
+def audit_native_composition(
+    workspace_path: Path,
+    *,
+    variant_id: str | None = None,
+) -> dict[str, Any]:
+    """Audit one native Composition document in an isolated Qt runtime."""
+
+    from sciplot_core.composition_workspace import CompositionWorkspace
+    from sciplot_gui.composition_compiler import (
+        audit_native_composition_document,
+    )
+
+    return audit_native_composition_document(
+        CompositionWorkspace(workspace_path.expanduser().resolve()),
+        variant_id=variant_id,
+    )
 
 
 def save_spec(document_path: Path, spec_path: Path) -> dict[str, Any]:
@@ -78,17 +109,34 @@ def _split_formats(value: str) -> list[str]:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Internal SciPlot Veusz export worker.")
+    parser = argparse.ArgumentParser(
+        description="Internal SciPlot Veusz export worker."
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    export_parser = subparsers.add_parser("export", help="Generate and export a Veusz document from a request.")
+    export_parser = subparsers.add_parser(
+        "export", help="Generate and export a Veusz document from a request."
+    )
     export_parser.add_argument("request", type=Path)
     export_parser.add_argument("--formats", default="pdf,tiff_300")
-    export_document_parser = subparsers.add_parser("export-document", help="Export an existing Veusz document.")
+    export_document_parser = subparsers.add_parser(
+        "export-document", help="Export an existing Veusz document."
+    )
     export_document_parser.add_argument("document", type=Path)
     export_document_parser.add_argument("--formats", default="pdf,tiff_300")
-    audit_parser = subparsers.add_parser("audit-documents", help="Audit exact current Veusz documents.")
+    export_document_parser.add_argument("--out", type=Path)
+    audit_parser = subparsers.add_parser(
+        "audit-documents", help="Audit exact current Veusz documents."
+    )
     audit_parser.add_argument("documents", nargs="+", type=Path)
-    save_spec_parser = subparsers.add_parser("save-spec", help="Generate a VSZ from a SciPlot Veusz spec.")
+    composition_audit_parser = subparsers.add_parser(
+        "audit-native-composition",
+        help="Audit a native Composition document.",
+    )
+    composition_audit_parser.add_argument("workspace", type=Path)
+    composition_audit_parser.add_argument("--variant")
+    save_spec_parser = subparsers.add_parser(
+        "save-spec", help="Generate a VSZ from a SciPlot Veusz spec."
+    )
     save_spec_parser.add_argument("document", type=Path)
     save_spec_parser.add_argument("spec", type=Path)
     return parser
@@ -99,9 +147,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "export":
         payload = export_request(args.request, formats=_split_formats(args.formats))
     elif args.command == "export-document":
-        payload = export_document(args.document, formats=_split_formats(args.formats))
+        payload = export_document(
+            args.document,
+            formats=_split_formats(args.formats),
+            output_dir=args.out,
+        )
     elif args.command == "audit-documents":
         payload = audit_documents(args.documents)
+    elif args.command == "audit-native-composition":
+        payload = audit_native_composition(
+            args.workspace,
+            variant_id=args.variant,
+        )
     else:
         payload = save_spec(args.document, args.spec)
     print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
@@ -112,4 +169,11 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["audit_documents", "export_document", "export_request", "main", "save_spec"]
+__all__ = [
+    "audit_documents",
+    "audit_native_composition",
+    "export_document",
+    "export_request",
+    "main",
+    "save_spec",
+]

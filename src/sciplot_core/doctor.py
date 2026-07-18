@@ -14,8 +14,12 @@ from sciplot_core.publication import (
     get_publication_profile,
     list_composite_layouts,
 )
+from sciplot_core.readiness import validated_envelope_status
 
-def _check(check_id: str, label: str, passed: bool, *, required: bool = True, detail: str = "") -> dict[str, Any]:
+
+def _check(
+    check_id: str, label: str, passed: bool, *, required: bool = True, detail: str = ""
+) -> dict[str, Any]:
     return {
         "id": check_id,
         "label": label,
@@ -27,6 +31,23 @@ def _check(check_id: str, label: str, passed: bool, *, required: bool = True, de
 
 def _module_available(module_name: str) -> bool:
     return importlib.util.find_spec(module_name) is not None
+
+
+def _veusz_qt_runtime_status() -> tuple[bool, str]:
+    if not _module_available("PyQt6"):
+        return False, "PyQt6 is not importable."
+    veusz_root = str(VEUSZ_ROOT)
+    if veusz_root not in sys.path:
+        sys.path.insert(0, veusz_root)
+    try:
+        from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: F401
+        from veusz.helpers import qtloops  # noqa: F401
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+    return (
+        True,
+        f"PyQt {QtCore.PYQT_VERSION_STR}; Qt runtime {QtCore.qVersion()}; Veusz qtloops loaded",
+    )
 
 
 def _top_level_symbols(path: Path) -> set[str]:
@@ -44,8 +65,12 @@ def _top_level_symbols(path: Path) -> set[str]:
 
 
 def _vsz_lifecycle_available() -> bool:
-    studio_symbols = _top_level_symbols(REPO_ROOT / "src" / "sciplot_core" / "studio.py")
-    delivery_symbols = _top_level_symbols(REPO_ROOT / "src" / "sciplot_core" / "delivery.py")
+    studio_symbols = _top_level_symbols(
+        REPO_ROOT / "src" / "sciplot_core" / "studio.py"
+    )
+    delivery_symbols = _top_level_symbols(
+        REPO_ROOT / "src" / "sciplot_core" / "delivery.py"
+    )
     return {
         "prepare_studio_document",
         "export_studio_document",
@@ -63,7 +88,9 @@ def _publication_foundation_available() -> bool:
         return False
     return (
         len(layouts) == 5
-        and all(float(layout.get("geometry_total_mm") or 0.0) == 183.0 for layout in layouts)
+        and all(
+            float(layout.get("geometry_total_mm") or 0.0) == 183.0 for layout in layouts
+        )
         and profile.get("integrity", {}).get("scientific_outcome_agnostic") is True
         and profile.get("integrity", {}).get("significance_required") is False
     )
@@ -74,9 +101,35 @@ def _ready_rule_fixtures_exist(rules: list[Any]) -> tuple[bool, str]:
         rule.rule_id
         for rule in rules
         if rule.fixture_status == "ready"
-        and (not rule.fixture_path or not resolve_fixture_path(str(rule.fixture_path)).exists())
+        and (
+            not rule.fixture_path
+            or not resolve_fixture_path(str(rule.fixture_path)).exists()
+        )
     ]
-    return not missing, ", ".join(missing) if missing else "all local acceptance fixtures are available"
+    return not missing, ", ".join(
+        missing
+    ) if missing else "all local acceptance fixtures are available"
+
+
+def _validated_envelope_summary() -> tuple[bool, str, dict[str, Any]]:
+    try:
+        payload = validated_envelope_status()
+    except Exception as exc:
+        return (
+            False,
+            f"{type(exc).__name__}: {exc}",
+            {
+                "status": "needs_rule_repair",
+                "ready_without_ai_rule_count": 0,
+                "current_ready_rule_count": 0,
+            },
+        )
+    ready = payload.get("status") == "ready"
+    detail = (
+        f"{payload.get('ready_without_ai_rule_count', 0)}/"
+        f"{payload.get('current_ready_rule_count', 0)} current rule contracts"
+    )
+    return ready, detail, payload
 
 
 def doctor_payload() -> dict[str, Any]:
@@ -84,6 +137,8 @@ def doctor_payload() -> dict[str, Any]:
     ready_rules = [rule for rule in rules if rule.fixture_status == "ready"]
     pending_rules = [rule for rule in rules if rule.fixture_status != "ready"]
     fixtures_ok, fixture_detail = _ready_rule_fixtures_exist(rules)
+    veusz_qt_ok, veusz_qt_detail = _veusz_qt_runtime_status()
+    envelope_ok, envelope_detail, envelope_payload = _validated_envelope_summary()
 
     checks = [
         _check(
@@ -92,7 +147,12 @@ def doctor_payload() -> dict[str, Any]:
             sys.version_info >= (3, 11),
             detail=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         ),
-        _check("repo_root", "SciPlot repo root", (REPO_ROOT / "pyproject.toml").exists(), detail=str(REPO_ROOT)),
+        _check(
+            "repo_root",
+            "SciPlot repo root",
+            (REPO_ROOT / "pyproject.toml").exists(),
+            detail=str(REPO_ROOT),
+        ),
         _check(
             "veusz_vendor",
             "Vendored Veusz runtime",
@@ -100,6 +160,12 @@ def doctor_payload() -> dict[str, Any]:
             detail=str(VEUSZ_ROOT),
         ),
         _check("pyqt6", "PyQt6 available", _module_available("PyQt6")),
+        _check(
+            "veusz_qt_runtime",
+            "Veusz Qt helper runtime",
+            veusz_qt_ok,
+            detail=veusz_qt_detail,
+        ),
         _check(
             "vsz_lifecycle",
             "VSZ authority, history, exact export, and delivery hash gate",
@@ -118,7 +184,18 @@ def doctor_payload() -> dict[str, Any]:
             (REPO_ROOT / "skill" / "scripts" / "sciplot").exists(),
             detail=str(REPO_ROOT / "skill" / "scripts" / "sciplot"),
         ),
-        _check("ready_rules", "Ready material rules", len(ready_rules) >= 5, detail=str(len(ready_rules))),
+        _check(
+            "ready_rules",
+            "Ready material rules",
+            len(ready_rules) >= 5,
+            detail=str(len(ready_rules)),
+        ),
+        _check(
+            "validated_envelopes",
+            "Ready rules match accepted real-data lifecycle contracts",
+            envelope_ok,
+            detail=envelope_detail,
+        ),
         _check(
             "ready_rule_fixtures",
             "Optional local acceptance fixtures",
@@ -131,7 +208,9 @@ def doctor_payload() -> dict[str, Any]:
             ),
         ),
     ]
-    required_failures = [check for check in checks if check["required"] and check["status"] != "passed"]
+    required_failures = [
+        check for check in checks if check["required"] and check["status"] != "passed"
+    ]
     layouts = list_composite_layouts()
     return {
         "kind": "sciplot_doctor",
@@ -173,6 +252,22 @@ def doctor_payload() -> dict[str, Any]:
             "pending": len(pending_rules),
             "automatic_match_scope": "ready_only",
         },
+        "validated_envelopes": {
+            "status": envelope_payload.get("status"),
+            "ready_without_ai_rule_count": envelope_payload.get(
+                "ready_without_ai_rule_count",
+            ),
+            "current_ready_rule_count": envelope_payload.get(
+                "current_ready_rule_count",
+            ),
+            "stale_rule_ids": envelope_payload.get("stale_rule_ids") or [],
+            "missing_rule_ids": envelope_payload.get("missing_rule_ids") or [],
+            "evidence_strength_counts": envelope_payload.get(
+                "evidence_strength_counts",
+            )
+            or {},
+            "claims": envelope_payload.get("claims") or {},
+        },
         "checks": checks,
         "next_actions": _next_actions(required_failures),
     }
@@ -187,14 +282,25 @@ def _next_actions(required_failures: list[dict[str, Any]]) -> list[str]:
         ]
     actions: list[str] = []
     failed_ids = {str(check["id"]) for check in required_failures}
-    if {"pyqt6", "veusz_vendor"} & failed_ids:
-        actions.append("Install the Studio dependencies and verify the vendored Veusz runtime.")
+    if {"pyqt6", "veusz_vendor", "veusz_qt_runtime"} & failed_ids:
+        actions.append(
+            "Install the Studio dependencies and verify the vendored Veusz runtime."
+        )
     if "python_version" in failed_ids:
         actions.append("Use Python 3.11 or newer.")
     if {"ready_rules", "ready_rule_fixtures"} & failed_ids:
-        actions.append("Keep automatic plotting limited to fixture-backed ready material rules.")
+        actions.append(
+            "Keep automatic plotting limited to fixture-backed ready material rules."
+        )
+    if "validated_envelopes" in failed_ids:
+        actions.append(
+            "Re-run ready-rule real-data acceptance and certify the current "
+            "deterministic rule contracts before returning ready_to_use."
+        )
     if "publication_foundation" in failed_ids:
-        actions.append("Restore publication profiles, 183 mm layouts, lineage contracts, and artifact QA.")
+        actions.append(
+            "Restore publication profiles, 183 mm layouts, lineage contracts, and artifact QA."
+        )
     if not actions:
         actions.append("Fix the failed required checks before normal use.")
     return actions

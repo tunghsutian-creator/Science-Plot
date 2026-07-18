@@ -39,6 +39,8 @@ jobs:
         run: python3 -m compileall -q src/sciplot_core src/sciplot_recipes
       - name: Install local runtime
         run: python3 -m pip install -e '.[studio]'
+      - name: Verify source-checkout wrapper bootstrap
+        run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null
       - name: Run readiness check
         run: skill/scripts/sciplot doctor --json
       - name: Run fixture-free lifecycle smoke

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from copy import deepcopy
 from datetime import UTC, datetime
 from html import escape
 from pathlib import Path
@@ -15,6 +16,7 @@ from sciplot_core.assisted_cleanup import (
     consume_ready_cleanup_result,
     write_cleanup_request,
 )
+from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.materials_rules import compute_analysis_metrics
 from sciplot_core.one_step import build_one_step_project, build_quality_actions
@@ -1060,14 +1062,26 @@ def run_request(request_path: Path) -> dict[str, Any]:
     original_input_path = _resolve_request_path(source_request.get("input"), base_dir=base_dir, field="input")
     output_dir = _resolve_request_path(source_request.get("output"), base_dir=base_dir, field="output")
     output_dir.mkdir(parents=True, exist_ok=True)
-    request, cleanup_application = consume_ready_cleanup_result(
+    mapped_request, mapping_application = resolve_data_mapping_request(
         source_request,
+        base_dir=base_dir,
+    )
+    request, cleanup_application = consume_ready_cleanup_result(
+        mapped_request,
         output_dir=output_dir,
         request_path=request_path,
     )
+    if mapping_application is not None and cleanup_application is not None:
+        raise ValueError(
+            "A confirmed DataMappingProposal and assisted cleanup cannot both "
+            "replace the same input in one run."
+        )
     input_path = _resolve_request_path(request.get("input"), base_dir=base_dir, field="input")
     _clear_managed_artifacts(output_dir)
-    raw_archive = _archive_raw_input(input_path, output_dir)
+    raw_archive = _archive_raw_input(
+        original_input_path if mapping_application is not None else input_path,
+        output_dir,
+    )
     if cleanup_application is not None and original_input_path.resolve() != input_path.resolve():
         raw_archive["pre_cleanup_input"] = _archive_raw_input(original_input_path, output_dir)
     (output_dir / "request_snapshot.json").write_text(
@@ -1084,7 +1098,15 @@ def run_request(request_path: Path) -> dict[str, Any]:
         existing=request.get("publication_intent") if isinstance(request.get("publication_intent"), dict) else None,
     )
     publication_profile = get_publication_profile(publication_intent["target_profile_id"])
-    transform_steps: list[dict[str, Any]] = []
+    transform_steps: list[dict[str, Any]] = [
+        deepcopy(step)
+        for step in (
+            mapping_application.get("transform_steps", [])
+            if mapping_application is not None
+            else []
+        )
+        if isinstance(step, dict)
+    ]
     if cleanup_application is not None:
         transform_steps.append(
             build_transform_step(
@@ -1279,6 +1301,11 @@ def run_request(request_path: Path) -> dict[str, Any]:
         "request_path": str(request_path),
         "request": json_safe(request),
         "source_request": json_safe(source_request),
+        "data_mapping_application": (
+            json_safe(mapping_application)
+            if mapping_application is not None
+            else None
+        ),
         "cleanup_application": json_safe(cleanup_application) if cleanup_application is not None else None,
         "route": route,
         "semantic": json_safe(semantic),

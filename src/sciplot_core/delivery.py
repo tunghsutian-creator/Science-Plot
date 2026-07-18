@@ -5,8 +5,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from sciplot_core._paths import REPO_ROOT
 from sciplot_core._utils import existing_file_sha256, slug
+from sciplot_core.launchers import portable_sciplot_prelude
 from sciplot_core.plot_data import build_plot_data_exports
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
@@ -134,14 +134,17 @@ def _write_delivery_launcher(delivery_dir: Path) -> Path:
     _write_executable(
         launcher,
         [
-            "#!/bin/zsh",
-            "set -euo pipefail",
-            'DELIVERY_DIR="${0:A:h}"',
-            "unset QT_QPA_PLATFORM || true",
+            *portable_sciplot_prelude(directory_var="DELIVERY_DIR"),
+            "",
             'documents=("${DELIVERY_DIR}"/project/*.vsz(N))',
             'if (( ${#documents[@]} == 0 )); then',
-            '  print -u2 "No Veusz project files found in ${DELIVERY_DIR}/project"',
-            "  exit 1",
+            '  die "No Veusz project files found in ${DELIVERY_DIR}/project"',
+            "fi",
+            'if [[ "${1:-}" == "--check" ]]; then',
+            '  for DOCUMENT in "${documents[@]}"; do',
+            '    "${SCIPLOT_CMD}" studio "${DOCUMENT}" --qt-smoke',
+            "  done",
+            "  exit 0",
             "fi",
             'if (( $# > 0 )); then',
             '  DOCUMENT="$1"',
@@ -170,8 +173,7 @@ def _write_delivery_launcher(delivery_dir: Path) -> Path:
             '  print -r -- "${DOCUMENT}"',
             "  exit 0",
             "fi",
-            f'cd "{REPO_ROOT}"',
-            'exec skill/scripts/sciplot studio "${DOCUMENT}" --advanced-editor',
+            'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --advanced-editor',
         ],
     )
     return launcher

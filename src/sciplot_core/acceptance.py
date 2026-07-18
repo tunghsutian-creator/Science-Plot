@@ -10,13 +10,27 @@ from typing import Any
 import pandas as pd
 
 from sciplot_core._bootstrap import ensure_legacy_core
-from sciplot_core._paths import REPO_ROOT, local_reference_root, real_world_fixture_root, resolve_fixture_path
+from sciplot_core._paths import (
+    REPO_ROOT,
+    local_reference_root,
+    real_world_fixture_root,
+    resolve_fixture_path,
+)
 from sciplot_core._utils import json_safe, slug
 from sciplot_core.curate import curate_torque_project
 from sciplot_core.evidence import enrich_rule_evidence, write_evidence_status_dashboard
 from sciplot_core.materials_rules import SemanticRule, get_rule, iter_public_rules
 from sciplot_core.policy import DEFAULT_FIGURE_SIZE
-from sciplot_core.studio import export_studio_document, prepare_studio_document, publish_studio_export_run
+from sciplot_core.readiness import (
+    rule_contract_sha256,
+    rule_semantic_contract_sha256,
+    semantic_contract_sha256,
+)
+from sciplot_core.studio import (
+    export_studio_document,
+    prepare_studio_document,
+    publish_studio_export_run,
+)
 from sciplot_core.visual_review import write_final_size_visual_review
 from sciplot_core.workflow import run_request
 
@@ -28,9 +42,10 @@ DEFAULT_3DPA_FTIR_LABELS = ("PA6", "A20", "A40", "A80", "A20-2MIN", "A30-2MIN")
 DEFAULT_3DPA_TORQUE_DIRS = ("转矩/260607", "转矩/Z", "torque/260607", "torque/Z")
 DEFAULT_DENSE_SERIES_COUNT = 44
 DEFAULT_REPRESENTATIVE_COUNT = 6
-RULE_ACCEPTANCE_VERSION = 2
+RULE_ACCEPTANCE_VERSION = 3
 RULE_ACCEPTANCE_CHECK_IDS = (
     "semantic_rule_selected",
+    "validated_rule_contract_current",
     "vsz_reopen_export",
     "manual_edit_preserved",
     "canonical_pdf_tiff_pair",
@@ -38,6 +53,8 @@ RULE_ACCEPTANCE_CHECK_IDS = (
     "delivery_complete",
     "provenance_complete",
 )
+
+
 @dataclass(frozen=True)
 class SpectrumSeries:
     label: str
@@ -152,6 +169,10 @@ def _rule_matrix_row(rule: SemanticRule, *, repo_root: Path) -> dict[str, Any]:
         "recipe": rule.recipe,
         "template": rule.template,
         "rule_readiness": rule.fixture_status,
+        "rule_contract_sha256": rule_contract_sha256(rule),
+        "accepted_rule_contract_sha256": None,
+        "semantic_contract_sha256": rule_semantic_contract_sha256(rule),
+        "accepted_semantic_contract_sha256": None,
         "fixture_path": str(fixture),
         "fixture_exists": fixture.exists(),
         "evidence": evidence,
@@ -165,14 +186,20 @@ def _rule_matrix_row(rule: SemanticRule, *, repo_root: Path) -> dict[str, Any]:
     }
 
 
-def build_rule_acceptance_matrix(*, repo_root: Path = REPO_ROOT) -> list[dict[str, Any]]:
+def build_rule_acceptance_matrix(
+    *, repo_root: Path = REPO_ROOT
+) -> list[dict[str, Any]]:
     return [_rule_matrix_row(rule, repo_root=repo_root) for rule in iter_public_rules()]
 
 
 def _delivery_artifact_passed(delivery: dict[str, Any], artifact_id: str) -> bool:
-    artifacts = delivery.get("artifacts") if isinstance(delivery.get("artifacts"), list) else []
+    artifacts = (
+        delivery.get("artifacts") if isinstance(delivery.get("artifacts"), list) else []
+    )
     return any(
-        isinstance(item, dict) and item.get("id") == artifact_id and item.get("exists") is True
+        isinstance(item, dict)
+        and item.get("id") == artifact_id
+        and item.get("exists") is True
         for item in artifacts
     )
 
@@ -203,7 +230,9 @@ def _run_rule_lifecycle_acceptance(
         request_path = Path(str(prepared["request"]))
         document_path = Path(str(prepared["document"]))
         marker = _manual_edit_probe(document_path, rule_id=rule.rule_id)
-        exports = export_studio_document(document_path, formats=["pdf", "tiff_300"])["exports"]
+        exports = export_studio_document(document_path, formats=["pdf", "tiff_300"])[
+            "exports"
+        ]
         studio_run = publish_studio_export_run(
             project_dir=project_dir,
             request_path=request_path,
@@ -212,14 +241,37 @@ def _run_rule_lifecycle_acceptance(
         )
         manifest_path = Path(str(studio_run["manifest"]))
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        semantic = manifest.get("semantic") if isinstance(manifest.get("semantic"), dict) else {}
-        transform = manifest.get("transform_ledger") if isinstance(manifest.get("transform_ledger"), dict) else {}
-        publication_intent = (
-            manifest.get("publication_intent") if isinstance(manifest.get("publication_intent"), dict) else {}
+        semantic = (
+            manifest.get("semantic")
+            if isinstance(manifest.get("semantic"), dict)
+            else {}
         )
-        delivery = manifest.get("delivery_package") if isinstance(manifest.get("delivery_package"), dict) else {}
-        editable_vsz = delivery.get("editable_vsz") if isinstance(delivery.get("editable_vsz"), dict) else {}
-        editable_path = Path(str(editable_vsz.get("path"))) if editable_vsz.get("path") else None
+        accepted_semantic_contract_sha256 = semantic_contract_sha256(semantic)
+        current_semantic_contract_sha256 = rule_semantic_contract_sha256(rule)
+        current_rule_contract_sha256 = rule_contract_sha256(rule)
+        transform = (
+            manifest.get("transform_ledger")
+            if isinstance(manifest.get("transform_ledger"), dict)
+            else {}
+        )
+        publication_intent = (
+            manifest.get("publication_intent")
+            if isinstance(manifest.get("publication_intent"), dict)
+            else {}
+        )
+        delivery = (
+            manifest.get("delivery_package")
+            if isinstance(manifest.get("delivery_package"), dict)
+            else {}
+        )
+        editable_vsz = (
+            delivery.get("editable_vsz")
+            if isinstance(delivery.get("editable_vsz"), dict)
+            else {}
+        )
+        editable_path = (
+            Path(str(editable_vsz.get("path"))) if editable_vsz.get("path") else None
+        )
         manual_edit_preserved = bool(
             manifest.get("manual_edit_detected") is True
             and marker in document_path.read_text(encoding="utf-8")
@@ -228,14 +280,22 @@ def _run_rule_lifecycle_acceptance(
             and marker in editable_path.read_text(encoding="utf-8")
             and editable_vsz.get("hash_matches_export") is True
         )
-        exported_formats = {str(item.get("format")) for item in exports if isinstance(item, dict)}
+        exported_formats = {
+            str(item.get("format")) for item in exports if isinstance(item, dict)
+        }
         checks = {
             "semantic_rule_selected": semantic.get("rule_id") == rule.rule_id,
+            "validated_rule_contract_current": (
+                accepted_semantic_contract_sha256 == current_semantic_contract_sha256
+                and row.get("rule_contract_sha256") == current_rule_contract_sha256
+            ),
             "vsz_reopen_export": document_path.exists()
             and prepared.get("series_count", 0) > 0
             and {"pdf", "tiff_300"} <= exported_formats,
             "manual_edit_preserved": manual_edit_preserved,
-            "canonical_pdf_tiff_pair": _delivery_artifact_passed(delivery, "canonical_pdf_tiff_pairs"),
+            "canonical_pdf_tiff_pair": _delivery_artifact_passed(
+                delivery, "canonical_pdf_tiff_pairs"
+            ),
             "qa_passed": manifest.get("qa", {}).get("status") == "passed",
             "delivery_complete": delivery.get("complete") is True,
             "provenance_complete": bool(
@@ -249,6 +309,12 @@ def _run_rule_lifecycle_acceptance(
             {
                 "lifecycle_status": "passed" if all(checks.values()) else "failed",
                 "checks": checks,
+                "rule_contract_sha256": current_rule_contract_sha256,
+                "accepted_rule_contract_sha256": current_rule_contract_sha256,
+                "semantic_contract_sha256": current_semantic_contract_sha256,
+                "accepted_semantic_contract_sha256": (
+                    accepted_semantic_contract_sha256
+                ),
                 "project_dir": str(project_dir),
                 "manifest": str(manifest_path),
                 "limitations": [
@@ -277,6 +343,10 @@ def _write_rule_acceptance_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "real_data_evidence",
         "lifecycle_status",
         "physical_size_status",
+        "rule_contract_sha256",
+        "accepted_rule_contract_sha256",
+        "semantic_contract_sha256",
+        "accepted_semantic_contract_sha256",
         *RULE_ACCEPTANCE_CHECK_IDS,
         "fixture_path",
         "manifest",
@@ -294,8 +364,21 @@ def _write_rule_acceptance_csv(path: Path, rows: list[dict[str, Any]]) -> None:
                     "evidence_tier": row["evidence"]["tier"],
                     "real_data_evidence": row["evidence"]["real_data_evidence"],
                     "lifecycle_status": row["lifecycle_status"],
-                    "physical_size_status": row.get("artifact_review", {}).get("status", "not_run"),
-                    **{check_id: row["checks"].get(check_id) for check_id in RULE_ACCEPTANCE_CHECK_IDS},
+                    "physical_size_status": row.get("artifact_review", {}).get(
+                        "status", "not_run"
+                    ),
+                    "rule_contract_sha256": row.get("rule_contract_sha256"),
+                    "accepted_rule_contract_sha256": row.get(
+                        "accepted_rule_contract_sha256"
+                    ),
+                    "semantic_contract_sha256": row.get("semantic_contract_sha256"),
+                    "accepted_semantic_contract_sha256": row.get(
+                        "accepted_semantic_contract_sha256"
+                    ),
+                    **{
+                        check_id: row["checks"].get(check_id)
+                        for check_id in RULE_ACCEPTANCE_CHECK_IDS
+                    },
                     "fixture_path": row["fixture_path"],
                     "manifest": row["manifest"],
                 }
@@ -315,7 +398,9 @@ def _write_rule_acceptance_markdown(path: Path, payload: dict[str, Any]) -> None
         "|---|---|---:|---|---|---|",
     ]
     for row in payload["matrix"]:
-        failed = [check_id for check_id, passed in row["checks"].items() if passed is False]
+        failed = [
+            check_id for check_id, passed in row["checks"].items() if passed is False
+        ]
         lines.append(
             f"| `{row['rule_id']}` | `{row['evidence']['tier']}` | "
             f"{'yes' if row['evidence']['real_data_evidence'] else 'no'} | "
@@ -332,7 +417,8 @@ def _write_rule_acceptance_markdown(path: Path, payload: dict[str, Any]) -> None
             "- `instrument_shaped_fixture` proves a parser/render contract only; it remains a real-data gap.",
             "- The manual-edit probe proves exact VSZ preservation. PDF/TIFF physical size is checked here, while "
             "the generated contact sheets still require an explicit visual decision.",
-            "- Native 183 mm Veusz composition remains outside this acceptance suite.",
+            "- Native 183 mm Veusz composition is covered by its separate "
+            "native-composition lifecycle gate.",
             "",
         ]
     )
@@ -348,7 +434,9 @@ def run_rule_acceptance_suite(
 ) -> dict[str, Any]:
     ready_rules = list(iter_public_rules())
     ready_by_id = {rule.rule_id: rule for rule in ready_rules}
-    selected_ids = list(dict.fromkeys(rule_ids or [rule.rule_id for rule in ready_rules]))
+    selected_ids = list(
+        dict.fromkeys(rule_ids or [rule.rule_id for rule in ready_rules])
+    )
     unknown = [rule_id for rule_id in selected_ids if rule_id not in ready_by_id]
     if unknown:
         for rule_id in unknown:
@@ -357,13 +445,17 @@ def run_rule_acceptance_suite(
             except ValueError:
                 continue
             if rule.fixture_status != "ready":
-                raise ValueError(f"Acceptance suite only runs ready rules; `{rule_id}` is {rule.fixture_status}.")
+                raise ValueError(
+                    f"Acceptance suite only runs ready rules; `{rule_id}` is {rule.fixture_status}."
+                )
         raise ValueError(f"Unknown or non-ready rule ids: {', '.join(unknown)}")
 
     project_dir = output_root.expanduser().resolve() / slug(project_name)
     projects_root = project_dir / "projects"
     project_dir.mkdir(parents=True, exist_ok=True)
-    rows_by_id = {row["rule_id"]: row for row in build_rule_acceptance_matrix(repo_root=repo_root)}
+    rows_by_id = {
+        row["rule_id"]: row for row in build_rule_acceptance_matrix(repo_root=repo_root)
+    }
     for rule_id in selected_ids:
         rows_by_id[rule_id] = _run_rule_lifecycle_acceptance(
             ready_by_id[rule_id],
@@ -388,13 +480,16 @@ def run_rule_acceptance_suite(
         for row in selected_rows
         if row.get("artifact_review", {}).get("status") == "failed"
     ]
-    selected_failed = list(dict.fromkeys([*selected_lifecycle_failed, *selected_size_failed]))
+    selected_failed = list(
+        dict.fromkeys([*selected_lifecycle_failed, *selected_size_failed])
+    )
     passed_count = sum(row["lifecycle_status"] == "passed" for row in rows)
     physical_size_passed_count = sum(
         row.get("artifact_review", {}).get("status") == "passed" for row in rows
     )
     real_data_passed_count = sum(
-        row["lifecycle_status"] == "passed" and row["evidence"]["real_data_evidence"] for row in rows
+        row["lifecycle_status"] == "passed" and row["evidence"]["real_data_evidence"]
+        for row in rows
     )
     coverage_complete = passed_count == len(ready_rules)
     physical_size_complete = physical_size_passed_count == len(ready_rules)
@@ -402,7 +497,9 @@ def run_rule_acceptance_suite(
     state = (
         "needs_rule_repair"
         if selected_failed
-        else ("ready" if coverage_complete and physical_size_complete else "in_progress")
+        else (
+            "ready" if coverage_complete and physical_size_complete else "in_progress"
+        )
     )
     payload = {
         "kind": "sciplot_ready_rule_acceptance",
@@ -432,15 +529,20 @@ def run_rule_acceptance_suite(
             "real-data breadth rather than journal compliance.",
             "Final PDF/TIFF dimensions are machine-checked, but contact-sheet visual review remains an explicit "
             "manual or agent decision.",
-            "Native 183 mm Veusz composition remains deferred in favor of exact-size standalone PDF assembly.",
+            "Native 183 mm Veusz composition is covered by its separate "
+            "native-composition lifecycle gate.",
         ],
     }
     summary_path = project_dir / "acceptance_summary.json"
     matrix_path = project_dir / "acceptance_matrix.json"
     csv_path = project_dir / "acceptance_matrix.csv"
     markdown_path = project_dir / "acceptance_matrix.md"
-    summary_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
-    matrix_path.write_text(json.dumps(json_safe(rows), indent=2, ensure_ascii=False), encoding="utf-8")
+    summary_path.write_text(
+        json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    matrix_path.write_text(
+        json.dumps(json_safe(rows), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     _write_rule_acceptance_csv(csv_path, rows)
     _write_rule_acceptance_markdown(markdown_path, payload)
     evidence_dashboard = write_evidence_status_dashboard(
@@ -458,7 +560,9 @@ def run_rule_acceptance_suite(
         **visual_review["artifacts"],
         **evidence_dashboard["artifacts"],
     }
-    summary_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+    summary_path.write_text(
+        json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     return payload
 
 
@@ -513,7 +617,9 @@ def _find_ftir_files(root: Path, *, representative_count: int) -> list[Path]:
             selected_set.add(path)
 
     if len(selected) < 2:
-        raise ValueError(f"3D PA acceptance needs at least two FTIR CSV files under {root}.")
+        raise ValueError(
+            f"3D PA acceptance needs at least two FTIR CSV files under {root}."
+        )
     return selected[:representative_count]
 
 
@@ -543,7 +649,9 @@ def _find_torque_dir(root: Path) -> Path | None:
         if not directory.is_dir():
             continue
         text = directory.as_posix().casefold()
-        if ("转矩" not in text and "torque" not in text) or len(list(directory.glob("*.txt"))) < 2:
+        if ("转矩" not in text and "torque" not in text) or len(
+            list(directory.glob("*.txt"))
+        ) < 2:
             continue
         return directory
     return None
@@ -574,7 +682,11 @@ def _read_raw_spectrum(path: Path) -> pd.DataFrame:
 
 def _load_spectra(paths: list[Path]) -> list[SpectrumSeries]:
     return [
-        SpectrumSeries(label=_sample_label(path), source=path.expanduser().resolve(), data=_read_raw_spectrum(path))
+        SpectrumSeries(
+            label=_sample_label(path),
+            source=path.expanduser().resolve(),
+            data=_read_raw_spectrum(path),
+        )
         for path in paths
     ]
 
@@ -604,7 +716,9 @@ def _write_curve_table(series: list[SpectrumSeries], output: Path) -> Path:
     return output
 
 
-def _build_dense_series(series: list[SpectrumSeries], *, series_count: int) -> list[SpectrumSeries]:
+def _build_dense_series(
+    series: list[SpectrumSeries], *, series_count: int
+) -> list[SpectrumSeries]:
     if series_count < 1:
         raise ValueError("dense series count must be at least 1.")
     dense: list[SpectrumSeries] = []
@@ -623,15 +737,29 @@ def _build_dense_series(series: list[SpectrumSeries], *, series_count: int) -> l
 
 def _write_request(path: Path, payload: dict[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+    path.write_text(
+        json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     return path
 
 
 def _manifest_summary(manifest: dict[str, Any]) -> dict[str, Any]:
     output_dir = Path(str(manifest["output"]))
-    layout_quality = manifest.get("layout_quality") if isinstance(manifest.get("layout_quality"), dict) else {}
-    delivery = manifest.get("delivery_package") if isinstance(manifest.get("delivery_package"), dict) else {}
-    summaries = layout_quality.get("summaries") if isinstance(layout_quality.get("summaries"), list) else []
+    layout_quality = (
+        manifest.get("layout_quality")
+        if isinstance(manifest.get("layout_quality"), dict)
+        else {}
+    )
+    delivery = (
+        manifest.get("delivery_package")
+        if isinstance(manifest.get("delivery_package"), dict)
+        else {}
+    )
+    summaries = (
+        layout_quality.get("summaries")
+        if isinstance(layout_quality.get("summaries"), list)
+        else []
+    )
     first_axis: dict[str, Any] = {}
     if summaries:
         axes = summaries[0].get("axes") if isinstance(summaries[0], dict) else []
@@ -639,7 +767,11 @@ def _manifest_summary(manifest: dict[str, Any]) -> dict[str, Any]:
             first_axis = axes[0] if isinstance(axes[0], dict) else {}
     pdf_count = len(list((output_dir / "figures").glob("*.pdf")))
     tiff_count = len(list((output_dir / "figures").glob("*_300dpi.tiff")))
-    delivery_dir = Path(str(delivery.get("path"))) if delivery.get("path") else output_dir / "delivery"
+    delivery_dir = (
+        Path(str(delivery.get("path")))
+        if delivery.get("path")
+        else output_dir / "delivery"
+    )
     state = "ready"
     if manifest.get("qa", {}).get("status") != "passed":
         state = "needs_rule_repair"
@@ -736,7 +868,9 @@ def run_3dpa_acceptance(
     data_dir = project_dir / "data"
     source_files = _find_ftir_files(root, representative_count=representative_count)
     spectra = _load_spectra(source_files)
-    representative_table = _write_curve_table(spectra, data_dir / "3dpa_ftir_representative_stack.csv")
+    representative_table = _write_curve_table(
+        spectra, data_dir / "3dpa_ftir_representative_stack.csv"
+    )
     dense_table = _write_curve_table(
         _build_dense_series(spectra, series_count=dense_series_count),
         data_dir / f"3dpa_ftir_dense_stack_{dense_series_count}.csv",
@@ -748,7 +882,9 @@ def run_3dpa_acceptance(
             request_name="ftir_representative_stack",
             input_path=representative_table,
             render_options={"size": DEFAULT_FIGURE_SIZE, "series_label_mode": "legend"},
-            review_notes=["3D PA FTIR representative stack acceptance from raw two-column spectra."],
+            review_notes=[
+                "3D PA FTIR representative stack acceptance from raw two-column spectra."
+            ],
         ),
         _run_acceptance_request(
             run_root=project_dir,
@@ -763,8 +899,14 @@ def run_3dpa_acceptance(
     ]
     torque_dir = _find_torque_dir(root)
     if torque_dir is not None:
-        runs.append(_run_torque_acceptance(project_dir=project_dir, torque_dir=torque_dir))
-    state = "ready" if all(run["summary"]["state"] == "ready" for run in runs) else "needs_rule_repair"
+        runs.append(
+            _run_torque_acceptance(project_dir=project_dir, torque_dir=torque_dir)
+        )
+    state = (
+        "ready"
+        if all(run["summary"]["state"] == "ready" for run in runs)
+        else "needs_rule_repair"
+    )
     payload = {
         "kind": "sciplot_acceptance_run",
         "target": "3dpa",

@@ -6,17 +6,22 @@ from typing import Any
 
 from sciplot_core._utils import json_safe, slug
 from sciplot_core.policy import LayoutPolicy, layout_policy_payload
+from sciplot_core.readiness import (
+    HIGH_CONFIDENCE_THRESHOLD,
+    INSIDE_VALIDATED_ENVELOPE,
+    MEDIUM_CONFIDENCE_THRESHOLD,
+    evaluate_validated_envelope,
+    validated_envelope_evaluation_ready,
+)
 from sciplot_core.split import DEFAULT_STACK_SPLIT_POLICY, STACKED_TALL_FIGURE_HEIGHT_MM
 
 ONE_STEP_MODEL_KIND = "sciplot_one_step_project"
-ONE_STEP_MODEL_VERSION = 1
+ONE_STEP_MODEL_VERSION = 2
 
 READY_STATE = "ready"
 HUMAN_CONFIRMATION_STATE = "needs_human_confirmation"
 RULE_REPAIR_STATE = "needs_rule_repair"
 
-HIGH_CONFIDENCE_THRESHOLD = 80.0
-MEDIUM_CONFIDENCE_THRESHOLD = 70.0
 QUALITY_ACTION_LINE_WIDTH_PT = 1.2
 
 _LEGEND_INLINE_STRATEGY = {
@@ -49,31 +54,46 @@ _ISSUE_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         "id": "normalize_line_width",
         "label": "Normalize line width",
         "reason": "Curve strokes fall outside the publication-style line-weight contract.",
-        "series_style_patch": {"target": "visible_series", "line_width": QUALITY_ACTION_LINE_WIDTH_PT},
+        "series_style_patch": {
+            "target": "visible_series",
+            "line_width": QUALITY_ACTION_LINE_WIDTH_PT,
+        },
     },
     "line_tick_hierarchy": {
         "id": "normalize_line_width",
         "label": "Normalize line width",
         "reason": "Curve strokes are visually weaker than the tick hierarchy.",
-        "series_style_patch": {"target": "visible_series", "line_width": QUALITY_ACTION_LINE_WIDTH_PT},
+        "series_style_patch": {
+            "target": "visible_series",
+            "line_width": QUALITY_ACTION_LINE_WIDTH_PT,
+        },
     },
     "stroke_hierarchy": {
         "id": "normalize_line_width",
         "label": "Normalize line width",
         "reason": "The plotted stroke hierarchy is outside the visual QA contract.",
-        "series_style_patch": {"target": "visible_series", "line_width": QUALITY_ACTION_LINE_WIDTH_PT},
+        "series_style_patch": {
+            "target": "visible_series",
+            "line_width": QUALITY_ACTION_LINE_WIDTH_PT,
+        },
     },
     "tick_label_overlap": {
         "id": "use_sparse_ticks",
         "label": "Use sparse ticks",
         "reason": "Major tick labels overlap in the rendered frame.",
-        "render_options_patch": {"x_tick_density": "sparse", "y_tick_density": "sparse"},
+        "render_options_patch": {
+            "x_tick_density": "sparse",
+            "y_tick_density": "sparse",
+        },
     },
     "axis_label_crowding": {
         "id": "use_sparse_ticks",
         "label": "Use sparse ticks",
         "reason": "Axis tick labels are too crowded for the current figure size.",
-        "render_options_patch": {"x_tick_density": "sparse", "y_tick_density": "sparse"},
+        "render_options_patch": {
+            "x_tick_density": "sparse",
+            "y_tick_density": "sparse",
+        },
     },
     "category_crowding": {
         "id": "use_sparse_ticks",
@@ -85,49 +105,70 @@ _ISSUE_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         "id": "use_inline_labels",
         "label": "Use inline labels",
         "reason": "The legend overlaps data, ticks, axis labels, or direct labels.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "inline"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "inline",
+        },
         "layout_strategy": _LEGEND_INLINE_STRATEGY,
     },
     "legend_footprint": {
         "id": "use_inline_labels",
         "label": "Use inline labels",
         "reason": "The legend footprint leaves too little useful plotting area.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "inline"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "inline",
+        },
         "layout_strategy": _LEGEND_INLINE_STRATEGY,
     },
     "legend_axes_too_small": {
         "id": "use_inline_labels",
         "label": "Use inline labels",
         "reason": "Legend avoidance makes the data axes too small.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "inline"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "inline",
+        },
         "layout_strategy": _LEGEND_INLINE_STRATEGY,
     },
     "legend_outside_bounds": {
         "id": "use_inside_or_inline_labels",
         "label": "Keep labels inside",
         "reason": "The legend extends outside the rendered canvas.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "inline"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "inline",
+        },
         "layout_strategy": _LEGEND_INLINE_STRATEGY,
     },
     "legend_crowded_inside": {
         "id": "use_inside_or_inline_labels",
         "label": "Keep labels inside",
         "reason": "The visible legend is too crowded for the fixed publication frame.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "inline"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "inline",
+        },
         "layout_strategy": _LEGEND_INLINE_STRATEGY,
     },
     "label_collision": {
         "id": "use_auto_legend",
         "label": "Use auto legend",
         "reason": "Direct labels collide; let the renderer choose a safer legend/label mode.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "legend"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "legend",
+        },
         "layout_strategy": _LEGEND_AUTO_STRATEGY,
     },
     "label_out_of_bounds": {
         "id": "use_auto_legend",
         "label": "Use auto legend",
         "reason": "At least one direct label falls outside the plotting axes.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "legend"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "legend",
+        },
         "layout_strategy": _LEGEND_AUTO_STRATEGY,
     },
     "ftir_wavenumber_bounds_missing": {
@@ -181,14 +222,20 @@ _ISSUE_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         "id": "use_auto_legend",
         "label": "Use auto legend",
         "reason": "Stacked direct labels collide.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "legend"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "legend",
+        },
         "layout_strategy": _LEGEND_AUTO_STRATEGY,
     },
     "stacked_label_bounds": {
         "id": "use_auto_legend",
         "label": "Use auto legend",
         "reason": "At least one stacked direct label is outside the plotting axes.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "legend"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "legend",
+        },
         "layout_strategy": _LEGEND_AUTO_STRATEGY,
     },
 }
@@ -206,7 +253,10 @@ _AUTOFIX_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         "id": "normalize_line_width",
         "label": "Normalized line width",
         "reason": "Default strokes were raised to the publication-style line-weight floor.",
-        "series_style_patch": {"target": "visible_series", "line_width": QUALITY_ACTION_LINE_WIDTH_PT},
+        "series_style_patch": {
+            "target": "visible_series",
+            "line_width": QUALITY_ACTION_LINE_WIDTH_PT,
+        },
     },
     "stacked_y_axis_compacted": {
         "id": "tighten_stacked_y_axis",
@@ -217,43 +267,64 @@ _AUTOFIX_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         "id": "use_inline_labels",
         "label": "Switched to inline labels",
         "reason": "The renderer used inline labels because the legend would hurt data readability.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "inline"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "inline",
+        },
     },
     "direct_series_labels": {
         "id": "use_inline_labels",
         "label": "Used inline labels",
         "reason": "Direct labels were selected by the automatic layout pass.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "inline"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "inline",
+        },
     },
     "legend_auto_widened_inside": {
         "id": "widen_for_inside_legend",
         "label": "Widened for inside legend",
         "reason": "The renderer widened an unlocked canvas while preserving the fixed graph margins.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "legend"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "legend",
+        },
     },
     "legend_outside_removed": {
         "id": "keep_legend_inside",
         "label": "Kept legend inside",
         "reason": "A retired outside-legend request was normalized to the fixed inside-frame policy.",
-        "render_options_patch": {"legend_position": "auto", "series_label_mode": "legend"},
+        "render_options_patch": {
+            "legend_position": "auto",
+            "series_label_mode": "legend",
+        },
     },
     "legend_auto_upper_right": {
         "id": "move_legend_upper_right",
         "label": "Moved legend upper right",
         "reason": "The legend was moved away from the lower data region.",
-        "render_options_patch": {"legend_position": "upper_right", "series_label_mode": "legend"},
+        "render_options_patch": {
+            "legend_position": "upper_right",
+            "series_label_mode": "legend",
+        },
     },
     "direct_label_offset": {
         "id": "offset_direct_labels",
         "label": "Offset direct labels",
         "reason": "Inline labels were offset from their curve anchors to reduce label-on-curve collisions.",
-        "render_options_patch": {"series_label_offset_fraction": 0.018, "series_label_vertical_align": "bottom"},
+        "render_options_patch": {
+            "series_label_offset_fraction": 0.018,
+            "series_label_vertical_align": "bottom",
+        },
     },
     "tick_density_sparse": {
         "id": "use_sparse_ticks",
         "label": "Used sparse ticks",
         "reason": "Dense ticks were downgraded to keep labels readable.",
-        "render_options_patch": {"x_tick_density": "sparse", "y_tick_density": "sparse"},
+        "render_options_patch": {
+            "x_tick_density": "sparse",
+            "y_tick_density": "sparse",
+        },
     },
     "split_stacked_figure_auto": {
         "id": "split_stacked_figure",
@@ -297,7 +368,9 @@ def confidence_band(semantic: dict[str, Any]) -> str:
     return "low"
 
 
-def _quality_action(template: dict[str, Any], *, status: str, evidence_id: str) -> dict[str, Any]:
+def _quality_action(
+    template: dict[str, Any], *, status: str, evidence_id: str
+) -> dict[str, Any]:
     action = {
         "id": str(template["id"]),
         "status": status,
@@ -327,7 +400,9 @@ def _quality_action(template: dict[str, Any], *, status: str, evidence_id: str) 
     return action
 
 
-def _layout_summary_height_mm(layout_summaries: list[dict[str, Any]] | None) -> float | None:
+def _layout_summary_height_mm(
+    layout_summaries: list[dict[str, Any]] | None,
+) -> float | None:
     heights: list[float] = []
     for summary in layout_summaries or []:
         if not isinstance(summary, dict):
@@ -376,7 +451,9 @@ def build_quality_actions(
             continue
         if str(template["id"]) in handled:
             continue
-        actions.append(_quality_action(template, status="suggested", evidence_id=str(issue_id)))
+        actions.append(
+            _quality_action(template, status="suggested", evidence_id=str(issue_id))
+        )
         handled.add(str(template["id"]))
     return actions
 
@@ -412,24 +489,36 @@ def build_mapping_package(
 ) -> dict[str, Any]:
     study_model = study_model if isinstance(study_model, dict) else {}
     confidence = _semantic_confidence(semantic)
-    recipe = request.get("recipe")
-    explicit_plot_intent = bool(request.get("template")) or (
-        isinstance(recipe, str) and bool(recipe.strip()) and recipe != "auto"
+    requested_rule_id = request.get("rule_id")
+    explicit_rule_confirmation = (
+        isinstance(requested_rule_id, str)
+        and requested_rule_id.strip() == str(semantic.get("rule_id") or "").strip()
     )
     has_confirmations = bool(request.get("column_confirmations"))
     sample_order = request.get("series_order")
     if not isinstance(sample_order, list):
-        sample_order = study_model.get("sample_order") if isinstance(study_model.get("sample_order"), list) else []
-    status = "confirmed" if has_confirmations or explicit_plot_intent else "auto"
-    if bool(semantic.get("needs_ai_intervention")) or confidence < MEDIUM_CONFIDENCE_THRESHOLD:
+        sample_order = (
+            study_model.get("sample_order")
+            if isinstance(study_model.get("sample_order"), list)
+            else []
+        )
+    status = "confirmed" if has_confirmations or explicit_rule_confirmation else "auto"
+    if (
+        bool(semantic.get("needs_ai_intervention"))
+        or confidence < MEDIUM_CONFIDENCE_THRESHOLD
+    ):
         status = "needs_rule_repair"
-    elif confidence < HIGH_CONFIDENCE_THRESHOLD and not (has_confirmations or explicit_plot_intent):
+    elif confidence < HIGH_CONFIDENCE_THRESHOLD and not (
+        has_confirmations or explicit_rule_confirmation
+    ):
         status = "needs_human_confirmation"
     return {
         "kind": "sciplot_mapping_package",
         "version": 1,
         "status": status,
-        "experiment_type": semantic.get("rule_id") or semantic.get("semantic_family") or "unknown",
+        "experiment_type": semantic.get("rule_id")
+        or semantic.get("semantic_family")
+        or "unknown",
         "semantic_family": semantic.get("semantic_family") or "unknown",
         "rule_id": semantic.get("rule_id"),
         "confidence": confidence,
@@ -440,19 +529,29 @@ def build_mapping_package(
     }
 
 
-def build_render_request_package(*, request_path: Path, request: dict[str, Any]) -> dict[str, Any]:
-    render_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
+def build_render_request_package(
+    *, request_path: Path, request: dict[str, Any]
+) -> dict[str, Any]:
+    render_options = request.get("render_options", {})
+    figure_size = (
+        render_options.get("size") if isinstance(render_options, dict) else None
+    ) or "60x55"
     return {
         "kind": "sciplot_render_request",
         "version": 1,
         "path": str(request_path),
-        "recipe": request.get("recipe") or None,
-        "template": request.get("template") or None,
-        "exports": list(request.get("exports") or ["pdf", "tiff_300"]),
+        "rule_id": request.get("rule_id"),
+        "recipe": request.get("recipe"),
+        "template": request.get("template"),
+        "exports": json_safe(request.get("exports", ["pdf", "tiff_300"])),
         "render_engine": "veusz",
-        "figure_size": render_options.get("size") or "60x55",
+        "figure_size": figure_size,
         "render_options": json_safe(render_options),
-        "split_policy": json_safe(request.get("split_policy") or {}),
+        "split_policy": json_safe(request.get("split_policy", {})),
+        "series_order": json_safe(request.get("series_order", [])),
+        "explicit_render_option_keys": json_safe(
+            request.get("explicit_render_option_keys", [])
+        ),
     }
 
 
@@ -464,14 +563,24 @@ def build_figure_qa_report(
 ) -> dict[str, Any]:
     qa = qa if isinstance(qa, dict) else {}
     layout_quality = layout_quality if isinstance(layout_quality, dict) else {}
-    issue_ids = layout_quality.get("issue_ids") if isinstance(layout_quality.get("issue_ids"), list) else []
+    issue_ids = (
+        layout_quality.get("issue_ids")
+        if isinstance(layout_quality.get("issue_ids"), list)
+        else []
+    )
     layout_needs_ai = bool(layout_quality.get("needs_ai_intervention"))
     qa_status = str(qa.get("status") or "unknown")
-    delivery_complete = bool(delivery_package.get("complete")) if isinstance(delivery_package, dict) else False
+    delivery_complete = (
+        bool(delivery_package.get("complete"))
+        if isinstance(delivery_package, dict)
+        else False
+    )
     pdfs = qa.get("pdfs") if isinstance(qa.get("pdfs"), list) else []
     normalized_issue_ids = [str(item) for item in issue_ids]
     raw_autofixes = layout_quality.get("autofixes_applied")
-    autofixes_applied = [str(item) for item in raw_autofixes] if isinstance(raw_autofixes, list) else []
+    autofixes_applied = (
+        [str(item) for item in raw_autofixes] if isinstance(raw_autofixes, list) else []
+    )
     export_visual_qa = [
         {"path": item.get("path"), "visual_qa": item.get("visual_qa")}
         for item in pdfs
@@ -486,7 +595,9 @@ def build_figure_qa_report(
     return {
         "kind": "sciplot_figure_qa_report",
         "version": 1,
-        "status": "passed" if qa_status == "passed" and not layout_needs_ai else "failed",
+        "status": "passed"
+        if qa_status == "passed" and not layout_needs_ai
+        else "failed",
         "qa_status": qa_status,
         "layout_review_mode": layout_quality.get("review_mode") or "structured_qa_only",
         "needs_ai_intervention": layout_needs_ai,
@@ -501,8 +612,13 @@ def build_figure_qa_report(
         "split_plan": json_safe(split_plan),
         "delivery_complete": delivery_complete,
         "export_visual_qa": export_visual_qa,
-        "image_review_required": layout_needs_ai or qa_status not in {"passed", "unknown"},
-        "image_review_triggers": ["qa_failure", "low_confidence_semantics", "explicit_user_request"],
+        "image_review_required": layout_needs_ai
+        or qa_status not in {"passed", "unknown"},
+        "image_review_triggers": [
+            "qa_failure",
+            "low_confidence_semantics",
+            "explicit_user_request",
+        ],
     }
 
 
@@ -510,22 +626,45 @@ def _readiness(
     *,
     source_package: dict[str, Any],
     mapping_package: dict[str, Any],
+    render_request: dict[str, Any],
     figure_qa_report: dict[str, Any],
+    validated_envelope: dict[str, Any],
 ) -> tuple[str, list[str]]:
     reasons: list[str] = []
-    if figure_qa_report.get("needs_ai_intervention") or figure_qa_report.get("qa_status") not in {"passed", "unknown"}:
+    if (
+        figure_qa_report.get("needs_ai_intervention")
+        or figure_qa_report.get("status") != "passed"
+        or figure_qa_report.get("qa_status") != "passed"
+    ):
         reasons.append("figure_qa_failed")
     if figure_qa_report.get("delivery_complete") is False:
         reasons.append("delivery_package_incomplete")
-    if source_package.get("confidence_band") == "low" or mapping_package.get("status") == "needs_rule_repair":
+    if (
+        source_package.get("confidence_band") == "low"
+        or mapping_package.get("status") == "needs_rule_repair"
+    ):
         reasons.append("semantic_rule_repair_required")
     if mapping_package.get("status") == "needs_human_confirmation":
         reasons.append("mapping_confirmation_required")
+    envelope_state = validated_envelope.get("state")
+    if envelope_state == "needs_rule_repair":
+        reasons.append("validated_envelope_rule_repair_required")
+    elif envelope_state == "needs_human_confirmation":
+        reasons.append("validated_envelope_confirmation_required")
+    elif envelope_state != INSIDE_VALIDATED_ENVELOPE:
+        reasons.append("validated_envelope_invalid")
+    elif not validated_envelope_evaluation_ready(
+        validated_envelope,
+        render_request=render_request,
+    ):
+        reasons.append("validated_envelope_invalid")
     if reasons:
         if (
             "semantic_rule_repair_required" in reasons
             or "figure_qa_failed" in reasons
             or "delivery_package_incomplete" in reasons
+            or "validated_envelope_rule_repair_required" in reasons
+            or "validated_envelope_invalid" in reasons
         ):
             return RULE_REPAIR_STATE, reasons
         return HUMAN_CONFIRMATION_STATE, reasons
@@ -543,11 +682,15 @@ def build_intervention_package(
         "kind": "sciplot_intervention_package",
         "version": 1,
         "required": state == RULE_REPAIR_STATE,
-        "reason": "rule_or_layout_repair_required" if state == RULE_REPAIR_STATE else "",
+        "reason": "rule_or_layout_repair_required"
+        if state == RULE_REPAIR_STATE
+        else "",
         "request": json_safe(intervention_request or {}),
         "codex_review_policy": {
             "default": "structured_qa_summary",
-            "image_review_required": bool(figure_qa_report.get("image_review_required")),
+            "image_review_required": bool(
+                figure_qa_report.get("image_review_required")
+            ),
             "image_review_triggers": figure_qa_report.get("image_review_triggers")
             or ["qa_failure", "low_confidence_semantics", "explicit_user_request"],
         },
@@ -568,18 +711,32 @@ def build_one_step_project(
     delivery_package: dict[str, Any] | None = None,
     intervention_request: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    source_package = build_source_package(input_path=input_path, raw_archive=raw_archive, semantic=semantic)
-    mapping_package = build_mapping_package(request=request, semantic=semantic, study_model=study_model)
-    render_request = build_render_request_package(request_path=request_path, request=request)
+    source_package = build_source_package(
+        input_path=input_path, raw_archive=raw_archive, semantic=semantic
+    )
+    mapping_package = build_mapping_package(
+        request=request, semantic=semantic, study_model=study_model
+    )
+    render_request = build_render_request_package(
+        request_path=request_path, request=request
+    )
     figure_qa_report = build_figure_qa_report(
         qa=qa,
         layout_quality=layout_quality,
         delivery_package=delivery_package,
     )
+    validated_envelope = evaluate_validated_envelope(
+        semantic=semantic,
+        source_package=source_package,
+        mapping_package=mapping_package,
+        render_request=render_request,
+    )
     state, reasons = _readiness(
         source_package=source_package,
         mapping_package=mapping_package,
+        render_request=render_request,
         figure_qa_report=figure_qa_report,
+        validated_envelope=validated_envelope,
     )
     return {
         "kind": ONE_STEP_MODEL_KIND,
@@ -593,6 +750,7 @@ def build_one_step_project(
         "render_request": render_request,
         "layout_policy": layout_policy_payload(layout_policy),
         "figure_qa_report": figure_qa_report,
+        "validated_envelope": validated_envelope,
         "intervention_package": build_intervention_package(
             intervention_request=intervention_request,
             state=state,
