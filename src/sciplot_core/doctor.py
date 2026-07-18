@@ -81,6 +81,35 @@ def _vsz_lifecycle_available() -> bool:
 
 
 def _publication_foundation_available() -> bool:
+    """Check the active single-panel publication and QA contract."""
+
+    try:
+        profile = get_publication_profile("sciplot_single_panel_v1")
+    except Exception:
+        return False
+    publication_symbols = _top_level_symbols(
+        REPO_ROOT / "src" / "sciplot_core" / "publication.py"
+    )
+    qa_symbols = _top_level_symbols(
+        REPO_ROOT / "src" / "sciplot_core" / "qa.py"
+    )
+    return (
+        profile.get("id") == "sciplot_single_panel_v1"
+        and profile.get("required_formats") == ["pdf", "tiff_300"]
+        and profile.get("integrity", {}).get("scientific_outcome_agnostic") is True
+        and profile.get("integrity", {}).get("significance_required") is False
+        and {
+            "build_publication_intent",
+            "build_transform_ledger",
+            "write_publication_artifacts",
+        }.issubset(publication_symbols)
+        and "run_qa" in qa_symbols
+    )
+
+
+def _optional_composition_available() -> bool:
+    """Report the retained composition regression without gating daily use."""
+
     try:
         layouts = list_composite_layouts()
         profile = get_publication_profile("sciplot_composite_183_v1")
@@ -89,7 +118,8 @@ def _publication_foundation_available() -> bool:
     return (
         len(layouts) == 5
         and all(
-            float(layout.get("geometry_total_mm") or 0.0) == 183.0 for layout in layouts
+            float(layout.get("geometry_total_mm") or 0.0) == 183.0
+            for layout in layouts
         )
         and profile.get("integrity", {}).get("scientific_outcome_agnostic") is True
         and profile.get("integrity", {}).get("significance_required") is False
@@ -174,9 +204,22 @@ def doctor_payload() -> dict[str, Any]:
         ),
         _check(
             "publication_foundation",
-            "Publication intent, lineage, 183 mm composition, and artifact QA",
+            "Single-panel publication intent, lineage, and artifact QA",
             _publication_foundation_available(),
-            detail="183 mm canvas -> evidence/transform contracts -> PDF/TIFF publication QA",
+            detail=(
+                "60/120/180 mm single-panel contract -> evidence/transform "
+                "lineage -> PDF/TIFF publication QA"
+            ),
+        ),
+        _check(
+            "optional_composition",
+            "Optional historical native-composition regression",
+            _optional_composition_available(),
+            required=False,
+            detail=(
+                "Retained for explicit regression only; it is not part of "
+                "Veusz-first daily readiness."
+            ),
         ),
         _check(
             "skill_wrapper",
@@ -211,7 +254,10 @@ def doctor_payload() -> dict[str, Any]:
     required_failures = [
         check for check in checks if check["required"] and check["status"] != "passed"
     ]
-    layouts = list_composite_layouts()
+    try:
+        layouts = list_composite_layouts()
+    except Exception:
+        layouts = []
     return {
         "kind": "sciplot_doctor",
         "status": "ready" if not required_failures else "blocked",
@@ -222,7 +268,9 @@ def doctor_payload() -> dict[str, Any]:
                 "sciplot studio PATH --rule RULE_ID --template TEMPLATE_ID "
                 "--out outputs/projects --export pdf,tiff_300 --json"
             ),
-            "frontend_default": "independent",
+            "frontend_default": "veusz_mainwindow",
+            "assistant_default": "independent",
+            "assistant_visibility_default": "hidden",
             "codex_required": False,
             "user_switch_required": False,
             "automatic_recognition_required": False,
@@ -237,14 +285,20 @@ def doctor_payload() -> dict[str, Any]:
             "delivery_requires_matching_vsz_hash": True,
         },
         "publication_foundation": {
-            "composite_canvas_width_mm": 183.0,
-            "nominal_panel_widths_mm": [60.0, 90.0, 120.0, 180.0],
-            "layout_ids": [layout["id"] for layout in layouts],
+            "ordinary_widths_mm": [60.0, 120.0, 180.0],
             "default_profile": "sciplot_single_panel_v1",
-            "composite_profile": "sciplot_composite_183_v1",
             "official_profile": "nature_flagship_research_2026_v1",
             "scientific_outcome_agnostic": True,
             "silent_data_omission_allowed": False,
+        },
+        "optional_capabilities": {
+            "native_composition": {
+                "required_for_daily_readiness": False,
+                "available": _optional_composition_available(),
+                "canvas_width_mm": 183.0,
+                "layout_ids": [layout["id"] for layout in layouts],
+                "profile": "sciplot_composite_183_v1",
+            },
         },
         "rule_summary": {
             "total": len(rules),
@@ -299,7 +353,8 @@ def _next_actions(required_failures: list[dict[str, Any]]) -> list[str]:
         )
     if "publication_foundation" in failed_ids:
         actions.append(
-            "Restore publication profiles, 183 mm layouts, lineage contracts, and artifact QA."
+            "Restore the single-panel publication profile, lineage contracts, "
+            "and artifact QA."
         )
     if not actions:
         actions.append("Fix the failed required checks before normal use.")

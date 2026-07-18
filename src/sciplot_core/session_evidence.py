@@ -6286,10 +6286,13 @@ def session_ledger_status(ledger_path: Path) -> dict[str, Any]:
 def session_evidence_schema() -> dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "title": "SciPlot preregistered session evidence contract",
+        "title": "SciPlot legacy preregistered Canvas session evidence contract",
         "kind": "sciplot_session_evidence_schema",
         "version": 1,
         "status": "ready",
+        "active_product_gate": False,
+        "legacy_frontend_gate": True,
+        "superseded_by": "M6.1 Veusz-first daily-use validation",
         "additionalProperties": False,
         "closed_enums": {
             "acceptance_lanes": list(ACCEPTANCE_LANES),

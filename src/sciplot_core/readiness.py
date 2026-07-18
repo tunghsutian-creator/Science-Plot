@@ -1424,7 +1424,7 @@ def build_validated_envelope_registry(
             "Runtime input recognition, mapping, QA, exact-current export, and "
             "delivery must still pass for every new input.",
             "Automated acceptance and source certificates do not count as human "
-            "daily-use sessions for the M6 frontend-retirement gate.",
+            "Veusz-first daily-use validation.",
         ),
     )
 
@@ -1507,6 +1507,8 @@ def validated_envelope_status(
             and all(entry.real_data_evidence for entry in resolved.entries),
             "journal_compliance_established": False,
             "human_daily_use_cutover_established": False,
+            "human_daily_use_validation_established": False,
+            "canvas_cutover_applicable": False,
         },
         "limitations": list(resolved.limitations),
     }

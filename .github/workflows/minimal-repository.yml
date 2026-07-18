@@ -14,11 +14,15 @@ jobs:
         run: |
           set -euo pipefail
           forbidden="$({
+            # A file cannot be both source-controlled and declared local-only.
+            git ls-files -ci --exclude-standard
             git ls-files \
               tests test examples example tmp tools outputs figures ftir_output .tmp_verify \
               .superpowers sciplot-main .DS_Store AGENTS.md DEVELOPMENT_LOG.md Makefile \
               Launch_SciPlot_App.command
-            git ls-files docs | grep -v '^docs/THIRD_PARTY_NOTICES\.md$' || true
+            git ls-files docs | grep -Ev \
+              '^docs/(THIRD_PARTY_NOTICES|SESSION_EVIDENCE|SCIPLOT_REVIEWED_PROMOTION)\.md$' \
+              || true
             git ls-files \
               third_party/veusz/tests \
               third_party/veusz/examples \
@@ -31,7 +35,7 @@ jobs:
               third_party/labplot_reference
           } | sed '/^$/d')"
           if [[ -n "$forbidden" ]]; then
-            echo "Non-runtime files are tracked but GitHub must contain only the minimal runnable distribution:" >&2
+            echo "Local-only or non-distribution files are tracked:" >&2
             printf '%s\n' "$forbidden" >&2
             exit 1
           fi

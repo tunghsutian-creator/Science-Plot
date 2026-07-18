@@ -214,7 +214,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sessions_parser = subparsers.add_parser(
         "sessions",
-        help="Preregister and verify real-use evidence sessions.",
+        help=(
+            "Read or verify the legacy Canvas-era session evidence contract."
+        ),
     )
     from sciplot_core.session_evidence import (
         ACCEPTANCE_LANES,
@@ -404,7 +406,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sessions_status_parser = sessions_subparsers.add_parser(
         "status",
-        help="Verify chain integrity and report M3/M6 gates without inflating counts.",
+        help=(
+            "Verify chain integrity and report legacy M3/M6 gates without "
+            "inflating counts."
+        ),
     )
     sessions_status_parser.add_argument("ledger", type=Path)
     sessions_status_parser.add_argument(
@@ -412,7 +417,10 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         choices=("integrity", "m3", "m6"),
         default=[],
-        help="Exit nonzero unless the named integrity/gate requirement passes.",
+        help=(
+            "Exit nonzero unless the named legacy integrity/gate requirement "
+            "passes."
+        ),
     )
     sessions_status_parser.add_argument("--json", action="store_true")
 
@@ -1119,7 +1127,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     publication_parser = subparsers.add_parser(
         "publication",
-        help="Inspect SciPlot publication profiles and 183 mm composite layouts.",
+        help=(
+            "Inspect active publication profiles and optional legacy "
+            "composite layouts."
+        ),
     )
     publication_subparsers = publication_parser.add_subparsers(
         dest="publication_command", required=True
@@ -1163,11 +1174,18 @@ def _build_parser() -> argparse.ArgumentParser:
     figure_build_parser.add_argument("--json", action="store_true")
 
     hidden_compatibility_commands = {
+        "learning",
+        "sessions",
         "one-step",
         "quick",
         "prepare",
         "intake",
         "workbench",
+        "canvas",
+        "compose",
+        "promotion-probe",
+        "canvas-inspector-probe",
+        "canvas-review-probe",
         "canvas-probe",
         "composition-probe",
         "readiness-probe",

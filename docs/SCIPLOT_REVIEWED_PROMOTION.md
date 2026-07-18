@@ -6,6 +6,12 @@ review material without allowing an AI output, candidate file, or approval
 record to change deterministic plotting behavior. It does not claim that any
 real decision has repeated three times.
 
+The current implementation replays the legacy version-1 Canvas session
+contract. That replay remains available for compatibility, but its former M6
+Canvas-cutover quota is cancelled and it is not an M6.1 daily-use gate.
+Veusz-first `assistant_history.jsonl` is observational only and does not grant
+promotion eligibility without a future, separately reviewed authority bridge.
+
 ## First-principles boundary
 
 Experience can propose a hypothesis. It cannot grant software capability.

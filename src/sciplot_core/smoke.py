@@ -2911,8 +2911,10 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         checks.append(
             _check(
                 "independent_mode",
-                "Normal plotting remains independent and Codex-optional",
-                normal_mode.get("frontend_default") == "independent"
+                "Veusz is the normal frontend and its optional assistant starts independent and hidden",
+                normal_mode.get("frontend_default") == "veusz_mainwindow"
+                and normal_mode.get("assistant_default") == "independent"
+                and normal_mode.get("assistant_visibility_default") == "hidden"
                 and normal_mode.get("codex_required") is False
                 and normal_mode.get("user_switch_required") is False,
                 detail=normal_mode,

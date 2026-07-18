@@ -755,6 +755,6 @@
   "limitations": [
     "A validated envelope proves the accepted deterministic rule/render contract and real-data lifecycle, not blanket journal compliance.",
     "Runtime input recognition, mapping, QA, exact-current export, and delivery must still pass for every new input.",
-    "Automated acceptance and source certificates do not count as human daily-use sessions for the M6 frontend-retirement gate."
+    "Automated acceptance and source certificates do not count as Veusz-first human daily-use validation."
   ]
 }

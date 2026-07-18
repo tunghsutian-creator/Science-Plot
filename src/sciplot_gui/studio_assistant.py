@@ -24,6 +24,11 @@ from sciplot_core.canvas.provider import (
     AssistantResponse,
 )
 from sciplot_gui.assistant_runtime import AssistantRequestRunner
+from sciplot_gui.studio_assistant_history import (
+    append_assistant_history_event,
+    assistant_history_path,
+    build_assistant_history_event,
+)
 
 
 _DEFAULT_OBJECT_TYPE_ORDER = {
@@ -52,6 +57,7 @@ class StudioAssistantBridge(QtCore.QObject):
     proposalReady = QtCore.pyqtSignal(object)
     proposalApplied = QtCore.pyqtSignal(object)
     requestRejected = QtCore.pyqtSignal(str)
+    historyRecorded = QtCore.pyqtSignal(object)
 
     def __init__(
         self,
@@ -65,6 +71,7 @@ class StudioAssistantBridge(QtCore.QObject):
         self.document = window.document
         self.plot = window.plot
         self.document_path = document_path.expanduser().resolve()
+        self.history_path = assistant_history_path(self.document_path)
         self.provider = provider
         self.runner = AssistantRequestRunner(provider, self)
         self._selected_widget: Any | None = None
@@ -97,6 +104,62 @@ class StudioAssistantBridge(QtCore.QObject):
     def pending_batch(self) -> CanvasOperationBatch | None:
         return self._pending_batch
 
+    def _record_history(
+        self,
+        *,
+        status: str,
+        request: AssistantRequest,
+        response: AssistantResponse | None = None,
+        batch: CanvasOperationBatch | None = None,
+        operations: list[Any] | tuple[Any, ...] | None = None,
+        reason_code: str | None = None,
+        applied_revision: int | None = None,
+        after_page_render_sha256: str | None = None,
+        render_changed: bool | None = None,
+        native_undo_label: str | None = None,
+    ) -> dict[str, Any]:
+        event = build_assistant_history_event(
+            status=status,
+            request=request,
+            descriptor=self.runner.descriptor,
+            response=response,
+            batch=batch,
+            operations=operations,
+            reason_code=reason_code,
+            applied_revision=applied_revision,
+            after_page_render_sha256=after_page_render_sha256,
+            render_changed=render_changed,
+            native_undo_label=native_undo_label,
+        )
+        append_assistant_history_event(self.history_path, event)
+        self.historyRecorded.emit(event)
+        return event
+
+    def _clear_pending(self) -> None:
+        """Release request-owned image bytes after a terminal outcome."""
+
+        self._pending_response = None
+        self._pending_batch = None
+        self._pending_request = None
+        self._pending_capabilities = {}
+        try:
+            self.apply_button.setEnabled(False)
+            self.reject_button.setEnabled(False)
+        except RuntimeError:
+            # Window destruction can delete child widgets before this bridge's
+            # shutdown slot releases request-owned image bytes.
+            pass
+
+    @staticmethod
+    def _terminal_history_status(response_status: str) -> str:
+        if response_status in {
+            "cancelled",
+            "needs_human_confirmation",
+            "needs_rule_repair",
+        }:
+            return response_status
+        return "failed"
+
     def _build_dock(self) -> QtWidgets.QDockWidget:
         dock = QtWidgets.QDockWidget("SciPlot AI", self.window)
         dock.setObjectName("sciplotStudioAssistantDock")
@@ -109,12 +172,12 @@ class StudioAssistantBridge(QtCore.QObject):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
 
-        intro = QtWidgets.QLabel(
-            "AI sees the exact current Veusz figure and can change only "
-            "the selected object's supported properties."
+        self.intro_label = QtWidgets.QLabel(
+            "AI inspects the exact-current rendered page for context. It can "
+            "propose changes only to the selected object's supported properties."
         )
-        intro.setWordWrap(True)
-        layout.addWidget(intro)
+        self.intro_label.setWordWrap(True)
+        layout.addWidget(self.intro_label)
 
         self.selection_label = QtWidgets.QLabel()
         self.selection_label.setWordWrap(True)
@@ -122,8 +185,7 @@ class StudioAssistantBridge(QtCore.QObject):
 
         self.intent_edit = QtWidgets.QPlainTextEdit()
         self.intent_edit.setPlaceholderText(
-            "Example: inspect the figure and improve the selected object's "
-            "alignment, typography, or visibility."
+            "Example: make the selected axis label easier to read."
         )
         self.intent_edit.setMaximumHeight(110)
         layout.addWidget(self.intent_edit)
@@ -131,7 +193,7 @@ class StudioAssistantBridge(QtCore.QObject):
         self.auto_apply = QtWidgets.QCheckBox(
             "Apply a safe, current proposal immediately"
         )
-        self.auto_apply.setChecked(True)
+        self.auto_apply.setChecked(False)
         self.auto_apply.setToolTip(
             "Every change remains one native Veusz Undo step. A stale response "
             "is rejected instead of being applied."
@@ -139,7 +201,7 @@ class StudioAssistantBridge(QtCore.QObject):
         layout.addWidget(self.auto_apply)
 
         request_row = QtWidgets.QHBoxLayout()
-        self.ask_button = QtWidgets.QPushButton("Inspect && Fix Current Figure")
+        self.ask_button = QtWidgets.QPushButton("Suggest Changes for Selected Object")
         self.cancel_button = QtWidgets.QPushButton("Stop")
         self.cancel_button.setEnabled(False)
         request_row.addWidget(self.ask_button, 1)
@@ -249,9 +311,7 @@ class StudioAssistantBridge(QtCore.QObject):
                 "Selected: none (choose a supported object in Veusz)"
             )
             return
-        self.selection_label.setText(
-            f"Selected: {widget.typename} · {widget.path}"
-        )
+        self.selection_label.setText(f"Selected: {widget.typename} · {widget.path}")
 
     def _object_id(self, widget: Any) -> str:
         document_id = uuid5(NAMESPACE_URL, str(self.document_path))
@@ -394,13 +454,16 @@ class StudioAssistantBridge(QtCore.QObject):
         intent_text = str(intent or "").strip()
         if not intent_text:
             intent_text = (
-                "Inspect the exact current figure and improve the selected object "
-                "only when a visible issue can be corrected with the allowed settings."
+                "Inspect the exact-current rendered page for context and suggest "
+                "a change only for the selected object when a visible issue can "
+                "be corrected with the allowed settings."
             )
         context = self.context_for_current_selection()
         _png, visual_preview = self.capture_current_plot_png()
         if int(self.document.changeset) != int(context["revision"]):
-            raise RuntimeError("The document changed while the AI request was prepared.")
+            raise RuntimeError(
+                "The document changed while the AI request was prepared."
+            )
         allowed = tuple(
             kind
             for kind in descriptor.proposal_kinds
@@ -430,22 +493,46 @@ class StudioAssistantBridge(QtCore.QObject):
     def submit_intent(self, intent: str) -> AssistantRequest:
         if self.runner.active:
             raise RuntimeError("An Assistant request is already running.")
-        self.reject_pending(silent=True)
+        self.reject_pending(
+            silent=True,
+            reason_code="superseded_by_new_request",
+        )
         request = self.build_request(intent)
-        capabilities = request.context["editing_capabilities"][
-            "allowed_operations"
-        ]
+        capabilities = request.context["editing_capabilities"]["allowed_operations"]
         self._pending_request = request
         self._pending_capabilities = {
             (str(item["target_id"]), str(item["setting_path"])): dict(item)
             for item in capabilities
         }
         self.proposal_view.setPlainText(
-            "Inspecting the exact current Veusz render…\n"
+            "Inspecting the exact-current rendered page…\n"
             f"PNG SHA-256: {request.visual_preview['sha256']}"
         )
-        self.status_label.setText("AI is inspecting the current figure.")
-        self.runner.submit(request)
+        self.status_label.setText(
+            "AI is inspecting the current page for a bounded selected-object proposal."
+        )
+        try:
+            self._record_history(status="submitted", request=request)
+        except Exception:
+            self._clear_pending()
+            raise RuntimeError(
+                "The Assistant request was not sent because its local history "
+                "could not be written."
+            ) from None
+        try:
+            self.runner.submit(request)
+        except Exception:
+            try:
+                self._record_history(
+                    status="failed",
+                    request=request,
+                    reason_code="request_submit_failed",
+                )
+            except Exception:
+                pass
+            finally:
+                self._clear_pending()
+            raise
         self.requestSubmitted.emit(request)
         return request
 
@@ -465,12 +552,19 @@ class StudioAssistantBridge(QtCore.QObject):
     def _provider_response(self, response: AssistantResponse) -> None:
         request = self._pending_request
         if request is None:
-            self._reject_stale("Assistant response has no active request.")
+            self._reject_stale(
+                "Assistant response has no active request.",
+                reason_code="no_active_request",
+                response=response,
+            )
             return
         if int(self.document.changeset) != request.base_revision:
             self._reject_stale(
                 "The Veusz document changed while AI was inspecting it. "
-                "The stale proposal was discarded; ask again to use the current figure."
+                "The stale proposal was discarded; ask again to use the "
+                "current rendered page.",
+                reason_code="document_revision_changed",
+                response=response,
             )
             return
         self._pending_response = response
@@ -479,24 +573,60 @@ class StudioAssistantBridge(QtCore.QObject):
             self.apply_button.setEnabled(False)
             self.reject_button.setEnabled(False)
             self.status_label.setText(response.understanding)
-            self.proposal_view.setPlainText(
-                self._response_text(response, batch=None)
-            )
+            self.proposal_view.setPlainText(self._response_text(response, batch=None))
+            try:
+                self._record_history(
+                    status=self._terminal_history_status(response.status),
+                    request=request,
+                    response=response,
+                )
+            except Exception:
+                self.status_label.setText(
+                    f"{response.understanding} Local Assistant history could "
+                    "not be finalized."
+                )
+            finally:
+                self._clear_pending()
             return
         if response.proposal_kind != "canvas_operation_batch":
-            self._reject_stale("The Assistant returned an unsupported proposal.")
+            self._reject_stale(
+                "The Assistant returned an unsupported proposal.",
+                reason_code="unsupported_proposal_kind",
+                response=response,
+            )
             return
-        batch = CanvasOperationBatch.from_dict(dict(response.proposal or {}))
         try:
+            batch = CanvasOperationBatch.from_dict(dict(response.proposal or {}))
             self._prepare_native_operations(batch, request=request)
         except Exception as exc:
-            self._reject_stale(f"Unsafe Assistant proposal rejected: {exc}")
+            self._reject_stale(
+                f"Unsafe Assistant proposal rejected: {exc}",
+                reason_code="typed_validation_failed",
+                response=response,
+            )
             return
         self._pending_batch = batch
         self.proposal_view.setPlainText(self._response_text(response, batch=batch))
         self.apply_button.setEnabled(True)
         self.reject_button.setEnabled(True)
         self.status_label.setText("A bounded proposal is ready.")
+        try:
+            self._record_history(
+                status="proposal_ready",
+                request=request,
+                response=response,
+                batch=batch,
+            )
+        except Exception:
+            message = (
+                "The bounded proposal was not retained because its local "
+                "Assistant history could not be written."
+            )
+            self._clear_pending()
+            self.status_label.setText(message)
+            self.proposal_view.setPlainText(message)
+            self.requestRejected.emit(message)
+            return
         self.proposalReady.emit(batch)
         if self.auto_apply.isChecked():
             self.accept_pending()
@@ -509,7 +639,9 @@ class StudioAssistantBridge(QtCore.QObject):
     ) -> str:
         lines = [response.understanding]
         if response.warnings:
-            lines.extend(["", "Warnings:", *[f"• {item}" for item in response.warnings]])
+            lines.extend(
+                ["", "Warnings:", *[f"• {item}" for item in response.warnings]]
+            )
         if batch is not None:
             lines.extend(["", "Proposed changes:"])
             for operation in batch.operations:
@@ -546,9 +678,7 @@ class StudioAssistantBridge(QtCore.QObject):
         seen_paths: set[str] = set()
         for operation in batch.operations:
             if operation.operation_type != "set_setting":
-                raise ValueError(
-                    f"unsupported operation {operation.operation_type!r}"
-                )
+                raise ValueError(f"unsupported operation {operation.operation_type!r}")
             setting_path = str(operation.arguments["setting_path"])
             key = (operation.target_id, setting_path)
             capability = self._pending_capabilities.get(key)
@@ -569,6 +699,7 @@ class StudioAssistantBridge(QtCore.QObject):
             prepared.append(
                 {
                     "operation_id": operation.operation_id,
+                    "operation_type": operation.operation_type,
                     "target_id": operation.target_id,
                     "setting_path": setting_path,
                     "old_value": current,
@@ -590,57 +721,191 @@ class StudioAssistantBridge(QtCore.QObject):
                 batch,
                 request=request,
             )
-            from veusz.document.operations import OperationMultiple
-
-            description = "SciPlot AI"
-            if batch.rationale.strip():
-                description = f"SciPlot AI: {batch.rationale.strip()[:80]}"
-            before_render = request.visual_preview["sha256"]
-            self.document.applyOperation(
-                OperationMultiple(native, descr=description)
+        except Exception as exc:
+            reason_code = (
+                "document_revision_changed"
+                if int(self.document.changeset) != request.base_revision
+                else "typed_validation_failed"
             )
+            self._reject_stale(
+                f"Assistant proposal was not applied: {exc}",
+                reason_code=reason_code,
+                response=self._pending_response,
+                batch=batch,
+            )
+            return None
+
+        description = f"SciPlot AI · {batch.batch_id[:8]}"
+        try:
+            self._record_history(
+                status="apply_started",
+                request=request,
+                response=self._pending_response,
+                batch=batch,
+                operations=prepared,
+                native_undo_label=description,
+            )
+        except Exception:
+            self.status_label.setText(
+                "The proposal was not applied because its durable local "
+                "Assistant history could not be written."
+            )
+            return None
+
+        from veusz.document.operations import OperationMultiple
+
+        before_render = request.visual_preview["sha256"]
+        try:
+            self.document.applyOperation(OperationMultiple(native, descr=description))
+        except Exception as exc:
+            try:
+                self._record_history(
+                    status="failed",
+                    request=request,
+                    response=self._pending_response,
+                    batch=batch,
+                    operations=prepared,
+                    reason_code="apply_failed",
+                    native_undo_label=description,
+                )
+            except Exception:
+                pass
+            self._clear_pending()
+            message = f"Assistant proposal could not be applied: {exc}"
+            self.status_label.setText(message)
+            self.proposal_view.setPlainText(message)
+            self.requestRejected.emit(message)
+            return None
+
+        applied_revision = int(self.document.changeset)
+        after_render: str | None = None
+        verification_error = False
+        try:
             after_render = self.current_render_sha256()
-            result = {
-                "batch_id": batch.batch_id,
-                "base_revision": batch.base_revision,
-                "applied_revision": int(self.document.changeset),
-                "before_render_sha256": before_render,
-                "after_render_sha256": after_render,
-                "render_changed": before_render != after_render,
-                "operations": prepared,
-                "native_undo_description": description,
-            }
+        except Exception:
+            verification_error = True
+
+        terminal_status = "applied_unverified" if verification_error else "applied"
+        render_changed = (
+            before_render != after_render if after_render is not None else None
+        )
+        history_finalized = True
+        try:
+            self._record_history(
+                status=terminal_status,
+                request=request,
+                response=self._pending_response,
+                batch=batch,
+                operations=prepared,
+                reason_code=(
+                    "after_render_verification_failed" if verification_error else None
+                ),
+                applied_revision=applied_revision,
+                after_page_render_sha256=after_render,
+                render_changed=render_changed,
+                native_undo_label=description,
+            )
+        except Exception:
+            history_finalized = False
+
+        result = {
+            "batch_id": batch.batch_id,
+            "base_revision": batch.base_revision,
+            "applied_revision": applied_revision,
+            "before_render_sha256": before_render,
+            "after_render_sha256": after_render,
+            "render_changed": render_changed,
+            "operations": prepared,
+            "native_undo_description": description,
+            "verification_status": terminal_status,
+            "history_finalized": history_finalized,
+        }
+        current = self.proposal_view.toPlainText()
+        self._clear_pending()
+        if verification_error:
+            self.status_label.setText(
+                "Applied as one native Veusz Undo step, but the exact-current "
+                "after-render hash could not be verified. Use Edit → Undo or "
+                "inspect the current page before saving."
+            )
+            self.proposal_view.setPlainText(
+                f"{current}\n\nApplied as one native Veusz Undo step; "
+                "after-render verification is incomplete."
+            )
+        elif not history_finalized:
+            self.status_label.setText(
+                "Applied as one native Veusz Undo step, but the terminal "
+                "Assistant history row could not be finalized."
+            )
+            self.proposal_view.setPlainText(
+                f"{current}\n\nApplied as one native Veusz Undo step; "
+                "history finalization is incomplete."
+            )
+        else:
             self.status_label.setText(
                 "Applied to the live Veusz document. Use Edit → Undo to revert; "
                 "save when satisfied."
             )
-            current = self.proposal_view.toPlainText()
             self.proposal_view.setPlainText(
                 f"{current}\n\nApplied as one native Veusz Undo step."
             )
-            self._pending_batch = None
-            self.apply_button.setEnabled(False)
-            self.reject_button.setEnabled(False)
-            self.proposalApplied.emit(result)
-            return result
-        except Exception as exc:
-            self._reject_stale(f"Assistant proposal was not applied: {exc}")
-            return None
+        self.proposalApplied.emit(result)
+        return result
 
     @QtCore.pyqtSlot()
-    def reject_pending(self, *, silent: bool = False) -> None:
+    def reject_pending(
+        self,
+        *,
+        silent: bool = False,
+        reason_code: str = "user_rejected",
+    ) -> None:
         had_proposal = self._pending_batch is not None
-        self._pending_response = None
-        self._pending_batch = None
-        self._pending_request = None
-        self._pending_capabilities = {}
-        self.apply_button.setEnabled(False)
-        self.reject_button.setEnabled(False)
+        request = self._pending_request
+        response = self._pending_response
+        batch = self._pending_batch
+        history_failed = False
+        if request is not None and had_proposal:
+            try:
+                self._record_history(
+                    status="rejected",
+                    request=request,
+                    response=response,
+                    batch=batch,
+                    reason_code=reason_code,
+                )
+            except Exception:
+                history_failed = True
+        self._clear_pending()
         if had_proposal and not silent:
-            self.status_label.setText("Proposal rejected; the Veusz document was unchanged.")
+            message = "Proposal rejected; the Veusz document was unchanged."
+            if history_failed:
+                message += " Local Assistant history could not be finalized."
+            self.status_label.setText(message)
 
-    def _reject_stale(self, message: str) -> None:
-        self.reject_pending(silent=True)
+    def _reject_stale(
+        self,
+        message: str,
+        *,
+        reason_code: str,
+        response: AssistantResponse | None = None,
+        batch: CanvasOperationBatch | None = None,
+    ) -> None:
+        request = self._pending_request
+        history_failed = False
+        if request is not None:
+            try:
+                self._record_history(
+                    status="rejected",
+                    request=request,
+                    response=response or self._pending_response,
+                    batch=batch or self._pending_batch,
+                    reason_code=reason_code,
+                )
+            except Exception:
+                history_failed = True
+        self._clear_pending()
+        if history_failed:
+            message = f"{message} Local Assistant history could not be finalized."
         self.status_label.setText(message)
         self.proposal_view.setPlainText(message)
         self.requestRejected.emit(message)
@@ -648,7 +913,24 @@ class StudioAssistantBridge(QtCore.QObject):
     @QtCore.pyqtSlot(object)
     def _provider_failed(self, payload: Any) -> None:
         error = payload.get("error") if isinstance(payload, dict) else str(payload)
-        self._reject_stale(f"Assistant request failed: {error}")
+        request = self._pending_request
+        history_failed = False
+        if request is not None:
+            try:
+                self._record_history(
+                    status="failed",
+                    request=request,
+                    reason_code="provider_failed",
+                )
+            except Exception:
+                history_failed = True
+        self._clear_pending()
+        message = f"Assistant request failed: {error}"
+        if history_failed:
+            message += " Local Assistant history could not be finalized."
+        self.status_label.setText(message)
+        self.proposal_view.setPlainText(message)
+        self.requestRejected.emit(message)
 
     @QtCore.pyqtSlot(bool)
     def _runner_active_changed(self, active: bool) -> None:
@@ -664,7 +946,21 @@ class StudioAssistantBridge(QtCore.QObject):
 
     @QtCore.pyqtSlot()
     def _shutdown(self) -> None:
+        was_active = self.runner.active
         self.runner.shutdown(wait_ms=3000)
+        request = self._pending_request
+        if request is not None:
+            try:
+                self._record_history(
+                    status=("cancelled" if was_active else "rejected"),
+                    request=request,
+                    response=self._pending_response,
+                    batch=self._pending_batch,
+                    reason_code="window_closed",
+                )
+            except Exception:
+                pass
+            self._clear_pending()
 
 
 def attach_studio_assistant(

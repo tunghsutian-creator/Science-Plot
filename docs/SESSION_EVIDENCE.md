@@ -1,8 +1,15 @@
 # SciPlot Session Evidence Contract
 
-Version 1 is the counting authority for the M3 production-model round and the
-M6 personal-product cutover. No run performed before preregistration can be
-promoted into either gate.
+> Legacy compatibility contract. Version 1 preserves the former Canvas-based
+> M3/M6 counting and reviewed-promotion replay format, but its Canvas cutover,
+> fifteen-session quota, and required Composition round are cancelled. It is
+> not the M6.1 Veusz-first daily-use acceptance gate. Existing ledgers remain
+> readable and verifiable; new daily-use work must not be forced into this
+> historical quota.
+
+Version 1 was the counting authority for the former M3 production-model round
+and M6 Canvas cutover. No run performed before preregistration can be promoted
+into either legacy gate.
 
 The contract has three events:
 

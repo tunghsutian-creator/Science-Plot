@@ -919,7 +919,7 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
         "limitations": [
             "This probe validates certificate authority and runtime gating; it "
             "does not replace the underlying authorized real-data acceptance.",
-            "It does not count as a human M6 daily-use session.",
+            "It does not count as Veusz-first human daily-use validation.",
         ],
     }
     summary_path = atomic_write_json(run_root / "readiness_probe.json", payload)

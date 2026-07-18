@@ -11,18 +11,18 @@ only production renderer; `studio/document.vsz` is the advanced-editing truth.
 
 ## Active development direction
 
-For product-development work, read `DEVELOPMENT_ROADMAP.md` and
-`docs/SCIPLOT_OPERATION_FLOW_PLAN.md` before changing the GUI, AI integration,
-annotations, composition, or Studio ownership. The current Veusz MainWindow
-and browser Result Review are protected transition baselines, not the final
-frontend.
+For product-development work, read `DEVELOPMENT_ROADMAP.md` before changing
+the GUI, AI integration, or Studio ownership. The original Veusz `MainWindow`
+is the final daily frontend, not a transition surface. SciPlot adds only
+optional, closable Project and AI docks plus exact-current export actions to
+the same live Veusz `Document`.
 
-The target is a focused native SciPlot Canvas that embeds Veusz `Document` and
-`PlotWindow`, sends both user and AI edits through typed operations, and keeps
-the current VSZ as visual authority. Do not rebuild every arbitrary Veusz
-property, add a second renderer, automate the Veusz GUI with mouse clicks, or
-remove the Advanced Editor recovery route before the roadmap's real-use
-retirement gate passes.
+Do not revive the standalone Canvas as a replacement frontend, rebuild
+Veusz's arbitrary property editor, add a second renderer or document model,
+automate the Veusz GUI with mouse clicks, or make native composition part of
+the ordinary readiness gate. The historical Canvas and Composition code may
+remain as bounded regression/reference capabilities, but daily development is
+driven by real Veusz-first tasks.
 
 ## Daily route
 
@@ -82,19 +82,11 @@ retirement gate passes.
    This route proves exact-current export only; it does not establish source
    provenance, transform lineage, or a complete SciPlot project delivery.
 
-   For the experimental M2-foundation native editor, use:
-
-   ```bash
-   skill/scripts/sciplot canvas PROJECT_OR_VSZ
-   ```
-
-   It embeds the exact-current Veusz PlotWindow in the SciPlot Qt shell and
-   provides selection, bounded visible-text editing, Save/Undo/Redo,
-   Export + QA, explicit recovery, palette-backed light/dark/high-contrast
-   chrome, adaptive inspector docking, `F9` inspector toggle, and `Tab`
-   Canvas-only mode. Advanced Editor is under `More` as a recovery route. Do
-   not describe this foundation as the complete M2 daily editor or switch the
-   normal `studio` entrypoint yet.
+   When the native window is open, keep ordinary alignment, selection, object
+   properties, Datasets, Save, and Undo/Redo in Veusz. Open the optional
+   SciPlot Project dock for source/QA/delivery status and the optional SciPlot
+   AI dock only for bounded edits to the currently selected supported object.
+   Both docks operate on the same document and remain hidden by default.
 
 4. Before reporting success, read the returned state, current VSZ hash,
    `manifest.json`, `review.html`, figures, `tables/analysis_metrics.csv`, QA and

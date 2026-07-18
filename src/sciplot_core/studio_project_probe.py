@@ -300,7 +300,11 @@ class _ActiveAssistantRunner:
         return True
 
 
-def _mapping_project_status(mapped_document: Path) -> dict[str, Any]:
+def _mapping_project_status(
+    mapped_document: Path,
+    *,
+    audit_source: bool = True,
+) -> dict[str, Any]:
     from sciplot_gui.studio_project import build_studio_project_status
 
     document = mapped_document.expanduser().resolve()
@@ -310,7 +314,7 @@ def _mapping_project_status(mapped_document: Path) -> dict[str, Any]:
         document=_SavedDocument(),
         project_dir=project_dir,
         request_path=project_dir / "plot_request.json",
-        audit_source=True,
+        audit_source=audit_source,
     )
 
 
@@ -445,8 +449,156 @@ def run_studio_project_probe(
             )
         )
 
-        baseline_export = project_bridge.export_current_document(
-            show_dialog=False
+        exporting_gate: dict[str, Any] = {}
+        original_project_export = project_bridge._project_export
+
+        def observed_project_export() -> dict[str, Any]:
+            exporting_gate.update(
+                {
+                    "workflow": json_safe(
+                        project_bridge.status_snapshot.get("workflow")
+                    ),
+                    "refresh_enabled": (
+                        project_bridge.refresh_button.isEnabled()
+                    ),
+                    "export_enabled": (
+                        project_bridge.export_button.isEnabled()
+                    ),
+                    "pdf_enabled": (
+                        project_bridge.open_pdf_button.isEnabled()
+                    ),
+                    "delivery_enabled": (
+                        project_bridge.show_delivery_button.isEnabled()
+                    ),
+                    "vsz_enabled": (
+                        project_bridge.reveal_vsz_button.isEnabled()
+                    ),
+                }
+            )
+            return original_project_export()
+
+        project_bridge._project_export = observed_project_export
+        try:
+            baseline_export = project_bridge.export_current_document(
+                show_dialog=False
+            )
+        finally:
+            project_bridge._project_export = original_project_export
+        baseline_light_status = json.loads(
+            json.dumps(
+                json_safe(project_bridge.status_snapshot),
+                ensure_ascii=False,
+            )
+        )
+        checks.append(
+            _check(
+                "project_exporting_state_gates_all_actions",
+                "Export publishes an observable exporting state and disables every mutating or result action",
+                exporting_gate.get("workflow", {}).get("state")
+                == "exporting"
+                and exporting_gate.get("refresh_enabled") is False
+                and exporting_gate.get("export_enabled") is False
+                and exporting_gate.get("pdf_enabled") is False
+                and exporting_gate.get("delivery_enabled") is False
+                and exporting_gate.get("vsz_enabled") is False,
+                exporting_gate,
+            )
+        )
+        light_results = (
+            baseline_light_status.get("results")
+            if isinstance(
+                baseline_light_status.get("results"),
+                dict,
+            )
+            else {}
+        )
+        light_pdf = (
+            light_results.get("pdf")
+            if isinstance(light_results.get("pdf"), dict)
+            else {}
+        )
+        light_delivery = (
+            light_results.get("delivery")
+            if isinstance(light_results.get("delivery"), dict)
+            else {}
+        )
+        light_vsz = (
+            light_results.get("vsz")
+            if isinstance(light_results.get("vsz"), dict)
+            else {}
+        )
+        light_evidence = Path(
+            str(baseline_light_status["qa"]["evidence"])
+        ).expanduser().resolve()
+        checks.append(
+            _check(
+                "light_refresh_separates_ready_result_from_pending_audit",
+                "The immediate lightweight post-export refresh keeps the result ready and labels the deep audit pending rather than stale",
+                baseline_export.get("ready_to_use") is True
+                and baseline_light_status.get("workflow", {}).get("state")
+                == "ready"
+                and baseline_light_status.get("workflow", {}).get(
+                    "audit_state"
+                )
+                == "pending"
+                and baseline_light_status.get("provenance", {}).get(
+                    "status"
+                )
+                == "audit_pending_for_current_project"
+                and baseline_light_status.get("qa", {}).get("status")
+                == "passed_for_current_document"
+                and baseline_light_status.get("provenance", {}).get(
+                    "project_delivery_current"
+                )
+                is True
+                and light_pdf.get("available") is True
+                and light_delivery.get("available") is True
+                and light_vsz.get("available") is True
+                and _is_within(
+                    Path(str(light_pdf["path"])),
+                    light_evidence.parent,
+                )
+                and _is_within(
+                    Path(str(light_delivery["path"])),
+                    light_evidence.parent,
+                ),
+                baseline_light_status,
+            )
+        )
+        opened_results: list[str] = []
+        original_open_local_path = project_bridge._open_local_path
+        project_bridge._open_local_path = (
+            lambda path: opened_results.append(
+                str(path.expanduser().resolve())
+            )
+            is None
+        )
+        try:
+            project_bridge.open_pdf_button.click()
+            project_bridge.show_delivery_button.click()
+            project_bridge.reveal_vsz_button.click()
+            _wait(application)
+        finally:
+            project_bridge._open_local_path = original_open_local_path
+        expected_opened_results = [
+            str(Path(str(light_pdf["path"])).expanduser().resolve()),
+            str(Path(str(light_delivery["path"])).expanduser().resolve()),
+            str(
+                Path(str(light_vsz["reveal_path"]))
+                .expanduser()
+                .resolve()
+            ),
+        ]
+        checks.append(
+            _check(
+                "current_result_actions_use_validated_local_targets",
+                "PDF, delivery, and VSZ reveal actions use only current validated paths without launching a real external application",
+                opened_results == expected_opened_results,
+                {
+                    "opened": opened_results,
+                    "expected": expected_opened_results,
+                },
+            )
         )
         baseline_status = project_bridge.refresh(
             capture_render=True,
@@ -492,7 +644,11 @@ def run_studio_project_probe(
                 == saved_hash_before_edit
                 and modified_status["document"]["live_render_sha256"] is None
                 and modified_status["qa"]["status"]
-                == "stale_for_current_document",
+                == "stale_for_current_document"
+                and modified_status.get("workflow", {}).get("state")
+                == "editing"
+                and not project_bridge.open_pdf_button.isEnabled()
+                and not project_bridge.show_delivery_button.isEnabled(),
                 modified_status,
             )
         )
@@ -513,7 +669,11 @@ def run_studio_project_probe(
                 and saved_status["document"]["saved_sha256"]
                 == saved_hash_after_edit
                 and saved_status["qa"]["status"]
-                == "stale_for_current_document",
+                == "stale_for_current_document"
+                and saved_status.get("workflow", {}).get("state")
+                == "editing"
+                and not project_bridge.open_pdf_button.isEnabled()
+                and not project_bridge.show_delivery_button.isEnabled(),
                 saved_status,
             )
         )
@@ -598,7 +758,13 @@ def run_studio_project_probe(
                 and tampered_delivery_status.get("provenance", {}).get(
                     "complete"
                 )
-                is False,
+                is False
+                and tampered_delivery_status.get("workflow", {}).get(
+                    "state"
+                )
+                == "needs_fix"
+                and project_bridge.open_pdf_button.isEnabled()
+                and not project_bridge.show_delivery_button.isEnabled(),
                 {
                     "delivery_pdf": (
                         str(delivery_pdf)
@@ -980,7 +1146,15 @@ def run_studio_project_probe(
                 and deleted_standalone_status.get("qa", {}).get(
                     "current_document"
                 )
-                is not True,
+                is not True
+                and tampered_standalone_status.get("workflow", {}).get(
+                    "state"
+                )
+                == "needs_fix"
+                and deleted_standalone_status.get("workflow", {}).get(
+                    "state"
+                )
+                == "needs_fix",
                 {
                     "tiff": (
                         str(standalone_tiff)
@@ -994,8 +1168,36 @@ def run_studio_project_probe(
         )
 
         mapping_status: dict[str, Any] | None = None
+        mapping_light_status: dict[str, Any] | None = None
         if mapped_document is not None:
+            mapping_light_status = _mapping_project_status(
+                mapped_document,
+                audit_source=False,
+            )
             mapping_status = _mapping_project_status(mapped_document)
+            checks.append(
+                _check(
+                    "mapped_light_refresh_is_ready_with_pending_audit",
+                    "A mapped current result remains ready while lightweight mapping and source audit are explicitly pending",
+                    mapping_light_status["mapping"]["status"]
+                    == "audit_pending"
+                    and mapping_light_status["source"]["audit_status"]
+                    == "not_computed"
+                    and mapping_light_status["qa"]["status"]
+                    == "passed_for_current_document"
+                    and mapping_light_status.get("workflow", {}).get(
+                        "state"
+                    )
+                    == "ready"
+                    and mapping_light_status.get("workflow", {}).get(
+                        "audit_state"
+                    )
+                    == "pending"
+                    and mapping_light_status["provenance"]["status"]
+                    == "audit_pending_for_current_project",
+                    mapping_light_status,
+                )
+            )
             checks.append(
                 _check(
                     "confirmed_mapping_status_is_reverified",
@@ -1044,6 +1246,10 @@ def run_studio_project_probe(
                 deleted_standalone_status
             ),
             "mapping_status": mapping_status,
+            "mapping_light_status": mapping_light_status,
+            "baseline_light_status": baseline_light_status,
+            "exporting_gate": exporting_gate,
+            "opened_results": opened_results,
             "baseline_export": baseline_export,
             "updated_export": updated_export,
             "standalone_export": standalone_export,

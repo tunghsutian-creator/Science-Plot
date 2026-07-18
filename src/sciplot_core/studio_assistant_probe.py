@@ -24,6 +24,10 @@ from sciplot_core.canvas.provider import (
     AssistantRequest,
     AssistantResponse,
 )
+from sciplot_gui.studio_assistant_history import (
+    canonical_value_sha256,
+    read_assistant_history,
+)
 
 STUDIO_ASSISTANT_PROBE_KIND = "sciplot_studio_assistant_probe"
 STUDIO_ASSISTANT_PROBE_VERSION = 1
@@ -364,7 +368,11 @@ def run_studio_assistant_probe(
         setting_path = f"{axis.path}/label"
         label_setting = window.document.resolveSettingPath(None, setting_path)
         original_label = json_safe(label_setting.get())
-        ai_label = f"{original_label} · AI" if str(original_label).strip() else "Frequency · AI"
+        ai_label = (
+            f"{original_label} · AI"
+            if str(original_label).strip()
+            else "Frequency · AI"
+        )
 
         identity = {
             "bridge_document_is_window_document": bridge.document is window.document,
@@ -404,12 +412,10 @@ def run_studio_assistant_probe(
         }
         native_plot_geometry_before = window.plot.geometry().getRect()
         dock_default_hidden = (
-            not bridge.dock.isVisible()
-            and not assistant_action.isChecked()
+            not bridge.dock.isVisible() and not assistant_action.isChecked()
         )
         action_in_sciplot_menu = (
-            sciplot_menu is not None
-            and assistant_action in sciplot_menu.actions()
+            sciplot_menu is not None and assistant_action in sciplot_menu.actions()
         )
         assistant_action.trigger()
         dock_shown = _wait_until(
@@ -432,8 +438,7 @@ def run_studio_assistant_probe(
         assistant_action.trigger()
         dock_hidden_again = _wait_until(
             application,
-            lambda: not bridge.dock.isVisible()
-            and not assistant_action.isChecked(),
+            lambda: not bridge.dock.isVisible() and not assistant_action.isChecked(),
             timeout_ms=2000,
         )
         native_identity_after = {
@@ -478,6 +483,28 @@ def run_studio_assistant_probe(
                 dock_behavior,
             )
         )
+        ui_scope = {
+            "intro": bridge.intro_label.text(),
+            "placeholder": bridge.intent_edit.placeholderText(),
+            "ask_button": bridge.ask_button.text(),
+            "auto_apply_checked": bridge.auto_apply.isChecked(),
+            "history_path": str(bridge.history_path),
+            "history_exists_before_request": bridge.history_path.exists(),
+        }
+        checks.append(
+            _check(
+                "selected_object_ui_scope",
+                "The Assistant describes the current page as context, names selected-object scope, and does not auto-apply by default",
+                "rendered page" in bridge.intro_label.text().casefold()
+                and "selected object" in bridge.intro_label.text().casefold()
+                and "selected object" in bridge.ask_button.text().casefold()
+                and "selected axis label"
+                in bridge.intent_edit.placeholderText().casefold()
+                and bridge.auto_apply.isChecked() is False
+                and not bridge.history_path.exists(),
+                ui_scope,
+            )
+        )
         checks.append(
             _check(
                 "axis_selected",
@@ -498,22 +525,38 @@ def run_studio_assistant_probe(
         applied_events: list[dict[str, Any]] = []
         rejected_events: list[str] = []
         submitted_requests: list[AssistantRequest] = []
-        bridge.proposalApplied.connect(
-            lambda value: applied_events.append(dict(value))
-        )
+        history_observations: list[dict[str, Any]] = []
+        bridge.proposalApplied.connect(lambda value: applied_events.append(dict(value)))
         bridge.requestRejected.connect(rejected_events.append)
         bridge.requestSubmitted.connect(submitted_requests.append)
+        bridge.historyRecorded.connect(
+            lambda event: history_observations.append(
+                {
+                    "status": str(event.get("status")),
+                    "document_changeset": int(window.document.changeset),
+                }
+            )
+        )
 
         provider.configure(next_value=ai_label)
         request = bridge.submit_intent(
             "Inspect the current plot and make the selected x-axis label visibly clearer."
         )
+        proposal_completed = _wait_until(
+            application,
+            lambda: bridge.pending_batch is not None and not bridge.runner.active,
+        )
+        if not proposal_completed:
+            raise RuntimeError("The deterministic Assistant proposal did not complete.")
+        manual_apply_result = bridge.accept_pending()
         positive_completed = _wait_until(
             application,
-            lambda: bool(applied_events) and not bridge.runner.active,
+            lambda: bool(applied_events),
         )
         if not positive_completed:
             raise RuntimeError("The deterministic Assistant edit did not complete.")
+        if manual_apply_result is None:
+            raise RuntimeError("The deterministic Assistant proposal was not applied.")
 
         provider_request = provider.requests[0]
         request_capability = _axis_label_capability(request)
@@ -555,17 +598,21 @@ def run_studio_assistant_probe(
         apply_result = applied_events[0]
         checks.append(
             _check(
-                "typed_axis_label_auto_apply",
-                "One typed axis-label proposal applies to the live Veusz plot and changes its render",
+                "typed_axis_label_manual_apply",
+                "One explicitly accepted typed axis-label proposal applies to the live Veusz plot and changes its render",
                 applied_value == ai_label
                 and apply_result["operations"][0]["setting_path"] == setting_path
                 and apply_result["operations"][0]["old_value"] == original_label
                 and apply_result["operations"][0]["new_value"] == ai_label
                 and apply_result["render_changed"] is True
+                and apply_result["verification_status"] == "applied"
+                and apply_result["history_finalized"] is True
                 and applied_capture["sha256"] != before_capture["sha256"]
+                and bridge._pending_request is None
+                and bridge._pending_response is None
                 and window.document.canUndo()
                 and str(window.document.historyundo[-1].descr).startswith(
-                    "SciPlot AI"
+                    "SciPlot AI · "
                 ),
                 {
                     "applied_value": applied_value,
@@ -573,6 +620,95 @@ def run_studio_assistant_probe(
                     "capture": applied_capture,
                     "undo_description": str(window.document.historyundo[-1].descr),
                 },
+            )
+        )
+
+        history_events = read_assistant_history(bridge.history_path)
+        positive_history = [
+            event
+            for event in history_events
+            if event.get("request_id") == request.request_id
+        ]
+        history_text = bridge.history_path.read_text(encoding="utf-8")
+        apply_started_event = next(
+            (
+                event
+                for event in positive_history
+                if event.get("status") == "apply_started"
+            ),
+            {},
+        )
+        applied_history_event = next(
+            (event for event in positive_history if event.get("status") == "applied"),
+            {},
+        )
+        apply_started_observation = next(
+            (
+                event
+                for event in history_observations
+                if event.get("status") == "apply_started"
+            ),
+            {},
+        )
+        applied_observation = next(
+            (
+                event
+                for event in history_observations
+                if event.get("status") == "applied"
+            ),
+            {},
+        )
+        history_safety = {
+            "path": str(bridge.history_path),
+            "statuses": [event.get("status") for event in positive_history],
+            "apply_started": apply_started_event,
+            "applied": applied_history_event,
+            "observations": history_observations,
+            "line_count": len(history_events),
+        }
+        checks.append(
+            _check(
+                "durable_privacy_minimal_assistant_history",
+                "The fsynced allowlisted history binds request, operations, and before/after renders without retaining images, prompts, model text, values, secrets, or filesystem paths",
+                [event.get("status") for event in positive_history]
+                == [
+                    "submitted",
+                    "proposal_ready",
+                    "apply_started",
+                    "applied",
+                ]
+                and apply_started_observation.get("document_changeset")
+                == request.base_revision
+                and applied_observation.get("document_changeset")
+                == apply_result["applied_revision"]
+                and apply_started_event.get("before_page_render_sha256")
+                == before_capture["sha256"]
+                and applied_history_event.get("after_page_render_sha256")
+                == applied_capture["sha256"]
+                and applied_history_event.get("render_changed") is True
+                and applied_history_event.get("operations", [{}])[0].get(
+                    "old_value_sha256"
+                )
+                == canonical_value_sha256(original_label)
+                and applied_history_event.get("operations", [{}])[0].get(
+                    "new_value_sha256"
+                )
+                == canonical_value_sha256(ai_label)
+                and request.visual_preview["base64"] not in history_text
+                and request.intent not in history_text
+                and provider_request.intent not in history_text
+                and "The exact-current axis label has one bounded edit."
+                not in history_text
+                and "Offline Studio axis-label probe" not in history_text
+                and ai_label not in history_text
+                and str(copied_document) not in history_text
+                and '"intent"' not in history_text
+                and '"visual_preview"' not in history_text
+                and '"understanding"' not in history_text
+                and '"rationale"' not in history_text
+                and '"api_key"' not in history_text
+                and '"authorization"' not in history_text,
+                history_safety,
             )
         )
 
@@ -634,6 +770,48 @@ def run_studio_assistant_probe(
             )
         )
 
+        reject_target = f"{manual_label} · rejected AI"
+        reject_revision = int(window.document.changeset)
+        reject_render = bridge.current_render_sha256()
+        provider.configure(next_value=reject_target)
+        reject_request = bridge.submit_intent(
+            "Propose a bounded label change that will be explicitly rejected."
+        )
+        reject_ready = _wait_until(
+            application,
+            lambda: bridge.pending_batch is not None and not bridge.runner.active,
+        )
+        if not reject_ready:
+            raise RuntimeError("The rejection proposal did not become ready.")
+        bridge.reject_pending()
+        reject_history = [
+            event
+            for event in read_assistant_history(bridge.history_path)
+            if event.get("request_id") == reject_request.request_id
+        ]
+        checks.append(
+            _check(
+                "explicit_rejection_history",
+                "Reject records a typed terminal outcome without changing the live Veusz Document",
+                json_safe(label_setting.get()) == manual_label
+                and int(window.document.changeset) == reject_revision
+                and bridge.current_render_sha256() == reject_render
+                and [event.get("status") for event in reject_history]
+                == ["submitted", "proposal_ready", "rejected"]
+                and reject_history[-1].get("reason_code") == "user_rejected"
+                and reject_history[-1]
+                .get("operations", [{}])[0]
+                .get("new_value_sha256")
+                == canonical_value_sha256(reject_target)
+                and bridge._pending_request is None,
+                {
+                    "statuses": [event.get("status") for event in reject_history],
+                    "terminal": reject_history[-1] if reject_history else None,
+                    "revision": int(window.document.changeset),
+                },
+            )
+        )
+
         stale_target = f"{manual_label} · stale AI"
         provider.configure(next_value=stale_target, delayed=True)
         stale_history_before = len(window.document.historyundo)
@@ -663,6 +841,11 @@ def run_studio_assistant_probe(
         )
         if not stale_completed:
             raise RuntimeError("The stale Assistant response was not resolved.")
+        stale_request_history = [
+            event
+            for event in read_assistant_history(bridge.history_path)
+            if event.get("request_id") == stale_request.request_id
+        ]
         checks.append(
             _check(
                 "stale_response_atomic_rejection",
@@ -672,6 +855,11 @@ def run_studio_assistant_probe(
                 and len(applied_events) == stale_applied_before
                 and len(window.document.historyundo) == stale_history_before + 1
                 and not bridge.pending_batch
+                and bridge._pending_request is None
+                and [event.get("status") for event in stale_request_history]
+                == ["submitted", "rejected"]
+                and stale_request_history[-1].get("reason_code")
+                == "document_revision_changed"
                 and any(
                     "changed while AI was inspecting" in message
                     for message in rejected_events
@@ -683,6 +871,130 @@ def run_studio_assistant_probe(
                     "history_before": stale_history_before,
                     "history_after": len(window.document.historyundo),
                     "rejections": rejected_events,
+                    "assistant_history": stale_request_history,
+                },
+            )
+        )
+
+        unverified_target = f"{concurrent_label} · unverified AI"
+        provider.configure(next_value=unverified_target)
+        unverified_request = bridge.submit_intent(
+            "Apply one bounded label change while after-render verification is forced to fail."
+        )
+        unverified_ready = _wait_until(
+            application,
+            lambda: bridge.pending_batch is not None and not bridge.runner.active,
+        )
+        if not unverified_ready:
+            raise RuntimeError("The unverified proposal did not become ready.")
+        original_render_method = bridge.current_render_sha256
+
+        def fail_after_render() -> str:
+            raise RuntimeError("forced after-render verification failure")
+
+        bridge.current_render_sha256 = fail_after_render
+        try:
+            unverified_result = bridge.accept_pending()
+        finally:
+            bridge.current_render_sha256 = original_render_method
+        if unverified_result is None:
+            raise RuntimeError("The unverified Assistant operation did not apply.")
+        unverified_history = [
+            event
+            for event in read_assistant_history(bridge.history_path)
+            if event.get("request_id") == unverified_request.request_id
+        ]
+        value_before_unverified_undo = json_safe(label_setting.get())
+        window.slotEditUndo()
+        value_after_unverified_undo = json_safe(label_setting.get())
+        checks.append(
+            _check(
+                "applied_unverified_is_honest_and_undoable",
+                "An after-render verification failure remains an applied native Undo step and is never reported as not applied",
+                value_before_unverified_undo == unverified_target
+                and value_after_unverified_undo == concurrent_label
+                and unverified_result["verification_status"] == "applied_unverified"
+                and unverified_result["after_render_sha256"] is None
+                and unverified_result["history_finalized"] is True
+                and [event.get("status") for event in unverified_history]
+                == [
+                    "submitted",
+                    "proposal_ready",
+                    "apply_started",
+                    "applied_unverified",
+                ]
+                and unverified_history[-1].get("reason_code")
+                == "after_render_verification_failed"
+                and "after_page_render_sha256" not in unverified_history[-1]
+                and bridge._pending_request is None
+                and "not applied" not in bridge.status_label.text().casefold(),
+                {
+                    "result": unverified_result,
+                    "statuses": [event.get("status") for event in unverified_history],
+                    "terminal": (
+                        unverified_history[-1] if unverified_history else None
+                    ),
+                    "value_before_undo": value_before_unverified_undo,
+                    "value_after_undo": value_after_unverified_undo,
+                    "status_text": bridge.status_label.text(),
+                },
+            )
+        )
+
+        history_failure_target = f"{concurrent_label} · blocked AI"
+        provider.configure(next_value=history_failure_target)
+        history_failure_request = bridge.submit_intent(
+            "Propose a change that must not apply when apply-start history fails."
+        )
+        history_failure_ready = _wait_until(
+            application,
+            lambda: bridge.pending_batch is not None and not bridge.runner.active,
+        )
+        if not history_failure_ready:
+            raise RuntimeError("The history-failure proposal did not become ready.")
+        history_failure_revision = int(window.document.changeset)
+        history_failure_undo_count = len(window.document.historyundo)
+        original_record_history = bridge._record_history
+
+        def fail_apply_started_history(**kwargs: Any) -> dict[str, Any]:
+            if kwargs.get("status") == "apply_started":
+                raise OSError("forced apply-start history failure")
+            return original_record_history(**kwargs)
+
+        bridge._record_history = fail_apply_started_history
+        try:
+            blocked_result = bridge.accept_pending()
+        finally:
+            bridge._record_history = original_record_history
+        history_failure_value = json_safe(label_setting.get())
+        history_failure_pending = bridge.pending_batch is not None
+        bridge.reject_pending()
+        history_failure_events = [
+            event
+            for event in read_assistant_history(bridge.history_path)
+            if event.get("request_id") == history_failure_request.request_id
+        ]
+        checks.append(
+            _check(
+                "apply_started_history_is_fail_closed",
+                "A durable apply-start history failure prevents any Veusz Document mutation",
+                blocked_result is None
+                and history_failure_value == concurrent_label
+                and int(window.document.changeset) == history_failure_revision
+                and len(window.document.historyundo) == history_failure_undo_count
+                and history_failure_pending
+                and [event.get("status") for event in history_failure_events]
+                == ["submitted", "proposal_ready", "rejected"]
+                and history_failure_events[-1].get("reason_code") == "user_rejected"
+                and bridge._pending_request is None,
+                {
+                    "statuses": [
+                        event.get("status") for event in history_failure_events
+                    ],
+                    "value": history_failure_value,
+                    "revision": int(window.document.changeset),
+                    "undo_count": len(window.document.historyundo),
+                    "blocked_status": bridge.status_label.text(),
                 },
             )
         )
@@ -767,6 +1079,7 @@ def run_studio_assistant_probe(
             )
         )
 
+        final_history_events = read_assistant_history(bridge.history_path)
         evidence = {
             "document_identity": identity,
             "dock_behavior": dock_behavior,
@@ -781,9 +1094,7 @@ def run_studio_assistant_probe(
                 "request_id": request.request_id,
                 "base_revision": request.base_revision,
                 "payload_sha256": request.payload_sha256,
-                "visual_preview": _visual_preview_metadata(
-                    request.visual_preview
-                ),
+                "visual_preview": _visual_preview_metadata(request.visual_preview),
             },
             "stale_request": {
                 "request_id": stale_request.request_id,
@@ -800,6 +1111,11 @@ def run_studio_assistant_probe(
             "exports": exports,
             "source_sha256": source_sha256,
             "saved_document_sha256": saved_sha256,
+            "assistant_history": {
+                "path": str(bridge.history_path),
+                "event_count": len(final_history_events),
+                "statuses": [event.get("status") for event in final_history_events],
+            },
         }
     except Exception as exc:
         error = {"type": type(exc).__name__, "message": str(exc)}
@@ -829,12 +1145,8 @@ def run_studio_assistant_probe(
         "checks": checks,
         "summary": {
             "check_count": len(checks),
-            "passed_count": sum(
-                item["status"] == "passed" for item in checks
-            ),
-            "failed_ids": [
-                item["id"] for item in checks if item["status"] != "passed"
-            ],
+            "passed_count": sum(item["status"] == "passed" for item in checks),
+            "failed_ids": [item["id"] for item in checks if item["status"] != "passed"],
         },
         "evidence": evidence,
         "artifacts": {
@@ -846,6 +1158,9 @@ def run_studio_assistant_probe(
             "undo_png": str(undo_png),
             "reopen_png": str(reopen_png),
             "exports": str(export_root),
+            "assistant_history": (
+                str(bridge.history_path) if "bridge" in locals() else None
+            ),
             "summary": str(summary_path),
         },
         "error": error,
