@@ -71,7 +71,18 @@ def _validate_template_render_option_keys(keys: set[str], *, template: str | Non
         for key in keys
         if key not in spec.editable_options
         and key not in UNIFIED_HARD_OPTION_KEYS
-        and key not in {"fit_options", "custom_theme_id", "custom_theme_draft", "visual_theme_id"}
+        and key
+        not in {
+            "fit_options",
+            "custom_theme_id",
+            "custom_theme_draft",
+            "visual_theme_id",
+            "x_minor_tick_count",
+            "y_minor_tick_count",
+            "x_minor_ticks",
+            "y_minor_ticks",
+            "show_y_ticks",
+        }
     )
     if unsupported:
         allowed = ", ".join(spec.editable_options)

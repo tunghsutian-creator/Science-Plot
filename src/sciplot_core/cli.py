@@ -349,6 +349,24 @@ def _build_parser() -> argparse.ArgumentParser:
     publication_layout_parser.add_argument("--height-mm", type=float, default=55.0)
     publication_layout_parser.add_argument("--json", action="store_true")
 
+    figure_parser = subparsers.add_parser(
+        "figure",
+        help="Build plot-ready curve and shared-colorbar figure profiles without scientific data processing.",
+    )
+    figure_subparsers = figure_parser.add_subparsers(dest="figure_command", required=True)
+    figure_profiles_parser = figure_subparsers.add_parser("profiles", help="List reusable figure profiles.")
+    figure_profiles_parser.add_argument("--json", action="store_true")
+    figure_profile_parser = figure_subparsers.add_parser("profile", help="Show one reusable figure profile.")
+    figure_profile_parser.add_argument("profile_id")
+    figure_profile_parser.add_argument("--json", action="store_true")
+    figure_build_parser = figure_subparsers.add_parser(
+        "build",
+        help="Build a VSZ/PDF/TIFF package from an explicit plot-ready figure request.",
+    )
+    figure_build_parser.add_argument("request", type=Path)
+    figure_build_parser.add_argument("--out", type=Path, required=True)
+    figure_build_parser.add_argument("--json", action="store_true")
+
     hidden_compatibility_commands = {"one-step", "quick", "prepare", "intake", "workbench"}
     subparsers._choices_actions[:] = [  # type: ignore[attr-defined]
         action for action in subparsers._choices_actions if action.dest not in hidden_compatibility_commands
@@ -665,6 +683,38 @@ def main(argv: list[str] | None = None) -> int:
                 payload = build_composite_layout(args.layout_id, canvas_height_mm=args.height_mm)
             if args.json:
                 _print_json(payload)
+            else:
+                print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return 0
+        if args.command == "figure":
+            from sciplot_core.figure_profiles import (
+                figure_profile_payload,
+                list_figure_profiles,
+            )
+
+            if args.figure_command == "profiles":
+                payload = {
+                    "kind": "sciplot_figure_profiles",
+                    "version": 1,
+                    "profiles": list_figure_profiles(),
+                }
+            elif args.figure_command == "profile":
+                payload = figure_profile_payload(args.profile_id)
+            else:
+                from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+                original_argv = list(sys.argv[1:] if argv is None else argv)
+                maybe_reexec_with_qt_runtime(original_argv)
+                from sciplot_core.figure_workflow import run_plot_ready_figure_request
+
+                payload = run_plot_ready_figure_request(
+                    _resolve_input(args.request, kind="Figure request file"),
+                    output_dir=args.out.expanduser(),
+                )
+            if args.json:
+                _print_json(payload)
+            elif args.figure_command == "build":
+                print(payload["delivery"])
             else:
                 print(json.dumps(payload, indent=2, ensure_ascii=False))
             return 0

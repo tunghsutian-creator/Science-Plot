@@ -21,6 +21,7 @@ from sciplot_core.policy import (
     POINT_LINE_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_X_LABEL,
+    RHEOLOGY_TEMPERATURE_RENDER_OPTIONS,
     TORQUE_CURVE_RENDER_OPTIONS,
 )
 from sciplot_core.study_model import experiment_recommendation_payload
@@ -300,7 +301,7 @@ RULES: tuple[SemanticRule, ...] = (
         AxisSpec(
             "Storage modulus",
             "Pa",
-            "Storage modulus, G′ (Pa)",
+            "G′ (Pa)",
             aliases=("storage modulus", "G'", "G′", "complex modulus", "|G*|"),
             priority_labels=("G'", "Storage Modulus", "|G*|", "Complex Modulus", "G\""),
             scale="log",
@@ -308,7 +309,7 @@ RULES: tuple[SemanticRule, ...] = (
         keywords=("rheologytemperaturesweep", "temperaturesweep", "温度扫描"),
         path_keywords=("/temp/", "rheology_temperature"),
         column_aliases=("temperature", "storage modulus", "complex modulus"),
-        render_options=_DEFAULT_RENDER_OPTIONS,
+        render_options=RHEOLOGY_TEMPERATURE_RENDER_OPTIONS,
         analysis=(
             AnalysisSpec("tan_delta", "loss factor column if present", ("tan delta",), "1"),
             AnalysisSpec(

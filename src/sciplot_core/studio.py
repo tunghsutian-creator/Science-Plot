@@ -2436,37 +2436,56 @@ def _veusz_style_contract(render_options: dict[str, Any]) -> _VeuszStyleContract
         contract = load_plot_contract()
         style = contract.styles.get(normalize_style_alias(style_id))
         if style is None:
-            return _VeuszStyleContract()
-        base = _VeuszStyleContract(
-            # Typography and physical strokes are deliberately not read from
-            # template/style overrides.  They are the project-wide hard
-            # contract; style presets remain only for semantic/layout
-            # compatibility and palette/theme selection.
-            font_family=UNIFIED_FONT_FAMILY,
-            font_size_pt=UNIFIED_FONT_SIZE_PT,
-            legend_font_size_pt=UNIFIED_LEGEND_FONT_SIZE_PT,
-            axis_linewidth_pt=UNIFIED_AXIS_LINEWIDTH_PT,
-            tick_width_pt=UNIFIED_TICK_WIDTH_PT,
-            tick_length_pt=UNIFIED_TICK_LENGTH_PT,
-            minor_tick_width_pt=UNIFIED_MINOR_TICK_WIDTH_PT,
-            minor_tick_length_pt=UNIFIED_MINOR_TICK_LENGTH_PT,
-            line_width_pt=UNIFIED_LINE_WIDTH_PT,
-            line_alpha=float(style.stroke.line_alpha),
-            marker_alpha=float(style.stroke.marker_alpha),
-            marker_size_pt=UNIFIED_MARKER_SIZE_PT,
-            marker_line_width_pt=UNIFIED_MARKER_LINE_WIDTH_PT,
-            axes_labelpad_pt=float(style.spacing.axes_labelpad),
-            xtick_major_pad_pt=float(style.spacing.xtick_major_pad),
-            ytick_major_pad_pt=float(style.spacing.ytick_major_pad),
-            legend_inset_fraction=float(style.spacing.legend_inset_fraction),
-            legend_frameon=bool(style.annotation.legend_frameon),
-            left_margin_mm=float(contract.global_frame.left_margin_mm),
-            right_margin_mm=float(contract.global_frame.right_margin_mm),
-            bottom_margin_mm=float(contract.global_frame.bottom_margin_mm),
-            top_margin_mm=float(contract.global_frame.top_margin_mm),
-        )
+            base = _VeuszStyleContract()
+        else:
+            base = _VeuszStyleContract(
+                # Typography and physical strokes are deliberately not read from
+                # template/style overrides.  They are the project-wide hard
+                # contract; style presets remain only for semantic/layout
+                # compatibility and palette/theme selection.
+                font_family=UNIFIED_FONT_FAMILY,
+                font_size_pt=UNIFIED_FONT_SIZE_PT,
+                legend_font_size_pt=UNIFIED_LEGEND_FONT_SIZE_PT,
+                axis_linewidth_pt=UNIFIED_AXIS_LINEWIDTH_PT,
+                tick_width_pt=UNIFIED_TICK_WIDTH_PT,
+                tick_length_pt=UNIFIED_TICK_LENGTH_PT,
+                minor_tick_width_pt=UNIFIED_MINOR_TICK_WIDTH_PT,
+                minor_tick_length_pt=UNIFIED_MINOR_TICK_LENGTH_PT,
+                line_width_pt=UNIFIED_LINE_WIDTH_PT,
+                line_alpha=float(style.stroke.line_alpha),
+                marker_alpha=float(style.stroke.marker_alpha),
+                marker_size_pt=UNIFIED_MARKER_SIZE_PT,
+                marker_line_width_pt=UNIFIED_MARKER_LINE_WIDTH_PT,
+                axes_labelpad_pt=float(style.spacing.axes_labelpad),
+                xtick_major_pad_pt=float(style.spacing.xtick_major_pad),
+                ytick_major_pad_pt=float(style.spacing.ytick_major_pad),
+                legend_inset_fraction=float(style.spacing.legend_inset_fraction),
+                legend_frameon=bool(style.annotation.legend_frameon),
+                left_margin_mm=float(contract.global_frame.left_margin_mm),
+                right_margin_mm=float(contract.global_frame.right_margin_mm),
+                bottom_margin_mm=float(contract.global_frame.bottom_margin_mm),
+                top_margin_mm=float(contract.global_frame.top_margin_mm),
+            )
     except Exception:
         base = _VeuszStyleContract()
+    # A small set of named figure profiles may own a special physical frame.
+    # Arbitrary request-level margins remain unsupported: the registry is the
+    # trust boundary that prevents one-off layouts from changing global
+    # 60 × 55 mm defaults.
+    try:
+        from sciplot_core.figure_profiles import figure_profile_frame_margins
+
+        profile_margins = figure_profile_frame_margins(render_options.get("_figure_profile_id"))
+    except (ImportError, ValueError):
+        profile_margins = None
+    if profile_margins is not None:
+        base = replace(
+            base,
+            left_margin_mm=float(profile_margins["left"]),
+            right_margin_mm=float(profile_margins["right"]),
+            bottom_margin_mm=float(profile_margins["bottom"]),
+            top_margin_mm=float(profile_margins["top"]),
+        )
     # Explicit request-level typography/stroke values are intentionally
     # ignored.  Veusz editing remains available after generation, but every
     # generated template starts from the same SciPlot hard standard.
@@ -3924,6 +3943,10 @@ def _build_veusz_plot_spec(
         label_mapping = render_options.get("_legend_label_mapping")
         if isinstance(label_mapping, list) and label_mapping:
             legend_spec["label_mapping"] = json_safe(label_mapping)
+    x_scale = _axis_scale(render_options, "x")
+    y_scale = _axis_scale(render_options, "y")
+    explicit_x_minor_ticks = list(_float_tuple(render_options.get("x_minor_ticks")))
+    explicit_y_minor_ticks = list(_float_tuple(render_options.get("y_minor_ticks")))
     return {
         "kind": "sciplot_veusz_plot_spec",
         "version": 1,
@@ -3931,6 +3954,7 @@ def _build_veusz_plot_spec(
         "render_engine": "veusz",
         "qa_target": "veusz_export",
         "template": template_id,
+        "figure_profile_id": _normalize_optional_string(render_options.get("_figure_profile_id")),
         "source_request": json_safe(request),
         "render_options": json_safe(render_options),
         "size_mm": [width_mm, height_mm],
@@ -3985,20 +4009,25 @@ def _build_veusz_plot_spec(
         "axes": {
             "x": {
                 "label": axis_info["x_label"],
-                "scale": _axis_scale(render_options, "x"),
+                "scale": x_scale,
                 "tick_format": str(
                     render_options.get("x_tick_format")
-                    or (DEFAULT_LOG_TICK_FORMAT if _axis_scale(render_options, "x") == "log" else "Auto")
+                    or (DEFAULT_LOG_TICK_FORMAT if x_scale == "log" else "Auto")
                 ),
                 "minor_tick_count": int(
-                    render_options.get("minor_tick_count")
-                    or (DEFAULT_LOG_MINOR_TICK_COUNT if _axis_scale(render_options, "x") == "log" else 20)
+                    render_options.get("x_minor_tick_count")
+                    or render_options.get("minor_tick_count")
+                    or (DEFAULT_LOG_MINOR_TICK_COUNT if x_scale == "log" else 20)
                 ),
-                "minor_ticks": _log_minor_ticks(
-                    axis_contract.x_min,
-                    axis_contract.x_max,
-                    scale=_axis_scale(render_options, "x"),
-                    major_ticks=axis_contract.x_ticks,
+                "minor_ticks": (
+                    explicit_x_minor_ticks
+                    if explicit_x_minor_ticks
+                    else _log_minor_ticks(
+                        axis_contract.x_min,
+                        axis_contract.x_max,
+                        scale=x_scale,
+                        major_ticks=axis_contract.x_ticks,
+                    )
                 ),
                 "min": axis_contract.x_min,
                 "max": axis_contract.x_max,
@@ -4010,20 +4039,25 @@ def _build_veusz_plot_spec(
             },
             "y": {
                 "label": axis_info["y_label"],
-                "scale": _axis_scale(render_options, "y"),
+                "scale": y_scale,
                 "tick_format": str(
                     render_options.get("y_tick_format")
-                    or (DEFAULT_LOG_TICK_FORMAT if _axis_scale(render_options, "y") == "log" else "Auto")
+                    or (DEFAULT_LOG_TICK_FORMAT if y_scale == "log" else "Auto")
                 ),
                 "minor_tick_count": int(
-                    render_options.get("minor_tick_count")
-                    or (DEFAULT_LOG_MINOR_TICK_COUNT if _axis_scale(render_options, "y") == "log" else 20)
+                    render_options.get("y_minor_tick_count")
+                    or render_options.get("minor_tick_count")
+                    or (DEFAULT_LOG_MINOR_TICK_COUNT if y_scale == "log" else 20)
                 ),
-                "minor_ticks": _log_minor_ticks(
-                    axis_contract.y_min,
-                    axis_contract.y_max,
-                    scale=_axis_scale(render_options, "y"),
-                    major_ticks=axis_contract.y_ticks,
+                "minor_ticks": (
+                    explicit_y_minor_ticks
+                    if explicit_y_minor_ticks
+                    else _log_minor_ticks(
+                        axis_contract.y_min,
+                        axis_contract.y_max,
+                        scale=y_scale,
+                        major_ticks=axis_contract.y_ticks,
+                    )
                 ),
                 "min": axis_contract.y_min,
                 "max": axis_contract.y_max,
@@ -4365,6 +4399,11 @@ def _add_veusz_reference_guides(interface: Any, spec: dict[str, Any]) -> None:
 
 
 def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
+    if spec.get("kind") == "sciplot_shared_scalar_strip_spec":
+        from sciplot_core.figure_workflow import apply_shared_scalar_strip_spec
+
+        apply_shared_scalar_strip_spec(interface, spec)
+        return
     style = spec["style"]
     axes = spec["axes"]
     size_mm = spec["size_mm"]
@@ -4609,6 +4648,7 @@ def _add_veusz_axis(interface: Any, axis: str, axis_spec: dict[str, Any], style:
     interface.Set("MinorTicks/number", int(axis_spec.get("minor_tick_count") or 20))
     minor_ticks = axis_spec.get("minor_ticks") if isinstance(axis_spec.get("minor_ticks"), list) else []
     if minor_ticks:
+        interface.Set("MinorTicks/hide", False)
         interface.Set("MinorTicks/manualTicks", [float(value) for value in minor_ticks])
     interface.Set("Label/size", _pt(float(style["font_size_pt"])))
     interface.Set("Label/offset", _pt(float(style["axes_labelpad_pt"])))

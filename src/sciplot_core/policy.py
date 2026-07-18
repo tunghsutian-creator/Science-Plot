@@ -153,6 +153,11 @@ RENDER_OPTION_KEYS = frozenset(
         "x_ticks",
         "y_ticks",
         "minor_tick_count",
+        "x_minor_tick_count",
+        "y_minor_tick_count",
+        "x_minor_ticks",
+        "y_minor_ticks",
+        "show_y_ticks",
         "series_order",
         "series_include",
         "series_styles",
@@ -457,6 +462,18 @@ RHEOLOGY_FREQUENCY_RENDER_OPTIONS: dict[str, Any] = {
     "x_tick_format": RHEOLOGY_FREQUENCY_TICK_FORMAT,
     "y_tick_format": RHEOLOGY_FREQUENCY_TICK_FORMAT,
     "minor_tick_count": DEFAULT_LOG_MINOR_TICK_COUNT,
+}
+
+
+RHEOLOGY_TEMPERATURE_RENDER_OPTIONS: dict[str, Any] = {
+    **POINT_LINE_RENDER_OPTIONS,
+    "xscale": "linear",
+    "yscale": "log",
+    "reverse_x": False,
+    "x_label_override": "Temperature (°C)",
+    "y_label_override": RHEOLOGY_METRIC_AXIS_LABELS["storage_modulus"],
+    "y_tick_format": DEFAULT_LOG_TICK_FORMAT,
+    "y_minor_tick_count": DEFAULT_LOG_MINOR_TICK_COUNT,
 }
 
 TORQUE_CURVE_RENDER_OPTIONS: dict[str, Any] = {
