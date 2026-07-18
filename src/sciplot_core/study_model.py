@@ -118,6 +118,61 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
             },
         ),
     },
+    "rheology_strain_sweep": {
+        "default_replicate_mode": "mean",
+        "figure_queue": (
+            {
+                "id": "storage_modulus_vs_strain",
+                "title": "Storage modulus vs strain",
+                "metric": "storage_modulus",
+                "x_metric": "strain",
+                "y_metric": "storage_modulus",
+                "default_template": "point_line",
+            },
+            {
+                "id": "loss_factor_vs_strain",
+                "title": "Loss factor vs strain",
+                "metric": "loss_factor",
+                "x_metric": "strain",
+                "y_metric": "loss_factor",
+                "default_template": "point_line",
+            },
+        ),
+    },
+    "rheology_stress_sweep": {
+        "default_replicate_mode": "mean",
+        "figure_queue": (
+            {
+                "id": "storage_modulus_vs_stress",
+                "title": "Storage modulus vs stress",
+                "metric": "storage_modulus",
+                "x_metric": "stress",
+                "y_metric": "storage_modulus",
+                "default_template": "point_line",
+            },
+            {
+                "id": "loss_factor_vs_stress",
+                "title": "Loss factor vs stress",
+                "metric": "loss_factor",
+                "x_metric": "stress",
+                "y_metric": "loss_factor",
+                "default_template": "point_line",
+            },
+        ),
+    },
+    "rheology_time_sweep": {
+        "default_replicate_mode": "mean",
+        "figure_queue": (
+            {
+                "id": "complex_modulus_vs_time",
+                "title": "Complex modulus vs time",
+                "metric": "complex_modulus",
+                "x_metric": "time",
+                "y_metric": "complex_modulus",
+                "default_template": "point_line",
+            },
+        ),
+    },
     "rheology_stress_relaxation": {
         "default_replicate_mode": "mean",
         "figure_queue": (

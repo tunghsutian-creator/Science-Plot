@@ -306,6 +306,11 @@ def prepare_studio_document(
         request,
         base_dir=request_path.parent,
     )
+    terminal_series_order = _string_list(
+        axis_info.get("semantic_terminal_series_order")
+    )
+    if terminal_series_order:
+        request["series_order"] = terminal_series_order
     if isinstance(axis_info.get("data_mapping_coverage"), dict):
         request["data_mapping_coverage"] = json_safe(
             axis_info["data_mapping_coverage"]
@@ -315,6 +320,9 @@ def prepare_studio_document(
         if isinstance(request.get("study_model"), dict)
         else {"kind": "sciplot_study_model", "version": 1, "samples": [], "figure_queue": []}
     )
+    render_defaults = study_model.get("render_defaults")
+    if terminal_series_order and isinstance(render_defaults, dict):
+        render_defaults["series_order"] = terminal_series_order
     transform_ledger = build_transform_ledger(
         study_model,
         request=request,
@@ -1061,6 +1069,7 @@ def publish_studio_export_run(
     semantic = _studio_export_semantic_payload(
         request=request,
         intake_manifest=intake_manifest,
+        document_path=document_path,
     )
     metric_source = _studio_metric_source(snapshot_source if snapshot_source is not None else input_path)
     analysis_metrics = (
@@ -1143,6 +1152,11 @@ def publish_studio_export_run(
         publication_profile=publication_profile,
         strict_publication=bool(request.get("publication_strict")),
         veusz_documents=[document_path],
+    )
+    semantic = _semantic_payload_with_exact_current_axes(
+        semantic,
+        qa=qa,
+        document_path=document_path,
     )
     publication_qa = qa.get("publication") if isinstance(qa.get("publication"), dict) else {}
     publication_artifacts = write_publication_artifacts(
@@ -1320,6 +1334,7 @@ def _studio_export_semantic_payload(
     *,
     request: dict[str, Any],
     intake_manifest: dict[str, Any],
+    document_path: Path,
 ) -> dict[str, Any]:
     recognition = (
         intake_manifest.get("recognition")
@@ -1347,7 +1362,7 @@ def _studio_export_semantic_payload(
         if isinstance(intake_manifest.get("experiment"), dict)
         else {}
     )
-    return {
+    semantic = {
         **rule_payload,
         **recognition,
         "semantic_family": (
@@ -1365,6 +1380,279 @@ def _studio_export_semantic_payload(
         ),
         "route": "studio",
     }
+    return _semantic_payload_with_terminal_axes(
+        semantic,
+        document_path=document_path,
+    )
+
+
+def _semantic_payload_with_terminal_axes(
+    semantic: dict[str, Any],
+    *,
+    document_path: Path,
+) -> dict[str, Any]:
+    """Make the generated terminal render contract the exported axis truth."""
+
+    updated = deepcopy(semantic)
+    registered_axis_plan = (
+        deepcopy(updated.get("registered_axis_plan"))
+        if isinstance(updated.get("registered_axis_plan"), dict)
+        else deepcopy(updated.get("axis_plan"))
+        if isinstance(updated.get("axis_plan"), dict)
+        else {}
+    )
+    registered_unit_plan = (
+        deepcopy(updated.get("registered_unit_plan"))
+        if isinstance(updated.get("registered_unit_plan"), dict)
+        else deepcopy(updated.get("unit_plan"))
+        if isinstance(updated.get("unit_plan"), dict)
+        else {}
+    )
+    updated["registered_axis_plan"] = registered_axis_plan
+    updated["registered_unit_plan"] = registered_unit_plan
+    updated["expected_axis_plan"] = deepcopy(registered_axis_plan)
+
+    spec_path = _veusz_spec_path(document_path)
+    spec = _read_json(spec_path) if spec_path.is_file() else {}
+    axes = spec.get("axes") if isinstance(spec.get("axes"), dict) else {}
+    effective_axis_plan = _effective_axis_plan(
+        registered_axis_plan,
+        axes=axes,
+    )
+    if effective_axis_plan:
+        updated["axis_plan"] = effective_axis_plan
+        updated["unit_plan"] = {
+            axis: str(payload.get("canonical_unit") or "")
+            for axis, payload in effective_axis_plan.items()
+            if isinstance(payload, dict)
+        }
+        updated["effective_axis_plan"] = deepcopy(effective_axis_plan)
+        updated["axis_plan_role"] = "effective_terminal_render_axis"
+        updated["axis_authority"] = {
+            "kind": "sciplot_axis_authority",
+            "version": 1,
+            "status": "generated_terminal_contract",
+            "source": "veusz_spec_terminal_render_contract",
+            "document": str(document_path),
+            "document_sha256": existing_file_sha256(document_path),
+            "spec": str(spec_path),
+        }
+    return updated
+
+
+def _semantic_payload_with_exact_current_axes(
+    semantic: dict[str, Any],
+    *,
+    qa: dict[str, Any],
+    document_path: Path,
+) -> dict[str, Any]:
+    """Promote exact-current axis settings from the Veusz QA audit."""
+
+    publication = (
+        qa.get("publication")
+        if isinstance(qa.get("publication"), dict)
+        else {}
+    )
+    audit_set = (
+        publication.get("veusz_document_audit")
+        if isinstance(publication.get("veusz_document_audit"), dict)
+        else {}
+    )
+    documents = (
+        audit_set.get("documents")
+        if isinstance(audit_set.get("documents"), list)
+        else []
+    )
+    resolved = document_path.expanduser().resolve()
+    document_audit = next(
+        (
+            item
+            for item in documents
+            if isinstance(item, dict)
+            and Path(str(item.get("path") or "")).expanduser().resolve()
+            == resolved
+        ),
+        None,
+    )
+    if not isinstance(document_audit, dict):
+        return semantic
+    axis_records = (
+        document_audit.get("axes")
+        if isinstance(document_audit.get("axes"), list)
+        else []
+    )
+    axes = {
+        str(item.get("name") or ""): item
+        for item in axis_records
+        if isinstance(item, dict)
+        and str(item.get("name") or "") in {"x", "y"}
+        and not bool(item.get("hidden"))
+    }
+    if set(axes) != {"x", "y"}:
+        return semantic
+    updated = deepcopy(semantic)
+    registered = (
+        updated.get("registered_axis_plan")
+        if isinstance(updated.get("registered_axis_plan"), dict)
+        else {}
+    )
+    effective = _effective_axis_plan(registered, axes=axes)
+    updated["axis_plan"] = effective
+    updated["effective_axis_plan"] = deepcopy(effective)
+    updated["unit_plan"] = {
+        axis: str(payload.get("canonical_unit") or "")
+        for axis, payload in effective.items()
+        if isinstance(payload, dict)
+    }
+    updated["axis_plan_role"] = "effective_terminal_render_axis"
+    updated["axis_authority"] = {
+        "kind": "sciplot_axis_authority",
+        "version": 1,
+        "status": "exact_current",
+        "source": "veusz_exact_current_document_audit",
+        "document": str(resolved),
+        "document_sha256": str(
+            document_audit.get("sha256")
+            or existing_file_sha256(resolved)
+            or ""
+        ),
+        "spec": str(_veusz_spec_path(resolved)),
+    }
+    return updated
+
+
+def _effective_axis_plan(
+    registered_axis_plan: dict[str, Any],
+    *,
+    axes: dict[str, Any],
+) -> dict[str, Any]:
+    effective: dict[str, Any] = {}
+    for axis_name in ("x", "y"):
+        terminal = (
+            axes.get(axis_name)
+            if isinstance(axes.get(axis_name), dict)
+            else {}
+        )
+        registered = (
+            deepcopy(registered_axis_plan.get(axis_name))
+            if isinstance(registered_axis_plan.get(axis_name), dict)
+            else {}
+        )
+        label = str(
+            terminal.get("label")
+            or registered.get("display_label")
+            or registered.get("canonical_label")
+            or axis_name
+        ).strip()
+        canonical_label, canonical_unit = _terminal_axis_identity(
+            label,
+            registered=registered,
+            fallback=axis_name,
+        )
+        payload = {
+            **registered,
+            "canonical_label": canonical_label,
+            "canonical_unit": canonical_unit,
+            "display_label": label,
+            "scale": str(
+                terminal.get("scale")
+                or registered.get("scale")
+                or "linear"
+            ),
+            "reverse": _terminal_axis_reverse(
+                terminal,
+                fallback=bool(registered.get("reverse")),
+            ),
+            "authority": "terminal_render_contract",
+        }
+        for source_key, target_key in (
+            ("min", "minimum"),
+            ("max", "maximum"),
+            ("ticks", "ticks"),
+        ):
+            if source_key in terminal:
+                payload[target_key] = json_safe(terminal[source_key])
+        effective[axis_name] = payload
+    return effective
+
+
+def _terminal_axis_identity(
+    label: str,
+    *,
+    registered: dict[str, Any],
+    fallback: str,
+) -> tuple[str, str]:
+    from sciplot_core.plot_data import _split_label_unit
+
+    visible_name, visible_unit = _split_label_unit(label, fallback=fallback)
+    registered_name = str(
+        registered.get("display_label")
+        or registered.get("canonical_label")
+        or ""
+    ).strip()
+    registered_visible_name, _registered_visible_unit = _split_label_unit(
+        registered_name,
+        fallback=fallback,
+    )
+    canonical_label = str(
+        registered.get("canonical_label") or visible_name or fallback
+    ).strip()
+    if _axis_identity_token(visible_name) != _axis_identity_token(
+        registered_visible_name
+    ):
+        canonical_label = visible_name or canonical_label
+    registered_unit = str(registered.get("canonical_unit") or "").strip()
+    canonical_unit = _canonical_terminal_axis_unit(
+        visible_unit,
+        registered=registered_unit,
+    )
+    return canonical_label, canonical_unit
+
+
+def _axis_identity_token(value: object) -> str:
+    return re.sub(r"[^a-z0-9%]+", "", str(value or "").casefold())
+
+
+def _canonical_terminal_axis_unit(
+    visible_unit: object,
+    *,
+    registered: str,
+) -> str:
+    unit = str(visible_unit or "").strip()
+    normalized = (
+        unit.replace("$", "")
+        .replace("{", "")
+        .replace("}", "")
+        .replace("\\", "")
+        .replace("−", "-")
+        .replace("·", ".")
+    )
+    aliases = {
+        "°": "degree",
+        "°c": "C",
+        "cm^-1": "cm^-1",
+        "nm^-1": "nm^-1",
+        "å^-1": "A^-1",
+        "counts": "count",
+    }
+    normalized = aliases.get(normalized.casefold(), normalized)
+    if not normalized:
+        return registered
+    if _axis_identity_token(normalized) == _axis_identity_token(registered):
+        return registered
+    return normalized
+
+
+def _terminal_axis_reverse(
+    terminal: dict[str, Any],
+    *,
+    fallback: bool,
+) -> bool:
+    minimum = terminal.get("min")
+    maximum = terminal.get("max")
+    if isinstance(minimum, int | float) and isinstance(maximum, int | float):
+        return float(minimum) > float(maximum)
+    return fallback
 
 
 def _resolve_studio_target(
@@ -2137,6 +2425,131 @@ def _scalar_field_from_frames(
     }
 
 
+def _apply_series_domain_contract_defaults(
+    render_options: dict[str, Any],
+    *,
+    request: dict[str, Any],
+    series: list[StudioSeries],
+) -> dict[str, Any]:
+    """Apply rule-specific bounds only when the current data justify them."""
+
+    updated = dict(render_options)
+    rule_id = str(request.get("rule_id") or "").strip()
+    explicit = _explicit_render_options(request)
+    x_values = [
+        value
+        for item in series
+        for value in item.x_values
+        if math.isfinite(value)
+    ]
+    y_values = [
+        value
+        for item in series
+        for value in item.y_values
+        if math.isfinite(value)
+    ]
+    if rule_id == "xrd_pattern":
+        if x_values and min(x_values) >= 0.0 and "x_min" not in explicit:
+            updated["x_min"] = 0.0
+        if y_values and min(y_values) >= 0.0 and "y_min" not in explicit:
+            updated["y_min"] = 0.0
+    elif rule_id == "rheology_stress_relaxation" and y_values:
+        lower = float(min(y_values))
+        upper = float(max(y_values))
+        configured_lower = updated.get("y_min")
+        configured_upper = updated.get("y_max")
+        adjusted: list[str] = []
+        if (
+            isinstance(configured_lower, int | float)
+            and lower < float(configured_lower)
+            and "y_min" not in explicit
+        ):
+            updated.pop("y_min", None)
+            adjusted.append("y_min_auto_for_observed_negative_response")
+        if (
+            isinstance(configured_upper, int | float)
+            and upper > float(configured_upper)
+            and "y_max" not in explicit
+        ):
+            updated.pop("y_max", None)
+            adjusted.append("y_max_auto_for_observed_response")
+        if adjusted and "y_ticks" not in explicit:
+            updated.pop("y_ticks", None)
+            adjusted.append("y_ticks_auto_for_observed_response")
+        if adjusted:
+            updated["_domain_contract_adjustments"] = sorted(set(adjusted))
+    return updated
+
+
+def _resolved_domain_render_options(
+    request: dict[str, Any],
+    *,
+    axis_info: dict[str, Any],
+    series: list[StudioSeries],
+) -> dict[str, Any]:
+    render_options = _effective_render_options(request)
+    render_options = _apply_series_domain_contract_defaults(
+        render_options,
+        request=request,
+        series=series,
+    )
+    return _apply_domain_render_defaults(
+        render_options,
+        request=request,
+        axis_info=axis_info,
+    )
+
+
+def _validate_log_domain_series(
+    series: list[StudioSeries],
+    *,
+    render_options: dict[str, Any],
+) -> None:
+    """Fail closed instead of silently dropping nonpositive log-axis data."""
+
+    invalid: dict[str, list[dict[str, Any]]] = {}
+    for axis in ("x", "y"):
+        if _axis_scale(render_options, axis) != "log":
+            continue
+        axis_issues: list[dict[str, Any]] = []
+        for item in series:
+            values = item.x_values if axis == "x" else item.y_values
+            nonfinite_count = sum(
+                1 for value in values if not math.isfinite(value)
+            )
+            nonpositive_count = sum(
+                1
+                for value in values
+                if math.isfinite(value) and value <= 0.0
+            )
+            if nonfinite_count or nonpositive_count:
+                axis_issues.append(
+                    {
+                        "series": item.label,
+                        "nonfinite_count": nonfinite_count,
+                        "nonpositive_count": nonpositive_count,
+                    }
+                )
+        if axis_issues:
+            invalid[axis] = axis_issues
+    if invalid:
+        detail = "; ".join(
+            f"{axis}: "
+            + ", ".join(
+                f"{item['series']} "
+                f"(nonfinite={item['nonfinite_count']}, "
+                f"nonpositive={item['nonpositive_count']})"
+                for item in issues
+            )
+            for axis, issues in invalid.items()
+        )
+        raise StudioPreparationBlocked(
+            "log_axis_nonpositive_data",
+            "Logarithmic axes require strictly positive finite values; "
+            f"semantic preparation must mask or resolve nonpositive points ({detail}).",
+        )
+
+
 def _series_from_frame_records(
     request: dict[str, Any],
     *,
@@ -2204,14 +2617,27 @@ def _series_from_frame_records(
             "tables; no placeholder data were generated.",
         )
 
-    render_options = _apply_domain_render_defaults(render_options, request=request, axis_info=axis_info)
+    axis_info["series_count"] = len(raw_series)
+    render_options = _resolved_domain_render_options(
+        request,
+        axis_info=axis_info,
+        series=raw_series,
+    )
+    _validate_log_domain_series(raw_series, render_options=render_options)
     styled = _apply_series_options(raw_series, render_options=render_options, request=request)
+    axis_info["series_count"] = len(styled)
+    render_options = _resolved_domain_render_options(
+        request,
+        axis_info=axis_info,
+        series=styled,
+    )
     if axis_info.get("presentation_kind") == "categorical_replicates":
         styled = _reindex_categorical_series(styled, render_options=render_options)
         axis_info["category_labels"] = [_category_axis_label(item.label) for item in styled]
         axis_info["category_positions"] = [float(index) for index in range(1, len(styled) + 1)]
         axis_info["raw_replicate_count"] = sum(len(item.y_values) for item in styled)
     styled = _apply_template_series_transforms(styled, request=request, render_options=render_options)
+    _validate_log_domain_series(styled, render_options=render_options)
     axis_info["x_label"] = _veusz_axis_label(render_options.get("x_label_override") or axis_info["x_label"])
     axis_info["y_label"] = _veusz_axis_label(render_options.get("y_label_override") or axis_info["y_label"])
     return styled, axis_info
@@ -2240,11 +2666,10 @@ def derive_terminal_render_data_contract(
         frames.extend(_read_source_frame_records(source, request=request))
     series, axis_info = _series_from_frame_records(request, frames=frames)
     series, _legend_label_mapping = _compact_replicate_series_labels(series)
-    render_options = _effective_render_options(request)
-    render_options = _apply_domain_render_defaults(
-        render_options,
+    render_options = _resolved_domain_render_options(
         request=request,
         axis_info=axis_info,
+        series=series,
     )
     template_id = _request_template(request)
     render_options = _apply_readability_render_defaults(
@@ -2441,6 +2866,9 @@ def _series_from_request(
     transform_steps.extend(semantic_steps)
     frames = _read_source_frame_records(source, request=request)
     styled, axis_info = _series_from_frame_records(request, frames=frames)
+    axis_info["semantic_terminal_series_order"] = [
+        item.label for item in styled
+    ]
     if mapping_application is not None:
         axis_info["data_mapping_coverage"] = _mapping_series_coverage(
             styled,
@@ -2664,9 +3092,39 @@ def _studio_source_for_request(
     )
     prepared_source = prepared.get("source")
     transform_steps = [step for step in prepared.get("transform_steps", []) if isinstance(step, dict)]
+    terminal_series_order = _semantic_terminal_series_order(transform_steps)
+    if terminal_series_order:
+        request["series_order"] = terminal_series_order
+        render_options = request.get("render_options")
+        if isinstance(render_options, dict) and "series_order" in render_options:
+            request["render_options"] = {
+                **render_options,
+                "series_order": terminal_series_order,
+            }
     if isinstance(prepared_source, str) and prepared_source.strip():
         return Path(prepared_source).expanduser(), transform_steps
     return source, transform_steps
+
+
+def _semantic_terminal_series_order(
+    transform_steps: list[dict[str, Any]],
+) -> list[str]:
+    for step in reversed(transform_steps):
+        parameters = step.get("parameters")
+        if not isinstance(parameters, dict):
+            continue
+        for key in ("output_sample_labels", "series_order", "sample_order"):
+            values = parameters.get(key)
+            if not isinstance(values, list | tuple):
+                continue
+            result: list[str] = []
+            for value in values:
+                label = str(value).strip()
+                if label and label not in result:
+                    result.append(label)
+            if result:
+                return result
+    return []
 
 
 def _read_source_frame_records(
@@ -2864,13 +3322,24 @@ def _columns_look_like_repeated_x(columns: list[Any]) -> bool:
 def _preferred_metric_pair(request: dict[str, Any]) -> tuple[str, str] | None:
     x_metric = _clean_metric_id(request.get("x_metric"))
     y_metric = _clean_metric_id(request.get("y_metric"))
+    rule_id = str(request.get("rule_id") or "").strip()
     study_model = request.get("study_model") if isinstance(request.get("study_model"), dict) else {}
     figure_queue = study_model.get("figure_queue") if isinstance(study_model.get("figure_queue"), list) else []
     if (not x_metric or not y_metric) and figure_queue:
         first_figure = next((item for item in figure_queue if isinstance(item, dict)), {})
         x_metric = x_metric or _clean_metric_id(first_figure.get("x_metric"))
         y_metric = y_metric or _clean_metric_id(first_figure.get("y_metric"))
-    rule_id = str(request.get("rule_id") or "").strip()
+    if rule_id in {
+        "rheology_frequency_sweep",
+        "rheology_temperature_sweep",
+        "rheology_strain_sweep",
+        "rheology_stress_sweep",
+        "rheology_time_sweep",
+    }:
+        if x_metric == "x":
+            x_metric = ""
+        if y_metric == "y":
+            y_metric = ""
     if not x_metric or not y_metric:
         if rule_id == "rheology_frequency_sweep":
             x_metric = x_metric or "angular_frequency"
@@ -2878,6 +3347,15 @@ def _preferred_metric_pair(request: dict[str, Any]) -> tuple[str, str] | None:
         elif rule_id == "rheology_temperature_sweep":
             x_metric = x_metric or "temperature"
             y_metric = y_metric or "storage_modulus"
+        elif rule_id == "rheology_strain_sweep":
+            x_metric = x_metric or "strain"
+            y_metric = y_metric or "storage_modulus"
+        elif rule_id == "rheology_stress_sweep":
+            x_metric = x_metric or "stress"
+            y_metric = y_metric or "storage_modulus"
+        elif rule_id == "rheology_time_sweep":
+            x_metric = x_metric or "time"
+            y_metric = y_metric or "complex_modulus"
     if x_metric and y_metric:
         return x_metric, y_metric
     return None
@@ -2892,6 +3370,9 @@ def _clean_metric_id(value: Any) -> str:
 _METRIC_ALIASES: dict[str, tuple[str, ...]] = {
     "angular_frequency": ("angular frequency", "frequency", "omega"),
     "temperature": ("temperature", "temp"),
+    "strain": ("strain", "shear strain", "gamma"),
+    "stress": ("stress", "shear stress"),
+    "time": ("time", "elapsed time"),
     "storage_modulus": ("storage modulus", "g'", "g prime"),
     "loss_modulus": ("loss modulus", 'g"', "g double prime"),
     "loss_factor": ("loss factor", "tan delta", "tan_delta"),
@@ -3066,6 +3547,38 @@ def _is_unit_label(label: str) -> bool:
     }
 
 
+def _replicate_group_style_indexes(
+    labels: list[str],
+) -> dict[str, tuple[int, int]]:
+    """Return stable condition and within-condition replicate indexes."""
+
+    pattern = re.compile(
+        r"^(?P<condition>.+?)\s+replicate\s+(?P<replicate>\S+)\s*$",
+        flags=re.IGNORECASE,
+    )
+    conditions: list[str] = []
+    replicates: dict[str, list[str]] = {}
+    parsed: dict[str, tuple[str, str]] = {}
+    for label in labels:
+        match = pattern.fullmatch(label.strip())
+        if match is None:
+            continue
+        condition = match.group("condition").strip()
+        replicate = match.group("replicate").strip()
+        if condition not in conditions:
+            conditions.append(condition)
+        if replicate not in replicates.setdefault(condition, []):
+            replicates[condition].append(replicate)
+        parsed[label] = (condition, replicate)
+    return {
+        label: (
+            conditions.index(condition),
+            replicates[condition].index(replicate),
+        )
+        for label, (condition, replicate) in parsed.items()
+    }
+
+
 def _apply_series_options(
     series: list[StudioSeries],
     *,
@@ -3118,11 +3631,14 @@ def _apply_series_options(
     by_label = {item.label: item for item in series}
     unknown_order = [label for label in order if label not in by_label]
     if unknown_order:
-        raise StudioPreparationBlocked(
-            "unknown_series_order",
-            "series_order contains unknown series labels: "
-            + ", ".join(unknown_order),
-        )
+        if _is_inferred_source_group_order(order, request=request):
+            order = [label for label in order if label in by_label]
+        else:
+            raise StudioPreparationBlocked(
+                "unknown_series_order",
+                "series_order contains unknown series labels: "
+                + ", ".join(unknown_order),
+            )
     ordered = [by_label[label] for label in order if label in by_label]
     ordered.extend(item for item in series if item.label not in {entry.label for entry in ordered})
     if include:
@@ -3143,16 +3659,29 @@ def _apply_series_options(
                 style_by_label[label] = style
     styled: list[StudioSeries] = []
     template_id = _request_template(request)
+    grouped_replicate_styles = (
+        _replicate_group_style_indexes([item.label for item in ordered])
+        if str(request.get("rule_id") or "").strip() == "swelling_curve"
+        else {}
+    )
     for index, item in enumerate(ordered):
         style = style_by_label.get(item.label, {})
         if style.get("visible") is False or style.get("enabled") is False:
             continue
+        condition_index, replicate_index = grouped_replicate_styles.get(
+            item.label,
+            (index, index),
+        )
         default_marker = (
-            marker_sequence[index % len(marker_sequence)]
+            marker_sequence[replicate_index % len(marker_sequence)]
             if (template_id == "point_line" or item.presentation_kind == "categorical_replicates")
             else "none"
         )
-        if template_id == "point_line" and len(ordered) > len(marker_sequence):
+        if item.label in grouped_replicate_styles:
+            default_line_style = line_style_sequence[
+                replicate_index % len(line_style_sequence)
+            ]
+        elif template_id == "point_line" and len(ordered) > len(marker_sequence):
             default_line_style = line_style_sequence[(index // len(marker_sequence)) % len(line_style_sequence)]
         elif template_id != "point_line" and len(ordered) > 1:
             default_line_style = line_style_sequence[index % len(line_style_sequence)]
@@ -3165,7 +3694,10 @@ def _apply_series_options(
                 y_name=item.y_name,
                 x_values=item.x_values,
                 y_values=item.y_values,
-                color=str(style.get("color") or palette[index % len(palette)]),
+                color=str(
+                    style.get("color")
+                    or palette[condition_index % len(palette)]
+                ),
                 line_width=UNIFIED_LINE_WIDTH_PT,
                 marker=style.get("marker", item.marker or default_marker),
                 marker_size=UNIFIED_MARKER_SIZE_PT,
@@ -3181,6 +3713,40 @@ def _apply_series_options(
             "The confirmed series selection leaves no visible series.",
         )
     return styled
+
+
+def _is_inferred_source_group_order(
+    order: list[str],
+    *,
+    request: dict[str, Any],
+) -> bool:
+    """Recognize intake grouping labels that are not terminal curve labels."""
+
+    if not order:
+        return False
+    study_model = (
+        request.get("study_model")
+        if isinstance(request.get("study_model"), dict)
+        else {}
+    )
+    sample_order = _string_list(study_model.get("sample_order"))
+    if order != sample_order:
+        return False
+    figure_queue = (
+        study_model.get("figure_queue")
+        if isinstance(study_model.get("figure_queue"), list)
+        else []
+    )
+    confirmation_statuses = {
+        str(evidence.get("confirmation_status") or "").strip().casefold()
+        for figure in figure_queue
+        if isinstance(figure, dict)
+        for evidence in [figure.get("evidence_contract")]
+        if isinstance(evidence, dict)
+    }
+    return not confirmation_statuses.intersection(
+        {"confirmed", "approved", "user_confirmed"}
+    )
 
 
 def _effective_render_options(request: dict[str, Any]) -> dict[str, Any]:
@@ -3379,22 +3945,28 @@ def _apply_domain_render_defaults(
             if "y_label_override" not in explicit_options:
                 updated["y_label_override"] = "Impact strength (kJ/m²)"
     if template_id in STACKED_TEMPLATE_IDS and _looks_like_wavenumber_axis(axis_info):
+        explicit_contract = _explicit_render_options(request)
+        detected_y_label = str(axis_info.get("y_label") or "").strip()
+        series_count = int(axis_info.get("series_count") or 0)
         label_mode = str(updated.get("series_label_mode") or "").strip().casefold()
         legend_position = str(updated.get("legend_position") or "").strip().casefold()
         domain_defaults: dict[str, Any] = {
             "reverse_x": True,
             "x_min": 400.0,
             "x_max": 4000.0,
-            "baseline": "linear_endpoints",
+            "baseline": "none",
             "series_label_side": "left",
             "show_y_ticks": False,
             "x_label_override": "Wavenumber (cm^-1)",
-            "y_label_override": "Absorbance (offset)",
             "size": "120x110",
         }
         for key, value in domain_defaults.items():
             if key not in explicit_options:
                 updated[key] = value
+        if detected_y_label and "y_label_override" not in explicit_contract:
+            updated["y_label_override"] = detected_y_label
+        if "show_y_ticks" not in explicit_contract:
+            updated["show_y_ticks"] = series_count <= 1
         if legend_position in {"", "auto", "none", "hide", "hidden", "off"}:
             updated["legend_position"] = "none"
         if label_mode in {"", "auto", "legend", "inline", "edge"}:
@@ -3435,6 +4007,21 @@ def _apply_domain_render_defaults(
             updated.setdefault("y_tick_format", DEFAULT_LOG_TICK_FORMAT)
             if "y_label_override" not in explicit_options and metric_label is not None:
                 updated["y_label_override"] = metric_label
+    rule_id = str(request.get("rule_id") or "").strip()
+    if rule_id in {"rheology_strain_sweep", "rheology_stress_sweep"}:
+        explicit_contract = _explicit_render_options(request)
+        metric_pair = _preferred_metric_pair(request)
+        y_metric = metric_pair[1] if metric_pair is not None else "storage_modulus"
+        metric_label = rheology_metric_axis_label(y_metric)
+        if metric_label is not None and "y_label_override" not in explicit_contract:
+            updated["y_label_override"] = metric_label
+        if "yscale" not in explicit_contract:
+            updated["yscale"] = "linear" if y_metric == "loss_factor" else "log"
+        if y_metric == "loss_factor":
+            if "y_tick_format" not in explicit_contract:
+                updated.pop("y_tick_format", None)
+        else:
+            updated.setdefault("y_tick_format", DEFAULT_LOG_TICK_FORMAT)
     if _looks_like_tensile_axis(axis_info):
         if "x_label_override" not in explicit_options:
             updated["x_label_override"] = "Tensile Strain (%)"
@@ -4267,8 +4854,11 @@ def _write_veusz_document(
     series: list[StudioSeries],
     axis_info: dict[str, Any],
 ) -> Path:
-    render_options = _effective_render_options(request)
-    render_options = _apply_domain_render_defaults(render_options, request=request, axis_info=axis_info)
+    render_options = _resolved_domain_render_options(
+        request,
+        axis_info=axis_info,
+        series=series,
+    )
     series, legend_label_mapping = _compact_replicate_series_labels(series)
     if legend_label_mapping:
         render_options = dict(render_options)

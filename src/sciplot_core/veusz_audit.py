@@ -186,6 +186,7 @@ def _audit_document(path: Path) -> dict[str, Any]:
     graphs: list[dict[str, Any]] = []
     grids: list[dict[str, Any]] = []
     auxiliaries: list[dict[str, Any]] = []
+    axes: list[dict[str, Any]] = []
     for widget_path, widget in ordered_widgets:
         state = state_by_path.get(widget_path)
         if state is None:
@@ -254,6 +255,36 @@ def _audit_document(path: Path) -> dict[str, Any]:
                     "page": state["page"],
                     "parent_path": parent_path,
                     "bounds_mm": state["bounds_mm"],
+                }
+            )
+        elif widget_type == "axis":
+            settings = widget.settings.setdict
+
+            def setting_value(name: str, default: object = None) -> object:
+                setting = settings.get(name)
+                return setting.val if setting is not None else default
+
+            axes.append(
+                {
+                    "path": widget_path,
+                    "name": str(widget.name),
+                    "page": state["page"],
+                    "graph_path": (
+                        str(widget.parent.path)
+                        if widget.parent is not None
+                        else None
+                    ),
+                    "label": str(setting_value("label", "") or "").strip(),
+                    "scale": (
+                        "log"
+                        if bool(setting_value("log", False))
+                        else "linear"
+                    ),
+                    "min": setting_value("min", "Auto"),
+                    "max": setting_value("max", "Auto"),
+                    "direction": str(setting_value("direction", "") or ""),
+                    "mode": str(setting_value("mode", "") or ""),
+                    "hidden": bool(setting_value("hide", False)),
                 }
             )
 
@@ -564,6 +595,7 @@ def _audit_document(path: Path) -> dict[str, Any]:
         "pages": pages,
         "grids": grids,
         "graphs": graphs,
+        "axes": axes,
         "categorical_graphs": categorical_graphs,
         "auxiliaries": auxiliaries,
         "semantic_labels": semantic_labels,

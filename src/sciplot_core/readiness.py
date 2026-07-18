@@ -306,7 +306,17 @@ def semantic_contract_payload(semantic: dict[str, Any]) -> dict[str, Any]:
     for field in _SEMANTIC_CONTRACT_FIELDS:
         if field not in semantic:
             raise ValueError(f"semantic contract is missing `{field}`.")
-        payload[field] = deepcopy(json_safe(semantic[field]))
+        registered_field = {
+            "axis_plan": "registered_axis_plan",
+            "unit_plan": "registered_unit_plan",
+        }.get(field)
+        value = (
+            semantic.get(registered_field)
+            if registered_field
+            and isinstance(semantic.get(registered_field), dict)
+            else semantic[field]
+        )
+        payload[field] = deepcopy(json_safe(value))
     if not isinstance(payload["rule_id"], str) or not payload["rule_id"].strip():
         raise ValueError("semantic contract rule_id must be non-empty text.")
     if (

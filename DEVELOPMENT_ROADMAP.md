@@ -1,50 +1,44 @@
-# SciPlot AI-Enhanced Canvas Development Roadmap
+# SciPlot Veusz-First Integration Development Roadmap
 
-Status: active product roadmap, 2026-07-17. M0 and M1 are complete; M2 and M3
-are in progress. M4's automated engineering baseline is implemented, while
-mixed-family real-session evidence remains part of the M6 cutover. M2's
-adaptive visual, contextual editing, and
-review/promotion kernels are complete, but its real-session retirement gate
-and default `studio` migration remain. M3's provider-neutral reversible
-`CanvasOperationBatch` transaction kernel and deterministic
-`DataMappingProposal` executor are implemented. Its provider-neutral,
-hash-bound request lifecycle, Canvas UI, and production OpenAI Responses
-adapter are also implemented. The Canvas now previews, explicitly confirms,
-executes, recovers, and opens a confirmed data-mapping proposal as a separate
-candidate Canvas. Live-endpoint model evaluation, the canonical
-natural-language acceptance tasks, and real-session cutover evidence remain.
-M5's source-controlled validated-envelope baseline is implemented for all 23
-ready rules: full recognition and semantic contracts, host-side one-step and
-autoplot gating, current-code authorized-real-data acceptance, and adversarial
-probe coverage are active. The repeated-AI-success promotion workflow remains
-open, so M5 is not yet complete. The active execution order is now frozen as:
-evidence contract, M5 promotion infrastructure, M3 task/capability closure and
-live-model truth, M6 discovery and evidence-backed gap closure, a frozen
-release candidate, fifteen qualifying real sessions, then the user-approved
-default-frontend cutover. New renderer, general-purpose editor, distribution,
-and unrelated plot-family work do not enter this critical path.
+Status: active product roadmap, 2026-07-18. Veusz `MainWindow` is the default
+daily frontend and remains the normal `studio` experience. SciPlot adds its
+scientific preparation, source audit, typed optional AI assistance,
+exact-current QA, export, and delivery capabilities to that same window
+without replacing Veusz's object tree, property editor, selection model, or
+undo/redo workflow.
 
-This roadmap supersedes the former assumption that native canvas work and
-multi-panel composition should remain deferred. Distribution to other users is
-still future work. The active objective is to make SciPlot the best daily
-research-figure environment for its owner first.
+M0-M4 remain valuable completed engineering records: the standalone Canvas,
+typed operation and mapping contracts, review tools, provider boundary, and
+native composition baseline all exist and may be reused selectively. They are
+not the default-frontend direction. The former Canvas-default cutover,
+fifteen-session retirement program, and Veusz-frontend retirement gate are
+**superseded and cancelled**. Native composition is also outside the active
+delivery target.
+
+M5's deterministic validated-envelope baseline remains active for all 23 ready
+rules. The current milestone is M6, now defined as Veusz-first integration and
+cleanup: preserve the proven Veusz interaction, expose SciPlot additions only
+where they provide distinct value, close scientific/shared-contract defects,
+revalidate the complete rule and GUI lifecycle, then remove redundant
+worktrees and fully merged branches.
 
 ## North-star objective
 
-Build SciPlot into a personal, daily-use, AI-enhanced scientific plotting
-workbench that replaces the Veusz application frontend with a focused SciPlot
-canvas while retaining Veusz as the document, rendering, and export engine.
+Build SciPlot into a personal, daily-use scientific plotting workbench whose
+normal frontend is Veusz `MainWindow`, enhanced in place by SciPlot's
+deterministic preparation, optional AI, provenance, QA, export, and delivery
+services.
 
 The finished system must:
 
 - turn raw experimental data into editable, publication-oriented figures;
-- show every user or AI visual operation on a live canvas;
-- support point-and-click selection, direct manipulation, review annotations,
-  and native multi-panel composition without repeated verbal coordinate
-  descriptions;
-- expose the high-frequency scientific editing controls needed for daily work,
-  while keeping the full Veusz editor as an explicit escape hatch for
-  infrequent or not-yet-supported properties;
+- show AI changes immediately in the same live Veusz document that the user is
+  editing;
+- preserve Veusz's existing point-and-click selection, object tree, property
+  editor, direct manipulation, and native undo/redo as the primary manual
+  workflow;
+- expose SciPlot additions through small, opt-in menu actions or docks that do
+  not disturb the default Veusz layout;
 - let AI interpret scientific intent and propose typed operations, but never
   require AI for supported deterministic workflows;
 - make accepted AI work reusable by promoting repeated decisions into rules,
@@ -55,17 +49,23 @@ The finished system must:
   deterministic envelope, and stop honestly at `needs_human_confirmation` or
   `needs_rule_repair` outside it.
 
+The standalone SciPlot Canvas and Composition Board remain implemented
+reference/optional capabilities. They are not prerequisites for the normal
+daily route and do not compete with the exact-current Veusz document for
+authority.
+
 The goal is not to maximize how much AI does. The goal is to reserve AI for
 ambiguity and new intent while moving repeated execution into deterministic
 software.
 
 ## First-principles decisions
 
-1. **The user wants a trustworthy figure, not a renderer object tree.**
-   SciPlot owns the normal product experience.
-2. **Geometry is a spatial problem.**
-   Selection, movement, alignment, sizing, annotation, and composition belong
-   on a canvas, not in a long chat.
+1. **Preserve the durable interaction that already works.**
+   Veusz `MainWindow` owns the normal product experience; SciPlot should not
+   rebuild its general editor.
+2. **Geometry is a spatial problem already solved by Veusz.**
+   Selection, movement, alignment, sizing, and annotation stay in Veusz's
+   native spatial and property-editing tools.
 3. **Scientific meaning is a language problem.**
    AI is valuable for sample meaning, column roles, comparison intent, unusual
    transformations, and explaining requested changes.
@@ -76,9 +76,11 @@ software.
    The exact current `studio/document.vsz` remains authoritative after user or
    AI edits. A request/spec can regenerate a baseline, but cannot silently
    overwrite an edited VSZ.
-6. **AI and humans use the same operation gateway.**
-   AI must not click the Veusz GUI, patch a VSZ as arbitrary text, or inject
-   unvalidated Python into the active document.
+6. **AI joins the same document and undo boundary.**
+   Humans keep editing through native Veusz. AI must not click the GUI, patch a
+   VSZ as arbitrary text, or inject unvalidated Python; accepted typed changes
+   operate on the same live `Document` and native undo/redo history visible to
+   the user.
 7. **AI is optional but deeply integrated.**
    Disabling the assistant must not disable supported plotting, editing, QA,
    export, or delivery.
@@ -89,12 +91,13 @@ software.
    Lifecycle success, exact-current artifact QA, provenance completeness, and
    journal-specific compliance are different fields.
 
-## Active execution charter
+## Superseded Canvas-cutover charter
 
-This charter turns the north-star objective into an ordered personal-product
-cutover program. It is the default work-selection policy until M6 is complete.
-Later phases must not be used to bypass an earlier failed authority or
-reliability gate.
+The E0-E7 program below is retained as historical evidence of the safeguards,
+probes, and contracts developed for the standalone Canvas. Its Canvas-default
+cutover, real-session quota, and Veusz-retirement policy are cancelled and do
+not govern current work. Applicable authority, rollback, provenance, and
+exact-current QA requirements remain reusable engineering evidence.
 
 ### E0 — Establish the evidence contract
 
@@ -136,16 +139,17 @@ overfilled cohorts, and a dirty/unverified frozen-build claim. These fixtures
 remain synthetic and count as zero M3/M6 sessions. Independent re-review
 reports no P0/P1 findings.
 
-E0 status: **closed**. The clean frozen-wheel installation gate passed the
-synthetic-only, non-counting `formal_contract_probe` from an isolated install:
+Historical E0 status: **closed**. The clean frozen-wheel installation gate
+passed the synthetic-only, non-counting `formal_contract_probe` from an
+isolated install:
 the exact commit, wheel `RECORD`, active package bytes, explicit checkout,
 Veusz/Qt runtime identity, Canvas review/promotion lifecycle, native
 composition lifecycle, reopen witnesses, QA/delivery, completion, and
 negative attacks all verified. The installed run passed 13/13 while recording
 one `formal_contract_probe` and zero M3/M6 sessions. The authoritative closure
 commit and wheel hashes live in `frozen_build.json` and the development log so
-an older diagnostic wheel cannot be mistaken for the candidate. E1 is the
-next active phase.
+an older diagnostic wheel cannot be mistaken for the candidate. Under the
+former charter, E1 would have been the next phase.
 
 ### E1 — Close the M5a promotion mechanism
 
@@ -282,13 +286,12 @@ possibility.
 Freeze one exact candidate commit, wheel/package hash, Veusz/Qt runtime,
 validated-envelope registry, and session-ledger schema after doctor, runtime
 smoke, affected probes, authorized-real-data lifecycles, and package import
-pass. This isolated candidate already contains the final `studio`-to-Canvas
-default routing, removal of obsolete normal-path UI/documentation, and the
-Advanced Editor escape hatch; it is exercised without changing the separate
-normal workspace or installed release. The final fifteen sessions all qualify
-this same candidate. Any runtime, rule, policy, adapter, renderer, entrypoint,
-or cleanup implementation change creates a new candidate and restarts the
-formal count.
+pass. Under the former plan, this isolated candidate would have contained the
+final `studio`-to-Canvas default routing, removal of normal-path
+UI/documentation, and the Advanced Editor escape hatch; it would have been
+exercised without changing the separate normal workspace or installed
+release. The proposed final fifteen sessions would all have qualified this
+same candidate.
 
 ### E6 — Qualify the frozen personal daily product
 
@@ -315,7 +318,7 @@ project is not a new session; a repeated source can count only for a distinct
 natural task and independently verified operation sequence. One session can
 satisfy M2, M3, M4, and M6 evidence simultaneously, but it is counted once.
 
-The qualification dossier must prove:
+Under that cancelled charter, the qualification dossier would have proven:
 
 - zero accepted edit loss;
 - every counted AI batch was committed, not undone or rolled back, and bound
@@ -345,10 +348,10 @@ The fifteen-session set also has orthogonal workflow coverage. It includes:
 These are cross-cutting requirements inside the same fifteen, not additional
 session quotas.
 
-### E7 — User-approved cutover, canary, and cleanup
+### E7 — Canvas cutover, canary, and cleanup (cancelled)
 
-Present the complete dossier before promoting the new normal entrypoint. Only
-after the owner explicitly approves:
+This proposed Canvas-default cutover is cancelled. The following list is
+retained only to document the former acceptance design:
 
 - promote the exact frozen commit/package already tested in E6 to the normal
   workspace/install without rebuilding or changing source/runtime identity;
@@ -370,10 +373,10 @@ The product has no independent/AI mode switch. Optional AI appears when the
 owner invokes it; supported deterministic work remains complete without it.
 M7 distribution is not part of this objective.
 
-### Global stop conditions
+### Historical stop conditions
 
-Stop the active phase and do not claim progress toward cutover when any of the
-following is true:
+Under the former charter, its phase would stop rather than claim progress
+toward cutover when any of the following was true:
 
 - exact-current authority, raw immutability, rollback, save/reopen, QA, or
   delivery cannot be proven;
@@ -399,60 +402,63 @@ following is true:
 
 ## Product and renderer boundary
 
-### Retired from the normal product frontend
+### Default daily frontend
 
-- Veusz `MainWindow`;
-- the full upstream object tree and property editor as the default user
-  experience;
-- AI automation through GUI clicks;
-- the browser's export-only static image as the primary editing canvas.
+- Veusz `MainWindow`, its object tree, property editor, live plot, selection,
+  and native undo/redo remain the normal `studio` experience;
+- SciPlot may add a compact menu and opt-in docks to the same window;
+- the AI dock is hidden by default and opens only when the user invokes it;
+- browser Result Review remains an artifact-review surface, not the primary
+  editor;
+- the standalone Canvas remains available as an experimental/reference
+  capability, not as the default daily frontend.
 
-### Retained as the rendering engine
+### Shared authority and services
 
 - Veusz `Document`;
-- Veusz `PlotWindow` for live drawing and object/data-point interaction;
+- Veusz `MainWindow` and `PlotWindow` for live drawing and interaction;
 - Veusz `CommandInterface` and document operations;
-- Veusz undo/redo semantics where they can be safely composed;
+- Veusz undo/redo semantics;
 - native VSZ saving, reopening, and exact-current export;
-- an explicit Advanced Editor route for infrequent or not-yet-supported edits
-  and recovery, without presenting it as the ordinary workflow.
+- SciPlot source audit, deterministic preparation, typed AI proposals,
+  structural/artifact QA, PDF/TIFF pairing, delivery, and provenance.
 
-Retiring the Veusz frontend does not mean deleting or forking the upstream
-editor immediately. It means that ordinary `studio` use no longer exposes it.
+There is one live visual authority: the exact current document loaded by Veusz
+and persisted as `studio/document.vsz`. SciPlot additions must not regenerate,
+silently replace, or maintain a competing document.
 
 ## Primary application architecture
 
-The primary GUI will be a native Qt application because the retained Veusz
-canvas is already a Qt `QGraphicsView`. The browser workflow remains a
-compatibility and data-confirmation surface until the native application
-absorbs the required Source, Inspect, Samples, Canvas, Review, and Export
-stages.
+The primary GUI is the existing Veusz `MainWindow`. SciPlot prepares the
+project and document before launch, then attaches bounded actions to that same
+window. Manual editing stays entirely native; optional AI changes and SciPlot
+export/QA operate against the same `Document`.
 
 ```mermaid
 flowchart LR
     RAW["Immutable raw data"] --> SEM["Semantic selection and mapping"]
     SEM --> TRANSFORM["Deterministic transform executor"]
     TRANSFORM --> REQUEST["Plot request and transform ledger"]
-    REQUEST --> SESSION["CanvasSession"]
+    REQUEST --> VSZ["Exact-current studio/document.vsz"]
+    VSZ --> MAIN["Veusz MainWindow"]
 
-    USER["Direct user actions"] --> OPS["Typed operation gateway"]
-    NOTES["Review annotations"] --> OPS
+    USER["Native Veusz editing"] --> MAIN
     AI["Optional AI assistant"] --> PROPOSAL["Validated operation proposal"]
     PROPOSAL --> OPS
 
-    OPS --> CONTROL["DocumentController"]
-    CONTROL --> DOC["Veusz Document"]
-    DOC --> VIEW["Embedded Veusz PlotWindow"]
-    DOC --> VSZ["Exact-current document.vsz"]
+    OPS["Typed operation gateway"] --> DOC["Same live Veusz Document"]
+    MAIN --> DOC
+    DOC --> VSZ
 
     VSZ --> QA["Structured and artifact QA"]
     QA --> DELIVERY["PDF, TIFF, project, and delivery"]
-
-    MODULES["Standalone figure modules"] --> COMPOSE["Composition model"]
-    COMPOSE --> OPS
 ```
 
-## Authority and persisted state
+## Historical Canvas architecture and persisted state
+
+The following Canvas contracts and ownership boundaries record implemented
+M0-M4 capabilities. They remain reusable source assets, but they no longer
+define the default frontend or the active delivery path.
 
 | Artifact | Authority |
 | --- | --- |
@@ -597,13 +603,18 @@ Rules:
 
 ## Development sequence
 
+M0-M4 below are retained as implementation and evidence history. M5 documents
+the deterministic foundation that remains active under M6. References in
+those milestone records to a future Canvas-default migration or Veusz
+retirement are superseded by the active Veusz-first route.
+
 ### M0 — Architecture freeze and canvas characterization
 
 Purpose: remove uncertainty before building the product shell.
 
 Deliverables:
 
-- record this product decision as the active roadmap;
+- record the then-current Canvas product decision;
 - characterize embedded `Document` + `PlotWindow` lifecycle on the current
   pinned Veusz runtime;
 - prove document-modified redraw, object click, axis-coordinate reporting,
@@ -755,8 +766,8 @@ M1 limits handed to M2, with current disposition:
   starting a new in-memory undo boundary;
 - the prototype light QSS has been replaced by palette-backed light, dark,
   increased-contrast, focus, spacing, and semantic-state tokens;
-- normal `studio` still uses the transition route until review tooling and ten
-  representative real M2 sessions prove the full daily-use gate.
+- normal `studio` remained on Veusz while the Canvas was evaluated. The former
+  migration gate is now superseded; Veusz remains the intended default.
 
 ### M2 — Daily Editing and Review Canvas
 
@@ -774,8 +785,8 @@ Deliverables:
 - coordinate binding to page, graph, data position, and selected object;
 - promotion of a review annotation into a native Veusz annotation;
 - fast structural QA after an editing debounce and full artifact QA on export;
-- migration of the normal `studio` entrypoint to the SciPlot canvas after the
-  exit gate passes.
+- the formerly proposed migration of the normal `studio` entrypoint to the
+  SciPlot Canvas. This deliverable is cancelled.
 
 M2 implementation progress, 2026-07-17:
 
@@ -880,12 +891,12 @@ M2 implementation progress, 2026-07-17:
   undo/redo, reopen, QA, exact-current export, and audit evidence;
 - no upstream `third_party/veusz` or migrated `_vendor` source was changed.
 
-This is not M2 completion. The contextual editing kernel is complete, but the
-at least ten real daily editing/review sessions and default `studio` migration
-remain required by the exit gate. Automated lifecycle probes are engineering
-evidence and do not count as human daily-use sessions.
+Historical M2 disposition: the contextual editing kernel is complete. The
+former ten-session Canvas-default migration gate is superseded and is not an
+active completion requirement. Automated lifecycle probes remain useful
+engineering evidence.
 
-Exit gate:
+Historical exit gate (Canvas-default portion superseded):
 
 - representative rheology, spectroscopy, mechanical, categorical, and
   scalar-field projects can complete common edits without Veusz MainWindow;
@@ -901,8 +912,8 @@ Current gate status:
 - representative editing, review persistence/export isolation, typed
   promotion, exact-current export, and manual-edit preservation pass automated
   gates;
-- the ten real-session zero-loss gate and user-approved default `studio`
-  cutover remain open.
+- the former ten-session zero-loss and Canvas-default `studio` cutover items
+  were left open and are now cancelled rather than carried into M6.
 
 ### M3 — AI-Enhanced Live Operation Loop
 
@@ -1185,9 +1196,10 @@ Current gate status:
   explicit receipt, background execution, retry/reopen recovery, and separate
   candidate-Canvas handoff pass with an injected deterministic provider;
 - live OpenAI endpoint execution, live-model quality evaluation, and the six
-  canonical natural-language tasks remain open;
-- automated probes do not satisfy M2's real-session cutover gate or the final
-  user decision to retire the Veusz frontend.
+  canonical natural-language tasks remain unproven; they are not M6
+  Veusz-first integration blockers;
+- live-endpoint model-quality evidence remains distinct from the engineering
+  probes; the former Canvas cutover and Veusz-retirement decision is cancelled.
 
 ### M4 — Native Composition Board
 
@@ -1241,9 +1253,9 @@ Current implementation status:
 - runtime smoke version 18 passes `34/34`, including the native composition
   and deterministic-readiness lifecycle gates.
 
-This establishes the automated M4 engineering baseline. It does not count as
-the owner's mixed-family daily-use acceptance or authorize the M6 Veusz
-frontend retirement decision.
+This establishes the automated M4 engineering baseline. It is retained as an
+optional historical capability and does not authorize or require frontend
+replacement; the former M6 Veusz-retirement decision is cancelled.
 
 ### M5 — Deterministic Ready and Learning Loop
 
@@ -1317,38 +1329,55 @@ This establishes the deterministic-ready baseline but does not finish M5.
 Promotion of repeated accepted AI mappings or operations into reviewed rules,
 fixtures, policies, and regression probes remains the next M5 increment.
 
-### M6 — Daily-Use Cutover and Veusz Frontend Retirement
+### M6 — Veusz-First Integration and Cleanup
 
-Purpose: make the new architecture the actual daily product rather than a
-parallel prototype.
+Purpose: converge SciPlot on one immediately usable daily product: the
+long-lived Veusz `MainWindow`, enhanced in place by SciPlot's distinct
+scientific, AI, QA, and delivery capabilities.
+
+The former M6 Canvas-default and Veusz-frontend-retirement plan is
+**superseded and cancelled**. It is not an acceptance dependency.
 
 Deliverables:
 
-- `studio` opens SciPlot Canvas by default;
-- Veusz MainWindow disappears from normal documentation and user actions;
-- Advanced Editor remains an explicit low-frequency, unsupported-property, and
-  recovery command; it is not duplicated wholesale inside SciPlot;
-- browser Result Review is compatibility-only rather than the primary canvas;
-- daily-use telemetry is local and limited to operational metrics such as
-  latency, state transitions, failures, and recovery—not scientific data;
-- obsolete duplicate UI paths are removed only after their replacement passes
-  real work.
+- keep `sciplot studio` and the ordinary project launcher on Veusz
+  `MainWindow`;
+- preserve the original Veusz object tree, property editor, selection,
+  shortcuts, layout, undo/redo, save, and export interactions;
+- attach SciPlot actions to the same live `Document`, with the optional AI
+  dock hidden by default and opened only by explicit user action;
+- make accepted typed AI changes visible immediately in Veusz and reversible
+  through the shared native undo/redo path;
+- expose exact-current SciPlot QA and PDF/TIFF delivery without regenerating or
+  replacing a manually edited VSZ;
+- retain source audit, deterministic mapping, validated envelopes, and
+  provenance in preparation or blocked-repair flows rather than duplicating
+  them as a general editor;
+- fix shared scientific-contract defects in the rule/semantic/policy owners,
+  with affected real-data lifecycle evidence;
+- align the README, operation flow, architecture, roadmap, and development
+  roadmap on the same Veusz-first route;
+- revalidate the Veusz GUI lifecycle, all 23 ready rules, `doctor`, runtime
+  smoke, exact-current export, QA, and delivery;
+- after every gate passes, remove redundant worktrees and only branches proven
+  fully merged.
 
-Retirement gate:
+Exit gate:
 
-- at least fifteen real plotting/editing/composition sessions across five
-  experiment or figure families complete through SciPlot Canvas, with at
-  least three qualifying completions in each acceptance lane defined in E4,
-  all bound to the same frozen candidate;
-- zero accepted manual or AI edits are lost;
-- no high-frequency or ordinary task requires Veusz MainWindow;
-- every fallback use is recorded with a concrete missing capability;
-- exact-current VSZ, QA, and delivery remain green;
-- the user explicitly accepts the cutover after reviewing the evidence.
-
-After this gate, the Veusz frontend is retired as the normal product surface.
-The vendored upstream editor may remain as the explicit low-frequency escape
-hatch and recovery surface.
+- a normal `studio` launch opens Veusz `MainWindow` with no Canvas-default
+  redirect;
+- the default Veusz layout and plot geometry are unchanged while the AI dock
+  is closed;
+- opening, applying, undoing/redoing, saving, reopening, and exporting an AI
+  change all operate on one exact-current document;
+- no supported deterministic workflow requires an AI provider;
+- all affected scientific-contract regressions pass on authorized data and the
+  full 23-rule acceptance registry is exact-current;
+- `skill/scripts/sciplot doctor --json` reports `status=ready`;
+- `skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json` reports
+  `status=passed`;
+- the main worktree is coherent, extra worktrees are removed, and obsolete
+  merged branches are deleted without losing unique work.
 
 ### M7 — Future Distribution
 
@@ -1360,33 +1389,33 @@ Only after the personal daily-use product is stable:
 - update and rollback;
 - broader architecture and platform support.
 
-Distribution must not preempt Canvas usability, AI interaction, composition,
-or deterministic trust.
+Distribution must not preempt Veusz-first integration, optional AI safety, or
+deterministic trust.
 
 ## Critical path
 
 ```text
-M0-M4 engineering baselines + M5 deterministic Ready
-  -> E0 evidence ledger and counting contract
-  -> E1 M5a reviewed promotion mechanism
-  -> E2 M3 canonical-task / typed-capability matrix
-  -> E3 M3 real-endpoint canonical tasks
-  -> E4 M6 five-lane discovery
-  -> E5 P0/P1 closure + natural M5 candidates + candidate freeze
-  -> E6 15 frozen-candidate real sessions
-  -> E7 owner approval + reversible Canvas cutover canary
+Freeze Veusz-first frontend boundary
+  -> audit and repair shared scientific contracts
+  -> attach optional AI and QA actions to the same MainWindow/Document
+  -> prove default-hidden UI and exact-current save/reopen/undo/export
+  -> rerun affected authorized-real-data lifecycles
+  -> rerun and certify all 23 ready rules
+  -> doctor ready + runtime smoke passed
+  -> remove redundant worktrees and fully merged branches
 ```
 
-E1 defines the promotion authority contract; E3/E4 supply real outcomes, and
-E5 closes any naturally eligible candidate before the final build freezes.
-Do not begin broad UI polishing, installer work, or unrelated plot-family
-expansion before the current phase's exit gate passes.
+M0-M4 Canvas and composition code remains available for selective reuse, but
+it is not on this critical path. Do not begin broad UI polishing, revive the
+composition product, rebuild Veusz's general editor, or start distribution
+work before M6 passes.
 
 ## Engineering gates for every non-trivial implementation turn
 
 1. Work only in the isolated development branch/worktree.
 2. Update `DEVELOPMENT_LOG.md`.
-3. Keep new Canvas responsibilities out of oversized legacy owners.
+3. Keep new integration responsibilities bounded; do not recreate Veusz
+   editors or add a competing document owner.
 4. Add a source-controlled smoke/contract probe for the changed public
    behavior and local focused tests where useful.
 5. Run:
@@ -1403,8 +1432,8 @@ expansion before the current phase's exit gate passes.
 7. For rule/data changes, run an affected authorized real-data lifecycle.
 8. For AI changes, test with the provider disabled, invalid output, stale
    revision, interruption, and rollback.
-9. For composition changes, prove physical dimensions and native, non-raster
-   object structure.
+9. Composition is outside active M6 scope; any future change must again prove
+   physical dimensions and native, non-raster object structure.
 10. Do not claim completion until the worktree and verification evidence are
     coherent.
 
@@ -1417,7 +1446,8 @@ These are product targets, not excuses to skip correctness:
 - 100% whole-transaction rollback success for accepted AI test scenarios;
 - zero silent raw-data mutation;
 - zero silent replacement of an edited VSZ;
-- zero raster panel composition in final editable composites;
+- the optional historical composition path, when exercised, still forbids
+  raster panel stitching in final editable composites;
 - supported deterministic flows remain fully usable with no assistant
   installed;
 - assistant context contains structured summaries by default, not entire raw
@@ -1436,34 +1466,40 @@ These are product targets, not excuses to skip correctness:
 | composition becoming a raster hack | compile native page/grid/graph objects and audit the VSZ |
 | new giant modules | enforce pure core/Qt adapter/UI ownership boundaries |
 | QA blocking useful work incorrectly | separate blocking gates from advisory diagnostics and keep evidence visible |
-| frontend rewrite destabilizing delivery | preserve the existing exact-current export and delivery services behind adapters |
+| in-window integration destabilizing Veusz | keep docks opt-in, use the same Document/undo path, and preserve exact-current export and delivery services |
 
 ## Explicit non-goals for the active roadmap
 
 - replacing Veusz as the renderer;
-- reproducing every arbitrary Veusz property in the first SciPlot canvas;
+- replacing Veusz `MainWindow` as the default frontend;
+- reproducing Veusz's object tree or arbitrary property editor in a SciPlot
+  shell;
 - building a general-purpose Illustrator replacement;
+- expanding the standalone Canvas or Composition Board as part of M6;
 - letting AI invent or silently rewrite experimental values;
 - making AI mandatory;
 - inferring journal compliance from a generic QA pass;
 - public multi-user collaboration or cloud storage;
-- cross-platform distribution before personal daily-use cutover;
+- cross-platform distribution before the Veusz-first daily product is stable;
 - a big-bang rewrite of `studio.py`, `semantic.py`, or `intake.py`.
 
 ## Completion definition for the north-star objective
 
 The objective is complete only when:
 
-1. SciPlot Canvas is the normal `studio` frontend and Veusz MainWindow is
-   retired from ordinary use.
-2. User and AI operations are live, typed, auditable, conflict-safe, and fully
-   reversible.
-3. Review annotations and promotion to formal annotations work on the canvas.
-4. Native multi-panel composition works through direct manipulation and
-   produces editable composite VSZ files.
+1. Veusz `MainWindow` is the normal `studio` frontend and its existing manual
+   interaction remains intact.
+2. SciPlot's optional AI and QA actions operate on the same live
+   `Document`; the AI dock is hidden by default, accepted edits are visible,
+   auditable, conflict-safe, and reversible.
+3. Saving, reopening, QA, PDF/TIFF export, delivery, and provenance all bind
+   the exact-current manually or AI-edited VSZ without regeneration.
+4. Shared scientific-contract defects identified in the audit are fixed in
+   durable owners and covered by affected real-data lifecycle evidence.
 5. Covered deterministic workflows reach `ready_to_use=true` without AI image
    inspection.
 6. Unknown or unsafe work stops at an honest non-ready state.
-7. Raw data, transform records, exact-current VSZ authority, QA, and delivery
-   all survive the new frontend.
-8. Real daily-use evidence satisfies the M6 retirement gate.
+7. All 23 ready rules are exact-current, `doctor` is ready, and runtime smoke
+   passes.
+8. Redundant worktrees and fully merged obsolete branches are removed only
+   after all gates pass.

@@ -843,7 +843,19 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
 
     from sciplot_core.materials_rules import compute_analysis_metrics
     from sciplot_core.semantic import classify_source, prepare_semantic_source
-    from sciplot_core.studio import StudioSeries, _apply_series_options
+    from sciplot_core.studio import (
+        StudioPreparationBlocked,
+        StudioSeries,
+        StudioSourceFrame,
+        _apply_series_options,
+        _apply_series_domain_contract_defaults,
+        _semantic_payload_with_exact_current_axes,
+        _semantic_payload_with_terminal_axes,
+        derive_terminal_render_data_contract,
+        _series_from_frame_records,
+        _validate_log_domain_series,
+        _veusz_spec_path,
+    )
 
     contracts = run_root / "semantic_contracts"
 
@@ -1037,6 +1049,329 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
     swelling_non_color_signatures = [
         (item.line_style, str(item.marker)) for item in styled_swelling_series
     ]
+    swelling_colors = [item.color for item in styled_swelling_series]
+    swelling_condition_groups = [
+        styled_swelling_series[index : index + 3]
+        for index in range(0, len(styled_swelling_series), 3)
+    ]
+
+    amplitude_frame = pd.DataFrame(
+        {
+            "Strain": ["%", "Sample A", 0.1, 1.0, 10.0],
+            "Storage Modulus": ["Pa", "Sample A", 1200.0, 1100.0, 900.0],
+            "Loss Modulus": ["Pa", "Sample A", 240.0, 260.0, 300.0],
+            "Loss Factor": ["1", "Sample A", 0.2, 0.24, 0.33],
+            "Strain.1": ["%", "Sample B", 0.1, 1.0, 10.0],
+            "Storage Modulus.1": ["Pa", "Sample B", 1800.0, 1600.0, 1300.0],
+            "Loss Modulus.1": ["Pa", "Sample B", 300.0, 340.0, 390.0],
+            "Loss Factor.1": ["1", "Sample B", 0.17, 0.21, 0.3],
+        }
+    )
+    amplitude_source = contracts / "rheology_strain_sweep" / "comparison.csv"
+    amplitude_source.parent.mkdir(parents=True, exist_ok=True)
+    amplitude_source.write_text("synthetic contract frame\n", encoding="utf-8")
+    amplitude_record = StudioSourceFrame(
+        label="comparison",
+        path=amplitude_source,
+        sha256=file_sha256(amplitude_source),
+        frame=amplitude_frame,
+    )
+    default_amplitude_series, default_amplitude_axis = _series_from_frame_records(
+        {
+            "template": "point_line",
+            "rule_id": "rheology_strain_sweep",
+            "series_order": ["Sample A", "Sample B"],
+            "render_options": {"xscale": "log", "yscale": "log"},
+            "explicit_render_option_keys": [],
+            "study_model": {
+                "figure_queue": [{"x_metric": "x", "y_metric": "y"}],
+            },
+        },
+        frames=[amplitude_record],
+    )
+    loss_factor_series, loss_factor_axis = _series_from_frame_records(
+        {
+            "template": "point_line",
+            "rule_id": "rheology_strain_sweep",
+            "y_metric": "loss_factor",
+            "series_order": ["Sample A", "Sample B"],
+            "render_options": {"xscale": "log", "yscale": "log"},
+            "explicit_render_option_keys": [],
+        },
+        frames=[amplitude_record],
+    )
+
+    positive_xrd_series = [
+        StudioSeries(
+            label="XRD",
+            x_name="xrd_x",
+            y_name="xrd_y",
+            x_values=(3.0, 20.0, 50.0),
+            y_values=(800.0, 5000.0, 900.0),
+            color="#000000",
+        )
+    ]
+    positive_xrd_options = _apply_series_domain_contract_defaults(
+        {},
+        request={
+            "rule_id": "xrd_pattern",
+            "render_options": {},
+            "explicit_render_option_keys": [],
+        },
+        series=positive_xrd_series,
+    )
+    negative_xrd_options = _apply_series_domain_contract_defaults(
+        {},
+        request={
+            "rule_id": "xrd_pattern",
+            "render_options": {},
+            "explicit_render_option_keys": [],
+        },
+        series=[
+            StudioSeries(
+                label="background-subtracted XRD",
+                x_name="xrd_negative_x",
+                y_name="xrd_negative_y",
+                x_values=(3.0, 20.0, 50.0),
+                y_values=(-5.0, 5000.0, 10.0),
+                color="#000000",
+            )
+        ],
+    )
+    noisy_relaxation_options = _apply_series_domain_contract_defaults(
+        {
+            "y_min": -0.05,
+            "y_max": 1.05,
+            "y_ticks": [0.0, 0.25, 0.5, 0.75, 1.0],
+        },
+        request={
+            "rule_id": "rheology_stress_relaxation",
+            "render_options": {},
+            "explicit_render_option_keys": [],
+        },
+        series=[
+            StudioSeries(
+                label="noisy relaxation",
+                x_name="relaxation_x",
+                y_name="relaxation_y",
+                x_values=(0.01, 0.1, 1.0),
+                y_values=(0.9, -0.47, 0.1),
+                color="#000000",
+            )
+        ],
+    )
+    xrd_terminal_source = contracts / "xrd_pattern" / "terminal.csv"
+    xrd_terminal_source.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {
+            "2theta": ["degree", "PDA-I", 3.0, 9.0, 20.0],
+            "Intensity": ["count", "PDA-I", 2.0, 10.0, 1.0],
+            "2theta.1": ["degree", "PDA-Br", 3.0, 7.0, 20.0],
+            "Intensity.1": ["count", "PDA-Br", 1.0, 8.0, 2.0],
+        }
+    ).to_csv(xrd_terminal_source, index=False)
+    xrd_terminal_contract = derive_terminal_render_data_contract(
+        request={
+            "template": "curve",
+            "rule_id": "xrd_pattern",
+            "series_order": ["pda_xrd_patterns"],
+            "render_options": {},
+            "explicit_render_option_keys": [],
+            "study_model": {
+                "sample_order": ["pda_xrd_patterns"],
+                "figure_queue": [
+                    {
+                        "evidence_contract": {
+                            "confirmation_status": "inferred",
+                        }
+                    }
+                ],
+            },
+        },
+        terminal_sources=[xrd_terminal_source],
+    )
+    xrd_terminal_labels = [
+        str(unit.get("label") or "")
+        for unit in xrd_terminal_contract.get("units") or []
+        if isinstance(unit, dict)
+    ]
+    xrd_terminal_axes = (
+        (xrd_terminal_contract.get("units") or [{}])[0].get("axes") or {}
+    )
+    try:
+        _apply_series_options(
+            positive_xrd_series,
+            render_options={},
+            request={
+                "template": "curve",
+                "rule_id": "xrd_pattern",
+                "series_order": ["manual typo"],
+                "study_model": {
+                    "sample_order": ["XRD"],
+                    "figure_queue": [
+                        {
+                            "evidence_contract": {
+                                "confirmation_status": "confirmed",
+                            }
+                        }
+                    ],
+                },
+            },
+        )
+    except StudioPreparationBlocked as exc:
+        manual_order_rejection = {
+            "reason_code": exc.reason_code,
+            "message": str(exc),
+        }
+    else:
+        manual_order_rejection = None
+
+    ftir_terminal_source = contracts / "ftir_spectrum" / "terminal.csv"
+    ftir_terminal_source.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        {
+            "Wavenumber": ["cm^-1", "Percent T", 4000.0, 3000.0, 2000.0],
+            "Transmittance": ["%", "Percent T", 90.0, 82.0, 75.0],
+            "Wavenumber.1": [
+                "cm^-1",
+                "Hidden trace",
+                4000.0,
+                3000.0,
+                2000.0,
+            ],
+            "Transmittance.1": [
+                "%",
+                "Hidden trace",
+                88.0,
+                80.0,
+                72.0,
+            ],
+        }
+    ).to_csv(ftir_terminal_source, index=False)
+    ftir_terminal_contract = derive_terminal_render_data_contract(
+        request={
+            "template": "stacked_curve",
+            "rule_id": "ftir_spectrum",
+            "series_order": ["Percent T", "Hidden trace"],
+            "render_options": {
+                "y_label_override": "Absorbance (offset)",
+                "series_include": ["Percent T"],
+            },
+            "explicit_render_option_keys": [],
+        },
+        terminal_sources=[ftir_terminal_source],
+    )
+    ftir_terminal_unit = (ftir_terminal_contract.get("units") or [{}])[0]
+    ftir_terminal_axes = ftir_terminal_unit.get("axes") or {}
+
+    gpc_axis_document = contracts / "axis_authority" / "gpc_document.vsz"
+    gpc_axis_document.parent.mkdir(parents=True, exist_ok=True)
+    gpc_axis_document.write_text(
+        "# synthetic axis-authority contract\n",
+        encoding="utf-8",
+    )
+    _veusz_spec_path(gpc_axis_document).write_text(
+        json.dumps(
+            {
+                "axes": {
+                    "x": {
+                        "label": "Elution time (min)",
+                        "scale": "linear",
+                        "min": 1.0,
+                        "max": 3.0,
+                    },
+                    "y": {
+                        "label": "Detector response (mV)",
+                        "scale": "linear",
+                        "min": 0.0,
+                        "max": 30.0,
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    gpc_effective_semantic = _semantic_payload_with_terminal_axes(
+        gpc_semantic,
+        document_path=gpc_axis_document,
+    )
+
+    ftir_axis_document = contracts / "axis_authority" / "ftir_document.vsz"
+    ftir_axis_document.write_text(
+        "# synthetic axis-authority contract\n",
+        encoding="utf-8",
+    )
+    ftir_axis_spec = {
+        "x": {
+            "label": "Wavenumber (cm^{-1})",
+            "scale": "linear",
+            "min": 4000.0,
+            "max": 400.0,
+        },
+        "y": {
+            "label": "Absorbance (a.u.)",
+            "scale": "linear",
+            "min": 0.0,
+            "max": 0.5,
+        },
+    }
+    _veusz_spec_path(ftir_axis_document).write_text(
+        json.dumps({"axes": ftir_axis_spec}),
+        encoding="utf-8",
+    )
+    ftir_absorbance_semantic = classify_source(
+        ftir_terminal_source,
+        requested_rule_id="ftir_spectrum",
+    )
+    ftir_effective_semantic = _semantic_payload_with_terminal_axes(
+        ftir_absorbance_semantic,
+        document_path=ftir_axis_document,
+    )
+    ftir_exact_semantic = _semantic_payload_with_exact_current_axes(
+        ftir_effective_semantic,
+        qa={
+            "publication": {
+                "veusz_document_audit": {
+                    "documents": [
+                        {
+                            "path": str(ftir_axis_document.resolve()),
+                            "sha256": file_sha256(ftir_axis_document),
+                            "axes": [
+                                {
+                                    "name": axis_name,
+                                    **axis_payload,
+                                    "hidden": False,
+                                }
+                                for axis_name, axis_payload in ftir_axis_spec.items()
+                            ],
+                        }
+                    ]
+                }
+            }
+        },
+        document_path=ftir_axis_document,
+    )
+    try:
+        _validate_log_domain_series(
+            [
+                StudioSeries(
+                    label="invalid log trace",
+                    x_name="log_x",
+                    y_name="log_y",
+                    x_values=(0.01, 0.1, 1.0),
+                    y_values=(10.0, 0.0, 1.0),
+                    color="#000000",
+                )
+            ],
+            render_options={"xscale": "log", "yscale": "log"},
+        )
+    except StudioPreparationBlocked as exc:
+        log_domain_rejection = {
+            "reason_code": exc.reason_code,
+            "message": str(exc),
+        }
+    else:
+        log_domain_rejection = None
 
     expected_saxs_order = ["HDPE", "2 wt% UDC 3"]
     expected_impact_order = ["V-PA (2 mm)", "E-PA (2 mm)", "V-PA (4 mm)", "E-PA (4 mm)"]
@@ -1081,7 +1416,71 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         and math.isclose(
             float(first_time_conversion.get("factor") or 0.0), 1.0 / 3600.0
         )
-        and len(set(swelling_non_color_signatures)) == 9
+        and len(swelling_condition_groups) == 3
+        and all(len({item.color for item in group}) == 1 for group in swelling_condition_groups)
+        and len({group[0].color for group in swelling_condition_groups if group}) == 3
+        and all(
+            len({(item.line_style, str(item.marker)) for item in group}) == 3
+            for group in swelling_condition_groups
+        )
+        and [item.label for item in default_amplitude_series]
+        == ["Sample A", "Sample B"]
+        and [item.y_values for item in default_amplitude_series]
+        == [(1200.0, 1100.0, 900.0), (1800.0, 1600.0, 1300.0)]
+        and "G" in str(default_amplitude_axis.get("y_label") or "")
+        and "Pa" in str(default_amplitude_axis.get("y_label") or "")
+        and [item.label for item in loss_factor_series]
+        == ["Sample A", "Sample B"]
+        and [item.y_values for item in loss_factor_series]
+        == [(0.2, 0.24, 0.33), (0.17, 0.21, 0.3)]
+        and "tan" in str(loss_factor_axis.get("y_label") or "").casefold()
+        and positive_xrd_options.get("x_min") == 0.0
+        and positive_xrd_options.get("y_min") == 0.0
+        and negative_xrd_options.get("x_min") == 0.0
+        and "y_min" not in negative_xrd_options
+        and "y_min" not in noisy_relaxation_options
+        and "y_ticks" not in noisy_relaxation_options
+        and noisy_relaxation_options.get("y_max") == 1.05
+        and (xrd_terminal_axes.get("x") or {}).get("min") == 0.0
+        and (xrd_terminal_axes.get("y") or {}).get("min") == 0.0
+        and xrd_terminal_labels == ["PDA-I", "PDA-Br"]
+        and (manual_order_rejection or {}).get("reason_code")
+        == "unknown_series_order"
+        and (
+            (gpc_effective_semantic.get("axis_plan") or {})
+            .get("y", {})
+            .get("canonical_unit")
+            == "mV"
+        )
+        and (
+            (gpc_effective_semantic.get("registered_axis_plan") or {})
+            .get("y", {})
+            .get("canonical_unit")
+            == "a.u."
+        )
+        and (
+            (ftir_exact_semantic.get("axis_plan") or {})
+            .get("y", {})
+            .get("canonical_label")
+            == "Absorbance"
+        )
+        and (
+            (ftir_exact_semantic.get("axis_plan") or {})
+            .get("y", {})
+            .get("canonical_unit")
+            == "a.u."
+        )
+        and (ftir_exact_semantic.get("axis_authority") or {}).get("status")
+        == "exact_current"
+        and "Transmittance"
+        in str((ftir_terminal_axes.get("y") or {}).get("label") or "")
+        and "Absorbance"
+        not in str((ftir_terminal_axes.get("y") or {}).get("label") or "")
+        and ftir_terminal_unit.get("y_values") == [90.0, 82.0, 75.0]
+        and ftir_terminal_contract.get("unit_count") == 1
+        and (ftir_terminal_axes.get("y") or {}).get("show_ticks") is True
+        and (log_domain_rejection or {}).get("reason_code")
+        == "log_axis_nonpositive_data"
     )
     return {
         "passed": passed,
@@ -1111,7 +1510,37 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
             "series_order": swelling_parameters.get("series_order"),
             "point_counts": swelling_parameters.get("source_point_counts"),
             "first_source_selection": first_swelling_selection,
+            "colors": swelling_colors,
             "non_color_signatures": swelling_non_color_signatures,
+        },
+        "amplitude_sweep": {
+            "default_labels": [item.label for item in default_amplitude_series],
+            "default_y_values": [item.y_values for item in default_amplitude_series],
+            "default_axis": default_amplitude_axis,
+            "loss_factor_labels": [item.label for item in loss_factor_series],
+            "loss_factor_y_values": [item.y_values for item in loss_factor_series],
+            "loss_factor_axis": loss_factor_axis,
+        },
+        "axis_domain_contracts": {
+            "positive_xrd_options": positive_xrd_options,
+            "negative_xrd_options": negative_xrd_options,
+            "noisy_relaxation_options": noisy_relaxation_options,
+            "xrd_terminal_axes": xrd_terminal_axes,
+            "xrd_terminal_labels": xrd_terminal_labels,
+            "manual_order_rejection": manual_order_rejection,
+            "gpc_effective_axis_plan": gpc_effective_semantic.get("axis_plan"),
+            "gpc_registered_axis_plan": gpc_effective_semantic.get(
+                "registered_axis_plan"
+            ),
+            "ftir_absorbance_effective_axis_plan": ftir_exact_semantic.get(
+                "axis_plan"
+            ),
+            "ftir_absorbance_axis_authority": ftir_exact_semantic.get(
+                "axis_authority"
+            ),
+            "ftir_terminal_axes": ftir_terminal_axes,
+            "ftir_terminal_y_values": ftir_terminal_unit.get("y_values"),
+            "log_domain_rejection": log_domain_rejection,
         },
     }
 
@@ -2496,6 +2925,37 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 "Generated SAXS, Agilent GPC, impact, and explicit-intent swelling contracts parse deterministically",
                 parser_probe.get("passed") is True,
                 detail=parser_probe,
+            )
+        )
+        from sciplot_core.analysis_contract_probe import (
+            run_analysis_contract_probe,
+        )
+        from sciplot_core.semantic_contract_probe import (
+            run_semantic_contract_probe,
+        )
+
+        analysis_contract_probe = run_analysis_contract_probe(
+            run_root / "analysis_contract_probe"
+        )
+        checks.append(
+            _check(
+                "scientific_analysis_contracts",
+                "Scientific metrics use the confirmed metric columns, "
+                "per-series extrema, and conservative interpretation rules",
+                analysis_contract_probe.get("status") == "passed",
+                detail=analysis_contract_probe,
+            )
+        )
+        semantic_contract_probe = run_semantic_contract_probe(
+            run_root / "semantic_contract_probe"
+        )
+        checks.append(
+            _check(
+                "scientific_semantic_contracts",
+                "Scientific preprocessing preserves units, interval identity, "
+                "log domains, and complete in-scope source coverage",
+                semantic_contract_probe.get("status") == "passed",
+                detail=semantic_contract_probe,
             )
         )
 

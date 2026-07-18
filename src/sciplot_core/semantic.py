@@ -82,6 +82,10 @@ class _ImpactDataValidationError(ValueError):
     """Raised when an impact-shaped table contains scientifically invalid data."""
 
 
+class _StressRelaxationHoldError(ValueError):
+    """Raised when a strain-controlled hold cannot be established safely."""
+
+
 _RHEOLOGY_SWEEP_METRICS = (
     ("storage_modulus", "Storage Modulus", ("storagemodulus", "storage modulus", "g'", "g′"), "Pa"),
     ("loss_modulus", "Loss Modulus", ("lossmodulus", 'g"', "g″"), "Pa"),
@@ -499,6 +503,10 @@ def _looks_like_unit(value: object) -> bool:
         "kpa",
         "mpa",
         "gpa",
+        "cm1",
+        "nm1",
+        "au",
+        "abs",
         "百分比",
         "kjm2",
         "kjm²",
@@ -614,6 +622,12 @@ def _scan_curve_series_table(
                     y_label=y_label,
                     y_unit=y_unit,
                     points=tuple(points),
+                    diagnostics={
+                        "source_x_header": _clean_text(row_values[x_index]),
+                        "source_y_header": _clean_text(row_values[y_index]),
+                        "source_x_unit": x_unit,
+                        "source_y_unit": y_unit,
+                    },
                 )
             )
         if sum(len(series.points) for series in candidate_series) > sum(len(series.points) for series in best):
@@ -777,6 +791,63 @@ def _read_gpc_series_list(source: Path) -> list[CurveSeriesPayload]:
             ]
         result.extend(candidate)
     return result
+
+
+def _retain_positive_saxs_log_domain(
+    series: CurveSeriesPayload,
+) -> CurveSeriesPayload:
+    source_point_count = len(series.points)
+    excluded_nonpositive_q_count = sum(
+        math.isfinite(q_value) and q_value <= 0.0
+        for q_value, _intensity in series.points
+    )
+    excluded_nonpositive_intensity_count = sum(
+        math.isfinite(intensity) and intensity <= 0.0
+        for _q_value, intensity in series.points
+    )
+    excluded_nonfinite_count = sum(
+        not (math.isfinite(q_value) and math.isfinite(intensity))
+        for q_value, intensity in series.points
+    )
+    retained = tuple(
+        (q_value, intensity)
+        for q_value, intensity in series.points
+        if (
+            math.isfinite(q_value)
+            and math.isfinite(intensity)
+            and q_value > 0.0
+            and intensity > 0.0
+        )
+    )
+    if len(retained) < 2:
+        raise ValueError(
+            f"SAXS series {series.sample!r} has fewer than two finite points "
+            "with q > 0 and intensity > 0; logarithmic plotting is blocked."
+        )
+    return CurveSeriesPayload(
+        sample=series.sample,
+        x_label=series.x_label,
+        x_unit=series.x_unit,
+        y_label=series.y_label,
+        y_unit=series.y_unit,
+        points=retained,
+        diagnostics={
+            **(series.diagnostics or {}),
+            "source_point_count": source_point_count,
+            "excluded_nonpositive_q_count": excluded_nonpositive_q_count,
+            "excluded_nonpositive_intensity_count": (
+                excluded_nonpositive_intensity_count
+            ),
+            "excluded_nonfinite_point_count": excluded_nonfinite_count,
+            "selected_point_count": len(retained),
+            "log_domain_policy": (
+                "retain only finite q > 0 and intensity > 0 for logarithmic axes"
+            ),
+            "intensity_offset_policy": (
+                "preserve source intensity values; do not infer or remove offsets"
+            ),
+        },
+    )
 
 
 _SWELLING_Y_ALIASES = ("swelling ratio", "ai/a0", "normalized projected area")
@@ -1146,6 +1217,11 @@ def _read_rheology_interval_series(
         "selected_result_label": selected["result_label"],
         "selected_interval_indexes": [interval["interval_index"] for interval in selected_intervals],
         "selected_interval_point_counts": [len(interval["points"]) for interval in selected_intervals],
+        "selected_point_interval_indexes": [
+            int(interval["interval_index"])
+            for interval in selected_intervals
+            for _point in interval["points"]
+        ],
         "selected_point_count": len(selected_points),
         "selected_y_coverage_fraction": round(float(selected["coverage"]), 6),
         "x_direction": x_direction,
@@ -1424,9 +1500,12 @@ def _read_rheology_sweep_comparison_samples(
     default_x_unit: str,
     interval_selection: str = "all_numeric_rows",
     metrics: tuple[tuple[str, str, tuple[str, ...], str], ...] = _RHEOLOGY_SWEEP_METRICS,
+    strict_scope: bool = True,
 ) -> list[RheologySweepSample]:
     samples: list[RheologySweepSample] = []
-    for candidate in _sweep_source_files(source):
+    candidates = _sweep_source_files(source)
+    errors: list[str] = []
+    for candidate in candidates:
         try:
             samples.append(
                 _read_rheology_sweep_sample(
@@ -1438,27 +1517,45 @@ def _read_rheology_sweep_comparison_samples(
                     metrics=metrics,
                 )
             )
-        except Exception:
-            continue
+        except Exception as exc:
+            errors.append(f"{candidate.name}: {exc}")
+    if errors and strict_scope:
+        detail = "; ".join(errors[:3])
+        raise ValueError(
+            "Rheology sweep preparation rejected one or more in-scope source "
+            f"files; silent partial datasets are not allowed ({detail})."
+        )
+    if not samples and strict_scope:
+        raise ValueError(f"No rheology sweep exports found under {source}.")
     return sorted(samples, key=_sweep_sample_order_key)
 
 
-def _read_rheology_frequency_comparison_samples(source: Path) -> list[RheologySweepSample]:
+def _read_rheology_frequency_comparison_samples(
+    source: Path,
+    *,
+    strict_scope: bool = True,
+) -> list[RheologySweepSample]:
     return _read_rheology_sweep_comparison_samples(
         source,
         x_aliases=("angularfrequency", "frequency", "omega", "ω"),
         x_label="Angular Frequency",
         default_x_unit="rad/s",
+        strict_scope=strict_scope,
     )
 
 
-def _read_rheology_temperature_comparison_samples(source: Path) -> list[RheologySweepSample]:
+def _read_rheology_temperature_comparison_samples(
+    source: Path,
+    *,
+    strict_scope: bool = True,
+) -> list[RheologySweepSample]:
     return _read_rheology_sweep_comparison_samples(
         source,
         x_aliases=("temperature", "temp", "温度"),
         x_label="Temperature",
         default_x_unit="°C",
         interval_selection="last_numeric_interval",
+        strict_scope=strict_scope,
     )
 
 
@@ -1777,7 +1874,15 @@ def is_rheology_frequency_comparison_dir(source: str | Path) -> bool:
     path = Path(source).expanduser()
     if not path.is_dir():
         return False
-    return len(_read_rheology_frequency_comparison_samples(path)) >= 2
+    return (
+        len(
+            _read_rheology_frequency_comparison_samples(
+                path,
+                strict_scope=False,
+            )
+        )
+        >= 2
+    )
 
 
 def is_rheology_temperature_comparison_dir(source: str | Path) -> bool:
@@ -1787,7 +1892,15 @@ def is_rheology_temperature_comparison_dir(source: str | Path) -> bool:
     text = path.as_posix().casefold()
     if "/temp/" not in text and "temperature" not in text and "温度" not in text:
         return False
-    return len(_read_rheology_temperature_comparison_samples(path)) >= 2
+    return (
+        len(
+            _read_rheology_temperature_comparison_samples(
+                path,
+                strict_scope=False,
+            )
+        )
+        >= 2
+    )
 
 
 def _sheet_name(value: str, used: set[str]) -> str:
@@ -1893,7 +2006,14 @@ def _read_wide_stress_relaxation_series(source: Path) -> list[CurveSeriesPayload
     series_list = _scan_curve_series_source(
         source,
         x_aliases=("time", "时间"),
-        y_aliases=("shear stress", "shearstress", "stress", "应力"),
+        y_aliases=(
+            "normalized stress",
+            "normalised stress",
+            "shear stress",
+            "shearstress",
+            "stress",
+            "应力",
+        ),
         x_label="Time",
         y_label="Shear stress",
         default_x_unit="s",
@@ -1908,31 +2028,408 @@ def _read_wide_stress_relaxation_series(source: Path) -> list[CurveSeriesPayload
     return series_list
 
 
+def _median(values: list[float]) -> float:
+    ordered = sorted(values)
+    midpoint = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[midpoint]
+    return (ordered[midpoint - 1] + ordered[midpoint]) / 2.0
+
+
+def _normalize_strain_controlled_hold(
+    response: CurveSeriesPayload,
+    control: CurveSeriesPayload,
+    *,
+    y_label: str = "Normalized stress",
+    y_unit: str = "sigma/sigma0",
+) -> CurveSeriesPayload:
+    """Crop a loading ramp and normalize from the detected strain-hold onset."""
+
+    response_result = (response.diagnostics or {}).get("selected_result_index")
+    control_result = (control.diagnostics or {}).get("selected_result_index")
+    if response_result != control_result:
+        raise _StressRelaxationHoldError(
+            "Stress-relaxation response and shear-strain control were selected "
+            "from different result sections."
+        )
+
+    response_diagnostics = response.diagnostics or {}
+    control_diagnostics = control.diagnostics or {}
+    response_intervals = tuple(
+        int(value)
+        for value in response_diagnostics.get("selected_interval_indexes", [])
+    )
+    control_intervals = tuple(
+        int(value)
+        for value in control_diagnostics.get("selected_interval_indexes", [])
+    )
+    if response_intervals != control_intervals:
+        raise _StressRelaxationHoldError(
+            "Stress-relaxation response and shear-strain control expose "
+            "different interval indexes."
+        )
+    response_point_intervals = tuple(
+        int(value)
+        for value in response_diagnostics.get(
+            "selected_point_interval_indexes",
+            [],
+        )
+    )
+    control_point_intervals = tuple(
+        int(value)
+        for value in control_diagnostics.get(
+            "selected_point_interval_indexes",
+            [],
+        )
+    )
+    if response_intervals:
+        if len(response_point_intervals) != len(response.points):
+            raise _StressRelaxationHoldError(
+                "Stress-relaxation response interval identity is incomplete."
+            )
+        if len(control_point_intervals) != len(control.points):
+            raise _StressRelaxationHoldError(
+                "Shear-strain control interval identity is incomplete."
+            )
+        hold_interval_index = response_intervals[-1]
+    else:
+        hold_interval_index = 0
+        response_point_intervals = (hold_interval_index,) * len(response.points)
+        control_point_intervals = (hold_interval_index,) * len(control.points)
+
+    control_by_identity: dict[tuple[int, float], float] = {}
+    for interval_index, (x_value, y_value) in zip(
+        control_point_intervals,
+        control.points,
+        strict=True,
+    ):
+        if (
+            interval_index != hold_interval_index
+            or not math.isfinite(x_value)
+            or not math.isfinite(y_value)
+        ):
+            continue
+        identity = (interval_index, x_value)
+        if identity in control_by_identity:
+            raise _StressRelaxationHoldError(
+                "Shear-strain control contains duplicate time values inside "
+                f"interval {interval_index}."
+            )
+        control_by_identity[identity] = y_value
+    response_identities = [
+        (interval_index, time_value)
+        for interval_index, (time_value, response_value) in zip(
+            response_point_intervals,
+            response.points,
+            strict=True,
+        )
+        if (
+            interval_index == hold_interval_index
+            and math.isfinite(time_value)
+            and math.isfinite(response_value)
+        )
+    ]
+    if len(response_identities) != len(set(response_identities)):
+        raise _StressRelaxationHoldError(
+            "Stress-relaxation response contains duplicate time values inside "
+            f"interval {hold_interval_index}."
+        )
+    aligned = [
+        (
+            time_value,
+            response_value,
+            control_by_identity[(interval_index, time_value)],
+        )
+        for interval_index, (time_value, response_value) in zip(
+            response_point_intervals,
+            response.points,
+            strict=True,
+        )
+        if (
+            interval_index == hold_interval_index
+            and math.isfinite(time_value)
+            and math.isfinite(response_value)
+            and (interval_index, time_value) in control_by_identity
+        )
+    ]
+    if len(aligned) < 6:
+        raise _StressRelaxationHoldError(
+            "A strain-controlled stress-relaxation hold needs at least six "
+            "aligned time, response, and shear-strain points."
+        )
+
+    tail_count = min(len(aligned), max(5, math.ceil(len(aligned) * 0.2)))
+    tail_control = [control_value for _time, _response, control_value in aligned[-tail_count:]]
+    target_strain = _median(tail_control)
+    control_scale = max(
+        (abs(control_value) for _time, _response, control_value in aligned),
+        default=0.0,
+    )
+    near_zero_control = max(1.0e-12, control_scale * 1.0e-9)
+    if abs(target_strain) <= near_zero_control:
+        raise _StressRelaxationHoldError(
+            "The terminal shear-strain target is zero or too close to zero to "
+            "define a strain-controlled hold."
+        )
+
+    tail_mad = _median([abs(value - target_strain) for value in tail_control])
+    relative_tolerance = abs(target_strain) * 0.01
+    tolerance = max(relative_tolerance, 3.0 * 1.4826 * tail_mad, 1.0e-12)
+    maximum_reasonable_tolerance = max(abs(target_strain) * 0.05, 1.0e-12)
+    if tolerance > maximum_reasonable_tolerance:
+        raise _StressRelaxationHoldError(
+            "The terminal shear-strain signal does not form a stable target "
+            "platform within a five-percent relative tolerance."
+        )
+    tail_inside_count = sum(
+        abs(value - target_strain) <= tolerance + 1.0e-12 for value in tail_control
+    )
+    minimum_tail_inside = max(3, math.ceil(tail_count * 0.8))
+    if tail_inside_count < minimum_tail_inside:
+        raise _StressRelaxationHoldError(
+            "The terminal shear-strain signal does not contain a sufficiently "
+            "stable target platform."
+        )
+
+    minimum_consecutive = 3
+    onset_index: int | None = None
+    for index in range(len(aligned) - minimum_consecutive + 1):
+        window = aligned[index : index + minimum_consecutive]
+        window_inside = all(
+            abs(control_value - target_strain) <= tolerance + 1.0e-12
+            for _time, _response, control_value in window
+        )
+        remaining_control = [
+            control_value for _time, _response, control_value in aligned[index:]
+        ]
+        remaining_inside = sum(
+            abs(control_value - target_strain) <= tolerance + 1.0e-12
+            for control_value in remaining_control
+        )
+        remaining_inside_fraction = remaining_inside / len(remaining_control)
+        remaining_maximum_deviation = max(
+            abs(control_value - target_strain)
+            for control_value in remaining_control
+        )
+        if (
+            window_inside
+            and remaining_inside_fraction >= 0.9
+            and remaining_maximum_deviation <= maximum_reasonable_tolerance + 1.0e-12
+        ):
+            onset_index = index
+            break
+    if onset_index is None:
+        raise _StressRelaxationHoldError(
+            "No shear-strain hold onset has at least three consecutive points "
+            "inside the terminal-platform tolerance."
+        )
+
+    onset_time, baseline, onset_strain = aligned[onset_index]
+    response_scale = max(
+        (abs(response_value) for _time, response_value, _control in aligned),
+        default=0.0,
+    )
+    near_zero_response = max(1.0e-12, response_scale * 1.0e-9)
+    if abs(baseline) <= near_zero_response:
+        raise _StressRelaxationHoldError(
+            "The response at the detected shear-strain hold onset is zero or "
+            "too close to zero to define sigma0."
+        )
+
+    normalized_points = tuple(
+        (time_value - onset_time, response_value / baseline)
+        for time_value, response_value, _control_value in aligned[onset_index + 1 :]
+        if time_value - onset_time > 0.0
+    )
+    if len(normalized_points) < 2:
+        raise _StressRelaxationHoldError(
+            "The detected hold has fewer than two positive elapsed-time response points."
+        )
+    normalized_values = [value for _time, value in normalized_points]
+    peak_index = max(
+        range(len(normalized_values)),
+        key=normalized_values.__getitem__,
+    )
+    post_peak_sides = [
+        value > 0.5 for value in normalized_values[peak_index:]
+    ]
+    threshold_crossing_count = sum(
+        left != right
+        for left, right in zip(
+            post_peak_sides,
+            post_peak_sides[1:],
+            strict=False,
+        )
+    )
+    negative_response_count = sum(
+        value < 0.0 for value in normalized_values
+    )
+    post_onset_control = [
+        control_value for _time, _response, control_value in aligned[onset_index:]
+    ]
+    diagnostics = {
+        **(response.diagnostics or {}),
+        "control_signal": "Shear strain",
+        "control_signal_unit": control.y_unit,
+        "target_strain": target_strain,
+        "target_strain_unit": control.y_unit,
+        "hold_target_strain": target_strain,
+        "hold_target_strain_unit": control.y_unit,
+        "hold_tolerance": tolerance,
+        "hold_tolerance_unit": control.y_unit,
+        "hold_detection_tolerance": tolerance,
+        "hold_detection_tolerance_unit": control.y_unit,
+        "hold_detection_minimum_consecutive_points": minimum_consecutive,
+        "hold_post_onset_inside_fraction": (
+            sum(
+                abs(value - target_strain) <= tolerance + 1.0e-12
+                for value in post_onset_control
+            )
+            / len(post_onset_control)
+        ),
+        "hold_post_onset_maximum_deviation": max(
+            abs(value - target_strain) for value in post_onset_control
+        ),
+        "hold_onset_source_time": onset_time,
+        "hold_onset_source_time_unit": response.x_unit,
+        "hold_onset_control_value": onset_strain,
+        "hold_interval_selection_policy": "last_common_selected_interval",
+        "hold_interval_index": hold_interval_index,
+        "available_interval_indexes": list(response_intervals),
+        "excluded_prior_interval_points": sum(
+            1
+            for interval_index in response_point_intervals
+            if interval_index != hold_interval_index
+        ),
+        "excluded_loading_points": onset_index,
+        "excluded_hold_onset_points": 1,
+        "source_point_count": len(aligned),
+        "selected_point_count": len(normalized_points),
+        "time_reset_definition": (
+            "elapsed_time = source_time - hold_onset_source_time; "
+            "retain elapsed_time > 0"
+        ),
+        "normalization_definition": (
+            "divide hold-phase response by the response at detected shear-strain hold onset"
+        ),
+        "baseline_response": baseline,
+        "baseline_response_unit": response.y_unit,
+        "sigma0": baseline,
+        "sigma0_unit": response.y_unit,
+        "normalization_baseline_value": baseline,
+        "normalization_baseline_source_time": onset_time,
+        "normalization_baseline_time": 0.0,
+        "normalized_minimum": min(normalized_values),
+        "normalized_maximum": max(normalized_values),
+        "normalized_final": normalized_values[-1],
+        "negative_normalized_response_count": negative_response_count,
+        "post_peak_half_response_crossing_count": (
+            threshold_crossing_count
+        ),
+        "normalization_quality": (
+            "review_noisy_or_nonmonotonic_response"
+            if negative_response_count or threshold_crossing_count > 1
+            else "passed"
+        ),
+    }
+    return CurveSeriesPayload(
+        sample=response.sample,
+        x_label="Elapsed time",
+        x_unit=response.x_unit,
+        y_label=y_label,
+        y_unit=y_unit,
+        points=normalized_points,
+        diagnostics=diagnostics,
+    )
+
+
+def _read_strain_controlled_stress_relaxation_series(
+    source: Path,
+) -> CurveSeriesPayload:
+    response = _read_rheology_interval_series(
+        source,
+        y_candidates=("shearstress", "stress", "应力"),
+        y_label="Shear stress",
+        y_unit="Pa",
+        preferred_result_tokens=("stress relaxation", "relaxation"),
+    )
+    control = _read_rheology_interval_series(
+        source,
+        y_candidates=("shearstrain", "strain", "应变"),
+        y_label="Shear strain",
+        y_unit="%",
+        preferred_result_tokens=("stress relaxation", "relaxation"),
+    )
+    return _normalize_strain_controlled_hold(response, control)
+
+
+def _retain_positive_stress_relaxation_time(
+    series: CurveSeriesPayload,
+) -> CurveSeriesPayload:
+    retained = tuple(
+        (time_value, response_value)
+        for time_value, response_value in series.points
+        if (
+            math.isfinite(time_value)
+            and math.isfinite(response_value)
+            and time_value > 0.0
+        )
+    )
+    excluded_nonpositive_time = sum(
+        math.isfinite(time_value) and time_value <= 0.0
+        for time_value, _response_value in series.points
+    )
+    excluded_nonfinite_points = sum(
+        not (math.isfinite(time_value) and math.isfinite(response_value))
+        for time_value, response_value in series.points
+    )
+    if len(retained) < 2:
+        raise ValueError(
+            "Stress-relaxation logarithmic time rendering needs at least two "
+            "finite points with time > 0."
+        )
+    return CurveSeriesPayload(
+        sample=series.sample,
+        x_label=series.x_label,
+        x_unit=series.x_unit,
+        y_label=series.y_label,
+        y_unit=series.y_unit,
+        points=retained,
+        diagnostics={
+            **(series.diagnostics or {}),
+            "log_domain_source_point_count": len(series.points),
+            "excluded_nonpositive_time_count": excluded_nonpositive_time,
+            "excluded_nonfinite_log_domain_point_count": excluded_nonfinite_points,
+            "log_domain_selected_point_count": len(retained),
+            "time_log_domain_policy": (
+                "retain only finite time > 0 for logarithmic time rendering"
+            ),
+        },
+    )
+
+
 def _read_stress_relaxation_source_series(source: Path) -> list[CurveSeriesPayload]:
     sample = _source_display_sample(source)
     try:
-        series = _read_rheology_interval_series(
-            source,
-            y_candidates=("shearstress", "stress", "应力"),
-            y_label="Shear stress",
-            y_unit="Pa",
-            preferred_result_tokens=("stress relaxation", "relaxation"),
-        )
-        normalized = _normalize_series(series, y_label="Normalized stress", y_unit="sigma/sigma0")
+        normalized = _read_strain_controlled_stress_relaxation_series(source)
+        normalized = _retain_positive_stress_relaxation_time(normalized)
         return [_with_series_sample(normalized, sample)]
+    except _StressRelaxationHoldError:
+        raise
     except ValueError:
         try:
             series_list = _read_wide_stress_relaxation_series(source)
         except ValueError:
-            series = _read_rheology_interval_series(
-                source,
-                y_candidates=("relaxationmodulus", "modulus", "松弛模量"),
-                y_label="Relaxation modulus",
-                y_unit="Pa",
-                preferred_result_tokens=("stress relaxation", "relaxation"),
+            raise ValueError(
+                "The stress-relaxation contract requires shear stress, "
+                "normalized stress, or a strain-controlled stress response. "
+                "Relaxation modulus G(t) needs a separate G/G0 axis and metric "
+                "contract and is not relabeled as sigma/sigma0."
             )
-            normalized = _normalize_series(series, y_label="Normalized modulus", y_unit="G/G0")
-            return [_with_series_sample(normalized, sample)]
+        series_list = [
+            _retain_positive_stress_relaxation_time(series)
+            for series in series_list
+        ]
         if len(series_list) == 1:
             return [_with_series_sample(series_list[0], sample)]
         return series_list
@@ -1946,25 +2443,79 @@ def _read_stress_relaxation_series_list(source: Path) -> list[CurveSeriesPayload
     for candidate in _sweep_source_files(source):
         try:
             series_list.extend(_read_stress_relaxation_source_series(candidate))
+        except _StressRelaxationHoldError as exc:
+            raise ValueError(f"{candidate.name}: {exc}") from exc
         except Exception as exc:
             errors.append(f"{candidate.name}: {exc}")
     if not series_list:
         detail = "; ".join(errors[:3])
         raise ValueError(f"No stress-relaxation exports found under {source}. {detail}".strip())
+    if errors:
+        detail = "; ".join(errors[:3])
+        raise ValueError(
+            "Stress-relaxation preparation rejected one or more in-scope "
+            f"source files; silent partial datasets are not allowed ({detail})."
+        )
     return series_list
 
 
 def _normalize_series(series: CurveSeriesPayload, *, y_label: str, y_unit: str) -> CurveSeriesPayload:
     if not series.points:
         return series
+
+    diagnostics = series.diagnostics or {}
+    source_measurement = " ".join(
+        str(diagnostics.get(key) or "")
+        for key in ("source_y_header", "source_y_unit")
+    ).casefold()
+    source_measurement_token = _token(source_measurement)
+    already_normalized = (
+        "normalized" in source_measurement
+        or "normalised" in source_measurement
+        or "归一化" in source_measurement
+        or any(
+            token in source_measurement_token
+            for token in ("sigmasigma0", "stressstress0", "gg0", "modulusmodulus0")
+        )
+    )
+    if already_normalized:
+        return CurveSeriesPayload(
+            sample=series.sample,
+            x_label=series.x_label,
+            x_unit=series.x_unit,
+            y_label=y_label,
+            y_unit=y_unit,
+            points=series.points,
+            diagnostics={
+                **diagnostics,
+                "normalization_applied": False,
+                "normalization_definition": (
+                    "source already reports a normalized response; preserve values and source time"
+                ),
+                "normalization_fallback": "already_normalized_source_preserved",
+                "time_reset_definition": "preserve source time unchanged",
+            },
+        )
+
+    finite_responses = [
+        abs(y_value)
+        for x_value, y_value in series.points
+        if math.isfinite(x_value) and math.isfinite(y_value)
+    ]
+    response_scale = max(finite_responses, default=0.0)
+    nonzero_tolerance = max(1.0e-12, response_scale * 1.0e-9)
     finite_points = [
         (x_value, y_value)
         for x_value, y_value in series.points
-        if y_value and math.isfinite(x_value) and math.isfinite(y_value)
+        if (
+            math.isfinite(x_value)
+            and math.isfinite(y_value)
+            and abs(y_value) > nonzero_tolerance
+        )
     ]
     if not finite_points:
         raise ValueError("Cannot normalize a stress-relaxation curve without a non-zero finite y value.")
-    baseline_time, baseline = max(finite_points, key=lambda point: abs(point[1]))
+    baseline_time, baseline = finite_points[0]
     normalized_points = tuple((x_value, y_value / baseline) for x_value, y_value in series.points)
     normalized_values = [value for _time, value in normalized_points if math.isfinite(value)]
     return CurveSeriesPayload(
@@ -1975,10 +2526,15 @@ def _normalize_series(series: CurveSeriesPayload, *, y_label: str, y_unit: str) 
         y_unit=y_unit,
         points=normalized_points,
         diagnostics={
-            **(series.diagnostics or {}),
-            "normalization_definition": "divide by maximum absolute finite response",
+            **diagnostics,
+            "normalization_applied": True,
+            "normalization_definition": (
+                "divide by first finite non-zero response; preserve source time"
+            ),
+            "normalization_fallback": "no_control_signal_first_finite_nonzero_response",
             "normalization_baseline_value": baseline,
             "normalization_baseline_time": baseline_time,
+            "time_reset_definition": "preserve source time unchanged",
             "normalized_minimum": min(normalized_values),
             "normalized_maximum": max(normalized_values),
             "normalized_final": normalized_values[-1],
@@ -2579,8 +3135,33 @@ def _read_headerless_ftir_series(source: Path) -> CurveSeriesPayload:
         y_label="Transmittance",
         y_unit="%",
         points=cleaned_points,
-        diagnostics={"source_file": str(source), **diagnostics},
+        diagnostics={
+            "source_file": str(source),
+            "ftir_measurement_mode": "percent_transmittance",
+            **diagnostics,
+        },
     )
+
+
+def _ftir_measurement_identity(
+    series: CurveSeriesPayload,
+) -> tuple[str, str, str]:
+    diagnostics = series.diagnostics or {}
+    header = str(diagnostics.get("source_y_header") or series.y_label)
+    header_text = header.casefold()
+    header_token = _token(header)
+    if "absorbance" in header_text or header_token in {"abs", "absorbance"}:
+        y_unit = series.y_unit
+        if not y_unit or y_unit == "%":
+            y_unit = "a.u."
+        return "Absorbance", y_unit, "absorbance"
+    if (
+        "transmittance" in header_text
+        or "%t" in header_text.replace(" ", "")
+        or header_token in {"t", "percenttransmittance"}
+    ):
+        return "Transmittance", series.y_unit or "%", "percent_transmittance"
+    return series.y_label, series.y_unit, "unclassified_structured_ftir_response"
 
 
 def _read_ftir_series(source: Path) -> list[CurveSeriesPayload]:
@@ -2596,31 +3177,43 @@ def _read_ftir_series(source: Path) -> list[CurveSeriesPayload]:
     )
     if len(structured) == 1:
         series = structured[0]
+        y_label, y_unit, measurement_mode = _ftir_measurement_identity(series)
         cleaned_points, diagnostics = _clean_ftir_boundary_artifacts(series.points)
         return [
             CurveSeriesPayload(
                 sample=_source_display_sample(source),
                 x_label=series.x_label,
                 x_unit=series.x_unit,
-                y_label=series.y_label,
-                y_unit=series.y_unit,
+                y_label=y_label,
+                y_unit=y_unit,
                 points=cleaned_points,
-                diagnostics={"source_file": str(source), **diagnostics},
+                diagnostics={
+                    **(series.diagnostics or {}),
+                    "source_file": str(source),
+                    "ftir_measurement_mode": measurement_mode,
+                    **diagnostics,
+                },
             )
         ]
     if structured:
         cleaned: list[CurveSeriesPayload] = []
         for series in structured:
+            y_label, y_unit, measurement_mode = _ftir_measurement_identity(series)
             cleaned_points, diagnostics = _clean_ftir_boundary_artifacts(series.points)
             cleaned.append(
                 CurveSeriesPayload(
                     sample=series.sample,
                     x_label=series.x_label,
                     x_unit=series.x_unit,
-                    y_label=series.y_label,
-                    y_unit=series.y_unit,
+                    y_label=y_label,
+                    y_unit=y_unit,
                     points=cleaned_points,
-                    diagnostics={"source_file": str(source), **diagnostics},
+                    diagnostics={
+                        **(series.diagnostics or {}),
+                        "source_file": str(source),
+                        "ftir_measurement_mode": measurement_mode,
+                        **diagnostics,
+                    },
                 )
             )
         return cleaned
@@ -2638,6 +3231,24 @@ def _read_ftir_series_list(source: Path) -> list[CurveSeriesPayload]:
     if not series_list:
         detail = "; ".join(errors[:3])
         raise ValueError(f"No FTIR spectra found under {source}. {detail}".strip())
+    if errors:
+        detail = "; ".join(errors[:3])
+        raise ValueError(
+            "FTIR preparation rejected one or more in-scope source files; "
+            f"silent partial datasets are not allowed ({detail})."
+        )
+    measurement_modes = {
+        str((series.diagnostics or {}).get("ftir_measurement_mode") or "")
+        for series in series_list
+    }
+    measurement_modes.discard("")
+    measurement_modes.discard("unclassified_structured_ftir_response")
+    if len(measurement_modes) > 1:
+        raise ValueError(
+            "FTIR transmittance and absorbance spectra cannot share one "
+            "stacked-response axis. Prepare separate figures for each "
+            f"measurement mode: {sorted(measurement_modes)}."
+        )
     return series_list
 
 
@@ -3462,7 +4073,12 @@ def prepare_semantic_source(
             operation="extract_and_normalize_stress_relaxation_curves",
             parameters={
                 "normalization_definition": (
-                    "divide each normalized source series by its maximum absolute finite y value"
+                    "strain-controlled interval sources: detect the terminal "
+                    "shear-strain hold, crop the loading ramp, reset elapsed "
+                    "time at hold onset, and divide by the onset response; "
+                    "sources without a control signal: preserve source time "
+                    "and divide by the first finite non-zero response; already "
+                    "normalized sources are preserved"
                 ),
                 "series_order": [series.sample for series in series_list],
                 "automatic_visual_ordering": not bool(_series_order_map(series_order)) and source.is_dir(),
@@ -3485,6 +4101,9 @@ def prepare_semantic_source(
                 default_y_unit="a.u.",
                 sample_prefix=source.stem,
             )
+            series_list = [
+                _retain_positive_saxs_log_domain(series) for series in series_list
+            ]
             operation = "extract_saxs_q_intensity_profile"
             selected_columns = {"x": "q", "y": "intensity"}
             sample_label = _constant_sample_label(source)
@@ -3517,7 +4136,17 @@ def prepare_semantic_source(
             parameters={
                 "series_order": [series.sample for series in series_list],
                 "selected_axis_columns": selected_columns,
-                "source_point_counts": [len(series.points) for series in series_list],
+                "source_point_counts": [
+                    int(
+                        (series.diagnostics or {}).get(
+                            "source_point_count", len(series.points)
+                        )
+                    )
+                    for series in series_list
+                ],
+                "selected_point_counts": [
+                    len(series.points) for series in series_list
+                ],
                 "source_selections": [
                     {"sample": series.sample, **(series.diagnostics or {})} for series in series_list
                 ],
