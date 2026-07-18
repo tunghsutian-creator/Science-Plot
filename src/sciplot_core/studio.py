@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, replace
@@ -21,7 +22,12 @@ from typing import Any
 import pandas as pd
 
 from sciplot_core._paths import VEUSZ_ROOT, VEUSZ_UPSTREAM_COMMIT
-from sciplot_core._utils import decode_text, existing_file_sha256, json_safe
+from sciplot_core._utils import (
+    decode_text,
+    existing_file_sha256,
+    file_sha256,
+    json_safe,
+)
 from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.launchers import portable_sciplot_prelude, portable_vsz_finder
@@ -71,6 +77,11 @@ from sciplot_core.publication import (
     write_publication_artifacts,
 )
 from sciplot_core.qa import run_qa
+from sciplot_core.scalar_visual import scalar_visual_contract
+from sciplot_core.source_coverage import (
+    evaluate_mapping_source_coverage,
+    verify_rendered_mapping_source_coverage,
+)
 from sciplot_core.study_model import (
     attach_run_artifacts_to_study_model,
     build_output_package_contract,
@@ -119,6 +130,15 @@ class StudioSeries:
     line_style: str = "solid"
     presentation_kind: str = "curve"
     category_position: float | None = None
+    source_artifacts: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True)
+class StudioSourceFrame:
+    label: str
+    path: Path
+    sha256: str
+    frame: pd.DataFrame
 
 
 @dataclass(frozen=True)
@@ -994,12 +1014,17 @@ def publish_studio_export_run(
         if data_mapping_application is not None
         else None,
     )
-    snapshot_source = _studio_snapshot_source(
+    snapshot_sources = _studio_snapshot_sources(
         input_path,
         project_dir=project_dir,
         transform_ledger=existing_transform_ledger,
     )
-    processed_source = _write_studio_data_snapshot(snapshot_source, output_dir) if snapshot_source is not None else None
+    snapshot_source = snapshot_sources[0] if snapshot_sources else None
+    processed_source = (
+        _write_studio_data_snapshots(snapshot_sources, output_dir)
+        if snapshot_sources
+        else None
+    )
     intake_manifest_path = project_dir / "intake_manifest.json"
     intake_manifest = _read_json(intake_manifest_path) if intake_manifest_path.exists() else {}
     semantic = _studio_export_semantic_payload(
@@ -1120,7 +1145,7 @@ def publish_studio_export_run(
         "outputs": figures,
         "processed": processed_source is not None,
         "processed_source": str(processed_source) if processed_source is not None else None,
-        "data_snapshot_source": str(snapshot_source) if snapshot_source is not None else None,
+        "data_snapshot_sources": [str(path) for path in snapshot_sources],
         "analysis_metrics": analysis_metrics,
         "template": request.get("template") or request.get("recipe") or "veusz_document",
         "operation_mode": normal_mode_payload(route="studio"),
@@ -1129,6 +1154,16 @@ def publish_studio_export_run(
             request.get("data_mapping_coverage")
         ),
     }
+    if len(snapshot_sources) == 1:
+        result["data_snapshot_source"] = str(snapshot_sources[0])
+    if data_mapping_application is not None:
+        result["rendered_source_coverage"] = (
+            verify_rendered_mapping_source_coverage(
+                result,
+                mapping_application=data_mapping_application,
+                request=request,
+            )
+        )
     manifest = {
         "kind": "sciplot_run",
         "created_at": datetime.now(UTC).isoformat(),
@@ -1547,37 +1582,56 @@ def _archive_studio_input(input_path: Path, output_dir: Path) -> dict[str, Any]:
     return {"kind": kind, "source": str(input_path), "path": str(destination)}
 
 
-def _write_studio_data_snapshot(input_path: Path, output_dir: Path) -> Path:
+def _write_studio_data_snapshots(
+    input_paths: list[Path],
+    output_dir: Path,
+) -> Path:
     processed_dir = output_dir / "processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     destination = processed_dir / "studio_export_data.xlsx"
-    try:
-        frames = _read_source_frames(input_path)
-    except Exception as exc:
-        raise StudioPreparationBlocked(
-            "studio_data_snapshot_failed",
-            f"Studio could not create a data snapshot from {input_path}: {exc}",
-        ) from exc
     with pd.ExcelWriter(destination) as writer:
         used_names: set[str] = set()
-        for index, (label, frame) in enumerate(frames, start=1):
-            sheet_name = _excel_sheet_name(label, fallback=f"data_{index}", used=used_names)
-            frame.to_excel(writer, sheet_name=sheet_name, index=False)
+        frame_index = 0
+        for source_index, input_path in enumerate(input_paths, start=1):
+            try:
+                frames = _read_source_frames(input_path)
+            except Exception as exc:
+                raise StudioPreparationBlocked(
+                    "studio_data_snapshot_failed",
+                    "Studio could not create a data snapshot from "
+                    f"{input_path}: {exc}",
+                ) from exc
+            for label, frame in frames:
+                frame_index += 1
+                qualified_label = (
+                    f"{input_path.stem}_{label}"
+                    if len(input_paths) > 1
+                    else label
+                )
+                sheet_name = _excel_sheet_name(
+                    qualified_label,
+                    fallback=f"data_{source_index}_{frame_index}",
+                    used=used_names,
+                )
+                frame.to_excel(writer, sheet_name=sheet_name, index=False)
     return destination
 
 
-def _studio_snapshot_source(
+def _studio_snapshot_sources(
     input_path: Path | None,
     *,
     project_dir: Path,
     transform_ledger: dict[str, Any] | None,
-) -> Path | None:
+) -> list[Path]:
     """Prefer the current plotted table while retaining raw input separately.
 
     Instrument folders are not necessarily rectangular worksheets. Semantic
     preparation records the exact plot-ready output in the transform ledger;
-    only project-local primary outputs are eligible for the delivery workbook.
+    all project-local terminal tabular outputs are eligible for the delivery
+    workbook and exact rendered-source evidence.
     """
+    supported_suffixes = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
+    resolved_project = project_dir.resolve()
     if isinstance(transform_ledger, dict):
         steps = transform_ledger.get("steps") if isinstance(transform_ledger.get("steps"), list) else []
         for step in reversed(steps):
@@ -1588,16 +1642,40 @@ def _studio_snapshot_source(
                 (item for item in artifacts if isinstance(item, dict)),
                 key=lambda item: 0 if item.get("role") == "output" else 1,
             )
+            candidates: list[Path] = []
             for artifact in ordered:
                 path_value = artifact.get("path")
                 if not isinstance(path_value, str) or not path_value.strip():
                     continue
                 candidate = Path(path_value).expanduser().resolve()
-                if not candidate.is_relative_to(project_dir.resolve()):
+                if not candidate.is_relative_to(resolved_project):
                     continue
-                if candidate.exists() and (candidate.is_file() or candidate.is_dir()):
-                    return candidate
-    return input_path
+                if not candidate.exists():
+                    continue
+                if candidate.is_file() and candidate.suffix.casefold() not in supported_suffixes:
+                    continue
+                if candidate.is_file() or candidate.is_dir():
+                    candidates.append(candidate)
+            unique_candidates = list(dict.fromkeys(candidates))
+            if unique_candidates:
+                return unique_candidates
+    return [input_path.expanduser().resolve()] if input_path is not None else []
+
+
+def _studio_snapshot_source(
+    input_path: Path | None,
+    *,
+    project_dir: Path,
+    transform_ledger: dict[str, Any] | None,
+) -> Path | None:
+    """Compatibility wrapper returning the primary plotted snapshot."""
+
+    sources = _studio_snapshot_sources(
+        input_path,
+        project_dir=project_dir,
+        transform_ledger=transform_ledger,
+    )
+    return sources[0] if sources else None
 
 
 def _studio_metric_source(source: Path | None) -> Path | None:
@@ -1928,7 +2006,7 @@ def _scalar_field_role_columns(
 
 
 def _scalar_field_from_frames(
-    frames: list[tuple[str, pd.DataFrame]],
+    frames: list[StudioSourceFrame],
     *,
     render_options: dict[str, Any],
 ) -> tuple[list[StudioSeries], dict[str, Any]]:
@@ -1937,7 +2015,8 @@ def _scalar_field_from_frames(
             "scalar_field_needs_one_table",
             "Scalar-field rendering currently accepts one plot-ready X/Y/Z table per figure.",
         )
-    _source_label, frame = frames[0]
+    source_frame = frames[0]
+    frame = source_frame.frame
     x_column, y_column, z_column = _scalar_field_role_columns(frame, render_options=render_options)
     numeric = _coerced_numeric_frame(frame)
     field = numeric[[x_column, y_column, z_column]].dropna().copy()
@@ -2002,6 +2081,12 @@ def _scalar_field_from_frames(
         "z_data_min": min(value for row in z_values for value in row),
         "z_data_max": max(value for row in z_values for value in row),
         "grid_shape": [len(y_values), len(x_values)],
+        "source_artifacts": [
+            {
+                "path": str(source_frame.path),
+                "sha256": source_frame.sha256,
+            }
+        ],
     }
     surrogate = StudioSeries(
         label=z_label,
@@ -2012,6 +2097,7 @@ def _scalar_field_from_frames(
         color=DEFAULT_PALETTE[0],
         marker="none",
         presentation_kind="scalar_field",
+        source_artifacts=((str(source_frame.path), source_frame.sha256),),
     )
     return [surrogate], {
         "x_label": x_label,
@@ -2020,11 +2106,273 @@ def _scalar_field_from_frames(
     }
 
 
+def _series_from_frame_records(
+    request: dict[str, Any],
+    *,
+    frames: list[StudioSourceFrame],
+) -> tuple[list[StudioSeries], dict[str, Any]]:
+    """Derive rendered numeric units from already-resolved terminal tables."""
+
+    render_options = _effective_render_options(request)
+    raw_series: list[StudioSeries] = []
+    axis_info: dict[str, Any] = {"x_label": "x", "y_label": "y"}
+    if _request_template(request) in SCALAR_FIELD_TEMPLATE_IDS:
+        raw_series, axis_info = _scalar_field_from_frames(
+            frames,
+            render_options=render_options,
+        )
+    elif _request_template(request) in CATEGORICAL_TEMPLATE_IDS:
+        raw_series, axis_info = _categorical_series_from_frames(
+            frames,
+            render_options=render_options,
+        )
+    else:
+        for frame_index, source_frame in enumerate(frames):
+            source_label = source_frame.label
+            frame = source_frame.frame
+            numeric = _coerced_numeric_frame(frame)
+            if numeric.shape[1] < 2:
+                continue
+            metadata_order = _series_metadata_order(frame)
+            pairs = _xy_pairs_for_request(numeric, request=request)
+            first_x, first_y = pairs[0]
+            if axis_info["x_label"] == "x":
+                axis_info["x_label"] = _axis_label_from_column(frame, first_x)
+            if axis_info["y_label"] == "y":
+                axis_info["y_label"] = _axis_label_from_column(frame, first_y)
+            for column_index, (x_column, y_column) in enumerate(pairs, start=1):
+                pair_frame = numeric[[x_column, y_column]].dropna()
+                if pair_frame.empty:
+                    continue
+                x_values = tuple(float(value) for value in pair_frame[x_column].tolist())
+                y_values = tuple(float(value) for value in pair_frame[y_column].tolist())
+                fallback = source_label if len(pairs) == 1 else str(y_column)
+                label = _series_label_from_column(
+                    frame[y_column],
+                    fallback=fallback,
+                    metadata_order=metadata_order,
+                )
+                raw_series.append(
+                    StudioSeries(
+                        label=label,
+                        x_name=f"x_{frame_index + 1}_{column_index}",
+                        y_name=f"y_{frame_index + 1}_{column_index}",
+                        x_values=x_values,
+                        y_values=y_values,
+                        color=DEFAULT_PALETTE[(len(raw_series)) % len(DEFAULT_PALETTE)],
+                        source_artifacts=(
+                            (str(source_frame.path), source_frame.sha256),
+                        ),
+                    )
+                )
+
+    if not raw_series:
+        raise StudioPreparationBlocked(
+            "no_plottable_numeric_series",
+            "Studio found no plottable numeric x/y series in the terminal "
+            "tables; no placeholder data were generated.",
+        )
+
+    render_options = _apply_domain_render_defaults(render_options, request=request, axis_info=axis_info)
+    styled = _apply_series_options(raw_series, render_options=render_options, request=request)
+    if axis_info.get("presentation_kind") == "categorical_replicates":
+        styled = _reindex_categorical_series(styled, render_options=render_options)
+        axis_info["category_labels"] = [_category_axis_label(item.label) for item in styled]
+        axis_info["category_positions"] = [float(index) for index in range(1, len(styled) + 1)]
+        axis_info["raw_replicate_count"] = sum(len(item.y_values) for item in styled)
+    styled = _apply_template_series_transforms(styled, request=request, render_options=render_options)
+    axis_info["x_label"] = _veusz_axis_label(render_options.get("x_label_override") or axis_info["x_label"])
+    axis_info["y_label"] = _veusz_axis_label(render_options.get("y_label_override") or axis_info["y_label"])
+    return styled, axis_info
+
+
+def derive_terminal_render_data_contract(
+    *,
+    request: dict[str, Any],
+    terminal_sources: list[Path],
+) -> dict[str, Any]:
+    """Replay terminal tables into the numeric units the renderer must consume."""
+
+    resolved_sources = [
+        source.expanduser().resolve() for source in terminal_sources
+    ]
+    if not resolved_sources or len(resolved_sources) != len(set(resolved_sources)):
+        raise ValueError(
+            "Terminal render-data derivation needs unique source files."
+        )
+    frames: list[StudioSourceFrame] = []
+    for source in resolved_sources:
+        if not source.is_file():
+            raise FileNotFoundError(
+                f"Terminal plotted source is not a file: {source}"
+            )
+        frames.extend(_read_source_frame_records(source, request=request))
+    series, axis_info = _series_from_frame_records(request, frames=frames)
+    series, _legend_label_mapping = _compact_replicate_series_labels(series)
+    render_options = _effective_render_options(request)
+    render_options = _apply_domain_render_defaults(
+        render_options,
+        request=request,
+        axis_info=axis_info,
+    )
+    template_id = _request_template(request)
+    render_options = _apply_readability_render_defaults(
+        render_options,
+        request=request,
+        axis_info=axis_info,
+        series=series,
+        template_id=template_id,
+    )
+    categorical = _categorical_plot_contract(
+        series,
+        template_id=template_id,
+        render_options=render_options,
+    )
+    style = _veusz_style_contract(render_options)
+    scalar_contract = _scalar_field_plot_contract(
+        axis_info,
+        render_options=render_options,
+        template_id=template_id,
+        style=style,
+    )
+    axis_info = dict(axis_info)
+    axis_info["x_label"] = _veusz_axis_label(
+        render_options.get("x_label_override") or axis_info["x_label"]
+    )
+    axis_info["y_label"] = _veusz_axis_label(
+        render_options.get("y_label_override") or axis_info["y_label"]
+    )
+    axis_contract = _veusz_axis_contract(
+        render_options,
+        template_id=template_id,
+        series=series,
+    )
+    axes = _veusz_axes_spec(
+        render_options=render_options,
+        axis_info=axis_info,
+        axis_contract=axis_contract,
+        categorical_contract=categorical,
+        style=style,
+    )
+    show_key = _show_veusz_key(
+        template_id=template_id,
+        render_options=render_options,
+        series_count=len(series),
+    )
+    show_direct_labels = _show_veusz_direct_labels(
+        template_id=template_id,
+        render_options=render_options,
+        series_count=len(series),
+        show_key=show_key,
+    )
+    direct_labels = _direct_label_contracts(
+        series,
+        render_options=render_options,
+        axis_contract=axis_contract,
+        style=style,
+        show_direct_labels=show_direct_labels,
+    )
+    categorical_groups = {
+        str(group.get("y_name") or ""): group
+        for group in (
+            categorical.get("groups", [])
+            if isinstance(categorical, dict)
+            else []
+        )
+        if isinstance(group, dict)
+    }
+    reference_guides = _reference_guides_contract(render_options)
+    units: list[dict[str, Any]] = []
+    scalar = axis_info.get("scalar_field")
+    if isinstance(scalar, dict):
+        if scalar_contract is None:
+            raise ValueError(
+                "Scalar-field derivation has no closed visual contract."
+            )
+        units.append(
+            {
+                "kind": "scalar_field",
+                "data_name": str(scalar["data_name"]),
+                "x_values": list(scalar["x_values"]),
+                "y_values": list(scalar["y_values"]),
+                "z_values": [list(row) for row in scalar["z_values"]],
+                "z_label": str(scalar["z_label"]),
+                "scalar_visual": scalar_visual_contract(
+                    scalar_contract,
+                    label="derived scalar field",
+                ),
+                "axes": json_safe(axes),
+                "reference_guides": json_safe(reference_guides),
+                "direct_labels": json_safe(direct_labels),
+                "source_artifacts": json_safe(scalar["source_artifacts"]),
+            }
+        )
+    else:
+        for index, item in enumerate(series, start=1):
+            group = categorical_groups.get(item.y_name)
+            units.append(
+                {
+                    "kind": "series",
+                    "name": f"series_{index}",
+                    "label": item.label,
+                    "x_name": item.x_name,
+                    "y_name": item.y_name,
+                    "x_values": list(item.x_values),
+                    "y_values": list(item.y_values),
+                    "presentation_kind": item.presentation_kind,
+                    "category_position": item.category_position,
+                    "plot_line_hide": (
+                        item.presentation_kind == "categorical_replicates"
+                    ),
+                    "raw_points_visible": (
+                        bool(group["raw_points_visible"])
+                        if isinstance(group, dict)
+                        else True
+                    ),
+                    "boxplot_eligible": (
+                        bool(group["boxplot_eligible"])
+                        if isinstance(group, dict)
+                        else False
+                    ),
+                    "axes": json_safe(axes),
+                    "reference_guides": json_safe(reference_guides),
+                    "direct_labels": json_safe(direct_labels),
+                    "source_artifacts": [
+                        {"path": path, "sha256": digest}
+                        for path, digest in item.source_artifacts
+                    ],
+                }
+            )
+    source_artifacts = sorted(
+        {
+            (str(frame.path), frame.sha256)
+            for frame in frames
+        }
+    )
+    return {
+        "kind": "sciplot_terminal_render_data_contract",
+        "version": 1,
+        "status": "passed",
+        "template": template_id,
+        "source_artifacts": [
+            {"path": path, "sha256": digest}
+            for path, digest in source_artifacts
+        ],
+        "units": units,
+        "unit_count": len(units),
+    }
+
+
 def _series_from_request(
     request: dict[str, Any],
     *,
     base_dir: Path,
 ) -> tuple[list[StudioSeries], dict[str, Any], list[dict[str, Any]], Path]:
+    if "_terminal_source_prepared" in request:
+        raise ValueError(
+            "`_terminal_source_prepared` is reserved and cannot appear in a "
+            "plot request."
+        )
     input_value = request.get("input")
     if not isinstance(input_value, str) or not input_value.strip():
         raise ValueError("plot_request.json needs an input path for Studio document generation.")
@@ -2045,7 +2393,6 @@ def _series_from_request(
     if not source.is_absolute():
         source = (base_dir / source).resolve()
     request = effective_request
-    render_options = _effective_render_options(request)
     transform_steps = [
         dict(step)
         for step in (
@@ -2061,71 +2408,14 @@ def _series_from_request(
         base_dir=base_dir,
     )
     transform_steps.extend(semantic_steps)
-    frames = _read_source_frames(source, request=request)
-    raw_series: list[StudioSeries] = []
-    axis_info: dict[str, Any] = {"x_label": "x", "y_label": "y"}
-    if _request_template(request) in SCALAR_FIELD_TEMPLATE_IDS:
-        raw_series, axis_info = _scalar_field_from_frames(
-            frames,
-            render_options=render_options,
-        )
-    elif _request_template(request) in CATEGORICAL_TEMPLATE_IDS:
-        raw_series, axis_info = _categorical_series_from_frames(
-            frames,
-            render_options=render_options,
-        )
-    else:
-        for frame_index, (source_label, frame) in enumerate(frames):
-            numeric = _coerced_numeric_frame(frame)
-            if numeric.shape[1] < 2:
-                continue
-            pairs = _xy_pairs_for_request(numeric, request=request)
-            first_x, first_y = pairs[0]
-            if axis_info["x_label"] == "x":
-                axis_info["x_label"] = _axis_label_from_column(frame, first_x)
-            if axis_info["y_label"] == "y":
-                axis_info["y_label"] = _axis_label_from_column(frame, first_y)
-            for column_index, (x_column, y_column) in enumerate(pairs, start=1):
-                pair_frame = numeric[[x_column, y_column]].dropna()
-                if pair_frame.empty:
-                    continue
-                x_values = tuple(float(value) for value in pair_frame[x_column].tolist())
-                y_values = tuple(float(value) for value in pair_frame[y_column].tolist())
-                fallback = source_label if len(pairs) == 1 else str(y_column)
-                label = _series_label_from_column(frame[y_column], fallback=fallback)
-                raw_series.append(
-                    StudioSeries(
-                        label=label,
-                        x_name=f"x_{frame_index + 1}_{column_index}",
-                        y_name=f"y_{frame_index + 1}_{column_index}",
-                        x_values=x_values,
-                        y_values=y_values,
-                        color=DEFAULT_PALETTE[(len(raw_series)) % len(DEFAULT_PALETTE)],
-                    )
-                )
-
-    if not raw_series:
-        raise StudioPreparationBlocked(
-            "no_plottable_numeric_series",
-            f"Studio found no plottable numeric x/y series in {source}; no placeholder data were generated.",
-        )
-
-    render_options = _apply_domain_render_defaults(render_options, request=request, axis_info=axis_info)
-    styled = _apply_series_options(raw_series, render_options=render_options, request=request)
-    if axis_info.get("presentation_kind") == "categorical_replicates":
-        styled = _reindex_categorical_series(styled, render_options=render_options)
-        axis_info["category_labels"] = [_category_axis_label(item.label) for item in styled]
-        axis_info["category_positions"] = [float(index) for index in range(1, len(styled) + 1)]
-        axis_info["raw_replicate_count"] = sum(len(item.y_values) for item in styled)
-    styled = _apply_template_series_transforms(styled, request=request, render_options=render_options)
+    frames = _read_source_frame_records(source, request=request)
+    styled, axis_info = _series_from_frame_records(request, frames=frames)
     if mapping_application is not None:
         axis_info["data_mapping_coverage"] = _mapping_series_coverage(
             styled,
             mapping_application=mapping_application,
             request=request,
         )
-    axis_info["x_label"] = _veusz_axis_label(render_options.get("x_label_override") or axis_info["x_label"])
-    axis_info["y_label"] = _veusz_axis_label(render_options.get("y_label_override") or axis_info["y_label"])
     return styled, axis_info, transform_steps, source_root
 
 
@@ -2135,60 +2425,29 @@ def _mapping_series_coverage(
     mapping_application: dict[str, Any],
     request: dict[str, Any],
 ) -> dict[str, Any]:
-    expected_labels = [
-        str(label).strip()
-        for label in mapping_application.get("expected_sample_labels", [])
-        if str(label).strip()
-    ]
-    expected_count = int(
-        mapping_application.get("expected_series_count_min")
-        or len(expected_labels)
-    )
-    actual_labels = [str(item.label).strip() for item in series]
-    missing_labels = [
-        expected
-        for expected in expected_labels
-        if not any(
-            _mapping_label_matches(actual, expected)
-            for actual in actual_labels
+    try:
+        coverage = evaluate_mapping_source_coverage(
+            [
+                {
+                    "identity": f"studio_series_{index}:{item.label}",
+                    "kind": item.presentation_kind,
+                    "source_artifacts": item.source_artifacts,
+                }
+                for index, item in enumerate(series, start=1)
+            ],
+            mapping_application=mapping_application,
+            template=_request_template(request),
         )
-    ]
-    passed = len(series) >= expected_count and not missing_labels
-    coverage = {
-        "kind": "sciplot_data_mapping_series_coverage",
-        "version": 1,
-        "status": "passed" if passed else "failed",
-        "proposal_id": mapping_application.get("proposal_id"),
-        "template": _request_template(request),
-        "expected_sample_labels": expected_labels,
-        "actual_series_labels": actual_labels,
-        "expected_series_count_min": expected_count,
-        "actual_series_count": len(series),
-        "missing_sample_labels": missing_labels,
-        "silent_omission_detected": not passed,
-    }
-    if not passed:
-        missing = ", ".join(missing_labels) or "unknown mapped source"
+        return {
+            **coverage,
+            "actual_series_labels": [str(item.label) for item in series],
+        }
+    except (FileNotFoundError, ValueError) as exc:
         raise StudioPreparationBlocked(
             "mapped_source_coverage_incomplete",
-            "Studio would omit confirmed mapped sources "
-            f"({missing}); expected at least {expected_count} series but "
-            f"prepared {len(series)}.",
-        )
-    return coverage
-
-
-def _mapping_label_matches(actual: str, expected: str) -> bool:
-    actual_key = " ".join(actual.casefold().split())
-    expected_key = " ".join(expected.casefold().split())
-    if actual_key == expected_key:
-        return True
-    separators = (" ", " (", " [", " /", " -", " —", ":")
-    return any(
-        actual_key.startswith(expected_key + separator)
-        or actual_key.endswith(separator + expected_key)
-        for separator in separators
-    )
+            "Studio would omit a confirmed mapped source before VSZ "
+            f"generation: {exc}",
+        ) from exc
 
 
 def _veusz_axis_label(value: object) -> str:
@@ -2252,14 +2511,17 @@ def _deterministic_category_positions(center: float, count: int, *, fraction: fl
 
 
 def _categorical_series_from_frames(
-    frames: list[tuple[str, pd.DataFrame]],
+    frames: list[StudioSourceFrame],
     *,
     render_options: dict[str, Any],
 ) -> tuple[list[StudioSeries], dict[str, Any]]:
     grouped: dict[str, list[float]] = {}
+    grouped_artifacts: dict[str, set[tuple[str, str]]] = {}
     metric_labels: list[str] = []
     units: list[str] = []
-    for source_label, frame in frames:
+    for source_frame in frames:
+        source_label = source_frame.label
+        frame = source_frame.frame
         if frame.shape[0] < 3:
             continue
         for column in frame.columns:
@@ -2268,6 +2530,9 @@ def _categorical_series_from_frames(
                 continue
             sample = _clean_studio_cell(frame[column].iloc[1]) or source_label or str(column)
             grouped.setdefault(sample, []).extend(float(value) for value in values.tolist())
+            grouped_artifacts.setdefault(sample, set()).add(
+                (str(source_frame.path), source_frame.sha256)
+            )
             metric = _categorical_metric_label(column)
             if metric:
                 metric_labels.append(metric)
@@ -2307,6 +2572,7 @@ def _categorical_series_from_frames(
                 color=DEFAULT_PALETTE[(index - 1) % len(DEFAULT_PALETTE)],
                 presentation_kind="categorical_replicates",
                 category_position=float(index),
+                source_artifacts=tuple(sorted(grouped_artifacts[sample])),
             )
         )
     return series, {
@@ -2372,7 +2638,11 @@ def _studio_source_for_request(
     return source, transform_steps
 
 
-def _read_source_frames(source: Path, *, request: dict[str, Any] | None = None) -> list[tuple[str, pd.DataFrame]]:
+def _read_source_frame_records(
+    source: Path,
+    *,
+    request: dict[str, Any] | None = None,
+) -> list[StudioSourceFrame]:
     files: list[Path]
     if source.is_dir():
         files = [
@@ -2388,15 +2658,44 @@ def _read_source_frames(source: Path, *, request: dict[str, Any] | None = None) 
         files = [source]
     else:
         raise FileNotFoundError(f"Studio source not found: {source}")
-    frames: list[tuple[str, pd.DataFrame]] = []
+    frames: list[StudioSourceFrame] = []
     for path in files:
         try:
-            frames.append((_source_label_from_path(path), _read_table(path)))
+            resolved = path.expanduser().resolve()
+            before_sha256 = file_sha256(resolved)
+            frame = _read_table(resolved)
+            after_sha256 = file_sha256(resolved)
+            if after_sha256 != before_sha256:
+                raise StudioPreparationBlocked(
+                    "source_changed_during_read",
+                    f"Studio source changed while it was read: {resolved}",
+                )
+            frames.append(
+                StudioSourceFrame(
+                    label=_source_label_from_path(resolved),
+                    path=resolved,
+                    sha256=before_sha256,
+                    frame=frame,
+                )
+            )
+        except StudioPreparationBlocked:
+            raise
         except Exception:
             continue
     if not frames:
         raise ValueError(f"Studio could not read any numeric table from {source}.")
     return frames
+
+
+def _read_source_frames(
+    source: Path,
+    *,
+    request: dict[str, Any] | None = None,
+) -> list[tuple[str, pd.DataFrame]]:
+    return [
+        (record.label, record.frame)
+        for record in _read_source_frame_records(source, request=request)
+    ]
 
 
 def _source_label_from_path(path: Path) -> str:
@@ -2463,6 +2762,40 @@ def _structured_metadata_prefix_rows(frame: pd.DataFrame) -> int:
         ):
             return min(2, frame.shape[0])
     return 0
+
+
+def _series_metadata_order(frame: pd.DataFrame) -> str | None:
+    """Identify whether two structured metadata rows store unit/sample or sample/unit."""
+
+    if (
+        frame.shape[0] < 2
+        or _structured_metadata_prefix_rows(frame) != 2
+    ):
+        return None
+
+    def unit_density(row_index: int) -> float:
+        values = [
+            str(value).strip().casefold()
+            for value in frame.iloc[row_index].tolist()
+            if not pd.isna(value) and str(value).strip()
+        ]
+        if not values:
+            return 0.0
+        return sum(_is_unit_label(value) for value in values) / len(values)
+
+    first_density = unit_density(0)
+    second_density = unit_density(1)
+    if first_density >= 0.5 and second_density >= 0.5:
+        raise StudioPreparationBlocked(
+            "ambiguous_metadata_row_roles",
+            "The first two metadata rows are both unit-like, so SciPlot "
+            "cannot safely determine which row contains sample labels.",
+        )
+    if first_density >= 0.5 and first_density > second_density:
+        return "unit_then_sample"
+    if second_density >= 0.5 and second_density > first_density:
+        return "sample_then_unit"
+    return None
 
 
 def _is_finite_numeric_text(value: str) -> bool:
@@ -2621,7 +2954,20 @@ def _unit_label_from_column(values: pd.Series) -> str:
     return ""
 
 
-def _series_label_from_column(values: pd.Series, *, fallback: str) -> str:
+def _series_label_from_column(
+    values: pd.Series,
+    *,
+    fallback: str,
+    metadata_order: str | None = None,
+) -> str:
+    metadata = [
+        None if pd.isna(value) else str(value).strip()
+        for value in values.tolist()[:2]
+    ]
+    if metadata_order == "unit_then_sample" and len(metadata) >= 2 and metadata[1]:
+        return metadata[1]
+    if metadata_order == "sample_then_unit" and metadata and metadata[0]:
+        return metadata[0]
     leading = [str(value).strip() for value in values.tolist()[:4] if not pd.isna(value) and str(value).strip()]
     if len(leading) >= 2:
         first_is_unit = _is_unit_label(leading[0].casefold())
@@ -2707,10 +3053,57 @@ def _apply_series_options(
     line_style_sequence = _string_list(render_options.get("line_style_sequence"))
     if not line_style_sequence:
         line_style_sequence = list(DEFAULT_LINE_STYLE_SEQUENCE)
+    duplicate_labels = sorted(
+        label
+        for label, count in Counter(item.label for item in series).items()
+        if count > 1
+    )
+    if duplicate_labels:
+        raise StudioPreparationBlocked(
+            "duplicate_series_labels",
+            "Series labels must be unique before label-based selection: "
+            + ", ".join(duplicate_labels),
+        )
+    duplicate_order = sorted(
+        label
+        for label, count in Counter(order).items()
+        if count > 1
+    )
+    if duplicate_order:
+        raise StudioPreparationBlocked(
+            "duplicate_series_order",
+            "series_order contains duplicate labels: "
+            + ", ".join(duplicate_order),
+        )
+    duplicate_include = sorted(
+        label
+        for label, count in Counter(include).items()
+        if count > 1
+    )
+    if duplicate_include:
+        raise StudioPreparationBlocked(
+            "duplicate_series_include",
+            "series_include contains duplicate labels: "
+            + ", ".join(duplicate_include),
+        )
     by_label = {item.label: item for item in series}
+    unknown_order = [label for label in order if label not in by_label]
+    if unknown_order:
+        raise StudioPreparationBlocked(
+            "unknown_series_order",
+            "series_order contains unknown series labels: "
+            + ", ".join(unknown_order),
+        )
     ordered = [by_label[label] for label in order if label in by_label]
     ordered.extend(item for item in series if item.label not in {entry.label for entry in ordered})
     if include:
+        unknown_include = [label for label in include if label not in by_label]
+        if unknown_include:
+            raise StudioPreparationBlocked(
+                "unknown_series_include",
+                "series_include contains unknown series labels: "
+                + ", ".join(unknown_include),
+            )
         include_set = set(include)
         ordered = [item for item in ordered if item.label in include_set]
     style_by_label: dict[str, dict[str, Any]] = {}
@@ -2750,9 +3143,15 @@ def _apply_series_options(
                 line_style=str(style.get("line_style") or style.get("linestyle") or default_line_style),
                 presentation_kind=item.presentation_kind,
                 category_position=item.category_position,
+                source_artifacts=item.source_artifacts,
             )
         )
-    return styled or series
+    if not styled:
+        raise StudioPreparationBlocked(
+            "no_visible_series",
+            "The confirmed series selection leaves no visible series.",
+        )
+    return styled
 
 
 def _effective_render_options(request: dict[str, Any]) -> dict[str, Any]:
@@ -2848,7 +3247,26 @@ def _veusz_style_contract(render_options: dict[str, Any]) -> _VeuszStyleContract
         marker_size = _optional_float(render_options.get("marker_size"))
     if marker_size is not None:
         overrides["marker_size_pt"] = marker_size
-    return replace(base, **overrides)
+    resolved = replace(base, **overrides)
+    required_visible_dimensions = {
+        "font_size_pt": resolved.font_size_pt,
+        "axis_linewidth_pt": resolved.axis_linewidth_pt,
+        "tick_width_pt": resolved.tick_width_pt,
+        "tick_length_pt": resolved.tick_length_pt,
+        "minor_tick_width_pt": resolved.minor_tick_width_pt,
+        "minor_tick_length_pt": resolved.minor_tick_length_pt,
+    }
+    invalid = [
+        name
+        for name, value in required_visible_dimensions.items()
+        if not math.isfinite(float(value)) or float(value) <= 0.0
+    ]
+    if invalid:
+        raise ValueError(
+            "Veusz axis and colorbar visibility dimensions must be finite and "
+            f"positive: {invalid}."
+        )
+    return resolved
 
 
 def _default_line_width(render_options: dict[str, Any]) -> float:
@@ -4050,6 +4468,7 @@ def _scalar_field_plot_contract(
     *,
     render_options: dict[str, Any],
     template_id: str,
+    style: _VeuszStyleContract,
 ) -> dict[str, Any] | None:
     source = axis_info.get("scalar_field")
     if template_id not in SCALAR_FIELD_TEMPLATE_IDS or not isinstance(source, dict):
@@ -4066,10 +4485,219 @@ def _scalar_field_plot_contract(
     if zscale == "log" and z_min <= 0.0:
         raise ValueError("Scalar-field logarithmic color scaling requires z_min > 0.")
     colors_value = render_options.get("colormap_colors")
-    colors = [str(value) for value in colors_value] if isinstance(colors_value, list | tuple) else []
-    colors = [value for value in colors if re.fullmatch(r"#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?", value)]
-    if len(colors) < 2:
+    if colors_value is None:
         colors = list(DEFAULT_SCALAR_FIELD_COLORS)
+    else:
+        if not isinstance(colors_value, list | tuple) or len(colors_value) < 2:
+            raise ValueError(
+                "Scalar-field colormap_colors must contain at least two "
+                "opaque hexadecimal colors."
+            )
+        colors = [str(value) for value in colors_value]
+        if any(
+            re.fullmatch(
+                r"#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?",
+                value,
+            )
+            is None
+            for value in colors
+        ):
+            raise ValueError(
+                "Scalar-field colormap_colors must use #RRGGBB or "
+                "#RRGGBBAA hexadecimal values."
+            )
+        opaque_rgb: list[str] = []
+        for value in colors:
+            alpha = value[7:9] if len(value) == 9 else "FF"
+            if alpha.casefold() != "ff":
+                raise ValueError(
+                    "Scalar-field colormap_colors must be fully opaque so "
+                    "the scientific field cannot disappear."
+                )
+            opaque_rgb.append(value[:7].casefold())
+        if len(set(opaque_rgb)) < 2:
+            raise ValueError(
+                "Scalar-field colormap_colors must contain at least two "
+                "visually distinct colors."
+            )
+    try:
+        field_transparency_raw = render_options.get("field_transparency")
+        field_transparency = int(
+            0 if field_transparency_raw is None else field_transparency_raw
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "Scalar-field transparency must be an integer percentage."
+        ) from exc
+    if not 0 <= field_transparency < 100:
+        raise ValueError(
+            "Scalar-field transparency must be between 0 and 99 so the "
+            "scientific field remains visible."
+        )
+    direction = str(
+        render_options.get("colorbar_direction") or "horizontal"
+    ).strip().casefold()
+    if direction not in {"horizontal", "vertical"}:
+        raise ValueError(
+            "Scalar-field colorbar direction must be horizontal or vertical."
+        )
+    colorbar_manual_position = (
+        render_options.get("colorbar_manual_position") is True
+    )
+    try:
+        width_value = render_options.get("colorbar_width_mm")
+        height_value = render_options.get("colorbar_height_mm")
+        background_transparency_value = render_options.get(
+            "colorbar_background_transparency"
+        )
+        background_x_value = render_options.get(
+            "colorbar_background_x_fraction"
+        )
+        background_y_value = render_options.get(
+            "colorbar_background_y_fraction"
+        )
+        background_width_value = render_options.get(
+            "colorbar_background_width_fraction"
+        )
+        background_height_value = render_options.get(
+            "colorbar_background_height_fraction"
+        )
+        horz_manual_value = render_options.get("colorbar_horz_manual")
+        vert_manual_value = render_options.get("colorbar_vert_manual")
+        colorbar_width_mm = float(
+            31.0 if width_value is None else width_value
+        )
+        colorbar_height_mm = float(
+            2.4 if height_value is None else height_value
+        )
+        colorbar_background_transparency = int(
+            0
+            if background_transparency_value is None
+            else background_transparency_value
+        )
+        colorbar_background_x_fraction = float(
+            0.5 if background_x_value is None else background_x_value
+        )
+        colorbar_background_y_fraction = float(
+            0.86 if background_y_value is None else background_y_value
+        )
+        colorbar_background_width_fraction = float(
+            0.44 if background_width_value is None else background_width_value
+        )
+        colorbar_background_height_fraction = float(
+            0.24
+            if background_height_value is None
+            else background_height_value
+        )
+        colorbar_horz_manual = float(
+            0.86 if horz_manual_value is None else horz_manual_value
+        )
+        colorbar_vert_manual = float(
+            0.18 if vert_manual_value is None else vert_manual_value
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "Scalar-field colorbar geometry must be numeric."
+        ) from exc
+    if (
+        not math.isfinite(colorbar_width_mm)
+        or not math.isfinite(colorbar_height_mm)
+        or colorbar_width_mm <= 0.0
+        or colorbar_height_mm <= 0.0
+    ):
+        raise ValueError(
+            "Scalar-field colorbar width and height must be finite and "
+            "positive."
+        )
+    if direction == "horizontal" and not (
+        5.0 <= colorbar_width_mm <= 50.0
+        and 0.5 <= colorbar_height_mm <= 8.0
+    ):
+        raise ValueError(
+            "Horizontal scalar-field colorbars must remain within the bounded "
+            "5..50 mm by 0.5..8 mm auxiliary envelope."
+        )
+    if direction == "vertical" and not (
+        0.5 <= colorbar_width_mm <= 8.0
+        and 5.0 <= colorbar_height_mm <= 50.0
+    ):
+        raise ValueError(
+            "Vertical scalar-field colorbars must remain within the bounded "
+            "0.5..8 mm by 5..50 mm auxiliary envelope."
+        )
+    if (
+        not math.isfinite(colorbar_horz_manual)
+        or not math.isfinite(colorbar_vert_manual)
+        or not 0.0 <= colorbar_horz_manual <= 1.0
+        or not 0.0 <= colorbar_vert_manual <= 1.0
+    ):
+        raise ValueError(
+            "Scalar-field manual colorbar coordinates must be finite fractions "
+            "between 0 and 1."
+        )
+    if not 0 <= colorbar_background_transparency <= 100:
+        raise ValueError(
+            "Scalar-field colorbar background transparency must be between "
+            "0 and 100."
+        )
+    background_geometry = (
+        colorbar_background_x_fraction,
+        colorbar_background_y_fraction,
+        colorbar_background_width_fraction,
+        colorbar_background_height_fraction,
+    )
+    if (
+        any(not math.isfinite(value) for value in background_geometry)
+        or colorbar_background_width_fraction <= 0.0
+        or colorbar_background_height_fraction <= 0.0
+    ):
+        raise ValueError(
+            "Scalar-field colorbar background geometry must be finite with "
+            "positive width and height."
+        )
+    background_color = str(
+        render_options.get("colorbar_background_color") or ""
+    ).strip()
+    if background_color:
+        left = (
+            colorbar_background_x_fraction
+            - colorbar_background_width_fraction / 2.0
+        )
+        right = (
+            colorbar_background_x_fraction
+            + colorbar_background_width_fraction / 2.0
+        )
+        top_band_start = (
+            colorbar_background_y_fraction
+            - colorbar_background_height_fraction / 2.0
+        )
+        bottom = (
+            colorbar_background_y_fraction
+            + colorbar_background_height_fraction / 2.0
+        )
+        background_area = (
+            colorbar_background_width_fraction
+            * colorbar_background_height_fraction
+        )
+        if direction != "horizontal" or colorbar_manual_position:
+            raise ValueError(
+                "Automatic scalar-field colorbar backgrounds are limited to "
+                "the default horizontal top auxiliary band."
+            )
+        if (
+            colorbar_background_transparency < 80
+            or colorbar_background_width_fraction > 0.55
+            or colorbar_background_height_fraction > 0.25
+            or background_area > 0.12
+            or left < 0.0
+            or right > 1.0
+            or top_band_start < 0.70
+            or bottom > 1.0
+        ):
+            raise ValueError(
+                "Scalar-field colorbar backgrounds must be semitransparent "
+                "and confined to the bounded horizontal top auxiliary band."
+            )
     contour_levels = [
         value for value in _float_tuple(render_options.get("contour_levels")) if z_min <= value <= z_max
     ]
@@ -4095,6 +4723,7 @@ def _scalar_field_plot_contract(
         "color_invert": render_options.get("color_invert") is True,
         "field_mapping": str(render_options.get("field_mapping") or "bounds"),
         "field_draw_mode": str(render_options.get("field_draw_mode") or "rectangles"),
+        "field_transparency": field_transparency,
         "show_contours": show_contours,
         "contour_levels": contour_levels,
         "contour_color": str(render_options.get("contour_color") or "#FFFFFF"),
@@ -4109,80 +4738,332 @@ def _scalar_field_plot_contract(
         "highlight_contour_line_width_pt": float(
             render_options.get("highlight_contour_line_width_pt") or 0.9
         ),
-        "colorbar_direction": str(render_options.get("colorbar_direction") or "horizontal"),
-        "colorbar_manual_position": render_options.get("colorbar_manual_position") is True,
-        "colorbar_width_mm": float(render_options.get("colorbar_width_mm") or 31.0),
-        "colorbar_height_mm": float(render_options.get("colorbar_height_mm") or 2.4),
-        "colorbar_horz_manual": float(render_options.get("colorbar_horz_manual") or 0.86),
-        "colorbar_vert_manual": float(
-            render_options["colorbar_vert_manual"]
-            if render_options.get("colorbar_vert_manual") is not None
-            else 0.18
-        ),
+        "colorbar_direction": direction,
+        "colorbar_manual_position": colorbar_manual_position,
+        "colorbar_width_mm": colorbar_width_mm,
+        "colorbar_height_mm": colorbar_height_mm,
+        "colorbar_horz_manual": colorbar_horz_manual,
+        "colorbar_vert_manual": colorbar_vert_manual,
+        "colorbar_label_size_pt": style.font_size_pt,
+        "colorbar_tick_label_size_pt": style.font_size_pt,
+        "colorbar_line_width_pt": style.axis_linewidth_pt,
+        "colorbar_border_width_pt": style.axis_linewidth_pt,
+        "colorbar_major_tick_width_pt": style.tick_width_pt,
+        "colorbar_major_tick_length_pt": style.tick_length_pt,
+        "colorbar_minor_tick_width_pt": style.minor_tick_width_pt,
+        "colorbar_minor_tick_length_pt": style.minor_tick_length_pt,
         "colorbar_foreground_color": str(
             render_options.get("colorbar_foreground_color") or "#111111"
         ),
-        "colorbar_background_color": str(
-            render_options.get("colorbar_background_color") or ""
+        "colorbar_background_color": background_color,
+        "colorbar_background_transparency": (
+            colorbar_background_transparency
         ),
-        "colorbar_background_transparency": int(
-            render_options.get("colorbar_background_transparency") or 0
+        "colorbar_background_x_fraction": (
+            colorbar_background_x_fraction
         ),
-        "colorbar_background_x_fraction": float(
-            render_options.get("colorbar_background_x_fraction") or 0.5
+        "colorbar_background_y_fraction": (
+            colorbar_background_y_fraction
         ),
-        "colorbar_background_y_fraction": float(
-            render_options.get("colorbar_background_y_fraction") or 0.86
+        "colorbar_background_width_fraction": (
+            colorbar_background_width_fraction
         ),
-        "colorbar_background_width_fraction": float(
-            render_options.get("colorbar_background_width_fraction") or 0.44
-        ),
-        "colorbar_background_height_fraction": float(
-            render_options.get("colorbar_background_height_fraction") or 0.24
+        "colorbar_background_height_fraction": (
+            colorbar_background_height_fraction
         ),
     }
 
 
 def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str, Any]]:
     value = render_options.get("reference_guides")
-    if not isinstance(value, list | tuple):
+    if value is None:
         return []
+    if not isinstance(value, list | tuple):
+        raise ValueError("reference_guides must be a list of guide objects.")
     guides: list[dict[str, Any]] = []
     for index, item in enumerate(value, start=1):
         if not isinstance(item, dict):
-            continue
+            raise ValueError(
+                f"Reference guide {index} must be an object."
+            )
         kind = str(item.get("kind") or "band").strip().casefold()
         axis = str(item.get("axis_target") or item.get("axis") or "x").strip().casefold()
         if kind not in {"band", "line"} or axis not in {"x", "y"}:
-            continue
+            raise ValueError(
+                f"Reference guide {index} must be a band or line on x or y."
+            )
         start = _optional_float(item.get("start"))
         end = _optional_float(item.get("end"))
         value_number = _optional_float(item.get("value"))
-        if kind == "line" and value_number is not None:
-            start = value_number
-            end = value_number
+        if kind == "line":
+            if value_number is not None:
+                start = value_number
+                end = value_number
+            elif (
+                start is None
+                or end is None
+                or not math.isclose(start, end, rel_tol=0.0, abs_tol=1e-12)
+            ):
+                raise ValueError(
+                    f"Reference line {index} requires one exact value."
+                )
         if start is None or end is None:
-            continue
+            raise ValueError(
+                f"Reference guide {index} requires finite start and end values."
+            )
         transparency_value = item.get("transparency")
-        transparency = (
-            86 if transparency_value is None and kind == "band"
-            else 35 if transparency_value is None
-            else int(transparency_value)
+        try:
+            transparency = int(
+                86 if transparency_value is None and kind == "band"
+                else 35 if transparency_value is None
+                else transparency_value
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"Reference guide {index} transparency must be an integer."
+            ) from exc
+        minimum_transparency = 70 if kind == "band" else 20
+        if not minimum_transparency <= transparency <= 95:
+            raise ValueError(
+                f"Reference guide {index} transparency must be between "
+                f"{minimum_transparency} and 95."
+            )
+        guide_contract: dict[str, Any] = {
+            "id": str(item.get("id") or f"guide_{index}"),
+            "kind": kind,
+            "axis": axis,
+            "start": min(start, end),
+            "end": max(start, end),
+            "color": str(item.get("color") or "#6B7280"),
+            "transparency": transparency,
+        }
+        if kind == "line":
+            line_width_value = item.get("line_width_pt")
+            try:
+                line_width_pt = float(
+                    0.7 if line_width_value is None else line_width_value
+                )
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Reference line {index} width must be numeric."
+                ) from exc
+            if (
+                not math.isfinite(line_width_pt)
+                or not 0.0 < line_width_pt <= 5.0
+            ):
+                raise ValueError(
+                    f"Reference line {index} width must be finite and "
+                    "between 0 and 5 pt."
+                )
+            line_style = str(
+                item.get("line_style") or "dashed"
+            ).strip().casefold()
+            if line_style not in DEFAULT_LINE_STYLE_SEQUENCE:
+                raise ValueError(
+                    f"Reference line {index} uses an unsupported line style."
+                )
+            guide_contract.update(
+                {
+                    "line_width_pt": line_width_pt,
+                    "line_style": line_style,
+                }
+            )
+        guides.append(guide_contract)
+    return guides
+
+
+def _veusz_axes_spec(
+    *,
+    render_options: dict[str, Any],
+    axis_info: dict[str, Any],
+    axis_contract: _VeuszAxisContract,
+    categorical_contract: dict[str, Any] | None,
+    style: _VeuszStyleContract,
+) -> dict[str, dict[str, Any]]:
+    x_scale = _axis_scale(render_options, "x")
+    y_scale = _axis_scale(render_options, "y")
+    return {
+        "x": {
+            "label": axis_info["x_label"],
+            "scale": x_scale,
+            "tick_format": str(
+                render_options.get("x_tick_format")
+                or (
+                    DEFAULT_LOG_TICK_FORMAT
+                    if x_scale == "log"
+                    else "Auto"
+                )
+            ),
+            "minor_tick_count": int(
+                render_options.get("minor_tick_count")
+                or (
+                    DEFAULT_LOG_MINOR_TICK_COUNT
+                    if x_scale == "log"
+                    else 20
+                )
+            ),
+            "minor_ticks": _log_minor_ticks(
+                axis_contract.x_min,
+                axis_contract.x_max,
+                scale=x_scale,
+                major_ticks=axis_contract.x_ticks,
+            ),
+            "min": axis_contract.x_min,
+            "max": axis_contract.x_max,
+            "ticks": list(axis_contract.x_ticks),
+            "reverse": render_options.get("reverse_x") is True,
+            "foreground_color": "black",
+            "label_size_pt": style.font_size_pt,
+            "tick_label_size_pt": style.font_size_pt,
+            "line_width_pt": style.axis_linewidth_pt,
+            "major_tick_width_pt": style.tick_width_pt,
+            "major_tick_length_pt": style.tick_length_pt,
+            "minor_tick_width_pt": style.minor_tick_width_pt,
+            "minor_tick_length_pt": style.minor_tick_length_pt,
+            "mode": (
+                "labels"
+                if categorical_contract is not None
+                else "numeric"
+            ),
+            "category_labels": list(
+                axis_info.get("category_labels") or []
+            ),
+            "category_positions": list(
+                axis_info.get("category_positions") or []
+            ),
+        },
+        "y": {
+            "label": axis_info["y_label"],
+            "scale": y_scale,
+            "tick_format": str(
+                render_options.get("y_tick_format")
+                or (
+                    DEFAULT_LOG_TICK_FORMAT
+                    if y_scale == "log"
+                    else "Auto"
+                )
+            ),
+            "minor_tick_count": int(
+                render_options.get("minor_tick_count")
+                or (
+                    DEFAULT_LOG_MINOR_TICK_COUNT
+                    if y_scale == "log"
+                    else 20
+                )
+            ),
+            "minor_ticks": _log_minor_ticks(
+                axis_contract.y_min,
+                axis_contract.y_max,
+                scale=y_scale,
+                major_ticks=axis_contract.y_ticks,
+            ),
+            "min": axis_contract.y_min,
+            "max": axis_contract.y_max,
+            "ticks": list(axis_contract.y_ticks),
+            "show_ticks": render_options.get("show_y_ticks") is not False,
+            "foreground_color": "black",
+            "label_size_pt": style.font_size_pt,
+            "tick_label_size_pt": style.font_size_pt,
+            "line_width_pt": style.axis_linewidth_pt,
+            "major_tick_width_pt": style.tick_width_pt,
+            "major_tick_length_pt": style.tick_length_pt,
+            "minor_tick_width_pt": style.minor_tick_width_pt,
+            "minor_tick_length_pt": style.minor_tick_length_pt,
+        },
+    }
+
+
+def _direct_label_contracts(
+    series: list[StudioSeries],
+    *,
+    render_options: dict[str, Any],
+    axis_contract: _VeuszAxisContract,
+    style: _VeuszStyleContract,
+    show_direct_labels: bool,
+) -> list[dict[str, Any]]:
+    """Derive the complete, source-bound native direct-label inventory."""
+
+    if not show_direct_labels:
+        return []
+    side = str(
+        render_options.get("series_label_side") or "auto"
+    ).strip().casefold()
+    reverse_x = render_options.get("reverse_x") is True
+    if side not in {"left", "right"}:
+        side = "left" if reverse_x else "right"
+    align = "left" if side == "left" else "right"
+    label_size = max(
+        style.legend_font_size_pt,
+        min(style.font_size_pt, 6.2),
+    )
+    y_span = (
+        axis_contract.y_max - axis_contract.y_min
+        if axis_contract.y_max is not None
+        and axis_contract.y_min is not None
+        else 0.0
+    )
+    offset_value = render_options.get("series_label_offset_fraction")
+    try:
+        offset_fraction = float(
+            0.0 if offset_value is None else offset_value
         )
-        guides.append(
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "Direct-label offset fraction must be numeric."
+        ) from exc
+    if not math.isfinite(offset_fraction) or offset_fraction < 0.0:
+        raise ValueError(
+            "Direct-label offset fraction must be finite and non-negative."
+        )
+    y_offset = y_span * offset_fraction
+    valign = str(
+        render_options.get("series_label_vertical_align") or "centre"
+    ).strip().casefold()
+    if valign not in {"top", "bottom", "centre", "center"}:
+        raise ValueError(
+            "Direct-label vertical alignment must be top, bottom, or centre."
+        )
+    if valign == "center":
+        valign = "centre"
+    labels: list[dict[str, Any]] = []
+    for index, item in enumerate(series, start=1):
+        anchor = _series_label_anchor(
+            item,
+            reverse_x=reverse_x,
+            side=side,
+        )
+        if anchor is None:
+            continue
+        x_pos, y_pos = anchor
+        y_pos += y_offset
+        labels.append(
             {
-                "id": str(item.get("id") or f"guide_{index}"),
-                "kind": kind,
-                "axis": axis,
-                "start": min(start, end),
-                "end": max(start, end),
-                "color": str(item.get("color") or "#6B7280"),
-                "transparency": min(max(transparency, 0), 100),
-                "line_width_pt": float(item.get("line_width_pt") or 0.7),
-                "line_style": str(item.get("line_style") or "dashed"),
+                "name": f"label_{index}",
+                "label": item.label,
+                "positioning": "axes",
+                "x_axis": "x",
+                "y_axis": "y",
+                "x": x_pos,
+                "y": y_pos,
+                "align": align,
+                "valign": valign,
+                "angle_degrees": 0.0,
+                "margin_pt": 1.0 if valign == "bottom" else 0.0,
+                "clip": True,
+                "text_size_pt": label_size,
+                "text_color": item.color,
+                "text_hide": False,
+                "background_color": "white",
+                "background_transparency": 0,
+                "background_hide": True,
+                "border_color": "black",
+                "border_width_pt": 0.5,
+                "border_style": "solid",
+                "border_transparency": 0,
+                "border_hide": True,
             }
         )
-    return guides
+    return labels
 
 
 def _build_veusz_plot_spec(
@@ -4204,53 +5085,20 @@ def _build_veusz_plot_spec(
         axis_info,
         render_options=render_options,
         template_id=template_id,
+        style=style,
     )
     categorical_contract = _categorical_plot_contract(
         series,
         template_id=template_id,
         render_options=render_options,
     )
-    label_specs: list[dict[str, Any]] = []
-    if show_direct_labels:
-        side = str(render_options.get("series_label_side") or "auto").strip().casefold()
-        reverse_x = render_options.get("reverse_x") is True
-        if side not in {"left", "right"}:
-            side = "left" if reverse_x else "right"
-        align = "left" if side == "left" else "right"
-        label_size = max(style.legend_font_size_pt, min(style.font_size_pt, 6.2))
-        y_span = (
-            axis_contract.y_max - axis_contract.y_min
-            if axis_contract.y_max is not None and axis_contract.y_min is not None
-            else 0.0
-        )
-        try:
-            offset_fraction = float(render_options.get("series_label_offset_fraction") or 0.0)
-        except (TypeError, ValueError):
-            offset_fraction = 0.0
-        y_offset = y_span * max(offset_fraction, 0.0)
-        valign = str(render_options.get("series_label_vertical_align") or "centre").strip().casefold()
-        if valign not in {"top", "bottom", "centre", "center"}:
-            valign = "centre"
-        if valign == "center":
-            valign = "centre"
-        for index, item in enumerate(series, start=1):
-            anchor = _series_label_anchor(item, reverse_x=reverse_x, side=side)
-            if anchor is None:
-                continue
-            x_pos, y_pos = anchor
-            y_pos += y_offset
-            label_specs.append(
-                {
-                    "name": f"label_{index}",
-                    "label": item.label,
-                    "x": x_pos,
-                    "y": y_pos,
-                    "align": align,
-                    "valign": valign,
-                    "color": item.color,
-                    "size_pt": label_size,
-                }
-            )
+    label_specs = _direct_label_contracts(
+        series,
+        render_options=render_options,
+        axis_contract=axis_contract,
+        style=style,
+        show_direct_labels=show_direct_labels,
+    )
     label_load = _label_load(series)
     layout_issues: list[dict[str, Any]] = []
     spectral_coverage_issue = _spectral_x_coverage_issue(
@@ -4366,55 +5214,13 @@ def _build_veusz_plot_spec(
                 "top": style.top_margin_mm,
             },
         },
-        "axes": {
-            "x": {
-                "label": axis_info["x_label"],
-                "scale": _axis_scale(render_options, "x"),
-                "tick_format": str(
-                    render_options.get("x_tick_format")
-                    or (DEFAULT_LOG_TICK_FORMAT if _axis_scale(render_options, "x") == "log" else "Auto")
-                ),
-                "minor_tick_count": int(
-                    render_options.get("minor_tick_count")
-                    or (DEFAULT_LOG_MINOR_TICK_COUNT if _axis_scale(render_options, "x") == "log" else 20)
-                ),
-                "minor_ticks": _log_minor_ticks(
-                    axis_contract.x_min,
-                    axis_contract.x_max,
-                    scale=_axis_scale(render_options, "x"),
-                    major_ticks=axis_contract.x_ticks,
-                ),
-                "min": axis_contract.x_min,
-                "max": axis_contract.x_max,
-                "ticks": list(axis_contract.x_ticks),
-                "reverse": render_options.get("reverse_x") is True,
-                "mode": "labels" if categorical_contract is not None else "numeric",
-                "category_labels": list(axis_info.get("category_labels") or []),
-                "category_positions": list(axis_info.get("category_positions") or []),
-            },
-            "y": {
-                "label": axis_info["y_label"],
-                "scale": _axis_scale(render_options, "y"),
-                "tick_format": str(
-                    render_options.get("y_tick_format")
-                    or (DEFAULT_LOG_TICK_FORMAT if _axis_scale(render_options, "y") == "log" else "Auto")
-                ),
-                "minor_tick_count": int(
-                    render_options.get("minor_tick_count")
-                    or (DEFAULT_LOG_MINOR_TICK_COUNT if _axis_scale(render_options, "y") == "log" else 20)
-                ),
-                "minor_ticks": _log_minor_ticks(
-                    axis_contract.y_min,
-                    axis_contract.y_max,
-                    scale=_axis_scale(render_options, "y"),
-                    major_ticks=axis_contract.y_ticks,
-                ),
-                "min": axis_contract.y_min,
-                "max": axis_contract.y_max,
-                "ticks": list(axis_contract.y_ticks),
-                "show_ticks": render_options.get("show_y_ticks") is not False,
-            },
-        },
+        "axes": _veusz_axes_spec(
+            render_options=render_options,
+            axis_info=axis_info,
+            axis_contract=axis_contract,
+            categorical_contract=categorical_contract,
+            style=style,
+        ),
         "legend": legend_spec,
         "categorical": categorical_contract,
         "scalar_field": scalar_field_contract,
@@ -4451,6 +5257,10 @@ def _build_veusz_plot_spec(
                         True,
                     )
                 ),
+                "source_artifacts": [
+                    {"path": path, "sha256": digest}
+                    for path, digest in item.source_artifacts
+                ],
             }
             for index, item in enumerate(series, start=1)
             if item.presentation_kind != "scalar_field"
@@ -4551,7 +5361,7 @@ def _add_veusz_contour(
     interface.To("..")
 
 
-def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any], style: dict[str, Any]) -> None:
+def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any]) -> None:
     data_name = str(scalar["data_name"])
     interface.SetData2D(
         data_name,
@@ -4604,34 +5414,62 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any], style: dict[
         if scalar.get("colorbar_manual_position") is True:
             interface.Set("horzPosn", "manual")
             interface.Set("vertPosn", "manual")
-            interface.Set("horzManual", float(scalar.get("colorbar_horz_manual") or 0.0))
-            interface.Set("vertManual", float(scalar.get("colorbar_vert_manual") or 0.0))
+            interface.Set("horzManual", float(scalar["colorbar_horz_manual"]))
+            interface.Set("vertManual", float(scalar["colorbar_vert_manual"]))
         elif direction == "horizontal":
             interface.Set("horzPosn", "right")
             interface.Set("vertPosn", "top")
         else:
             interface.Set("horzPosn", "manual")
             interface.Set("vertPosn", "manual")
-            interface.Set("horzManual", float(scalar.get("colorbar_horz_manual") or 0.86))
-            interface.Set("vertManual", float(scalar.get("colorbar_vert_manual") or 0.18))
-        interface.Set("width", _cm_from_mm(float(scalar.get("colorbar_width_mm") or 2.4)))
-        interface.Set("height", _cm_from_mm(float(scalar.get("colorbar_height_mm") or 24.0)))
+            interface.Set("horzManual", float(scalar["colorbar_horz_manual"]))
+            interface.Set("vertManual", float(scalar["colorbar_vert_manual"]))
+        interface.Set("width", _cm_from_mm(float(scalar["colorbar_width_mm"])))
+        interface.Set("height", _cm_from_mm(float(scalar["colorbar_height_mm"])))
         interface.Set("label", str(scalar.get("z_label") or "Z"))
         interface.Set("autoMirror", False)
         interface.Set("outerticks", True)
         foreground_color = str(scalar.get("colorbar_foreground_color") or "#111111")
         interface.Set("Line/color", foreground_color)
-        interface.Set("Line/width", _pt(float(style["axis_linewidth_pt"])))
+        interface.Set("Line/width", _pt(float(scalar["colorbar_line_width_pt"])))
+        interface.Set("Line/hide", False)
+        interface.Set("Line/transparency", 0)
         interface.Set("Border/color", foreground_color)
-        interface.Set("Border/width", _pt(float(style["axis_linewidth_pt"])))
-        interface.Set("MajorTicks/width", _pt(float(style["tick_width_pt"])))
-        interface.Set("MajorTicks/length", _pt(float(style["tick_length_pt"])))
-        interface.Set("MinorTicks/width", _pt(float(style["minor_tick_width_pt"])))
-        interface.Set("MinorTicks/length", _pt(float(style["minor_tick_length_pt"])))
-        interface.Set("Label/size", _pt(float(style["font_size_pt"])))
+        interface.Set("Border/width", _pt(float(scalar["colorbar_border_width_pt"])))
+        interface.Set("Border/hide", False)
+        interface.Set("Border/transparency", 0)
+        interface.Set(
+            "MajorTicks/width",
+            _pt(float(scalar["colorbar_major_tick_width_pt"])),
+        )
+        interface.Set(
+            "MajorTicks/length",
+            _pt(float(scalar["colorbar_major_tick_length_pt"])),
+        )
+        interface.Set("MajorTicks/hide", False)
+        interface.Set("MajorTicks/transparency", 0)
+        interface.Set(
+            "MinorTicks/width",
+            _pt(float(scalar["colorbar_minor_tick_width_pt"])),
+        )
+        interface.Set(
+            "MinorTicks/length",
+            _pt(float(scalar["colorbar_minor_tick_length_pt"])),
+        )
+        interface.Set("MinorTicks/hide", False)
+        interface.Set("MinorTicks/transparency", 0)
+        interface.Set(
+            "Label/size",
+            _pt(float(scalar["colorbar_label_size_pt"])),
+        )
         interface.Set("Label/color", foreground_color)
-        interface.Set("TickLabels/size", _pt(float(style["font_size_pt"])))
+        interface.Set("Label/hide", False)
+        interface.Set(
+            "TickLabels/size",
+            _pt(float(scalar["colorbar_tick_label_size_pt"])),
+        )
         interface.Set("TickLabels/color", foreground_color)
+        interface.Set("TickLabels/hide", False)
         interface.Set("TickLabels/format", str(scalar.get("z_tick_format") or "Auto"))
         z_ticks = scalar.get("z_ticks") if isinstance(scalar.get("z_ticks"), list) else []
         if 1 < len(z_ticks) <= 12:
@@ -4642,22 +5480,22 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any], style: dict[
         interface.Add("rect", name="field_colorbar_background", autoadd=False)
         interface.To("field_colorbar_background")
         interface.Set("positioning", "relative")
-        interface.Set("xPos", [float(scalar.get("colorbar_background_x_fraction") or 0.5)])
-        interface.Set("yPos", [float(scalar.get("colorbar_background_y_fraction") or 0.86)])
+        interface.Set("xPos", [float(scalar["colorbar_background_x_fraction"])])
+        interface.Set("yPos", [float(scalar["colorbar_background_y_fraction"])])
         interface.Set(
             "width",
-            [float(scalar.get("colorbar_background_width_fraction") or 0.44)],
+            [float(scalar["colorbar_background_width_fraction"])],
         )
         interface.Set(
             "height",
-            [float(scalar.get("colorbar_background_height_fraction") or 0.24)],
+            [float(scalar["colorbar_background_height_fraction"])],
         )
         interface.Set("clip", True)
         interface.Set("Fill/color", background_color)
         interface.Set("Fill/hide", False)
         interface.Set(
             "Fill/transparency",
-            min(max(int(scalar.get("colorbar_background_transparency") or 0), 0), 100),
+            int(scalar["colorbar_background_transparency"]),
         )
         interface.Set("Border/hide", True)
         interface.To("..")
@@ -4671,6 +5509,10 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any], style: dict[
     interface.Set("colorInvert", bool(scalar.get("color_invert")))
     interface.Set("mapping", str(scalar.get("field_mapping") or "bounds"))
     interface.Set("drawMode", str(scalar.get("field_draw_mode") or "rectangles"))
+    interface.Set(
+        "transparency",
+        int(scalar.get("field_transparency") or 0),
+    )
     interface.To("..")
 
 
@@ -4682,69 +5524,227 @@ def _axis_midpoint(axis_spec: dict[str, Any]) -> float:
     return 0.5 * (minimum + maximum)
 
 
-def _add_veusz_reference_guides(interface: Any, spec: dict[str, Any]) -> None:
+def _axis_interval_geometry(
+    axis_spec: dict[str, Any],
+    *,
+    start: float,
+    end: float,
+) -> tuple[float, float] | None:
+    """Return data-space midpoint and occupied fraction for one axis interval."""
+
+    minimum = float(axis_spec["min"])
+    maximum = float(axis_spec["max"])
+    clipped_start = max(start, minimum)
+    clipped_end = min(end, maximum)
+    if clipped_end <= clipped_start:
+        return None
+    if str(axis_spec.get("scale") or "linear") == "log":
+        if (
+            minimum <= 0.0
+            or maximum <= minimum
+            or clipped_start <= 0.0
+        ):
+            raise ValueError(
+                "Logarithmic reference-guide geometry requires positive, "
+                "strictly increasing axis bounds."
+            )
+        midpoint = math.sqrt(clipped_start * clipped_end)
+        occupied_fraction = math.log(
+            clipped_end / clipped_start
+        ) / math.log(maximum / minimum)
+    else:
+        if maximum <= minimum:
+            raise ValueError(
+                "Reference-guide geometry requires strictly increasing axis bounds."
+            )
+        midpoint = 0.5 * (clipped_start + clipped_end)
+        occupied_fraction = (
+            clipped_end - clipped_start
+        ) / (maximum - minimum)
+    return midpoint, occupied_fraction
+
+
+def _reference_guide_rect_contracts(
+    spec: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Derive the closed, non-occluding graph-local band inventory."""
+
     guides = spec.get("reference_guides")
     if not isinstance(guides, list):
-        return
+        return []
     axes = spec["axes"]
     x_axis = axes["x"]
     y_axis = axes["y"]
     if any(x_axis.get(key) is None for key in ("min", "max")) or any(
         y_axis.get(key) is None for key in ("min", "max")
     ):
-        return
-    x_min, x_max = float(x_axis["min"]), float(x_axis["max"])
-    y_min, y_max = float(y_axis["min"]), float(y_axis["max"])
+        return []
+    contracts: list[dict[str, Any]] = []
     for index, guide in enumerate(guides, start=1):
-        if not isinstance(guide, dict):
+        if (
+            not isinstance(guide, dict)
+            or str(guide.get("kind") or "band") != "band"
+        ):
             continue
         axis = str(guide.get("axis") or "x")
-        kind = str(guide.get("kind") or "band")
         start = float(guide["start"])
         end = float(guide["end"])
         if axis == "x":
-            clipped_start = max(start, x_min)
-            clipped_end = min(end, x_max)
-            if clipped_end < clipped_start:
+            geometry = _axis_interval_geometry(
+                x_axis,
+                start=start,
+                end=end,
+            )
+            if geometry is None:
                 continue
-            center_x = 0.5 * (clipped_start + clipped_end)
-            width_fraction = (clipped_end - clipped_start) / max(x_max - x_min, sys.float_info.epsilon)
-            if kind == "line" or math.isclose(width_fraction, 0.0):
-                width_fraction = max(width_fraction, 0.0025)
+            center_x, width_fraction = geometry
             center_y = _axis_midpoint(y_axis)
             height_fraction = 1.0
         else:
-            clipped_start = max(start, y_min)
-            clipped_end = min(end, y_max)
-            if clipped_end < clipped_start:
+            geometry = _axis_interval_geometry(
+                y_axis,
+                start=start,
+                end=end,
+            )
+            if geometry is None:
                 continue
-            if str(y_axis.get("scale") or "linear") == "log" and clipped_start > 0.0 and clipped_end > 0.0:
-                center_y = math.sqrt(clipped_start * clipped_end)
-                height_fraction = math.log(clipped_end / clipped_start) / max(
-                    math.log(y_max / y_min),
-                    sys.float_info.epsilon,
-                )
-            else:
-                center_y = 0.5 * (clipped_start + clipped_end)
-                height_fraction = (clipped_end - clipped_start) / max(y_max - y_min, sys.float_info.epsilon)
-            if kind == "line" or math.isclose(height_fraction, 0.0):
-                height_fraction = max(height_fraction, 0.0025)
+            center_y, height_fraction = geometry
             center_x = _axis_midpoint(x_axis)
             width_fraction = 1.0
-        interface.Add("rect", name=f"reference_guide_{index}", autoadd=False)
-        interface.To(f"reference_guide_{index}")
-        interface.Set("positioning", "axes")
-        interface.Set("xPos", [center_x])
-        interface.Set("yPos", [center_y])
-        interface.Set("width", [min(max(width_fraction, 0.0), 1.0)])
-        interface.Set("height", [min(max(height_fraction, 0.0), 1.0)])
+        width_fraction = min(max(width_fraction, 0.0), 1.0)
+        height_fraction = min(max(height_fraction, 0.0), 1.0)
+        transparency = int(guide["transparency"])
+        occupied_axis_fraction = (
+            width_fraction if axis == "x" else height_fraction
+        )
+        if occupied_axis_fraction > 0.8:
+            raise ValueError(
+                "Reference-guide bands cannot cover more than 80% of their "
+                "scientific axis."
+            )
+        contracts.append(
+            {
+                "name": f"reference_guide_{index}",
+                "positioning": "axes",
+                "xPos": [center_x],
+                "yPos": [center_y],
+                "width": [width_fraction],
+                "height": [height_fraction],
+                "clip": True,
+                "fill_color": str(guide.get("color") or "#6B7280"),
+                "fill_hide": False,
+                "fill_transparency": transparency,
+                "border_hide": True,
+            }
+        )
+    return contracts
+
+
+def _reference_guide_line_contracts(
+    spec: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Derive the closed native point-to-point reference-line inventory."""
+
+    guides = spec.get("reference_guides")
+    if not isinstance(guides, list):
+        return []
+    axes = spec["axes"]
+    x_axis = axes["x"]
+    y_axis = axes["y"]
+    if any(x_axis.get(key) is None for key in ("min", "max")) or any(
+        y_axis.get(key) is None for key in ("min", "max")
+    ):
+        return []
+    x_min, x_max = float(x_axis["min"]), float(x_axis["max"])
+    y_min, y_max = float(y_axis["min"]), float(y_axis["max"])
+    contracts: list[dict[str, Any]] = []
+    for index, guide in enumerate(guides, start=1):
+        if (
+            not isinstance(guide, dict)
+            or str(guide.get("kind") or "band") != "line"
+        ):
+            continue
+        axis = str(guide.get("axis") or "x")
+        value = float(guide["start"])
+        if axis == "x":
+            if not x_min <= value <= x_max:
+                continue
+            x_pos = [value]
+            y_pos = [y_min]
+            x_pos_2 = [value]
+            y_pos_2 = [y_max]
+        else:
+            if not y_min <= value <= y_max:
+                continue
+            x_pos = [x_min]
+            y_pos = [value]
+            x_pos_2 = [x_max]
+            y_pos_2 = [value]
+        contracts.append(
+            {
+                "name": f"reference_guide_{index}",
+                "positioning": "axes",
+                "x_axis": "x",
+                "y_axis": "y",
+                "mode": "point-to-point",
+                "xPos": x_pos,
+                "yPos": y_pos,
+                "xPos2": x_pos_2,
+                "yPos2": y_pos_2,
+                "clip": True,
+                "hide": False,
+                "line_color": str(guide.get("color") or "#6B7280"),
+                "line_width_pt": float(guide["line_width_pt"]),
+                "line_style": str(guide["line_style"]),
+                "line_transparency": int(guide["transparency"]),
+                "line_hide": False,
+                "arrow_left": "none",
+                "arrow_right": "none",
+                "fill_hide": True,
+            }
+        )
+    return contracts
+
+
+def _add_veusz_reference_guides(interface: Any, spec: dict[str, Any]) -> None:
+    for contract in _reference_guide_rect_contracts(spec):
+        interface.Add("rect", name=contract["name"], autoadd=False)
+        interface.To(contract["name"])
+        interface.Set("positioning", contract["positioning"])
+        interface.Set("xPos", contract["xPos"])
+        interface.Set("yPos", contract["yPos"])
+        interface.Set("width", contract["width"])
+        interface.Set("height", contract["height"])
         interface.Set("clip", True)
-        interface.Set("Fill/color", str(guide.get("color") or "#6B7280"))
-        transparency_value = guide.get("transparency")
-        transparency = 86 if transparency_value is None else int(transparency_value)
-        interface.Set("Fill/transparency", min(max(transparency, 0), 100))
-        interface.Set("Fill/hide", False)
-        interface.Set("Border/hide", True)
+        interface.Set("Fill/color", contract["fill_color"])
+        interface.Set("Fill/transparency", contract["fill_transparency"])
+        interface.Set("Fill/hide", contract["fill_hide"])
+        interface.Set("Border/hide", contract["border_hide"])
+        interface.To("..")
+    for contract in _reference_guide_line_contracts(spec):
+        interface.Add("line", name=contract["name"], autoadd=False)
+        interface.To(contract["name"])
+        interface.Set("positioning", contract["positioning"])
+        interface.Set("xAxis", contract["x_axis"])
+        interface.Set("yAxis", contract["y_axis"])
+        interface.Set("mode", contract["mode"])
+        interface.Set("xPos", contract["xPos"])
+        interface.Set("yPos", contract["yPos"])
+        interface.Set("xPos2", contract["xPos2"])
+        interface.Set("yPos2", contract["yPos2"])
+        interface.Set("clip", contract["clip"])
+        interface.Set("hide", contract["hide"])
+        interface.Set("Line/color", contract["line_color"])
+        interface.Set("Line/width", _pt(contract["line_width_pt"]))
+        interface.Set("Line/style", contract["line_style"])
+        interface.Set(
+            "Line/transparency",
+            contract["line_transparency"],
+        )
+        interface.Set("Line/hide", contract["line_hide"])
+        interface.Set("arrowleft", contract["arrow_left"])
+        interface.Set("arrowright", contract["arrow_right"])
+        interface.Set("Fill/hide", contract["fill_hide"])
         interface.To("..")
 
 
@@ -4800,7 +5800,7 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     _add_veusz_axis(interface, "y", axes["y"], style)
     scalar = spec.get("scalar_field") if isinstance(spec.get("scalar_field"), dict) else None
     if scalar is not None:
-        _add_veusz_scalar_field(interface, scalar, style)
+        _add_veusz_scalar_field(interface, scalar)
     legend = spec["legend"]
     if legend["show"]:
         interface.Add("key", name="key1", autoadd=False)
@@ -4906,17 +5906,38 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     for item in spec["direct_labels"]:
         interface.Add("label", name=item["name"], autoadd=False)
         interface.To(item["name"])
-        interface.Set("positioning", "axes")
+        interface.Set("positioning", item["positioning"])
+        interface.Set("xAxis", item["x_axis"])
+        interface.Set("yAxis", item["y_axis"])
         interface.Set("xPos", [float(item["x"])])
         interface.Set("yPos", [float(item["y"])])
         interface.Set("label", _veusz_literal_text(item["label"]))
         interface.Set("alignHorz", item["align"])
-        interface.Set("alignVert", item.get("valign") or "centre")
-        interface.Set("margin", "1pt" if item.get("valign") == "bottom" else "0pt")
-        interface.Set("Text/size", _pt(float(item["size_pt"])))
-        interface.Set("Text/color", item["color"])
-        interface.Set("Background/hide", True)
-        interface.Set("Border/hide", True)
+        interface.Set("alignVert", item["valign"])
+        interface.Set("angle", float(item["angle_degrees"]))
+        interface.Set("margin", _pt(float(item["margin_pt"])))
+        interface.Set("clip", item["clip"])
+        interface.Set("hide", False)
+        interface.Set("Text/size", _pt(float(item["text_size_pt"])))
+        interface.Set("Text/color", item["text_color"])
+        interface.Set("Text/hide", item["text_hide"])
+        interface.Set("Background/color", item["background_color"])
+        interface.Set(
+            "Background/transparency",
+            item["background_transparency"],
+        )
+        interface.Set("Background/hide", item["background_hide"])
+        interface.Set("Border/color", item["border_color"])
+        interface.Set(
+            "Border/width",
+            _pt(float(item["border_width_pt"])),
+        )
+        interface.Set("Border/style", item["border_style"])
+        interface.Set(
+            "Border/transparency",
+            item["border_transparency"],
+        )
+        interface.Set("Border/hide", item["border_hide"])
         interface.To("..")
     interface.To("..")
     # Force an opaque export canvas.  Some Veusz PDF/TIFF backends retain an
@@ -4931,8 +5952,10 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     interface.Set("yPos", [0.5])
     interface.Set("width", [1.0])
     interface.Set("height", [1.0])
+    interface.Set("clip", True)
     interface.Set("Fill/color", "white")
     interface.Set("Fill/hide", False)
+    interface.Set("Fill/transparency", 0)
     interface.Set("Border/hide", True)
     interface.To("..")
     interface.To("..")
@@ -4984,19 +6007,42 @@ def _add_veusz_axis(interface: Any, axis: str, axis_spec: dict[str, Any], style:
         interface.Set("mode", "labels")
     interface.Set("autoMirror", False)
     interface.Set("outerticks", True)
-    interface.Set("Line/color", "black")
-    interface.Set("Line/width", _pt(float(style["axis_linewidth_pt"])))
-    interface.Set("MajorTicks/width", _pt(float(style["tick_width_pt"])))
-    interface.Set("MajorTicks/length", _pt(float(style["tick_length_pt"])))
-    interface.Set("MinorTicks/width", _pt(float(style["minor_tick_width_pt"])))
-    interface.Set("MinorTicks/length", _pt(float(style["minor_tick_length_pt"])))
+    foreground_color = str(axis_spec["foreground_color"])
+    interface.Set("Line/color", foreground_color)
+    interface.Set("Line/width", _pt(float(axis_spec["line_width_pt"])))
+    interface.Set("Line/hide", False)
+    interface.Set("Line/transparency", 0)
+    interface.Set(
+        "MajorTicks/width",
+        _pt(float(axis_spec["major_tick_width_pt"])),
+    )
+    interface.Set(
+        "MajorTicks/length",
+        _pt(float(axis_spec["major_tick_length_pt"])),
+    )
+    interface.Set("MajorTicks/transparency", 0)
+    interface.Set(
+        "MinorTicks/width",
+        _pt(float(axis_spec["minor_tick_width_pt"])),
+    )
+    interface.Set(
+        "MinorTicks/length",
+        _pt(float(axis_spec["minor_tick_length_pt"])),
+    )
+    interface.Set("MinorTicks/transparency", 0)
     interface.Set("MinorTicks/number", int(axis_spec.get("minor_tick_count") or 20))
     minor_ticks = axis_spec.get("minor_ticks") if isinstance(axis_spec.get("minor_ticks"), list) else []
     if minor_ticks:
         interface.Set("MinorTicks/manualTicks", [float(value) for value in minor_ticks])
-    interface.Set("Label/size", _pt(float(style["font_size_pt"])))
+    interface.Set("Label/size", _pt(float(axis_spec["label_size_pt"])))
+    interface.Set("Label/color", foreground_color)
+    interface.Set("Label/hide", False)
     interface.Set("Label/offset", _pt(float(style["axes_labelpad_pt"])))
-    interface.Set("TickLabels/size", _pt(float(style["font_size_pt"])))
+    interface.Set(
+        "TickLabels/size",
+        _pt(float(axis_spec["tick_label_size_pt"])),
+    )
+    interface.Set("TickLabels/color", foreground_color)
     interface.Set("TickLabels/format", str(axis_spec.get("tick_format") or "Auto"))
     tick_offset = style["xtick_major_pad_pt"] if axis == "x" else style["ytick_major_pad_pt"]
     interface.Set("TickLabels/offset", _pt(float(tick_offset)))

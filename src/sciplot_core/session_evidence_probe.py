@@ -23,6 +23,7 @@ from sciplot_core.session_evidence import (
     _canonical_bytes,
     _completion_evidence_checks,
     _head_path,
+    _is_provider_disabled_promotion_mapping,
     _m3_round_summary,
     _m6_round_summary,
     _pending_path,
@@ -38,7 +39,11 @@ from sciplot_core.session_evidence import (
     session_ledger_status,
     witness_session_reopen,
 )
-from sciplot_core.session_evidence_artifacts import verify_regular_production_qa
+from sciplot_core.session_evidence_artifacts import (
+    _verify_terminal_data_snapshots,
+    artifact_content_record,
+    verify_regular_production_qa,
+)
 
 SESSION_EVIDENCE_PROBE_KIND = "sciplot_session_evidence_probe"
 SESSION_EVIDENCE_PROBE_VERSION = 5
@@ -471,6 +476,43 @@ def _tampered_evaluation_status(
     return session_ledger_status(ledger)
 
 
+def _tampered_lineage_status(
+    run_root: Path,
+    *,
+    source_ledger: Path,
+) -> dict[str, Any]:
+    ledger = run_root / "tamper" / "self_reported_lineage.jsonl"
+    _copy_ledger(source_ledger, ledger)
+    events = [
+        json.loads(line)
+        for line in ledger.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    completion = events[-1]
+    lineage = completion["payload"]["manifest"]["source_lineage"]
+    lineage["mapping_bound"] = False
+    lineage["raw_archive_bound"] = False
+    completion["event_sha256"] = canonical_sha256(
+        {key: value for key, value in completion.items() if key != "event_sha256"}
+    )
+    ledger.write_bytes(
+        b"".join(_canonical_bytes(event) + b"\n" for event in events)
+    )
+    head = json.loads(_head_path(ledger).read_text(encoding="utf-8"))
+    data = ledger.read_bytes()
+    head.update(
+        {
+            "event_count": len(events),
+            "last_event_sha256": completion["event_sha256"],
+            "ledger_size_bytes": len(data),
+            "ledger_sha256": hashlib.sha256(data).hexdigest(),
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+    )
+    atomic_write_json(_head_path(ledger), head)
+    return session_ledger_status(ledger)
+
+
 def _compact_runtime_probe(
     probe: dict[str, Any],
     *,
@@ -581,6 +623,104 @@ def run_session_evidence_probe(
                 detail=canvas_checks,
             )
         )
+        promotion_mapping_preregistration = {
+            "expected_evidence": [
+                "canvas_lifecycle",
+                "data_mapping",
+                "provider_disabled",
+            ],
+            "provider": None,
+            "model": None,
+            "promotion_binding": {
+                "candidate_id": "1" * 64,
+                "decision_sha256": "2" * 64,
+                "plan_sha256": "3" * 64,
+                "assertion_ids": ["4" * 64],
+            },
+        }
+        promotion_mapping_checks = _completion_evidence_checks(
+            promotion_mapping_preregistration,
+            {
+                "authority_mode": "canvas",
+                "authority": {"ready_to_use": True},
+                "optional_evidence": {
+                    "data_mapping": {
+                        "provider": "historical-mapping-provider",
+                        "raw_inputs_unchanged": True,
+                        "handoff_allowed": True,
+                    }
+                },
+                "journal": {
+                    "event_types": {"assistant_provider_state": 1},
+                    "references": [
+                        {
+                            "event": "assistant_provider_state",
+                            "provider_connected": False,
+                            "index": 0,
+                        }
+                    ],
+                },
+            },
+        )
+        checks.append(
+            _check(
+                "provider_disabled_promotion_mapping_is_reachable",
+                "A frozen mapping can be deterministically recertified with "
+                "the runtime provider disabled and no Assistant activity",
+                _is_provider_disabled_promotion_mapping(
+                    promotion_mapping_preregistration
+                )
+                and promotion_mapping_checks.get("canvas_lifecycle") is True
+                and promotion_mapping_checks.get("provider_disabled") is True
+                and promotion_mapping_checks.get("data_mapping") is True,
+                detail=promotion_mapping_checks,
+            )
+        )
+        snapshot_a = run_root / "lineage" / "mapped_a.csv"
+        snapshot_b = run_root / "lineage" / "mapped_b.csv"
+        snapshot_a.parent.mkdir(parents=True, exist_ok=True)
+        snapshot_a.write_text("x,y\n1,2\n", encoding="utf-8")
+        snapshot_b.write_text("x,y\n3,4\n", encoding="utf-8")
+        terminal_records = [
+            artifact_content_record(snapshot_a),
+            artifact_content_record(snapshot_b),
+        ]
+        terminal_outputs = {
+            (
+                str(record["kind"]),
+                str(Path(str(record["path"])).expanduser().resolve()),
+                str(record["sha256"]),
+            )
+            for record in terminal_records
+        }
+        verified_terminal_records = _verify_terminal_data_snapshots(
+            {
+                "data_snapshot_sources": [
+                    str(snapshot_a.resolve()),
+                    str(snapshot_b.resolve()),
+                ]
+            },
+            final_outputs=terminal_outputs,
+        )
+        omission_rejected, omission_detail = _expect_failure(
+            lambda: _verify_terminal_data_snapshots(
+                {"data_snapshot_sources": [str(snapshot_a.resolve())]},
+                final_outputs=terminal_outputs,
+            ),
+            contains="terminal transform output",
+        )
+        checks.append(
+            _check(
+                "multi_table_terminal_lineage_is_complete",
+                "Multi-table plots bind every terminal transform output and "
+                "reject silent source omission",
+                len(verified_terminal_records) == 2 and omission_rejected,
+                detail={
+                    "terminal_snapshot_count": len(verified_terminal_records),
+                    "omission_rejection": omission_detail,
+                },
+            )
+        )
         if frozen_build_artifact is not None:
             checks.append(
                 _check(
@@ -685,15 +825,27 @@ def run_session_evidence_probe(
             run_root,
             source_ledger=Path(canvas["registration"]["ledger"]),
         )
+        tampered_lineage = _tampered_lineage_status(
+            run_root,
+            source_ledger=Path(canvas["registration"]["ledger"]),
+        )
         checks.append(
             _check(
                 "self_reported_classification_rejected",
-                "Status rejects a fully rehashed ledger whose completion "
-                "self-reports a classification not derivable from raw evidence",
+                "Status rejects fully rehashed completion classifications and "
+                "source lineages that are not derivable from live evidence",
                 tampered.get("status") == "failed"
                 and "stored evaluation"
-                in str(tampered.get("integrity", {}).get("error", "")),
-                detail=tampered.get("integrity"),
+                in str(tampered.get("integrity", {}).get("error", ""))
+                and tampered_lineage.get("status") == "failed"
+                and "exactly one"
+                in str(
+                    tampered_lineage.get("integrity", {}).get("error", "")
+                ),
+                detail={
+                    "evaluation": tampered.get("integrity"),
+                    "lineage": tampered_lineage.get("integrity"),
+                },
             )
         )
 

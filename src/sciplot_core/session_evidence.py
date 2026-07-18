@@ -145,6 +145,7 @@ _PREREGISTRATION_KEYS = {
     "model",
     "canonical_task",
     "attempt",
+    "promotion_binding",
     "limitations",
 }
 _WITNESS_KEYS = {
@@ -284,16 +285,45 @@ def _reject_unknown(
         raise ValueError(f"{label} has unknown fields: {sorted(unknown)!r}.")
 
 
-def _read_json(path: Path, label: str) -> dict[str, Any]:
+def _read_json_snapshot(
+    path: Path,
+    label: str,
+) -> tuple[dict[str, Any], str]:
     target = path.expanduser().resolve()
+    if not target.is_file():
+        raise FileNotFoundError(f"{label} not found: {target}")
     try:
-        value = json.loads(target.read_text(encoding="utf-8"))
+        with target.open("rb") as handle:
+            before = os.fstat(handle.fileno())
+            data = handle.read()
+            after = os.fstat(handle.fileno())
     except FileNotFoundError:
         raise FileNotFoundError(f"{label} not found: {target}") from None
-    except json.JSONDecodeError as exc:
+    if (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    ) != (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    ) or len(data) != after.st_size:
+        raise ValueError(f"{label} changed during one snapshot read: {target}")
+    try:
+        value = json.loads(data)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"{label} is not valid JSON: {target}") from exc
     if not isinstance(value, dict):
         raise ValueError(f"{label} must contain an object: {target}")
+    return value, hashlib.sha256(data).hexdigest()
+
+
+def _read_json(path: Path, label: str) -> dict[str, Any]:
+    value, _digest = _read_json_snapshot(path, label)
     return value
 
 
@@ -1489,7 +1519,10 @@ def _canvas_witness(
             and entry.get("execution_manifest_sha256") == mapping_hash
             and entry.get("raw_inputs_mutated") is False
         ]
-        if not handoffs:
+        provider_disabled_promotion_mapping = (
+            _is_provider_disabled_promotion_mapping(preregistration)
+        )
+        if not handoffs and not provider_disabled_promotion_mapping:
             raise ValueError("The journal does not bind the verified mapping handoff.")
         optional["data_mapping"] = {
             "path": str(mapping),
@@ -2393,6 +2426,18 @@ def _verify_composition_manifest(
     }
 
 
+def _is_provider_disabled_promotion_mapping(
+    preregistration: dict[str, Any],
+) -> bool:
+    expected = set(preregistration.get("expected_evidence") or [])
+    return bool(
+        isinstance(preregistration.get("promotion_binding"), dict)
+        and {"provider_disabled", "data_mapping"} <= expected
+        and preregistration.get("provider") is None
+        and preregistration.get("model") is None
+    )
+
+
 def _validate_preregistration(payload: dict[str, Any]) -> None:
     _reject_unknown(
         payload,
@@ -2629,6 +2674,10 @@ def _validate_preregistration(payload: dict[str, Any]) -> None:
         raise ValueError(
             "canonical_task and attempt are reserved for M3 scored sessions."
         )
+    promotion_binding = payload.get("promotion_binding")
+    provider_disabled_promotion_mapping = (
+        _is_provider_disabled_promotion_mapping(payload)
+    )
     if "provider_disabled" in expected:
         if provider is not None or model is not None:
             raise ValueError(
@@ -2643,12 +2692,69 @@ def _validate_preregistration(payload: dict[str, Any]) -> None:
                 "provider_disabled evidence requires a reopened Canvas runtime "
                 "that recorded its concrete provider state."
             )
-    if {"ai_operation", "cancellation_rollback", "data_mapping"} & set(expected) and (
+    if {"ai_operation", "cancellation_rollback"} & set(expected) and (
         provider is None or model is None
     ):
         raise ValueError(
-            "AI, cancellation, and mapping evidence require provider and model."
+            "AI and cancellation evidence require provider and model."
         )
+    if (
+        "data_mapping" in expected
+        and (provider is None or model is None)
+        and not provider_disabled_promotion_mapping
+    ):
+        raise ValueError(
+            "Data-mapping evidence requires provider and model unless an "
+            "owner-bound promotion lifecycle is deterministically recertifying "
+            "the frozen mapping with the provider disabled."
+        )
+    if promotion_binding is not None:
+        binding = _object(promotion_binding, "promotion_binding")
+        _reject_unknown(
+            binding,
+            {
+                "assertion_ids",
+                "candidate_id",
+                "decision_sha256",
+                "plan_sha256",
+            },
+            label="promotion_binding",
+        )
+        for field in ("candidate_id", "decision_sha256", "plan_sha256"):
+            _required_hash(
+                binding.get(field),
+                f"promotion_binding.{field}",
+            )
+        assertion_ids = [
+            _required_hash(
+                value,
+                "promotion_binding.assertion_id",
+            )
+            for value in _list(
+                binding.get("assertion_ids"),
+                "promotion_binding.assertion_ids",
+            )
+        ]
+        if not assertion_ids or assertion_ids != sorted(set(assertion_ids)):
+            raise ValueError(
+                "promotion_binding.assertion_ids must be non-empty, sorted, "
+                "and unique."
+            )
+        if scope not in _FORMAL_SCOPES:
+            raise ValueError(
+                "Promotion verification can bind only a formal real session."
+            )
+        if source_class not in {
+            "owner_authorized_real",
+            "public_authorized_real",
+        }:
+            raise ValueError(
+                "Promotion verification cannot bind synthetic source evidence."
+            )
+        if "provider_disabled" not in expected:
+            raise ValueError(
+                "Promotion verification requires provider_disabled evidence."
+            )
     limitations = _list(payload.get("limitations"), "limitations")
     if not limitations:
         raise ValueError("Preregistration must disclose evidence limitations.")
@@ -3118,6 +3224,523 @@ def _validate_witness(payload: dict[str, Any]) -> None:
         raise ValueError("Witness must disclose its attestation limitation.")
 
 
+def _validate_source_hash_record(
+    value: object,
+    *,
+    label: str,
+    extra_fields: set[str] | None = None,
+) -> dict[str, Any]:
+    record = _object(value, label)
+    _reject_unknown(
+        record,
+        {"path", "sha256"} | (extra_fields or set()),
+        label=label,
+    )
+    _required_text(record.get("path"), f"{label}.path")
+    _required_hash(record.get("sha256"), f"{label}.sha256")
+    return record
+
+
+def _validate_rendered_source_coverage(
+    value: object,
+    *,
+    label: str,
+) -> dict[str, Any]:
+    coverage = _object(value, label)
+    _reject_unknown(
+        coverage,
+        {
+            "kind",
+            "version",
+            "status",
+            "proposal_id",
+            "template",
+            "coverage_mode",
+            "expected_outputs",
+            "expected_output_count",
+            "rendered_units",
+            "rendered_unit_count",
+            "contribution_counts",
+            "silent_omission_detected",
+            "terminal_outputs",
+            "terminal_output_count",
+            "terminal_contribution_counts",
+            "spec_artifacts",
+            "spec_count",
+            "document_artifacts",
+            "document_count",
+            "document_data_audits",
+            "terminal_data_derivation",
+        },
+        label=label,
+    )
+    if (
+        coverage.get("kind")
+        != "sciplot_rendered_mapping_source_coverage"
+        or coverage.get("version") != 1
+        or coverage.get("status") != "passed"
+        or coverage.get("coverage_mode")
+        not in {"exact_per_output", "transitive_single_output"}
+        or coverage.get("silent_omission_detected") is not False
+    ):
+        raise ValueError(f"{label} is not a passing closed coverage record.")
+    _required_text(coverage.get("template"), f"{label}.template")
+    expected = _list(coverage.get("expected_outputs"), f"{label}.expected_outputs")
+    expected_count = _required_int(
+        coverage.get("expected_output_count"),
+        f"{label}.expected_output_count",
+        minimum=1,
+    )
+    if len(expected) != expected_count:
+        raise ValueError(f"{label} expected-output count is inconsistent.")
+    expected_records = [
+        _validate_source_hash_record(
+            record,
+            label=f"{label}.expected_outputs[{index}]",
+        )
+        for index, record in enumerate(expected)
+    ]
+    expected_keys = {
+        (str(record["path"]), str(record["sha256"]))
+        for record in expected_records
+    }
+    if len(expected_keys) != expected_count:
+        raise ValueError(f"{label} repeats an expected output.")
+
+    units = _list(coverage.get("rendered_units"), f"{label}.rendered_units")
+    unit_count = _required_int(
+        coverage.get("rendered_unit_count"),
+        f"{label}.rendered_unit_count",
+        minimum=1,
+    )
+    if len(units) != unit_count:
+        raise ValueError(f"{label} rendered-unit count is inconsistent.")
+    rendered_source_keys: set[tuple[str, str]] = set()
+    rendered_identities: set[str] = set()
+    for unit_index, value in enumerate(units):
+        unit = _object(value, f"{label}.rendered_units[{unit_index}]")
+        _reject_unknown(
+            unit,
+            {"identity", "kind", "source_artifacts"},
+            label=f"{label}.rendered_units[{unit_index}]",
+        )
+        identity = _required_text(
+            unit.get("identity"),
+            f"{label}.rendered_units[{unit_index}].identity",
+        )
+        if identity in rendered_identities:
+            raise ValueError(f"{label} repeats a rendered-unit identity.")
+        rendered_identities.add(identity)
+        _required_text(
+            unit.get("kind"),
+            f"{label}.rendered_units[{unit_index}].kind",
+        )
+        source_artifacts = _list(
+            unit.get("source_artifacts"),
+            f"{label}.rendered_units[{unit_index}].source_artifacts",
+        )
+        if not source_artifacts:
+            raise ValueError(
+                f"{label}.rendered_units[{unit_index}] has no source artifacts."
+            )
+        for artifact_index, record in enumerate(source_artifacts):
+            parsed = _validate_source_hash_record(
+                record,
+                label=(
+                    f"{label}.rendered_units[{unit_index}]."
+                    f"source_artifacts[{artifact_index}]"
+                ),
+            )
+            rendered_source_keys.add(
+                (str(parsed["path"]), str(parsed["sha256"]))
+            )
+    contributions = _list(
+        coverage.get("contribution_counts"),
+        f"{label}.contribution_counts",
+    )
+    if len(contributions) != expected_count:
+        raise ValueError(f"{label} contribution inventory is inconsistent.")
+    contribution_keys: set[tuple[str, str]] = set()
+    for index, record in enumerate(contributions):
+        parsed = _validate_source_hash_record(
+            record,
+            label=f"{label}.contribution_counts[{index}]",
+            extra_fields={"rendered_unit_count"},
+        )
+        count = _required_int(
+            parsed.get("rendered_unit_count"),
+            f"{label}.contribution_counts[{index}].rendered_unit_count",
+            minimum=0,
+        )
+        contribution_keys.add(
+            (str(parsed["path"]), str(parsed["sha256"]))
+        )
+        if coverage.get("coverage_mode") == "exact_per_output" and count < 1:
+            raise ValueError(f"{label} exact output has no rendered contribution.")
+    if contribution_keys != expected_keys:
+        raise ValueError(f"{label} contribution outputs are inconsistent.")
+    if (
+        coverage.get("coverage_mode") == "transitive_single_output"
+        and expected_count != 1
+    ):
+        raise ValueError(
+            f"{label} transitive coverage is limited to one mapped output."
+        )
+
+    terminal = _list(
+        coverage.get("terminal_outputs"),
+        f"{label}.terminal_outputs",
+    )
+    terminal_count = _required_int(
+        coverage.get("terminal_output_count"),
+        f"{label}.terminal_output_count",
+        minimum=1,
+    )
+    if len(terminal) != terminal_count:
+        raise ValueError(f"{label} terminal-output count is inconsistent.")
+    terminal_records = [
+        _validate_source_hash_record(
+            record,
+            label=f"{label}.terminal_outputs[{index}]",
+        )
+        for index, record in enumerate(terminal)
+    ]
+    terminal_keys = {
+        (str(record["path"]), str(record["sha256"]))
+        for record in terminal_records
+    }
+    if len(terminal_keys) != terminal_count:
+        raise ValueError(f"{label} repeats a terminal output.")
+    if not rendered_source_keys or not rendered_source_keys <= terminal_keys:
+        raise ValueError(
+            f"{label} rendered sources are not confined to terminal outputs."
+        )
+    terminal_contributions = _list(
+        coverage.get("terminal_contribution_counts"),
+        f"{label}.terminal_contribution_counts",
+    )
+    if len(terminal_contributions) != terminal_count:
+        raise ValueError(
+            f"{label} terminal contribution inventory is inconsistent."
+        )
+    terminal_contribution_keys: set[tuple[str, str]] = set()
+    for index, record in enumerate(terminal_contributions):
+        parsed = _validate_source_hash_record(
+            record,
+            label=f"{label}.terminal_contribution_counts[{index}]",
+            extra_fields={"rendered_unit_count"},
+        )
+        _required_int(
+            parsed.get("rendered_unit_count"),
+            (
+                f"{label}.terminal_contribution_counts[{index}]."
+                "rendered_unit_count"
+            ),
+            minimum=1,
+        )
+        terminal_contribution_keys.add(
+            (str(parsed["path"]), str(parsed["sha256"]))
+        )
+    if terminal_contribution_keys != terminal_keys:
+        raise ValueError(
+            f"{label} terminal contribution outputs are inconsistent."
+        )
+    derivation_label = f"{label}.terminal_data_derivation"
+    derivation = _object(
+        coverage.get("terminal_data_derivation"),
+        derivation_label,
+    )
+    _reject_unknown(
+        derivation,
+        {
+            "kind",
+            "version",
+            "status",
+            "request_sha256",
+            "terminal_artifacts",
+            "terminal_artifact_count",
+            "unit_signatures",
+            "unit_count",
+        },
+        label=derivation_label,
+    )
+    if (
+        derivation.get("kind")
+        != "sciplot_terminal_render_data_derivation"
+        or derivation.get("version") != 1
+        or derivation.get("status") != "passed"
+    ):
+        raise ValueError(
+            f"{derivation_label} is not a passing derivation record."
+        )
+    _required_hash(
+        derivation.get("request_sha256"),
+        f"{derivation_label}.request_sha256",
+    )
+    derived_terminal_artifacts = _list(
+        derivation.get("terminal_artifacts"),
+        f"{derivation_label}.terminal_artifacts",
+    )
+    derived_terminal_count = _required_int(
+        derivation.get("terminal_artifact_count"),
+        f"{derivation_label}.terminal_artifact_count",
+        minimum=1,
+    )
+    if (
+        len(derived_terminal_artifacts) != derived_terminal_count
+        or derived_terminal_count != terminal_count
+    ):
+        raise ValueError(
+            f"{derivation_label} terminal inventory is inconsistent."
+        )
+    derived_terminal_records = [
+        _validate_source_hash_record(
+            record,
+            label=f"{derivation_label}.terminal_artifacts[{index}]",
+        )
+        for index, record in enumerate(derived_terminal_artifacts)
+    ]
+    if {
+        (str(record["path"]), str(record["sha256"]))
+        for record in derived_terminal_records
+    } != terminal_keys:
+        raise ValueError(
+            f"{derivation_label} does not bind the terminal outputs."
+        )
+    unit_signatures = _list(
+        derivation.get("unit_signatures"),
+        f"{derivation_label}.unit_signatures",
+    )
+    derived_unit_count = _required_int(
+        derivation.get("unit_count"),
+        f"{derivation_label}.unit_count",
+        minimum=1,
+    )
+    if (
+        len(unit_signatures) != derived_unit_count
+        or derived_unit_count != unit_count
+    ):
+        raise ValueError(
+            f"{derivation_label} rendered-unit inventory is inconsistent."
+        )
+    for index, signature in enumerate(unit_signatures):
+        _required_hash(
+            signature,
+            f"{derivation_label}.unit_signatures[{index}]",
+        )
+
+    specs = _list(coverage.get("spec_artifacts"), f"{label}.spec_artifacts")
+    spec_count = _required_int(
+        coverage.get("spec_count"),
+        f"{label}.spec_count",
+        minimum=1,
+    )
+    if len(specs) != spec_count:
+        raise ValueError(f"{label} specification count is inconsistent.")
+    spec_records = [
+        _validate_source_hash_record(
+            record,
+            label=f"{label}.spec_artifacts[{index}]",
+        )
+        for index, record in enumerate(specs)
+    ]
+    spec_keys = {
+        (str(record["path"]), str(record["sha256"]))
+        for record in spec_records
+    }
+    if len(spec_keys) != spec_count:
+        raise ValueError(f"{label} repeats a specification artifact.")
+
+    documents = _list(
+        coverage.get("document_artifacts"),
+        f"{label}.document_artifacts",
+    )
+    document_count = _required_int(
+        coverage.get("document_count"),
+        f"{label}.document_count",
+        minimum=1,
+    )
+    if (
+        len(documents) != document_count
+        or document_count != spec_count
+    ):
+        raise ValueError(f"{label} document/specification counts disagree.")
+    document_records = [
+        _validate_source_hash_record(
+            record,
+            label=f"{label}.document_artifacts[{index}]",
+        )
+        for index, record in enumerate(documents)
+    ]
+    document_keys = {
+        (str(record["path"]), str(record["sha256"]))
+        for record in document_records
+    }
+    if len(document_keys) != document_count:
+        raise ValueError(f"{label} repeats a Veusz document artifact.")
+
+    audits = _list(
+        coverage.get("document_data_audits"),
+        f"{label}.document_data_audits",
+    )
+    if len(audits) != document_count:
+        raise ValueError(f"{label} document-audit count is inconsistent.")
+    audited_document_keys: set[tuple[str, str]] = set()
+    audited_spec_keys: set[tuple[str, str]] = set()
+    audited_unit_count = 0
+    for audit_index, raw_audit in enumerate(audits):
+        audit_label = f"{label}.document_data_audits[{audit_index}]"
+        audit = _object(raw_audit, audit_label)
+        _reject_unknown(
+            audit,
+            {
+                "kind",
+                "version",
+                "status",
+                "document",
+                "spec",
+                "units",
+                "unit_count",
+            },
+            label=audit_label,
+        )
+        if (
+            audit.get("kind") != "sciplot_veusz_spec_data_audit"
+            or audit.get("version") != 1
+            or audit.get("status") != "passed"
+        ):
+            raise ValueError(f"{audit_label} is not a passing VSZ data audit.")
+        audited_document = _validate_source_hash_record(
+            audit.get("document"),
+            label=f"{audit_label}.document",
+        )
+        audited_spec = _validate_source_hash_record(
+            audit.get("spec"),
+            label=f"{audit_label}.spec",
+        )
+        audited_document_keys.add(
+            (
+                str(audited_document["path"]),
+                str(audited_document["sha256"]),
+            )
+        )
+        audited_spec_keys.add(
+            (str(audited_spec["path"]), str(audited_spec["sha256"]))
+        )
+        audit_units = _list(audit.get("units"), f"{audit_label}.units")
+        audit_unit_count = _required_int(
+            audit.get("unit_count"),
+            f"{audit_label}.unit_count",
+            minimum=1,
+        )
+        if len(audit_units) != audit_unit_count:
+            raise ValueError(f"{audit_label} unit count is inconsistent.")
+        audited_unit_count += audit_unit_count
+        audit_identities: set[str] = set()
+        for unit_index, raw_unit in enumerate(audit_units):
+            unit_label = f"{audit_label}.units[{unit_index}]"
+            audit_unit = _object(raw_unit, unit_label)
+            _reject_unknown(
+                audit_unit,
+                {"identity", "kind", "datasets", "consumer_paths"},
+                label=unit_label,
+            )
+            audit_identity = _required_text(
+                audit_unit.get("identity"),
+                f"{unit_label}.identity",
+            )
+            if audit_identity in audit_identities:
+                raise ValueError(f"{audit_label} repeats a unit identity.")
+            audit_identities.add(audit_identity)
+            if audit_unit.get("kind") not in {"series", "scalar_field"}:
+                raise ValueError(f"{unit_label}.kind is unsupported.")
+            datasets = _list(
+                audit_unit.get("datasets"),
+                f"{unit_label}.datasets",
+            )
+            if not datasets:
+                raise ValueError(f"{unit_label} has no audited datasets.")
+            for dataset_index, raw_dataset in enumerate(datasets):
+                dataset_label = (
+                    f"{unit_label}.datasets[{dataset_index}]"
+                )
+                dataset = _object(raw_dataset, dataset_label)
+                _reject_unknown(
+                    dataset,
+                    {
+                        "name",
+                        "dimensions",
+                        "shape",
+                        "value_sha256",
+                        "x_value_sha256",
+                        "y_value_sha256",
+                    },
+                    label=dataset_label,
+                )
+                _required_text(dataset.get("name"), f"{dataset_label}.name")
+                dimensions = _required_int(
+                    dataset.get("dimensions"),
+                    f"{dataset_label}.dimensions",
+                    minimum=1,
+                )
+                if dimensions > 2:
+                    raise ValueError(
+                        f"{dataset_label}.dimensions must be 1 or 2."
+                    )
+                shape = _list(
+                    dataset.get("shape"),
+                    f"{dataset_label}.shape",
+                )
+                if len(shape) != dimensions:
+                    raise ValueError(f"{dataset_label} shape is inconsistent.")
+                for dimension_index, dimension in enumerate(shape):
+                    _required_int(
+                        dimension,
+                        f"{dataset_label}.shape[{dimension_index}]",
+                        minimum=0,
+                    )
+                _required_hash(
+                    dataset.get("value_sha256"),
+                    f"{dataset_label}.value_sha256",
+                )
+                if dimensions == 2:
+                    _required_hash(
+                        dataset.get("x_value_sha256"),
+                        f"{dataset_label}.x_value_sha256",
+                    )
+                    _required_hash(
+                        dataset.get("y_value_sha256"),
+                        f"{dataset_label}.y_value_sha256",
+                    )
+                elif (
+                    dataset.get("x_value_sha256") is not None
+                    or dataset.get("y_value_sha256") is not None
+                ):
+                    raise ValueError(
+                        f"{dataset_label} has unexpected coordinate hashes."
+                    )
+            consumer_paths = _list(
+                audit_unit.get("consumer_paths"),
+                f"{unit_label}.consumer_paths",
+            )
+            if not consumer_paths:
+                raise ValueError(f"{unit_label} has no visible VSZ consumer.")
+            for consumer_index, consumer in enumerate(consumer_paths):
+                _required_text(
+                    consumer,
+                    f"{unit_label}.consumer_paths[{consumer_index}]",
+                )
+    if (
+        audited_document_keys != document_keys
+        or audited_spec_keys != spec_keys
+        or audited_unit_count != unit_count
+    ):
+        raise ValueError(
+            f"{label} exact-current document audit inventory is inconsistent."
+        )
+    return coverage
+
+
 def _validate_completion_manifest(
     value: object,
     *,
@@ -3185,8 +3808,11 @@ def _validate_completion_manifest(
                 "initial_input_count",
                 "step_count",
                 "terminal_snapshot",
+                "terminal_snapshots",
+                "terminal_snapshot_count",
                 "transform_ledger_sha256",
                 "mapping_bound",
+                "rendered_source_coverage",
                 "raw_archive_bound",
             },
             label=f"{label}.source_lineage",
@@ -3202,17 +3828,112 @@ def _validate_completion_manifest(
                 f"{label}.source_lineage.{field}",
                 minimum=1,
             )
-        _object(
+        terminal_snapshot = _object(
             lineage.get("terminal_snapshot"),
             f"{label}.source_lineage.terminal_snapshot",
         )
+        _required_text(
+            terminal_snapshot.get("path"),
+            f"{label}.source_lineage.terminal_snapshot.path",
+        )
+        _required_hash(
+            terminal_snapshot.get("sha256"),
+            f"{label}.source_lineage.terminal_snapshot.sha256",
+        )
+        terminal_snapshots = lineage.get("terminal_snapshots")
+        terminal_snapshot_count = lineage.get("terminal_snapshot_count")
+        normalized_terminal_snapshots = [terminal_snapshot]
+        if (
+            terminal_snapshots is None
+            and terminal_snapshot_count is not None
+        ) or (
+            terminal_snapshots is not None
+            and terminal_snapshot_count is None
+        ):
+            raise ValueError(
+                f"{label}.source_lineage plural terminal snapshot fields "
+                "must appear together."
+            )
+        if terminal_snapshots is not None:
+            records = _list(
+                terminal_snapshots,
+                f"{label}.source_lineage.terminal_snapshots",
+            )
+            count = _required_int(
+                terminal_snapshot_count,
+                f"{label}.source_lineage.terminal_snapshot_count",
+                minimum=1,
+            )
+            normalized = [
+                _object(
+                    record,
+                    f"{label}.source_lineage.terminal_snapshots[{index}]",
+                )
+                for index, record in enumerate(records)
+            ]
+            if len(normalized) != count or normalized[0] != terminal_snapshot:
+                raise ValueError(
+                    f"{label}.source_lineage terminal snapshot inventory "
+                    "is inconsistent."
+                )
+            normalized_terminal_snapshots = normalized
+            for index, record in enumerate(normalized_terminal_snapshots):
+                _required_text(
+                    record.get("path"),
+                    (
+                        f"{label}.source_lineage."
+                        f"terminal_snapshots[{index}].path"
+                    ),
+                )
+                _required_hash(
+                    record.get("sha256"),
+                    (
+                        f"{label}.source_lineage."
+                        f"terminal_snapshots[{index}].sha256"
+                    ),
+                )
         _required_hash(
             lineage.get("transform_ledger_sha256"),
             f"{label}.source_lineage.transform_ledger_sha256",
         )
-        for field in ("mapping_bound", "raw_archive_bound"):
-            if not isinstance(lineage.get(field), bool):
+        mapping_bound = lineage.get("mapping_bound")
+        raw_archive_bound = lineage.get("raw_archive_bound")
+        for field, field_value in (
+            ("mapping_bound", mapping_bound),
+            ("raw_archive_bound", raw_archive_bound),
+        ):
+            if not isinstance(field_value, bool):
                 raise ValueError(f"{label}.source_lineage.{field} must be boolean.")
+        if mapping_bound == raw_archive_bound:
+            raise ValueError(
+                f"{label}.source_lineage must bind exactly one of mapping "
+                "or raw-archive authority."
+            )
+        rendered_source_coverage = lineage.get("rendered_source_coverage")
+        if mapping_bound is True:
+            validated_coverage = _validate_rendered_source_coverage(
+                rendered_source_coverage,
+                label=f"{label}.source_lineage.rendered_source_coverage",
+            )
+            lineage_terminal_keys = {
+                (str(record.get("path")), str(record.get("sha256")))
+                for record in normalized_terminal_snapshots
+            }
+            coverage_terminal_keys = {
+                (str(record.get("path")), str(record.get("sha256")))
+                for record in validated_coverage["terminal_outputs"]
+                if isinstance(record, dict)
+            }
+            if coverage_terminal_keys != lineage_terminal_keys:
+                raise ValueError(
+                    f"{label}.source_lineage coverage and terminal snapshots "
+                    "disagree."
+                )
+        elif rendered_source_coverage is not None:
+            raise ValueError(
+                f"{label}.source_lineage has rendered mapping coverage "
+                "without a mapping."
+            )
     elif kind == "sciplot_composition_delivery":
         _reject_unknown(
             manifest,
@@ -3511,6 +4232,68 @@ def _validate_transitions(events: list[dict[str, Any]]) -> None:
         history.append(event_type)
 
 
+def _rederive_regular_completion_lineage(
+    *,
+    preregistration: dict[str, Any],
+    witness: dict[str, Any],
+    completion: dict[str, Any],
+) -> None:
+    normalized_manifest = _object(
+        completion.get("manifest"),
+        "completion manifest",
+    )
+    if normalized_manifest.get("kind") != "sciplot_run":
+        return
+    project_root = _preregistered_project_root(preregistration)
+    manifest_path = require_within(
+        project_root,
+        Path(
+            _required_text(
+                normalized_manifest.get("path"),
+                "completion manifest path",
+            )
+        ),
+        label="Completion SciPlot run manifest",
+    )
+    payload, payload_sha256 = _read_json_snapshot(
+        manifest_path,
+        "Completion SciPlot run manifest",
+    )
+    if payload_sha256 != _required_hash(
+        normalized_manifest.get("sha256"),
+        "completion manifest sha256",
+    ):
+        raise ValueError(
+            "Completion SciPlot run manifest changed after evidence recording."
+        )
+    if payload.get("kind") != "sciplot_run":
+        raise ValueError("Completion path no longer contains a SciPlot run.")
+    optional = _object(
+        witness.get("optional_evidence"),
+        "witness optional evidence",
+    )
+    witnessed_mapping = optional.get("data_mapping")
+    rederived = verify_regular_source_lineage(
+        payload,
+        preregistration=preregistration,
+        witnessed_mapping=(
+            witnessed_mapping
+            if isinstance(witnessed_mapping, dict)
+            else None
+        ),
+    )
+    if normalized_manifest.get("source_lineage") != rederived:
+        raise ValueError(
+            "Stored completion source lineage differs from live replay."
+        )
+    if normalized_manifest.get("transform_ledger_sha256") != rederived.get(
+        "transform_ledger_sha256"
+    ):
+        raise ValueError(
+            "Stored completion transform-ledger hash differs from live replay."
+        )
+
+
 def _validate_completion_relations(events: list[dict[str, Any]]) -> None:
     sessions: dict[str, dict[str, dict[str, Any]]] = {}
     preregistrations: list[dict[str, Any]] = []
@@ -3543,6 +4326,11 @@ def _validate_completion_relations(events: list[dict[str, Any]]) -> None:
                 preregistration,
                 witness,
             )
+            _rederive_regular_completion_lineage(
+                preregistration=preregistration,
+                witness=witness,
+                completion=completion,
+            )
         else:
             derived_checks = {key: False for key in EXPECTED_EVIDENCE}
         if stored_checks != derived_checks:
@@ -3562,16 +4350,39 @@ def _validate_completion_relations(events: list[dict[str, Any]]) -> None:
             )
 
 
-def _read_events_unlocked(ledger_path: Path) -> list[dict[str, Any]]:
+def _read_ledger_bytes_unlocked(ledger_path: Path) -> bytes:
     ledger = ledger_path.expanduser().resolve()
     if not ledger.is_file():
-        return []
+        return b""
+    with ledger.open("rb") as handle:
+        before = os.fstat(handle.fileno())
+        data = handle.read()
+        after = os.fstat(handle.fileno())
+    if (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+    ) != (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+    ) or len(data) != after.st_size:
+        raise ValueError(
+            "Session evidence ledger changed during one snapshot read."
+        )
+    return data
+
+
+def _parse_events_bytes(data: bytes) -> list[dict[str, Any]]:
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError("Session evidence ledger is not valid UTF-8.") from exc
     events: list[dict[str, Any]] = []
     previous = GENESIS_SHA256
-    for line_number, line in enumerate(
-        ledger.read_text(encoding="utf-8").splitlines(),
-        1,
-    ):
+    for line_number, line in enumerate(text.splitlines(), 1):
         if not line.strip():
             continue
         try:
@@ -3596,9 +4407,24 @@ def _read_events_unlocked(ledger_path: Path) -> list[dict[str, Any]]:
     return events
 
 
+def _read_events_unlocked(
+    ledger_path: Path,
+    *,
+    ledger_data: bytes | None = None,
+) -> list[dict[str, Any]]:
+    data = (
+        _read_ledger_bytes_unlocked(ledger_path)
+        if ledger_data is None
+        else ledger_data
+    )
+    return _parse_events_bytes(data)
+
+
 def _verify_head_unlocked(
     ledger_path: Path,
     events: list[dict[str, Any]],
+    *,
+    ledger_data: bytes | None = None,
 ) -> dict[str, Any]:
     ledger = ledger_path.expanduser().resolve()
     head_path = _head_path(ledger)
@@ -3635,7 +4461,11 @@ def _verify_head_unlocked(
         != ledger
     ):
         raise ValueError("Session evidence head points to another ledger.")
-    data = ledger.read_bytes()
+    data = (
+        _read_ledger_bytes_unlocked(ledger)
+        if ledger_data is None
+        else ledger_data
+    )
     if (
         _required_int(head.get("event_count"), "head event_count") != len(events)
         or _required_hash(
@@ -3671,9 +4501,85 @@ def _read_verified_events(ledger_path: Path) -> list[dict[str, Any]]:
                 "Session evidence ledger has a pending append; run "
                 "`sciplot sessions recover LEDGER` before trusting status."
             )
-        events = _read_events_unlocked(ledger_path)
-        _verify_head_unlocked(ledger_path, events)
+        data = _read_ledger_bytes_unlocked(ledger_path)
+        events = _read_events_unlocked(ledger_path, ledger_data=data)
+        _verify_head_unlocked(
+            ledger_path,
+            events,
+            ledger_data=data,
+        )
         return events
+
+
+def verified_session_evidence_snapshot(ledger_path: Path) -> dict[str, Any]:
+    """Return one lock-consistent, replay-verified ledger snapshot.
+
+    Downstream evidence consumers must not reconstruct trust from the public
+    status summary alone.  This contract exposes the validated source events
+    together with the exact ledger bytes they came from while retaining the
+    pending-append and companion-head checks.
+    """
+
+    ledger = ledger_path.expanduser().resolve()
+    with _ledger_lock(ledger, exclusive=False):
+        pending = _pending_path(ledger)
+        if pending.exists():
+            raise ValueError(
+                "Session evidence ledger has a pending append; run "
+                "`sciplot sessions recover LEDGER` before trusting evidence."
+            )
+        data = _read_ledger_bytes_unlocked(ledger)
+        events = _read_events_unlocked(ledger, ledger_data=data)
+        head = _verify_head_unlocked(
+            ledger,
+            events,
+            ledger_data=data,
+        )
+        event_prefixes: list[dict[str, Any]] = []
+        event_index = 0
+        prefix_hasher = hashlib.sha256()
+        prefix_size = 0
+        for raw_line in data.splitlines(keepends=True):
+            prefix_hasher.update(raw_line)
+            prefix_size += len(raw_line)
+            if not raw_line.strip():
+                continue
+            if event_index >= len(events):
+                raise ValueError(
+                    "Session evidence byte-prefix accounting exceeded the "
+                    "validated event sequence."
+                )
+            event = events[event_index]
+            event_prefixes.append(
+                {
+                    "event_sha256": event["event_sha256"],
+                    "prefix_size_bytes": prefix_size,
+                    "prefix_sha256": prefix_hasher.hexdigest(),
+                }
+            )
+            event_index += 1
+        if event_index != len(events):
+            raise ValueError(
+                "Session evidence byte-prefix accounting did not cover every "
+                "validated event."
+            )
+        return {
+            "kind": "sciplot_verified_session_evidence_snapshot",
+            "version": 1,
+            "status": "passed",
+            "ledger": str(ledger),
+            "ledger_sha256": hashlib.sha256(data).hexdigest(),
+            "ledger_size_bytes": len(data),
+            "event_count": len(events),
+            "last_event_sha256": head["last_event_sha256"],
+            "head": head["head"],
+            "events": json.loads(json.dumps(events)),
+            "event_prefixes": event_prefixes,
+            "limitations": [
+                "This is a local hash-chain and head-checkpoint proof, not a signed remote identity proof.",
+                "Owner identity and reopen remain explicit attestations.",
+            ],
+        }
 
 
 def _write_head_unlocked(
@@ -4070,6 +4976,10 @@ def preregister_session(
     model: str | None = None,
     canonical_task: str | None = None,
     attempt: int | None = None,
+    promotion_candidate_id: str | None = None,
+    promotion_decision_sha256: str | None = None,
+    promotion_plan_sha256: str | None = None,
+    promotion_assertion_ids: list[str] | None = None,
     session_id: str | None = None,
 ) -> dict[str, Any]:
     ledger = ledger_path.expanduser().resolve()
@@ -4125,6 +5035,45 @@ def preregister_session(
             "No existing session or artifact may be retroactively promoted into this preregistration.",
         ],
     }
+    promotion_values = (
+        promotion_candidate_id,
+        promotion_decision_sha256,
+        promotion_plan_sha256,
+        promotion_assertion_ids,
+    )
+    if any(value is not None for value in promotion_values):
+        if not all(value is not None for value in promotion_values):
+            raise ValueError(
+                "Promotion preregistration requires candidate, decision, and "
+                "plan hashes together."
+            )
+        payload["promotion_binding"] = {
+            "candidate_id": _required_hash(
+                promotion_candidate_id,
+                "promotion_candidate_id",
+            ),
+            "decision_sha256": _required_hash(
+                promotion_decision_sha256,
+                "promotion_decision_sha256",
+            ),
+            "plan_sha256": _required_hash(
+                promotion_plan_sha256,
+                "promotion_plan_sha256",
+            ),
+            "assertion_ids": sorted(
+                {
+                    _required_hash(
+                        value,
+                        "promotion_assertion_id",
+                    )
+                    for value in (promotion_assertion_ids or [])
+                }
+            ),
+        }
+        if not payload["promotion_binding"]["assertion_ids"]:
+            raise ValueError(
+                "Promotion preregistration requires at least one assertion ID."
+            )
     _validate_preregistration(payload)
 
     def assert_preregistration_available(
@@ -4471,12 +5420,24 @@ def _completion_evidence_checks(
                 and value.get("raw_inputs_mutated") is False
                 and int(value.get("index") or -1) > int(request["index"])
             )
-    checks["data_mapping"] = bool(
+    provider_disabled_promotion_mapping = bool(
+        _is_provider_disabled_promotion_mapping(preregistration)
+        and checks["provider_disabled"] is True
+    )
+    safe_mapping = bool(
         isinstance(mapping, dict)
-        and mapping.get("provider") == expected_provider
         and mapping.get("raw_inputs_unchanged") is True
         and mapping.get("handoff_allowed") is True
-        and mapping_handoffs
+    )
+    checks["data_mapping"] = bool(
+        safe_mapping
+        and (
+            (
+                mapping.get("provider") == expected_provider
+                and mapping_handoffs
+            )
+            or provider_disabled_promotion_mapping
+        )
     )
     review = optional.get("review")
     checks["review_sidecar"] = (
@@ -5373,6 +6334,18 @@ def session_evidence_schema() -> dict[str, Any]:
                 "native_composition": "at_least_one",
             },
         },
+        "promotion_verification": {
+            "preregistered_binding_fields": [
+                "assertion_ids",
+                "candidate_id",
+                "decision_sha256",
+                "plan_sha256",
+            ],
+            "all_or_none": True,
+            "formal_real_scope_required": True,
+            "provider_disabled_required": True,
+            "retroactive_binding_allowed": False,
+        },
         "trust_boundary": [
             "Status recomputes classifications from preregistration, witness, and raw completion fields.",
             "A pending append blocks all status claims until explicit recovery.",
@@ -5400,5 +6373,6 @@ __all__ = [
     "recover_session_ledger",
     "session_evidence_schema",
     "session_ledger_status",
+    "verified_session_evidence_snapshot",
     "witness_session_reopen",
 ]

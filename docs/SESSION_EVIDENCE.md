@@ -162,6 +162,59 @@ missing `--round-id`, a dirty or uncommitted worktree, and synthetic source
 class. The non-counting `formal_contract_probe` accepts only the synthetic
 source class while still enforcing the clean frozen-build contract.
 
+When a provider-disabled session is recertifying an approved reviewed-promotion
+candidate, preregistration must additionally bind all three identities and one
+or more lane-specific behavior assertions before work begins:
+
+```bash
+  --promotion-candidate-id CANDIDATE_SHA256 \
+  --promotion-decision-sha256 DECISION_SHA256 \
+  --promotion-plan-sha256 PLAN_SHA256 \
+  --promotion-assertion-id ASSERTION_SHA256
+```
+
+The identity fields and assertion list are all-or-none, formal-real-only, and
+cannot be attached retroactively. Repeat `--promotion-assertion-id` when a
+lane has multiple assertions. Promotion verification requires the sorted,
+exact assertion set declared for that lane and rejects an otherwise successful
+session from the same lane or commit when the binding is absent or the
+final manifest does not contain the complete canonical candidate. Canvas
+candidates additionally require one assertion per canonical operation and
+must reproduce each setting or widget effect in the reopened VSZ. Mapping
+candidates require a separate assertion that replays the witnessed proposal,
+mapped outputs, transformation ledger, and final plotted source lineage;
+copying the canonical JSON into a manifest is insufficient. Generic health
+fields do not qualify as promotion assertions.
+
+Every session with this `promotion_binding` is verification-only and
+explicitly non-voting. `learning collect` records
+`promotion_verification_session_non_voting` and does not turn its mapping or
+Canvas activity into a new observation. Verification evidence therefore
+cannot recursively manufacture promotion evidence.
+
+For a mapping-candidate recertification, preregister both
+`--expected provider_disabled` and `--expected data_mapping`, but do not pass
+`--provider` or `--model`. The mapping execution still records which provider
+originally proposed the mapping; that historical identity does not mean the
+recertification runtime is connected to a provider. The reopened journal must
+prove provider-disabled state and contain no Assistant request, proposal,
+handoff, commit, or rollback activity. Completion accepts the mapping only
+after the exact execution and final source lineage are independently replayed.
+
+After completion, obtain the exact facts for the externally signed
+verification receipt with:
+
+```bash
+skill/scripts/sciplot learning session-binding \
+  /absolute/path/to/session_evidence.jsonl SESSION_ID --json
+```
+
+The binding covers the ledger byte prefix through completion, the three event
+hashes, and current authority artifact hashes. Use the returned canonical path
+and fields unchanged; path aliases are rejected and cannot duplicate one
+session. SciPlot computes these powerless facts but never creates the receipt,
+private key, or signature.
+
 Perform the task through SciPlot, save the exact-current VSZ, export the
 canonical PDF and 300 dpi TIFF, and let the normal QA/delivery path finish.
 Then close the Canvas, reopen that project yourself, inspect the reopened
@@ -183,9 +236,73 @@ confirmed mapping handoff. For a `data_mapping` session, preregister the exact
 mapping `source_root` directory as `--source`, not only one member file: the
 directory inventory is the first transform input and every proposal source
 hash must equal that inventory. The final transform ledger must begin with the
-exact confirmed mapping step and end at the plotted data snapshot. For native
-composition, use `--composition .../composition.json` instead of
-`--canvas-session` and `--document`.
+exact confirmed mapping step and end at the plotted data snapshot. Auto and
+explicit-recipe routes record their processed source; a direct multi-table
+mapping records every concrete mapped table. If the final transform has
+multiple outputs, the plotted snapshot inventory must equal that complete
+terminal set, so a directory alias or one selected member cannot hide silent
+omission. Independently, every rendered Veusz curve, categorical group, or
+scalar field records the source file's canonical path and SHA-256. Completion
+captures both the exact specifications and exact-current VSZ files into
+private read-only snapshots, then reopens only those bytes. It quantizes the
+specification expectation once to Veusz's persisted `.6e` token and compares
+the reopened value exactly; extra precision in a hand-edited VSZ is not
+rounded away. Every expected unit must retain a real visible line, marker,
+fill, native boxplot, or scalar-image channel, the categorical boxplot
+inventory must be exact, and unapproved visible data plotters are rejected.
+Independently, the verifier replays the exact terminal tables through the
+renderer's data-selection and transform semantics and requires those derived
+units, the specification, and the reopened VSZ to agree. Terminal tables are
+captured through regular-file descriptors with `O_NOFOLLOW`; replay consumes
+only private read-only copies, maps their provenance back to the original
+canonical path/SHA-256, and rechecks the original identity before returning.
+The comparison binds stable series name, visible label, x/y dataset identity,
+and order. The reopened document must also expose the exact x/y axis labels,
+directions, numeric or categorical mode, linear or logarithmic scale, bounds,
+tick formats, major and minor ticks, tick visibility, text sizes, line and
+tick dimensions, legend keys, direct-label text/position/alignment/size/color/
+background/border/order, complete visible-label inventory,
+categorical text dataset, category-axis labels, and XY/boxplot order. Scalar
+fields additionally bind the independently derived z range, color scale and
+ticks, a custom colormap with at least two distinct fully opaque colors,
+inversion, field mapping/draw mode, colorbar text,
+line and tick dimensions, and contour inventories to the reopened image,
+custom colormap definition, colorbar, and contour widgets. Source-evidenced
+automatic renders use a closed shape inventory: only the exact page
+background, bounded source-bound reference bands, exact native reference lines,
+and an optional highly transparent local colorbar background are allowed.
+Reference bands use logarithmic geometry on logarithmic axes; reference lines
+bind point-to-point geometry, width, style, color, transparency, and visibility.
+Unmanaged rect, ellipse, line, polygon, image-file, or SVG overlays fail closed.
+External
+requests cannot self-declare that their source is already preprocessed, and a
+manifest cannot self-attest its own terminal request. The verifier rebuilds a
+closed request from the confirmed authoritative request and private terminal
+table snapshots, then treats any manifest projection only as a declaration
+that must match. An explicit split policy is reproduced into the exact panel
+plan and per-panel series selection. Unconfirmed automatic splitting and
+multi-metric bundles without an independently persisted panel plan cannot
+produce formal source evidence. Two unit-like metadata rows are ambiguous and
+stop rather than guessing sample labels. Duplicate display labels stop before
+label-based selection or split routing; unknown or fully hidden selections
+stop instead of silently restoring all curves. The verifier then recomputes
+coverage: every
+terminal plotted snapshot must contribute to at least one rendered unit, no
+rendered unit may cite a source outside that terminal inventory, and each
+output of a multi-source mapping must contribute.
+A display label or total series count cannot satisfy this test, so
+case-insensitive aliases, an injected table, one non-plottable table, and a
+data-edited stale VSZ all fail closed; coordinated request/spec/VSZ forgery,
+axis or series relabeling, reordered series, arbitrary visible text, hidden
+marks, missing boxes, changed scalar color semantics, extra plotters,
+split-plan tampering, and file-swap races also fail.
+Style-only VSZ edits remain valid. A
+deterministic transform of one mapped output may use the explicit
+`transitive_single_output` result, while its transform ledger and terminal
+snapshot remain mandatory. Every ledger replay reopens the bound run manifest
+and rederives this source lineage instead of trusting the stored completion
+object. For native composition, use `--composition .../composition.json`
+instead of `--canvas-session` and `--document`.
 
 Do not edit the witnessed authority. Complete it against the ready Studio
 manifest or composition delivery manifest:
