@@ -311,6 +311,22 @@ def _veusz_layout_report(
             "bottom": float(contract.global_frame.bottom_margin_mm),
             "top": float(contract.global_frame.top_margin_mm),
         }
+        profile_id = str(spec.get("figure_profile_id") or "").strip()
+        frame_contract = (
+            spec.get("frame_alignment")
+            if isinstance(spec.get("frame_alignment"), dict)
+            else {}
+        )
+        profile_margins = (
+            frame_contract.get("margins_mm")
+            if profile_id and isinstance(frame_contract.get("margins_mm"), dict)
+            else None
+        )
+        if profile_margins is not None:
+            expected_margins = {
+                side: float(profile_margins[side])
+                for side in ("left", "right", "bottom", "top")
+            }
         style = spec.get("style") if isinstance(spec.get("style"), dict) else {}
         actual_margins = style.get("margins_mm") if isinstance(style.get("margins_mm"), dict) else {}
         margin_errors = {
@@ -327,6 +343,7 @@ def _veusz_layout_report(
             "margin_error_mm": margin_errors,
             "tolerance_mm": tolerance_mm,
             "outside_legend_allowed": False,
+            "figure_profile_id": profile_id or None,
         }
         summary["frame_alignment"] = frame_alignment
         if frame_alignment["status"] != "aligned":
