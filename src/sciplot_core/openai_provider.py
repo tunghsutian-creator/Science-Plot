@@ -926,6 +926,34 @@ class OpenAIResponsesProvider:
             "allowed_proposal_kinds": list(request.allowed_proposal_kinds),
             "context": request.context,
         }
+        preview = request.visual_preview
+        if preview is not None:
+            user_payload["visual_preview"] = {
+                "sha256": preview["sha256"],
+                "width": preview["width"],
+                "height": preview["height"],
+                "revision": preview["revision"],
+            }
+        content: list[dict[str, Any]] = [
+            {
+                "type": "input_text",
+                "text": json.dumps(
+                    user_payload,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                ),
+            }
+        ]
+        if preview is not None:
+            content.append(
+                {
+                    "type": "input_image",
+                    "image_url": f"data:image/png;base64,{preview['base64']}",
+                    "detail": "high",
+                }
+            )
         return {
             "model": self.config.model,
             "store": False,
@@ -936,18 +964,7 @@ class OpenAIResponsesProvider:
             "input": [
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": json.dumps(
-                                user_payload,
-                                ensure_ascii=False,
-                                sort_keys=True,
-                                separators=(",", ":"),
-                                allow_nan=False,
-                            ),
-                        }
-                    ],
+                    "content": content,
                 }
             ],
             "text": {

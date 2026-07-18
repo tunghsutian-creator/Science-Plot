@@ -736,7 +736,27 @@ def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
     menu.addAction(export_action)
     if context is None:
         export_action.setToolTip("Open a SciPlot project package to enable SciPlot QA export.")
-    window._sciplot_actions = getattr(window, "_sciplot_actions", []) + [export_action]
+    actions = [export_action]
+    try:
+        from sciplot_gui.studio_assistant import attach_studio_assistant
+
+        assistant = attach_studio_assistant(window, document_path)
+        menu.addSeparator()
+        assistant_action = assistant.dock.toggleViewAction()
+        assistant_action.setText("Show SciPlot AI")
+        menu.addAction(assistant_action)
+        actions.append(assistant_action)
+    except Exception as exc:
+        assistant_unavailable = QtGui.QAction(
+            f"SciPlot AI unavailable: {type(exc).__name__}",
+            window,
+        )
+        assistant_unavailable.setEnabled(False)
+        assistant_unavailable.setToolTip(str(exc))
+        menu.addSeparator()
+        menu.addAction(assistant_unavailable)
+        actions.append(assistant_unavailable)
+    window._sciplot_actions = getattr(window, "_sciplot_actions", []) + actions
 
 
 def _project_context_for_document(document_path: Path) -> dict[str, Path] | None:

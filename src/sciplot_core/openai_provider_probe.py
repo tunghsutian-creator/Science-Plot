@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
+import struct
 import tempfile
 import threading
 import time
 import warnings
+import zlib
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -49,6 +53,38 @@ def _check(
 def _sse_payload(event_type: str, payload: dict[str, Any]) -> bytes:
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     return f"event: {event_type}\ndata: {encoded}\n\n".encode()
+
+
+def _png_chunk(chunk_type: bytes, payload: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(payload))
+        + chunk_type
+        + payload
+        + struct.pack(">I", zlib.crc32(chunk_type + payload) & 0xFFFFFFFF)
+    )
+
+
+def _visual_preview(
+    *,
+    revision: int = 7,
+    width: int = 2,
+    height: int = 1,
+) -> dict[str, Any]:
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    scanline = b"\x00" + (b"\x20\x60\xa0" * width)
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", ihdr)
+        + _png_chunk(b"IDAT", zlib.compress(scanline * height))
+        + _png_chunk(b"IEND", b"")
+    )
+    return {
+        "base64": base64.b64encode(png).decode("ascii"),
+        "sha256": hashlib.sha256(png).hexdigest(),
+        "width": width,
+        "height": height,
+        "revision": revision,
+    }
 
 
 def _completed_response(
@@ -461,6 +497,7 @@ def _request(
     *,
     allowed: bool = True,
     version: int = 3,
+    visual_preview: dict[str, Any] | None = None,
 ) -> AssistantRequest:
     return AssistantRequest(
         transaction_id=str(uuid4()),
@@ -469,6 +506,7 @@ def _request(
         base_revision=7,
         context=_context(allowed=allowed, version=version),
         allowed_proposal_kinds=("canvas_operation_batch",),
+        visual_preview=visual_preview,
     )
 
 
@@ -587,6 +625,161 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
         wire = OpenAIProviderWireFixture()
         provider = wire.provider()
         success_request = _request("success")
+        legacy_payload = success_request.to_dict()
+        legacy_roundtrip = AssistantRequest.from_dict(legacy_payload)
+        legacy_keys = {
+            "kind",
+            "version",
+            "request_id",
+            "transaction_id",
+            "provider_id",
+            "intent",
+            "base_revision",
+            "context",
+            "context_sha256",
+            "allowed_proposal_kinds",
+            "created_at",
+        }
+        checks.append(
+            _check(
+                "legacy_request_compatibility",
+                "Requests without a visual preview preserve the version-1 payload shape and hash",
+                set(legacy_payload) == legacy_keys
+                and "visual_preview" not in legacy_payload
+                and legacy_roundtrip.to_dict() == legacy_payload
+                and legacy_roundtrip.payload_sha256
+                == success_request.payload_sha256,
+                {
+                    "keys": sorted(legacy_payload),
+                    "hash": success_request.payload_sha256,
+                },
+            )
+        )
+
+        preview = _visual_preview()
+        preview_request = _request("success", visual_preview=preview)
+        preview_payload = preview_request.to_dict()
+        preview_roundtrip = AssistantRequest.from_dict(preview_payload)
+        preview_response, _ = _generate(provider, preview_roundtrip)
+        preview_body = wire.records[-1]["body"]
+        preview_content = preview_body["input"][0]["content"]
+        preview_text = preview_content[0]["text"]
+        preview_user_payload = json.loads(preview_text)
+        preview_image = preview_content[1]
+        decoded_preview = base64.b64decode(
+            preview_image["image_url"].removeprefix(
+                "data:image/png;base64,"
+            ),
+            validate=True,
+        )
+        checks.append(
+            _check(
+                "visual_preview_roundtrip",
+                "The exact-current PNG survives request roundtrip and remains bound to the request hash",
+                preview_roundtrip.to_dict() == preview_payload
+                and preview_roundtrip.payload_sha256
+                == preview_request.payload_sha256
+                and preview_roundtrip.payload_sha256
+                != success_request.payload_sha256
+                and preview_response.request_sha256
+                == preview_request.payload_sha256
+                and hashlib.sha256(decoded_preview).hexdigest()
+                == preview["sha256"],
+                {
+                    "sha256": preview["sha256"],
+                    "width": preview["width"],
+                    "height": preview["height"],
+                    "revision": preview["revision"],
+                },
+            )
+        )
+        preview_metadata = {
+            "sha256": preview["sha256"],
+            "width": preview["width"],
+            "height": preview["height"],
+            "revision": preview["revision"],
+        }
+        checks.append(
+            _check(
+                "responses_visual_input",
+                "Responses input carries one high-detail PNG image while text contains metadata only",
+                len(preview_content) == 2
+                and preview_content[0]["type"] == "input_text"
+                and preview_image
+                == {
+                    "type": "input_image",
+                    "image_url": (
+                        f"data:image/png;base64,{preview['base64']}"
+                    ),
+                    "detail": "high",
+                }
+                and preview_user_payload.get("visual_preview")
+                == preview_metadata
+                and "base64"
+                not in preview_user_payload.get("visual_preview", {})
+                and preview["base64"] not in preview_text
+                and "data:image/png;base64," not in preview_text,
+                {
+                    "content_types": [
+                        item.get("type") for item in preview_content
+                    ],
+                    "metadata": preview_user_payload.get("visual_preview"),
+                },
+            )
+        )
+
+        invalid_base64 = dict(preview)
+        invalid_base64["base64"] = "not valid base64"
+        invalid_hash = dict(preview)
+        invalid_hash["sha256"] = "0" * 64
+        invalid_revision = dict(preview)
+        invalid_revision["revision"] = 6
+        invalid_dimensions = dict(preview)
+        invalid_dimensions["width"] = preview["width"] + 1
+        invalid_png_bytes = b"not a PNG"
+        invalid_png = {
+            "base64": base64.b64encode(invalid_png_bytes).decode("ascii"),
+            "sha256": hashlib.sha256(invalid_png_bytes).hexdigest(),
+            "width": 1,
+            "height": 1,
+            "revision": 7,
+        }
+        oversized_bytes = b"\x00" * (4 * 1024 * 1024 + 1)
+        oversized = {
+            "base64": base64.b64encode(oversized_bytes).decode("ascii"),
+            "sha256": hashlib.sha256(oversized_bytes).hexdigest(),
+            "width": 1,
+            "height": 1,
+            "revision": 7,
+        }
+        unknown_field = dict(preview)
+        unknown_field["path"] = "/tmp/preview.png"
+
+        def preview_rejected(candidate: dict[str, Any]) -> bool:
+            try:
+                _request("success", visual_preview=candidate)
+            except ValueError:
+                return True
+            return False
+
+        preview_rejections = {
+            "base64": preview_rejected(invalid_base64),
+            "sha256": preview_rejected(invalid_hash),
+            "revision": preview_rejected(invalid_revision),
+            "dimensions": preview_rejected(invalid_dimensions),
+            "png": preview_rejected(invalid_png),
+            "size": preview_rejected(oversized),
+            "unknown_field": preview_rejected(unknown_field),
+        }
+        checks.append(
+            _check(
+                "visual_preview_rejections",
+                "Invalid base64, hash, revision, dimensions, PNG bytes, size, and fields are rejected locally",
+                all(preview_rejections.values()),
+                preview_rejections,
+            )
+        )
+
         success, progress = _generate(provider, success_request)
         batch = CanvasOperationBatch.from_dict(dict(success.proposal or {}))
         operation = batch.operations[0]

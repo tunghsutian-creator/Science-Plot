@@ -313,7 +313,7 @@ VALIDATED_VISUAL_OVERRIDE_KEYS = frozenset(
         "palette_preset",
         "visual_theme_id",
     }
-)
+) - UNIFIED_HARD_OPTION_KEYS
 
 DELIVERY_DIR = "delivery"
 # User-facing delivery has exactly four artifact groups plus one launcher.

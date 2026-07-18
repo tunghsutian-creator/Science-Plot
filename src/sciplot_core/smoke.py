@@ -301,6 +301,11 @@ def _portable_launcher_probe(
     project_dir: Path,
     *,
     ignore_runtime_overrides: bool = False,
+    launcher_names: tuple[str, ...] = (
+        "Open_in_SciPlot_Studio.command",
+        "Open_in_Veusz.command",
+        "Export_Edited_Veusz.command",
+    ),
 ) -> dict[str, Any]:
     """Exercise generated launcher discovery without starting an interactive GUI."""
 
@@ -315,12 +320,20 @@ def _portable_launcher_probe(
             "SCIPLOT_PYTHON",
         ):
             env.pop(key, None)
-    for name in (
-        "Open_in_SciPlot_Studio.command",
-        "Open_in_Veusz.command",
-        "Export_Edited_Veusz.command",
-    ):
+    for name in launcher_names:
         launcher = project_dir / name
+        if not launcher.is_file():
+            results.append(
+                {
+                    "launcher": str(launcher),
+                    "exists": False,
+                    "returncode": None,
+                    "qt_smoke_passed": False,
+                    "settings_noise": False,
+                    "stderr": "Launcher is missing.",
+                }
+            )
+            continue
         completed = subprocess.run(
             [str(launcher), "--check"],
             text=True,
@@ -358,25 +371,29 @@ def _relocated_delivery_launcher_probe(
 ) -> dict[str, Any]:
     """Copy an editable delivery elsewhere and prove its launchers still load the VSZ."""
 
-    projects = (
-        delivery.get("editable_vsz_projects")
-        if isinstance(delivery.get("editable_vsz_projects"), list)
-        else []
-    )
-    project = projects[0] if projects and isinstance(projects[0], dict) else {}
-    source_value = project.get("path")
+    source_value = delivery.get("path")
     if not source_value:
         return {
             "passed": False,
-            "reason": "Delivery did not publish an editable VSZ project.",
+            "reason": "Delivery did not publish a portable package path.",
         }
     source = Path(str(source_value)).expanduser().resolve()
+    if not source.is_dir():
+        return {
+            "passed": False,
+            "reason": "Delivery package path is not a directory.",
+            "source": str(source),
+        }
     relocated = run_root / "relocated_delivery" / source.name
     if relocated.exists():
         shutil.rmtree(relocated)
     relocated.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, relocated)
-    probe = _portable_launcher_probe(relocated, ignore_runtime_overrides=True)
+    probe = _portable_launcher_probe(
+        relocated,
+        ignore_runtime_overrides=True,
+        launcher_names=("Open_in_Veusz.command",),
+    )
     probe.update(
         {
             "source": str(source),

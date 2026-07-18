@@ -351,7 +351,6 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
             "render_options": {
                 "size": "120x55",
                 "palette_preset": "tol_bright",
-                "line_width_pt": 1.2,
             }
         },
     )
@@ -360,6 +359,22 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
         source_package=ready_source,
         mapping_package=ready_mapping,
         render_request=safe_visual_render_request,
+        registry=registry,
+    )
+    hard_style_render_request = _render_request(
+        _semantic(confidence=95.0),
+        request_patch={
+            "render_options": {
+                "size": "60x55",
+                "line_width_pt": 1.2,
+            }
+        },
+    )
+    hard_style_evaluation = evaluate_validated_envelope(
+        semantic=_semantic(confidence=95.0),
+        source_package=ready_source,
+        mapping_package=ready_mapping,
+        render_request=hard_style_render_request,
         registry=registry,
     )
     unsafe_axis_render_request = _render_request(
@@ -700,6 +715,11 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
             in rule_contract.get("render_request_policy", {}).get(
                 "visual_override_keys",
                 [],
+            )
+            and "line_width_pt"
+            not in rule_contract.get("render_request_policy", {}).get(
+                "visual_override_keys",
+                [],
             ),
             detail=rule_contract.get("render_request_policy"),
         ),
@@ -765,6 +785,15 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
             safe_visual_evaluation["state"] == INSIDE_VALIDATED_ENVELOPE
             and safe_visual_evaluation["request_contract_current"] is True,
             detail=safe_visual_evaluation,
+        ),
+        _check(
+            "unified_style_overrides_cannot_claim_ready",
+            "Project-wide typography and stroke settings cannot bypass the unified style contract",
+            hard_style_evaluation["state"] == NEEDS_RULE_REPAIR
+            and hard_style_evaluation["ready_without_ai"] is False
+            and "render_options_not_canonical"
+            in hard_style_evaluation["repair_reasons"],
+            detail=hard_style_evaluation,
         ),
         _check(
             "scientific_render_overrides_require_confirmation",

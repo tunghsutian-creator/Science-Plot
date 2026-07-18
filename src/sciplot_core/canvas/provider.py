@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import copy
 import hashlib
 import json
@@ -7,9 +9,12 @@ import re
 import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, Protocol
 from uuid import UUID, uuid4
+
+from PIL import Image
 
 from sciplot_core.canvas._validation import (
     reject_unknown_keys,
@@ -93,6 +98,7 @@ ASSISTANT_CONTEXT_KIND = "sciplot_canvas_assistant_context"
 ASSISTANT_CONTEXT_VERSION = 3
 ASSISTANT_CONTEXT_COMPATIBLE_VERSIONS = frozenset({2, ASSISTANT_CONTEXT_VERSION})
 ASSISTANT_DATA_POLICY = "structured_context_no_raw_dataset_arrays"
+ASSISTANT_VISUAL_PREVIEW_MAX_BYTES = 4 * 1024 * 1024
 
 ASSISTANT_EDITABLE_FIELD_EDITORS = frozenset(
     {
@@ -125,6 +131,9 @@ _MAX_EDITING_CAPABILITIES = 128
 _MAX_CAPABILITY_CHOICES = 256
 _MAX_CAPABILITY_VALUE_ITEMS = 128
 _MAX_CAPABILITY_VALUE_BYTES = 16_384
+_MAX_VISUAL_PREVIEW_BASE64_LENGTH = (
+    (ASSISTANT_VISUAL_PREVIEW_MAX_BYTES + 2) // 3
+) * 4
 
 ASSISTANT_DATA_MAPPING_STATES = frozenset(
     {
@@ -232,6 +241,89 @@ def canonical_payload_sha256(payload: dict[str, Any]) -> str:
         allow_nan=False,
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _png_dimensions(payload: bytes) -> tuple[int, int]:
+    if not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("Assistant visual_preview must contain a PNG image.")
+    try:
+        with Image.open(BytesIO(payload)) as image:
+            if image.format != "PNG":
+                raise ValueError("Assistant visual_preview must contain a PNG image.")
+            width, height = image.size
+            image.verify()
+    except (OSError, SyntaxError, ValueError) as exc:
+        raise ValueError(
+            "Assistant visual_preview must contain a structurally valid PNG image."
+        ) from exc
+    return int(width), int(height)
+
+
+def _validate_visual_preview(
+    value: object,
+    *,
+    base_revision: int,
+) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    preview = require_json_object(value, label="Assistant visual_preview")
+    fields = {"base64", "sha256", "width", "height", "revision"}
+    reject_unknown_keys(preview, fields, label="Assistant visual_preview")
+    missing = sorted(fields.difference(preview))
+    if missing:
+        raise ValueError(
+            f"Assistant visual_preview is missing required fields: {missing!r}"
+        )
+    encoded = preview["base64"]
+    if not isinstance(encoded, str) or not encoded:
+        raise ValueError("Assistant visual_preview base64 must be a non-empty string.")
+    if len(encoded) > _MAX_VISUAL_PREVIEW_BASE64_LENGTH:
+        raise ValueError("Assistant visual_preview must decode to at most 4 MiB.")
+    try:
+        encoded_bytes = encoded.encode("ascii")
+        image = base64.b64decode(encoded_bytes, validate=True)
+    except (UnicodeEncodeError, ValueError, binascii.Error) as exc:
+        raise ValueError(
+            "Assistant visual_preview base64 must be canonical standard base64."
+        ) from exc
+    if base64.b64encode(image).decode("ascii") != encoded:
+        raise ValueError(
+            "Assistant visual_preview base64 must be canonical standard base64."
+        )
+    if not image or len(image) > ASSISTANT_VISUAL_PREVIEW_MAX_BYTES:
+        raise ValueError(
+            "Assistant visual_preview must decode to 1 byte through 4 MiB."
+        )
+    png_width, png_height = _png_dimensions(image)
+    supplied_sha = _sha256(preview["sha256"], "visual_preview sha256")
+    expected_sha = hashlib.sha256(image).hexdigest()
+    if supplied_sha != expected_sha:
+        raise ValueError(
+            "Assistant visual_preview sha256 does not match the PNG bytes."
+        )
+    width = require_json_int(preview["width"], label="visual_preview width")
+    height = require_json_int(preview["height"], label="visual_preview height")
+    if width != png_width or height != png_height:
+        raise ValueError(
+            "Assistant visual_preview dimensions do not match the PNG IHDR."
+        )
+    revision = require_json_int(
+        preview["revision"],
+        label="visual_preview revision",
+    )
+    if revision < 0:
+        raise ValueError("Assistant visual_preview revision must be non-negative.")
+    if revision != base_revision:
+        raise ValueError(
+            "Assistant visual_preview revision must match base_revision."
+        )
+    return {
+        "base64": encoded,
+        "sha256": expected_sha,
+        "width": width,
+        "height": height,
+        "revision": revision,
+    }
 
 
 def _text_list(
@@ -875,6 +967,7 @@ class AssistantRequest:
     request_id: str = field(default_factory=lambda: str(uuid4()))
     context_sha256: str | None = None
     created_at: str = field(default_factory=_now)
+    visual_preview: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -926,9 +1019,17 @@ class AssistantRequest:
             raise ValueError(
                 "Assistant request context revision must match base_revision."
             )
+        object.__setattr__(
+            self,
+            "visual_preview",
+            _validate_visual_preview(
+                self.visual_preview,
+                base_revision=self.base_revision,
+            ),
+        )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "kind": ASSISTANT_REQUEST_KIND,
             "version": ASSISTANT_REQUEST_VERSION,
             "request_id": self.request_id,
@@ -941,6 +1042,9 @@ class AssistantRequest:
             "allowed_proposal_kinds": list(self.allowed_proposal_kinds),
             "created_at": self.created_at,
         }
+        if self.visual_preview is not None:
+            payload["visual_preview"] = copy.deepcopy(self.visual_preview)
+        return payload
 
     @property
     def payload_sha256(self) -> str:
@@ -963,6 +1067,7 @@ class AssistantRequest:
                 "context_sha256",
                 "allowed_proposal_kinds",
                 "created_at",
+                "visual_preview",
             },
             label="AssistantRequest",
         )
@@ -992,6 +1097,16 @@ class AssistantRequest:
                 allowed=ASSISTANT_PROPOSAL_KINDS,
             ),
             created_at=_timestamp(value.get("created_at"), "request created_at"),
+            visual_preview=(
+                dict(
+                    require_json_object(
+                        value["visual_preview"],
+                        label="visual_preview",
+                    )
+                )
+                if "visual_preview" in value
+                else None
+            ),
         )
 
 
@@ -1955,6 +2070,7 @@ __all__ = [
     "ASSISTANT_REQUEST_RECORD_STATUSES",
     "ASSISTANT_REQUEST_TERMINAL_STATUSES",
     "ASSISTANT_RESPONSE_STATUSES",
+    "ASSISTANT_VISUAL_PREVIEW_MAX_BYTES",
     "AssistantCancellationToken",
     "AssistantCancelled",
     "AssistantDataMappingState",
