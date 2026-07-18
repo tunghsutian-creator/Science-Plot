@@ -2062,13 +2062,29 @@ def _semantic_payload_with_terminal_axes(
     updated["registered_axis_plan"] = registered_axis_plan
     updated["registered_unit_plan"] = registered_unit_plan
     updated["expected_axis_plan"] = deepcopy(registered_axis_plan)
+    updated["axis_plan"] = deepcopy(registered_axis_plan)
+    updated["unit_plan"] = deepcopy(registered_unit_plan)
+    for field in ("effective_axis_plan", "axis_plan_role", "axis_authority"):
+        updated.pop(field, None)
 
     spec_path = _veusz_spec_path(document_path)
     spec = _read_json(spec_path) if spec_path.is_file() else {}
     axes = spec.get("axes") if isinstance(spec.get("axes"), dict) else {}
-    effective_axis_plan = _effective_axis_plan(
-        registered_axis_plan,
-        axes=axes,
+    document_sha256 = existing_file_sha256(document_path)
+    terminal_axes_complete = (
+        document_sha256 is not None
+        and all(
+            isinstance(axes.get(axis_name), dict) and bool(axes[axis_name])
+            for axis_name in ("x", "y")
+        )
+    )
+    effective_axis_plan = (
+        _effective_axis_plan(
+            registered_axis_plan,
+            axes=axes,
+        )
+        if terminal_axes_complete
+        else {}
     )
     if effective_axis_plan:
         updated["axis_plan"] = effective_axis_plan
@@ -2085,7 +2101,7 @@ def _semantic_payload_with_terminal_axes(
             "status": "generated_terminal_contract",
             "source": "veusz_spec_terminal_render_contract",
             "document": str(document_path),
-            "document_sha256": existing_file_sha256(document_path),
+            "document_sha256": document_sha256,
             "spec": str(spec_path),
         }
     return updated

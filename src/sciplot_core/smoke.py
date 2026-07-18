@@ -2936,7 +2936,7 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         )
 
         analysis_contract_probe = run_analysis_contract_probe(
-            run_root / "analysis_contract_probe"
+            output_root=run_root / "analysis_contract_probe"
         )
         checks.append(
             _check(

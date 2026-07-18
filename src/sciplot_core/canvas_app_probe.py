@@ -754,9 +754,16 @@ def run_canvas_app_probe(
                 and standalone_export.get("project_delivery_complete") is False
                 and standalone_export.get("provenance_complete") is False
             )
-        no_veusz_mainwindow = (
-            "veusz.windows.mainwindow" not in sys.modules
-            and window_class == "SciPlotCanvasWindow"
+        window_type = type(window)
+        window_mro = window_type.__mro__
+        window_mro_modules = [str(base.__module__) for base in window_mro]
+        native_owned_window = (
+            window_type is SciPlotCanvasWindow
+            and QtWidgets.QMainWindow in window_mro
+            and all(
+                base.__module__ != "veusz.windows.mainwindow"
+                for base in window_mro
+            )
         )
         evidence = {
             "source": str(source),
@@ -869,10 +876,13 @@ def run_canvas_app_probe(
             [
                 _check(
                     "native_sciplot_window",
-                    "The SciPlot shell is native-owned and never imports Veusz MainWindow",
-                    no_veusz_mainwindow,
+                    "The optional SciPlot Canvas shell remains native-owned when "
+                    "the Veusz MainWindow integration is loaded",
+                    native_owned_window,
                     {
                         "window_class": window_class,
+                        "window_module": window_type.__module__,
+                        "mro_modules": window_mro_modules,
                         "mainwindow_module_loaded": "veusz.windows.mainwindow"
                         in sys.modules,
                     },

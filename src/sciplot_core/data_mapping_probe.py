@@ -1022,6 +1022,60 @@ def run_data_mapping_probe(
     request_only_semantic = _studio_export_semantic_payload(
         request={"rule_id": "ftir_spectrum"},
         intake_manifest={},
+        document_path=root / "request_only_document.vsz",
+    )
+    invalid_terminal_axis_results: dict[str, dict[str, bool]] = {}
+    for case_name, axes in (
+        ("empty", {}),
+        ("x_only", {"x": {"label": "Wavenumber (cm^-1)"}}),
+        ("unrelated", {"color": {"label": "Intensity"}}),
+        ("empty_xy", {"x": {}, "y": {}}),
+    ):
+        case_document = root / f"invalid_terminal_{case_name}.vsz"
+        case_document.write_text("Add('page')\n", encoding="utf-8")
+        case_document.with_suffix(".spec.json").write_text(
+            json.dumps({"axes": axes}),
+            encoding="utf-8",
+        )
+        case_semantic = _studio_export_semantic_payload(
+            request={"rule_id": "ftir_spectrum"},
+            intake_manifest={},
+            document_path=case_document,
+        )
+        invalid_terminal_axis_results[case_name] = {
+            "registered_axes_preserved": set(
+                case_semantic.get("axis_plan") or {}
+            )
+            == {"x", "y"},
+            "axis_authority_absent": "axis_authority" not in case_semantic,
+            "effective_axis_plan_absent": (
+                "effective_axis_plan" not in case_semantic
+            ),
+        }
+    complete_terminal_document = root / "complete_terminal_axes.vsz"
+    complete_terminal_document.write_text("Add('page')\n", encoding="utf-8")
+    complete_terminal_document.with_suffix(".spec.json").write_text(
+        json.dumps(
+            {
+                "axes": {
+                    "x": {
+                        "label": "Wavenumber (cm^-1)",
+                        "scale": "linear",
+                    },
+                    "y": {
+                        "label": "Transmittance (%)",
+                        "scale": "linear",
+                    },
+                    "color": {"label": "Intensity"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    complete_terminal_semantic = _studio_export_semantic_payload(
+        request={"rule_id": "ftir_spectrum"},
+        intake_manifest={},
+        document_path=complete_terminal_document,
     )
     numeric_sample_label = _series_label_from_column(
         pd.Series(["a.u.", "8", 0.1, 0.2]),
@@ -2291,7 +2345,31 @@ def run_data_mapping_probe(
             "A standard mapping project recovers complete axis and analysis semantics from its persisted rule without an intake manifest",
             request_only_semantic.get("rule_id") == "ftir_spectrum"
             and set(request_only_semantic.get("axis_plan") or {}) == {"x", "y"}
-            and isinstance(request_only_semantic.get("analysis_plan"), list),
+            and isinstance(request_only_semantic.get("analysis_plan"), list)
+            and "axis_authority" not in request_only_semantic,
+        ),
+        _check(
+            "incomplete_terminal_specs_cannot_claim_axis_authority",
+            "Empty, partial, or unrelated terminal specs fall back to the registered axes without retaining false authority",
+            all(
+                all(case_result.values())
+                for case_result in invalid_terminal_axis_results.values()
+            ),
+            {"cases": invalid_terminal_axis_results},
+        ),
+        _check(
+            "complete_terminal_spec_binds_axis_authority",
+            "A current document with complete x and y terminal axes binds effective semantics to its exact hash",
+            set(complete_terminal_semantic.get("effective_axis_plan") or {})
+            == {"x", "y"}
+            and (
+                complete_terminal_semantic.get("axis_authority") or {}
+            ).get("status")
+            == "generated_terminal_contract"
+            and (
+                complete_terminal_semantic.get("axis_authority") or {}
+            ).get("document_sha256")
+            == file_sha256(complete_terminal_document),
         ),
         _check(
             "numeric_sample_labels_survive_unit_rows",
