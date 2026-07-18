@@ -1850,9 +1850,18 @@ def main(argv: list[str] | None = None) -> int:
             template = args.template
             options = _load_options(args.options)
             if args.auto:
-                recommendations = (
-                    inspect_payload(source, sheet=sheet).get("recommendations") or []
-                )
+                inspection = inspect_payload(source, sheet=sheet)
+                resolution = inspection.get("inspection_resolution")
+                if (
+                    isinstance(resolution, dict)
+                    and resolution.get("status") != "ready_rule_authoritative"
+                ):
+                    raise ValueError(
+                        "--auto refused an unverified material-rule candidate; "
+                        "inspect or repair the source, or pass --template and "
+                        "--options explicitly."
+                    )
+                recommendations = inspection.get("recommendations") or []
                 if not recommendations:
                     raise ValueError(
                         "--auto could not recommend a template; pass --template and --options explicitly."

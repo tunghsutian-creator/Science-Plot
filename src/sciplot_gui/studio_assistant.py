@@ -31,20 +31,6 @@ from sciplot_gui.studio_assistant_history import (
 )
 
 
-_DEFAULT_OBJECT_TYPE_ORDER = {
-    "graph": 0,
-    "page": 1,
-    "axis": 2,
-    "key": 3,
-    "xy": 4,
-    "boxplot": 5,
-    "image": 6,
-    "contour": 7,
-    "colorbar": 8,
-    "label": 9,
-}
-
-
 class StudioAssistantBridge(QtCore.QObject):
     """A narrow AI bridge over an existing Veusz MainWindow and Document.
 
@@ -92,7 +78,6 @@ class StudioAssistantBridge(QtCore.QObject):
             self.dock,
         )
         self._connect_signals()
-        self._select_default_widget()
         self._refresh_selection_label()
         self._set_provider_state()
 
@@ -103,6 +88,51 @@ class StudioAssistantBridge(QtCore.QObject):
     @property
     def pending_batch(self) -> CanvasOperationBatch | None:
         return self._pending_batch
+
+    def _window_document_path(self) -> Path | None:
+        filename = str(getattr(self.window, "filename", "") or "").strip()
+        if not filename:
+            return None
+        try:
+            return Path(filename).expanduser().resolve()
+        except (OSError, RuntimeError, ValueError):
+            return None
+
+    def _document_context_blocker(self) -> str | None:
+        current = self._window_document_path()
+        if current == self.document_path:
+            return None
+        current_label = str(current) if current is not None else "an unsaved document"
+        return (
+            "This Veusz window now points to "
+            f"{current_label}, but SciPlot AI remains bound to "
+            f"{self.document_path}. Close this window and reopen the new VSZ "
+            "before asking AI so the exact-current document context can be "
+            "rebuilt safely."
+        )
+
+    def handle_document_context_changed(self) -> str | None:
+        message = self._document_context_blocker()
+        if message is None:
+            self._refresh_ask_button()
+            return None
+        if self.runner.active:
+            try:
+                self.runner.cancel()
+            except Exception:
+                pass
+        if self._pending_request is not None:
+            self._reject_stale(
+                message,
+                reason_code="document_context_changed",
+            )
+        else:
+            self._clear_pending()
+            self.status_label.setText(message)
+            self.proposal_view.setPlainText(message)
+            self.requestRejected.emit(message)
+        self._refresh_ask_button()
+        return message
 
     def _record_history(
         self,
@@ -149,6 +179,7 @@ class StudioAssistantBridge(QtCore.QObject):
             # Window destruction can delete child widgets before this bridge's
             # shutdown slot releases request-owned image bytes.
             pass
+        self._refresh_ask_button()
 
     @staticmethod
     def _terminal_history_status(response_status: str) -> str:
@@ -249,22 +280,37 @@ class StudioAssistantBridge(QtCore.QObject):
 
     def _set_provider_state(self) -> None:
         if self.provider is None:
-            self.ask_button.setEnabled(False)
             self.status_label.setText(
                 "No OpenAI Assistant is connected. Veusz editing remains fully "
                 "available; set OPENAI_API_KEY to enable visual AI edits."
             )
+            self._refresh_ask_button()
             return
         descriptor = self.runner.descriptor
         label = descriptor.display_name if descriptor is not None else "Assistant"
         self.status_label.setText(
             f"{label} is ready. Select an object in the plot or object tree."
         )
+        self._refresh_ask_button()
+
+    def _refresh_ask_button(self) -> None:
+        try:
+            context_blocker = self._document_context_blocker()
+            self.ask_button.setEnabled(
+                self.provider is not None
+                and self._selected_widget is not None
+                and not self.runner.active
+                and context_blocker is None
+            )
+            self.ask_button.setToolTip(context_blocker or "")
+        except RuntimeError:
+            # Child widgets can already be gone while the native MainWindow is
+            # completing destruction.
+            pass
 
     @QtCore.pyqtSlot(list, object)
     def _widgets_selected(self, widgets: list[Any], _settings_proxy: Any) -> None:
-        if widgets:
-            self.set_selected_widget(widgets[0])
+        self.set_selected_widget(widgets[0] if widgets else None)
 
     @QtCore.pyqtSlot(object, str)
     def _plot_widget_clicked(self, widget: Any, _mode: str) -> None:
@@ -272,13 +318,28 @@ class StudioAssistantBridge(QtCore.QObject):
 
     def set_selected_widget(self, widget: Any | None) -> Any | None:
         candidate = widget
+        selected: Any | None = None
         while candidate is not None:
             if str(getattr(candidate, "typename", "")) in SUPPORTED_INSPECTOR_TYPES:
-                self._selected_widget = candidate
-                self._refresh_selection_label()
-                return candidate
+                selected = candidate
+                break
             candidate = getattr(candidate, "parent", None)
-        return self._selected_widget
+
+        previous = self._selected_widget
+        self._selected_widget = selected
+        self._refresh_selection_label()
+        self._refresh_ask_button()
+        if (
+            previous is not selected
+            and self._pending_request is not None
+            and not self.runner.active
+        ):
+            self._reject_stale(
+                "The selected Veusz object changed. The old-object proposal "
+                "was discarded; ask again for the current selection.",
+                reason_code="selected_object_changed",
+            )
+        return selected
 
     def _walk_widgets(self) -> list[Any]:
         result: list[Any] = []
@@ -288,21 +349,6 @@ class StudioAssistantBridge(QtCore.QObject):
             result.append(widget)
             stack[0:0] = list(widget.children)
         return result
-
-    def _select_default_widget(self) -> None:
-        supported = [
-            widget
-            for widget in self._walk_widgets()
-            if str(getattr(widget, "typename", "")) in SUPPORTED_INSPECTOR_TYPES
-        ]
-        supported.sort(
-            key=lambda widget: (
-                _DEFAULT_OBJECT_TYPE_ORDER.get(str(widget.typename), 99),
-                str(widget.path),
-            )
-        )
-        if supported:
-            self._selected_widget = supported[0]
 
     def _refresh_selection_label(self) -> None:
         widget = self._selected_widget
@@ -316,6 +362,17 @@ class StudioAssistantBridge(QtCore.QObject):
     def _object_id(self, widget: Any) -> str:
         document_id = uuid5(NAMESPACE_URL, str(self.document_path))
         return str(uuid5(document_id, str(widget.path)))
+
+    def _request_targets_current_selection(self, request: AssistantRequest) -> bool:
+        widget = self._selected_widget
+        if widget is None:
+            return False
+        selected = request.context.get("selected_object")
+        if not isinstance(selected, dict):
+            return False
+        return str(selected.get("object_id") or "") == self._object_id(widget) and str(
+            selected.get("object_type") or ""
+        ) == str(getattr(widget, "typename", ""))
 
     def _editing_capabilities(self, widget: Any) -> dict[str, Any]:
         target_id = self._object_id(widget)
@@ -354,6 +411,10 @@ class StudioAssistantBridge(QtCore.QObject):
         }
 
     def context_for_current_selection(self) -> dict[str, Any]:
+        context_blocker = self._document_context_blocker()
+        if context_blocker is not None:
+            self.handle_document_context_changed()
+            raise RuntimeError(context_blocker)
         widget = self._selected_widget
         if widget is None:
             raise RuntimeError("Select a supported Veusz object before asking AI.")
@@ -416,6 +477,10 @@ class StudioAssistantBridge(QtCore.QObject):
         )
 
     def capture_current_plot_png(self) -> tuple[bytes, dict[str, Any]]:
+        context_blocker = self._document_context_blocker()
+        if context_blocker is not None:
+            self.handle_document_context_changed()
+            raise RuntimeError(context_blocker)
         revision = int(self.document.changeset)
         self.plot.actionForceUpdate()
         self._wait_for_plot()
@@ -491,6 +556,10 @@ class StudioAssistantBridge(QtCore.QObject):
             self._show_error(str(exc))
 
     def submit_intent(self, intent: str) -> AssistantRequest:
+        context_blocker = self._document_context_blocker()
+        if context_blocker is not None:
+            self.handle_document_context_changed()
+            raise RuntimeError(context_blocker)
         if self.runner.active:
             raise RuntimeError("An Assistant request is already running.")
         self.reject_pending(
@@ -546,15 +615,34 @@ class StudioAssistantBridge(QtCore.QObject):
 
     @QtCore.pyqtSlot(object)
     def _provider_progress(self, event: Any) -> None:
+        if self._document_context_blocker() is not None:
+            return
         self.status_label.setText(str(getattr(event, "message", "AI is working…")))
 
     @QtCore.pyqtSlot(object)
     def _provider_response(self, response: AssistantResponse) -> None:
+        context_blocker = self._document_context_blocker()
+        if context_blocker is not None:
+            self._reject_stale(
+                context_blocker,
+                reason_code="document_context_changed",
+                response=response,
+            )
+            return
         request = self._pending_request
         if request is None:
             self._reject_stale(
                 "Assistant response has no active request.",
                 reason_code="no_active_request",
+                response=response,
+            )
+            return
+        if not self._request_targets_current_selection(request):
+            self._reject_stale(
+                "The selected Veusz object changed while AI was inspecting it. "
+                "The old-object proposal was discarded; ask again for the "
+                "current selection.",
+                reason_code="selected_object_changed",
                 response=response,
             )
             return
@@ -712,9 +800,21 @@ class StudioAssistantBridge(QtCore.QObject):
 
     @QtCore.pyqtSlot()
     def accept_pending(self) -> dict[str, Any] | None:
+        context_blocker = self._document_context_blocker()
+        if context_blocker is not None:
+            self.handle_document_context_changed()
+            return None
         batch = self._pending_batch
         request = self._pending_request
         if batch is None or request is None:
+            return None
+        if not self._request_targets_current_selection(request):
+            self._reject_stale(
+                "The selected Veusz object changed. The old-object proposal "
+                "was discarded; ask again for the current selection.",
+                reason_code="selected_object_changed",
+                batch=batch,
+            )
             return None
         try:
             native, prepared = self._prepare_native_operations(
@@ -912,6 +1012,9 @@ class StudioAssistantBridge(QtCore.QObject):
 
     @QtCore.pyqtSlot(object)
     def _provider_failed(self, payload: Any) -> None:
+        if self._document_context_blocker() is not None:
+            self.handle_document_context_changed()
+            return
         error = payload.get("error") if isinstance(payload, dict) else str(payload)
         request = self._pending_request
         history_failed = False
@@ -934,7 +1037,13 @@ class StudioAssistantBridge(QtCore.QObject):
 
     @QtCore.pyqtSlot(bool)
     def _runner_active_changed(self, active: bool) -> None:
-        self.ask_button.setEnabled(not active and self.provider is not None)
+        context_blocker = self._document_context_blocker()
+        if context_blocker is not None:
+            self.status_label.setText(context_blocker)
+            self.proposal_view.setPlainText(context_blocker)
+            self._refresh_ask_button()
+            return
+        self._refresh_ask_button()
         descriptor = self.runner.descriptor
         self.cancel_button.setEnabled(
             bool(active and descriptor is not None and descriptor.supports_cancellation)

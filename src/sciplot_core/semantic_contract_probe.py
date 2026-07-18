@@ -10,6 +10,7 @@ import pandas as pd
 
 from sciplot_core._utils import json_safe
 from sciplot_core.semantic import (
+    _read_dma_temperature_series,
     _read_ftir_series,
     _read_ftir_series_list,
     _read_rheology_frequency_comparison_samples,
@@ -17,9 +18,13 @@ from sciplot_core.semantic import (
     _read_stress_relaxation_source_series,
     prepare_semantic_source,
 )
+from sciplot_core.intake import (
+    SAXS_SCALING_REVIEW_NOTE,
+    converge_material_review_notes,
+)
 
 SEMANTIC_CONTRACT_PROBE_KIND = "sciplot_semantic_contract_probe"
-SEMANTIC_CONTRACT_PROBE_VERSION = 1
+SEMANTIC_CONTRACT_PROBE_VERSION = 2
 
 
 def _check(
@@ -211,6 +216,219 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         lambda: _read_stress_relaxation_source_series(modulus_source)
     )
 
+    dma_source = fixtures / "dma_temperature_display_units.csv"
+    _write_table(
+        dma_source,
+        [
+            ["Temperature (°C)", "Storage Modulus (kPa) Probe"],
+            [50.0, 80_000.0],
+            [75.0, 40_000.0],
+            [100.0, -0.5],
+        ],
+    )
+    dma_before = _sha256(dma_source)
+    dma_series = _read_dma_temperature_series(dma_source)[0]
+    dma_result = prepare_semantic_source(
+        dma_source,
+        output_dir=runs / "dma_temperature",
+        semantic={"semantic_family": "dma_temperature_sweep"},
+    )
+    dma_after = _sha256(dma_source)
+    dma_step = dma_result["transform_steps"][0]
+    dma_parameters = dma_step["parameters"]
+    dma_diagnostics = dma_parameters["source_selections"][0]
+    dma_processed = pd.read_csv(
+        Path(str(dma_result["processed_source"])),
+        header=None,
+    )
+
+    dma_kelvin_source = fixtures / "dma_temperature_kelvin_gpa.csv"
+    _write_table(
+        dma_kelvin_source,
+        [
+            ["Temperature (K)", "Storage Modulus (GPa) Kelvin Probe"],
+            [273.15, 0.08],
+            [298.15, 0.04],
+        ],
+    )
+    dma_kelvin_before = _sha256(dma_kelvin_source)
+    dma_kelvin_result = prepare_semantic_source(
+        dma_kelvin_source,
+        output_dir=runs / "dma_temperature_kelvin",
+        semantic={"semantic_family": "dma_temperature_sweep"},
+    )
+    dma_kelvin_after = _sha256(dma_kelvin_source)
+    dma_kelvin_diagnostics = dma_kelvin_result["transform_steps"][0]["parameters"][
+        "source_selections"
+    ][0]
+    dma_kelvin_processed = pd.read_csv(
+        Path(str(dma_kelvin_result["processed_source"])),
+        header=None,
+    )
+
+    dma_celsius_row_source = fixtures / "dma_temperature_c_unit_row.csv"
+    _write_table(
+        dma_celsius_row_source,
+        [
+            ["Temperature", "Storage Modulus"],
+            ["C", "Pa"],
+            ["Celsius row probe", "Celsius row probe"],
+            [10.0, 2_000_000.0],
+            [20.0, 1_000_000.0],
+        ],
+    )
+    dma_celsius_row_before = _sha256(dma_celsius_row_source)
+    dma_celsius_row_series = _read_dma_temperature_series(dma_celsius_row_source)[0]
+    dma_celsius_row_after = _sha256(dma_celsius_row_source)
+
+    dma_missing_modulus_source = fixtures / "dma_missing_modulus_unit.csv"
+    _write_table(
+        dma_missing_modulus_source,
+        [
+            ["Temperature (°C)", "Storage Modulus Missing Probe"],
+            [50.0, 80.0],
+            [75.0, 40.0],
+        ],
+    )
+    dma_missing_temperature_source = fixtures / "dma_missing_temperature_unit.csv"
+    _write_table(
+        dma_missing_temperature_source,
+        [
+            ["Temperature", "Storage Modulus (MPa) Missing Probe"],
+            ["Sample C", "Sample C"],
+            [50.0, 80.0],
+            [75.0, 40.0],
+        ],
+    )
+    dma_unknown_modulus_source = fixtures / "dma_unknown_modulus_unit.csv"
+    _write_table(
+        dma_unknown_modulus_source,
+        [
+            ["Temperature (°C)", "Storage Modulus (psi) Unknown Probe"],
+            [50.0, 80.0],
+            [75.0, 40.0],
+        ],
+    )
+    dma_unknown_temperature_source = fixtures / "dma_unknown_temperature_unit.csv"
+    _write_table(
+        dma_unknown_temperature_source,
+        [
+            ["Temperature (°F)", "Storage Modulus (MPa) Unknown Probe"],
+            [50.0, 80.0],
+            [75.0, 40.0],
+        ],
+    )
+    dma_temperature_rate_source = fixtures / "dma_temperature_rate_unit.csv"
+    _write_table(
+        dma_temperature_rate_source,
+        [
+            ["Temperature (K/min)", "Storage Modulus (MPa) Rate Probe"],
+            [50.0, 80.0],
+            [75.0, 40.0],
+        ],
+    )
+    dma_modulus_rate_source = fixtures / "dma_modulus_rate_unit.csv"
+    _write_table(
+        dma_modulus_rate_source,
+        [
+            ["Temperature (°C)", "Storage Modulus (MPa/min) Rate Probe"],
+            [50.0, 80.0],
+            [75.0, 40.0],
+        ],
+    )
+    dma_fail_closed_sources = (
+        dma_missing_modulus_source,
+        dma_missing_temperature_source,
+        dma_unknown_modulus_source,
+        dma_unknown_temperature_source,
+        dma_temperature_rate_source,
+        dma_modulus_rate_source,
+    )
+    dma_fail_closed_hashes_before = {
+        path.name: _sha256(path) for path in dma_fail_closed_sources
+    }
+    (
+        dma_missing_modulus_blocked,
+        dma_missing_modulus_error,
+    ) = _raises_value_error(
+        lambda: _read_dma_temperature_series(dma_missing_modulus_source)
+    )
+    (
+        dma_missing_temperature_blocked,
+        dma_missing_temperature_error,
+    ) = _raises_value_error(
+        lambda: _read_dma_temperature_series(dma_missing_temperature_source)
+    )
+    (
+        dma_unknown_modulus_blocked,
+        dma_unknown_modulus_error,
+    ) = _raises_value_error(
+        lambda: _read_dma_temperature_series(dma_unknown_modulus_source)
+    )
+    (
+        dma_unknown_temperature_blocked,
+        dma_unknown_temperature_error,
+    ) = _raises_value_error(
+        lambda: _read_dma_temperature_series(dma_unknown_temperature_source)
+    )
+    (
+        dma_temperature_rate_blocked,
+        dma_temperature_rate_error,
+    ) = _raises_value_error(
+        lambda: _read_dma_temperature_series(dma_temperature_rate_source)
+    )
+    (
+        dma_modulus_rate_blocked,
+        dma_modulus_rate_error,
+    ) = _raises_value_error(
+        lambda: _read_dma_temperature_series(dma_modulus_rate_source)
+    )
+    dma_fail_closed_hashes_after = {
+        path.name: _sha256(path) for path in dma_fail_closed_sources
+    }
+
+    dma_partial_unit_dir = fixtures / "dma_partial_unit_scope"
+    dma_partial_unit_dir.mkdir(parents=True, exist_ok=True)
+    dma_partial_valid_source = dma_partial_unit_dir / "valid.csv"
+    dma_partial_invalid_source = dma_partial_unit_dir / "invalid.csv"
+    _write_table(
+        dma_partial_valid_source,
+        [
+            ["Temperature (°C)", "Storage Modulus (MPa) Valid"],
+            [50.0, 80.0],
+            [75.0, 40.0],
+        ],
+    )
+    _write_table(
+        dma_partial_invalid_source,
+        [
+            ["Temperature (°F)", "Storage Modulus (MPa) Invalid"],
+            [50.0, 80.0],
+            [75.0, 40.0],
+        ],
+    )
+    dma_partial_hashes_before = {
+        path.name: _sha256(path)
+        for path in (
+            dma_partial_valid_source,
+            dma_partial_invalid_source,
+        )
+    }
+    dma_partial_blocked, dma_partial_error = _raises_value_error(
+        lambda: prepare_semantic_source(
+            dma_partial_unit_dir,
+            output_dir=runs / "dma_partial_unit_scope",
+            semantic={"semantic_family": "dma_temperature_sweep"},
+        )
+    )
+    dma_partial_hashes_after = {
+        path.name: _sha256(path)
+        for path in (
+            dma_partial_valid_source,
+            dma_partial_invalid_source,
+        )
+    }
+
     saxs_source = fixtures / "saxs_log_domain.csv"
     _write_table(
         saxs_source,
@@ -357,6 +575,225 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         lambda: _read_rheology_frequency_comparison_samples(partial_sweep_dir)
     )
 
+    viscosity_sweep_dir = fixtures / "rheology_viscosity_units"
+    viscosity_sweep_dir.mkdir(parents=True, exist_ok=True)
+    viscosity_source = viscosity_sweep_dir / "viscosity_probe.csv"
+    _write_table(
+        viscosity_source,
+        [
+            [
+                "Angular Frequency",
+                "Storage Modulus",
+                "Loss Modulus",
+                "Loss Factor",
+                "Complex Viscosity",
+            ],
+            ["rad/s", "Pa", "Pa", "1", "mPa·s"],
+            [1.0, 1000.0, 500.0, 0.5, 500_000.0],
+            [10.0, 900.0, 450.0, 0.5, 50_000.0],
+        ],
+    )
+    viscosity_before = _sha256(viscosity_source)
+    viscosity_source_values = [
+        float(value)
+        for value in pd.to_numeric(
+            pd.read_csv(viscosity_source, header=None).iloc[2:, 4],
+            errors="coerce",
+        ).dropna()
+    ]
+    viscosity_sample = _read_rheology_frequency_comparison_samples(viscosity_sweep_dir)[
+        0
+    ]
+    viscosity_canonical_values = [
+        row.get("complex_viscosity") for row in viscosity_sample.rows
+    ]
+    viscosity_result = prepare_semantic_source(
+        viscosity_sweep_dir,
+        output_dir=runs / "rheology_viscosity_units",
+        semantic={"semantic_family": "rheology_frequency"},
+    )
+    viscosity_processed = pd.read_excel(
+        Path(str(viscosity_result["processed_source"])),
+        sheet_name="Frequency_Comparison",
+        header=None,
+    )
+    viscosity_after = _sha256(viscosity_source)
+    viscosity_step = viscosity_result["transform_steps"][0]
+    viscosity_inventory = viscosity_step["parameters"]["unit_conversions"]
+    viscosity_provenance = viscosity_inventory[0]["metrics"]["complex_viscosity"]
+
+    unsupported_viscosity_dir = fixtures / "rheology_unsupported_units"
+    unsupported_viscosity_dir.mkdir(parents=True, exist_ok=True)
+    _write_table(
+        unsupported_viscosity_dir / "unsupported.csv",
+        [
+            [
+                "Angular Frequency",
+                "Storage Modulus",
+                "Complex Viscosity",
+            ],
+            ["rad/s", "Pa", "arbitrary viscosity unit"],
+            [1.0, 1000.0, 500_000.0],
+            [10.0, 900.0, 50_000.0],
+        ],
+    )
+    unsupported_viscosity_blocked, unsupported_viscosity_error = _raises_value_error(
+        lambda: _read_rheology_frequency_comparison_samples(unsupported_viscosity_dir)
+    )
+
+    confirmed_viscosity_dir = fixtures / "confirmed_rheology_viscosity_units"
+    confirmed_viscosity_dir.mkdir(parents=True, exist_ok=True)
+    confirmed_viscosity_source = confirmed_viscosity_dir / "confirmed_viscosity.csv"
+    _write_table(
+        confirmed_viscosity_source,
+        [
+            ["Opaque independent", "Opaque elastic", "Opaque flow"],
+            ["rad/s", "Pa", "mPa·s"],
+            [1.0, 1000.0, 500_000.0],
+            [10.0, 900.0, 50_000.0],
+        ],
+    )
+    confirmed_viscosity_columns = [
+        {
+            "file_name": confirmed_viscosity_source.name,
+            "source_path": str(confirmed_viscosity_source),
+            "columns": [
+                {
+                    "index": 0,
+                    "name": "Angular Frequency",
+                    "confirmed_type": "numeric",
+                    "role": "x",
+                },
+                {
+                    "index": 1,
+                    "name": "Storage Modulus",
+                    "confirmed_type": "numeric",
+                    "role": "y",
+                },
+                {
+                    "index": 2,
+                    "name": "Complex Viscosity",
+                    "confirmed_type": "numeric",
+                    "role": "y",
+                },
+            ],
+        }
+    ]
+    confirmed_viscosity_before = _sha256(confirmed_viscosity_source)
+    confirmed_viscosity_result = prepare_semantic_source(
+        confirmed_viscosity_dir,
+        output_dir=runs / "confirmed_rheology_viscosity_units",
+        semantic={"semantic_family": "rheology_frequency"},
+        column_confirmations=confirmed_viscosity_columns,
+    )
+    confirmed_viscosity_after = _sha256(confirmed_viscosity_source)
+    confirmed_viscosity_processed = pd.read_excel(
+        Path(str(confirmed_viscosity_result["processed_source"])),
+        sheet_name="Frequency_Comparison",
+        header=None,
+    )
+    confirmed_viscosity_inventory = confirmed_viscosity_result["transform_steps"][0][
+        "parameters"
+    ]["unit_conversions"]
+    confirmed_viscosity_provenance = confirmed_viscosity_inventory[0]["metrics"][
+        "complex_viscosity"
+    ]
+
+    confirmed_partial_dir = fixtures / "confirmed_rheology_partial_scope"
+    confirmed_partial_dir.mkdir(parents=True, exist_ok=True)
+    confirmed_valid_source = confirmed_partial_dir / "valid.csv"
+    confirmed_bad_unit_source = confirmed_partial_dir / "bad_unit.csv"
+    confirmed_bad_parse_source = confirmed_partial_dir / "bad_parse.csv"
+    _write_table(
+        confirmed_valid_source,
+        [
+            ["Opaque x", "Opaque modulus", "Opaque viscosity"],
+            ["rad/s", "Pa", "mPa·s"],
+            [1.0, 1000.0, 500_000.0],
+            [10.0, 900.0, 50_000.0],
+        ],
+    )
+    _write_table(
+        confirmed_bad_unit_source,
+        [
+            ["Opaque x", "Opaque modulus", "Opaque viscosity"],
+            ["rad/s", "Pa", "MPa/min"],
+            [1.0, 1000.0, 500_000.0],
+            [10.0, 900.0, 50_000.0],
+        ],
+    )
+    _write_table(
+        confirmed_bad_parse_source,
+        [
+            ["Opaque x", "Opaque modulus", "Opaque viscosity"],
+            ["rad/s", "Pa", "mPa·s"],
+            ["not numeric", "not numeric", "not numeric"],
+        ],
+    )
+
+    def confirmed_columns(source_path: Path) -> dict[str, Any]:
+        return {
+            "file_name": source_path.name,
+            "source_path": str(source_path),
+            "columns": [
+                {
+                    "index": 0,
+                    "name": "Angular Frequency",
+                    "confirmed_type": "numeric",
+                    "role": "x",
+                },
+                {
+                    "index": 1,
+                    "name": "Storage Modulus",
+                    "confirmed_type": "numeric",
+                    "role": "y",
+                },
+                {
+                    "index": 2,
+                    "name": "Complex Viscosity",
+                    "confirmed_type": "numeric",
+                    "role": "y",
+                },
+            ],
+        }
+
+    confirmed_partial_sources = (
+        confirmed_valid_source,
+        confirmed_bad_unit_source,
+        confirmed_bad_parse_source,
+    )
+    confirmed_partial_hashes_before = {
+        path.name: _sha256(path) for path in confirmed_partial_sources
+    }
+    confirmed_partial_blocked, confirmed_partial_error = _raises_value_error(
+        lambda: prepare_semantic_source(
+            confirmed_partial_dir,
+            output_dir=runs / "confirmed_rheology_partial_scope",
+            semantic={"semantic_family": "rheology_frequency"},
+            column_confirmations=[
+                confirmed_columns(path) for path in confirmed_partial_sources
+            ],
+        )
+    )
+    confirmed_partial_hashes_after = {
+        path.name: _sha256(path) for path in confirmed_partial_sources
+    }
+
+    saxs_review_request = {
+        "rule_id": "saxs_profile",
+        "review_notes": ["Prepared by SciPlot from the selected data mapping."],
+    }
+    saxs_review_changed = converge_material_review_notes(saxs_review_request)
+    saxs_review_second_change = converge_material_review_notes(saxs_review_request)
+    non_saxs_review_request = {
+        "rule_id": "xrd_pattern",
+        "review_notes": [
+            "Prepared by SciPlot from the selected data mapping.",
+            SAXS_SCALING_REVIEW_NOTE,
+        ],
+    }
+    non_saxs_review_changed = converge_material_review_notes(non_saxs_review_request)
+
     checks = [
         _check(
             "stress_hold_onset_contract",
@@ -449,6 +886,201 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             {"error": modulus_error},
         ),
         _check(
+            "dma_temperature_display_unit_contract",
+            "DMA temperature keeps Pa canonical lineage while displaying E-prime in MPa",
+            (
+                dma_before == dma_after
+                and dma_series.y_label == "Storage modulus, E′"
+                and dma_series.y_unit == "MPa"
+                and dma_series.points
+                == (
+                    (50.0, 80.0),
+                    (75.0, 40.0),
+                    (100.0, -0.0005),
+                )
+                and dma_parameters.get("canonical_y_unit") == "Pa"
+                and dma_parameters.get("display_y_unit") == "MPa"
+                and dma_parameters.get("canonical_to_display_factor") == 1.0e-6
+                and dma_diagnostics.get("source_x_unit") == "°C"
+                and dma_diagnostics.get("canonical_x_unit") == "°C"
+                and dma_diagnostics.get("display_x_unit") == "°C"
+                and dma_diagnostics.get("source_x_unit_detection")
+                == "detected_from_header"
+                and dma_diagnostics.get("source_x_to_display_factor") == 1.0
+                and dma_diagnostics.get("source_x_to_display_offset") == 0.0
+                and dma_diagnostics.get("x_conversion_method") == "identity_celsius"
+                and dma_diagnostics.get("source_y_unit") == "kPa"
+                and dma_diagnostics.get("source_y_unit_detection")
+                == "detected_from_header"
+                and dma_diagnostics.get("source_to_canonical_factor") == 1.0e3
+                and dma_diagnostics.get("canonical_to_display_factor") == 1.0e-6
+                and dma_diagnostics.get("source_to_display_factor") == 1.0e-3
+                and dma_processed.iat[1, 1] == "MPa"
+                and float(dma_processed.iat[3, 1]) == 80.0
+            ),
+            {
+                "source_sha256_before": dma_before,
+                "source_sha256_after": dma_after,
+                "points": dma_series.points,
+                "transform_parameters": dma_parameters,
+            },
+        ),
+        _check(
+            "dma_temperature_negative_noise_diagnostic",
+            "DMA negative acquisition noise is preserved and explicitly counted before y-min display clipping",
+            (
+                dma_diagnostics.get("negative_display_point_count") == 1
+                and dma_diagnostics.get("minimum_negative_display_value") == -0.0005
+                and dma_diagnostics.get("maximum_negative_to_positive_peak_fraction")
+                == 6.25e-6
+                and dma_diagnostics.get("default_y_min_clipped_point_count") == 1
+                and dma_parameters.get("negative_display_point_count") == 1
+                and dma_parameters.get("default_y_min_clipped_point_count") == 1
+                and "Preserve finite negative"
+                in str(dma_diagnostics.get("negative_value_policy"))
+                and float(dma_processed.iat[5, 1]) == -0.0005
+            ),
+            {
+                "diagnostics": dma_diagnostics,
+                "processed_tail_value": dma_processed.iat[5, 1],
+            },
+        ),
+        _check(
+            "dma_kelvin_temperature_conversion_contract",
+            "DMA Kelvin temperatures convert to Celsius while GPa follows the source-to-Pa-to-MPa ledger",
+            (
+                dma_kelvin_before == dma_kelvin_after
+                and dma_kelvin_diagnostics.get("source_x_unit") == "K"
+                and dma_kelvin_diagnostics.get("display_x_unit") == "°C"
+                and dma_kelvin_diagnostics.get("source_x_to_display_factor") == 1.0
+                and dma_kelvin_diagnostics.get("source_x_to_display_offset") == -273.15
+                and dma_kelvin_diagnostics.get("x_conversion_method")
+                == "kelvin_to_celsius"
+                and dma_kelvin_diagnostics.get("source_y_unit") == "GPa"
+                and dma_kelvin_diagnostics.get("source_to_canonical_factor") == 1.0e9
+                and dma_kelvin_diagnostics.get("canonical_to_display_factor") == 1.0e-6
+                and dma_kelvin_diagnostics.get("source_to_display_factor") == 1.0e3
+                and dma_kelvin_processed.iat[1, 0] == "°C"
+                and dma_kelvin_processed.iat[1, 1] == "MPa"
+                and float(dma_kelvin_processed.iat[3, 0]) == 0.0
+                and float(dma_kelvin_processed.iat[3, 1]) == 80.0
+                and float(dma_kelvin_processed.iat[4, 0]) == 25.0
+                and float(dma_kelvin_processed.iat[4, 1]) == 40.0
+            ),
+            {
+                "source_sha256_before": dma_kelvin_before,
+                "source_sha256_after": dma_kelvin_after,
+                "diagnostics": dma_kelvin_diagnostics,
+                "processed_points": [
+                    [
+                        dma_kelvin_processed.iat[row_index, 0],
+                        dma_kelvin_processed.iat[row_index, 1],
+                    ]
+                    for row_index in (3, 4)
+                ],
+            },
+        ),
+        _check(
+            "dma_celsius_adjacent_unit_row_contract",
+            "DMA accepts plain C and Pa only when they are explicitly present in an adjacent unit row",
+            (
+                dma_celsius_row_before == dma_celsius_row_after
+                and dma_celsius_row_series.x_unit == "°C"
+                and dma_celsius_row_series.y_unit == "MPa"
+                and dma_celsius_row_series.points == ((10.0, 2.0), (20.0, 1.0))
+                and (dma_celsius_row_series.diagnostics or {}).get("source_x_unit")
+                == "°C"
+                and (dma_celsius_row_series.diagnostics or {}).get(
+                    "source_x_unit_detection"
+                )
+                == "detected_from_adjacent_unit_row"
+                and (dma_celsius_row_series.diagnostics or {}).get("source_y_unit")
+                == "Pa"
+                and (dma_celsius_row_series.diagnostics or {}).get(
+                    "source_y_unit_detection"
+                )
+                == "detected_from_adjacent_unit_row"
+            ),
+            {
+                "source_sha256_before": dma_celsius_row_before,
+                "source_sha256_after": dma_celsius_row_after,
+                "points": dma_celsius_row_series.points,
+                "diagnostics": dma_celsius_row_series.diagnostics,
+            },
+        ),
+        _check(
+            "dma_missing_units_fail_closed",
+            "DMA never assumes Celsius or Pa when a source unit is absent",
+            (
+                dma_missing_modulus_blocked
+                and "Missing DMA storage-modulus unit" in dma_missing_modulus_error
+                and dma_missing_temperature_blocked
+                and "Missing DMA temperature unit" in dma_missing_temperature_error
+                and dma_fail_closed_hashes_before == dma_fail_closed_hashes_after
+            ),
+            {
+                "modulus_error": dma_missing_modulus_error,
+                "temperature_error": dma_missing_temperature_error,
+                "source_sha256_before": dma_fail_closed_hashes_before,
+                "source_sha256_after": dma_fail_closed_hashes_after,
+            },
+        ),
+        _check(
+            "dma_unsupported_units_fail_closed",
+            "DMA rejects unsupported temperature and storage-modulus units instead of relabelling raw values",
+            (
+                dma_unknown_modulus_blocked
+                and "Unsupported DMA storage-modulus unit" in dma_unknown_modulus_error
+                and "psi" in dma_unknown_modulus_error
+                and dma_unknown_temperature_blocked
+                and "Unsupported DMA temperature unit" in dma_unknown_temperature_error
+                and "°F" in dma_unknown_temperature_error
+                and dma_fail_closed_hashes_before == dma_fail_closed_hashes_after
+            ),
+            {
+                "modulus_error": dma_unknown_modulus_error,
+                "temperature_error": dma_unknown_temperature_error,
+                "source_sha256_before": dma_fail_closed_hashes_before,
+                "source_sha256_after": dma_fail_closed_hashes_after,
+            },
+        ),
+        _check(
+            "dma_rate_units_not_scalar_units",
+            "DMA requires a complete scalar unit and never reads K/min or MPa/min as K or MPa",
+            (
+                dma_temperature_rate_blocked
+                and "Unsupported DMA temperature unit" in dma_temperature_rate_error
+                and "K/min" in dma_temperature_rate_error
+                and dma_modulus_rate_blocked
+                and "Unsupported DMA storage-modulus unit"
+                in dma_modulus_rate_error
+                and "MPa/min" in dma_modulus_rate_error
+                and dma_fail_closed_hashes_before == dma_fail_closed_hashes_after
+            ),
+            {
+                "temperature_rate_error": dma_temperature_rate_error,
+                "modulus_rate_error": dma_modulus_rate_error,
+                "source_sha256_before": dma_fail_closed_hashes_before,
+                "source_sha256_after": dma_fail_closed_hashes_after,
+            },
+        ),
+        _check(
+            "dma_partial_unit_scope_fails_closed",
+            "A valid DMA file cannot hide an in-scope file with an unsupported unit",
+            (
+                dma_partial_blocked
+                and "silent partial datasets are not allowed" in dma_partial_error
+                and "Unsupported DMA temperature unit" in dma_partial_error
+                and "invalid.csv" in dma_partial_error
+                and dma_partial_hashes_before == dma_partial_hashes_after
+            ),
+            {
+                "error": dma_partial_error,
+                "source_sha256_before": dma_partial_hashes_before,
+                "source_sha256_after": dma_partial_hashes_after,
+            },
+        ),
+        _check(
             "saxs_positive_log_domain",
             "SAXS removes non-positive log-domain points per series without changing the source",
             (
@@ -463,6 +1095,17 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                 and all(
                     "do not infer or remove offsets"
                     in str(item.get("intensity_offset_policy"))
+                    for item in saxs_diagnostics
+                )
+                and all(
+                    item.get("retained_positive_values_preserved_without_scaling")
+                    is True
+                    and item.get("sciplot_intensity_scale_factor") == 1.0
+                    and item.get("sciplot_intensity_offset") == 0.0
+                    and item.get("source_series_scaling_status")
+                    == "not_validated_from_source_metadata"
+                    and item.get("absolute_cross_series_intensity_comparison_validated")
+                    is False
                     for item in saxs_diagnostics
                 )
             ),
@@ -525,6 +1168,116 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                 "sweep_error": partial_sweep_error,
             },
         ),
+        _check(
+            "rheology_complex_viscosity_canonical_unit",
+            "Rheology frequency converts source mPa-s viscosity to canonical Pa-s with explicit provenance",
+            (
+                viscosity_before == viscosity_after
+                and viscosity_sample.metric_units.get("complex_viscosity") == "Pa·s"
+                and viscosity_canonical_values
+                == [value * 0.001 for value in viscosity_source_values]
+                and viscosity_processed.iat[2, 4] == "Pa·s"
+                and [
+                    float(viscosity_processed.iat[row_index, 4]) for row_index in (3, 4)
+                ]
+                == viscosity_canonical_values
+                and viscosity_provenance.get("source_unit") == "mPa·s"
+                and viscosity_provenance.get("output_unit") == "Pa·s"
+                and viscosity_provenance.get("factor") == 0.001
+                and viscosity_provenance.get("method") == "mPa_s_to_Pa_s"
+            ),
+            {
+                "source_sha256_before": viscosity_before,
+                "source_sha256_after": viscosity_after,
+                "source_complex_viscosity_mPa_s": viscosity_source_values,
+                "canonical_complex_viscosity_Pa_s": (viscosity_canonical_values),
+                "processed_output_unit": viscosity_processed.iat[2, 4],
+                "processed_output_values": [
+                    float(viscosity_processed.iat[row_index, 4]) for row_index in (3, 4)
+                ],
+                "expected_source_to_canonical_factor": 0.001,
+                "transform_unit_conversions": viscosity_inventory,
+            },
+        ),
+        _check(
+            "rheology_unsupported_unit_fails_closed",
+            "A rheology metric is never relabelled with a canonical unit when no validated conversion exists",
+            (
+                unsupported_viscosity_blocked
+                and "Unsupported rheology unit" in unsupported_viscosity_error
+                and "complex_viscosity" in unsupported_viscosity_error
+                and "Pa·s" in unsupported_viscosity_error
+            ),
+            {"error": unsupported_viscosity_error},
+        ),
+        _check(
+            "confirmed_rheology_complex_viscosity_canonical_unit",
+            "Confirmed rheology columns convert mPa-s values to Pa-s before writing the canonical workbook",
+            (
+                confirmed_viscosity_before == confirmed_viscosity_after
+                and confirmed_viscosity_processed.iat[2, 4] == "Pa·s"
+                and [
+                    float(confirmed_viscosity_processed.iat[row_index, 4])
+                    for row_index in (3, 4)
+                ]
+                == [500.0, 50.0]
+                and confirmed_viscosity_provenance.get("source_unit") == "mPa·s"
+                and confirmed_viscosity_provenance.get("output_unit") == "Pa·s"
+                and confirmed_viscosity_provenance.get("factor") == 0.001
+                and confirmed_viscosity_provenance.get("method")
+                == "mPa_s_to_Pa_s"
+            ),
+            {
+                "source_sha256_before": confirmed_viscosity_before,
+                "source_sha256_after": confirmed_viscosity_after,
+                "processed_output_unit": confirmed_viscosity_processed.iat[2, 4],
+                "processed_output_values": [
+                    float(confirmed_viscosity_processed.iat[row_index, 4])
+                    for row_index in (3, 4)
+                ],
+                "transform_unit_conversions": confirmed_viscosity_inventory,
+            },
+        ),
+        _check(
+            "confirmed_rheology_scope_fails_closed",
+            "A confirmed rheology sample with invalid units or unparseable values blocks the whole confirmed scope",
+            (
+                confirmed_partial_blocked
+                and "silent partial datasets are not allowed"
+                in confirmed_partial_error
+                and "bad_unit.csv" in confirmed_partial_error
+                and "Unsupported confirmed rheology unit" in confirmed_partial_error
+                and "bad_parse.csv" in confirmed_partial_error
+                and "No numeric rheology sweep points" in confirmed_partial_error
+                and confirmed_partial_hashes_before
+                == confirmed_partial_hashes_after
+            ),
+            {
+                "error": confirmed_partial_error,
+                "source_sha256_before": confirmed_partial_hashes_before,
+                "source_sha256_after": confirmed_partial_hashes_after,
+            },
+        ),
+        _check(
+            "saxs_review_note_converges_from_final_rule",
+            "The final SAXS rule adds one honest scaling note and a later rule override removes it",
+            (
+                saxs_review_changed
+                and not saxs_review_second_change
+                and saxs_review_request["review_notes"].count(SAXS_SCALING_REVIEW_NOTE)
+                == 1
+                and non_saxs_review_changed
+                and SAXS_SCALING_REVIEW_NOTE
+                not in non_saxs_review_request["review_notes"]
+                and "non-positive log-domain points were excluded"
+                in SAXS_SCALING_REVIEW_NOTE
+            ),
+            {
+                "saxs_notes": saxs_review_request["review_notes"],
+                "non_saxs_notes": non_saxs_review_request["review_notes"],
+                "idempotent_second_change": saxs_review_second_change,
+            },
+        ),
     ]
 
     repository = Path(__file__).resolve().parents[2]
@@ -575,10 +1328,106 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                 "real_saxs_zero_tail_accounting",
                 "Available SAXS fixture records each sample's non-positive intensity tail",
                 bool(excluded_counts)
-                and all(3 <= count <= 12 for count in excluded_counts),
+                and all(3 <= count <= 12 for count in excluded_counts)
+                and all(
+                    item.get("retained_positive_values_preserved_without_scaling")
+                    is True
+                    and item.get("absolute_cross_series_intensity_comparison_validated")
+                    is False
+                    for item in real_diagnostics
+                ),
                 {
                     "source": str(real_saxs),
                     "excluded_nonpositive_intensity_counts": excluded_counts,
+                    "source_scaling_status": [
+                        item.get("source_series_scaling_status")
+                        for item in real_diagnostics
+                    ],
+                },
+            )
+        )
+
+    real_dma = (
+        repository
+        / ".local"
+        / "reference_data"
+        / "real_world"
+        / "dma_temperature_sweep"
+        / "Fig2b_storage_modulus_temperature.csv"
+    )
+    if real_dma.exists():
+        real_dma_before = _sha256(real_dma)
+        real_dma_result = prepare_semantic_source(
+            real_dma,
+            output_dir=runs / "real_dma_temperature",
+            semantic={"semantic_family": "dma_temperature_sweep"},
+        )
+        real_dma_after = _sha256(real_dma)
+        real_dma_parameters = real_dma_result["transform_steps"][0]["parameters"]
+        real_dma_diagnostics = real_dma_parameters["source_selections"]
+        real_dma_processed = pd.read_csv(
+            Path(str(real_dma_result["processed_source"])),
+            header=None,
+        )
+        real_dma_values = pd.concat(
+            [
+                pd.to_numeric(
+                    real_dma_processed.iloc[3:, column_index],
+                    errors="coerce",
+                )
+                for column_index in range(
+                    1,
+                    real_dma_processed.shape[1],
+                    2,
+                )
+            ],
+            ignore_index=True,
+        ).dropna()
+        checks.append(
+            _check(
+                "real_dma_temperature_display_units",
+                "Available DMA temperature fixture renders scientific-scale MPa values with explicit negative-noise accounting",
+                (
+                    real_dma_before == real_dma_after
+                    and not real_dma_values.empty
+                    and 50.0 <= float(real_dma_values.max()) <= 80.0
+                    and float(real_dma_values.min()) < 0.0
+                    and real_dma_parameters.get("canonical_y_unit") == "Pa"
+                    and real_dma_parameters.get("display_y_unit") == "MPa"
+                    and real_dma_parameters.get("canonical_x_unit") == "°C"
+                    and real_dma_parameters.get("display_x_unit") == "°C"
+                    and real_dma_parameters.get("negative_display_point_count") == 1
+                    and all(
+                        item.get("source_x_unit") == "°C"
+                        and item.get("x_conversion_method") == "identity_celsius"
+                        and item.get("canonical_y_unit") == "Pa"
+                        and item.get("display_y_unit") == "MPa"
+                        for item in real_dma_diagnostics
+                    )
+                    and any(
+                        item.get("negative_display_point_count") == 1
+                        and float(
+                            item.get(
+                                "minimum_negative_display_value",
+                                0.0,
+                            )
+                        )
+                        < 0.0
+                        and "Preserve finite negative"
+                        in str(item.get("negative_value_policy"))
+                        for item in real_dma_diagnostics
+                    )
+                ),
+                {
+                    "source": str(real_dma),
+                    "source_sha256_before": real_dma_before,
+                    "source_sha256_after": real_dma_after,
+                    "display_minimum_MPa": float(real_dma_values.min()),
+                    "display_maximum_MPa": float(real_dma_values.max()),
+                    "negative_display_point_count": (
+                        real_dma_parameters.get("negative_display_point_count")
+                    ),
+                    "series": real_dma_diagnostics,
                 },
             )
         )

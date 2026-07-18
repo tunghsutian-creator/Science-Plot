@@ -12,7 +12,11 @@ from sciplot_core._utils import json_safe
 from sciplot_core.ingest import normalized_source
 from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY
 from sciplot_core.semantic import classify_source
-from sciplot_core.split import SUPPORTED_SPLIT_TEMPLATES, build_split_plan, normalize_split_policy
+from sciplot_core.split import (
+    SUPPORTED_SPLIT_TEMPLATES,
+    build_split_plan,
+    normalize_split_policy,
+)
 from sciplot_core.terminal_request import project_terminal_render_request
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
@@ -40,20 +44,66 @@ _EXPORT_FORMATS = {
 DEFAULT_EXPORT_FORMATS = DEFAULT_EXPORT_FORMATS_POLICY
 DEFAULT_RENDER_ENGINE = "veusz"
 
+_GENERIC_PRESENTATION_WARNING_MARKERS = (
+    "axis label",
+    "axis labels",
+    "box plot",
+    "boxplot",
+    "categories",
+    "category labels",
+    "crowd",
+    "density plot",
+    "heatmap",
+    "legend",
+    "many groups",
+    "matrix view",
+    "shrink",
+    "violin",
+    "wrap",
+)
+_GENERIC_DATA_RISK_WARNING_MARKERS = (
+    "duplicate",
+    "empty",
+    "failed",
+    "inconsistent",
+    "invalid",
+    "missing",
+    "nan",
+    "negative",
+    "non-finite",
+    "nonfinite",
+    "out of range",
+    "zero",
+)
+_GENERIC_PRESENTATION_ONLY_MISSING_PHRASES = (
+    "missing axis label",
+    "missing axis labels",
+    "missing category label",
+    "missing category labels",
+)
+
 
 def _material_rule_recommendation(semantics: dict[str, Any]) -> dict[str, Any]:
-    axis_plan = semantics.get("axis_plan") if isinstance(semantics.get("axis_plan"), dict) else {}
+    axis_plan = (
+        semantics.get("axis_plan")
+        if isinstance(semantics.get("axis_plan"), dict)
+        else {}
+    )
     x_axis = axis_plan.get("x") if isinstance(axis_plan.get("x"), dict) else {}
     y_axis = axis_plan.get("y") if isinstance(axis_plan.get("y"), dict) else {}
     semantic_family = str(semantics.get("semantic_family") or "unknown")
     template = str(semantics.get("template") or "curve")
     confidence = float(semantics.get("confidence") or 0.0)
-    reason = str(semantics.get("reason") or f"Matched SciPlot material rule `{semantic_family}`.")
+    reason = str(
+        semantics.get("reason") or f"Matched SciPlot material rule `{semantic_family}`."
+    )
     return {
         "template_id": template,
         "score": confidence,
         "why_hard_match": [reason],
-        "why_soft_prior": ["SciPlot material semantics take precedence over generic table-shape inspection."],
+        "why_soft_prior": [
+            "SciPlot material semantics take precedence over generic table-shape inspection."
+        ],
         "inferred_mapping": {
             "x": x_axis.get("canonical_label") or "x",
             "y": y_axis.get("canonical_label") or "y",
@@ -86,28 +136,109 @@ def _material_rule_recommendation(semantics: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _generic_warning_is_superseded_by_ready_rule(message: str) -> bool:
+    normalized = " ".join(str(message).strip().lower().split())
+    if not normalized:
+        return True
+    # Remove only the known presentation-only use of "missing" before looking
+    # for data-risk words. This keeps "Missing axis labels" suppressible while
+    # preserving mixed warnings such as "Missing axis labels and values".
+    risk_text = normalized
+    for phrase in _GENERIC_PRESENTATION_ONLY_MISSING_PHRASES:
+        risk_text = risk_text.replace(phrase, "")
+    if any(marker in risk_text for marker in _GENERIC_DATA_RISK_WARNING_MARKERS):
+        return False
+    if any(marker in normalized for marker in _GENERIC_PRESENTATION_WARNING_MARKERS):
+        return True
+    # Unknown generic warnings are review input, not safe to suppress.
+    return False
+
+
+def _resolve_ready_rule_inspection_warnings(
+    warnings: list[Any],
+    *,
+    rule_id: str,
+) -> tuple[list[str], list[dict[str, str]]]:
+    user_warnings: list[str] = []
+    provenance: list[dict[str, str]] = []
+    for raw_warning in warnings:
+        message = str(raw_warning).strip()
+        if not message:
+            continue
+        superseded = _generic_warning_is_superseded_by_ready_rule(message)
+        disposition = (
+            "superseded_by_ready_rule" if superseded else "preserved_for_review"
+        )
+        provenance.append(
+            {
+                "message": message,
+                "source": "generic_table_inspection",
+                "disposition": disposition,
+                "resolved_by": f"sciplot_material_rule:{rule_id}" if superseded else "",
+            }
+        )
+        if not superseded:
+            user_warnings.append(f"[generic_table_inspection] {message}")
+    return user_warnings, provenance
+
+
 def _semantic_only_inspection_payload(
     source: Path,
     semantics: dict[str, Any],
     *,
     vendor_error: Exception,
 ) -> dict[str, Any]:
-    recommendation = _material_rule_recommendation(semantics)
+    candidate = _material_rule_recommendation(semantics)
+    candidate.update(
+        {
+            "score": 0.0,
+            "recommended_action": "inspect_source",
+            "lifecycle_policy": "candidate_only",
+            "recommendation_source": "sciplot_material_rule_candidate",
+            "suitability_hint": (
+                "Unverified SciPlot material-rule candidate; not eligible for "
+                "automatic rendering."
+            ),
+        }
+    )
     semantic_family = str(semantics.get("semantic_family") or "unknown")
-    confidence = float(semantics.get("confidence") or 0.0)
-    reason = str(semantics.get("reason") or f"Matched SciPlot material rule `{semantic_family}`.")
+    reason = str(
+        semantics.get("reason") or f"Matched SciPlot material rule `{semantic_family}`."
+    )
+    rule_id = str(semantics.get("rule_id") or semantic_family)
+    warning = (
+        "Generic table inspection could not read this source, so SciPlot cannot "
+        f"treat material rule `{rule_id}` as authoritative: {vendor_error}"
+    )
     return {
         "source": str(source),
         "model": semantic_family,
-        "model_label": f"{semantic_family} ({semantics.get('rule_id') or semantic_family})",
-        "recommendations": [recommendation],
-        "canonical_templates": [recommendation],
+        "model_label": f"{semantic_family} ({rule_id}; unverified candidate)",
+        # Keep executable recommendation surfaces empty.  Consumers such as
+        # ``render --auto`` intentionally select only from this list.
+        "recommendations": [],
+        "canonical_templates": [],
         "advanced_templates": [],
-        "recommendation_confidence": confidence,
-        "recommendation_summary": reason,
-        "warnings": [
-            "Generic table inspection could not read the raw instrument container; "
-            "SciPlot used its ready material rule."
+        "unverified_candidate": candidate,
+        "recommendation_confidence": 0.0,
+        "recommendation_summary": f"Unverified candidate only. {reason}",
+        "warnings": [f"[generic_table_inspection] {warning}"],
+        "inspection_resolution": {
+            "status": "generic_inspection_failed",
+            "authoritative_source": None,
+            "candidate_source": "sciplot_material_rule",
+            "candidate_rule_id": rule_id,
+            "candidate_model": semantic_family,
+            "candidate_template": semantics.get("template"),
+            "generic_inspection_status": "failed",
+        },
+        "inspection_warning_provenance": [
+            {
+                "message": warning,
+                "source": "generic_table_inspection",
+                "disposition": "preserved_for_review",
+                "resolved_by": "",
+            }
         ],
         "vendor_inspection_error": str(vendor_error),
         "sciplot_semantics": semantics,
@@ -116,67 +247,116 @@ def _semantic_only_inspection_payload(
 
 def inspect_payload(input_path: Path, *, sheet: str | int = 0) -> dict[str, Any]:
     with normalized_source(input_path) as source:
+        if source.is_file() and source.stat().st_size <= 0:
+            raise ValueError(f"Input file is empty: {source}")
         try:
             payload = json_safe(inspect_input_file(source, sheet))
         except (IsADirectoryError, TypeError, ValueError) as exc:
-            semantics = json_safe(classify_source(source, sheet=sheet))
-            if semantics.get("production_status") != "ready" or not semantics.get("rule_id"):
+            # A non-empty file that the generic reader cannot parse must fail
+            # closed.  Classifying it after the failure lets path keywords such
+            # as ``dma`` or ``ftir`` turn arbitrary bytes into an apparently
+            # authoritative ready-rule result.
+            if source.is_file():
                 raise
-            return _semantic_only_inspection_payload(source, semantics, vendor_error=exc)
-        semantics = json_safe(classify_source(source, sheet=sheet, vendor_inspection=payload))
+            semantics = json_safe(classify_source(source, sheet=sheet))
+            if semantics.get("production_status") != "ready" or not semantics.get(
+                "rule_id"
+            ):
+                raise
+            return _semantic_only_inspection_payload(
+                source, semantics, vendor_error=exc
+            )
+        semantics = json_safe(
+            classify_source(source, sheet=sheet, vendor_inspection=payload)
+        )
         payload["sciplot_semantics"] = semantics
         vendor_model = str(payload.get("model") or "")
         semantic_family = str(semantics.get("semantic_family") or "")
         rule_id = str(semantics.get("rule_id") or "")
         vendor_recommendations = (
-            payload.get("recommendations") if isinstance(payload.get("recommendations"), list) else []
+            payload.get("recommendations")
+            if isinstance(payload.get("recommendations"), list)
+            else []
         )
-        vendor_template = str(vendor_recommendations[0].get("template_id") or "") if vendor_recommendations else ""
+        vendor_template = (
+            str(vendor_recommendations[0].get("template_id") or "")
+            if vendor_recommendations
+            else ""
+        )
         semantic_template = str(semantics.get("template") or "")
-        semantic_override = (
-            semantics.get("production_status") == "ready"
-            and bool(rule_id)
-            and (vendor_model != semantic_family or vendor_template != semantic_template)
+        ready_rule_authority = semantics.get("production_status") == "ready" and bool(
+            rule_id
+        )
+        semantic_override = ready_rule_authority and (
+            vendor_model != semantic_family or vendor_template != semantic_template
         )
         if semantic_override:
             vendor_advanced = (
-                payload.get("advanced_templates") if isinstance(payload.get("advanced_templates"), list) else []
+                payload.get("advanced_templates")
+                if isinstance(payload.get("advanced_templates"), list)
+                else []
             )
             confidence = float(semantics.get("confidence") or 0.0)
-            reason = str(semantics.get("reason") or f"Matched SciPlot material rule `{semantic_family}`.")
+            reason = str(
+                semantics.get("reason")
+                or f"Matched SciPlot material rule `{semantic_family}`."
+            )
             recommendation = _material_rule_recommendation(semantics)
             payload["vendor_inspection_model"] = vendor_model
             payload["vendor_recommendations"] = vendor_recommendations
             payload["vendor_advanced_templates"] = vendor_advanced
             payload["model"] = semantic_family
-            payload["model_label"] = f"{semantic_family} ({semantics.get('rule_id') or semantic_family})"
+            payload["model_label"] = (
+                f"{semantic_family} ({semantics.get('rule_id') or semantic_family})"
+            )
             payload["recommendations"] = [recommendation]
             payload["canonical_templates"] = [recommendation]
             payload["advanced_templates"] = []
             payload["recommendation_confidence"] = confidence
             payload["recommendation_summary"] = reason
-            warnings = payload.get("warnings") if isinstance(payload.get("warnings"), list) else []
-            payload["warnings"] = [
-                (
-                    f"Generic inspection proposed `{vendor_model or 'unknown'}` / "
-                    f"`{vendor_template or 'unknown'}`; ready SciPlot rule `{rule_id}` "
-                    f"is authoritative and selected `{semantic_family}` / `{semantic_template}`."
+        if ready_rule_authority:
+            warnings = (
+                payload.get("warnings")
+                if isinstance(payload.get("warnings"), list)
+                else []
+            )
+            user_warnings, warning_provenance = _resolve_ready_rule_inspection_warnings(
+                warnings,
+                rule_id=rule_id,
+            )
+            payload["warnings"] = user_warnings
+            payload["inspection_resolution"] = {
+                "status": "ready_rule_authoritative",
+                "authoritative_source": "sciplot_material_rule",
+                "rule_id": rule_id,
+                "selected_model": semantic_family,
+                "selected_template": semantic_template,
+                "generic_inspection_status": (
+                    "superseded" if semantic_override else "confirmed"
                 ),
-                *warnings,
-            ]
+                "generic_model": vendor_model or "unknown",
+                "generic_template": vendor_template or "unknown",
+            }
+            payload["inspection_warning_provenance"] = warning_provenance
     return payload
 
 
-def _normalize_export_formats(export_formats: list[str] | tuple[str, ...] | None) -> tuple[str, ...]:
+def _normalize_export_formats(
+    export_formats: list[str] | tuple[str, ...] | None,
+) -> tuple[str, ...]:
     if export_formats is None:
         return DEFAULT_EXPORT_FORMATS
-    normalized = tuple(str(item).strip().lower() for item in export_formats if str(item).strip())
+    normalized = tuple(
+        str(item).strip().lower() for item in export_formats if str(item).strip()
+    )
     if not normalized:
         return DEFAULT_EXPORT_FORMATS
     unknown = [item for item in normalized if item not in _EXPORT_FORMATS]
     if unknown:
         known = ", ".join(sorted(_EXPORT_FORMATS))
-        raise ValueError(f"Unknown export format(s): {', '.join(unknown)}. Available exports: {known}.")
+        raise ValueError(
+            f"Unknown export format(s): {', '.join(unknown)}. Available exports: {known}."
+        )
     return normalized
 
 
@@ -189,13 +369,18 @@ def _export_path(filename: str, output_dir: Path, export_format: str) -> Path:
     return output_dir / f"{base}{suffix}.{extension}"
 
 
-def _series_labels_for_split(source: Path, sheet: str | int, options: dict[str, Any]) -> list[str]:
+def _series_labels_for_split(
+    source: Path, sheet: str | int, options: dict[str, Any]
+) -> list[str]:
     series_list = load_curve_table(source, sheet_name=sheet)
     available = [series.sample for series in series_list]
     series_include = options.get("series_include")
     unknown_include = unknown_series_order_labels(available, series_include)
     if unknown_include:
-        raise ValueError("series_include contains unknown series labels: " + ", ".join(unknown_include))
+        raise ValueError(
+            "series_include contains unknown series labels: "
+            + ", ".join(unknown_include)
+        )
     selected = filter_curve_series(series_list, series_include)
     if not selected and series_include:
         raise ValueError("series_include did not match any series.")
@@ -203,7 +388,9 @@ def _series_labels_for_split(source: Path, sheet: str | int, options: dict[str, 
     series_order = options.get("series_order")
     unknown_order = unknown_series_order_labels(selected_labels, series_order)
     if unknown_order:
-        raise ValueError("series_order contains unknown series labels: " + ", ".join(unknown_order))
+        raise ValueError(
+            "series_order contains unknown series labels: " + ", ".join(unknown_order)
+        )
     ordered = reorder_curve_series(selected, series_order)
     return [series.sample for series in ordered]
 
@@ -222,14 +409,18 @@ def _read_json_if_exists(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _veusz_target_base(source: Path, template: str, *, panel_index: int | None = None) -> str:
+def _veusz_target_base(
+    source: Path, template: str, *, panel_index: int | None = None
+) -> str:
     base = f"{source.stem}_{template}"
     if panel_index is not None:
         base = f"{base}_part{panel_index:02d}"
     return base
 
 
-def _render_studio_exports(request_path: Path, export_formats: tuple[str, ...]) -> dict[str, Any]:
+def _render_studio_exports(
+    request_path: Path, export_formats: tuple[str, ...]
+) -> dict[str, Any]:
     command = [
         sys.executable,
         "-m",
@@ -284,7 +475,9 @@ def _veusz_layout_report(
             }
         ],
     }
-    categorical = spec.get("categorical") if isinstance(spec.get("categorical"), dict) else None
+    categorical = (
+        spec.get("categorical") if isinstance(spec.get("categorical"), dict) else None
+    )
     if categorical is not None:
         summary["categorical_replicates"] = {
             "presentation_kind": categorical.get("presentation_kind"),
@@ -293,7 +486,10 @@ def _veusz_layout_report(
             "raw_values_preserved": categorical.get("raw_values_preserved"),
             "raw_replicate_count": categorical.get("raw_replicate_count"),
             "group_count": len(categorical.get("groups") or []),
-            "insufficient_replicate_groups": categorical.get("insufficient_replicate_groups") or [],
+            "insufficient_replicate_groups": categorical.get(
+                "insufficient_replicate_groups"
+            )
+            or [],
         }
     if split_panel is not None:
         summary["split_panel"] = split_panel
@@ -329,7 +525,9 @@ def _veusz_layout_report(
                 for side in ("left", "right", "bottom", "top")
             }
         style = spec.get("style") if isinstance(spec.get("style"), dict) else {}
-        actual_margins = style.get("margins_mm") if isinstance(style.get("margins_mm"), dict) else {}
+        actual_margins = (
+            style.get("margins_mm") if isinstance(style.get("margins_mm"), dict) else {}
+        )
         margin_errors = {
             side: abs(float(actual_margins.get(side, float("inf"))) - expected)
             for side, expected in expected_margins.items()
@@ -337,7 +535,9 @@ def _veusz_layout_report(
         frame_alignment = {
             "mode": "fixed_mm",
             "status": (
-                "aligned" if all(error <= tolerance_mm for error in margin_errors.values()) else "misaligned"
+                "aligned"
+                if all(error <= tolerance_mm for error in margin_errors.values())
+                else "misaligned"
             ),
             "expected_margins_mm": expected_margins,
             "actual_margins_mm": actual_margins,
@@ -358,7 +558,10 @@ def _veusz_layout_report(
                 }
             )
         legend = spec.get("legend") if isinstance(spec.get("legend"), dict) else {}
-        if str(legend.get("mode") or "").strip().casefold() in {"outside", "outside_right"}:
+        if str(legend.get("mode") or "").strip().casefold() in {
+            "outside",
+            "outside_right",
+        }:
             issues.append(
                 {
                     "id": "outside_legend_forbidden",
@@ -393,7 +596,9 @@ def _veusz_layout_report(
         "engine": "veusz",
         "issues": issues,
         "autofixes_applied": [
-            str(item) for item in spec.get("autofixes_applied", []) if isinstance(item, str)
+            str(item)
+            for item in spec.get("autofixes_applied", [])
+            if isinstance(item, str)
         ],
         "layout_summary": summary,
     }
@@ -471,11 +676,17 @@ def _render_veusz_panel(
         **terminal_request,
     }
     request_path = panel_dir / "plot_request.json"
-    request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
+    request_path.write_text(
+        json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     payload = _render_studio_exports(request_path, export_formats)
-    outputs, export_records = _copy_veusz_exports(payload, output_dir=output_dir, output_base=output_base)
+    outputs, export_records = _copy_veusz_exports(
+        payload, output_dir=output_dir, output_base=output_base
+    )
     document = Path(str(payload["document"]))
-    spec = Path(str(payload.get("studio", {}).get("spec") or document.with_suffix(".spec.json")))
+    spec = Path(
+        str(payload.get("studio", {}).get("spec") or document.with_suffix(".spec.json"))
+    )
     spec_payload = _read_json_if_exists(spec)
     report = _veusz_layout_report(
         template=template,
@@ -549,7 +760,8 @@ def _render_to_dir_veusz(
                 source,
                 template=template,
                 output_dir=output_dir,
-                panel_dir=worker_root / (f"panel_{panel_index:02d}" if panel_index else "single"),
+                panel_dir=worker_root
+                / (f"panel_{panel_index:02d}" if panel_index else "single"),
                 output_base=output_base,
                 options=panel_options,
                 export_formats=normalized_exports,

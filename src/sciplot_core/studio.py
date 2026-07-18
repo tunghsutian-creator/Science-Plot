@@ -32,7 +32,11 @@ from sciplot_core._utils import (
 from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.launchers import portable_sciplot_prelude, portable_vsz_finder
-from sciplot_core.materials_rules import compute_analysis_metrics, get_rule, semantic_payload_from_rule
+from sciplot_core.materials_rules import (
+    compute_analysis_metrics,
+    get_rule,
+    semantic_payload_from_rule,
+)
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import (
     AUTO_LOG_BOUND_PADDING_FACTOR,
@@ -219,7 +223,9 @@ def maybe_reexec_with_qt_runtime(original_argv: list[str]) -> None:
         current = env.get(key)
         env[key] = f"{joined}:{current}" if current else joined
     env["SCIPLOT_STUDIO_QT_RUNTIME"] = "1"
-    os.execvpe(sys.executable, [sys.executable, "-m", "sciplot_core.cli", *original_argv], env)
+    os.execvpe(
+        sys.executable, [sys.executable, "-m", "sciplot_core.cli", *original_argv], env
+    )
 
 
 def prepare_studio_document(
@@ -241,7 +247,9 @@ def prepare_studio_document(
     )
     if target_info["mode"] == "vsz":
         if _normalize_optional_string(rule_id):
-            raise ValueError("--rule applies to raw data, a SciPlot project, or plot_request.json; not an existing VSZ.")
+            raise ValueError(
+                "--rule applies to raw data, a SciPlot project, or plot_request.json; not an existing VSZ."
+            )
         return _existing_document_payload(target_info["document"])
 
     request_path = target_info["request"]
@@ -255,6 +263,19 @@ def prepare_studio_document(
         and project_name is None
         and not regenerate_generated
     ):
+        request = _read_json(request_path)
+        if _converge_studio_request_review_notes(request):
+            request_path.write_text(
+                json.dumps(json_safe(request), indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        figure_set = _prepare_rheology_frequency_figure_set(
+            project_dir=project_dir,
+            request_path=request_path,
+            request=request,
+            primary_document=existing_document,
+            preserve_existing=True,
+        )
         launcher = _write_studio_launcher(project_dir)
         veusz_launcher = _write_veusz_launcher(project_dir, existing_document)
         export_edited_launcher = _write_export_edited_launcher(project_dir)
@@ -268,6 +289,7 @@ def prepare_studio_document(
             request_path=request_path,
             series_count=_count_veusz_series(existing_document),
             generated_hash=generated_hash,
+            figure_set=figure_set,
         )
         _register_studio_block(project_dir, studio_block)
         return {
@@ -282,6 +304,7 @@ def prepare_studio_document(
             "series_count": studio_block["series_count"],
             "document_state": studio_block["document_state"],
             "studio": studio_block,
+            "figure_set": figure_set,
             "preserved_existing_document": True,
         }
     _apply_studio_request_overrides(
@@ -292,19 +315,19 @@ def prepare_studio_document(
         project_name=project_name,
     )
     request = _read_json(request_path)
+    _converge_studio_request_review_notes(request)
     effective_request, data_mapping_application = resolve_data_mapping_request(
         request,
         base_dir=request_path.parent,
     )
     if data_mapping_application is not None:
-        request["transform_ledger"] = deepcopy(
-            effective_request["transform_ledger"]
-        )
+        request["transform_ledger"] = deepcopy(effective_request["transform_ledger"])
     document_path = project_dir / "studio" / "document.vsz"
     document_path.parent.mkdir(parents=True, exist_ok=True)
     _archive_manual_document_if_needed(project_dir, document_path)
+    primary_render_request = _rheology_frequency_primary_request(request)
     series, axis_info, transform_steps, source_root = _series_from_request(
-        request,
+        primary_render_request,
         base_dir=request_path.parent,
     )
     terminal_series_order = _string_list(
@@ -312,14 +335,18 @@ def prepare_studio_document(
     )
     if terminal_series_order:
         request["series_order"] = terminal_series_order
+        primary_render_request["series_order"] = terminal_series_order
     if isinstance(axis_info.get("data_mapping_coverage"), dict):
-        request["data_mapping_coverage"] = json_safe(
-            axis_info["data_mapping_coverage"]
-        )
+        request["data_mapping_coverage"] = json_safe(axis_info["data_mapping_coverage"])
     study_model = normalize_study_model(
         request.get("study_model")
         if isinstance(request.get("study_model"), dict)
-        else {"kind": "sciplot_study_model", "version": 1, "samples": [], "figure_queue": []}
+        else {
+            "kind": "sciplot_study_model",
+            "version": 1,
+            "samples": [],
+            "figure_queue": [],
+        }
     )
     render_defaults = study_model.get("render_defaults")
     if terminal_series_order and isinstance(render_defaults, dict):
@@ -329,14 +356,20 @@ def prepare_studio_document(
         request=request,
         input_path=source_root,
         steps=transform_steps,
-        existing=request.get("transform_ledger") if isinstance(request.get("transform_ledger"), dict) else None,
+        existing=request.get("transform_ledger")
+        if isinstance(request.get("transform_ledger"), dict)
+        else None,
     )
     publication_intent = build_publication_intent(
         study_model,
         request=request,
-        existing=request.get("publication_intent") if isinstance(request.get("publication_intent"), dict) else None,
+        existing=request.get("publication_intent")
+        if isinstance(request.get("publication_intent"), dict)
+        else None,
     )
-    publication_intent = link_intent_to_transform_ledger(publication_intent, transform_ledger)
+    publication_intent = link_intent_to_transform_ledger(
+        publication_intent, transform_ledger
+    )
     study_model["publication_intent_ref"] = "publication_intent.json"
     request["study_model"] = study_model
     request["publication_intent"] = publication_intent
@@ -345,7 +378,21 @@ def prepare_studio_document(
         json.dumps(json_safe(request), indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    spec_path = _write_veusz_document(document_path, request=request, series=series, axis_info=axis_info)
+    spec_path = _write_veusz_document(
+        document_path,
+        request=primary_render_request,
+        series=series,
+        axis_info=axis_info,
+    )
+    figure_set = _prepare_rheology_frequency_figure_set(
+        project_dir=project_dir,
+        request_path=request_path,
+        request=request,
+        primary_document=document_path,
+        primary_series_count=len(series),
+        primary_generated_hash=existing_file_sha256(document_path),
+        preserve_existing=False,
+    )
     launcher = _write_studio_launcher(project_dir)
     veusz_launcher = _write_veusz_launcher(project_dir, document_path)
     export_edited_launcher = _write_export_edited_launcher(project_dir)
@@ -359,6 +406,7 @@ def prepare_studio_document(
         request_path=request_path,
         series_count=len(series),
         generated_hash=generated_hash,
+        figure_set=figure_set,
     )
     _register_studio_block(project_dir, studio_block)
     return {
@@ -373,6 +421,7 @@ def prepare_studio_document(
         "series_count": len(series),
         "document_state": studio_block["document_state"],
         "studio": studio_block,
+        "figure_set": figure_set,
     }
 
 
@@ -402,7 +451,11 @@ def run_studio_command(
         return 0
 
     if new:
-        payload = {"kind": "sciplot_studio_session", "mode": "new", "upstreams": upstream_status()}
+        payload = {
+            "kind": "sciplot_studio_session",
+            "mode": "new",
+            "upstreams": upstream_status(),
+        }
         if json_output or prepare_only:
             print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
             return 0
@@ -413,7 +466,9 @@ def run_studio_command(
         raise ValueError("studio needs PATH or --new.")
 
     if advanced_editor:
-        maybe_reexec_with_qt_runtime(original_argv or ["studio", str(target), "--advanced-editor"])
+        maybe_reexec_with_qt_runtime(
+            original_argv or ["studio", str(target), "--advanced-editor"]
+        )
         return launch_veusz_gui(target.expanduser())
 
     if not (json_output or prepare_only or export):
@@ -456,9 +511,16 @@ def run_studio_command(
         standalone_root = (
             output_root.expanduser().resolve()
             if standalone_export and output_root is not None
-            else document_path.parent / "exports"
+            else _standalone_export_artifact_root(document_path)
         )
-        export_dir = standalone_root / "figures" if standalone_export and output_root is not None else None
+        export_dir = (
+            standalone_root / "figures"
+            if standalone_export
+            and (
+                output_root is not None or _is_project_secondary_document(document_path)
+            )
+            else None
+        )
         export_payload = export_studio_document(
             document_path,
             formats=requested_formats,
@@ -471,21 +533,23 @@ def run_studio_command(
                 request_path=Path(payload["request"]),
                 document_path=document_path,
                 exports=payload["exports"],
-                export_document_sha256=str(
-                    export_payload["document_sha256"]
-                ),
+                export_document_sha256=str(export_payload["document_sha256"]),
             )
             payload["studio_run"] = studio_run
-            _register_studio_exports(Path(payload["project_dir"]), payload["exports"], studio_run=studio_run)
+            _register_studio_exports(
+                Path(payload["project_dir"]), payload["exports"], studio_run=studio_run
+            )
+            figure_set_export_scope = studio_run.get("figure_set_export_scope")
+            if isinstance(figure_set_export_scope, dict):
+                payload["figure_set_export_scope"] = json_safe(figure_set_export_scope)
+            payload["scope"] = str(studio_run.get("scope") or "project_delivery")
         elif standalone_export:
             receipt = publish_standalone_export_receipt(
                 document_path=document_path,
                 requested_formats=requested_formats,
                 exports=payload["exports"],
                 artifact_root=standalone_root,
-                export_document_sha256=str(
-                    export_payload["document_sha256"]
-                ),
+                export_document_sha256=str(export_payload["document_sha256"]),
             )
             payload["standalone_export"] = receipt
             payload["status"] = receipt["status"]
@@ -500,11 +564,212 @@ def run_studio_command(
             if isinstance(studio_run, dict):
                 if studio_run.get("ready_to_use") is not True:
                     return 1
-            elif not isinstance(standalone_receipt, dict) or standalone_receipt.get("export_ready") is not True:
+            elif (
+                not isinstance(standalone_receipt, dict)
+                or standalone_receipt.get("export_ready") is not True
+            ):
                 return 1
         return 0
 
     return launch_veusz_gui(document_path)
+
+
+def _is_project_secondary_document(document_path: Path) -> bool:
+    resolved = document_path.expanduser().resolve()
+    return bool(
+        resolved.parent.name == "figures"
+        and resolved.parent.parent.name == "studio"
+        and resolved.name != "document.vsz"
+        and (resolved.parent.parent / "document.vsz").is_file()
+        and (resolved.parent.parent.parent / "plot_request.json").is_file()
+    )
+
+
+def _standalone_export_artifact_root(document_path: Path) -> Path:
+    resolved = document_path.expanduser().resolve()
+    if _is_project_secondary_document(resolved):
+        return resolved.parent / "exports" / resolved.stem
+    return resolved.parent / "exports"
+
+
+def _validate_staged_veusz_document(
+    staged_path: Path,
+    *,
+    mode: str,
+    source_document: Any,
+) -> bool:
+    """Validate staged bytes and report whether secure Veusz reopen succeeded.
+
+    Syntax, non-empty, and I/O failures raise.  A secure-mode rejection of
+    owner-approved commands returns ``False`` so the caller can preserve the
+    document atomically while withholding any verified-export claim.
+    """
+
+    with staged_path.open("rb") as handle:
+        handle.seek(0, os.SEEK_END)
+        size = handle.tell()
+        if size <= 0:
+            raise OSError("Veusz produced an empty staged document.")
+        handle.seek(0)
+        handle.read(1)
+
+    if mode == "vsz":
+        source = staged_path.read_text(encoding="utf-8")
+        compile(source, str(staged_path), "exec")
+
+    from veusz import document as veusz_document
+
+    reopened = veusz_document.Document()
+    try:
+        reopened.load(
+            str(staged_path),
+            mode=mode,
+            callbackunsafe=lambda: False,
+            callbackimporterror=lambda _filename, _error: False,
+        )
+    except Exception as exc:
+        # A document which the owner explicitly opened in Veusz secure mode
+        # may legitimately serialize commands that a fresh validation
+        # document refuses to execute.  The staged source has still passed
+        # UTF-8 decoding, Python compilation, fsync, and non-empty checks.
+        # Never execute those commands a second time merely to validate save.
+        if mode == "vsz" and "unsafe command" in str(exc).casefold():
+            return False
+        raise
+    expected_datasets = sorted(str(name) for name in source_document.data)
+    reopened_datasets = sorted(str(name) for name in reopened.data)
+    expected_pages = [
+        (str(child.name), str(getattr(child, "typename", "")))
+        for child in source_document.basewidget.children
+    ]
+    reopened_pages = [
+        (str(child.name), str(getattr(child, "typename", "")))
+        for child in reopened.basewidget.children
+    ]
+    if reopened_datasets != expected_datasets or reopened_pages != expected_pages:
+        raise OSError(
+            "The staged Veusz document reopened with a different dataset or "
+            "page structure."
+        )
+    return True
+
+
+def atomic_save_veusz_document(document: Any, target: Path) -> dict[str, Any]:
+    """Serialize a live Veusz document without ever truncating its target.
+
+    Veusz's native ``Document.save`` writes directly to the requested path and
+    marks the live document unmodified before the caller knows whether a
+    durable replacement exists.  This adapter serializes beside the target,
+    fsyncs, and attempts a secure-mode structural reopen before replacing the
+    public path.  A VSZ containing commands which secure-mode validation cannot
+    execute is still saved atomically so the owner's work is not lost, but its
+    receipt is explicitly ``saved_unvalidated`` and callers must not publish
+    it as an exact-current verified export.  The live filename, modified flag,
+    and revision are restored exactly when any pre-commit step fails.
+    """
+
+    requested = target.expanduser()
+    if not requested.is_absolute():
+        requested = Path.cwd() / requested
+    parent = requested.parent.resolve(strict=True)
+    if not parent.is_dir():
+        raise NotADirectoryError(parent)
+    resolved_target = parent / requested.name
+    mode = "hdf5" if resolved_target.suffix.casefold() == ".vszh5" else "vsz"
+    old_document_filename = str(getattr(document, "filename", "") or "")
+    old_modified = bool(document.isModified())
+    old_changeset = int(getattr(document, "changeset", 0))
+    signals_blocked = bool(
+        document.signalsBlocked() if hasattr(document, "signalsBlocked") else False
+    )
+    existing_mode = (
+        resolved_target.stat().st_mode & 0o777 if resolved_target.exists() else 0o644
+    )
+    staged_fd, staged_name = tempfile.mkstemp(
+        prefix=f".{resolved_target.stem}.sciplot-save-",
+        suffix=resolved_target.suffix,
+        dir=parent,
+    )
+    os.close(staged_fd)
+    staged_path = Path(staged_name)
+    replaced = False
+
+    def restore_live_state() -> None:
+        document.filename = old_document_filename
+        document.modified = old_modified
+        document.changeset = old_changeset
+
+    try:
+        if hasattr(document, "blockSignals"):
+            document.blockSignals(True)
+        try:
+            document.save(str(staged_path), mode)
+        finally:
+            restore_live_state()
+            if hasattr(document, "blockSignals"):
+                document.blockSignals(signals_blocked)
+
+        with staged_path.open("r+b") as handle:
+            handle.flush()
+            os.fsync(handle.fileno())
+        reopen_validated = _validate_staged_veusz_document(
+            staged_path,
+            mode=mode,
+            source_document=document,
+        )
+        os.chmod(staged_path, existing_mode)
+        staged_size = staged_path.stat().st_size
+        staged_sha256 = file_sha256(staged_path)
+        os.replace(staged_path, resolved_target)
+        replaced = True
+
+        # Directory fsync is not supported on every filesystem.  The replace
+        # is already the commit point, so an unsupported durability hint must
+        # not roll the live state back to a filename that has in fact changed.
+        directory_fd: int | None = None
+        directory_fsync = False
+        try:
+            directory_fd = os.open(parent, os.O_RDONLY)
+            os.fsync(directory_fd)
+            directory_fsync = True
+        except OSError:
+            pass
+        finally:
+            if directory_fd is not None:
+                try:
+                    os.close(directory_fd)
+                except OSError:
+                    pass
+
+        document.filename = str(resolved_target)
+        try:
+            document.setModified(False)
+        except Exception:
+            # The file replacement is already committed.  Do not report a
+            # save failure that could tempt the caller to retry against a
+            # target which did change; preserve the truthful saved state.
+            document.modified = False
+        return {
+            "kind": "sciplot_atomic_veusz_save",
+            "version": 1,
+            "status": "passed" if reopen_validated else "saved_unvalidated",
+            "target": str(resolved_target),
+            "mode": mode,
+            "size_bytes": staged_size,
+            "sha256": staged_sha256,
+            "reopen_validated": reopen_validated,
+            "ready_for_export": reopen_validated,
+            "directory_fsync": directory_fsync,
+        }
+    except Exception:
+        if not replaced:
+            restore_live_state()
+            if hasattr(document, "blockSignals"):
+                document.blockSignals(signals_blocked)
+        raise
+    finally:
+        if staged_path.exists():
+            staged_path.unlink()
 
 
 def qt_smoke_payload(document_path: Path | None = None) -> dict[str, Any]:
@@ -519,6 +784,13 @@ def qt_smoke_payload(document_path: Path | None = None) -> dict[str, Any]:
     # upstream import-security confirmation dialog, which is intentionally left
     # to the separate reopen/export smoke rather than an offscreen GUI check.
     window = _create_veusz_window(None)
+    close_safety = _mainwindow_close_safety_probe(window)
+    selected_widgets = getattr(window.treeedit, "selwidgets", [])
+    selected_widget_path = (
+        str(selected_widgets[0].path)
+        if isinstance(selected_widgets, list) and selected_widgets
+        else None
+    )
     document_probe: dict[str, Any] = {
         "document": None,
         "document_loaded": None,
@@ -549,6 +821,27 @@ def qt_smoke_payload(document_path: Path | None = None) -> dict[str, Any]:
         "pyqt_version": QtCore.PYQT_VERSION_STR,
         "window": type(window).__name__,
         "main_window_constructed": True,
+        "window_title": window.windowTitle(),
+        "initial_widget_path": selected_widget_path,
+        "fail_closed_close_installed": bool(
+            getattr(type(window).closeEvent, "_sciplot_fail_closed", False)
+        ),
+        "atomic_save_installed": bool(
+            getattr(type(window).slotFileSave, "_sciplot_atomic_save", False)
+            and getattr(
+                type(window).slotFileSaveAs,
+                "_sciplot_atomic_save_as",
+                False,
+            )
+        ),
+        "integrated_window_factory_installed": bool(
+            getattr(
+                getattr(type(window).CreateWindow, "__func__", None),
+                "_sciplot_integrated_factory",
+                False,
+            )
+        ),
+        "close_safety": close_safety,
         **document_probe,
         "upstreams": upstream_status(),
     }
@@ -556,6 +849,126 @@ def qt_smoke_payload(document_path: Path | None = None) -> dict[str, Any]:
     if created_app:
         app.quit()
     return payload
+
+
+def _mainwindow_close_safety_probe(window: Any) -> dict[str, bool]:
+    """Exercise close decisions without actually destroying the probe window."""
+
+    from veusz import qtall as qt
+
+    class ProbeCloseEvent:
+        def __init__(self) -> None:
+            self.accepted = False
+            self.ignored = False
+
+        def accept(self) -> None:
+            self.accepted = True
+            self.ignored = False
+
+        def ignore(self) -> None:
+            self.accepted = False
+            self.ignored = True
+
+        def isAccepted(self) -> bool:
+            return self.accepted
+
+    original_query = window.queryOverwrite
+    original_save = window.slotFileSave
+    original_filename = str(getattr(window, "filename", "") or "")
+    results: dict[str, bool] = {}
+
+    def exercise(
+        decision: Any,
+        *,
+        filename: Path | None,
+        save: Any,
+    ) -> tuple[ProbeCloseEvent, bool]:
+        window.document.setModified(True)
+        window.filename = "" if filename is None else str(filename)
+        window.queryOverwrite = lambda: decision
+        window.slotFileSave = save
+        event = ProbeCloseEvent()
+        window.closeEvent(event)
+        return event, bool(window.document.isModified())
+
+    try:
+        cancel_event, cancel_modified = exercise(
+            qt.QMessageBox.StandardButton.Cancel,
+            filename=None,
+            save=lambda: None,
+        )
+        results["cancel_keeps_window"] = cancel_event.ignored and cancel_modified
+
+        with tempfile.TemporaryDirectory(prefix="sciplot_close_probe_") as raw:
+            root = Path(raw)
+            failed_path = root / "missing" / "failed.vsz"
+            failed_event, failed_modified = exercise(
+                qt.QMessageBox.StandardButton.Save,
+                filename=failed_path,
+                save=lambda: None,
+            )
+            results["save_failure_keeps_window"] = (
+                failed_event.ignored and failed_modified and not failed_path.exists()
+            )
+
+            def exceptional_save() -> None:
+                raise OSError("synthetic close-save failure")
+
+            exception_event, exception_modified = exercise(
+                qt.QMessageBox.StandardButton.Save,
+                filename=failed_path,
+                save=exceptional_save,
+            )
+            close_save_error = getattr(
+                window,
+                "_sciplot_close_save_error",
+                None,
+            )
+            results["save_exception_keeps_window"] = (
+                exception_event.ignored
+                and exception_modified
+                and isinstance(close_save_error, dict)
+                and close_save_error.get("state") == "save_exception"
+                and close_save_error.get("error", {}).get("type") == "OSError"
+            )
+
+            save_as_event, save_as_modified = exercise(
+                qt.QMessageBox.StandardButton.Save,
+                filename=None,
+                save=lambda: None,
+            )
+            results["save_as_cancel_keeps_window"] = (
+                save_as_event.ignored and save_as_modified
+            )
+
+            saved_path = root / "saved.vsz"
+
+            def successful_save() -> None:
+                saved_path.write_text("SciPlot close safety probe\n", encoding="utf-8")
+                window.document.setModified(False)
+
+            saved_event, saved_modified = exercise(
+                qt.QMessageBox.StandardButton.Save,
+                filename=saved_path,
+                save=successful_save,
+            )
+            results["save_success_closes"] = (
+                saved_event.accepted and not saved_modified and saved_path.is_file()
+            )
+
+        discard_event, discard_modified = exercise(
+            qt.QMessageBox.StandardButton.Discard,
+            filename=None,
+            save=lambda: None,
+        )
+        results["discard_closes"] = discard_event.accepted and not discard_modified
+    finally:
+        window.queryOverwrite = original_query
+        window.slotFileSave = original_save
+        window.filename = original_filename
+        window.document.setModified(False)
+
+    return results
 
 
 def launch_veusz_gui(document_path: Path | None) -> int:
@@ -592,15 +1005,265 @@ def _create_veusz_window(document_path: Path | None) -> Any:
 
     _ensure_veusz_loader_compat()
     _ensure_veusz_examples_menu_compat(MainWindow)
+    _ensure_veusz_mainwindow_compat(MainWindow)
     window = MainWindow()
     if document_path is not None:
         window.openFileInWindow(str(document_path))
     else:
         window.setupDefaultDoc("graph")
-    window.setWindowTitle("SciPlot Studio")
-    _attach_sciplot_menu(window, document_path)
-    window.resize(1200, 820)
+        _configure_sciplot_window(window, None)
+    if window not in MainWindow.windows:
+        MainWindow.windows.append(window)
     return window
+
+
+def _ensure_veusz_mainwindow_compat(main_window_type: type[Any]) -> None:
+    """Install SciPlot's fail-closed save and integrated window factory.
+
+    Upstream Veusz accepts a close event after ``slotFileSave()`` even when
+    saving failed or Save As was cancelled.  That is unsafe for a daily editing
+    surface because a still-modified document can disappear.  The adapter also
+    keeps File/Open, Recent, and drag-created windows inside the same SciPlot
+    MainWindow integration instead of silently dropping the Project and AI
+    docks.
+    """
+
+    if getattr(main_window_type, "_sciplot_mainwindow_compat", False):
+        return
+
+    from veusz import qtall as qt
+
+    original_close_event = main_window_type.closeEvent
+    original_open_file_in_window = main_window_type.openFileInWindow
+    original_slot_file_save_as = main_window_type.slotFileSaveAs
+    original_update_titlebar = main_window_type.updateTitlebar
+
+    def readable_filename(window: Any) -> Path | None:
+        filename = str(getattr(window, "filename", "") or "").strip()
+        if not filename:
+            return None
+        candidate = Path(filename).expanduser()
+        try:
+            resolved = candidate.resolve()
+            if not resolved.is_file():
+                return None
+            with resolved.open("rb") as handle:
+                handle.read(1)
+        except OSError:
+            return None
+        return resolved
+
+    def record_close_save_error(
+        window: Any,
+        *,
+        state: str,
+        message: str,
+        exc: Exception | None = None,
+    ) -> None:
+        error_type = type(exc).__name__ if exc is not None else "RuntimeError"
+        window._sciplot_close_save_error = {
+            "state": state,
+            "error": {
+                "type": error_type,
+                "message": message,
+            },
+        }
+
+    def record_save_error(window: Any, *, target: Path | None, exc: Exception) -> None:
+        message = str(exc) or type(exc).__name__
+        window._sciplot_save_error = {
+            "state": "atomic_save_failed",
+            "target": str(target) if target is not None else None,
+            "error": {
+                "type": type(exc).__name__,
+                "message": message,
+            },
+        }
+        try:
+            window.updateStatusbar(f"Save failed: {message}")
+        except (AttributeError, RuntimeError):
+            pass
+        handler = getattr(window, "_sciplot_save_error_handler", None)
+        if callable(handler):
+            handler(window._sciplot_save_error)
+            return
+        qt.QMessageBox.critical(
+            window,
+            "Error — SciPlot Studio",
+            "Unable to save the Veusz document without risking the current "
+            f"file.\n\n{message}",
+        )
+
+    def save_to_target(window: Any, target: Path) -> bool:
+        old_window_filename = str(getattr(window, "filename", "") or "")
+        try:
+            receipt = atomic_save_veusz_document(window.document, target)
+        except Exception as exc:
+            window.filename = old_window_filename
+            record_save_error(window, target=target, exc=exc)
+            return False
+        saved_path = str(receipt["target"])
+        window.filename = saved_path
+        window._sciplot_atomic_save_receipt = receipt
+        window._sciplot_save_error = None
+        try:
+            window.updateTitlebar()
+            if receipt.get("reopen_validated") is True:
+                window.updateStatusbar(f"Saved to {saved_path}")
+            else:
+                window.updateStatusbar(
+                    "Saved atomically, but secure-mode structural validation "
+                    "was unavailable; SciPlot export remains blocked."
+                )
+        except Exception:
+            pass
+        return True
+
+    def slot_file_save(window: Any) -> bool:
+        filename = str(getattr(window, "filename", "") or "").strip()
+        if not filename:
+            return bool(window.slotFileSaveAs())
+        return save_to_target(window, Path(filename))
+
+    def slot_file_save_as(window: Any) -> bool:
+        filters = ["Veusz document files (*.vsz)"]
+        if original_slot_file_save_as.__globals__.get("h5py") is not None:
+            filters.append("Veusz HDF5 document files (*.vszh5)")
+        filename = window.fileSaveDialog(filters, "Save as")
+        if not filename:
+            return False
+        return save_to_target(window, Path(str(filename)))
+
+    def close_event(window: Any, event: Any) -> None:
+        # The event starts fail-closed.  Only a confirmed discard or a save
+        # that leaves an unmodified document at a readable target may reach
+        # Veusz's normal close path.
+        event.ignore()
+        discard_requested = False
+        if window.document.isModified():
+            decision = window.queryOverwrite()
+            if decision == qt.QMessageBox.StandardButton.Cancel:
+                return
+            if decision == qt.QMessageBox.StandardButton.Save:
+                window._sciplot_close_save_error = None
+                try:
+                    window.slotFileSave()
+                except Exception as exc:
+                    window.document.setModified(True)
+                    record_close_save_error(
+                        window,
+                        state="save_exception",
+                        message=str(exc) or type(exc).__name__,
+                        exc=exc,
+                    )
+                    return
+                saved_path = readable_filename(window)
+                if window.document.isModified() or saved_path is None:
+                    window.document.setModified(True)
+                    record_close_save_error(
+                        window,
+                        state="save_incomplete",
+                        message=(
+                            "Veusz did not leave an unmodified document at a "
+                            "readable save target; the window remains open."
+                        ),
+                    )
+                    return
+            elif decision == qt.QMessageBox.StandardButton.Discard:
+                discard_requested = True
+                # Let the upstream close path persist geometry/settings without
+                # showing the same prompt a second time.
+                window.document.setModified(False)
+
+        try:
+            original_close_event(window, event)
+        finally:
+            if discard_requested and not event.isAccepted():
+                window.document.setModified(True)
+
+    def update_titlebar(window: Any) -> None:
+        original_update_titlebar(window)
+        filename = str(getattr(window, "filename", "") or "").strip()
+        title_label = Path(filename).stem if filename else "Untitled"
+        window.setWindowTitle(f"{title_label} — SciPlot Studio")
+        for attribute in (
+            "_sciplot_project_bridge",
+            "_sciplot_assistant_bridge",
+        ):
+            bridge = getattr(window, attribute, None)
+            handler = getattr(bridge, "handle_document_context_changed", None)
+            if callable(handler):
+                handler()
+
+    def open_file_in_window(window: Any, filename: str) -> Any:
+        result = original_open_file_in_window(window, filename)
+        loaded_filename = str(getattr(window, "filename", "") or "").strip()
+        if loaded_filename:
+            _configure_sciplot_window(
+                window,
+                Path(loaded_filename).expanduser().resolve(),
+            )
+        return result
+
+    @classmethod
+    def create_window(
+        cls: type[Any],
+        filename: str | None = None,
+        mode: str = "graph",
+    ) -> Any:
+        window = cls()
+        if filename:
+            window.openFileInWindow(str(filename))
+        else:
+            window.setupDefaultDoc(mode)
+            _configure_sciplot_window(window, None)
+        window.show()
+        if window not in cls.windows:
+            cls.windows.append(window)
+        return window
+
+    close_event._sciplot_fail_closed = True  # type: ignore[attr-defined]
+    slot_file_save._sciplot_atomic_save = True  # type: ignore[attr-defined]
+    slot_file_save_as._sciplot_atomic_save_as = True  # type: ignore[attr-defined]
+    update_titlebar._sciplot_titlebar = True  # type: ignore[attr-defined]
+    open_file_in_window._sciplot_integrated_open = True  # type: ignore[attr-defined]
+    create_window.__func__._sciplot_integrated_factory = True  # type: ignore[attr-defined]
+    main_window_type.closeEvent = close_event
+    main_window_type.slotFileSave = slot_file_save
+    main_window_type.slotFileSaveAs = slot_file_save_as
+    main_window_type.updateTitlebar = update_titlebar
+    main_window_type.openFileInWindow = open_file_in_window
+    main_window_type.CreateWindow = create_window
+    main_window_type._sciplot_mainwindow_compat = True
+
+
+def _configure_sciplot_window(
+    window: Any,
+    document_path: Path | None,
+) -> None:
+    resolved_document = (
+        document_path.expanduser().resolve() if document_path is not None else None
+    )
+    _attach_sciplot_menu(window, resolved_document)
+    if resolved_document is None:
+        title_label = "Untitled"
+    else:
+        context = _project_context_for_document(resolved_document)
+        if context is None:
+            title_label = resolved_document.stem
+        else:
+            figure_id = str(context.get("figure_id") or "").strip()
+            title_label = context["project_dir"].name
+            if figure_id:
+                title_label = f"{title_label} — {figure_id}"
+    window.setWindowTitle(f"{title_label} — SciPlot Studio")
+    try:
+        window.treeedit.doInitialWidgetSelect()
+    except (AttributeError, RuntimeError):
+        pass
+    if not getattr(window, "_sciplot_size_initialized", False):
+        window.resize(1200, 820)
+        window._sciplot_size_initialized = True
 
 
 def ensure_veusz_qsettings_compat() -> None:
@@ -674,7 +1337,9 @@ def _ensure_veusz_loader_compat() -> None:
     else:
 
         def _missing_import_fits(self: Any, *_args: Any, **_kwargs: Any) -> None:
-            raise RuntimeError("Veusz FITS import support is unavailable in this SciPlot Studio runtime.")
+            raise RuntimeError(
+                "Veusz FITS import support is unavailable in this SciPlot Studio runtime."
+            )
 
         CommandInterface.ImportFITSFile = _missing_import_fits
 
@@ -686,7 +1351,9 @@ def _ensure_veusz_loader_compat() -> None:
     ) -> tuple[list[str], dict[str, int]]:
         dataset_name = str(descriptor).split("(", 1)[0].strip()
         if not dataset_name:
-            raise ValueError(f"Unsupported Veusz ImportString descriptor: {descriptor!r}")
+            raise ValueError(
+                f"Unsupported Veusz ImportString descriptor: {descriptor!r}"
+            )
         values: list[float] = []
         invalid = 0
         for line in str(dstring).splitlines():
@@ -736,6 +1403,9 @@ def _ensure_veusz_loader_compat() -> None:
 def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
     if document_path is None:
         return
+    document_key = str(document_path.expanduser().resolve())
+    if getattr(window, "_sciplot_attached_document", None) == document_key:
+        return
     try:
         from PyQt6 import QtGui
     except Exception:
@@ -757,12 +1427,13 @@ def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
             "Save And Export Exact-Current PDF/TIFF",
             window,
         )
-        export_action.triggered.connect(project.export_current_document)
-        menu.addAction(export_action)
         export_action.setToolTip(
             "Save the current Veusz document, export PDF/TIFF, and run SciPlot "
             "artifact QA. Project packages also build the portable delivery."
         )
+        export_action.triggered.connect(project.export_current_document)
+        menu.addAction(export_action)
+        project.bind_export_action(export_action)
         project_action = project.dock.toggleViewAction()
         project_action.setText("Show SciPlot Project")
         menu.addAction(project_action)
@@ -780,6 +1451,9 @@ def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
         from sciplot_gui.studio_assistant import attach_studio_assistant
 
         assistant = attach_studio_assistant(window, document_path)
+        project = getattr(window, "_sciplot_project_bridge", None)
+        if project is not None and hasattr(project, "bind_assistant"):
+            project.bind_assistant(assistant)
         menu.addSeparator()
         assistant_action = assistant.dock.toggleViewAction()
         assistant_action.setText("Show SciPlot AI")
@@ -796,15 +1470,26 @@ def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
         menu.addAction(assistant_unavailable)
         actions.append(assistant_unavailable)
     window._sciplot_actions = getattr(window, "_sciplot_actions", []) + actions
+    window._sciplot_attached_document = document_key
 
 
-def _project_context_for_document(document_path: Path) -> dict[str, Path] | None:
+def _project_context_for_document(document_path: Path) -> dict[str, Any] | None:
     candidate = document_path.expanduser().resolve()
-    if candidate.parent.name == "studio":
-        project_dir = candidate.parent.parent
+    studio_dir = next(
+        (parent for parent in candidate.parents if parent.name == "studio"),
+        None,
+    )
+    if studio_dir is not None:
+        project_dir = studio_dir.parent
         request_path = project_dir / "plot_request.json"
         if request_path.exists():
-            return {"project_dir": project_dir, "request_path": request_path}
+            return {
+                "project_dir": project_dir,
+                "request_path": request_path,
+                "figure_id": (
+                    None if candidate == studio_dir / "document.vsz" else candidate.stem
+                ),
+            }
     return None
 
 
@@ -815,11 +1500,836 @@ def _normalize_optional_string(value: str | None) -> str | None:
     return stripped or None
 
 
+def _converge_studio_request_review_notes(
+    request: dict[str, Any],
+) -> bool:
+    from sciplot_core.intake import converge_material_review_notes
+
+    return converge_material_review_notes(request)
+
+
+_RHEOLOGY_FREQUENCY_FIGURE_METRICS = {
+    "storage_modulus",
+    "loss_modulus",
+    "loss_factor",
+    "complex_viscosity",
+}
+
+
+def _rheology_frequency_figure_queue(
+    request: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return the bounded, independent-document frequency-sweep queue."""
+
+    if str(request.get("rule_id") or "").strip() != "rheology_frequency_sweep":
+        return []
+    study_model = normalize_study_model(
+        request.get("study_model")
+        if isinstance(request.get("study_model"), dict)
+        else {}
+    )
+    raw_queue = (
+        study_model.get("figure_queue")
+        if isinstance(study_model.get("figure_queue"), list)
+        else []
+    )
+    queue: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for value in raw_queue:
+        if not isinstance(value, dict):
+            continue
+        figure_id = str(value.get("id") or "").strip()
+        x_metric = _clean_metric_id(value.get("x_metric"))
+        y_metric = _clean_metric_id(value.get("y_metric") or value.get("metric"))
+        if (
+            not re.fullmatch(r"[a-z0-9][a-z0-9_]*", figure_id)
+            or figure_id in seen_ids
+            or x_metric != "angular_frequency"
+            or y_metric not in _RHEOLOGY_FREQUENCY_FIGURE_METRICS
+        ):
+            continue
+        seen_ids.add(figure_id)
+        queue.append(
+            {
+                **deepcopy(value),
+                "id": figure_id,
+                "x_metric": x_metric,
+                "y_metric": y_metric,
+                "metric": y_metric,
+                "default_template": "point_line",
+            }
+        )
+    if not any(item["y_metric"] == "storage_modulus" for item in queue):
+        return []
+    return queue
+
+
+def _rheology_frequency_figure_request(
+    request: dict[str, Any],
+    figure: dict[str, Any],
+) -> dict[str, Any]:
+    figure_request = deepcopy(request)
+    y_metric = str(figure["y_metric"])
+    figure_request["x_metric"] = "angular_frequency"
+    figure_request["y_metric"] = y_metric
+    figure_request["template"] = "point_line"
+    render_options = (
+        dict(figure_request.get("render_options"))
+        if isinstance(figure_request.get("render_options"), dict)
+        else {}
+    )
+    render_options["size"] = "60x55"
+    explicit_render_keys = {
+        str(value)
+        for value in (
+            figure_request.get("explicit_render_option_keys")
+            if isinstance(
+                figure_request.get("explicit_render_option_keys"),
+                list,
+            )
+            else []
+        )
+    }
+    if y_metric == "loss_factor":
+        if "yscale" not in explicit_render_keys:
+            render_options["yscale"] = "linear"
+        if (
+            str(render_options.get("yscale") or "").casefold() != "log"
+            and "y_tick_format" not in explicit_render_keys
+        ):
+            render_options.pop("y_tick_format", None)
+    metric_label = rheology_metric_axis_label(y_metric)
+    if y_metric == "complex_viscosity":
+        metric_label = "|\\eta^{*}| (Pa·s)"
+    if metric_label is not None:
+        render_options["y_label_override"] = metric_label
+    figure_request["render_options"] = render_options
+    return figure_request
+
+
+def _rheology_frequency_primary_request(
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    queue = _rheology_frequency_figure_queue(request)
+    primary = next(
+        (item for item in queue if item["y_metric"] == "storage_modulus"),
+        None,
+    )
+    return (
+        _rheology_frequency_figure_request(request, primary)
+        if primary is not None
+        else request
+    )
+
+
+def _studio_figure_set_path(project_dir: Path) -> Path:
+    return project_dir / "studio" / "figure_set.json"
+
+
+def _read_studio_figure_set(project_dir: Path) -> dict[str, Any] | None:
+    path = _studio_figure_set_path(project_dir)
+    if not path.is_file():
+        return None
+    try:
+        payload = _read_json(path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    if payload.get("kind") != "sciplot_studio_figure_set":
+        return None
+    primary_id = str(payload.get("primary_figure_id") or "").strip()
+    figures = payload.get("figures") if isinstance(payload.get("figures"), list) else []
+    normalized_figures: list[dict[str, Any]] = []
+    for value in figures:
+        if not isinstance(value, dict):
+            continue
+        figure_id = str(value.get("figure_id") or "").strip()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_]*", figure_id):
+            continue
+        document = (
+            project_dir / "studio" / "document.vsz"
+            if figure_id == primary_id
+            else project_dir / "studio" / "figures" / f"{figure_id}.vsz"
+        )
+        normalized_figures.append(
+            {
+                **value,
+                "document": str(document.resolve()),
+                "spec": str(_veusz_spec_path(document).resolve()),
+            }
+        )
+    payload["figures"] = normalized_figures
+    payload["primary_document"] = str(
+        (project_dir / "studio" / "document.vsz").resolve()
+    )
+    payload["generated_from"] = str((project_dir / "plot_request.json").resolve())
+    payload["registry_path"] = str(path.resolve())
+    return payload
+
+
+def _studio_figure_set_export_scope(
+    project_dir: Path,
+    *,
+    request: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Return the exact project-receipt scope for an independent figure set."""
+
+    registry = _read_studio_figure_set(project_dir)
+    queue = _rheology_frequency_figure_queue(request)
+    if registry is None and not queue:
+        return None
+    has_registry = registry is not None
+    registry = registry or {}
+    request_rule_id = str(request.get("rule_id") or "").strip()
+    expected_frequency_primary = next(
+        (
+            str(item["id"])
+            for item in queue
+            if item.get("y_metric") == "storage_modulus"
+        ),
+        "",
+    )
+    if queue and has_registry:
+        if str(registry.get("rule_id") or "").strip() != request_rule_id:
+            return None
+        if (
+            str(registry.get("primary_figure_id") or "").strip()
+            != expected_frequency_primary
+        ):
+            return None
+    figures = [
+        item
+        for item in registry.get("figures", [])
+        if isinstance(item, dict) and str(item.get("figure_id") or "").strip()
+    ]
+    primary_id = expected_frequency_primary or str(
+        registry.get("primary_figure_id") or ""
+    ).strip()
+    if not primary_id:
+        return None
+    planned_ids = [str(item["id"]) for item in queue]
+    if has_registry:
+        if not figures:
+            return None
+        registry_ids = [str(item["figure_id"]) for item in figures]
+        if len(registry_ids) != len(set(registry_ids)):
+            return None
+        if any(
+            item.get("status") not in {"ready", "unavailable"}
+            for item in figures
+        ):
+            return None
+        if planned_ids:
+            if set(registry_ids) != set(planned_ids):
+                return None
+        else:
+            planned_ids = registry_ids
+        available_ids = [
+            str(item["figure_id"])
+            for item in figures
+            if item.get("status") == "ready"
+        ]
+        unavailable_ids = [
+            str(item["figure_id"])
+            for item in figures
+            if item.get("status") == "unavailable"
+        ]
+    else:
+        available_ids = []
+        unavailable_ids = []
+        for figure_id in planned_ids:
+            document = (
+                project_dir / "studio" / "document.vsz"
+                if figure_id == primary_id
+                else project_dir / "studio" / "figures" / f"{figure_id}.vsz"
+            )
+            target = available_ids if document.is_file() else unavailable_ids
+            target.append(figure_id)
+    planned_set = set(planned_ids)
+    available_set = set(available_ids)
+    unavailable_set = set(unavailable_ids)
+    if (
+        primary_id not in available_set
+        or available_set & unavailable_set
+        or available_set | unavailable_set != planned_set
+    ):
+        return None
+    export_contract = (
+        registry.get("export_contract")
+        if isinstance(registry.get("export_contract"), dict)
+        else {}
+    )
+    blocked_ids = [value for value in available_ids if value != primary_id]
+    blocker = str(export_contract.get("blocker") or "").strip() or (
+        "The project receipt binds one authoritative primary VSZ hash and one "
+        "primary PDF/TIFF pair. Each independent secondary VSZ must publish "
+        "its own standalone exact-current receipt."
+    )
+    return {
+        **json_safe(export_contract),
+        "kind": "sciplot_figure_set_export_scope",
+        "version": 1,
+        "status": "primary_exact_current_only",
+        "scope": "primary_figure_project_delivery",
+        "primary_figure_id": primary_id,
+        "supported_figure_ids": [primary_id],
+        "blocked_figure_ids": list(dict.fromkeys(blocked_ids)),
+        "planned_figure_ids": list(dict.fromkeys(planned_ids or available_ids)),
+        "available_figure_ids": list(dict.fromkeys(available_ids)),
+        "unavailable_figure_ids": list(dict.fromkeys(unavailable_ids)),
+        "secondary_receipt_scope": "standalone_exact_current_export",
+        "full_figure_set_delivery_complete": False,
+        "blocker": blocker,
+    }
+
+
+def _is_primary_figure_set_export_scope(value: object) -> bool:
+    """Return whether *value* is the complete primary-only receipt contract."""
+
+    if not isinstance(value, dict):
+        return False
+    primary_id = str(value.get("primary_figure_id") or "").strip()
+    supported_ids = value.get("supported_figure_ids")
+    planned_ids = value.get("planned_figure_ids")
+    if (
+        value.get("kind") != "sciplot_figure_set_export_scope"
+        or value.get("status") != "primary_exact_current_only"
+        or value.get("scope") != "primary_figure_project_delivery"
+        or value.get("secondary_receipt_scope")
+        != "standalone_exact_current_export"
+        or value.get("full_figure_set_delivery_complete") is not False
+        or not re.fullmatch(r"[a-z0-9][a-z0-9_]*", primary_id)
+        or supported_ids != [primary_id]
+        or not isinstance(planned_ids, list)
+        or primary_id not in planned_ids
+        or not str(value.get("blocker") or "").strip()
+    ):
+        return False
+    normalized_lists: dict[str, list[str]] = {}
+    for key in (
+        "planned_figure_ids",
+        "blocked_figure_ids",
+        "available_figure_ids",
+        "unavailable_figure_ids",
+    ):
+        values = value.get(key)
+        if not isinstance(values, list) or not all(
+            isinstance(item, str)
+            and bool(item.strip())
+            and re.fullmatch(r"[a-z0-9][a-z0-9_]*", item)
+            for item in values
+        ):
+            return False
+        if len(values) != len(set(values)):
+            return False
+        normalized_lists[key] = values
+    planned_set = set(normalized_lists["planned_figure_ids"])
+    blocked_set = set(normalized_lists["blocked_figure_ids"])
+    available_set = set(normalized_lists["available_figure_ids"])
+    unavailable_set = set(normalized_lists["unavailable_figure_ids"])
+    return bool(
+        primary_id in available_set
+        and primary_id not in unavailable_set
+        and available_set.isdisjoint(unavailable_set)
+        and available_set | unavailable_set == planned_set
+        and blocked_set == available_set - {primary_id}
+    )
+
+
+def _figure_set_export_review_note(scope: dict[str, Any]) -> str:
+    primary_id = str(scope.get("primary_figure_id") or "primary figure")
+    blocked = [
+        str(value)
+        for value in scope.get("blocked_figure_ids", [])
+        if str(value).strip()
+    ]
+    secondary_text = ", ".join(f"`{value}`" for value in blocked) or "none"
+    return (
+        "Figure-set delivery scope: this project receipt and delivery contain "
+        f"only the primary figure `{primary_id}`. Secondary figure IDs "
+        f"({secondary_text}) are not included in this delivery; each must be "
+        "exported with its own standalone exact-current receipt."
+    )
+
+
+def _registered_figure_generated_hash(
+    project_dir: Path,
+    document_path: Path,
+) -> str | None:
+    registry = _read_studio_figure_set(project_dir)
+    if registry is None:
+        return None
+    resolved = document_path.expanduser().resolve()
+    for figure in registry.get("figures", []):
+        if not isinstance(figure, dict):
+            continue
+        value = figure.get("document")
+        if not isinstance(value, str) or not value.strip():
+            continue
+        if Path(value).expanduser().resolve() != resolved:
+            continue
+        generated_hash = figure.get("generated_hash")
+        if isinstance(generated_hash, str) and generated_hash.strip():
+            return generated_hash
+    return None
+
+
+def _figure_registry_entry(
+    *,
+    figure: dict[str, Any],
+    document_path: Path,
+    generated_hash: str | None,
+    series_count: int,
+    status: str = "ready",
+    unavailable: dict[str, Any] | None = None,
+    state_document_path: Path | None = None,
+) -> dict[str, Any]:
+    document_state = _studio_document_state(
+        state_document_path or document_path,
+        generated_hash=generated_hash,
+    )
+    entry = {
+        "figure_id": str(figure["id"]),
+        "title": str(figure.get("title") or figure["id"]),
+        "metric": str(figure["y_metric"]),
+        "x_metric": "angular_frequency",
+        "y_metric": str(figure["y_metric"]),
+        "order": int(figure.get("order") or 0),
+        "status": status,
+        "document": str(document_path),
+        "spec": str(_veusz_spec_path(document_path)),
+        "generated_hash": generated_hash,
+        "series_count": int(series_count),
+        "size_mm": [60, 55],
+        "single_page": True,
+        "document_authority": document_state["authority"],
+        "document_state": document_state,
+    }
+    if unavailable is not None:
+        entry["unavailable"] = json_safe(unavailable)
+    return entry
+
+
+def _replace_studio_figure_set_path(source: Path, target: Path) -> None:
+    """Replace one canonical figure-set member through an injectable boundary."""
+
+    os.replace(source, target)
+
+
+def _commit_studio_figure_set_transaction(
+    *,
+    project_dir: Path,
+    replacements: list[dict[str, Any]],
+    manual_archive_requests: list[dict[str, Any]],
+    registry: dict[str, Any],
+) -> None:
+    """Install secondary VSZ/spec files and their registry as one rollback set."""
+
+    registry_path = _studio_figure_set_path(project_dir)
+    staged_registry = registry_path.with_name(
+        f".sciplot-figure-set-transaction-{uuid4().hex}.json"
+    )
+    try:
+        staged_registry.write_text(
+            json.dumps(json_safe(registry), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        staged_registry_payload = _read_json(staged_registry)
+    except Exception:
+        staged_registry.unlink(missing_ok=True)
+        raise
+    if staged_registry_payload.get("kind") != "sciplot_studio_figure_set":
+        staged_registry.unlink(missing_ok=True)
+        raise RuntimeError("The staged figure-set registry failed validation.")
+    registry_hash = existing_file_sha256(staged_registry)
+    if not registry_hash:
+        staged_registry.unlink(missing_ok=True)
+        raise RuntimeError("The staged figure-set registry is empty.")
+
+    pending = [
+        *replacements,
+        {
+            "staged": staged_registry,
+            "target": registry_path,
+            "expected_hash": registry_hash,
+            "kind": "registry",
+        },
+    ]
+    records: list[dict[str, Any]] = []
+    archived_paths: list[Path] = []
+    created_history_dirs: list[Path] = []
+    committed = False
+    rollback_incomplete = False
+    try:
+        for item in pending:
+            target = Path(item["target"])
+            prior_hash = existing_file_sha256(target)
+            backup = None
+            if target.exists():
+                if not target.is_file() or not prior_hash:
+                    raise RuntimeError(
+                        f"Cannot transactionally replace invalid file {target}."
+                    )
+                backup = target.with_name(
+                    f".sciplot-figure-set-transaction-{uuid4().hex}.backup"
+                )
+            record = {
+                **item,
+                "target": target,
+                "prior_hash": prior_hash,
+                "backup": backup,
+                "installed": False,
+            }
+            records.append(record)
+            if backup is not None:
+                shutil.copy2(target, backup)
+                if existing_file_sha256(backup) != prior_hash:
+                    raise RuntimeError(
+                        f"Could not verify the figure-set backup for {target}."
+                    )
+
+        by_target = {record["target"]: record for record in records}
+        for record in records[:-1]:
+            _replace_studio_figure_set_path(record["staged"], record["target"])
+            record["installed"] = True
+            if existing_file_sha256(record["target"]) != record["expected_hash"]:
+                raise RuntimeError(
+                    f"Installed figure-set {record['kind']} failed validation."
+                )
+            if record["kind"] == "spec":
+                _read_json(record["target"])
+
+        for request in manual_archive_requests:
+            document_path = Path(request["document"])
+            document_record = by_target.get(document_path)
+            if document_record is None or document_record["backup"] is None:
+                continue
+            current_hash = document_record["prior_hash"]
+            generated_hash = request.get("generated_hash")
+            if generated_hash and current_hash == generated_hash:
+                continue
+            history_dir = document_path.parent / "history"
+            if not history_dir.exists():
+                history_dir.mkdir(parents=True)
+                created_history_dirs.append(history_dir)
+            stamp = (
+                datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+                + f"_{uuid4().hex[:8]}"
+            )
+            archived_document = (
+                history_dir / f"{document_path.stem}_{stamp}{document_path.suffix}"
+            )
+            archived_paths.append(archived_document)
+            shutil.copy2(document_record["backup"], archived_document)
+            if existing_file_sha256(archived_document) != current_hash:
+                raise RuntimeError(
+                    f"Could not verify the manual figure archive for {document_path}."
+                )
+            spec_path = Path(request["spec"])
+            spec_record = by_target.get(spec_path)
+            if spec_record is not None and spec_record["backup"] is not None:
+                archived_spec = (
+                    history_dir / f"{document_path.stem}_{stamp}.spec.json"
+                )
+                archived_paths.append(archived_spec)
+                shutil.copy2(spec_record["backup"], archived_spec)
+                if (
+                    existing_file_sha256(archived_spec)
+                    != spec_record["prior_hash"]
+                ):
+                    raise RuntimeError(
+                        f"Could not verify the manual spec archive for {spec_path}."
+                    )
+
+        registry_record = records[-1]
+        _replace_studio_figure_set_path(
+            registry_record["staged"], registry_record["target"]
+        )
+        registry_record["installed"] = True
+        if (
+            existing_file_sha256(registry_path) != registry_record["expected_hash"]
+            or _read_json(registry_path) != json_safe(registry)
+        ):
+            raise RuntimeError("The installed figure-set registry failed validation.")
+        for entry in registry.get("figures", []):
+            if not isinstance(entry, dict) or entry.get("status") != "ready":
+                continue
+            document = Path(str(entry.get("document") or ""))
+            spec = Path(str(entry.get("spec") or ""))
+            if not document.is_file() or not spec.is_file():
+                raise RuntimeError(
+                    f"Ready figure {entry.get('figure_id')} is incomplete."
+                )
+            _read_json(spec)
+            document_record = by_target.get(document)
+            if (
+                document_record is not None
+                and entry.get("generated_hash")
+                != existing_file_sha256(document)
+            ):
+                raise RuntimeError(
+                    f"Ready figure {entry.get('figure_id')} has a stale hash."
+                )
+        committed = True
+    except Exception as exc:
+        for path in reversed(archived_paths):
+            path.unlink(missing_ok=True)
+        rollback_errors: list[str] = []
+        for record in reversed(records):
+            if not record["installed"]:
+                continue
+            target = record["target"]
+            backup = record["backup"]
+            try:
+                if backup is None:
+                    target.unlink(missing_ok=True)
+                else:
+                    # Keep the verified backup until restoration itself has
+                    # been hash-checked. If the copy fails, the original bytes
+                    # remain beside the target for recovery instead of being
+                    # consumed by the rollback attempt.
+                    shutil.copy2(backup, target)
+                if existing_file_sha256(target) != record["prior_hash"]:
+                    raise RuntimeError("restored hash mismatch")
+            except Exception as rollback_exc:
+                rollback_errors.append(f"{target}: {rollback_exc}")
+        if rollback_errors:
+            rollback_incomplete = True
+            raise RuntimeError(
+                "Figure-set transaction failed and rollback was incomplete: "
+                + "; ".join(rollback_errors)
+            ) from exc
+        raise
+    finally:
+        for record in records:
+            Path(record["staged"]).unlink(missing_ok=True)
+            backup = record["backup"]
+            if backup is not None and not rollback_incomplete:
+                backup.unlink(missing_ok=True)
+        staged_registry.unlink(missing_ok=True)
+        if not committed:
+            for history_dir in reversed(created_history_dirs):
+                try:
+                    history_dir.rmdir()
+                except OSError:
+                    pass
+
+
+def _prepare_rheology_frequency_figure_set(
+    *,
+    project_dir: Path,
+    request_path: Path,
+    request: dict[str, Any],
+    primary_document: Path,
+    primary_series_count: int | None = None,
+    primary_generated_hash: str | None = None,
+    preserve_existing: bool,
+) -> dict[str, Any] | None:
+    queue = _rheology_frequency_figure_queue(request)
+    if not queue:
+        return None
+    figures_dir = project_dir / "studio" / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    prior_registry = _read_studio_figure_set(project_dir) or {}
+    prior_by_id = {
+        str(item.get("figure_id")): item
+        for item in prior_registry.get("figures", [])
+        if isinstance(item, dict) and item.get("figure_id")
+    }
+    entries: list[dict[str, Any]] = []
+    replacements: list[dict[str, Any]] = []
+    manual_archive_requests: list[dict[str, Any]] = []
+    primary_id = next(
+        item["id"] for item in queue if item["y_metric"] == "storage_modulus"
+    )
+    try:
+        for figure in queue:
+            figure_id = str(figure["id"])
+            is_primary = figure_id == primary_id
+            document_path = (
+                primary_document if is_primary else figures_dir / f"{figure_id}.vsz"
+            )
+            prior = prior_by_id.get(figure_id, {})
+            registered_hash = (
+                primary_generated_hash
+                if is_primary and primary_generated_hash
+                else str(prior.get("generated_hash") or "").strip() or None
+            )
+            if is_primary and document_path.is_file():
+                generated_hash = (
+                    registered_hash or _registered_generated_hash(project_dir)
+                )
+                entries.append(
+                    _figure_registry_entry(
+                        figure=figure,
+                        document_path=document_path,
+                        generated_hash=generated_hash,
+                        series_count=(
+                            int(primary_series_count)
+                            if primary_series_count is not None
+                            else _count_veusz_series(document_path)
+                        ),
+                    )
+                )
+                continue
+            if preserve_existing and document_path.is_file():
+                entries.append(
+                    _figure_registry_entry(
+                        figure=figure,
+                        document_path=document_path,
+                        generated_hash=registered_hash,
+                        series_count=_count_veusz_series(document_path),
+                    )
+                )
+                continue
+            spec_path = _veusz_spec_path(document_path)
+            figure_request = _rheology_frequency_figure_request(request, figure)
+            staged_document = document_path.with_name(
+                f".sciplot-figure-set-transaction-{uuid4().hex}.vsz"
+            )
+            staged_spec = _veusz_spec_path(staged_document)
+            try:
+                series, axis_info, _steps, _source = _series_from_request(
+                    figure_request,
+                    base_dir=request_path.parent,
+                )
+                _write_veusz_document(
+                    staged_document,
+                    request=figure_request,
+                    series=series,
+                    axis_info=axis_info,
+                )
+            except StudioPreparationBlocked as exc:
+                staged_document.unlink(missing_ok=True)
+                staged_spec.unlink(missing_ok=True)
+                entries.append(
+                    _figure_registry_entry(
+                        figure=figure,
+                        document_path=document_path,
+                        generated_hash=registered_hash,
+                        series_count=(
+                            _count_veusz_series(document_path)
+                            if document_path.is_file()
+                            else 0
+                        ),
+                        status="unavailable",
+                        unavailable={
+                            "reason_code": exc.reason_code,
+                            "message": str(exc),
+                        },
+                    )
+                )
+                continue
+            except Exception:
+                staged_document.unlink(missing_ok=True)
+                staged_spec.unlink(missing_ok=True)
+                raise
+            try:
+                document_hash = existing_file_sha256(staged_document)
+                spec_hash = existing_file_sha256(staged_spec)
+                spec_kind = _read_json(staged_spec).get("kind")
+            except Exception:
+                staged_document.unlink(missing_ok=True)
+                staged_spec.unlink(missing_ok=True)
+                raise
+            if not document_hash or not spec_hash or spec_kind != "sciplot_veusz_plot_spec":
+                staged_document.unlink(missing_ok=True)
+                staged_spec.unlink(missing_ok=True)
+                raise RuntimeError(
+                    f"Staged figure generation was incomplete for {figure_id}."
+                )
+            replacements.extend(
+                [
+                    {
+                        "staged": staged_document,
+                        "target": document_path,
+                        "expected_hash": document_hash,
+                        "kind": "document",
+                    },
+                    {
+                        "staged": staged_spec,
+                        "target": spec_path,
+                        "expected_hash": spec_hash,
+                        "kind": "spec",
+                    },
+                ]
+            )
+            manual_archive_requests.append(
+                {
+                    "document": document_path,
+                    "spec": spec_path,
+                    "generated_hash": registered_hash,
+                }
+            )
+            entries.append(
+                _figure_registry_entry(
+                    figure=figure,
+                    document_path=document_path,
+                    generated_hash=document_hash,
+                    series_count=len(series),
+                    state_document_path=staged_document,
+                )
+            )
+    except Exception:
+        for replacement in replacements:
+            Path(replacement["staged"]).unlink(missing_ok=True)
+        raise
+    registry = {
+        "kind": "sciplot_studio_figure_set",
+        "version": 1,
+        "rule_id": "rheology_frequency_sweep",
+        "status": (
+            "ready"
+            if all(item.get("status") == "ready" for item in entries)
+            else "partially_available"
+        ),
+        "primary_figure_id": primary_id,
+        "primary_document": str(primary_document),
+        "document_policy": "independent_single_page_vsz",
+        "publication_layout_inferred": False,
+        "composite_figure": False,
+        "figures": entries,
+        "export_contract": {
+            "kind": "sciplot_figure_set_export_scope",
+            "version": 1,
+            "status": "primary_exact_current_only",
+            "scope": "primary_figure_project_delivery",
+            "primary_figure_id": primary_id,
+            "supported_figure_ids": [primary_id],
+            "blocked_figure_ids": [
+                str(item["figure_id"])
+                for item in entries
+                if item["figure_id"] != primary_id and item.get("status") == "ready"
+            ],
+            "blocker": (
+                "The existing project publish receipt binds one authoritative "
+                "VSZ hash and one PDF/TIFF pair. Secondary documents are "
+                "generated, registered, and editable, but are not silently "
+                "published under the primary receipt until a multi-document "
+                "exact-current receipt is implemented."
+            ),
+            "secondary_receipt_scope": "standalone_exact_current_export",
+            "full_figure_set_delivery_complete": False,
+        },
+        "generated_from": str(request_path),
+        "registry_path": str(_studio_figure_set_path(project_dir)),
+    }
+    _commit_studio_figure_set_transaction(
+        project_dir=project_dir,
+        replacements=replacements,
+        manual_archive_requests=manual_archive_requests,
+        registry=registry,
+    )
+    return registry
+
+
 def _project_studio_document(project_dir: Path) -> Path | None:
     document = project_dir / "studio" / "document.vsz"
     if document.exists() and document.is_file():
         return document.resolve()
-    manifest_paths = [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]
+    manifest_paths = [
+        project_dir / "intake_manifest.json",
+        *sorted(project_dir.glob("*.sciplot.json")),
+    ]
     for manifest_path in manifest_paths:
         if not manifest_path.exists():
             continue
@@ -827,7 +2337,9 @@ def _project_studio_document(project_dir: Path) -> Path | None:
             payload = _read_json(manifest_path)
         except Exception:
             continue
-        studio = payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
+        studio = (
+            payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
+        )
         document_value = studio.get("document")
         if isinstance(document_value, str) and document_value.strip():
             candidate = Path(document_value).expanduser()
@@ -853,14 +2365,19 @@ def export_studio_document(
     formats: list[str],
     output_dir: Path | None = None,
 ) -> dict[str, Any]:
-    from sciplot_core.veusz_runtime import needs_veusz_worker_process, veusz_worker_environment
+    from sciplot_core.veusz_runtime import (
+        needs_veusz_worker_process,
+        veusz_worker_environment,
+    )
 
     normalized_formats = list(
         dict.fromkeys(_normalize_export_format(item) for item in formats)
     )
     if not normalized_formats:
         raise ValueError("At least one export format is required.")
-    resolved_output_dir = output_dir.expanduser().resolve() if output_dir is not None else None
+    resolved_output_dir = (
+        output_dir.expanduser().resolve() if output_dir is not None else None
+    )
     if needs_veusz_worker_process():
         command = [
             sys.executable,
@@ -882,7 +2399,9 @@ def export_studio_document(
         )
         return json.loads(result.stdout)
     export_dir = resolved_output_dir or document_path.parent / "exports"
-    log_root = export_dir.parent if resolved_output_dir is not None else document_path.parent
+    log_root = (
+        export_dir.parent if resolved_output_dir is not None else document_path.parent
+    )
     stderr_log = log_root / "logs" / "veusz_export_stderr.log"
     exports: list[dict[str, Any]] = []
     pending_exports: list[dict[str, Any]] = []
@@ -947,8 +2466,7 @@ def export_studio_document(
                 temporary_path = pending["temporary_path"]
                 output_path = pending["output_path"]
                 backup_path = (
-                    export_dir
-                    / f".{output_path.name}.{uuid4().hex}.previous"
+                    export_dir / f".{output_path.name}.{uuid4().hex}.previous"
                     if output_path.exists()
                     else None
                 )
@@ -1040,10 +2558,7 @@ def _verify_exact_current_export_binding(
 ) -> None:
     expected_document_hash = str(export_document_sha256 or "").strip()
     current_document_hash = existing_file_sha256(document_path)
-    if (
-        not expected_document_hash
-        or current_document_hash != expected_document_hash
-    ):
+    if not expected_document_hash or current_document_hash != expected_document_hash:
         raise RuntimeError(
             "The current VSZ hash no longer matches the document that produced "
             "these exports."
@@ -1055,14 +2570,10 @@ def _verify_exact_current_export_binding(
     for item in exports:
         path_value = item.get("path") if isinstance(item, dict) else None
         raw_format = (
-            str(item.get("format") or "").strip()
-            if isinstance(item, dict)
-            else ""
+            str(item.get("format") or "").strip() if isinstance(item, dict) else ""
         )
         expected_hash = (
-            str(item.get("sha256") or "").strip()
-            if isinstance(item, dict)
-            else ""
+            str(item.get("sha256") or "").strip() if isinstance(item, dict) else ""
         )
         try:
             normalized_format = _normalize_export_format(raw_format)
@@ -1088,9 +2599,7 @@ def _verify_exact_current_export_binding(
             )
         expected_suffix, _dpi = _export_suffix(normalized_format)
         actual_hash = existing_file_sha256(artifact_path)
-        actual_size = (
-            artifact_path.stat().st_size if artifact_path.is_file() else 0
-        )
+        actual_size = artifact_path.stat().st_size if artifact_path.is_file() else 0
         if (
             not artifact_path.is_file()
             or actual_size <= 0
@@ -1114,17 +2623,13 @@ def _verify_qa_artifact_hashes(
     exports: list[dict[str, Any]],
     covered_formats: set[str],
 ) -> None:
-    canonical_covered = {
-        _normalize_export_format(item) for item in covered_formats
-    }
+    canonical_covered = {_normalize_export_format(item) for item in covered_formats}
     expected_records: Counter[tuple[str, str, str]] = Counter()
     for item in exports:
         if not isinstance(item, dict):
             continue
         try:
-            normalized_format = _normalize_export_format(
-                str(item.get("format") or "")
-            )
+            normalized_format = _normalize_export_format(str(item.get("format") or ""))
         except ValueError:
             continue
         if normalized_format not in canonical_covered:
@@ -1144,9 +2649,7 @@ def _verify_qa_artifact_hashes(
         ("tiffs", "tiff_300"),
     ):
         records = qa.get(qa_key)
-        if normalized_format not in canonical_covered or not isinstance(
-            records, list
-        ):
+        if normalized_format not in canonical_covered or not isinstance(records, list):
             continue
         for item in records:
             if not isinstance(item, dict):
@@ -1164,9 +2667,7 @@ def _verify_qa_artifact_hashes(
         or any(not record[2] for record in expected_records)
         or expected_records != actual_records
     ):
-        raise RuntimeError(
-            "Artifact QA hashes do not match the exact-current exports."
-        )
+        raise RuntimeError("Artifact QA hashes do not match the exact-current exports.")
 
 
 def _write_json_atomic(path: Path, payload: object) -> None:
@@ -1216,20 +2717,14 @@ def _verify_studio_delivery_binding(
             candidate = Path(value).expanduser().resolve()
             candidate.relative_to(delivery_root)
         except (OSError, RuntimeError, ValueError):
-            issues.append(
-                f"The delivery {role} is outside its package root: {value}"
-            )
+            issues.append(f"The delivery {role} is outside its package root: {value}")
             return None
         try:
             if not candidate.is_file() or candidate.stat().st_size <= 0:
-                issues.append(
-                    f"The delivery {role} is missing or empty: {candidate}"
-                )
+                issues.append(f"The delivery {role} is missing or empty: {candidate}")
                 return None
         except OSError as exc:
-            issues.append(
-                f"The delivery {role} could not be inspected: {exc}"
-            )
+            issues.append(f"The delivery {role} could not be inspected: {exc}")
             return None
         return candidate
 
@@ -1237,9 +2732,7 @@ def _verify_studio_delivery_binding(
     for item in exports:
         try:
             source = Path(str(item["path"])).expanduser().resolve()
-            export_format = _normalize_export_format(
-                str(item.get("format") or "")
-            )
+            export_format = _normalize_export_format(str(item.get("format") or ""))
         except (KeyError, OSError, RuntimeError, ValueError):
             issues.append("An exact-current export record is invalid.")
             continue
@@ -1251,9 +2744,7 @@ def _verify_studio_delivery_binding(
 
     matched_sources: set[Path] = set()
     figure_records = (
-        delivery.get("figures")
-        if isinstance(delivery.get("figures"), list)
-        else []
+        delivery.get("figures") if isinstance(delivery.get("figures"), list) else []
     )
     for record in figure_records:
         if not isinstance(record, dict):
@@ -1278,11 +2769,7 @@ def _verify_studio_delivery_binding(
         export_format, expected_hash = expected
         try:
             recorded_format = _normalize_export_format(
-                str(
-                    record.get("export_format")
-                    or record.get("format")
-                    or ""
-                )
+                str(record.get("export_format") or record.get("format") or "")
             )
         except ValueError:
             recorded_format = ""
@@ -1292,9 +2779,7 @@ def _verify_studio_delivery_binding(
         )
         source_hash = existing_file_sha256(source)
         destination_hash = (
-            existing_file_sha256(destination)
-            if destination is not None
-            else None
+            existing_file_sha256(destination) if destination is not None else None
         )
         if (
             recorded_format != export_format
@@ -1304,21 +2789,16 @@ def _verify_studio_delivery_binding(
             or str(record.get("delivery_sha256") or "") != expected_hash
             or record.get("copy_hash_matches") is not True
         ):
-            issues.append(
-                f"Delivery figure hash or format binding failed: {source}"
-            )
+            issues.append(f"Delivery figure hash or format binding failed: {source}")
             continue
         matched_sources.add(source)
     if set(expected_exports) != matched_sources:
         issues.append(
-            "The delivery figures do not cover every exact-current export "
-            "exactly once."
+            "The delivery figures do not cover every exact-current export exactly once."
         )
 
     data_records = (
-        delivery.get("data_csvs")
-        if isinstance(delivery.get("data_csvs"), list)
-        else []
+        delivery.get("data_csvs") if isinstance(delivery.get("data_csvs"), list) else []
     )
     if not data_records:
         issues.append("The delivery contains no recorded data CSV.")
@@ -1351,16 +2831,12 @@ def _verify_studio_delivery_binding(
             role="editable Veusz document",
         )
         destination_hash = (
-            existing_file_sha256(destination)
-            if destination is not None
-            else None
+            existing_file_sha256(destination) if destination is not None else None
         )
         if (
             destination_hash != export_document_sha256
-            or str(record.get("source_sha256") or "")
-            != export_document_sha256
-            or str(record.get("delivery_sha256") or "")
-            != export_document_sha256
+            or str(record.get("source_sha256") or "") != export_document_sha256
+            or str(record.get("delivery_sha256") or "") != export_document_sha256
             or record.get("copy_hash_matches") is not True
             or record.get("hash_matches_export") is not True
         ):
@@ -1381,10 +2857,8 @@ def _verify_studio_delivery_binding(
     if (
         editable_path is None
         or existing_file_sha256(editable_path) != export_document_sha256
-        or str(editable.get("expected_hash") or "")
-        != export_document_sha256
-        or str(editable.get("actual_hash") or "")
-        != export_document_sha256
+        or str(editable.get("expected_hash") or "") != export_document_sha256
+        or str(editable.get("actual_hash") or "") != export_document_sha256
         or editable.get("hash_matches_export") is not True
     ):
         issues.append(
@@ -1433,9 +2907,7 @@ def publish_standalone_export_receipt(
         )
     )
     if not normalized_formats:
-        raise ValueError(
-            "A standalone export receipt requires at least one format."
-        )
+        raise ValueError("A standalone export receipt requires at least one format.")
     successful_formats = {
         _normalize_export_format(str(item.get("format") or ""))
         for item in exports
@@ -1446,29 +2918,20 @@ def publish_standalone_export_receipt(
     }
     requested_exports_complete = set(normalized_formats) <= successful_formats
     qa_covered_formats = (
-        {
-            item
-            for item in normalized_formats
-            if item in {"pdf", "tiff_300"}
-        }
+        {item for item in normalized_formats if item in {"pdf", "tiff_300"}}
         if "pdf" in normalized_formats
         else set()
     )
-    qa_uncovered_formats = sorted(
-        set(normalized_formats) - qa_covered_formats
-    )
+    qa_uncovered_formats = sorted(set(normalized_formats) - qa_covered_formats)
     qa_required = bool(qa_covered_formats)
     if qa_required and requested_exports_complete:
-        qa_input_dir = (
-            resolved_root / "qa_inputs" / uuid4().hex
-        )
+        qa_input_dir = resolved_root / "qa_inputs" / uuid4().hex
         qa_input_dir.mkdir(parents=True, exist_ok=False)
         try:
             for item in exports:
                 if (
                     not isinstance(item, dict)
-                    or str(item.get("format") or "")
-                    not in qa_covered_formats
+                    or str(item.get("format") or "") not in qa_covered_formats
                 ):
                     continue
                 source = Path(str(item["path"])).expanduser().resolve()
@@ -1517,9 +2980,7 @@ def publish_standalone_export_receipt(
         binding_error = str(exc)
     qa_passed = qa.get("status") in {"passed", "not_required"}
     export_ready = bool(
-        requested_exports_complete
-        and qa_passed
-        and binding_error is None
+        requested_exports_complete and qa_passed and binding_error is None
     )
     spec_reference = _veusz_spec_reference(document_path)
     receipt_path = resolved_root / "standalone_export_receipt.json"
@@ -1534,8 +2995,7 @@ def publish_standalone_export_receipt(
     elif not qa_passed:
         failure_stage = "artifact_qa"
         failure_reason = str(
-            qa.get("reason")
-            or "The standalone PDF/TIFF artifact QA did not pass."
+            qa.get("reason") or "The standalone PDF/TIFF artifact QA did not pass."
         )
     else:
         failure_stage = None
@@ -1545,9 +3005,7 @@ def publish_standalone_export_receipt(
         "version": 1,
         "status": "passed" if export_ready else "failed",
         "state": (
-            "exported_exact_current"
-            if export_ready
-            else "needs_artifact_review"
+            "exported_exact_current" if export_ready else "needs_artifact_review"
         ),
         "scope": "standalone_exact_current_export",
         "document": str(document_path),
@@ -1589,12 +3047,47 @@ def publish_studio_export_run(
     exports: list[dict[str, Any]],
     export_document_sha256: str,
 ) -> dict[str, Any]:
+    resolved_project = project_dir.expanduser().resolve()
+    resolved_request = request_path.expanduser().resolve()
+    resolved_document = document_path.expanduser().resolve()
+    canonical_request = (resolved_project / "plot_request.json").resolve()
+    canonical_document = (resolved_project / "studio" / "document.vsz").resolve()
+    if resolved_request != canonical_request:
+        raise RuntimeError(
+            "A project delivery receipt can use only the canonical "
+            "project/plot_request.json. A foreign or relocated request cannot "
+            "publish into this project."
+        )
+    if resolved_document != canonical_document:
+        raise RuntimeError(
+            "A project delivery receipt can be published only from the "
+            "canonical project/studio/document.vsz. Independent secondary "
+            "figures require standalone exact-current receipts."
+        )
+    project_dir = resolved_project
+    request_path = resolved_request
+    document_path = resolved_document
     _verify_exact_current_export_binding(
         document_path=document_path,
         export_document_sha256=export_document_sha256,
         exports=exports,
     )
     request = _read_json(request_path)
+    figure_set_export_scope = _studio_figure_set_export_scope(
+        project_dir,
+        request=request,
+    )
+    figure_set_scope_expected = bool(
+        _studio_figure_set_path(project_dir).exists()
+        or _rheology_frequency_figure_queue(request)
+    )
+    if figure_set_scope_expected and not _is_primary_figure_set_export_scope(
+        figure_set_export_scope
+    ):
+        raise RuntimeError(
+            "SciPlot could not establish the complete primary-only figure-set "
+            "export scope. No project delivery receipt was published."
+        )
     effective_request, data_mapping_application = resolve_data_mapping_request(
         request,
         base_dir=request_path.parent,
@@ -1624,10 +3117,7 @@ def publish_studio_export_run(
                 f"A project export disappeared before packaging: {source}"
             )
         expected_hash = str(item.get("sha256") or "")
-        if (
-            not expected_hash
-            or existing_file_sha256(source) != expected_hash
-        ):
+        if not expected_hash or existing_file_sha256(source) != expected_hash:
             raise RuntimeError(
                 "A project export changed before it could be copied into the "
                 f"run: {source}"
@@ -1635,9 +3125,7 @@ def publish_studio_export_run(
         destination = figures_dir / source.name
         shutil.copy2(source, destination)
         if existing_file_sha256(destination) != expected_hash:
-            raise RuntimeError(
-                f"Copied project export hash mismatch: {destination}"
-            )
+            raise RuntimeError(f"Copied project export hash mismatch: {destination}")
         copied = {
             **item,
             "source": str(source),
@@ -1654,7 +3142,9 @@ def publish_studio_export_run(
         encoding="utf-8",
     )
     input_path = _resolve_request_input(request, base_dir=request_path.parent)
-    raw_archive = _archive_studio_input(input_path, output_dir) if input_path is not None else {}
+    raw_archive = (
+        _archive_studio_input(input_path, output_dir) if input_path is not None else {}
+    )
     existing_transform_ledger = _verified_mapping_ledger_extension(
         request.get("transform_ledger"),
         effective_request.get("transform_ledger")
@@ -1673,13 +3163,17 @@ def publish_studio_export_run(
         else None
     )
     intake_manifest_path = project_dir / "intake_manifest.json"
-    intake_manifest = _read_json(intake_manifest_path) if intake_manifest_path.exists() else {}
+    intake_manifest = (
+        _read_json(intake_manifest_path) if intake_manifest_path.exists() else {}
+    )
     semantic = _studio_export_semantic_payload(
         request=request,
         intake_manifest=intake_manifest,
         document_path=document_path,
     )
-    metric_source = _studio_metric_source(snapshot_source if snapshot_source is not None else input_path)
+    metric_source = _studio_metric_source(
+        snapshot_source if snapshot_source is not None else input_path
+    )
     analysis_metrics = (
         compute_analysis_metrics(
             source_path=metric_source,
@@ -1693,14 +3187,23 @@ def publish_studio_export_run(
     study_model = normalize_study_model(
         request.get("study_model")
         if isinstance(request.get("study_model"), dict)
-        else {"kind": "sciplot_study_model", "version": 1, "samples": [], "figure_queue": []}
+        else {
+            "kind": "sciplot_study_model",
+            "version": 1,
+            "samples": [],
+            "figure_queue": [],
+        }
     )
     publication_intent = build_publication_intent(
         study_model,
         request=request,
-        existing=request.get("publication_intent") if isinstance(request.get("publication_intent"), dict) else None,
+        existing=request.get("publication_intent")
+        if isinstance(request.get("publication_intent"), dict)
+        else None,
     )
-    publication_profile = get_publication_profile(publication_intent["target_profile_id"])
+    publication_profile = get_publication_profile(
+        publication_intent["target_profile_id"]
+    )
     transform_ledger = build_transform_ledger(
         study_model,
         request=request,
@@ -1709,7 +3212,9 @@ def publish_studio_export_run(
     )
     visual_transforms = _studio_visual_presentation_transforms(document_path)
     if visual_transforms:
-        presentation_input = metric_source or snapshot_source or input_path or document_path
+        presentation_input = (
+            metric_source or snapshot_source or input_path or document_path
+        )
         presentation_step = build_transform_step(
             step_id="veusz_visual_presentation",
             operation="apply_recorded_visual_presentation_transforms",
@@ -1740,7 +3245,9 @@ def publish_studio_export_run(
             "The saved Veusz document predates persisted runtime transform steps; "
             "preprocessing lineage requires review."
         ]
-    publication_intent = link_intent_to_transform_ledger(publication_intent, transform_ledger)
+    publication_intent = link_intent_to_transform_ledger(
+        publication_intent, transform_ledger
+    )
     study_model["publication_intent_ref"] = "publication_intent.json"
     publication_artifacts = write_publication_artifacts(
         output_dir,
@@ -1754,6 +3261,7 @@ def publish_studio_export_run(
         document_path=document_path,
         figures=figures,
         analysis_metrics=analysis_metrics,
+        figure_set_export_scope=figure_set_export_scope,
     )
     qa = _run_studio_qa(
         output_dir,
@@ -1772,7 +3280,9 @@ def publish_studio_export_run(
         qa=qa,
         document_path=document_path,
     )
-    publication_qa = qa.get("publication") if isinstance(qa.get("publication"), dict) else {}
+    publication_qa = (
+        qa.get("publication") if isinstance(qa.get("publication"), dict) else {}
+    )
     publication_artifacts = write_publication_artifacts(
         output_dir,
         publication_intent=publication_intent,
@@ -1799,29 +3309,38 @@ def publish_studio_export_run(
         "document_authority": document_state["authority"],
         "exported_document_hash": export_document_sha256,
         "manual_edit_detected": document_state["manual_edit_detected"],
-        "export_formats": [str(item.get("format")) for item in copied_exports if item.get("format")],
+        "export_formats": [
+            str(item.get("format")) for item in copied_exports if item.get("format")
+        ],
         "exports": copied_exports,
         "outputs": figures,
         "processed": processed_source is not None,
-        "processed_source": str(processed_source) if processed_source is not None else None,
+        "processed_source": str(processed_source)
+        if processed_source is not None
+        else None,
         "data_snapshot_sources": [str(path) for path in snapshot_sources],
         "analysis_metrics": analysis_metrics,
-        "template": request.get("template") or request.get("recipe") or "veusz_document",
+        "template": request.get("template")
+        or request.get("recipe")
+        or "veusz_document",
         "operation_mode": normal_mode_payload(route="studio"),
         "data_mapping_application": json_safe(data_mapping_application),
-        "data_mapping_coverage": json_safe(
-            request.get("data_mapping_coverage")
+        "data_mapping_coverage": json_safe(request.get("data_mapping_coverage")),
+        "scope": (
+            "primary_figure_project_delivery"
+            if _is_primary_figure_set_export_scope(figure_set_export_scope)
+            else "project_delivery"
         ),
     }
+    if figure_set_export_scope is not None:
+        result["figure_set_export_scope"] = json_safe(figure_set_export_scope)
     if len(snapshot_sources) == 1:
         result["data_snapshot_source"] = str(snapshot_sources[0])
     if data_mapping_application is not None:
-        result["rendered_source_coverage"] = (
-            verify_rendered_mapping_source_coverage(
-                result,
-                mapping_application=data_mapping_application,
-                request=request,
-            )
+        result["rendered_source_coverage"] = verify_rendered_mapping_source_coverage(
+            result,
+            mapping_application=data_mapping_application,
+            request=request,
         )
     manifest = {
         "kind": "sciplot_run",
@@ -1860,9 +3379,8 @@ def publish_studio_export_run(
         "layout_quality": layout_quality,
         "operation_mode": normal_mode_payload(route="studio"),
         "data_mapping_application": json_safe(data_mapping_application),
-        "data_mapping_coverage": json_safe(
-            request.get("data_mapping_coverage")
-        ),
+        "data_mapping_coverage": json_safe(request.get("data_mapping_coverage")),
+        "scope": result["scope"],
         "studio": {
             "engine": "veusz",
             "render_engine": "veusz",
@@ -1878,7 +3396,14 @@ def publish_studio_export_run(
             "operation_mode": normal_mode_payload(route="studio"),
         },
     }
-    manifest["revision_brief"] = _write_studio_revision_brief(output_dir, manifest=manifest)
+    if figure_set_export_scope is not None:
+        manifest["figure_set_export_scope"] = json_safe(figure_set_export_scope)
+        manifest["studio"]["figure_set_export_scope"] = json_safe(
+            figure_set_export_scope
+        )
+    manifest["revision_brief"] = _write_studio_revision_brief(
+        output_dir, manifest=manifest
+    )
     _write_studio_review_html(output_dir, manifest=manifest)
     studio_snapshot = output_dir / "studio"
     if studio_snapshot.exists():
@@ -1895,16 +3420,34 @@ def publish_studio_export_run(
             output_dir,
             manifest=manifest,
         )
+        if figure_set_export_scope is not None:
+            manifest["package_contract"]["figure_set_export_scope"] = json_safe(
+                figure_set_export_scope
+            )
+            manifest["package_contract"]["full_figure_set_complete"] = False
+            manifest["package_contract"]["complete_scope"] = (
+                "primary_figure_exact_current_delivery"
+            )
         manifest["delivery_package"] = build_delivery_package(
             output_dir,
             manifest=manifest,
         )
-        manifest["delivery_verification"] = (
-            _verify_studio_delivery_binding(
-                manifest["delivery_package"],
-                exports=copied_exports,
-                export_document_sha256=export_document_sha256,
+        if figure_set_export_scope is not None:
+            manifest["delivery_package"]["scope"] = "primary_figure_project_delivery"
+            manifest["delivery_package"]["complete_scope"] = (
+                "primary_figure_exact_current_delivery"
             )
+            manifest["delivery_package"]["full_figure_set_complete"] = False
+            manifest["delivery_package"]["figure_set_export_scope"] = json_safe(
+                figure_set_export_scope
+            )
+            manifest["delivery_package"]["limitations"] = [
+                _figure_set_export_review_note(figure_set_export_scope)
+            ]
+        manifest["delivery_verification"] = _verify_studio_delivery_binding(
+            manifest["delivery_package"],
+            exports=copied_exports,
+            export_document_sha256=export_document_sha256,
         )
         failure_stage = "exact_current_binding"
         _verify_exact_current_export_binding(
@@ -1929,9 +3472,7 @@ def publish_studio_export_run(
     manifest["state"] = "ready" if ready_to_use else "needs_rule_repair"
     manifest["ready_to_use"] = ready_to_use
     manifest["publish_complete"] = True
-    manifest["failure_stage"] = (
-        None if ready_to_use else "quality_or_delivery_gate"
-    )
+    manifest["failure_stage"] = None if ready_to_use else "quality_or_delivery_gate"
     manifest["failure_reason"] = (
         None
         if ready_to_use
@@ -1939,7 +3480,7 @@ def publish_studio_export_run(
     )
     _write_json_atomic(output_dir / "manifest.json", manifest)
     _register_studio_run(project_dir, manifest)
-    return {
+    run_payload = {
         "kind": "sciplot_studio_export_run",
         "output": str(output_dir),
         "manifest": str(output_dir / "manifest.json"),
@@ -1952,7 +3493,11 @@ def publish_studio_export_run(
         "delivery_verification": manifest["delivery_verification"],
         "state": manifest["state"],
         "ready_to_use": ready_to_use,
+        "scope": manifest["scope"],
     }
+    if figure_set_export_scope is not None:
+        run_payload["figure_set_export_scope"] = json_safe(figure_set_export_scope)
+    return run_payload
 
 
 def _verified_mapping_ledger_extension(
@@ -1969,9 +3514,7 @@ def _verified_mapping_ledger_extension(
         else []
     )
     current_steps = (
-        current.get("steps")
-        if isinstance(current.get("steps"), list)
-        else []
+        current.get("steps") if isinstance(current.get("steps"), list) else []
     )
     if current_steps[: len(base_steps)] != base_steps:
         raise ValueError(
@@ -1992,9 +3535,7 @@ def _studio_export_semantic_payload(
         if isinstance(intake_manifest.get("recognition"), dict)
         else {}
     )
-    rule_id = str(
-        recognition.get("rule_id") or request.get("rule_id") or ""
-    ).strip()
+    rule_id = str(recognition.get("rule_id") or request.get("rule_id") or "").strip()
     rule = get_rule(rule_id) if rule_id else None
     rule_payload = (
         semantic_payload_from_rule(
@@ -2071,12 +3612,9 @@ def _semantic_payload_with_terminal_axes(
     spec = _read_json(spec_path) if spec_path.is_file() else {}
     axes = spec.get("axes") if isinstance(spec.get("axes"), dict) else {}
     document_sha256 = existing_file_sha256(document_path)
-    terminal_axes_complete = (
-        document_sha256 is not None
-        and all(
-            isinstance(axes.get(axis_name), dict) and bool(axes[axis_name])
-            for axis_name in ("x", "y")
-        )
+    terminal_axes_complete = document_sha256 is not None and all(
+        isinstance(axes.get(axis_name), dict) and bool(axes[axis_name])
+        for axis_name in ("x", "y")
     )
     effective_axis_plan = (
         _effective_axis_plan(
@@ -2116,9 +3654,7 @@ def _semantic_payload_with_exact_current_axes(
     """Promote exact-current axis settings from the Veusz QA audit."""
 
     publication = (
-        qa.get("publication")
-        if isinstance(qa.get("publication"), dict)
-        else {}
+        qa.get("publication") if isinstance(qa.get("publication"), dict) else {}
     )
     audit_set = (
         publication.get("veusz_document_audit")
@@ -2136,8 +3672,7 @@ def _semantic_payload_with_exact_current_axes(
             item
             for item in documents
             if isinstance(item, dict)
-            and Path(str(item.get("path") or "")).expanduser().resolve()
-            == resolved
+            and Path(str(item.get("path") or "")).expanduser().resolve() == resolved
         ),
         None,
     )
@@ -2179,9 +3714,7 @@ def _semantic_payload_with_exact_current_axes(
         "source": "veusz_exact_current_document_audit",
         "document": str(resolved),
         "document_sha256": str(
-            document_audit.get("sha256")
-            or existing_file_sha256(resolved)
-            or ""
+            document_audit.get("sha256") or existing_file_sha256(resolved) or ""
         ),
         "spec": str(_veusz_spec_path(resolved)),
     }
@@ -2195,11 +3728,7 @@ def _effective_axis_plan(
 ) -> dict[str, Any]:
     effective: dict[str, Any] = {}
     for axis_name in ("x", "y"):
-        terminal = (
-            axes.get(axis_name)
-            if isinstance(axes.get(axis_name), dict)
-            else {}
-        )
+        terminal = axes.get(axis_name) if isinstance(axes.get(axis_name), dict) else {}
         registered = (
             deepcopy(registered_axis_plan.get(axis_name))
             if isinstance(registered_axis_plan.get(axis_name), dict)
@@ -2221,11 +3750,7 @@ def _effective_axis_plan(
             "canonical_label": canonical_label,
             "canonical_unit": canonical_unit,
             "display_label": label,
-            "scale": str(
-                terminal.get("scale")
-                or registered.get("scale")
-                or "linear"
-            ),
+            "scale": str(terminal.get("scale") or registered.get("scale") or "linear"),
             "reverse": _terminal_axis_reverse(
                 terminal,
                 fallback=bool(registered.get("reverse")),
@@ -2253,9 +3778,7 @@ def _terminal_axis_identity(
 
     visible_name, visible_unit = _split_label_unit(label, fallback=fallback)
     registered_name = str(
-        registered.get("display_label")
-        or registered.get("canonical_label")
-        or ""
+        registered.get("display_label") or registered.get("canonical_label") or ""
     ).strip()
     registered_visible_name, _registered_visible_unit = _split_label_unit(
         registered_name,
@@ -2355,7 +3878,9 @@ def _resolve_studio_target(
             template=template,
             project_name=project_name,
         )
-    raise ValueError("studio accepts a SciPlot project directory, plot_request.json, or .vsz document.")
+    raise ValueError(
+        "studio accepts a SciPlot project directory, plot_request.json, or .vsz document."
+    )
 
 
 def _qt_first_project_from_source(
@@ -2366,10 +3891,15 @@ def _qt_first_project_from_source(
     template: str | None = None,
     project_name: str | None = None,
 ) -> dict[str, Any]:
-    from sciplot_core.intake import create_intake_project_from_session, prepare_intake_session
+    from sciplot_core.intake import (
+        create_intake_project_from_session,
+        prepare_intake_session,
+    )
 
     project_root = output_root or Path("outputs") / "intake_projects"
-    session = prepare_intake_session(path, output_root=project_root, requested_rule_id=rule_id)
+    session = prepare_intake_session(
+        path, output_root=project_root, requested_rule_id=rule_id
+    )
     normalized_name = _normalize_optional_string(project_name)
     if normalized_name:
         session["project_name"] = normalized_name
@@ -2409,7 +3939,9 @@ def _apply_studio_request_overrides(
     selected_rule_id = _normalize_optional_string(rule_id)
     selected_rule = get_rule(selected_rule_id) if selected_rule_id else None
     if selected_rule is not None and selected_rule.fixture_status != "ready":
-        raise ValueError(f"Material rule `{selected_rule.rule_id}` is not ready for production use.")
+        raise ValueError(
+            f"Material rule `{selected_rule.rule_id}` is not ready for production use."
+        )
     selected_rule_payload = (
         semantic_payload_from_rule(
             selected_rule,
@@ -2419,7 +3951,9 @@ def _apply_studio_request_overrides(
         if selected_rule is not None
         else None
     )
-    selected_template = _normalize_optional_string(template) or (selected_rule.template if selected_rule else None)
+    selected_template = _normalize_optional_string(template) or (
+        selected_rule.template if selected_rule else None
+    )
     selected_project_name = _normalize_optional_string(project_name)
     if not selected_rule and not selected_template and not selected_project_name:
         return
@@ -2429,18 +3963,30 @@ def _apply_studio_request_overrides(
             request["rule_id"] = selected_rule.rule_id
             request.setdefault("recipe", "auto")
             current_options = (
-                dict(request.get("render_options")) if isinstance(request.get("render_options"), dict) else {}
+                dict(request.get("render_options"))
+                if isinstance(request.get("render_options"), dict)
+                else {}
             )
             explicit_key_payload = request.get("explicit_render_option_keys")
             explicit_keys = (
-                {str(key) for key in explicit_key_payload if str(key) in current_options}
+                {
+                    str(key)
+                    for key in explicit_key_payload
+                    if str(key) in current_options
+                }
                 if isinstance(explicit_key_payload, list | tuple | set)
                 else set(current_options)
             )
             explicit_options = {key: current_options[key] for key in explicit_keys}
-            current_options = dict((selected_rule_payload or {}).get("render_options") or {})
-            current_options.setdefault("x_label_override", selected_rule.x_axis.display_label)
-            current_options.setdefault("y_label_override", selected_rule.y_axis.display_label)
+            current_options = dict(
+                (selected_rule_payload or {}).get("render_options") or {}
+            )
+            current_options.setdefault(
+                "x_label_override", selected_rule.x_axis.display_label
+            )
+            current_options.setdefault(
+                "y_label_override", selected_rule.y_axis.display_label
+            )
             current_options.update(explicit_options)
             request["render_options"] = current_options
         if selected_template:
@@ -2461,7 +4007,9 @@ def _apply_studio_request_overrides(
                         else {}
                     )
                     current_options = (
-                        dict(request.get("render_options")) if isinstance(request.get("render_options"), dict) else {}
+                        dict(request.get("render_options"))
+                        if isinstance(request.get("render_options"), dict)
+                        else {}
                     )
                     explicit_key_payload = request.get("explicit_render_option_keys")
                     explicit_keys = (
@@ -2470,7 +4018,10 @@ def _apply_studio_request_overrides(
                         else set(current_options)
                     )
                     for key, value in previous_defaults.items():
-                        if key not in explicit_keys and current_options.get(key) == value:
+                        if (
+                            key not in explicit_keys
+                            and current_options.get(key) == value
+                        ):
                             current_options.pop(key, None)
                     for key, value in selected_defaults.items():
                         current_options.setdefault(key, value)
@@ -2478,19 +4029,33 @@ def _apply_studio_request_overrides(
                 except Exception:
                     pass
             request["template"] = selected_template
-        request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
-    for manifest_path in [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]:
+        request_path.write_text(
+            json.dumps(json_safe(request), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    for manifest_path in [
+        project_dir / "intake_manifest.json",
+        *sorted(project_dir.glob("*.sciplot.json")),
+    ]:
         if not manifest_path.exists():
             continue
         payload = _read_json(manifest_path)
         if selected_project_name:
             payload["project_name"] = selected_project_name
         if selected_template:
-            experiment = payload.get("experiment") if isinstance(payload.get("experiment"), dict) else {}
+            experiment = (
+                payload.get("experiment")
+                if isinstance(payload.get("experiment"), dict)
+                else {}
+            )
             experiment["template"] = selected_template
             experiment["chart"] = selected_template
             payload["experiment"] = experiment
-            plot_options = payload.get("plot_options") if isinstance(payload.get("plot_options"), dict) else {}
+            plot_options = (
+                payload.get("plot_options")
+                if isinstance(payload.get("plot_options"), dict)
+                else {}
+            )
             plot_options["template"] = selected_template
             payload["plot_options"] = plot_options
         if selected_rule is not None:
@@ -2504,12 +4069,19 @@ def _apply_studio_request_overrides(
                 }
             )
             payload["recognition"] = recognition
-            experiment = payload.get("experiment") if isinstance(payload.get("experiment"), dict) else {}
+            experiment = (
+                payload.get("experiment")
+                if isinstance(payload.get("experiment"), dict)
+                else {}
+            )
             experiment["rule_id"] = selected_rule.rule_id
             experiment.setdefault("id", selected_rule.rule_id)
             experiment.setdefault("label", selected_rule.rule_id)
             payload["experiment"] = experiment
-        manifest_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+        manifest_path.write_text(
+            json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
 
 def _existing_document_payload(document_path: Path) -> dict[str, Any]:
@@ -2587,15 +4159,12 @@ def _write_studio_data_snapshots(
             except Exception as exc:
                 raise StudioPreparationBlocked(
                     "studio_data_snapshot_failed",
-                    "Studio could not create a data snapshot from "
-                    f"{input_path}: {exc}",
+                    f"Studio could not create a data snapshot from {input_path}: {exc}",
                 ) from exc
             for label, frame in frames:
                 frame_index += 1
                 qualified_label = (
-                    f"{input_path.stem}_{label}"
-                    if len(input_paths) > 1
-                    else label
+                    f"{input_path.stem}_{label}" if len(input_paths) > 1 else label
                 )
                 sheet_name = _excel_sheet_name(
                     qualified_label,
@@ -2622,11 +4191,19 @@ def _studio_snapshot_sources(
     supported_suffixes = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
     resolved_project = project_dir.resolve()
     if isinstance(transform_ledger, dict):
-        steps = transform_ledger.get("steps") if isinstance(transform_ledger.get("steps"), list) else []
+        steps = (
+            transform_ledger.get("steps")
+            if isinstance(transform_ledger.get("steps"), list)
+            else []
+        )
         for step in reversed(steps):
             if not isinstance(step, dict):
                 continue
-            artifacts = step.get("output_artifacts") if isinstance(step.get("output_artifacts"), list) else []
+            artifacts = (
+                step.get("output_artifacts")
+                if isinstance(step.get("output_artifacts"), list)
+                else []
+            )
             ordered = sorted(
                 (item for item in artifacts if isinstance(item, dict)),
                 key=lambda item: 0 if item.get("role") == "output" else 1,
@@ -2641,7 +4218,10 @@ def _studio_snapshot_sources(
                     continue
                 if not candidate.exists():
                     continue
-                if candidate.is_file() and candidate.suffix.casefold() not in supported_suffixes:
+                if (
+                    candidate.is_file()
+                    and candidate.suffix.casefold() not in supported_suffixes
+                ):
                     continue
                 if candidate.is_file() or candidate.is_dir():
                     candidates.append(candidate)
@@ -2678,17 +4258,25 @@ def _studio_metric_source(source: Path | None) -> Path | None:
         return None
     supported_suffixes = {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
     candidates = sorted(
-        path for path in source.rglob("*") if path.is_file() and path.suffix.casefold() in supported_suffixes
+        path
+        for path in source.rglob("*")
+        if path.is_file() and path.suffix.casefold() in supported_suffixes
     )
     if len(candidates) == 1:
         return candidates[0]
     preferred_tokens = ("comparison", "plotting_data", "source_curves", "prepared")
-    preferred = [path for path in candidates if any(token in path.stem.casefold() for token in preferred_tokens)]
+    preferred = [
+        path
+        for path in candidates
+        if any(token in path.stem.casefold() for token in preferred_tokens)
+    ]
     return preferred[0] if len(preferred) == 1 else None
 
 
 def _excel_sheet_name(label: str, *, fallback: str, used: set[str]) -> str:
-    cleaned = "".join("_" if char in "[]:*?/\\'" else char for char in str(label).strip())
+    cleaned = "".join(
+        "_" if char in "[]:*?/\\'" else char for char in str(label).strip()
+    )
     cleaned = (cleaned or fallback)[:31]
     candidate = cleaned
     suffix = 1
@@ -2719,7 +4307,9 @@ def _run_studio_qa(
         for document_path in veusz_documents or []:
             spec_path = _veusz_spec_path(document_path)
             spec = _read_json(spec_path) if spec_path.exists() else {}
-            issues = [item for item in spec.get("layout_issues", []) if isinstance(item, dict)]
+            issues = [
+                item for item in spec.get("layout_issues", []) if isinstance(item, dict)
+            ]
             layout_documents.append(
                 {
                     "document": str(document_path),
@@ -2763,12 +4353,18 @@ def _studio_layout_quality_from_spec(document_path: Path) -> dict[str, Any]:
     x_axis = axes.get("x") if isinstance(axes.get("x"), dict) else {}
     y_axis = axes.get("y") if isinstance(axes.get("y"), dict) else {}
     issues = [item for item in spec.get("layout_issues", []) if isinstance(item, dict)]
-    autofixes = [str(item) for item in spec.get("autofixes_applied", []) if isinstance(item, str)]
+    autofixes = [
+        str(item) for item in spec.get("autofixes_applied", []) if isinstance(item, str)
+    ]
     return {
         "kind": "sciplot_studio_layout_quality",
         "review_mode": "native_veusz_editor",
-        "needs_ai_intervention": any(item.get("severity") == "critical" for item in issues),
-        "issue_ids": sorted({str(item["id"]) for item in issues if isinstance(item.get("id"), str)}),
+        "needs_ai_intervention": any(
+            item.get("severity") == "critical" for item in issues
+        ),
+        "issue_ids": sorted(
+            {str(item["id"]) for item in issues if isinstance(item.get("id"), str)}
+        ),
         "autofixes_applied": sorted(set(autofixes)),
         "summaries": [
             {
@@ -2779,8 +4375,12 @@ def _studio_layout_quality_from_spec(document_path: Path) -> dict[str, Any]:
                 "document": str(document_path),
                 "spec": str(spec_path),
                 "series_count": len(series),
-                "requested_size_mm": spec.get("size_mm") if isinstance(spec.get("size_mm"), list) else [],
-                "figure_size_mm": spec.get("size_mm") if isinstance(spec.get("size_mm"), list) else [],
+                "requested_size_mm": spec.get("size_mm")
+                if isinstance(spec.get("size_mm"), list)
+                else [],
+                "figure_size_mm": spec.get("size_mm")
+                if isinstance(spec.get("size_mm"), list)
+                else [],
                 "axes": [
                     {
                         "x_label": x_axis.get("label"),
@@ -2800,7 +4400,11 @@ def _studio_layout_quality_from_spec(document_path: Path) -> dict[str, Any]:
 def _studio_visual_presentation_transforms(document_path: Path) -> list[dict[str, Any]]:
     spec_path = _veusz_spec_path(document_path)
     spec = _read_json(spec_path) if spec_path.exists() else {}
-    return [dict(item) for item in spec.get("visual_data_transforms", []) if isinstance(item, dict)]
+    return [
+        dict(item)
+        for item in spec.get("visual_data_transforms", [])
+        if isinstance(item, dict)
+    ]
 
 
 def _write_studio_analysis_report(
@@ -2810,8 +4414,17 @@ def _write_studio_analysis_report(
     document_path: Path,
     figures: list[str],
     analysis_metrics: list[dict[str, Any]],
+    figure_set_export_scope: dict[str, Any] | None = None,
 ) -> None:
-    notes = request.get("review_notes") if isinstance(request.get("review_notes"), list) else []
+    notes = list(
+        request.get("review_notes")
+        if isinstance(request.get("review_notes"), list)
+        else []
+    )
+    if figure_set_export_scope is not None:
+        scope_note = _figure_set_export_review_note(figure_set_export_scope)
+        if scope_note not in [str(value) for value in notes]:
+            notes.append(scope_note)
     lines = [
         "# SciPlot Studio Export",
         "",
@@ -2845,22 +4458,49 @@ def _write_studio_analysis_report(
     )
     if not notes:
         lines.append("- No review notes supplied.")
-    (output_dir / "analysis_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (output_dir / "analysis_report.md").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8"
+    )
 
 
 def _write_studio_review_html(output_dir: Path, *, manifest: dict[str, Any]) -> None:
-    figures = [Path(path) for path in manifest.get("figures", []) if isinstance(path, str)]
+    figures = [
+        Path(path) for path in manifest.get("figures", []) if isinstance(path, str)
+    ]
     figure_items = []
     for figure in figures:
-        rel = figure.relative_to(output_dir) if figure.exists() and figure.is_relative_to(output_dir) else figure
+        rel = (
+            figure.relative_to(output_dir)
+            if figure.exists() and figure.is_relative_to(output_dir)
+            else figure
+        )
         label = escape(str(rel))
         if figure.suffix.lower() in {".png", ".jpg", ".jpeg"}:
-            figure_items.append(f'<li><a href="{label}">{label}</a><br><img src="{label}" alt="{label}"></li>')
+            figure_items.append(
+                f'<li><a href="{label}">{label}</a><br><img src="{label}" alt="{label}"></li>'
+            )
         else:
             figure_items.append(f'<li><a href="{label}">{label}</a></li>')
-    request = manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
-    notes = request.get("review_notes") if isinstance(request.get("review_notes"), list) else []
-    note_items = [f"<li>{escape(str(note))}</li>" for note in notes] or ["<li>No review notes supplied.</li>"]
+    request = (
+        manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
+    )
+    notes = (
+        request.get("review_notes")
+        if isinstance(request.get("review_notes"), list)
+        else []
+    )
+    figure_set_export_scope = (
+        manifest.get("figure_set_export_scope")
+        if isinstance(manifest.get("figure_set_export_scope"), dict)
+        else None
+    )
+    if figure_set_export_scope is not None:
+        scope_note = _figure_set_export_review_note(figure_set_export_scope)
+        if scope_note not in [str(value) for value in notes]:
+            notes = [*notes, scope_note]
+    note_items = [f"<li>{escape(str(note))}</li>" for note in notes] or [
+        "<li>No review notes supplied.</li>"
+    ]
     revision_brief = manifest.get("revision_brief")
     html = "\n".join(
         [
@@ -2901,10 +4541,16 @@ def _write_studio_review_html(output_dir: Path, *, manifest: dict[str, Any]) -> 
 
 
 def _write_studio_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) -> str:
-    figures = [Path(path) for path in manifest.get("figures", []) if isinstance(path, str)]
+    figures = [
+        Path(path) for path in manifest.get("figures", []) if isinstance(path, str)
+    ]
     figure_lines = []
     for figure in figures:
-        rel = figure.relative_to(output_dir) if figure.exists() and figure.is_relative_to(output_dir) else figure
+        rel = (
+            figure.relative_to(output_dir)
+            if figure.exists() and figure.is_relative_to(output_dir)
+            else figure
+        )
         figure_lines.append(f"- `{rel}`")
     qa = manifest.get("qa") if isinstance(manifest.get("qa"), dict) else {}
     studio = manifest.get("studio") if isinstance(manifest.get("studio"), dict) else {}
@@ -2935,7 +4581,9 @@ def _write_studio_revision_brief(output_dir: Path, *, manifest: dict[str, Any]) 
         "- 导出格式或 QA：",
         "- 其他：",
     ]
-    (output_dir / "revision_brief.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (output_dir / "revision_brief.md").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8"
+    )
     return "revision_brief.md"
 
 
@@ -2952,7 +4600,9 @@ def _scalar_field_role_columns(
     render_options: dict[str, Any],
 ) -> tuple[object, object, object]:
     numeric = _coerced_numeric_frame(frame)
-    numeric_columns = [column for column in numeric.columns if numeric[column].notna().any()]
+    numeric_columns = [
+        column for column in numeric.columns if numeric[column].notna().any()
+    ]
     if len(numeric_columns) < 3:
         raise StudioPreparationBlocked(
             "scalar_field_needs_xyz_columns",
@@ -2961,7 +4611,9 @@ def _scalar_field_role_columns(
     requested = render_options.get("data_variables")
     requested = requested if isinstance(requested, dict) else {}
     resolved: list[object] = []
-    available_by_text = {str(column).strip().casefold(): column for column in frame.columns}
+    available_by_text = {
+        str(column).strip().casefold(): column for column in frame.columns
+    }
     for role in ("x", "y", "z"):
         value = requested.get(role)
         if isinstance(value, str) and value.strip():
@@ -2984,7 +4636,9 @@ def _scalar_field_role_columns(
         if alias is not None and alias not in resolved:
             resolved.append(alias)
             continue
-        fallback = next((column for column in numeric_columns if column not in resolved), None)
+        fallback = next(
+            (column for column in numeric_columns if column not in resolved), None
+        )
         if fallback is None:
             raise StudioPreparationBlocked(
                 "scalar_field_role_column_missing",
@@ -3013,14 +4667,14 @@ def _scalar_field_from_frames(
                 "sha256": source_frame.sha256,
             }
         ]
-        series_source_artifacts = (
-            (str(source_frame.path), source_frame.sha256),
-        )
+        series_source_artifacts = ((str(source_frame.path), source_frame.sha256),)
     else:
         _label, frame = source_frame
         source_artifacts = []
         series_source_artifacts = ()
-    x_column, y_column, z_column = _scalar_field_role_columns(frame, render_options=render_options)
+    x_column, y_column, z_column = _scalar_field_role_columns(
+        frame, render_options=render_options
+    )
     numeric = _coerced_numeric_frame(frame)
     field = numeric[[x_column, y_column, z_column]].dropna().copy()
     if field.empty:
@@ -3116,16 +4770,10 @@ def _apply_series_domain_contract_defaults(
     rule_id = str(request.get("rule_id") or "").strip()
     explicit = _explicit_render_options(request)
     x_values = [
-        value
-        for item in series
-        for value in item.x_values
-        if math.isfinite(value)
+        value for item in series for value in item.x_values if math.isfinite(value)
     ]
     y_values = [
-        value
-        for item in series
-        for value in item.y_values
-        if math.isfinite(value)
+        value for item in series for value in item.y_values if math.isfinite(value)
     ]
     if rule_id == "xrd_pattern":
         if x_values and min(x_values) >= 0.0 and "x_min" not in explicit:
@@ -3193,13 +4841,9 @@ def _validate_log_domain_series(
         axis_issues: list[dict[str, Any]] = []
         for item in series:
             values = item.x_values if axis == "x" else item.y_values
-            nonfinite_count = sum(
-                1 for value in values if not math.isfinite(value)
-            )
+            nonfinite_count = sum(1 for value in values if not math.isfinite(value))
             nonpositive_count = sum(
-                1
-                for value in values
-                if math.isfinite(value) and value <= 0.0
+                1 for value in values if math.isfinite(value) and value <= 0.0
             )
             if nonfinite_count or nonpositive_count:
                 axis_issues.append(
@@ -3267,8 +4911,12 @@ def _series_from_frame_records(
                 pair_frame = numeric[[x_column, y_column]].dropna()
                 if pair_frame.empty:
                     continue
-                x_values = tuple(float(value) for value in pair_frame[x_column].tolist())
-                y_values = tuple(float(value) for value in pair_frame[y_column].tolist())
+                x_values = tuple(
+                    float(value) for value in pair_frame[x_column].tolist()
+                )
+                y_values = tuple(
+                    float(value) for value in pair_frame[y_column].tolist()
+                )
                 fallback = source_label if len(pairs) == 1 else str(y_column)
                 label = _series_label_from_column(
                     frame[y_column],
@@ -3303,7 +4951,9 @@ def _series_from_frame_records(
         series=raw_series,
     )
     _validate_log_domain_series(raw_series, render_options=render_options)
-    styled = _apply_series_options(raw_series, render_options=render_options, request=request)
+    styled = _apply_series_options(
+        raw_series, render_options=render_options, request=request
+    )
     axis_info["series_count"] = len(styled)
     render_options = _resolved_domain_render_options(
         request,
@@ -3312,13 +4962,23 @@ def _series_from_frame_records(
     )
     if axis_info.get("presentation_kind") == "categorical_replicates":
         styled = _reindex_categorical_series(styled, render_options=render_options)
-        axis_info["category_labels"] = [_category_axis_label(item.label) for item in styled]
-        axis_info["category_positions"] = [float(index) for index in range(1, len(styled) + 1)]
+        axis_info["category_labels"] = [
+            _category_axis_label(item.label) for item in styled
+        ]
+        axis_info["category_positions"] = [
+            float(index) for index in range(1, len(styled) + 1)
+        ]
         axis_info["raw_replicate_count"] = sum(len(item.y_values) for item in styled)
-    styled = _apply_template_series_transforms(styled, request=request, render_options=render_options)
+    styled = _apply_template_series_transforms(
+        styled, request=request, render_options=render_options
+    )
     _validate_log_domain_series(styled, render_options=render_options)
-    axis_info["x_label"] = _veusz_axis_label(render_options.get("x_label_override") or axis_info["x_label"])
-    axis_info["y_label"] = _veusz_axis_label(render_options.get("y_label_override") or axis_info["y_label"])
+    axis_info["x_label"] = _veusz_axis_label(
+        render_options.get("x_label_override") or axis_info["x_label"]
+    )
+    axis_info["y_label"] = _veusz_axis_label(
+        render_options.get("y_label_override") or axis_info["y_label"]
+    )
     return styled, axis_info
 
 
@@ -3329,19 +4989,13 @@ def derive_terminal_render_data_contract(
 ) -> dict[str, Any]:
     """Replay terminal tables into the numeric units the renderer must consume."""
 
-    resolved_sources = [
-        source.expanduser().resolve() for source in terminal_sources
-    ]
+    resolved_sources = [source.expanduser().resolve() for source in terminal_sources]
     if not resolved_sources or len(resolved_sources) != len(set(resolved_sources)):
-        raise ValueError(
-            "Terminal render-data derivation needs unique source files."
-        )
+        raise ValueError("Terminal render-data derivation needs unique source files.")
     frames: list[StudioSourceFrame] = []
     for source in resolved_sources:
         if not source.is_file():
-            raise FileNotFoundError(
-                f"Terminal plotted source is not a file: {source}"
-            )
+            raise FileNotFoundError(f"Terminal plotted source is not a file: {source}")
         frames.extend(_read_source_frame_records(source, request=request))
     series, axis_info = _series_from_frame_records(request, frames=frames)
     series, _legend_label_mapping = _compact_replicate_series_labels(series)
@@ -3410,9 +5064,7 @@ def derive_terminal_render_data_contract(
     categorical_groups = {
         str(group.get("y_name") or ""): group
         for group in (
-            categorical.get("groups", [])
-            if isinstance(categorical, dict)
-            else []
+            categorical.get("groups", []) if isinstance(categorical, dict) else []
         )
         if isinstance(group, dict)
     }
@@ -3421,9 +5073,7 @@ def derive_terminal_render_data_contract(
     scalar = axis_info.get("scalar_field")
     if isinstance(scalar, dict):
         if scalar_contract is None:
-            raise ValueError(
-                "Scalar-field derivation has no closed visual contract."
-            )
+            raise ValueError("Scalar-field derivation has no closed visual contract.")
         units.append(
             {
                 "kind": "scalar_field",
@@ -3478,20 +5128,14 @@ def derive_terminal_render_data_contract(
                     ],
                 }
             )
-    source_artifacts = sorted(
-        {
-            (str(frame.path), frame.sha256)
-            for frame in frames
-        }
-    )
+    source_artifacts = sorted({(str(frame.path), frame.sha256) for frame in frames})
     return {
         "kind": "sciplot_terminal_render_data_contract",
         "version": 1,
         "status": "passed",
         "template": template_id,
         "source_artifacts": [
-            {"path": path, "sha256": digest}
-            for path, digest in source_artifacts
+            {"path": path, "sha256": digest} for path, digest in source_artifacts
         ],
         "units": units,
         "unit_count": len(units),
@@ -3510,7 +5154,9 @@ def _series_from_request(
         )
     input_value = request.get("input")
     if not isinstance(input_value, str) or not input_value.strip():
-        raise ValueError("plot_request.json needs an input path for Studio document generation.")
+        raise ValueError(
+            "plot_request.json needs an input path for Studio document generation."
+        )
     source = Path(input_value).expanduser()
     if not source.is_absolute():
         source = (base_dir / source).resolve()
@@ -3521,9 +5167,7 @@ def _series_from_request(
     )
     effective_input = effective_request.get("input")
     if not isinstance(effective_input, str) or not effective_input.strip():
-        raise ValueError(
-            "Resolved data mapping request has no effective input path."
-        )
+        raise ValueError("Resolved data mapping request has no effective input path.")
     source = Path(effective_input).expanduser()
     if not source.is_absolute():
         source = (base_dir / source).resolve()
@@ -3545,9 +5189,7 @@ def _series_from_request(
     transform_steps.extend(semantic_steps)
     frames = _read_source_frame_records(source, request=request)
     styled, axis_info = _series_from_frame_records(request, frames=frames)
-    axis_info["semantic_terminal_series_order"] = [
-        item.label for item in styled
-    ]
+    axis_info["semantic_terminal_series_order"] = [item.label for item in styled]
     if mapping_application is not None:
         axis_info["data_mapping_coverage"] = _mapping_series_coverage(
             styled,
@@ -3583,8 +5225,7 @@ def _mapping_series_coverage(
     except (FileNotFoundError, ValueError) as exc:
         raise StudioPreparationBlocked(
             "mapped_source_coverage_incomplete",
-            "Studio would omit a confirmed mapped source before VSZ "
-            f"generation: {exc}",
+            f"Studio would omit a confirmed mapped source before VSZ generation: {exc}",
         ) from exc
 
 
@@ -3640,7 +5281,9 @@ def _categorical_axis_label(metric: str, unit: str) -> str:
     return f"{metric} ({normalized_unit})"
 
 
-def _deterministic_category_positions(center: float, count: int, *, fraction: float) -> tuple[float, ...]:
+def _deterministic_category_positions(
+    center: float, count: int, *, fraction: float
+) -> tuple[float, ...]:
     if count <= 1:
         return (center,)
     bounded = min(max(float(fraction), 0.0), 0.35)
@@ -3666,8 +5309,12 @@ def _categorical_series_from_frames(
             values = pd.to_numeric(frame[column].iloc[2:], errors="coerce").dropna()
             if values.empty:
                 continue
-            sample = _clean_studio_cell(frame[column].iloc[1]) or source_label or str(column)
-            grouped.setdefault(sample, []).extend(float(value) for value in values.tolist())
+            sample = (
+                _clean_studio_cell(frame[column].iloc[1]) or source_label or str(column)
+            )
+            grouped.setdefault(sample, []).extend(
+                float(value) for value in values.tolist()
+            )
             grouped_artifacts.setdefault(sample, set()).add(
                 (str(source_frame.path), source_frame.sha256)
             )
@@ -3682,21 +5329,27 @@ def _categorical_series_from_frames(
     distinct_metrics = list(dict.fromkeys(metric_labels))
     distinct_units = list(dict.fromkeys(units))
     normalized_metrics = {metric.casefold() for metric in distinct_metrics}
-    normalized_units = {re.sub(r"\s+", " ", unit).strip().casefold() for unit in distinct_units}
+    normalized_units = {
+        re.sub(r"\s+", " ", unit).strip().casefold() for unit in distinct_units
+    }
     if len(normalized_metrics) > 1:
         raise StudioPreparationBlocked(
             "mixed_categorical_metrics",
-            "Categorical replicate rendering requires one metric; found: " + ", ".join(distinct_metrics),
+            "Categorical replicate rendering requires one metric; found: "
+            + ", ".join(distinct_metrics),
         )
     if len(normalized_units) > 1:
         raise StudioPreparationBlocked(
             "mixed_categorical_units",
-            "Categorical replicate rendering requires one unit; found: " + ", ".join(distinct_units),
+            "Categorical replicate rendering requires one unit; found: "
+            + ", ".join(distinct_units),
         )
     metric = distinct_metrics[0] if distinct_metrics else "Value"
     unit = distinct_units[0] if distinct_units else ""
     jitter = normalize_raw_point_jitter_fraction(
-        render_options.get("raw_point_jitter_fraction", DEFAULT_RAW_POINT_JITTER_FRACTION)
+        render_options.get(
+            "raw_point_jitter_fraction", DEFAULT_RAW_POINT_JITTER_FRACTION
+        )
     )
     series: list[StudioSeries] = []
     for index, (sample, values) in enumerate(grouped.items(), start=1):
@@ -3705,7 +5358,9 @@ def _categorical_series_from_frames(
                 label=sample,
                 x_name=f"category_x_{index}",
                 y_name=f"category_y_{index}",
-                x_values=_deterministic_category_positions(float(index), len(values), fraction=jitter),
+                x_values=_deterministic_category_positions(
+                    float(index), len(values), fraction=jitter
+                ),
                 y_values=tuple(values),
                 color=DEFAULT_PALETTE[(index - 1) % len(DEFAULT_PALETTE)],
                 presentation_kind="categorical_replicates",
@@ -3729,12 +5384,16 @@ def _reindex_categorical_series(
     render_options: dict[str, Any],
 ) -> list[StudioSeries]:
     jitter = normalize_raw_point_jitter_fraction(
-        render_options.get("raw_point_jitter_fraction", DEFAULT_RAW_POINT_JITTER_FRACTION)
+        render_options.get(
+            "raw_point_jitter_fraction", DEFAULT_RAW_POINT_JITTER_FRACTION
+        )
     )
     return [
         replace(
             item,
-            x_values=_deterministic_category_positions(float(index), len(item.y_values), fraction=jitter),
+            x_values=_deterministic_category_positions(
+                float(index), len(item.y_values), fraction=jitter
+            ),
             category_position=float(index),
         )
         for index, item in enumerate(series, start=1)
@@ -3770,7 +5429,9 @@ def _studio_source_for_request(
         replicate_mode=request.get("replicate_mode"),
     )
     prepared_source = prepared.get("source")
-    transform_steps = [step for step in prepared.get("transform_steps", []) if isinstance(step, dict)]
+    transform_steps = [
+        step for step in prepared.get("transform_steps", []) if isinstance(step, dict)
+    ]
     terminal_series_order = _semantic_terminal_series_order(transform_steps)
     if terminal_series_order:
         request["series_order"] = terminal_series_order
@@ -3816,10 +5477,15 @@ def _read_source_frame_records(
         files = [
             path
             for path in sorted(source.rglob("*"))
-            if path.is_file() and path.suffix.lower() in {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
+            if path.is_file()
+            and path.suffix.lower() in {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
         ]
         if _is_rheology_sweep_request(request):
-            text_files = [path for path in files if path.suffix.lower() in {".csv", ".tsv", ".txt"}]
+            text_files = [
+                path
+                for path in files
+                if path.suffix.lower() in {".csv", ".tsv", ".txt"}
+            ]
             if text_files:
                 files = text_files
     elif source.is_file():
@@ -3903,7 +5569,9 @@ def _coerced_numeric_frame(frame: pd.DataFrame) -> pd.DataFrame:
         pd.to_numeric,
         errors="coerce",
     )
-    useful_columns = [column for column in numeric.columns if numeric[column].notna().sum() >= 2]
+    useful_columns = [
+        column for column in numeric.columns if numeric[column].notna().sum() >= 2
+    ]
     return numeric[useful_columns].dropna(how="all")
 
 
@@ -3920,9 +5588,7 @@ def _structured_metadata_prefix_rows(frame: pd.DataFrame) -> int:
             continue
         unit_values = [value for value in values if _is_unit_label(value)]
         nonnumeric_units = [
-            value
-            for value in unit_values
-            if not _is_finite_numeric_text(value)
+            value for value in unit_values if not _is_finite_numeric_text(value)
         ]
         if (
             len(unit_values) >= max(1, math.ceil(len(values) * 0.5))
@@ -3935,10 +5601,7 @@ def _structured_metadata_prefix_rows(frame: pd.DataFrame) -> int:
 def _series_metadata_order(frame: pd.DataFrame) -> str | None:
     """Identify whether two structured metadata rows store unit/sample or sample/unit."""
 
-    if (
-        frame.shape[0] < 2
-        or _structured_metadata_prefix_rows(frame) != 2
-    ):
+    if frame.shape[0] < 2 or _structured_metadata_prefix_rows(frame) != 2:
         return None
 
     def unit_density(row_index: int) -> float:
@@ -3973,13 +5636,22 @@ def _is_finite_numeric_text(value: str) -> bool:
         return False
 
 
-def _xy_pairs_for_request(numeric: pd.DataFrame, *, request: dict[str, Any]) -> list[tuple[Any, Any]]:
+def _xy_pairs_for_request(
+    numeric: pd.DataFrame, *, request: dict[str, Any]
+) -> list[tuple[Any, Any]]:
     metric_pair = _preferred_metric_pair(request)
     if metric_pair is not None:
         x_metric, y_metric = metric_pair
         pairs = _metric_xy_pairs(numeric, x_metric=x_metric, y_metric=y_metric)
         if pairs:
             return pairs
+        if str(request.get("rule_id") or "").strip() == "rheology_frequency_sweep":
+            raise StudioPreparationBlocked(
+                "figure_metric_unavailable",
+                "The frequency-sweep figure requests "
+                f"{y_metric!r}, but the prepared source has no matching "
+                "metric column. SciPlot will not substitute another metric.",
+            )
     return _xy_pairs(numeric)
 
 
@@ -3994,18 +5666,32 @@ def _xy_pairs(numeric: pd.DataFrame) -> list[tuple[Any, Any]]:
 
 
 def _columns_look_like_repeated_x(columns: list[Any]) -> bool:
-    cleaned = [_clean_column_label(column).split(".")[0].casefold() for column in columns]
-    return len(set(cleaned)) == 1 or all(label in {"x", "time", "temperature", "frequency"} for label in cleaned)
+    cleaned = [
+        _clean_column_label(column).split(".")[0].casefold() for column in columns
+    ]
+    return len(set(cleaned)) == 1 or all(
+        label in {"x", "time", "temperature", "frequency"} for label in cleaned
+    )
 
 
 def _preferred_metric_pair(request: dict[str, Any]) -> tuple[str, str] | None:
     x_metric = _clean_metric_id(request.get("x_metric"))
     y_metric = _clean_metric_id(request.get("y_metric"))
     rule_id = str(request.get("rule_id") or "").strip()
-    study_model = request.get("study_model") if isinstance(request.get("study_model"), dict) else {}
-    figure_queue = study_model.get("figure_queue") if isinstance(study_model.get("figure_queue"), list) else []
+    study_model = (
+        request.get("study_model")
+        if isinstance(request.get("study_model"), dict)
+        else {}
+    )
+    figure_queue = (
+        study_model.get("figure_queue")
+        if isinstance(study_model.get("figure_queue"), list)
+        else []
+    )
     if (not x_metric or not y_metric) and figure_queue:
-        first_figure = next((item for item in figure_queue if isinstance(item, dict)), {})
+        first_figure = next(
+            (item for item in figure_queue if isinstance(item, dict)), {}
+        )
         x_metric = x_metric or _clean_metric_id(first_figure.get("x_metric"))
         y_metric = y_metric or _clean_metric_id(first_figure.get("y_metric"))
     if rule_id in {
@@ -4060,15 +5746,25 @@ _METRIC_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 
-def _metric_xy_pairs(numeric: pd.DataFrame, *, x_metric: str, y_metric: str) -> list[tuple[Any, Any]]:
+def _metric_xy_pairs(
+    numeric: pd.DataFrame, *, x_metric: str, y_metric: str
+) -> list[tuple[Any, Any]]:
     columns = list(numeric.columns)
-    x_columns = [column for column in columns if _column_matches_metric(column, x_metric)]
-    y_columns = [column for column in columns if _column_matches_metric(column, y_metric)]
+    x_columns = [
+        column for column in columns if _column_matches_metric(column, x_metric)
+    ]
+    y_columns = [
+        column for column in columns if _column_matches_metric(column, y_metric)
+    ]
     pairs: list[tuple[Any, Any]] = []
     for y_column in y_columns:
         suffix = _duplicate_column_suffix(y_column)
         x_column = next(
-            (column for column in x_columns if _duplicate_column_suffix(column) == suffix),
+            (
+                column
+                for column in x_columns
+                if _duplicate_column_suffix(column) == suffix
+            ),
             x_columns[0] if x_columns else None,
         )
         if x_column is not None:
@@ -4102,13 +5798,20 @@ def _duplicate_column_suffix(column: Any) -> str:
 
 def _normal_metric_label(label: str) -> str:
     text = label.casefold().replace("′", "'").replace("δ", "delta")
-    return "".join(character for character in text if character.isalnum() or character in {"'", '"', "*"})
+    return "".join(
+        character
+        for character in text
+        if character.isalnum() or character in {"'", '"', "*"}
+    )
 
 
 def _is_rheology_sweep_request(request: dict[str, Any] | None) -> bool:
     if not isinstance(request, dict):
         return False
-    return str(request.get("rule_id") or "").strip() in {"rheology_frequency_sweep", "rheology_temperature_sweep"}
+    return str(request.get("rule_id") or "").strip() in {
+        "rheology_frequency_sweep",
+        "rheology_temperature_sweep",
+    }
 
 
 def _clean_column_label(column: Any) -> str:
@@ -4152,14 +5855,17 @@ def _series_label_from_column(
     metadata_order: str | None = None,
 ) -> str:
     metadata = [
-        None if pd.isna(value) else str(value).strip()
-        for value in values.tolist()[:2]
+        None if pd.isna(value) else str(value).strip() for value in values.tolist()[:2]
     ]
     if metadata_order == "unit_then_sample" and len(metadata) >= 2 and metadata[1]:
         return metadata[1]
     if metadata_order == "sample_then_unit" and metadata and metadata[0]:
         return metadata[0]
-    leading = [str(value).strip() for value in values.tolist()[:4] if not pd.isna(value) and str(value).strip()]
+    leading = [
+        str(value).strip()
+        for value in values.tolist()[:4]
+        if not pd.isna(value) and str(value).strip()
+    ]
     if len(leading) >= 2:
         first_is_unit = _is_unit_label(leading[0].casefold())
         second_is_unit = _is_unit_label(leading[1].casefold())
@@ -4265,8 +5971,14 @@ def _apply_series_options(
     request: dict[str, Any],
 ) -> list[StudioSeries]:
     include = _string_list(render_options.get("series_include"))
-    order = _string_list(render_options.get("series_order")) or _string_list(request.get("series_order"))
-    styles = render_options.get("series_styles") if isinstance(render_options.get("series_styles"), list) else []
+    order = _string_list(render_options.get("series_order")) or _string_list(
+        request.get("series_order")
+    )
+    styles = (
+        render_options.get("series_styles")
+        if isinstance(render_options.get("series_styles"), list)
+        else []
+    )
     palette = _palette_for_render_options(render_options)
     marker_sequence = _string_list(render_options.get("marker_sequence"))
     if not marker_sequence:
@@ -4286,26 +5998,20 @@ def _apply_series_options(
             + ", ".join(duplicate_labels),
         )
     duplicate_order = sorted(
-        label
-        for label, count in Counter(order).items()
-        if count > 1
+        label for label, count in Counter(order).items() if count > 1
     )
     if duplicate_order:
         raise StudioPreparationBlocked(
             "duplicate_series_order",
-            "series_order contains duplicate labels: "
-            + ", ".join(duplicate_order),
+            "series_order contains duplicate labels: " + ", ".join(duplicate_order),
         )
     duplicate_include = sorted(
-        label
-        for label, count in Counter(include).items()
-        if count > 1
+        label for label, count in Counter(include).items() if count > 1
     )
     if duplicate_include:
         raise StudioPreparationBlocked(
             "duplicate_series_include",
-            "series_include contains duplicate labels: "
-            + ", ".join(duplicate_include),
+            "series_include contains duplicate labels: " + ", ".join(duplicate_include),
         )
     by_label = {item.label: item for item in series}
     unknown_order = [label for label in order if label not in by_label]
@@ -4319,7 +6025,9 @@ def _apply_series_options(
                 + ", ".join(unknown_order),
             )
     ordered = [by_label[label] for label in order if label in by_label]
-    ordered.extend(item for item in series if item.label not in {entry.label for entry in ordered})
+    ordered.extend(
+        item for item in series if item.label not in {entry.label for entry in ordered}
+    )
     if include:
         unknown_include = [label for label in include if label not in by_label]
         if unknown_include:
@@ -4333,7 +6041,12 @@ def _apply_series_options(
     style_by_label: dict[str, dict[str, Any]] = {}
     for style in styles:
         if isinstance(style, dict):
-            label = style.get("label") or style.get("sample") or style.get("name") or style.get("series_id")
+            label = (
+                style.get("label")
+                or style.get("sample")
+                or style.get("name")
+                or style.get("series_id")
+            )
             if isinstance(label, str):
                 style_by_label[label] = style
     styled: list[StudioSeries] = []
@@ -4353,7 +6066,10 @@ def _apply_series_options(
         )
         default_marker = (
             marker_sequence[replicate_index % len(marker_sequence)]
-            if (template_id == "point_line" or item.presentation_kind == "categorical_replicates")
+            if (
+                template_id == "point_line"
+                or item.presentation_kind == "categorical_replicates"
+            )
             else "none"
         )
         if item.label in grouped_replicate_styles:
@@ -4361,7 +6077,9 @@ def _apply_series_options(
                 replicate_index % len(line_style_sequence)
             ]
         elif template_id == "point_line" and len(ordered) > len(marker_sequence):
-            default_line_style = line_style_sequence[(index // len(marker_sequence)) % len(line_style_sequence)]
+            default_line_style = line_style_sequence[
+                (index // len(marker_sequence)) % len(line_style_sequence)
+            ]
         elif template_id != "point_line" and len(ordered) > 1:
             default_line_style = line_style_sequence[index % len(line_style_sequence)]
         else:
@@ -4374,13 +6092,16 @@ def _apply_series_options(
                 x_values=item.x_values,
                 y_values=item.y_values,
                 color=str(
-                    style.get("color")
-                    or palette[condition_index % len(palette)]
+                    style.get("color") or palette[condition_index % len(palette)]
                 ),
                 line_width=UNIFIED_LINE_WIDTH_PT,
                 marker=style.get("marker", item.marker or default_marker),
                 marker_size=UNIFIED_MARKER_SIZE_PT,
-                line_style=str(style.get("line_style") or style.get("linestyle") or default_line_style),
+                line_style=str(
+                    style.get("line_style")
+                    or style.get("linestyle")
+                    or default_line_style
+                ),
                 presentation_kind=item.presentation_kind,
                 category_position=item.category_position,
                 source_artifacts=item.source_artifacts,
@@ -4440,7 +6161,9 @@ def _effective_render_options(request: dict[str, Any]) -> dict[str, Any]:
             merged.update(template.default_options)
     except Exception:
         if template_id == "stacked_curve":
-            merged.update({"series_label_mode": "inline", "baseline": "none", "reverse_x": False})
+            merged.update(
+                {"series_label_mode": "inline", "baseline": "none", "reverse_x": False}
+            )
 
     if isinstance(request.get("render_options"), dict):
         merged.update(request["render_options"])
@@ -4547,7 +6270,9 @@ def _veusz_style_contract(render_options: dict[str, Any]) -> _VeuszStyleContract
     try:
         from sciplot_core.figure_profiles import figure_profile_frame_margins
 
-        profile_margins = figure_profile_frame_margins(render_options.get("_figure_profile_id"))
+        profile_margins = figure_profile_frame_margins(
+            render_options.get("_figure_profile_id")
+        )
     except (ImportError, ValueError):
         profile_margins = None
     if profile_margins is not None:
@@ -4589,14 +6314,23 @@ def _apply_domain_render_defaults(
     axis_info: dict[str, Any],
 ) -> dict[str, Any]:
     updated = dict(render_options)
-    explicit_options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
+    explicit_options = (
+        request.get("render_options")
+        if isinstance(request.get("render_options"), dict)
+        else {}
+    )
+    explicit_contract = _explicit_render_options(request)
     template_id = _request_template(request)
     category_positions = axis_info.get("category_positions")
     if template_id == "point_line":
         for key, value in POINT_LINE_RENDER_OPTIONS.items():
             if key not in explicit_options:
                 updated[key] = list(value) if isinstance(value, list) else value
-    if template_id in CATEGORICAL_TEMPLATE_IDS and isinstance(category_positions, list) and category_positions:
+    if (
+        template_id in CATEGORICAL_TEMPLATE_IDS
+        and isinstance(category_positions, list)
+        and category_positions
+    ):
         for key, value in CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS.items():
             if key not in explicit_options:
                 updated[key] = list(value) if isinstance(value, list) else value
@@ -4613,9 +6347,13 @@ def _apply_domain_render_defaults(
         updated.setdefault("legend_position", "none")
         updated.setdefault("series_label_mode", "none")
         if str(request.get("rule_id") or "").strip() == "impact_metric":
-            category_labels = [str(value) for value in axis_info.get("category_labels") or []]
+            category_labels = [
+                str(value) for value in axis_info.get("category_labels") or []
+            ]
             thickness_labels = bool(category_labels) and all(
-                re.fullmatch(r".+?\s+\(\d+(?:\.\d+)?\s*mm\)", label, flags=re.IGNORECASE)
+                re.fullmatch(
+                    r".+?\s+\(\d+(?:\.\d+)?\s*mm\)", label, flags=re.IGNORECASE
+                )
                 or re.fullmatch(r".+?/\d+(?:\.\d+)?", label)
                 for label in category_labels
             )
@@ -4624,7 +6362,6 @@ def _apply_domain_render_defaults(
             if "y_label_override" not in explicit_options:
                 updated["y_label_override"] = "Impact strength (kJ/m²)"
     if template_id in STACKED_TEMPLATE_IDS and _looks_like_wavenumber_axis(axis_info):
-        explicit_contract = _explicit_render_options(request)
         detected_y_label = str(axis_info.get("y_label") or "").strip()
         series_count = int(axis_info.get("series_count") or 0)
         label_mode = str(updated.get("series_label_mode") or "").strip().casefold()
@@ -4635,13 +6372,23 @@ def _apply_domain_render_defaults(
             "x_max": 4000.0,
             "baseline": "none",
             "series_label_side": "left",
+            "show_single_series_label": series_count == 1,
             "show_y_ticks": False,
             "x_label_override": "Wavenumber (cm^-1)",
-            "size": "120x110",
+            "size": "120x55" if series_count == 1 else "120x110",
         }
         for key, value in domain_defaults.items():
-            if key not in explicit_options:
+            if (
+                key not in explicit_options
+                or key == "size"
+                and key not in explicit_contract
+            ):
                 updated[key] = value
+        if series_count == 1:
+            if "series_label_offset_fraction" not in explicit_contract:
+                updated["series_label_offset_fraction"] = 0.0
+            if "series_label_vertical_align" not in explicit_contract:
+                updated["series_label_vertical_align"] = "top"
         if detected_y_label and "y_label_override" not in explicit_contract:
             updated["y_label_override"] = detected_y_label
         if "show_y_ticks" not in explicit_contract:
@@ -4650,7 +6397,10 @@ def _apply_domain_render_defaults(
             updated["legend_position"] = "none"
         if label_mode in {"", "auto", "legend", "inline", "edge"}:
             updated["series_label_mode"] = "inline"
-    if _looks_like_torque_axis(axis_info) or str(request.get("rule_id") or "").strip() == "torque_curve":
+    if (
+        _looks_like_torque_axis(axis_info)
+        or str(request.get("rule_id") or "").strip() == "torque_curve"
+    ):
         x_label = str(updated.get("x_label_override") or "").strip().casefold()
         if x_label in {"", "time"}:
             updated["x_label_override"] = "Time (s)"
@@ -4658,7 +6408,11 @@ def _apply_domain_render_defaults(
         if y_label in {"", "screw torque", "torque"}:
             updated["y_label_override"] = "Screw torque (N·m)"
         updated.setdefault("stack_spacing_scale", 0.05)
-        if str(updated.get("series_label_mode") or "").casefold() in {"", "auto", "inline"}:
+        if str(updated.get("series_label_mode") or "").casefold() in {
+            "",
+            "auto",
+            "inline",
+        }:
             updated["series_label_mode"] = "legend"
     if _looks_like_frequency_axis(axis_info):
         updated.setdefault("xscale", "log")
@@ -4676,7 +6430,9 @@ def _apply_domain_render_defaults(
             None,
         )
         rule_id = str(request.get("rule_id") or "").strip()
-        rheology_frequency = rule_id == "rheology_frequency_sweep" or metric_label is not None
+        rheology_frequency = (
+            rule_id == "rheology_frequency_sweep" or metric_label is not None
+        )
         x_axis_text = str(axis_info.get("x_label") or "").casefold()
         if rheology_frequency or "angular" in x_axis_text or "rad" in x_axis_text:
             updated.setdefault("x_label_override", RHEOLOGY_FREQUENCY_X_RENDER_LABEL)
@@ -4712,14 +6468,24 @@ def _apply_domain_render_defaults(
         updated.setdefault("y_label_override", "Normalized stress (\\sigma/\\sigma_0)")
     if str(request.get("rule_id") or "").strip() == "gpc_sec_chromatogram":
         detected_y_label = str(axis_info.get("y_label") or "").strip()
-        requested_y_label = str(updated.get("y_label_override") or "").strip().casefold()
-        if detected_y_label and requested_y_label in {"", "detector response", "detector response (a.u.)"}:
+        requested_y_label = (
+            str(updated.get("y_label_override") or "").strip().casefold()
+        )
+        if detected_y_label and requested_y_label in {
+            "",
+            "detector response",
+            "detector response (a.u.)",
+        }:
             updated["y_label_override"] = detected_y_label
     return updated
 
 
 def _explicit_render_options(request: dict[str, Any]) -> dict[str, Any]:
-    options = request.get("render_options") if isinstance(request.get("render_options"), dict) else {}
+    options = (
+        request.get("render_options")
+        if isinstance(request.get("render_options"), dict)
+        else {}
+    )
     explicit_keys = request.get("explicit_render_option_keys")
     if not isinstance(explicit_keys, list | tuple | set):
         return options
@@ -4764,7 +6530,9 @@ def _compact_replicate_series_labels(
         ),
         None,
     )
-    compact_prefix = " ".join(tokens[acronym_index:]) if acronym_index is not None else prefix
+    compact_prefix = (
+        " ".join(tokens[acronym_index:]) if acronym_index is not None else prefix
+    )
     if "_" in compact_prefix:
         identifier_parts = [part for part in compact_prefix.split("_") if part]
         if len(identifier_parts) > 1 and len(identifier_parts[-1]) <= 8:
@@ -4825,7 +6593,11 @@ def _legend_axis_bounds(
     if axis_contract is not None:
         minimum = _optional_float(getattr(axis_contract, f"{axis}_min"))
         maximum = _optional_float(getattr(axis_contract, f"{axis}_max"))
-        if minimum is not None and maximum is not None and not math.isclose(minimum, maximum):
+        if (
+            minimum is not None
+            and maximum is not None
+            and not math.isclose(minimum, maximum)
+        ):
             if scale == "log":
                 if minimum <= 0.0 or maximum <= 0.0:
                     return None
@@ -4855,8 +6627,12 @@ def _legend_curve_samples(
     *,
     axis_contract: _VeuszAxisContract | None = None,
 ) -> list[tuple[float, float]]:
-    x_bounds = _legend_axis_bounds(series, render_options, "x", axis_contract=axis_contract)
-    y_bounds = _legend_axis_bounds(series, render_options, "y", axis_contract=axis_contract)
+    x_bounds = _legend_axis_bounds(
+        series, render_options, "x", axis_contract=axis_contract
+    )
+    y_bounds = _legend_axis_bounds(
+        series, render_options, "y", axis_contract=axis_contract
+    )
     if x_bounds is None or y_bounds is None:
         return []
     x_low, x_high, x_scale = x_bounds
@@ -4877,7 +6653,12 @@ def _legend_curve_samples(
             y_norm = normalized(float(y_value), y_low, y_high, y_scale)
             if x_norm is None or y_norm is None:
                 continue
-            if math.isfinite(x_norm) and math.isfinite(y_norm) and 0.0 <= x_norm <= 1.0 and 0.0 <= y_norm <= 1.0:
+            if (
+                math.isfinite(x_norm)
+                and math.isfinite(y_norm)
+                and 0.0 <= x_norm <= 1.0
+                and 0.0 <= y_norm <= 1.0
+            ):
                 points.append((x_norm, y_norm))
         for index, point in enumerate(points):
             samples.append(point)
@@ -4903,8 +6684,12 @@ def _legend_footprint(
 
     style = _veusz_style_contract(render_options)
     width_mm, height_mm = _size_mm(str(render_options.get("size") or "60x55"))
-    graph_width_mm = max(float(width_mm) - style.left_margin_mm - style.right_margin_mm, 1.0)
-    graph_height_mm = max(float(height_mm) - style.top_margin_mm - style.bottom_margin_mm, 1.0)
+    graph_width_mm = max(
+        float(width_mm) - style.left_margin_mm - style.right_margin_mm, 1.0
+    )
+    graph_height_mm = max(
+        float(height_mm) - style.top_margin_mm - style.bottom_margin_mm, 1.0
+    )
     load = _label_load(series)
     columns = _legend_columns(
         series_count=load["series_count"],
@@ -4915,9 +6700,13 @@ def _legend_footprint(
     rows = max(1, math.ceil(load["series_count"] / columns))
     point_to_mm = 25.4 / 72.0
     font_height_mm = max(style.legend_font_size_pt * 1.2 * point_to_mm, 0.1)
-    max_text_width_mm = max(load["max_label_length"] * style.legend_font_size_pt * 0.56 * point_to_mm, 0.2)
+    max_text_width_mm = max(
+        load["max_label_length"] * style.legend_font_size_pt * 0.56 * point_to_mm, 0.2
+    )
     key_length_mm = 4.0
-    box_width_mm = (max_text_width_mm + font_height_mm + key_length_mm) * columns + font_height_mm * (columns - 1)
+    box_width_mm = (
+        max_text_width_mm + font_height_mm + key_length_mm
+    ) * columns + font_height_mm * (columns - 1)
     box_height_mm = rows * font_height_mm
     if style.legend_frameon:
         margin_mm = 0.15 * font_height_mm
@@ -4954,7 +6743,9 @@ def _auto_inside_legend_placement(
     *,
     template_id: str,
 ) -> dict[str, Any]:
-    axis_contract = _veusz_axis_contract(render_options, template_id=template_id, series=series)
+    axis_contract = _veusz_axis_contract(
+        render_options, template_id=template_id, series=series
+    )
     samples = _legend_curve_samples(series, render_options, axis_contract=axis_contract)
     footprint = _legend_footprint(series, render_options)
     graph_width_mm = float(footprint["graph_width_mm"])
@@ -4963,7 +6754,8 @@ def _auto_inside_legend_placement(
     height = float(footprint["box_height_mm"]) / graph_height_mm
     edge_padding_mm = max(
         0.0,
-        _optional_float(render_options.get("legend_edge_padding_mm")) or DEFAULT_LEGEND_EDGE_PADDING_MM,
+        _optional_float(render_options.get("legend_edge_padding_mm"))
+        or DEFAULT_LEGEND_EDGE_PADDING_MM,
     )
     horizontal_pad = min(edge_padding_mm / graph_width_mm, max(0.0, 1.0 - width))
     vertical_pad = min(edge_padding_mm / graph_height_mm, max(0.0, 1.0 - height))
@@ -4986,11 +6778,17 @@ def _auto_inside_legend_placement(
             1.0 - vertical_pad - height,
             1.0 - vertical_pad,
         ),
-        "lower_left": (horizontal_pad, horizontal_pad + width, vertical_pad, vertical_pad + height),
+        "lower_left": (
+            horizontal_pad,
+            horizontal_pad + width,
+            vertical_pad,
+            vertical_pad + height,
+        ),
     }
     clearance_mm = max(
         0.0,
-        _optional_float(render_options.get("legend_curve_clearance_mm")) or DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
+        _optional_float(render_options.get("legend_curve_clearance_mm"))
+        or DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
     )
     order = ("upper_right", "lower_right", "upper_left", "lower_left")
     metrics: dict[str, dict[str, Any]] = {}
@@ -5016,8 +6814,14 @@ def _auto_inside_legend_placement(
             "rectangle_fraction": [round(value, 6) for value in rectangle],
             "overlap_samples": overlaps,
             "near_samples": near,
-            "minimum_curve_clearance_mm": None if not math.isfinite(minimum) else round(minimum, 6),
-            "clearance_deficit_mm": (0.0 if not math.isfinite(minimum) else round(max(clearance_mm - minimum, 0.0), 6)),
+            "minimum_curve_clearance_mm": None
+            if not math.isfinite(minimum)
+            else round(minimum, 6),
+            "clearance_deficit_mm": (
+                0.0
+                if not math.isfinite(minimum)
+                else round(max(clearance_mm - minimum, 0.0), 6)
+            ),
             "proximity_load": round(proximity_load, 6),
         }
 
@@ -5045,7 +6849,9 @@ def _auto_inside_legend_placement(
         "edge_padding_mm": edge_padding_mm,
         "minimum_curve_clearance_mm": minimum,
         "clearance_status": (
-            "safe" if minimum is None or float(minimum) >= clearance_mm else "best_available_needs_reserve"
+            "safe"
+            if minimum is None or float(minimum) >= clearance_mm
+            else "best_available_needs_reserve"
         ),
         "footprint": {key: round(float(value), 6) for key, value in footprint.items()},
         "candidates": metrics,
@@ -5060,7 +6866,11 @@ def _legend_placement_on_vertical_side(
     """Keep reserve iterations on the side whose axis bound is being expanded."""
 
     order = ("lower_right", "lower_left") if lower else ("upper_right", "upper_left")
-    metrics = placement.get("candidates") if isinstance(placement.get("candidates"), dict) else {}
+    metrics = (
+        placement.get("candidates")
+        if isinstance(placement.get("candidates"), dict)
+        else {}
+    )
     required = _optional_float(placement.get("required_curve_clearance_mm")) or 0.0
 
     def score(name: str) -> tuple[Any, ...]:
@@ -5079,12 +6889,18 @@ def _legend_placement_on_vertical_side(
         )
 
     selected = min(order, key=score)
-    selected_metrics = metrics.get(selected) if isinstance(metrics.get(selected), dict) else {}
+    selected_metrics = (
+        metrics.get(selected) if isinstance(metrics.get(selected), dict) else {}
+    )
     minimum = _optional_float(selected_metrics.get("minimum_curve_clearance_mm"))
     revised = dict(placement)
     revised["position"] = selected
     revised["minimum_curve_clearance_mm"] = minimum
-    revised["clearance_status"] = "safe" if minimum is None or minimum >= required else "best_available_needs_reserve"
+    revised["clearance_status"] = (
+        "safe"
+        if minimum is None or minimum >= required
+        else "best_available_needs_reserve"
+    )
     return revised
 
 
@@ -5117,7 +6933,9 @@ def _reserve_vertical_legend_clearance(
         minimum = _optional_float(revised.get("minimum_curve_clearance_mm"))
         if minimum is None or minimum >= required:
             break
-        axis_contract = _veusz_axis_contract(updated, template_id=template_id, series=series)
+        axis_contract = _veusz_axis_contract(
+            updated, template_id=template_id, series=series
+        )
         y_min = axis_contract.y_min
         y_max = axis_contract.y_max
         if y_min is None or y_max is None or y_max <= y_min:
@@ -5158,8 +6976,12 @@ def _reserve_vertical_legend_clearance(
             lower=lower,
         )
         candidate_minimum = _optional_float(candidate.get("minimum_curve_clearance_mm"))
-        current_metrics = revised.get("candidates", {}).get(str(revised.get("position") or ""), {})
-        candidate_metrics = candidate.get("candidates", {}).get(str(candidate.get("position") or ""), {})
+        current_metrics = revised.get("candidates", {}).get(
+            str(revised.get("position") or ""), {}
+        )
+        candidate_metrics = candidate.get("candidates", {}).get(
+            str(candidate.get("position") or ""), {}
+        )
         current_overlap = int(current_metrics.get("overlap_samples") or 0)
         candidate_overlap = int(candidate_metrics.get("overlap_samples") or 0)
         current_load = float(current_metrics.get("proximity_load") or 0.0)
@@ -5167,7 +6989,10 @@ def _reserve_vertical_legend_clearance(
         candidate_improved = candidate_minimum is not None and (
             candidate_minimum > minimum + 1e-6
             or candidate_overlap < current_overlap
-            or (candidate_overlap == current_overlap and candidate_load < current_load - 1e-6)
+            or (
+                candidate_overlap == current_overlap
+                and candidate_load < current_load - 1e-6
+            )
         )
         if not candidate_improved:
             if previous_bound is None:
@@ -5178,14 +7003,22 @@ def _reserve_vertical_legend_clearance(
         total_reserve += increment
         revised = candidate
     revised_minimum = _optional_float(revised.get("minimum_curve_clearance_mm"))
-    if original_bound is None or revised_minimum is None or revised_minimum <= initial_minimum + 1e-6:
+    if (
+        original_bound is None
+        or revised_minimum is None
+        or revised_minimum <= initial_minimum + 1e-6
+    ):
         return render_options, placement
     revised["axis_reserve"] = {
         "side": "bottom" if lower else "top",
         "original_bound": original_bound,
         "revised_bound": updated[bound_key],
         "scale": scale,
-        **({"decades": round(total_reserve, 6)} if scale == "log" else {"axis_units": round(total_reserve, 6)}),
+        **(
+            {"decades": round(total_reserve, 6)}
+            if scale == "log"
+            else {"axis_units": round(total_reserve, 6)}
+        ),
     }
     return updated, revised
 
@@ -5194,7 +7027,11 @@ def _marker_thin_factor(item: StudioSeries, *, template_id: str) -> int:
     """Keep point-line markers legible while preserving every line sample."""
 
     marker = str(item.marker or "none").strip().casefold()
-    if template_id != "point_line" or marker == "none" or item.presentation_kind == "categorical_replicates":
+    if (
+        template_id != "point_line"
+        or marker == "none"
+        or item.presentation_kind == "categorical_replicates"
+    ):
         return 1
     point_count = min(len(item.x_values), len(item.y_values))
     return max(1, math.ceil(point_count / MAX_POINT_LINE_MARKERS_PER_SERIES))
@@ -5228,7 +7065,9 @@ def _apply_readability_render_defaults(
         and _axis_scale(updated, "x") == "linear"
         and not {"x_min", "x_max", "x_ticks"} & explicit_options.keys()
     ):
-        compact_axis = compact_linear_axis(value for item in series for value in item.x_values if math.isfinite(value))
+        compact_axis = compact_linear_axis(
+            value for item in series for value in item.x_values if math.isfinite(value)
+        )
         if compact_axis is not None:
             x_min, x_max, x_ticks = compact_axis
             updated.update({"x_min": x_min, "x_max": x_max, "x_ticks": list(x_ticks)})
@@ -5238,55 +7077,127 @@ def _apply_readability_render_defaults(
         and _axis_scale(updated, "y") == "linear"
         and not {"y_min", "y_max", "y_ticks"} & explicit_options.keys()
     ):
-        compact_axis = compact_linear_axis(value for item in series for value in item.y_values if math.isfinite(value))
+        compact_axis = compact_linear_axis(
+            value for item in series for value in item.y_values if math.isfinite(value)
+        )
         if compact_axis is not None:
             y_min, y_max, y_ticks = compact_axis
             updated.update({"y_min": y_min, "y_max": y_max, "y_ticks": list(y_ticks)})
             autofixes.append("tga_mass_axis_compacted")
     if str(request.get("rule_id") or "").strip() == "gpc_sec_chromatogram":
-        if _axis_scale(updated, "x") == "linear" and not {"x_min", "x_max", "x_ticks"} & explicit_options.keys():
+        if (
+            _axis_scale(updated, "x") == "linear"
+            and not {"x_min", "x_max", "x_ticks"} & explicit_options.keys()
+        ):
             compact_axis = compact_linear_axis(
-                value for item in series for value in item.x_values if math.isfinite(value)
+                value
+                for item in series
+                for value in item.x_values
+                if math.isfinite(value)
             )
             if compact_axis is not None:
                 x_min, x_max, x_ticks = compact_axis
-                updated.update({"x_min": x_min, "x_max": x_max, "x_ticks": list(x_ticks)})
+                updated.update(
+                    {"x_min": x_min, "x_max": x_max, "x_ticks": list(x_ticks)}
+                )
                 autofixes.append("gpc_elution_axis_compacted")
-        if _axis_scale(updated, "y") == "linear" and not {"y_min", "y_max", "y_ticks"} & explicit_options.keys():
+        if (
+            _axis_scale(updated, "y") == "linear"
+            and not {"y_min", "y_max", "y_ticks"} & explicit_options.keys()
+        ):
             compact_axis = compact_linear_axis(
-                value for item in series for value in item.y_values if math.isfinite(value)
+                value
+                for item in series
+                for value in item.y_values
+                if math.isfinite(value)
             )
             if compact_axis is not None:
                 y_min, y_max, y_ticks = compact_axis
-                updated.update({"y_min": y_min, "y_max": y_max, "y_ticks": list(y_ticks)})
+                updated.update(
+                    {"y_min": y_min, "y_max": y_max, "y_ticks": list(y_ticks)}
+                )
                 autofixes.append("gpc_response_axis_compacted")
     if is_removed_outside_legend_position(raw_legend_position):
         updated["legend_position"] = "auto"
-        for key in ("legend_horz_position", "legend_vert_position", "legend_horz_manual", "legend_vert_manual"):
+        for key in (
+            "legend_horz_position",
+            "legend_vert_position",
+            "legend_horz_manual",
+            "legend_vert_manual",
+        ):
             updated.pop(key, None)
         autofixes.append("legend_outside_removed")
 
     if template_id in STACKED_TEMPLATE_IDS:
         if _looks_like_wavenumber_axis(axis_info):
-            y_label = str(updated.get("y_label_override") or axis_info.get("y_label") or "").strip()
-            if len(series) == 1 and str(updated.get("baseline") or "none").casefold() == "none":
+            y_label = str(
+                updated.get("y_label_override") or axis_info.get("y_label") or ""
+            ).strip()
+            if (
+                len(series) == 1
+                and str(updated.get("baseline") or "none").casefold() == "none"
+            ):
                 updated["show_y_ticks"] = True
+                updated.setdefault("show_single_series_label", True)
+                updated.setdefault("series_label_offset_fraction", 0.018)
+                updated.setdefault("series_label_vertical_align", "bottom")
+                x_values = [
+                    float(value)
+                    for item in series
+                    for value in item.x_values
+                    if math.isfinite(float(value))
+                ]
+                if x_values:
+                    measured_min = min(x_values)
+                    measured_max = max(x_values)
+                    nominal_span = 4000.0 - 400.0
+                    boundary_tolerance = nominal_span * 0.001
+                    if (
+                        "x_min" not in explicit_options
+                        and 400.0 - boundary_tolerance <= measured_min < 400.0
+                    ):
+                        updated["x_min"] = measured_min
+                        autofixes.append("spectrum_lower_boundary_tolerance")
+                    if (
+                        "x_max" not in explicit_options
+                        and 4000.0 < measured_max <= 4000.0 + boundary_tolerance
+                    ):
+                        updated["x_max"] = measured_max
+                        if "x_ticks" not in explicit_options:
+                            updated["x_ticks"] = [
+                                400.0,
+                                1000.0,
+                                2000.0,
+                                3000.0,
+                                4000.0,
+                            ]
+                        autofixes.append("spectrum_upper_boundary_tolerance")
                 if not {"y_min", "y_max", "y_ticks"} & explicit_options.keys():
                     compact_axis = compact_linear_axis(
-                        value for item in series for value in item.y_values if math.isfinite(value)
+                        value
+                        for item in series
+                        for value in item.y_values
+                        if math.isfinite(value)
                     )
                     if compact_axis is not None:
                         y_min, y_max, y_ticks = compact_axis
-                        updated.update({"y_min": y_min, "y_max": y_max, "y_ticks": list(y_ticks)})
+                        updated.update(
+                            {"y_min": y_min, "y_max": y_max, "y_ticks": list(y_ticks)}
+                        )
                         autofixes.append("single_spectrum_y_axis_compacted")
                 autofixes.append("single_spectrum_raw_y_scale")
             elif len(series) > 1:
                 updated["show_y_ticks"] = False
                 if "transmittance" in y_label.casefold():
                     updated["y_label_override"] = "Transmittance (offset)"
-                elif "absorbance" in y_label.casefold() and "offset" not in y_label.casefold():
+                elif (
+                    "absorbance" in y_label.casefold()
+                    and "offset" not in y_label.casefold()
+                ):
                     updated["y_label_override"] = "Absorbance (offset)"
-        if label_mode in {"inline", "edge", "auto"} and len(series) > 1:
+        if label_mode in {"inline", "edge", "auto"} and (
+            len(series) > 1 or updated.get("show_single_series_label") is True
+        ):
             updated.setdefault("series_label_offset_fraction", 0.018)
             updated.setdefault("series_label_vertical_align", "bottom")
             autofixes.append("direct_label_offset")
@@ -5302,12 +7213,17 @@ def _apply_readability_render_defaults(
         if _legend_is_dense(series) and "size" not in explicit_options:
             updated["size"] = _wide_size_for_dense_legend(series)
             autofixes.append("legend_auto_widened_inside")
-        if _looks_like_torque_axis(axis_info) or str(request.get("rule_id") or "").strip() == "torque_curve":
+        if (
+            _looks_like_torque_axis(axis_info)
+            or str(request.get("rule_id") or "").strip() == "torque_curve"
+        ):
             updated["legend_position"] = "upper_right"
             updated["series_label_mode"] = "legend"
             autofixes.append("legend_auto_upper_right")
         else:
-            placement = _auto_inside_legend_placement(series, updated, template_id=template_id)
+            placement = _auto_inside_legend_placement(
+                series, updated, template_id=template_id
+            )
             updated, placement = _reserve_vertical_legend_clearance(
                 updated,
                 request=request,
@@ -5320,15 +7236,23 @@ def _apply_readability_render_defaults(
             updated["series_label_mode"] = "legend"
             updated["_legend_placement_diagnostics"] = placement
             if isinstance(placement.get("axis_reserve"), dict):
-                autofixes.append(f"legend_axis_reserve_{placement['axis_reserve']['side']}")
+                autofixes.append(
+                    f"legend_axis_reserve_{placement['axis_reserve']['side']}"
+                )
             footprint = placement["footprint"]
             graph_width_mm = max(float(footprint["graph_width_mm"]), 1.0)
             graph_height_mm = max(float(footprint["graph_height_mm"]), 1.0)
             box_width_mm = min(float(footprint["box_width_mm"]), graph_width_mm)
             box_height_mm = min(float(footprint["box_height_mm"]), graph_height_mm)
             edge_padding_mm = max(float(placement.get("edge_padding_mm") or 0.0), 0.0)
-            horizontal_pad = min(edge_padding_mm / graph_width_mm, max(0.0, 1.0 - box_width_mm / graph_width_mm))
-            vertical_pad = min(edge_padding_mm / graph_height_mm, max(0.0, 1.0 - box_height_mm / graph_height_mm))
+            horizontal_pad = min(
+                edge_padding_mm / graph_width_mm,
+                max(0.0, 1.0 - box_width_mm / graph_width_mm),
+            )
+            vertical_pad = min(
+                edge_padding_mm / graph_height_mm,
+                max(0.0, 1.0 - box_height_mm / graph_height_mm),
+            )
             updated["legend_horz_position"] = "manual"
             updated["legend_vert_position"] = "manual"
             updated["legend_horz_manual"] = (
@@ -5387,7 +7311,10 @@ def _baseline_correct_series(item: StudioSeries) -> StudioSeries:
     x_end = _mean(x_values[index] for index in end_indexes)
     y_end = _mean(y_values[index] for index in end_indexes)
     if math.isclose(x_start, x_end):
-        corrected = tuple(y_value - y_start if math.isfinite(y_value) else y_value for y_value in y_values)
+        corrected = tuple(
+            y_value - y_start if math.isfinite(y_value) else y_value
+            for y_value in y_values
+        )
     else:
         slope = (y_end - y_start) / (x_end - x_start)
         corrected = tuple(
@@ -5399,7 +7326,9 @@ def _baseline_correct_series(item: StudioSeries) -> StudioSeries:
     return replace(item, y_values=corrected)
 
 
-def _stack_studio_series(series: list[StudioSeries], *, render_options: dict[str, Any]) -> list[StudioSeries]:
+def _stack_studio_series(
+    series: list[StudioSeries], *, render_options: dict[str, Any]
+) -> list[StudioSeries]:
     if len(series) <= 1:
         return series
 
@@ -5410,7 +7339,10 @@ def _stack_studio_series(series: list[StudioSeries], *, render_options: dict[str
     for item in series:
         finite = _finite_values(item.y_values)
         q01 = _quantile(finite, 0.01) if finite else 0.0
-        shifted = tuple(y_value - q01 if math.isfinite(y_value) else y_value for y_value in item.y_values)
+        shifted = tuple(
+            y_value - q01 if math.isfinite(y_value) else y_value
+            for y_value in item.y_values
+        )
         shifted_finite = _finite_values(shifted)
         lower_guards.append(max(0.0, -min(shifted_finite)) if shifted_finite else 0.0)
         peak = _robust_peak_height(finite)
@@ -5427,9 +7359,16 @@ def _stack_studio_series(series: list[StudioSeries], *, render_options: dict[str
         min_gap = 0.25 * peak
         padding = 0.10 * peak
         lower_guard = max(lower_guards) if lower_guards else 0.0
-        required_span = series_count * peak + (series_count - 1) * min_gap + 2.0 * padding + lower_guard
+        required_span = (
+            series_count * peak
+            + (series_count - 1) * min_gap
+            + 2.0 * padding
+            + lower_guard
+        )
         y_span = _nice_ceiling(required_span)
-        gap = (y_span - series_count * peak - 2.0 * padding - lower_guard) / max(series_count - 1, 1)
+        gap = (y_span - series_count * peak - 2.0 * padding - lower_guard) / max(
+            series_count - 1, 1
+        )
         step = peak + max(gap, min_gap)
         floor = padding + lower_guard
     else:
@@ -5441,7 +7380,9 @@ def _stack_studio_series(series: list[StudioSeries], *, render_options: dict[str
     stacked: list[StudioSeries] = []
     for index, (item, shifted, _span, _peak) in enumerate(prepared):
         offset = floor + index * step
-        stacked.append(replace(item, y_values=tuple(y_value + offset for y_value in shifted)))
+        stacked.append(
+            replace(item, y_values=tuple(y_value + offset for y_value in shifted))
+        )
     return stacked
 
 
@@ -5457,7 +7398,9 @@ def _request_template(request: dict[str, Any]) -> str:
 
 def _looks_like_wavenumber_axis(axis_info: dict[str, Any]) -> bool:
     text = " ".join(str(value) for value in axis_info.values()).casefold()
-    return "wavenumber" in text or ("cm" in text and ("-1" in text or "−1" in text or "^{-1}" in text))
+    return "wavenumber" in text or (
+        "cm" in text and ("-1" in text or "−1" in text or "^{-1}" in text)
+    )
 
 
 def _looks_like_torque_axis(axis_info: dict[str, Any]) -> bool:
@@ -5472,7 +7415,9 @@ def _looks_like_frequency_axis(axis_info: dict[str, Any]) -> bool:
 
 def _looks_like_tensile_axis(axis_info: dict[str, Any]) -> bool:
     text = " ".join(str(value) for value in axis_info.values()).casefold()
-    return ("strain" in text and "stress" in text) or "tensile" in text or "拉伸" in text
+    return (
+        ("strain" in text and "stress" in text) or "tensile" in text or "拉伸" in text
+    )
 
 
 def _finite_values(values: tuple[float, ...]) -> list[float]:
@@ -5557,13 +7502,21 @@ def _write_veusz_document(
         template_id=template_id,
     )
     axis_info = dict(axis_info)
-    axis_info["x_label"] = _veusz_axis_label(render_options.get("x_label_override") or axis_info["x_label"])
-    axis_info["y_label"] = _veusz_axis_label(render_options.get("y_label_override") or axis_info["y_label"])
+    axis_info["x_label"] = _veusz_axis_label(
+        render_options.get("x_label_override") or axis_info["x_label"]
+    )
+    axis_info["y_label"] = _veusz_axis_label(
+        render_options.get("y_label_override") or axis_info["y_label"]
+    )
     legend_mode = _veusz_legend_mode(render_options, template_id=template_id)
     style = _veusz_style_contract(render_options)
-    axis_contract = _veusz_axis_contract(render_options, template_id=template_id, series=series)
+    axis_contract = _veusz_axis_contract(
+        render_options, template_id=template_id, series=series
+    )
     width, height = _size_mm(str(render_options.get("size") or "60x55"))
-    show_key = _show_veusz_key(template_id=template_id, render_options=render_options, series_count=len(series))
+    show_key = _show_veusz_key(
+        template_id=template_id, render_options=render_options, series_count=len(series)
+    )
     show_direct_labels = _show_veusz_direct_labels(
         template_id=template_id,
         render_options=render_options,
@@ -5586,12 +7539,16 @@ def _write_veusz_document(
     )
     spec_path = _veusz_spec_path(path)
     spec_path.parent.mkdir(parents=True, exist_ok=True)
-    spec_path.write_text(json.dumps(json_safe(spec), indent=2, ensure_ascii=False), encoding="utf-8")
+    spec_path.write_text(
+        json.dumps(json_safe(spec), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     _save_veusz_document_from_spec(path, spec, spec_path=spec_path)
     generate_log = path.parent / "logs" / "veusz_generate_stderr.log"
     if generate_log.exists():
         spec["stderr_logs"] = {"generate": str(generate_log)}
-    spec_path.write_text(json.dumps(json_safe(spec), indent=2, ensure_ascii=False), encoding="utf-8")
+    spec_path.write_text(
+        json.dumps(json_safe(spec), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     return spec_path
 
 
@@ -5601,7 +7558,9 @@ def _categorical_plot_contract(
     template_id: str,
     render_options: dict[str, Any],
 ) -> dict[str, Any] | None:
-    categorical = [item for item in series if item.presentation_kind == "categorical_replicates"]
+    categorical = [
+        item for item in series if item.presentation_kind == "categorical_replicates"
+    ]
     if not categorical:
         return None
     summary_statistic = normalize_categorical_summary(
@@ -5609,9 +7568,15 @@ def _categorical_plot_contract(
     )
     groups: list[dict[str, Any]] = []
     for index, item in enumerate(categorical, start=1):
-        values = [float(value) for value in item.y_values if math.isfinite(float(value))]
-        position = float(item.category_position if item.category_position is not None else index)
-        eligible = summary_statistic == "median_iqr" and len(values) >= MIN_BOX_REPLICATES
+        values = [
+            float(value) for value in item.y_values if math.isfinite(float(value))
+        ]
+        position = float(
+            item.category_position if item.category_position is not None else index
+        )
+        eligible = (
+            summary_statistic == "median_iqr" and len(values) >= MIN_BOX_REPLICATES
+        )
         groups.append(
             {
                 "label": item.label,
@@ -5636,7 +7601,9 @@ def _categorical_plot_contract(
                     "maximum": max(values),
                 },
                 "raw_points_visible": (
-                    template_id == "box_strip" or summary_statistic == "raw_only" or len(values) < MIN_BOX_REPLICATES
+                    template_id == "box_strip"
+                    or summary_statistic == "raw_only"
+                    or len(values) < MIN_BOX_REPLICATES
                 ),
             }
         )
@@ -5654,7 +7621,9 @@ def _categorical_plot_contract(
         "raw_replicate_count": sum(group["replicate_count"] for group in groups),
         "visual_style": {
             "palette_policy": "relaxed_multi_category",
-            "palette_preset": str(render_options.get("palette_preset") or DEFAULT_PALETTE_PRESET),
+            "palette_preset": str(
+                render_options.get("palette_preset") or DEFAULT_PALETTE_PRESET
+            ),
             "box_fill_mode": "series_color",
             "box_fill_transparency": CATEGORICAL_BOX_FILL_TRANSPARENCY,
             "box_fill_fraction": CATEGORICAL_BOX_FILL_FRACTION,
@@ -5663,7 +7632,9 @@ def _categorical_plot_contract(
         },
         "groups": groups,
         "insufficient_replicate_groups": [
-            group["label"] for group in groups if group["summary_status"] == "insufficient_replicates"
+            group["label"]
+            for group in groups
+            if group["summary_status"] == "insufficient_replicates"
         ],
     }
 
@@ -5675,11 +7646,15 @@ def _spectral_x_coverage_issue(
     axis_info: dict[str, Any],
     axis_contract: _VeuszAxisContract,
 ) -> dict[str, Any] | None:
-    if template_id not in STACKED_TEMPLATE_IDS or not _looks_like_wavenumber_axis(axis_info):
+    if template_id not in STACKED_TEMPLATE_IDS or not _looks_like_wavenumber_axis(
+        axis_info
+    ):
         return None
     if axis_contract.x_min is None or axis_contract.x_max is None:
         return None
-    axis_low, axis_high = sorted((float(axis_contract.x_min), float(axis_contract.x_max)))
+    axis_low, axis_high = sorted(
+        (float(axis_contract.x_min), float(axis_contract.x_max))
+    )
     axis_span = axis_high - axis_low
     values = [
         float(value)
@@ -5727,7 +7702,9 @@ def _semantic_series_contract_issues(
     }
     forbidden = forbidden_by_rule.get(rule_id, ())
     incompatible_labels = [
-        item.label for item, label in zip(series, labels, strict=True) if any(token in label for token in forbidden)
+        item.label
+        for item, label in zip(series, labels, strict=True)
+        if any(token in label for token in forbidden)
     ]
     if incompatible_labels:
         issues.append(
@@ -5742,18 +7719,26 @@ def _semantic_series_contract_issues(
     if rule_id == "gpc_sec_chromatogram" and len(series) > 1:
         domains: list[tuple[float, float]] = []
         for item in series:
-            values = [float(value) for value in item.x_values if math.isfinite(float(value))]
+            values = [
+                float(value) for value in item.x_values if math.isfinite(float(value))
+            ]
             if len(values) >= 2 and max(values) > min(values):
                 domains.append((min(values), max(values)))
         if len(domains) == len(series):
-            overlap = max(0.0, min(high for _low, high in domains) - max(low for low, _high in domains))
+            overlap = max(
+                0.0,
+                min(high for _low, high in domains)
+                - max(low for low, _high in domains),
+            )
             minimum_span = min(high - low for low, high in domains)
             overlap_fraction = overlap / minimum_span if minimum_span > 0.0 else 0.0
             if overlap_fraction < 0.25:
                 issues.append(
                     {
                         "id": "gpc_detector_time_domains_misaligned",
-                        "severity": "critical" if overlap_fraction < 0.05 else "warning",
+                        "severity": "critical"
+                        if overlap_fraction < 0.05
+                        else "warning",
                         "message": (
                             "GPC detector traces share too little elution-time domain for a common-axis overlay."
                         ),
@@ -5814,7 +7799,9 @@ def _scalar_field_plot_contract(
     z_min = data_min if z_min is None else z_min
     z_max = data_max if z_max is None else z_max
     if not math.isfinite(z_min) or not math.isfinite(z_max) or z_min >= z_max:
-        raise ValueError("Scalar-field z_min and z_max must be finite and strictly increasing.")
+        raise ValueError(
+            "Scalar-field z_min and z_max must be finite and strictly increasing."
+        )
     zscale = str(render_options.get("zscale") or "linear").strip().casefold()
     if zscale == "log" and z_min <= 0.0:
         raise ValueError("Scalar-field logarithmic color scaling requires z_min > 0.")
@@ -5868,28 +7855,22 @@ def _scalar_field_plot_contract(
             "Scalar-field transparency must be between 0 and 99 so the "
             "scientific field remains visible."
         )
-    direction = str(
-        render_options.get("colorbar_direction") or "horizontal"
-    ).strip().casefold()
+    direction = (
+        str(render_options.get("colorbar_direction") or "horizontal").strip().casefold()
+    )
     if direction not in {"horizontal", "vertical"}:
         raise ValueError(
             "Scalar-field colorbar direction must be horizontal or vertical."
         )
-    colorbar_manual_position = (
-        render_options.get("colorbar_manual_position") is True
-    )
+    colorbar_manual_position = render_options.get("colorbar_manual_position") is True
     try:
         width_value = render_options.get("colorbar_width_mm")
         height_value = render_options.get("colorbar_height_mm")
         background_transparency_value = render_options.get(
             "colorbar_background_transparency"
         )
-        background_x_value = render_options.get(
-            "colorbar_background_x_fraction"
-        )
-        background_y_value = render_options.get(
-            "colorbar_background_y_fraction"
-        )
+        background_x_value = render_options.get("colorbar_background_x_fraction")
+        background_y_value = render_options.get("colorbar_background_y_fraction")
         background_width_value = render_options.get(
             "colorbar_background_width_fraction"
         )
@@ -5898,12 +7879,8 @@ def _scalar_field_plot_contract(
         )
         horz_manual_value = render_options.get("colorbar_horz_manual")
         vert_manual_value = render_options.get("colorbar_vert_manual")
-        colorbar_width_mm = float(
-            31.0 if width_value is None else width_value
-        )
-        colorbar_height_mm = float(
-            2.4 if height_value is None else height_value
-        )
+        colorbar_width_mm = float(31.0 if width_value is None else width_value)
+        colorbar_height_mm = float(2.4 if height_value is None else height_value)
         colorbar_background_transparency = int(
             0
             if background_transparency_value is None
@@ -5919,9 +7896,7 @@ def _scalar_field_plot_contract(
             0.44 if background_width_value is None else background_width_value
         )
         colorbar_background_height_fraction = float(
-            0.24
-            if background_height_value is None
-            else background_height_value
+            0.24 if background_height_value is None else background_height_value
         )
         colorbar_horz_manual = float(
             0.86 if horz_manual_value is None else horz_manual_value
@@ -5930,9 +7905,7 @@ def _scalar_field_plot_contract(
             0.18 if vert_manual_value is None else vert_manual_value
         )
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            "Scalar-field colorbar geometry must be numeric."
-        ) from exc
+        raise ValueError("Scalar-field colorbar geometry must be numeric.") from exc
     if (
         not math.isfinite(colorbar_width_mm)
         or not math.isfinite(colorbar_height_mm)
@@ -5940,20 +7913,17 @@ def _scalar_field_plot_contract(
         or colorbar_height_mm <= 0.0
     ):
         raise ValueError(
-            "Scalar-field colorbar width and height must be finite and "
-            "positive."
+            "Scalar-field colorbar width and height must be finite and positive."
         )
     if direction == "horizontal" and not (
-        5.0 <= colorbar_width_mm <= 50.0
-        and 0.5 <= colorbar_height_mm <= 8.0
+        5.0 <= colorbar_width_mm <= 50.0 and 0.5 <= colorbar_height_mm <= 8.0
     ):
         raise ValueError(
             "Horizontal scalar-field colorbars must remain within the bounded "
             "5..50 mm by 0.5..8 mm auxiliary envelope."
         )
     if direction == "vertical" and not (
-        0.5 <= colorbar_width_mm <= 8.0
-        and 5.0 <= colorbar_height_mm <= 50.0
+        0.5 <= colorbar_width_mm <= 8.0 and 5.0 <= colorbar_height_mm <= 50.0
     ):
         raise ValueError(
             "Vertical scalar-field colorbars must remain within the bounded "
@@ -5971,8 +7941,7 @@ def _scalar_field_plot_contract(
         )
     if not 0 <= colorbar_background_transparency <= 100:
         raise ValueError(
-            "Scalar-field colorbar background transparency must be between "
-            "0 and 100."
+            "Scalar-field colorbar background transparency must be between 0 and 100."
         )
     background_geometry = (
         colorbar_background_x_fraction,
@@ -5993,25 +7962,18 @@ def _scalar_field_plot_contract(
         render_options.get("colorbar_background_color") or ""
     ).strip()
     if background_color:
-        left = (
-            colorbar_background_x_fraction
-            - colorbar_background_width_fraction / 2.0
-        )
+        left = colorbar_background_x_fraction - colorbar_background_width_fraction / 2.0
         right = (
-            colorbar_background_x_fraction
-            + colorbar_background_width_fraction / 2.0
+            colorbar_background_x_fraction + colorbar_background_width_fraction / 2.0
         )
         top_band_start = (
-            colorbar_background_y_fraction
-            - colorbar_background_height_fraction / 2.0
+            colorbar_background_y_fraction - colorbar_background_height_fraction / 2.0
         )
         bottom = (
-            colorbar_background_y_fraction
-            + colorbar_background_height_fraction / 2.0
+            colorbar_background_y_fraction + colorbar_background_height_fraction / 2.0
         )
         background_area = (
-            colorbar_background_width_fraction
-            * colorbar_background_height_fraction
+            colorbar_background_width_fraction * colorbar_background_height_fraction
         )
         if direction != "horizontal" or colorbar_manual_position:
             raise ValueError(
@@ -6033,7 +7995,9 @@ def _scalar_field_plot_contract(
                 "and confined to the bounded horizontal top auxiliary band."
             )
     contour_levels = [
-        value for value in _float_tuple(render_options.get("contour_levels")) if z_min <= value <= z_max
+        value
+        for value in _float_tuple(render_options.get("contour_levels"))
+        if z_min <= value <= z_max
     ]
     highlight_levels = [
         value
@@ -6052,7 +8016,9 @@ def _scalar_field_plot_contract(
             or (DEFAULT_LOG_TICK_FORMAT if zscale == "log" else "Auto")
         ),
         "show_colorbar": render_options.get("show_colorbar") is not False,
-        "colormap_name": str(render_options.get("colormap_name") or DEFAULT_SCALAR_FIELD_COLORMAP_ID),
+        "colormap_name": str(
+            render_options.get("colormap_name") or DEFAULT_SCALAR_FIELD_COLORMAP_ID
+        ),
         "colormap_colors": colors,
         "color_invert": render_options.get("color_invert") is True,
         "field_mapping": str(render_options.get("field_mapping") or "bounds"),
@@ -6065,7 +8031,9 @@ def _scalar_field_plot_contract(
         "contour_line_width_pt": UNIFIED_LINE_WIDTH_PT,
         "contour_labels": render_options.get("contour_labels") is True,
         "highlight_contour_levels": highlight_levels,
-        "highlight_contour_color": str(render_options.get("highlight_contour_color") or "#111111"),
+        "highlight_contour_color": str(
+            render_options.get("highlight_contour_color") or "#111111"
+        ),
         "highlight_contour_line_style": str(
             render_options.get("highlight_contour_line_style") or "dashed"
         ),
@@ -6088,21 +8056,11 @@ def _scalar_field_plot_contract(
             render_options.get("colorbar_foreground_color") or "#111111"
         ),
         "colorbar_background_color": background_color,
-        "colorbar_background_transparency": (
-            colorbar_background_transparency
-        ),
-        "colorbar_background_x_fraction": (
-            colorbar_background_x_fraction
-        ),
-        "colorbar_background_y_fraction": (
-            colorbar_background_y_fraction
-        ),
-        "colorbar_background_width_fraction": (
-            colorbar_background_width_fraction
-        ),
-        "colorbar_background_height_fraction": (
-            colorbar_background_height_fraction
-        ),
+        "colorbar_background_transparency": (colorbar_background_transparency),
+        "colorbar_background_x_fraction": (colorbar_background_x_fraction),
+        "colorbar_background_y_fraction": (colorbar_background_y_fraction),
+        "colorbar_background_width_fraction": (colorbar_background_width_fraction),
+        "colorbar_background_height_fraction": (colorbar_background_height_fraction),
     }
 
 
@@ -6115,11 +8073,11 @@ def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str,
     guides: list[dict[str, Any]] = []
     for index, item in enumerate(value, start=1):
         if not isinstance(item, dict):
-            raise ValueError(
-                f"Reference guide {index} must be an object."
-            )
+            raise ValueError(f"Reference guide {index} must be an object.")
         kind = str(item.get("kind") or "band").strip().casefold()
-        axis = str(item.get("axis_target") or item.get("axis") or "x").strip().casefold()
+        axis = (
+            str(item.get("axis_target") or item.get("axis") or "x").strip().casefold()
+        )
         if kind not in {"band", "line"} or axis not in {"x", "y"}:
             raise ValueError(
                 f"Reference guide {index} must be a band or line on x or y."
@@ -6136,9 +8094,7 @@ def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str,
                 or end is None
                 or not math.isclose(start, end, rel_tol=0.0, abs_tol=1e-12)
             ):
-                raise ValueError(
-                    f"Reference line {index} requires one exact value."
-                )
+                raise ValueError(f"Reference line {index} requires one exact value.")
         if start is None or end is None:
             raise ValueError(
                 f"Reference guide {index} requires finite start and end values."
@@ -6146,8 +8102,10 @@ def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str,
         transparency_value = item.get("transparency")
         try:
             transparency = int(
-                86 if transparency_value is None and kind == "band"
-                else 35 if transparency_value is None
+                86
+                if transparency_value is None and kind == "band"
+                else 35
+                if transparency_value is None
                 else transparency_value
             )
         except (TypeError, ValueError) as exc:
@@ -6179,17 +8137,12 @@ def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str,
                 raise ValueError(
                     f"Reference line {index} width must be numeric."
                 ) from exc
-            if (
-                not math.isfinite(line_width_pt)
-                or not 0.0 < line_width_pt <= 5.0
-            ):
+            if not math.isfinite(line_width_pt) or not 0.0 < line_width_pt <= 5.0:
                 raise ValueError(
                     f"Reference line {index} width must be finite and "
                     "between 0 and 5 pt."
                 )
-            line_style = str(
-                item.get("line_style") or "dashed"
-            ).strip().casefold()
+            line_style = str(item.get("line_style") or "dashed").strip().casefold()
             if line_style not in DEFAULT_LINE_STYLE_SEQUENCE:
                 raise ValueError(
                     f"Reference line {index} uses an unsupported line style."
@@ -6216,32 +8169,20 @@ def _veusz_axes_spec(
 ) -> dict[str, dict[str, Any]]:
     x_scale = _axis_scale(render_options, "x")
     y_scale = _axis_scale(render_options, "y")
-    explicit_x_minor_ticks = list(
-        _float_tuple(render_options.get("x_minor_ticks"))
-    )
-    explicit_y_minor_ticks = list(
-        _float_tuple(render_options.get("y_minor_ticks"))
-    )
+    explicit_x_minor_ticks = list(_float_tuple(render_options.get("x_minor_ticks")))
+    explicit_y_minor_ticks = list(_float_tuple(render_options.get("y_minor_ticks")))
     return {
         "x": {
             "label": axis_info["x_label"],
             "scale": x_scale,
             "tick_format": str(
                 render_options.get("x_tick_format")
-                or (
-                    DEFAULT_LOG_TICK_FORMAT
-                    if x_scale == "log"
-                    else "Auto"
-                )
+                or (DEFAULT_LOG_TICK_FORMAT if x_scale == "log" else "Auto")
             ),
             "minor_tick_count": int(
                 render_options.get("x_minor_tick_count")
                 or render_options.get("minor_tick_count")
-                or (
-                    DEFAULT_LOG_MINOR_TICK_COUNT
-                    if x_scale == "log"
-                    else 20
-                )
+                or (DEFAULT_LOG_MINOR_TICK_COUNT if x_scale == "log" else 20)
             ),
             "minor_ticks": (
                 explicit_x_minor_ticks
@@ -6265,37 +8206,21 @@ def _veusz_axes_spec(
             "major_tick_length_pt": style.tick_length_pt,
             "minor_tick_width_pt": style.minor_tick_width_pt,
             "minor_tick_length_pt": style.minor_tick_length_pt,
-            "mode": (
-                "labels"
-                if categorical_contract is not None
-                else "numeric"
-            ),
-            "category_labels": list(
-                axis_info.get("category_labels") or []
-            ),
-            "category_positions": list(
-                axis_info.get("category_positions") or []
-            ),
+            "mode": ("labels" if categorical_contract is not None else "numeric"),
+            "category_labels": list(axis_info.get("category_labels") or []),
+            "category_positions": list(axis_info.get("category_positions") or []),
         },
         "y": {
             "label": axis_info["y_label"],
             "scale": y_scale,
             "tick_format": str(
                 render_options.get("y_tick_format")
-                or (
-                    DEFAULT_LOG_TICK_FORMAT
-                    if y_scale == "log"
-                    else "Auto"
-                )
+                or (DEFAULT_LOG_TICK_FORMAT if y_scale == "log" else "Auto")
             ),
             "minor_tick_count": int(
                 render_options.get("y_minor_tick_count")
                 or render_options.get("minor_tick_count")
-                or (
-                    DEFAULT_LOG_MINOR_TICK_COUNT
-                    if y_scale == "log"
-                    else 20
-                )
+                or (DEFAULT_LOG_MINOR_TICK_COUNT if y_scale == "log" else 20)
             ),
             "minor_ticks": (
                 explicit_y_minor_ticks
@@ -6335,9 +8260,7 @@ def _direct_label_contracts(
 
     if not show_direct_labels:
         return []
-    side = str(
-        render_options.get("series_label_side") or "auto"
-    ).strip().casefold()
+    side = str(render_options.get("series_label_side") or "auto").strip().casefold()
     reverse_x = render_options.get("reverse_x") is True
     if side not in {"left", "right"}:
         side = "left" if reverse_x else "right"
@@ -6345,27 +8268,24 @@ def _direct_label_contracts(
     label_size = style.font_size_pt
     y_span = (
         axis_contract.y_max - axis_contract.y_min
-        if axis_contract.y_max is not None
-        and axis_contract.y_min is not None
+        if axis_contract.y_max is not None and axis_contract.y_min is not None
         else 0.0
     )
     offset_value = render_options.get("series_label_offset_fraction")
     try:
-        offset_fraction = float(
-            0.0 if offset_value is None else offset_value
-        )
+        offset_fraction = float(0.0 if offset_value is None else offset_value)
     except (TypeError, ValueError) as exc:
-        raise ValueError(
-            "Direct-label offset fraction must be numeric."
-        ) from exc
+        raise ValueError("Direct-label offset fraction must be numeric.") from exc
     if not math.isfinite(offset_fraction) or offset_fraction < 0.0:
         raise ValueError(
             "Direct-label offset fraction must be finite and non-negative."
         )
     y_offset = y_span * offset_fraction
-    valign = str(
-        render_options.get("series_label_vertical_align") or "centre"
-    ).strip().casefold()
+    valign = (
+        str(render_options.get("series_label_vertical_align") or "centre")
+        .strip()
+        .casefold()
+    )
     if valign not in {"top", "bottom", "centre", "center"}:
         raise ValueError(
             "Direct-label vertical alignment must be top, bottom, or centre."
@@ -6457,7 +8377,17 @@ def _build_veusz_plot_spec(
     if spectral_coverage_issue is not None:
         layout_issues.append(spectral_coverage_issue)
     layout_issues.extend(_semantic_series_contract_issues(series, request=request))
-    if show_key and template_id not in STACKED_TEMPLATE_IDS and _legend_is_dense(series):
+    placement_diagnostics = render_options.get("_legend_placement_diagnostics")
+    placement_is_safe = (
+        isinstance(placement_diagnostics, dict)
+        and placement_diagnostics.get("clearance_status") == "safe"
+    )
+    if (
+        show_key
+        and template_id not in STACKED_TEMPLATE_IDS
+        and _legend_is_dense(series)
+        and not placement_is_safe
+    ):
         layout_issues.append(
             {
                 "id": "legend_crowded_inside",
@@ -6474,17 +8404,24 @@ def _build_veusz_plot_spec(
             figure_width_mm=width_mm,
         ),
         "mode": legend_mode,
-        "horz_position": _normalize_optional_string(render_options.get("legend_horz_position")),
-        "vert_position": _normalize_optional_string(render_options.get("legend_vert_position")),
+        "horz_position": _normalize_optional_string(
+            render_options.get("legend_horz_position")
+        ),
+        "vert_position": _normalize_optional_string(
+            render_options.get("legend_vert_position")
+        ),
         "horz_manual": _optional_float(render_options.get("legend_horz_manual")),
         "vert_manual": _optional_float(render_options.get("legend_vert_manual")),
     }
-    placement_diagnostics = render_options.get("_legend_placement_diagnostics")
     if isinstance(placement_diagnostics, dict):
         legend_spec["placement_diagnostics"] = json_safe(placement_diagnostics)
         if show_key and placement_diagnostics.get("clearance_status") != "safe":
-            measured_clearance = _optional_float(placement_diagnostics.get("minimum_curve_clearance_mm"))
-            overlap_detected = measured_clearance is not None and measured_clearance <= 0.0
+            measured_clearance = _optional_float(
+                placement_diagnostics.get("minimum_curve_clearance_mm")
+            )
+            overlap_detected = (
+                measured_clearance is not None and measured_clearance <= 0.0
+            )
             layout_issues.append(
                 {
                     "id": "legend_curve_clearance_below_target",
@@ -6494,8 +8431,12 @@ def _build_veusz_plot_spec(
                         if overlap_detected
                         else "No inside legend corner reached the requested curve clearance at final size."
                     ),
-                    "required_clearance_mm": placement_diagnostics.get("required_curve_clearance_mm"),
-                    "measured_clearance_mm": placement_diagnostics.get("minimum_curve_clearance_mm"),
+                    "required_clearance_mm": placement_diagnostics.get(
+                        "required_curve_clearance_mm"
+                    ),
+                    "measured_clearance_mm": placement_diagnostics.get(
+                        "minimum_curve_clearance_mm"
+                    ),
                 }
             )
     if show_key:
@@ -6510,7 +8451,9 @@ def _build_veusz_plot_spec(
         "render_engine": "veusz",
         "qa_target": "veusz_export",
         "template": template_id,
-        "figure_profile_id": _normalize_optional_string(render_options.get("_figure_profile_id")),
+        "figure_profile_id": _normalize_optional_string(
+            render_options.get("_figure_profile_id")
+        ),
         "source_request": json_safe(request),
         "render_options": json_safe(render_options),
         "size_mm": [width_mm, height_mm],
@@ -6586,10 +8529,15 @@ def _build_veusz_plot_spec(
                 "line_style": item.line_style,
                 "marker": str(MARKER_MAP.get(item.marker, item.marker or "none")),
                 "marker_size_pt": item.marker_size,
-                "marker_thin_factor": _marker_thin_factor(item, template_id=template_id),
+                "marker_thin_factor": _marker_thin_factor(
+                    item, template_id=template_id
+                ),
                 "marker_fill_color": (
                     "white"
-                    if str(render_options.get("marker_fill_mode") or "filled").casefold() == "open"
+                    if str(
+                        render_options.get("marker_fill_mode") or "filled"
+                    ).casefold()
+                    == "open"
                     else item.color
                 ),
                 "presentation_kind": item.presentation_kind,
@@ -6623,7 +8571,10 @@ def _save_veusz_document_from_spec(
     *,
     spec_path: Path | None = None,
 ) -> None:
-    from sciplot_core.veusz_runtime import needs_veusz_worker_process, veusz_worker_environment
+    from sciplot_core.veusz_runtime import (
+        needs_veusz_worker_process,
+        veusz_worker_environment,
+    )
 
     if needs_veusz_worker_process():
         resolved_spec = spec_path or _veusz_spec_path(path)
@@ -6755,7 +8706,9 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any]) -> None:
         # colorbar is created first to satisfy Veusz's reverse paint order.
         interface.Set("min", float(scalar["z_min"]))
         interface.Set("max", float(scalar["z_max"]))
-        direction = str(scalar.get("colorbar_direction") or "horizontal").strip().casefold()
+        direction = (
+            str(scalar.get("colorbar_direction") or "horizontal").strip().casefold()
+        )
         if direction not in {"horizontal", "vertical"}:
             direction = "horizontal"
         interface.Set("direction", direction)
@@ -6819,7 +8772,9 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any]) -> None:
         interface.Set("TickLabels/color", foreground_color)
         interface.Set("TickLabels/hide", False)
         interface.Set("TickLabels/format", str(scalar.get("z_tick_format") or "Auto"))
-        z_ticks = scalar.get("z_ticks") if isinstance(scalar.get("z_ticks"), list) else []
+        z_ticks = (
+            scalar.get("z_ticks") if isinstance(scalar.get("z_ticks"), list) else []
+        )
         if 1 < len(z_ticks) <= 12:
             interface.Set("MajorTicks/manualTicks", [float(value) for value in z_ticks])
         interface.To("..")
@@ -6867,7 +8822,11 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any]) -> None:
 def _axis_midpoint(axis_spec: dict[str, Any]) -> float:
     minimum = float(axis_spec["min"])
     maximum = float(axis_spec["max"])
-    if str(axis_spec.get("scale") or "linear") == "log" and minimum > 0.0 and maximum > 0.0:
+    if (
+        str(axis_spec.get("scale") or "linear") == "log"
+        and minimum > 0.0
+        and maximum > 0.0
+    ):
         return math.sqrt(minimum * maximum)
     return 0.5 * (minimum + maximum)
 
@@ -6887,28 +8846,22 @@ def _axis_interval_geometry(
     if clipped_end <= clipped_start:
         return None
     if str(axis_spec.get("scale") or "linear") == "log":
-        if (
-            minimum <= 0.0
-            or maximum <= minimum
-            or clipped_start <= 0.0
-        ):
+        if minimum <= 0.0 or maximum <= minimum or clipped_start <= 0.0:
             raise ValueError(
                 "Logarithmic reference-guide geometry requires positive, "
                 "strictly increasing axis bounds."
             )
         midpoint = math.sqrt(clipped_start * clipped_end)
-        occupied_fraction = math.log(
-            clipped_end / clipped_start
-        ) / math.log(maximum / minimum)
+        occupied_fraction = math.log(clipped_end / clipped_start) / math.log(
+            maximum / minimum
+        )
     else:
         if maximum <= minimum:
             raise ValueError(
                 "Reference-guide geometry requires strictly increasing axis bounds."
             )
         midpoint = 0.5 * (clipped_start + clipped_end)
-        occupied_fraction = (
-            clipped_end - clipped_start
-        ) / (maximum - minimum)
+        occupied_fraction = (clipped_end - clipped_start) / (maximum - minimum)
     return midpoint, occupied_fraction
 
 
@@ -6929,10 +8882,7 @@ def _reference_guide_rect_contracts(
         return []
     contracts: list[dict[str, Any]] = []
     for index, guide in enumerate(guides, start=1):
-        if (
-            not isinstance(guide, dict)
-            or str(guide.get("kind") or "band") != "band"
-        ):
+        if not isinstance(guide, dict) or str(guide.get("kind") or "band") != "band":
             continue
         axis = str(guide.get("axis") or "x")
         start = float(guide["start"])
@@ -6962,9 +8912,7 @@ def _reference_guide_rect_contracts(
         width_fraction = min(max(width_fraction, 0.0), 1.0)
         height_fraction = min(max(height_fraction, 0.0), 1.0)
         transparency = int(guide["transparency"])
-        occupied_axis_fraction = (
-            width_fraction if axis == "x" else height_fraction
-        )
+        occupied_axis_fraction = width_fraction if axis == "x" else height_fraction
         if occupied_axis_fraction > 0.8:
             raise ValueError(
                 "Reference-guide bands cannot cover more than 80% of their "
@@ -7007,10 +8955,7 @@ def _reference_guide_line_contracts(
     y_min, y_max = float(y_axis["min"]), float(y_axis["max"])
     contracts: list[dict[str, Any]] = []
     for index, guide in enumerate(guides, start=1):
-        if (
-            not isinstance(guide, dict)
-            or str(guide.get("kind") or "band") != "line"
-        ):
+        if not isinstance(guide, dict) or str(guide.get("kind") or "band") != "line":
             continue
         axis = str(guide.get("axis") or "x")
         value = float(guide["start"])
@@ -7096,166 +9041,7 @@ def _add_veusz_reference_guides(interface: Any, spec: dict[str, Any]) -> None:
         interface.To("..")
 
 
-def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
-    if spec.get("kind") == "sciplot_shared_scalar_strip_spec":
-        from sciplot_core.figure_workflow import apply_shared_scalar_strip_spec
-
-        apply_shared_scalar_strip_spec(interface, spec)
-        return
-    style = spec["style"]
-    axes = spec["axes"]
-    size_mm = spec["size_mm"]
-    categorical = spec.get("categorical") if isinstance(spec.get("categorical"), dict) else None
-    for item in spec["series"]:
-        x_data = "\n".join(f"{float(value):.12g}" for value in item["x_values"])
-        y_data = "\n".join(f"{float(value):.12g}" for value in item["y_values"])
-        interface.ImportString(f"{item['x_name']}(numeric)", x_data)
-        interface.ImportString(f"{item['y_name']}(numeric)", y_data)
-    if categorical is not None:
-        groups = [group for group in categorical.get("groups", []) if isinstance(group, dict)]
-        x_axis = axes.get("x") if isinstance(axes.get("x"), dict) else {}
-        category_labels = x_axis.get("category_labels") if isinstance(x_axis.get("category_labels"), list) else []
-        interface.SetDataText(
-            "category_axis_labels",
-            [
-                _veusz_literal_text(category_labels[index] if index < len(category_labels) else group["label"])
-                for index, group in enumerate(groups)
-            ],
-        )
-        interface.ImportString(
-            "category_axis_x(numeric)",
-            "\n".join(f"{float(group['position']):.12g}" for group in groups),
-        )
-        interface.ImportString(
-            "category_axis_y(numeric)",
-            "\n".join(f"{float(group['descriptive_statistics']['median']):.12g}" for group in groups),
-        )
-    interface.Set("StyleSheet/Font/font", style["font_family"])
-    interface.Set("StyleSheet/Font/size", _pt(float(style["font_size_pt"])))
-    interface.Set("StyleSheet/Line/width", _pt(float(style["line_width_pt"])))
-    interface.Set("width", f"{float(size_mm[0]):g}mm")
-    interface.Set("height", f"{float(size_mm[1]):g}mm")
-    interface.Add("page", name="page1", autoadd=False)
-    interface.To("page1")
-    interface.Set("width", f"{float(size_mm[0]):g}mm")
-    interface.Set("height", f"{float(size_mm[1]):g}mm")
-    interface.Set("Background/color", "white")
-    interface.Set("Background/hide", False)
-    interface.Add("graph", name="graph1", autoadd=False)
-    interface.To("graph1")
-    interface.Set("Border/hide", True)
-    margins = style["margins_mm"]
-    interface.Set("leftMargin", _cm_from_mm(float(margins["left"])))
-    interface.Set("rightMargin", _cm_from_mm(float(margins["right"])))
-    interface.Set("topMargin", _cm_from_mm(float(margins["top"])))
-    interface.Set("bottomMargin", _cm_from_mm(float(margins["bottom"])))
-    _add_veusz_axis(interface, "x", axes["x"], style)
-    _add_veusz_axis(interface, "y", axes["y"], style)
-    scalar = spec.get("scalar_field") if isinstance(spec.get("scalar_field"), dict) else None
-    if scalar is not None:
-        _add_veusz_scalar_field(interface, scalar)
-    legend = spec["legend"]
-    if legend["show"]:
-        interface.Add("key", name="key1", autoadd=False)
-        interface.To("key1")
-        interface.Set("title", "")
-        interface.Set("Text/size", _pt(float(style["legend_font_size_pt"])))
-        interface.Set("keyLength", "0.40cm")
-        interface.Set("marginSize", 0.15)
-        interface.Set("columns", int(legend["columns"]))
-        _apply_key_position(
-            interface,
-            str(legend.get("mode") or "inside_best"),
-            horz_position=_normalize_optional_string(legend.get("horz_position")),
-            vert_position=_normalize_optional_string(legend.get("vert_position")),
-            horz_manual=_optional_float(legend.get("horz_manual")),
-            vert_manual=_optional_float(legend.get("vert_manual")),
-        )
-        interface.Set("Background/hide", not bool(style["legend_frameon"]))
-        interface.Set("Border/hide", not bool(style["legend_frameon"]))
-        interface.To("..")
-    if categorical is not None and categorical.get("native_veusz_boxplot") is True:
-        categorical_style = categorical.get("visual_style") if isinstance(categorical.get("visual_style"), dict) else {}
-        box_groups = [
-            group
-            for group in categorical.get("groups", [])
-            if isinstance(group, dict) and group.get("boxplot_eligible") is True
-        ]
-        box_line_width = float(categorical_style.get("box_line_width_pt", CATEGORICAL_BOX_LINE_WIDTH_PT))
-        for box_index, group in enumerate(box_groups, start=1):
-            box_color = str(group.get("color") or DEFAULT_PALETTE_COLORS[(box_index - 1) % len(DEFAULT_PALETTE_COLORS)])
-            box_name = f"categorical_boxplot_{box_index}"
-            interface.Add("boxplot", name=box_name, autoadd=False)
-            interface.To(box_name)
-            interface.Set("values", (str(group["y_name"]),))
-            interface.Set("posn", [float(group["position"])])
-            interface.Set("whiskermode", str(categorical.get("box_whisker_mode") or "1.5IQR"))
-            interface.Set(
-                "fillfraction",
-                float(categorical_style.get("box_fill_fraction", CATEGORICAL_BOX_FILL_FRACTION)),
-            )
-            interface.Set("meanmarker", "none")
-            interface.Set("outliersmarker", "none")
-            interface.Set("Fill/color", box_color)
-            interface.Set(
-                "Fill/transparency",
-                int(categorical_style.get("box_fill_transparency", CATEGORICAL_BOX_FILL_TRANSPARENCY)),
-            )
-            interface.Set("Border/color", box_color)
-            interface.Set("Border/width", _pt(box_line_width))
-            interface.Set("Whisker/color", box_color)
-            interface.Set("Whisker/width", _pt(box_line_width))
-            interface.Set("MarkersLine/hide", True)
-            interface.Set("MarkersFill/hide", True)
-            interface.To("..")
-    for item in spec["series"]:
-        interface.Add("xy", name=item["name"], autoadd=False)
-        interface.To(item["name"])
-        interface.Set("xData", item["x_name"])
-        interface.Set("yData", item["y_name"])
-        interface.Set("key", _veusz_literal_text(item["label"]))
-        interface.Set("PlotLine/color", item["color"])
-        interface.Set("PlotLine/style", item.get("line_style") or "solid")
-        interface.Set("MarkerFill/color", item.get("marker_fill_color") or item["color"])
-        interface.Set("MarkerLine/color", item["color"])
-        interface.Set("MarkerLine/width", _pt(float(style["marker_line_width_pt"])))
-        interface.Set("marker", item["marker"])
-        if item.get("plot_line_hide") is True:
-            interface.Set("PlotLine/hide", True)
-        if item.get("raw_points_visible") is False:
-            interface.Set("MarkerFill/hide", True)
-            interface.Set("MarkerLine/hide", True)
-        interface.Set("PlotLine/transparency", _alpha_to_transparency(float(style["line_alpha"])))
-        interface.Set("MarkerFill/transparency", _alpha_to_transparency(float(style["marker_alpha"])))
-        interface.Set("MarkerLine/transparency", _alpha_to_transparency(float(style["marker_alpha"])))
-        if item.get("line_width_pt") is not None:
-            interface.Set("PlotLine/width", _pt(float(item["line_width_pt"])))
-        marker = str(item.get("marker") or "none")
-        if item.get("marker_size_pt") is not None:
-            interface.Set("markerSize", _pt(float(item["marker_size_pt"])))
-        elif marker != "none":
-            interface.Set("markerSize", _pt(float(style["marker_size_pt"])))
-        marker_thin_factor = max(1, int(item.get("marker_thin_factor") or 1))
-        if marker_thin_factor > 1:
-            interface.Set("thinfactor", marker_thin_factor)
-        interface.To("..")
-    if categorical is not None:
-        interface.Add("xy", name="category_axis_label_provider", autoadd=False)
-        interface.To("category_axis_label_provider")
-        interface.Set("xData", "category_axis_x")
-        interface.Set("yData", "category_axis_y")
-        interface.Set("labels", "category_axis_labels")
-        interface.Set("marker", "none")
-        interface.Set("PlotLine/hide", True)
-        interface.Set("MarkerFill/hide", True)
-        interface.Set("MarkerLine/hide", True)
-        interface.Set("ErrorBarLine/hide", True)
-        interface.Set("Label/hide", True)
-        interface.To("..")
-    # Graph children are painted in reverse object-tree order.  Add reference
-    # guides after data plotters so bands/lines paint first and never obscure
-    # the scientific curves.
-    _add_veusz_reference_guides(interface, spec)
+def _add_veusz_direct_labels(interface: Any, spec: dict[str, Any]) -> None:
     for item in spec["direct_labels"]:
         interface.Add("label", name=item["name"], autoadd=False)
         interface.To(item["name"])
@@ -7292,6 +9078,218 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         )
         interface.Set("Border/hide", item["border_hide"])
         interface.To("..")
+
+
+def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
+    if spec.get("kind") == "sciplot_shared_scalar_strip_spec":
+        from sciplot_core.figure_workflow import apply_shared_scalar_strip_spec
+
+        apply_shared_scalar_strip_spec(interface, spec)
+        return
+    style = spec["style"]
+    axes = spec["axes"]
+    size_mm = spec["size_mm"]
+    categorical = (
+        spec.get("categorical") if isinstance(spec.get("categorical"), dict) else None
+    )
+    for item in spec["series"]:
+        x_data = "\n".join(f"{float(value):.12g}" for value in item["x_values"])
+        y_data = "\n".join(f"{float(value):.12g}" for value in item["y_values"])
+        interface.ImportString(f"{item['x_name']}(numeric)", x_data)
+        interface.ImportString(f"{item['y_name']}(numeric)", y_data)
+    if categorical is not None:
+        groups = [
+            group for group in categorical.get("groups", []) if isinstance(group, dict)
+        ]
+        x_axis = axes.get("x") if isinstance(axes.get("x"), dict) else {}
+        category_labels = (
+            x_axis.get("category_labels")
+            if isinstance(x_axis.get("category_labels"), list)
+            else []
+        )
+        interface.SetDataText(
+            "category_axis_labels",
+            [
+                _veusz_literal_text(
+                    category_labels[index]
+                    if index < len(category_labels)
+                    else group["label"]
+                )
+                for index, group in enumerate(groups)
+            ],
+        )
+        interface.ImportString(
+            "category_axis_x(numeric)",
+            "\n".join(f"{float(group['position']):.12g}" for group in groups),
+        )
+        interface.ImportString(
+            "category_axis_y(numeric)",
+            "\n".join(
+                f"{float(group['descriptive_statistics']['median']):.12g}"
+                for group in groups
+            ),
+        )
+    interface.Set("StyleSheet/Font/font", style["font_family"])
+    interface.Set("StyleSheet/Font/size", _pt(float(style["font_size_pt"])))
+    interface.Set("StyleSheet/Line/width", _pt(float(style["line_width_pt"])))
+    interface.Set("width", f"{float(size_mm[0]):g}mm")
+    interface.Set("height", f"{float(size_mm[1]):g}mm")
+    interface.Add("page", name="page1", autoadd=False)
+    interface.To("page1")
+    interface.Set("width", f"{float(size_mm[0]):g}mm")
+    interface.Set("height", f"{float(size_mm[1]):g}mm")
+    interface.Set("Background/color", "white")
+    interface.Set("Background/hide", False)
+    interface.Add("graph", name="graph1", autoadd=False)
+    interface.To("graph1")
+    interface.Set("Border/hide", True)
+    margins = style["margins_mm"]
+    interface.Set("leftMargin", _cm_from_mm(float(margins["left"])))
+    interface.Set("rightMargin", _cm_from_mm(float(margins["right"])))
+    interface.Set("topMargin", _cm_from_mm(float(margins["top"])))
+    interface.Set("bottomMargin", _cm_from_mm(float(margins["bottom"])))
+    _add_veusz_axis(interface, "x", axes["x"], style)
+    _add_veusz_axis(interface, "y", axes["y"], style)
+    # Veusz paints graph children in reverse object-tree order. Add direct
+    # labels before plotters so the labels paint last and curves cannot strike
+    # through their text.
+    _add_veusz_direct_labels(interface, spec)
+    scalar = (
+        spec.get("scalar_field") if isinstance(spec.get("scalar_field"), dict) else None
+    )
+    if scalar is not None:
+        _add_veusz_scalar_field(interface, scalar)
+    legend = spec["legend"]
+    if legend["show"]:
+        interface.Add("key", name="key1", autoadd=False)
+        interface.To("key1")
+        interface.Set("title", "")
+        interface.Set("Text/size", _pt(float(style["legend_font_size_pt"])))
+        interface.Set("keyLength", "0.40cm")
+        interface.Set("marginSize", 0.15)
+        interface.Set("columns", int(legend["columns"]))
+        _apply_key_position(
+            interface,
+            str(legend.get("mode") or "inside_best"),
+            horz_position=_normalize_optional_string(legend.get("horz_position")),
+            vert_position=_normalize_optional_string(legend.get("vert_position")),
+            horz_manual=_optional_float(legend.get("horz_manual")),
+            vert_manual=_optional_float(legend.get("vert_manual")),
+        )
+        interface.Set("Background/hide", not bool(style["legend_frameon"]))
+        interface.Set("Border/hide", not bool(style["legend_frameon"]))
+        interface.To("..")
+    if categorical is not None and categorical.get("native_veusz_boxplot") is True:
+        categorical_style = (
+            categorical.get("visual_style")
+            if isinstance(categorical.get("visual_style"), dict)
+            else {}
+        )
+        box_groups = [
+            group
+            for group in categorical.get("groups", [])
+            if isinstance(group, dict) and group.get("boxplot_eligible") is True
+        ]
+        box_line_width = float(
+            categorical_style.get("box_line_width_pt", CATEGORICAL_BOX_LINE_WIDTH_PT)
+        )
+        for box_index, group in enumerate(box_groups, start=1):
+            box_color = str(
+                group.get("color")
+                or DEFAULT_PALETTE_COLORS[(box_index - 1) % len(DEFAULT_PALETTE_COLORS)]
+            )
+            box_name = f"categorical_boxplot_{box_index}"
+            interface.Add("boxplot", name=box_name, autoadd=False)
+            interface.To(box_name)
+            interface.Set("values", (str(group["y_name"]),))
+            interface.Set("posn", [float(group["position"])])
+            interface.Set(
+                "whiskermode", str(categorical.get("box_whisker_mode") or "1.5IQR")
+            )
+            interface.Set(
+                "fillfraction",
+                float(
+                    categorical_style.get(
+                        "box_fill_fraction", CATEGORICAL_BOX_FILL_FRACTION
+                    )
+                ),
+            )
+            interface.Set("meanmarker", "none")
+            interface.Set("outliersmarker", "none")
+            interface.Set("Fill/color", box_color)
+            interface.Set(
+                "Fill/transparency",
+                int(
+                    categorical_style.get(
+                        "box_fill_transparency", CATEGORICAL_BOX_FILL_TRANSPARENCY
+                    )
+                ),
+            )
+            interface.Set("Border/color", box_color)
+            interface.Set("Border/width", _pt(box_line_width))
+            interface.Set("Whisker/color", box_color)
+            interface.Set("Whisker/width", _pt(box_line_width))
+            interface.Set("MarkersLine/hide", True)
+            interface.Set("MarkersFill/hide", True)
+            interface.To("..")
+    for item in spec["series"]:
+        interface.Add("xy", name=item["name"], autoadd=False)
+        interface.To(item["name"])
+        interface.Set("xData", item["x_name"])
+        interface.Set("yData", item["y_name"])
+        interface.Set("key", _veusz_literal_text(item["label"]))
+        interface.Set("PlotLine/color", item["color"])
+        interface.Set("PlotLine/style", item.get("line_style") or "solid")
+        interface.Set(
+            "MarkerFill/color", item.get("marker_fill_color") or item["color"]
+        )
+        interface.Set("MarkerLine/color", item["color"])
+        interface.Set("MarkerLine/width", _pt(float(style["marker_line_width_pt"])))
+        interface.Set("marker", item["marker"])
+        if item.get("plot_line_hide") is True:
+            interface.Set("PlotLine/hide", True)
+        if item.get("raw_points_visible") is False:
+            interface.Set("MarkerFill/hide", True)
+            interface.Set("MarkerLine/hide", True)
+        interface.Set(
+            "PlotLine/transparency", _alpha_to_transparency(float(style["line_alpha"]))
+        )
+        interface.Set(
+            "MarkerFill/transparency",
+            _alpha_to_transparency(float(style["marker_alpha"])),
+        )
+        interface.Set(
+            "MarkerLine/transparency",
+            _alpha_to_transparency(float(style["marker_alpha"])),
+        )
+        if item.get("line_width_pt") is not None:
+            interface.Set("PlotLine/width", _pt(float(item["line_width_pt"])))
+        marker = str(item.get("marker") or "none")
+        if item.get("marker_size_pt") is not None:
+            interface.Set("markerSize", _pt(float(item["marker_size_pt"])))
+        elif marker != "none":
+            interface.Set("markerSize", _pt(float(style["marker_size_pt"])))
+        marker_thin_factor = max(1, int(item.get("marker_thin_factor") or 1))
+        if marker_thin_factor > 1:
+            interface.Set("thinfactor", marker_thin_factor)
+        interface.To("..")
+    if categorical is not None:
+        interface.Add("xy", name="category_axis_label_provider", autoadd=False)
+        interface.To("category_axis_label_provider")
+        interface.Set("xData", "category_axis_x")
+        interface.Set("yData", "category_axis_y")
+        interface.Set("labels", "category_axis_labels")
+        interface.Set("marker", "none")
+        interface.Set("PlotLine/hide", True)
+        interface.Set("MarkerFill/hide", True)
+        interface.Set("MarkerLine/hide", True)
+        interface.Set("ErrorBarLine/hide", True)
+        interface.Set("Label/hide", True)
+        interface.To("..")
+    # Graph children are painted in reverse object-tree order.  Add reference
+    # guides after data plotters so bands/lines paint first and never obscure
+    # the scientific curves.
+    _add_veusz_reference_guides(interface, spec)
     interface.To("..")
     # Force an opaque export canvas.  Some Veusz PDF/TIFF backends retain an
     # alpha page when free-plotter guide rectangles are present even though
@@ -7330,9 +9328,13 @@ def _apply_key_position(
         interface.Set("horzPosn", horz)
         interface.Set("vertPosn", vert)
         if horz == "manual":
-            interface.Set("horzManual", float(horz_manual if horz_manual is not None else 0.5))
+            interface.Set(
+                "horzManual", float(horz_manual if horz_manual is not None else 0.5)
+            )
         if vert == "manual":
-            interface.Set("vertManual", float(vert_manual if vert_manual is not None else 0.5))
+            interface.Set(
+                "vertManual", float(vert_manual if vert_manual is not None else 0.5)
+            )
         return
     if normalized in {"upper_right", "top_right"}:
         interface.Set("horzPosn", "right")
@@ -7350,7 +9352,9 @@ def _apply_key_position(
     interface.Set("vertPosn", "bottom")
 
 
-def _add_veusz_axis(interface: Any, axis: str, axis_spec: dict[str, Any], style: dict[str, Any]) -> None:
+def _add_veusz_axis(
+    interface: Any, axis: str, axis_spec: dict[str, Any], style: dict[str, Any]
+) -> None:
     interface.Add("axis", name=axis, autoadd=False)
     interface.To(axis)
     interface.Set("label", axis_spec["label"])
@@ -7384,7 +9388,11 @@ def _add_veusz_axis(interface: Any, axis: str, axis_spec: dict[str, Any], style:
     )
     interface.Set("MinorTicks/transparency", 0)
     interface.Set("MinorTicks/number", int(axis_spec.get("minor_tick_count") or 20))
-    minor_ticks = axis_spec.get("minor_ticks") if isinstance(axis_spec.get("minor_ticks"), list) else []
+    minor_ticks = (
+        axis_spec.get("minor_ticks")
+        if isinstance(axis_spec.get("minor_ticks"), list)
+        else []
+    )
     if minor_ticks:
         interface.Set("MinorTicks/hide", False)
         interface.Set("MinorTicks/manualTicks", [float(value) for value in minor_ticks])
@@ -7398,7 +9406,9 @@ def _add_veusz_axis(interface: Any, axis: str, axis_spec: dict[str, Any], style:
     )
     interface.Set("TickLabels/color", foreground_color)
     interface.Set("TickLabels/format", str(axis_spec.get("tick_format") or "Auto"))
-    tick_offset = style["xtick_major_pad_pt"] if axis == "x" else style["ytick_major_pad_pt"]
+    tick_offset = (
+        style["xtick_major_pad_pt"] if axis == "x" else style["ytick_major_pad_pt"]
+    )
     interface.Set("TickLabels/offset", _pt(float(tick_offset)))
     if axis == "y" and axis_spec.get("show_ticks") is False:
         interface.Set("MajorTicks/hide", True)
@@ -7438,6 +9448,24 @@ def _axis_scale(render_options: dict[str, Any], axis: str) -> str:
     return "linear"
 
 
+def _trim_empty_terminal_log_decades(
+    ticks: tuple[float, ...],
+    *,
+    data_max: float,
+) -> tuple[tuple[float, ...], float | None]:
+    """Drop an empty terminal decade while retaining useful major ticks."""
+
+    trimmed = tuple(ticks)
+    changed = False
+    while len(trimmed) > 2 and trimmed[-1] > data_max * MAX_AUTO_LOG_EMPTY_RANGE_FACTOR:
+        trimmed = trimmed[:-1]
+        changed = True
+    return (
+        trimmed,
+        data_max * AUTO_LOG_BOUND_PADDING_FACTOR if changed else None,
+    )
+
+
 def _veusz_axis_contract(
     render_options: dict[str, Any],
     *,
@@ -7472,7 +9500,8 @@ def _veusz_axis_contract(
                 x_values=[item.x_values for item in series],
                 xscale=_axis_scale(render_options, "x"),
                 yscale=_axis_scale(render_options, "y"),
-                x_padding=_optional_float(render_options.get("x_padding_fraction")) or 0.02,
+                x_padding=_optional_float(render_options.get("x_padding_fraction"))
+                or 0.02,
                 y_padding_top=_optional_float(render_options.get("y_padding_top"))
                 or (0.08 if template_id in STACKED_TEMPLATE_IDS else 0.18),
                 y_padding_bottom=_optional_float(render_options.get("y_padding_bottom"))
@@ -7487,44 +9516,88 @@ def _veusz_axis_contract(
             if y_max is None:
                 y_max = float(limits.ylim[1])
             if not x_ticks and limits.x_tick_policy is not None:
-                x_ticks = tuple(float(value) for value in limits.x_tick_policy.major_ticks)
+                x_ticks = tuple(
+                    float(value) for value in limits.x_tick_policy.major_ticks
+                )
             if not y_ticks and limits.y_tick_policy is not None:
-                y_ticks = tuple(float(value) for value in limits.y_tick_policy.major_ticks)
+                y_ticks = tuple(
+                    float(value) for value in limits.y_tick_policy.major_ticks
+                )
         except Exception:
             pass
 
     if series and _axis_scale(render_options, "x") == "log" and not explicit_x_ticks:
-        positive_x_values = [value for item in series for value in item.x_values if math.isfinite(value) and value > 0]
+        positive_x_values = [
+            value
+            for item in series
+            for value in item.x_values
+            if math.isfinite(value) and value > 0
+        ]
         x_ticks = anchored_log_decade_ticks(positive_x_values)
         if x_ticks:
             if not explicit_x_min:
-                x_min = min(float(x_min), x_ticks[0]) if x_min is not None else x_ticks[0]
+                x_min = (
+                    min(float(x_min), x_ticks[0]) if x_min is not None else x_ticks[0]
+                )
             if not explicit_x_max:
-                x_max = max(float(x_max), x_ticks[-1]) if x_max is not None else x_ticks[-1]
                 data_max = max(positive_x_values)
-                if x_max > data_max * MAX_AUTO_LOG_EMPTY_RANGE_FACTOR:
-                    x_max = max(x_ticks[-1], data_max * AUTO_LOG_BOUND_PADDING_FACTOR)
+                x_ticks, compact_max = _trim_empty_terminal_log_decades(
+                    x_ticks,
+                    data_max=data_max,
+                )
+                if compact_max is not None:
+                    x_max = compact_max
+                else:
+                    x_max = (
+                        max(float(x_max), x_ticks[-1])
+                        if x_max is not None
+                        else x_ticks[-1]
+                    )
     if series and _axis_scale(render_options, "y") == "log" and not explicit_y_ticks:
-        positive_y_values = [value for item in series for value in item.y_values if math.isfinite(value) and value > 0]
+        positive_y_values = [
+            value
+            for item in series
+            for value in item.y_values
+            if math.isfinite(value) and value > 0
+        ]
         y_ticks = anchored_log_decade_ticks(positive_y_values)
         if y_ticks:
             if not explicit_y_min:
-                y_min = min(float(y_min), y_ticks[0]) if y_min is not None else y_ticks[0]
+                y_min = (
+                    min(float(y_min), y_ticks[0]) if y_min is not None else y_ticks[0]
+                )
             if not explicit_y_max:
-                y_max = max(float(y_max), y_ticks[-1]) if y_max is not None else y_ticks[-1]
                 data_max = max(positive_y_values)
-                if y_max > data_max * MAX_AUTO_LOG_EMPTY_RANGE_FACTOR:
-                    y_max = max(y_ticks[-1], data_max * AUTO_LOG_BOUND_PADDING_FACTOR)
+                y_ticks, compact_max = _trim_empty_terminal_log_decades(
+                    y_ticks,
+                    data_max=data_max,
+                )
+                if compact_max is not None:
+                    y_max = compact_max
+                else:
+                    y_max = (
+                        max(float(y_max), y_ticks[-1])
+                        if y_max is not None
+                        else y_ticks[-1]
+                    )
     if x_ticks:
         if not explicit_x_min:
-            x_min = min(float(x_min), min(x_ticks)) if x_min is not None else min(x_ticks)
+            x_min = (
+                min(float(x_min), min(x_ticks)) if x_min is not None else min(x_ticks)
+            )
         if not explicit_x_max:
-            x_max = max(float(x_max), max(x_ticks)) if x_max is not None else max(x_ticks)
+            x_max = (
+                max(float(x_max), max(x_ticks)) if x_max is not None else max(x_ticks)
+            )
     if y_ticks:
         if not explicit_y_min:
-            y_min = min(float(y_min), min(y_ticks)) if y_min is not None else min(y_ticks)
+            y_min = (
+                min(float(y_min), min(y_ticks)) if y_min is not None else min(y_ticks)
+            )
         if not explicit_y_max:
-            y_max = max(float(y_max), max(y_ticks)) if y_max is not None else max(y_ticks)
+            y_max = (
+                max(float(y_max), max(y_ticks)) if y_max is not None else max(y_ticks)
+            )
 
     reverse_x = render_options.get("reverse_x") is True
     if reverse_x and x_min is not None and x_max is not None:
@@ -7533,7 +9606,13 @@ def _veusz_axis_contract(
         low = min(x_min, x_max)
         high = max(x_min, x_max)
         tick_values = (
-            [x_min, *x_ticks, x_max] if reverse_x and _axis_scale(render_options, "x") != "log" else list(x_ticks)
+            [x_min, *x_ticks, x_max]
+            if (
+                reverse_x
+                and _axis_scale(render_options, "x") != "log"
+                and not explicit_x_ticks
+            )
+            else list(x_ticks)
         )
         deduped: list[float] = []
         for value in tick_values:
@@ -7545,7 +9624,11 @@ def _veusz_axis_contract(
     if y_ticks and y_min is not None and y_max is not None:
         low = min(y_min, y_max)
         high = max(y_min, y_max)
-        y_ticks = tuple(value for value in sorted(set(y_ticks)) if low - 1e-9 <= value <= high + 1e-9)
+        y_ticks = tuple(
+            value
+            for value in sorted(set(y_ticks))
+            if low - 1e-9 <= value <= high + 1e-9
+        )
     return _VeuszAxisContract(
         x_min=x_min,
         x_max=x_max,
@@ -7560,7 +9643,13 @@ def _veusz_legend_mode(render_options: dict[str, Any], *, template_id: str) -> s
     legend_position = normalize_legend_position(render_options.get("legend_position"))
     if legend_position in {"none", "hide", "hidden", "off"}:
         return "none"
-    if legend_position in {"upper_right", "upper_left", "lower_left", "lower_right", "manual"}:
+    if legend_position in {
+        "upper_right",
+        "upper_left",
+        "lower_left",
+        "lower_right",
+        "manual",
+    }:
         return legend_position
     if template_id in STACKED_TEMPLATE_IDS:
         label_mode = str(render_options.get("series_label_mode") or "").casefold()
@@ -7577,7 +9666,11 @@ def _legend_columns(
 ) -> int:
     if series_count <= 4:
         return 1
-    if figure_width_mm is not None and figure_width_mm <= 60.5 and max_label_length >= 22:
+    if (
+        figure_width_mm is not None
+        and figure_width_mm <= 60.5
+        and max_label_length >= 22
+    ):
         return 1
     return 2
 
@@ -7589,13 +9682,17 @@ def _show_veusz_direct_labels(
     series_count: int,
     show_key: bool,
 ) -> bool:
-    if show_key or series_count <= 1 or template_id not in STACKED_TEMPLATE_IDS:
+    if show_key or series_count <= 0 or template_id not in STACKED_TEMPLATE_IDS:
         return False
     label_mode = str(render_options.get("series_label_mode") or "").strip().casefold()
+    if series_count == 1 and render_options.get("show_single_series_label") is not True:
+        return False
     return label_mode in {"inline", "edge", "auto"}
 
 
-def _series_label_anchor(item: StudioSeries, *, reverse_x: bool, side: str) -> tuple[float, float] | None:
+def _series_label_anchor(
+    item: StudioSeries, *, reverse_x: bool, side: str
+) -> tuple[float, float] | None:
     points = sorted(
         (
             (float(x_value), float(y_value))
@@ -7620,15 +9717,21 @@ def _series_label_anchor(item: StudioSeries, *, reverse_x: bool, side: str) -> t
     return nearest
 
 
-def _show_veusz_key(*, template_id: str, render_options: dict[str, Any], series_count: int) -> bool:
+def _show_veusz_key(
+    *, template_id: str, render_options: dict[str, Any], series_count: int
+) -> bool:
     if template_id in SCALAR_FIELD_TEMPLATE_IDS:
         return False
     if series_count <= 1:
         return False
     if template_id in CATEGORICAL_TEMPLATE_IDS:
         return False
-    label_mode = str(render_options.get("series_label_mode") or "legend").strip().casefold()
-    legend_position = str(render_options.get("legend_position") or "auto").strip().casefold()
+    label_mode = (
+        str(render_options.get("series_label_mode") or "legend").strip().casefold()
+    )
+    legend_position = (
+        str(render_options.get("legend_position") or "auto").strip().casefold()
+    )
     if template_id in STACKED_TEMPLATE_IDS and label_mode in {"inline", "edge", "auto"}:
         return False
     if legend_position in {"none", "hide", "hidden", "off"}:
@@ -7727,16 +9830,22 @@ def _veusz_spec_reference(document_path: Path) -> dict[str, Any]:
     }
 
 
-def _studio_document_state(document_path: Path, *, generated_hash: str | None) -> dict[str, Any]:
+def _studio_document_state(
+    document_path: Path, *, generated_hash: str | None
+) -> dict[str, Any]:
     current_hash = existing_file_sha256(document_path)
-    manual_edit_detected = bool(generated_hash and current_hash and current_hash != generated_hash)
+    manual_edit_detected = bool(
+        generated_hash and current_hash and current_hash != generated_hash
+    )
     if manual_edit_detected:
         authority = "veusz_manual"
     elif generated_hash and current_hash == generated_hash:
         authority = "sciplot_generated"
     else:
         authority = "veusz_document"
-    regeneration_requires_archive = bool(current_hash and (manual_edit_detected or generated_hash is None))
+    regeneration_requires_archive = bool(
+        current_hash and (manual_edit_detected or generated_hash is None)
+    )
     return {
         "kind": "sciplot_vsz_document_state",
         "authority": authority,
@@ -7750,30 +9859,44 @@ def _studio_document_state(document_path: Path, *, generated_hash: str | None) -
 
 
 def _registered_generated_hash(project_dir: Path) -> str | None:
-    for manifest_path in [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]:
+    for manifest_path in [
+        project_dir / "intake_manifest.json",
+        *sorted(project_dir.glob("*.sciplot.json")),
+    ]:
         if not manifest_path.exists():
             continue
         try:
             payload = _read_json(manifest_path)
         except Exception:
             continue
-        studio = payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
+        studio = (
+            payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
+        )
         value = studio.get("generated_hash")
         if isinstance(value, str) and value.strip():
             return value
     return None
 
 
-def _archive_manual_document_if_needed(project_dir: Path, document_path: Path) -> None:
+def _archive_manual_document_if_needed(
+    project_dir: Path,
+    document_path: Path,
+    *,
+    generated_hash: str | None = None,
+) -> None:
     if not document_path.exists():
         return
     current_hash = existing_file_sha256(document_path)
-    generated_hash = _registered_generated_hash(project_dir)
+    generated_hash = generated_hash or (
+        _registered_generated_hash(project_dir)
+        if document_path.name == "document.vsz"
+        else _registered_figure_generated_hash(project_dir, document_path)
+    )
     if generated_hash and current_hash == generated_hash:
         return
     history_dir = document_path.parent / "history"
     history_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ") + f"_{uuid4().hex[:8]}"
     destination = history_dir / f"{document_path.stem}_{stamp}{document_path.suffix}"
     shutil.copy2(document_path, destination)
     spec_path = _veusz_spec_path(document_path)
@@ -7791,9 +9914,12 @@ def _studio_block(
     request_path: Path,
     series_count: int,
     generated_hash: str | None,
+    figure_set: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    document_state = _studio_document_state(document_path, generated_hash=generated_hash)
-    return {
+    document_state = _studio_document_state(
+        document_path, generated_hash=generated_hash
+    )
+    block = {
         "kind": "sciplot_studio_document",
         "engine": "veusz",
         "render_engine": "veusz",
@@ -7814,14 +9940,33 @@ def _studio_block(
         "upstream": upstream_status()["veusz"],
         "operation_mode": normal_mode_payload(route="studio"),
     }
+    if figure_set is not None:
+        block["figure_set"] = json_safe(figure_set)
+        block["figure_set_registry"] = str(
+            _studio_figure_set_path(document_path.parent.parent)
+        )
+    return block
 
 
 def _register_studio_block(project_dir: Path, studio_block: dict[str, Any]) -> None:
-    for manifest_path in [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]:
+    for manifest_path in [
+        project_dir / "intake_manifest.json",
+        *sorted(project_dir.glob("*.sciplot.json")),
+    ]:
         if manifest_path.exists():
             payload = _read_json(manifest_path)
             payload["studio"] = studio_block
-            manifest_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+            manifest_path.write_text(
+                json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+    # Existing or moved projects can carry a retired Web launcher and stale
+    # absolute launcher paths in both manifests.  Converge only after the
+    # current portable launchers and Studio block are written so normal
+    # `studio PROJECT` is itself the repair path.
+    from sciplot_core.intake import converge_intake_project_launchers
+
+    converge_intake_project_launchers(project_dir)
 
 
 def _register_studio_exports(
@@ -7830,18 +9975,31 @@ def _register_studio_exports(
     *,
     studio_run: dict[str, Any] | None = None,
 ) -> None:
-    for manifest_path in [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]:
+    for manifest_path in [
+        project_dir / "intake_manifest.json",
+        *sorted(project_dir.glob("*.sciplot.json")),
+    ]:
         if manifest_path.exists():
             payload = _read_json(manifest_path)
-            studio = payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
+            studio = (
+                payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
+            )
             studio["exports"] = exports
             if studio_run is not None:
                 studio["last_export_run"] = studio_run
             payload["studio"] = studio
-            manifest_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+            manifest_path.write_text(
+                json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
 
 
 def _register_studio_run(project_dir: Path, manifest: dict[str, Any]) -> None:
+    figure_set_export_scope = (
+        manifest.get("figure_set_export_scope")
+        if isinstance(manifest.get("figure_set_export_scope"), dict)
+        else None
+    )
     last_run = {
         "completed_at": manifest.get("created_at"),
         "route": "studio",
@@ -7853,7 +10011,12 @@ def _register_studio_run(project_dir: Path, manifest: dict[str, Any]) -> None:
         "delivery_package": manifest.get("delivery_package", {}),
         "layout_quality": manifest.get("layout_quality", {}),
     }
-    for manifest_path in [project_dir / "intake_manifest.json", *sorted(project_dir.glob("*.sciplot.json"))]:
+    if figure_set_export_scope is not None:
+        last_run["figure_set_export_scope"] = json_safe(figure_set_export_scope)
+    for manifest_path in [
+        project_dir / "intake_manifest.json",
+        *sorted(project_dir.glob("*.sciplot.json")),
+    ]:
         if not manifest_path.exists():
             continue
         payload = _read_json(manifest_path)
@@ -7861,18 +10024,37 @@ def _register_studio_run(project_dir: Path, manifest: dict[str, Any]) -> None:
         payload["package_contract"] = manifest.get("package_contract", {})
         payload["delivery_package"] = manifest.get("delivery_package", {})
         payload["layout_quality"] = manifest.get("layout_quality", {})
-        studio = payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
+        if figure_set_export_scope is not None:
+            payload["figure_set_export_scope"] = json_safe(figure_set_export_scope)
+        else:
+            payload.pop("figure_set_export_scope", None)
+        studio = (
+            payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
+        )
         studio["last_export_run"] = {
             "kind": "sciplot_studio_export_run",
             "output": manifest.get("output"),
-            "manifest": str(Path(str(manifest.get("output"))) / "manifest.json") if manifest.get("output") else None,
-            "review_html": str(Path(str(manifest.get("output"))) / "review.html") if manifest.get("output") else None,
+            "manifest": str(Path(str(manifest.get("output"))) / "manifest.json")
+            if manifest.get("output")
+            else None,
+            "review_html": str(Path(str(manifest.get("output"))) / "review.html")
+            if manifest.get("output")
+            else None,
             "figures": manifest.get("figures", []),
             "qa": manifest.get("qa", {}),
         }
+        if figure_set_export_scope is not None:
+            studio["last_export_run"]["figure_set_export_scope"] = json_safe(
+                figure_set_export_scope
+            )
         payload["studio"] = studio
-        payload["study_model"] = manifest.get("study_model", payload.get("study_model", {}))
-        manifest_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+        payload["study_model"] = manifest.get(
+            "study_model", payload.get("study_model", {})
+        )
+        manifest_path.write_text(
+            json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
     try:
         from sciplot_core.intake import refresh_intake_project_zip
 
@@ -7916,7 +10098,10 @@ def _capture_process_stderr(log_path: Path):
 
 
 def _qt_framework_paths() -> list[Path]:
-    candidates = [Path("/opt/homebrew/opt/qtbase/lib"), Path("/opt/homebrew/opt/qt/lib")]
+    candidates = [
+        Path("/opt/homebrew/opt/qtbase/lib"),
+        Path("/opt/homebrew/opt/qt/lib"),
+    ]
     if all(path.exists() for path in candidates):
         return candidates
     brew = shutil.which("brew")
@@ -7925,7 +10110,9 @@ def _qt_framework_paths() -> list[Path]:
     paths: list[Path] = []
     for package in ("qtbase", "qt"):
         try:
-            prefix = subprocess.check_output([brew, "--prefix", package], text=True, stderr=subprocess.DEVNULL).strip()
+            prefix = subprocess.check_output(
+                [brew, "--prefix", package], text=True, stderr=subprocess.DEVNULL
+            ).strip()
         except (OSError, subprocess.CalledProcessError):
             continue
         lib_path = Path(prefix) / "lib"
@@ -7936,9 +10123,7 @@ def _qt_framework_paths() -> list[Path]:
 
 def _split_formats(value: str) -> list[str]:
     formats = [
-        _normalize_export_format(item)
-        for item in value.split(",")
-        if item.strip()
+        _normalize_export_format(item) for item in value.split(",") if item.strip()
     ]
     return formats or ["pdf"]
 
@@ -7958,9 +10143,7 @@ def _normalize_export_format(fmt: str) -> str:
     try:
         return aliases[normalized]
     except KeyError as exc:
-        supported = ", ".join(
-            ("pdf", "tiff_300", "png_300", "png_600", "svg")
-        )
+        supported = ", ".join(("pdf", "tiff_300", "png_300", "png_600", "svg"))
         raise ValueError(
             f"Unsupported export format {fmt!r}. Supported formats: {supported}."
         ) from exc
@@ -8024,7 +10207,9 @@ def _log_minor_ticks(
     if not math.isfinite(low) or not math.isfinite(high) or low <= 0 or high <= low:
         return []
     visible_major_ticks = sorted(
-        float(value) for value in major_ticks if math.isfinite(value) and low <= float(value) <= high
+        float(value)
+        for value in major_ticks
+        if math.isfinite(value) and low <= float(value) <= high
     )
     if len(visible_major_ticks) >= 2:
         low, high = visible_major_ticks[0], visible_major_ticks[-1]
@@ -8043,6 +10228,7 @@ def _log_minor_ticks(
 
 
 __all__ = [
+    "atomic_save_veusz_document",
     "ensure_veusz_qsettings_compat",
     "export_studio_document",
     "maybe_reexec_with_qt_runtime",

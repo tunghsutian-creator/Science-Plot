@@ -38,6 +38,7 @@ ASSISTANT_HISTORY_REASON_CODES = frozenset(
         "no_active_request",
         "provider_failed",
         "request_submit_failed",
+        "selected_object_changed",
         "superseded_by_new_request",
         "typed_validation_failed",
         "unsupported_proposal_kind",

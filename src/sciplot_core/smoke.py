@@ -14,13 +14,14 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core._paths import (
+    REPO_ROOT,
     VEUSZ_ROOT,
     VEUSZ_UPSTREAM_COMMIT,
     VENDORED_CORE_ROOT,
 )
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 21
+RUNTIME_SMOKE_VERSION = 23
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 EXPECTED_SCALAR_VISUAL_ATTACK_IDS = frozenset(
@@ -119,9 +120,7 @@ def _inspect_veusz_document_state(document_path: Path) -> dict[str, Any]:
         or payload.get("status") != "passed"
         or not isinstance(payload.get("widgets"), dict)
     ):
-        raise ValueError(
-            "Veusz attack materialization inspection did not pass."
-        )
+        raise ValueError("Veusz attack materialization inspection did not pass.")
     return payload
 
 
@@ -140,7 +139,11 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
 
     delivery_path = Path(str(delivery.get("path") or "")).expanduser().resolve()
     expected_entries = {"data", "pdf", "tiff", "project", "Open_in_Veusz.command"}
-    actual_entries = {path.name for path in delivery_path.iterdir()} if delivery_path.is_dir() else set()
+    actual_entries = (
+        {path.name for path in delivery_path.iterdir()}
+        if delivery_path.is_dir()
+        else set()
+    )
     forbidden_names = {
         "_sciplot_internal",
         "editable",
@@ -151,16 +154,25 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         "raw",
         "tables",
     }
-    forbidden_paths = [
-        str(path)
-        for path in delivery_path.rglob("*")
-        if path.name in forbidden_names or path.suffix.casefold() in {".xlsx", ".xls", ".sciplot"}
-    ] if delivery_path.is_dir() else []
+    forbidden_paths = (
+        [
+            str(path)
+            for path in delivery_path.rglob("*")
+            if path.name in forbidden_names
+            or path.suffix.casefold() in {".xlsx", ".xls", ".sciplot"}
+        ]
+        if delivery_path.is_dir()
+        else []
+    )
 
-    data_records = delivery.get("data_csvs") if isinstance(delivery.get("data_csvs"), list) else []
+    data_records = (
+        delivery.get("data_csvs") if isinstance(delivery.get("data_csvs"), list) else []
+    )
     data_checks: list[dict[str, Any]] = []
     for record in data_records:
-        path = Path(str(record.get("path") or "")) if isinstance(record, dict) else Path()
+        path = (
+            Path(str(record.get("path") or "")) if isinstance(record, dict) else Path()
+        )
         rows: list[list[str]] = []
         if path.is_file():
             with path.open("r", encoding="utf-8", newline="") as handle:
@@ -170,13 +182,16 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
                 "path": str(path),
                 "under_data": path.parent == delivery_path / "data",
                 "row_count": len(rows),
-                "four_row_header": len(rows) >= 4 and all(rows[index] for index in range(3)),
+                "four_row_header": len(rows) >= 4
+                and all(rows[index] for index in range(3)),
                 "data_rows": max(len(rows) - 3, 0),
                 "column_count": len(rows[0]) if rows else 0,
             }
         )
 
-    figure_records = delivery.get("figures") if isinstance(delivery.get("figures"), list) else []
+    figure_records = (
+        delivery.get("figures") if isinstance(delivery.get("figures"), list) else []
+    )
     figure_locations = [
         {
             "path": str(record.get("path")),
@@ -194,7 +209,8 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
     project_locations = [
         {
             "path": str(record.get("path")),
-            "in_project": Path(str(record.get("path") or "")).parent == delivery_path / "project",
+            "in_project": Path(str(record.get("path") or "")).parent
+            == delivery_path / "project",
             "exists": bool(record.get("exists")),
         }
         for record in project_records
@@ -202,7 +218,10 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
     ]
 
     launcher = delivery_path / "Open_in_Veusz.command"
-    launcher_probe: dict[str, Any] = {"path": str(launcher), "exists": launcher.is_file()}
+    launcher_probe: dict[str, Any] = {
+        "path": str(launcher),
+        "exists": launcher.is_file(),
+    }
     if launcher.is_file():
         env = os.environ.copy()
         env["SCIPLOT_LAUNCH_DRY_RUN"] = "1"
@@ -227,7 +246,10 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         and not forbidden_paths
         and bool(data_checks)
         and all(
-            item["under_data"] and item["four_row_header"] and item["data_rows"] > 0 and item["column_count"] > 0
+            item["under_data"]
+            and item["four_row_header"]
+            and item["data_rows"] > 0
+            and item["column_count"] > 0
             for item in data_checks
         )
         and bool(figure_locations)
@@ -301,8 +323,8 @@ def _package_import_probe() -> dict[str, Any]:
 def _source_checkout_wrapper_probe() -> dict[str, Any]:
     """Prove a checkout wrapper or installed CLI starts without import leakage."""
 
-    source_root = Path(__file__).resolve().parents[2]
-    wrapper = source_root / "skill" / "scripts" / "sciplot"
+    package_source_root = Path(__file__).resolve().parents[1]
+    wrapper = REPO_ROOT / "skill" / "scripts" / "sciplot"
     installed_cli = shutil.which("sciplot")
     command = str(wrapper) if wrapper.is_file() else installed_cli
     if command is None:
@@ -314,9 +336,10 @@ def _source_checkout_wrapper_probe() -> dict[str, Any]:
         }
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
-    env["SCIPLOT_PYTHON"] = sys.executable
-    env["SCIPLOT_REPO"] = str(source_root)
-    env["SCIPLOT_SOURCE_ROOT"] = str(source_root / "src")
+    if wrapper.is_file():
+        env["SCIPLOT_PYTHON"] = sys.executable
+        env["SCIPLOT_REPO"] = str(REPO_ROOT)
+        env["SCIPLOT_SOURCE_ROOT"] = str(package_source_root)
     completed = subprocess.run(
         [command, "--help"],
         text=True,
@@ -332,7 +355,7 @@ def _source_checkout_wrapper_probe() -> dict[str, Any]:
         "wrapper": str(wrapper),
         "installed_cli": installed_cli,
         "returncode": completed.returncode,
-        "source_root": str(source_root / "src"),
+        "source_root": str(package_source_root),
         "stderr": completed.stderr.strip(),
     }
 
@@ -363,6 +386,24 @@ def _qt_mainwindow_probe(document_path: Path | None = None) -> dict[str, Any]:
         and payload.get("status") == "passed"
         and payload.get("window") == "MainWindow"
         and payload.get("main_window_constructed") is True
+        and payload.get("fail_closed_close_installed") is True
+        and payload.get("atomic_save_installed") is True
+        and payload.get("integrated_window_factory_installed") is True
+        and payload.get("initial_widget_path") not in {None, "", "/"}
+        and all(
+            value is True
+            for value in (
+                payload.get("close_safety")
+                if isinstance(payload.get("close_safety"), dict)
+                else {}
+            ).values()
+        )
+        and len(
+            payload.get("close_safety")
+            if isinstance(payload.get("close_safety"), dict)
+            else {}
+        )
+        == 6
         and not settings_noise
     )
     if document_path is not None:
@@ -377,6 +418,14 @@ def _qt_mainwindow_probe(document_path: Path | None = None) -> dict[str, Any]:
         "returncode": completed.returncode,
         "window": payload.get("window"),
         "main_window_constructed": payload.get("main_window_constructed"),
+        "window_title": payload.get("window_title"),
+        "initial_widget_path": payload.get("initial_widget_path"),
+        "fail_closed_close_installed": payload.get("fail_closed_close_installed"),
+        "atomic_save_installed": payload.get("atomic_save_installed"),
+        "integrated_window_factory_installed": payload.get(
+            "integrated_window_factory_installed"
+        ),
+        "close_safety": payload.get("close_safety"),
         "document": payload.get("document"),
         "document_loaded": payload.get("document_loaded"),
         "datasets": payload.get("datasets"),
@@ -1196,9 +1245,9 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         for unit in xrd_terminal_contract.get("units") or []
         if isinstance(unit, dict)
     ]
-    xrd_terminal_axes = (
-        (xrd_terminal_contract.get("units") or [{}])[0].get("axes") or {}
-    )
+    xrd_terminal_axes = (xrd_terminal_contract.get("units") or [{}])[0].get(
+        "axes"
+    ) or {}
     try:
         _apply_series_options(
             positive_xrd_series,
@@ -1418,7 +1467,10 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
             float(first_time_conversion.get("factor") or 0.0), 1.0 / 3600.0
         )
         and len(swelling_condition_groups) == 3
-        and all(len({item.color for item in group}) == 1 for group in swelling_condition_groups)
+        and all(
+            len({item.color for item in group}) == 1
+            for group in swelling_condition_groups
+        )
         and len({group[0].color for group in swelling_condition_groups if group}) == 3
         and all(
             len({(item.line_style, str(item.marker)) for item in group}) == 3
@@ -1430,8 +1482,7 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         == [(1200.0, 1100.0, 900.0), (1800.0, 1600.0, 1300.0)]
         and "G" in str(default_amplitude_axis.get("y_label") or "")
         and "Pa" in str(default_amplitude_axis.get("y_label") or "")
-        and [item.label for item in loss_factor_series]
-        == ["Sample A", "Sample B"]
+        and [item.label for item in loss_factor_series] == ["Sample A", "Sample B"]
         and [item.y_values for item in loss_factor_series]
         == [(0.2, 0.24, 0.33), (0.17, 0.21, 0.3)]
         and "tan" in str(loss_factor_axis.get("y_label") or "").casefold()
@@ -1445,8 +1496,7 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         and (xrd_terminal_axes.get("x") or {}).get("min") == 0.0
         and (xrd_terminal_axes.get("y") or {}).get("min") == 0.0
         and xrd_terminal_labels == ["PDA-I", "PDA-Br"]
-        and (manual_order_rejection or {}).get("reason_code")
-        == "unknown_series_order"
+        and (manual_order_rejection or {}).get("reason_code") == "unknown_series_order"
         and (
             (gpc_effective_semantic.get("axis_plan") or {})
             .get("y", {})
@@ -1533,12 +1583,8 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
             "gpc_registered_axis_plan": gpc_effective_semantic.get(
                 "registered_axis_plan"
             ),
-            "ftir_absorbance_effective_axis_plan": ftir_exact_semantic.get(
-                "axis_plan"
-            ),
-            "ftir_absorbance_axis_authority": ftir_exact_semantic.get(
-                "axis_authority"
-            ),
+            "ftir_absorbance_effective_axis_plan": ftir_exact_semantic.get("axis_plan"),
+            "ftir_absorbance_axis_authority": ftir_exact_semantic.get("axis_authority"),
             "ftir_terminal_axes": ftir_terminal_axes,
             "ftir_terminal_y_values": ftir_terminal_unit.get("y_values"),
             "log_domain_rejection": log_domain_rejection,
@@ -1634,24 +1680,16 @@ def _direct_label_contract_probe(run_root: Path) -> dict[str, Any]:
     rejection_results: dict[str, bool] = {}
     for attack_id, (command, setting_path) in attacks.items():
         attacked_document = (
-            document_text
-            + f"\nTo('{target_path}')\n"
-            + command
-            + "\nTo('/')\n"
+            document_text + f"\nTo('{target_path}')\n" + command + "\nTo('/')\n"
         )
         try:
             document.write_text(attacked_document, encoding="utf-8")
-            attacked_widgets = _inspect_veusz_document_state(document)[
-                "widgets"
-            ]
-            materialization_results[attack_id] = (
-                baseline_widgets.get(target_path, {})
-                .get("settings", {})
-                .get(setting_path)
-                != attacked_widgets.get(target_path, {})
-                .get("settings", {})
-                .get(setting_path)
-            )
+            attacked_widgets = _inspect_veusz_document_state(document)["widgets"]
+            materialization_results[attack_id] = baseline_widgets.get(
+                target_path, {}
+            ).get("settings", {}).get(setting_path) != attacked_widgets.get(
+                target_path, {}
+            ).get("settings", {}).get(setting_path)
             verify_rendered_mapping_source_coverage(
                 coverage_input,
                 mapping_application=mapping_application,
@@ -1672,11 +1710,7 @@ def _direct_label_contract_probe(run_root: Path) -> dict[str, Any]:
         forged_labels = forged_spec.get("direct_labels")
         if isinstance(forged_labels, list) and forged_labels:
             original_x = float(forged_labels[0]["x"])
-            replacement_x = (
-                0.5
-                if not math.isclose(original_x, 0.5)
-                else 0.25
-            )
+            replacement_x = 0.5 if not math.isclose(original_x, 0.5) else 0.25
             forged_labels[0]["x"] = replacement_x
             forged_spec_text = json.dumps(
                 forged_spec,
@@ -1707,8 +1741,7 @@ def _direct_label_contract_probe(run_root: Path) -> dict[str, Any]:
                     .get("xPos")
                 )
                 coordinated_materialized = (
-                    forged_spec_text != spec_text
-                    and forged_x != baseline_x
+                    forged_spec_text != spec_text and forged_x != baseline_x
                 )
                 verify_rendered_mapping_source_coverage(
                     coverage_input,
@@ -1740,16 +1773,12 @@ def _direct_label_contract_probe(run_root: Path) -> dict[str, Any]:
         "spec": str(spec),
         "baseline_status": baseline_coverage.get("status"),
         "direct_label_count": (
-            len(baseline_labels)
-            if isinstance(baseline_labels, list)
-            else 0
+            len(baseline_labels) if isinstance(baseline_labels, list) else 0
         ),
         "expected_attack_ids": sorted(expected_attack_ids),
         "materialization_results": materialization_results,
         "rejection_results": rejection_results,
-        "coordinated_spec_vsz_forgery_materialized": (
-            coordinated_materialized
-        ),
+        "coordinated_spec_vsz_forgery_materialized": (coordinated_materialized),
         "coordinated_spec_vsz_forgery_rejected": coordinated_rejected,
         "real_data_evidence": False,
         "evidence_tier": "generated_synthetic_contract_fixture",
@@ -1956,9 +1985,7 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
         "Set('colorInvert', True)",
         1,
     )
-    document_only_visual_edit_materialized = (
-        document_only_visual_edit != document_text
-    )
+    document_only_visual_edit_materialized = document_only_visual_edit != document_text
     document_only_visual_edit_rejected = False
     if document_only_visual_edit_materialized:
         try:
@@ -1987,9 +2014,7 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
         if isinstance(scalar_field, dict):
             scalar_field["color_invert"] = True
             forged_spec_text = json.dumps(forged_spec, indent=2)
-            coordinated_visual_forgery_materialized = (
-                forged_spec_text != spec_text
-            )
+            coordinated_visual_forgery_materialized = forged_spec_text != spec_text
             try:
                 spec.write_text(forged_spec_text, encoding="utf-8")
                 document.write_text(
@@ -2011,64 +2036,40 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
                 document.write_text(document_text, encoding="utf-8")
     exact_current_visual_attacks = {
         "image_transparency": (
-            "To('/page1/graph1/field_image')\n"
-            "Set('transparency', 100)\n"
-            "To('/')"
+            "To('/page1/graph1/field_image')\nSet('transparency', 100)\nTo('/')"
         ),
         "colorbar_zero_width": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('width', '0cm')\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('width', '0cm')\nTo('/')"
         ),
         "colorbar_label_hidden": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('Label/hide', True)\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('Label/hide', True)\nTo('/')"
         ),
         "colorbar_ticklabels_hidden": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('TickLabels/hide', True)\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('TickLabels/hide', True)\nTo('/')"
         ),
         "colorbar_major_ticks_hidden": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('MajorTicks/hide', True)\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('MajorTicks/hide', True)\nTo('/')"
         ),
         "colorbar_minor_ticks_hidden": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('MinorTicks/hide', True)\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('MinorTicks/hide', True)\nTo('/')"
         ),
         "colorbar_line_hidden": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('Line/hide', True)\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('Line/hide', True)\nTo('/')"
         ),
         "colorbar_border_hidden": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('Border/hide', True)\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('Border/hide', True)\nTo('/')"
         ),
         "colorbar_label_size_zero": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('Label/size', '0pt')\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('Label/size', '0pt')\nTo('/')"
         ),
         "colorbar_ticklabels_size_zero": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('TickLabels/size', '0pt')\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('TickLabels/size', '0pt')\nTo('/')"
         ),
         "colorbar_line_width_zero": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('Line/width', '0pt')\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('Line/width', '0pt')\nTo('/')"
         ),
         "colorbar_border_width_zero": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('Border/width', '0pt')\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('Border/width', '0pt')\nTo('/')"
         ),
         "colorbar_major_tick_width_zero": (
             "To('/page1/graph1/field_colorbar')\n"
@@ -2091,14 +2092,10 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
             "To('/')"
         ),
         "colorbar_foreground_changed": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('Line/color', '#FF0000')\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('Line/color', '#FF0000')\nTo('/')"
         ),
         "colorbar_line_transparent": (
-            "To('/page1/graph1/field_colorbar')\n"
-            "Set('Line/transparency', 100)\n"
-            "To('/')"
+            "To('/page1/graph1/field_colorbar')\nSet('Line/transparency', 100)\nTo('/')"
         ),
         "colorbar_border_transparent": (
             "To('/page1/graph1/field_colorbar')\n"
@@ -2116,9 +2113,7 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
             "To('/')"
         ),
         "contour_lines_hidden": (
-            "To('/page1/graph1/field_contours')\n"
-            "Set('Lines/hide', True)\n"
-            "To('/')"
+            "To('/page1/graph1/field_contours')\nSet('Lines/hide', True)\nTo('/')"
         ),
         "reference_guide_made_opaque": (
             "To('/page1/graph1/reference_guide_1')\n"
@@ -2126,19 +2121,13 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
             "To('/')"
         ),
         "reference_line_width_changed": (
-            "To('/page1/graph1/reference_guide_2')\n"
-            "Set('Line/width', '4pt')\n"
-            "To('/')"
+            "To('/page1/graph1/reference_guide_2')\nSet('Line/width', '4pt')\nTo('/')"
         ),
         "reference_line_style_changed": (
-            "To('/page1/graph1/reference_guide_2')\n"
-            "Set('Line/style', 'solid')\n"
-            "To('/')"
+            "To('/page1/graph1/reference_guide_2')\nSet('Line/style', 'solid')\nTo('/')"
         ),
         "reference_line_hidden": (
-            "To('/page1/graph1/reference_guide_2')\n"
-            "Set('Line/hide', True)\n"
-            "To('/')"
+            "To('/page1/graph1/reference_guide_2')\nSet('Line/hide', True)\nTo('/')"
         ),
         "reference_line_geometry_changed": (
             "To('/page1/graph1/reference_guide_2')\n"
@@ -2167,39 +2156,25 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
             "To('/')"
         ),
         "axis_label_size_zero": (
-            "To('/page1/graph1/x')\n"
-            "Set('Label/size', '0pt')\n"
-            "To('/')"
+            "To('/page1/graph1/x')\nSet('Label/size', '0pt')\nTo('/')"
         ),
         "axis_ticklabels_size_zero": (
-            "To('/page1/graph1/x')\n"
-            "Set('TickLabels/size', '0pt')\n"
-            "To('/')"
+            "To('/page1/graph1/x')\nSet('TickLabels/size', '0pt')\nTo('/')"
         ),
         "axis_line_width_zero": (
-            "To('/page1/graph1/x')\n"
-            "Set('Line/width', '0pt')\n"
-            "To('/')"
+            "To('/page1/graph1/x')\nSet('Line/width', '0pt')\nTo('/')"
         ),
         "axis_major_tick_width_zero": (
-            "To('/page1/graph1/x')\n"
-            "Set('MajorTicks/width', '0pt')\n"
-            "To('/')"
+            "To('/page1/graph1/x')\nSet('MajorTicks/width', '0pt')\nTo('/')"
         ),
         "axis_major_tick_length_zero": (
-            "To('/page1/graph1/x')\n"
-            "Set('MajorTicks/length', '0pt')\n"
-            "To('/')"
+            "To('/page1/graph1/x')\nSet('MajorTicks/length', '0pt')\nTo('/')"
         ),
         "axis_minor_tick_width_zero": (
-            "To('/page1/graph1/x')\n"
-            "Set('MinorTicks/width', '0pt')\n"
-            "To('/')"
+            "To('/page1/graph1/x')\nSet('MinorTicks/width', '0pt')\nTo('/')"
         ),
         "axis_minor_tick_length_zero": (
-            "To('/page1/graph1/x')\n"
-            "Set('MinorTicks/length', '0pt')\n"
-            "To('/')"
+            "To('/page1/graph1/x')\nSet('MinorTicks/length', '0pt')\nTo('/')"
         ),
     }
     exact_current_attack_documents = {
@@ -2249,12 +2224,10 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
         "Set('Fill/hide', True)\n"
         "To('..')\n"
     )
-    exact_current_attack_documents["unmanaged_line_overlay"] = (
-        document_text.replace(
-            image_command,
-            unmanaged_line + image_command,
-            1,
-        )
+    exact_current_attack_documents["unmanaged_line_overlay"] = document_text.replace(
+        image_command,
+        unmanaged_line + image_command,
+        1,
     )
     background_command = "Add('rect', name='field_colorbar_background'"
     background_start = document_text.find(background_command)
@@ -2432,8 +2405,7 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
             attacked_widgets = attacked_state["widgets"]
             if attack_id == "colorbar_background_deleted":
                 materialized = (
-                    "/page1/graph1/field_colorbar_background"
-                    in baseline_widgets
+                    "/page1/graph1/field_colorbar_background" in baseline_widgets
                     and "/page1/graph1/field_colorbar_background"
                     not in attacked_widgets
                 )
@@ -2460,9 +2432,7 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
                     and baseline_target.get("settings", {}).get(setting_path)
                     != attacked_target.get("settings", {}).get(setting_path)
                 )
-            exact_current_visual_attack_materialization[attack_id] = (
-                materialized
-            )
+            exact_current_visual_attack_materialization[attack_id] = materialized
             verify_rendered_mapping_source_coverage(
                 {
                     **rendered,
@@ -2509,8 +2479,7 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
         and log_x_reference_guide_geometry_correct
         and invalid_scalar_request_results
         and all(invalid_scalar_request_results.values())
-        and set(exact_current_attack_documents)
-        == EXPECTED_SCALAR_VISUAL_ATTACK_IDS
+        and set(exact_current_attack_documents) == EXPECTED_SCALAR_VISUAL_ATTACK_IDS
         and set(exact_current_visual_attack_materialization)
         == EXPECTED_SCALAR_VISUAL_ATTACK_IDS
         and all(exact_current_visual_attack_materialization.values())
@@ -2544,12 +2513,8 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
         "rendered_source_coverage": rendered_source_coverage,
         "direct_label_contract": direct_label_contract,
         "scalar_visual_attack_regression": {
-            "document_only_edit_materialized": (
-                document_only_visual_edit_materialized
-            ),
-            "document_only_edit_rejected": (
-                document_only_visual_edit_rejected
-            ),
+            "document_only_edit_materialized": (document_only_visual_edit_materialized),
+            "document_only_edit_rejected": (document_only_visual_edit_rejected),
             "coordinated_spec_vsz_forgery_materialized": (
                 coordinated_visual_forgery_materialized
             ),
@@ -2567,23 +2532,17 @@ def _scalar_field_render_probe(run_root: Path) -> dict[str, Any]:
                 EXPECTED_SCALAR_VISUAL_ATTACK_IDS
             ),
             "exact_current_attack_id_set_matches": (
-                set(exact_current_attack_documents)
-                == EXPECTED_SCALAR_VISUAL_ATTACK_IDS
+                set(exact_current_attack_documents) == EXPECTED_SCALAR_VISUAL_ATTACK_IDS
             ),
             "exact_current_attack_materialization": (
                 exact_current_visual_attack_materialization
             ),
-            "exact_current_visual_attacks": (
-                exact_current_visual_attack_results
-            ),
+            "exact_current_visual_attacks": (exact_current_visual_attack_results),
         },
         "overlay_order": {
             "colorbar_before_image_in_object_tree": 0 <= colorbar_index < image_index,
             "colorbar_background_between_colorbar_and_image": (
-                0
-                <= colorbar_index
-                < colorbar_background_index
-                < image_index
+                0 <= colorbar_index < colorbar_background_index < image_index
             ),
             "contours_before_image_in_object_tree": 0 <= contour_index < image_index,
         },
@@ -2933,6 +2892,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         from sciplot_core.analysis_contract_probe import (
             run_analysis_contract_probe,
         )
+        from sciplot_core.inspection_contract_probe import (
+            run_inspection_contract_probe,
+        )
         from sciplot_core.semantic_contract_probe import (
             run_semantic_contract_probe,
         )
@@ -2959,6 +2921,17 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 "log domains, and complete in-scope source coverage",
                 semantic_contract_probe.get("status") == "passed",
                 detail=semantic_contract_probe,
+            )
+        )
+        inspection_contract_probe = run_inspection_contract_probe(
+            run_root / "inspection_contract_probe"
+        )
+        checks.append(
+            _check(
+                "inspection_warning_authority",
+                "Ready material rules own presentation warnings without hiding unresolved data risks",
+                inspection_contract_probe.get("status") == "passed",
+                detail=inspection_contract_probe,
             )
         )
 
@@ -3129,6 +3102,22 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 },
             )
         )
+        from sciplot_core.studio_figure_set_probe import (
+            run_studio_figure_set_probe,
+        )
+
+        studio_figure_set_probe = run_studio_figure_set_probe(
+            output_root=run_root / "studio_figure_set",
+        )
+        checks.append(
+            _check(
+                "rheology_frequency_figure_set",
+                "Frequency sweeps create metric-bound independent VSZ files, "
+                "fail closed on missing metrics, and never imply a composite",
+                studio_figure_set_probe.get("status") == "passed",
+                detail=studio_figure_set_probe,
+            )
+        )
         from sciplot_core.canvas_probe import run_canvas_characterization
 
         canvas_characterization = run_canvas_characterization(
@@ -3290,9 +3279,7 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         )
         data_mapping_artifacts = data_mapping_probe.get("artifacts")
         data_mapping_artifacts = (
-            data_mapping_artifacts
-            if isinstance(data_mapping_artifacts, dict)
-            else {}
+            data_mapping_artifacts if isinstance(data_mapping_artifacts, dict) else {}
         )
         canvas_assistant_artifacts = canvas_assistant_probe.get("artifacts")
         canvas_assistant_artifacts = (
@@ -3399,9 +3386,7 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             request_path=request_path,
             document_path=document_path,
             exports=exports,
-            export_document_sha256=str(
-                export_payload["document_sha256"]
-            ),
+            export_document_sha256=str(export_payload["document_sha256"]),
         )
         manifest_path = Path(str(studio_run["manifest"]))
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))

@@ -10,6 +10,9 @@ from PyQt6 import QtCore, QtGui, QtWidgets
 from sciplot_core._utils import existing_file_sha256, json_safe
 from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.studio import (
+    _is_primary_figure_set_export_scope,
+    _studio_figure_set_export_scope,
+    atomic_save_veusz_document,
     export_studio_document,
     publish_standalone_export_receipt,
     publish_studio_export_run,
@@ -37,9 +40,7 @@ def _validate_project_request_pair(
     request_path: Path | None,
 ) -> None:
     if (project_dir is None) != (request_path is None):
-        raise ValueError(
-            "project_dir and request_path must be provided together."
-        )
+        raise ValueError("project_dir and request_path must be provided together.")
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -84,11 +85,7 @@ def _registered_manifest_candidates(
     local_candidates = [
         candidate.resolve()
         for candidate in reversed(
-            sorted(
-                (resolved_project / "runs").glob(
-                    "studio_*/manifest.json"
-                )
-            )
+            sorted((resolved_project / "runs").glob("studio_*/manifest.json"))
         )
     ]
     registered_candidates: list[Path] = []
@@ -272,9 +269,7 @@ def _source_status(
         )
         current_hash = current.get("sha256")
         reference_hash = (
-            reference.get("sha256")
-            if isinstance(reference, dict)
-            else None
+            reference.get("sha256") if isinstance(reference, dict) else None
         )
         if reference_hash and current_hash == reference_hash:
             audit_status = "matches_last_run_lineage"
@@ -306,9 +301,7 @@ def _mapping_application_from_run(
     if isinstance(application, dict):
         return application
     result = (
-        latest_run.get("result")
-        if isinstance(latest_run.get("result"), dict)
-        else {}
+        latest_run.get("result") if isinstance(latest_run.get("result"), dict) else {}
     )
     application = result.get("data_mapping_application")
     return application if isinstance(application, dict) else {}
@@ -321,9 +314,7 @@ def _mapping_coverage_from_run(
     if isinstance(coverage, dict):
         return coverage
     result = (
-        latest_run.get("result")
-        if isinstance(latest_run.get("result"), dict)
-        else {}
+        latest_run.get("result") if isinstance(latest_run.get("result"), dict) else {}
     )
     coverage = result.get("data_mapping_coverage")
     return coverage if isinstance(coverage, dict) else {}
@@ -441,8 +432,7 @@ def _mapping_status(
     elif not application_matches:
         status = "unverified"
         reason = (
-            "Current-run coverage is not bound to the current "
-            "data_mapping_application."
+            "Current-run coverage is not bound to the current data_mapping_application."
         )
     else:
         status = "unverified"
@@ -484,9 +474,7 @@ def _export_records(
         requested = evidence.get("requested_formats")
     else:
         result = (
-            evidence.get("result")
-            if isinstance(evidence.get("result"), dict)
-            else {}
+            evidence.get("result") if isinstance(evidence.get("result"), dict) else {}
         )
         records = result.get("exports")
         if not isinstance(records, list):
@@ -577,46 +565,30 @@ def _verify_export_artifacts(
         try:
             artifact_path = artifact_path.resolve()
         except (OSError, RuntimeError, ValueError) as exc:
-            issues.append(
-                f"Export record {index + 1} path is invalid: {exc}"
-            )
+            issues.append(f"Export record {index + 1} path is invalid: {exc}")
             continue
         if evidence_root is None or not _is_within(
             artifact_path,
             evidence_root,
         ):
             issues.append(
-                f"Export artifact is outside the evidence directory: "
-                f"{artifact_path}"
+                f"Export artifact is outside the evidence directory: {artifact_path}"
             )
             continue
         if export_format in seen_formats:
-            issues.append(
-                f"Duplicate export format record: {export_format}"
-            )
+            issues.append(f"Duplicate export format record: {export_format}")
         if artifact_path in seen_paths:
-            issues.append(
-                f"Duplicate export artifact path: {artifact_path}"
-            )
+            issues.append(f"Duplicate export artifact path: {artifact_path}")
         seen_formats.add(export_format)
         seen_paths.add(artifact_path)
         qa_binding = qa_hashes_by_path.get(artifact_path)
-        if (
-            qa_binding is not None
-            and qa_binding[0] != export_format
-        ):
+        if qa_binding is not None and qa_binding[0] != export_format:
             issues.append(
-                f"Artifact QA format does not match export record: "
-                f"{artifact_path}"
+                f"Artifact QA format does not match export record: {artifact_path}"
             )
-        if (
-            recorded_hash
-            and qa_binding is not None
-            and qa_binding[1] != recorded_hash
-        ):
+        if recorded_hash and qa_binding is not None and qa_binding[1] != recorded_hash:
             issues.append(
-                f"Artifact QA hash does not match export record: "
-                f"{artifact_path}"
+                f"Artifact QA hash does not match export record: {artifact_path}"
             )
         expected_hash = recorded_hash or (
             qa_binding[1] if qa_binding is not None else ""
@@ -672,9 +644,7 @@ def _verify_export_artifacts(
             )
     missing_formats = sorted(required_formats - verified_formats)
     if missing_formats:
-        issues.append(
-            "Missing current export formats: " + ", ".join(missing_formats)
-        )
+        issues.append("Missing current export formats: " + ", ".join(missing_formats))
     current = bool(records and not issues)
     return {
         "status": "passed" if current else "failed",
@@ -708,9 +678,7 @@ def _standalone_qa_report_current(
         recorded = _read_json(candidate)
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError):
         return False
-    return _canonical_json_sha256(recorded) == _canonical_json_sha256(
-        embedded_qa
-    )
+    return _canonical_json_sha256(recorded) == _canonical_json_sha256(embedded_qa)
 
 
 def _qa_display_status(
@@ -804,13 +772,9 @@ def _qa_status(
         else True
     )
     evidence_artifacts_current = bool(
-        export_artifacts["current"] is True
-        and qa_report_current
+        export_artifacts["current"] is True and qa_report_current
     )
-    current_document = bool(
-        document_hash_current
-        and evidence_artifacts_current
-    )
+    current_document = bool(document_hash_current and evidence_artifacts_current)
     status, artifact_qa_current = _qa_display_status(
         artifact_status=artifact_status,
         ready=bool(ready),
@@ -837,23 +801,19 @@ def _qa_status(
 def _project_audit_state(status: dict[str, Any]) -> str:
     if status.get("mode") != "project":
         return "not_applicable"
-    source = (
-        status.get("source")
-        if isinstance(status.get("source"), dict)
-        else {}
-    )
-    mapping = (
-        status.get("mapping")
-        if isinstance(status.get("mapping"), dict)
-        else {}
-    )
+    if status.get("document_scope") == "project_secondary_standalone_receipt":
+        return "not_applicable"
+    source = status.get("source") if isinstance(status.get("source"), dict) else {}
+    mapping = status.get("mapping") if isinstance(status.get("mapping"), dict) else {}
     provenance = (
-        status.get("provenance")
-        if isinstance(status.get("provenance"), dict)
-        else {}
+        status.get("provenance") if isinstance(status.get("provenance"), dict) else {}
     )
     if provenance.get("full_project_evidence_current") is True:
         return "current"
+    if provenance.get("primary_figure_evidence_current") is True:
+        return "current_primary_figure"
+    if provenance.get("delivery_scope_known") is not True:
+        return "blocked"
     source_audit = str(source.get("audit_status") or "")
     mapping_status = str(mapping.get("status") or "")
     if source_audit == "audit_failed" or mapping_status in {
@@ -876,15 +836,9 @@ def _workflow_status(
         message = "Saving and validating the exact-current Veusz document."
     else:
         document = (
-            status.get("document")
-            if isinstance(status.get("document"), dict)
-            else {}
+            status.get("document") if isinstance(status.get("document"), dict) else {}
         )
-        qa = (
-            status.get("qa")
-            if isinstance(status.get("qa"), dict)
-            else {}
-        )
+        qa = status.get("qa") if isinstance(status.get("qa"), dict) else {}
         provenance = (
             status.get("provenance")
             if isinstance(status.get("provenance"), dict)
@@ -894,7 +848,12 @@ def _workflow_status(
             qa.get("artifact_qa_current") is True
             and (
                 status.get("mode") == "standalone_vsz"
-                or provenance.get("project_delivery_current") is True
+                or status.get("document_scope")
+                == "project_secondary_standalone_receipt"
+                or (
+                    provenance.get("project_delivery_current") is True
+                    and provenance.get("delivery_scope_known") is True
+                )
             )
         )
         if result_ready:
@@ -957,11 +916,12 @@ def _result_targets(
         )
         if candidate is not None and candidate.is_file():
             pdf_path = candidate
-            pdf_sha256 = str(
-                record.get("expected_sha256")
-                or record.get("actual_sha256")
-                or ""
-            ).strip() or None
+            pdf_sha256 = (
+                str(
+                    record.get("expected_sha256") or record.get("actual_sha256") or ""
+                ).strip()
+                or None
+            )
             break
 
     delivery_root: Path | None = None
@@ -988,51 +948,31 @@ def _result_targets(
         "pdf": {
             "path": str(pdf_path) if pdf_path is not None else None,
             "evidence_root": (
-                str(evidence_root)
-                if evidence_root is not None
-                else None
+                str(evidence_root) if evidence_root is not None else None
             ),
             "sha256": pdf_sha256,
             "current": bool(
-                pdf_path is not None
-                and qa.get("artifact_qa_current") is True
+                pdf_path is not None and qa.get("artifact_qa_current") is True
             ),
             "available": False,
         },
         "delivery": {
-            "path": (
-                str(delivery_root)
-                if delivery_root is not None
-                else None
-            ),
+            "path": (str(delivery_root) if delivery_root is not None else None),
             "evidence_root": (
-                str(evidence_root)
-                if evidence_root is not None
-                else None
+                str(evidence_root) if evidence_root is not None else None
             ),
             "current": delivery_root is not None,
             "available": False,
         },
         "vsz": {
-            "path": (
-                str(document_path)
-                if document_path is not None
-                else None
-            ),
+            "path": (str(document_path) if document_path is not None else None),
             "reveal_path": (
-                str(document_path.parent)
-                if document_path is not None
-                else None
+                str(document_path.parent) if document_path is not None else None
             ),
             "evidence_root": (
-                str(document_path.parent)
-                if document_path is not None
-                else None
+                str(document_path.parent) if document_path is not None else None
             ),
-            "current": bool(
-                document_path is not None
-                and document_path.is_file()
-            ),
+            "current": bool(document_path is not None and document_path.is_file()),
             "available": False,
         },
     }
@@ -1046,11 +986,7 @@ def _finalize_status(
     updated = dict(status)
     workflow = _workflow_status(updated, exporting=exporting)
     updated["workflow"] = workflow
-    results = (
-        updated.get("results")
-        if isinstance(updated.get("results"), dict)
-        else {}
-    )
+    results = updated.get("results") if isinstance(updated.get("results"), dict) else {}
     finalized_results: dict[str, Any] = {}
     for key in ("pdf", "delivery", "vsz"):
         target = (
@@ -1064,11 +1000,7 @@ def _finalize_status(
         target["available"] = bool(
             not exporting
             and target.get("current") is True
-            and (
-                target.get("reveal_path")
-                if key == "vsz"
-                else target.get("path")
-            )
+            and (target.get("reveal_path") if key == "vsz" else target.get("path"))
         )
         finalized_results[key] = target
     updated["results"] = finalized_results
@@ -1094,9 +1026,7 @@ def _live_document_payload(
         "saved_sha256": saved_sha256,
         "live_render_sha256": render_sha256,
         "hash_scope": (
-            "saved_vsz_and_exact_current_render"
-            if render_sha256
-            else "saved_vsz_only"
+            "saved_vsz_and_exact_current_render" if render_sha256 else "saved_vsz_only"
         ),
     }
 
@@ -1234,6 +1164,8 @@ def _provenance_status(
     mapping: dict[str, Any],
     qa: dict[str, Any],
     source: dict[str, Any],
+    figure_set_export_scope: object = None,
+    figure_set_scope_status: str = "unknown",
 ) -> dict[str, Any]:
     evidence_root = latest_path.parent if latest_path is not None else None
     raw_archive_current = bool(
@@ -1269,15 +1201,27 @@ def _provenance_status(
         "not_applied",
         "verified",
     }
-    source_current = (
-        source.get("audit_status") == "matches_last_run_lineage"
-    )
-    full_project_evidence_current = bool(
+    source_current = source.get("audit_status") == "matches_last_run_lineage"
+    current_evidence = bool(
         run_evidence_complete
         and source_current
         and mapping_current
         and qa.get("artifact_qa_current") is True
     )
+    normalized_figure_scope = (
+        dict(figure_set_export_scope)
+        if _is_primary_figure_set_export_scope(figure_set_export_scope)
+        else None
+    )
+    primary_only_scope = bool(
+        normalized_figure_scope is not None
+        and figure_set_scope_status
+        in {"persisted", "recomputed_current_project"}
+    )
+    full_project_scope = figure_set_scope_status == "not_applicable"
+    delivery_scope_known = bool(primary_only_scope or full_project_scope)
+    primary_figure_evidence_current = bool(current_evidence and primary_only_scope)
+    full_project_evidence_current = bool(current_evidence and full_project_scope)
     audit_pending = bool(
         source.get("audit_status") == "not_computed"
         or mapping.get("status") == "audit_pending"
@@ -1286,17 +1230,34 @@ def _provenance_status(
         run_evidence_complete
         and qa.get("artifact_qa_current") is True
         and audit_pending
+        and delivery_scope_known
     )
     return {
         "status": (
-            "current_full_project_evidence"
+            "unknown_or_incomplete_figure_set_scope"
+            if not delivery_scope_known
+            else "current_full_project_evidence"
             if full_project_evidence_current
+            else "current_primary_figure_evidence"
+            if primary_figure_evidence_current
             else "audit_pending_for_current_project"
             if current_result_awaiting_audit
             else "incomplete_or_stale_project_evidence"
         ),
         "complete": full_project_evidence_current,
         "full_project_evidence_current": full_project_evidence_current,
+        "primary_figure_evidence_current": primary_figure_evidence_current,
+        "figure_set_export_scope": json_safe(normalized_figure_scope),
+        "figure_set_export_scope_status": figure_set_scope_status,
+        "delivery_scope_known": delivery_scope_known,
+        "delivery_scope": (
+            "primary_figure_project_delivery"
+            if primary_only_scope
+            else "project_delivery"
+            if full_project_scope
+            else "unknown"
+        ),
+        "full_figure_set_delivery_complete": (False if primary_only_scope else None),
         "audit_pending": current_result_awaiting_audit,
         "run_evidence_complete": run_evidence_complete,
         "request_snapshot_current": latest_path is not None,
@@ -1305,22 +1266,68 @@ def _provenance_status(
         "mapping_current": mapping_current,
         "transform_status": transform_status,
         "raw_archive": (
-            str(raw_archive_path)
-            if raw_archive_path is not None
-            else None
+            str(raw_archive_path) if raw_archive_path is not None else None
         ),
         "raw_archive_current": raw_archive_current,
         "package_complete": (
-            isinstance(package, dict)
-            and package.get("complete") is True
+            isinstance(package, dict) and package.get("complete") is True
         ),
         "package_current": package_current,
         "project_delivery_complete": (
-            isinstance(delivery, dict)
-            and delivery.get("complete") is True
+            isinstance(delivery, dict) and delivery.get("complete") is True
         ),
         "project_delivery_current": delivery_current,
+        "primary_figure_delivery_current": bool(
+            delivery_current and primary_only_scope
+        ),
+        "full_project_delivery_current": bool(
+            delivery_current and full_project_scope
+        ),
     }
+
+
+def _resolve_figure_set_export_scope(
+    *,
+    project_dir: Path,
+    request: dict[str, Any],
+    latest_run: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str]:
+    persisted_present = "figure_set_export_scope" in latest_run
+    persisted = latest_run.get("figure_set_export_scope")
+    if _is_primary_figure_set_export_scope(persisted):
+        return dict(persisted), "persisted"
+
+    try:
+        recomputed = _studio_figure_set_export_scope(
+            project_dir,
+            request=request,
+        )
+    except Exception:
+        recomputed = None
+    if _is_primary_figure_set_export_scope(recomputed):
+        return dict(recomputed), "recomputed_current_project"
+
+    delivery = (
+        latest_run.get("delivery_package")
+        if isinstance(latest_run.get("delivery_package"), dict)
+        else {}
+    )
+    package = (
+        latest_run.get("package_contract")
+        if isinstance(latest_run.get("package_contract"), dict)
+        else {}
+    )
+    figure_set_indicated = bool(
+        persisted_present
+        or (project_dir / "studio" / "figure_set.json").exists()
+        or delivery.get("scope") == "primary_figure_project_delivery"
+        or package.get("full_figure_set_complete") is False
+    )
+    return (
+        (None, "unknown_or_incomplete")
+        if figure_set_indicated
+        else (None, "not_applicable")
+    )
 
 
 def build_studio_project_status(
@@ -1343,9 +1350,7 @@ def build_studio_project_status(
     modified = live_document["modified"] is True
     if project_dir is None:
         receipt_path = (
-            resolved_document.parent
-            / "exports"
-            / "standalone_export_receipt.json"
+            resolved_document.parent / "exports" / "standalone_export_receipt.json"
         )
         try:
             receipt = _read_json(receipt_path) if receipt_path.is_file() else {}
@@ -1354,11 +1359,7 @@ def build_studio_project_status(
         qa = _qa_status(
             evidence=receipt,
             evidence_path=receipt_path if receipt else None,
-            saved_sha256=(
-                str(saved_sha256)
-                if isinstance(saved_sha256, str)
-                else None
-            ),
+            saved_sha256=(str(saved_sha256) if isinstance(saved_sha256, str) else None),
             modified=modified,
             standalone=True,
         )
@@ -1409,6 +1410,74 @@ def build_studio_project_status(
         request_error: str | None = str(exc)
     else:
         request_error = None
+    canonical_primary = (resolved_project / "studio" / "document.vsz").resolve()
+    if resolved_document != canonical_primary:
+        receipt_path = (
+            resolved_document.parent
+            / "exports"
+            / resolved_document.stem
+            / "standalone_export_receipt.json"
+        )
+        try:
+            receipt = _read_json(receipt_path) if receipt_path.is_file() else {}
+        except (OSError, ValueError, json.JSONDecodeError):
+            receipt = {}
+        qa = _qa_status(
+            evidence=receipt,
+            evidence_path=receipt_path if receipt else None,
+            saved_sha256=(str(saved_sha256) if isinstance(saved_sha256, str) else None),
+            modified=modified,
+            standalone=True,
+        )
+        status = {
+            "kind": "sciplot_studio_project_status",
+            "version": 1,
+            "mode": "project",
+            "document_scope": "project_secondary_standalone_receipt",
+            "project": {
+                "name": (project_manifest.get("project_name") or resolved_project.name),
+                "path": str(resolved_project),
+                "request": str(resolved_request),
+                "request_status": "invalid" if request_error else "loaded",
+                "request_error": request_error,
+                "request_snapshot_current": False,
+                "evidence_run": None,
+                "rule_id": request.get("rule_id"),
+                "template": request.get("template"),
+            },
+            "document": live_document,
+            "source": {
+                "status": "not_established_for_secondary_receipt",
+                "path": None,
+                "exists": False,
+                "audit_status": "not_available",
+                "reason": (
+                    "This secondary figure uses a standalone exact-current "
+                    "receipt; it does not extend the primary project receipt's "
+                    "raw-source or transform-lineage claim."
+                ),
+            },
+            "mapping": {
+                "status": "unavailable_for_secondary_receipt",
+                "coverage_status": "unavailable",
+            },
+            "provenance": {
+                "status": "secondary_standalone_receipt_only",
+                "complete": False,
+                "full_project_evidence_current": False,
+                "primary_figure_evidence_current": False,
+                "project_delivery_complete": False,
+                "project_delivery_current": False,
+                "standalone_receipt_current": (qa.get("artifact_qa_current") is True),
+            },
+            "qa": qa,
+            "results": _result_targets(
+                live_document=live_document,
+                qa=qa,
+                evidence_path=receipt_path if receipt else None,
+            ),
+        }
+        return _finalize_status(status)
     if request_error is None:
         latest_path, latest_run = _latest_project_run(
             resolved_project,
@@ -1420,11 +1489,7 @@ def build_studio_project_status(
     qa = _qa_status(
         evidence=latest_run,
         evidence_path=latest_path,
-        saved_sha256=(
-            str(saved_sha256)
-            if isinstance(saved_sha256, str)
-            else None
-        ),
+        saved_sha256=(str(saved_sha256) if isinstance(saved_sha256, str) else None),
         modified=modified,
         standalone=False,
     )
@@ -1466,9 +1531,7 @@ def build_studio_project_status(
         raw_archive_path = _request_path_value(
             raw_archive.get("path"),
             base_dir=(
-                latest_path.parent
-                if latest_path is not None
-                else resolved_project
+                latest_path.parent if latest_path is not None else resolved_project
             ),
         )
     except (OSError, RuntimeError, ValueError):
@@ -1496,6 +1559,13 @@ def build_studio_project_status(
         ),
         "effective_input": mapping.get("effective_input"),
     }
+    figure_set_export_scope, figure_set_scope_status = (
+        _resolve_figure_set_export_scope(
+            project_dir=resolved_project,
+            request=request,
+            latest_run=latest_run,
+        )
+    )
     provenance = _provenance_status(
         latest_path=latest_path,
         transform_status=transform_status,
@@ -1505,26 +1575,21 @@ def build_studio_project_status(
         mapping=mapping,
         qa=qa,
         source=source,
+        figure_set_export_scope=figure_set_export_scope,
+        figure_set_scope_status=figure_set_scope_status,
     )
     status = {
         "kind": "sciplot_studio_project_status",
         "version": 1,
         "mode": "project",
         "project": {
-            "name": (
-                project_manifest.get("project_name")
-                or resolved_project.name
-            ),
+            "name": (project_manifest.get("project_name") or resolved_project.name),
             "path": str(resolved_project),
             "request": str(resolved_request),
             "request_status": "invalid" if request_error else "loaded",
             "request_error": request_error,
             "request_snapshot_current": latest_path is not None,
-            "evidence_run": (
-                str(latest_path)
-                if latest_path is not None
-                else None
-            ),
+            "evidence_run": (str(latest_path) if latest_path is not None else None),
             "rule_id": request.get("rule_id"),
             "template": request.get("template"),
         },
@@ -1538,8 +1603,9 @@ def build_studio_project_status(
             qa=qa,
             evidence_path=latest_path,
             delivery=delivery,
-            delivery_current=(
+            delivery_current=bool(
                 provenance.get("project_delivery_current") is True
+                and provenance.get("delivery_scope_known") is True
             ),
         ),
     }
@@ -1569,12 +1635,30 @@ def export_result_message(
             if isinstance(payload.get("studio_run"), dict)
             else {}
         )
+        figure_scope = (
+            payload.get("figure_set_export_scope")
+            if isinstance(payload.get("figure_set_export_scope"), dict)
+            else {}
+        )
+        scope_note = (
+            "\n\nFigure set: only the primary G-prime document is bound "
+            "to this receipt; registered secondary VSZ files remain saved "
+            "but unpublished."
+            if figure_scope.get("status") == "primary_exact_current_only"
+            else ""
+        )
+        delivery_summary = (
+            "PDF/TIFF, QA, and the primary-figure scoped portable delivery passed."
+            if payload.get("scope") == "primary_figure_project_delivery"
+            else "PDF/TIFF, QA, and the portable project delivery passed."
+        )
         return (
             "information",
             "SciPlot project export",
-            "PDF/TIFF, QA, and the portable project delivery passed.\n\n"
+            f"{delivery_summary}\n\n"
             f"Review: {run.get('review_html')}\n"
-            f"Output: {run.get('output')}",
+            f"Output: {run.get('output')}"
+            f"{scope_note}",
         )
     evidence = (
         payload.get("standalone_export")
@@ -1618,8 +1702,15 @@ def _status_text(status: dict[str, Any]) -> str:
         else _workflow_status(status)
     )
     project = status.get("project")
+    mode_label = (
+        "Project secondary — standalone exact-current receipt"
+        if status.get("document_scope") == "project_secondary_standalone_receipt"
+        else "Project package"
+        if status["mode"] == "project"
+        else "Standalone VSZ"
+    )
     lines = [
-        f"Mode: {'Project package' if status['mode'] == 'project' else 'Standalone VSZ'}",
+        f"Mode: {mode_label}",
         f"Result: {workflow.get('state')} — {workflow.get('message')}",
         f"Audit: {workflow.get('audit_state')}",
     ]
@@ -1679,17 +1770,15 @@ class StudioProjectBridge(QtCore.QObject):
         self.plot = window.plot
         self.document_path = document_path.expanduser().resolve()
         self.project_dir = (
-            project_dir.expanduser().resolve()
-            if project_dir is not None
-            else None
+            project_dir.expanduser().resolve() if project_dir is not None else None
         )
         self.request_path = (
-            request_path.expanduser().resolve()
-            if request_path is not None
-            else None
+            request_path.expanduser().resolve() if request_path is not None else None
         )
         self.status_snapshot: dict[str, Any] = {}
         self._exporting = False
+        self.export_action: QtGui.QAction | None = None
+        self._bound_assistant_ids: set[int] = set()
         self.dock = self._build_dock()
         self.dock.hide()
         self.window.addDockWidget(
@@ -1700,6 +1789,11 @@ class StudioProjectBridge(QtCore.QObject):
         self.dock.visibilityChanged.connect(self._dock_visibility_changed)
         self.refresh_button.clicked.connect(self.refresh_full)
         self.export_button.clicked.connect(self.export_current_document)
+        self.figure_list.itemDoubleClicked.connect(
+            lambda _item: self.open_selected_figure()
+        )
+        self.figure_list.currentItemChanged.connect(self._figure_selection_changed)
+        self.open_figure_button.clicked.connect(self.open_selected_figure)
         self.open_pdf_button.clicked.connect(self.open_current_pdf)
         self.show_delivery_button.clicked.connect(self.show_current_delivery)
         self.reveal_vsz_button.clicked.connect(self.reveal_current_vsz)
@@ -1708,6 +1802,140 @@ class StudioProjectBridge(QtCore.QObject):
     @property
     def mode(self) -> str:
         return "project" if self.project_dir is not None else "standalone_vsz"
+
+    def _window_document_path(self) -> Path | None:
+        filename = str(getattr(self.window, "filename", "") or "").strip()
+        if not filename:
+            return None
+        try:
+            return Path(filename).expanduser().resolve()
+        except (OSError, RuntimeError, ValueError):
+            return None
+
+    def _document_context_blocker(self) -> str | None:
+        current = self._window_document_path()
+        if current == self.document_path:
+            return None
+        current_label = str(current) if current is not None else "an unsaved document"
+        return (
+            "This Veusz window now points to "
+            f"{current_label}, but SciPlot Project remains bound to "
+            f"{self.document_path}. Close this window and reopen the new VSZ "
+            "so SciPlot can bind a fresh exact-current project context. The "
+            "old project path will not be overwritten."
+        )
+
+    def _document_context_status(self, message: str) -> dict[str, Any]:
+        status = dict(self.status_snapshot)
+        workflow = (
+            dict(status.get("workflow"))
+            if isinstance(status.get("workflow"), dict)
+            else {}
+        )
+        workflow.update(
+            {
+                "state": "document_context_changed",
+                "audit_state": "blocked",
+                "result_ready": False,
+                "ready_to_use": False,
+                "message": (
+                    "The Veusz document context changed. Reopen this VSZ before "
+                    "using prior results or exporting."
+                ),
+            }
+        )
+        qa = dict(status.get("qa")) if isinstance(status.get("qa"), dict) else {}
+        for key in tuple(qa):
+            if key == "current" or key.endswith("_current"):
+                qa[key] = False
+        qa.update(
+            {
+                "status": "stale_for_document_context",
+                "ready_to_use": False,
+                "current_document": False,
+                "document_hash_current": False,
+                "artifact_qa_current": False,
+                "exports_current": False,
+                "qa_report_current": False,
+                "state": "document_context_changed",
+            }
+        )
+        provenance = (
+            dict(status.get("provenance"))
+            if isinstance(status.get("provenance"), dict)
+            else {}
+        )
+        for key in tuple(provenance):
+            if (
+                key == "current"
+                or key == "complete"
+                or key.endswith("_current")
+                or key.endswith("_complete")
+            ):
+                provenance[key] = False
+        provenance.update(
+            {
+                "status": "document_context_changed",
+                "complete": False,
+                "full_project_evidence_current": False,
+                "primary_figure_evidence_current": False,
+                "project_delivery_current": False,
+                "delivery_scope_known": False,
+            }
+        )
+        results = (
+            dict(status.get("results"))
+            if isinstance(status.get("results"), dict)
+            else {}
+        )
+        for key, value in tuple(results.items()):
+            target = dict(value) if isinstance(value, dict) else {}
+            target["current"] = False
+            target["available"] = False
+            results[key] = target
+        project = (
+            dict(status.get("project"))
+            if isinstance(status.get("project"), dict)
+            else status.get("project")
+        )
+        if isinstance(project, dict):
+            project["request_snapshot_current"] = False
+        status.update(
+            {
+                "kind": "sciplot_studio_project_status",
+                "version": 1,
+                "mode": self.mode,
+                "state": "document_context_changed",
+                "ready_to_use": False,
+                "workflow": workflow,
+                "project": project,
+                "qa": qa,
+                "provenance": provenance,
+                "results": results,
+                "document_context": {
+                    "state": "document_context_changed",
+                    "bound_document": str(self.document_path),
+                    "window_document": (
+                        str(self._window_document_path())
+                        if self._window_document_path() is not None
+                        else None
+                    ),
+                    "message": message,
+                },
+            }
+        )
+        return status
+
+    def handle_document_context_changed(self) -> dict[str, Any] | None:
+        message = self._document_context_blocker()
+        if message is None:
+            return None
+        status = self._document_context_status(message)
+        self._publish_status(status)
+        self.status_view.setPlainText(
+            f"{_status_text(status)}\n\nDocument context changed: {message}"
+        )
+        return status
 
     def _build_dock(self) -> QtWidgets.QDockWidget:
         dock = QtWidgets.QDockWidget("SciPlot Project", self.window)
@@ -1727,6 +1955,25 @@ class StudioProjectBridge(QtCore.QObject):
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
+
+        self.figure_group = QtWidgets.QGroupBox("Figures")
+        figure_layout = QtWidgets.QVBoxLayout(self.figure_group)
+        self.figure_list = QtWidgets.QListWidget()
+        self.figure_list.setObjectName("sciplotStudioFigureList")
+        self.figure_list.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.SingleSelection
+        )
+        self.figure_list.setMinimumHeight(0)
+        self.figure_list.setMaximumHeight(60)
+        self.open_figure_button = QtWidgets.QPushButton("Open selected figure")
+        self.open_figure_button.setToolTip(
+            "Open the selected independent single-page VSZ in another "
+            "integrated SciPlot Veusz window."
+        )
+        figure_layout.addWidget(self.figure_list)
+        figure_layout.addWidget(self.open_figure_button)
+        self.figure_group.hide()
+        layout.addWidget(self.figure_group)
 
         self.status_view = QtWidgets.QPlainTextEdit()
         self.status_view.setReadOnly(True)
@@ -1772,8 +2019,7 @@ class StudioProjectBridge(QtCore.QObject):
                 return None
             normalized = str(digest or "").strip().casefold()
             if len(normalized) == 64 and all(
-                character in "0123456789abcdef"
-                for character in normalized
+                character in "0123456789abcdef" for character in normalized
             ):
                 return normalized
         # The native plot pixmap can lag the Veusz document queue. Without the
@@ -1782,39 +2028,232 @@ class StudioProjectBridge(QtCore.QObject):
 
     def _publish_status(self, status: dict[str, Any]) -> dict[str, Any]:
         self.status_snapshot = status
+        self._populate_figure_list()
         self.status_view.setPlainText(_status_text(status))
         self._update_controls(status)
         self.statusChanged.emit(status)
         return status
 
+    def bind_export_action(self, action: QtGui.QAction) -> None:
+        self.export_action = action
+        self._update_controls(self.status_snapshot)
+
+    def bind_assistant(self, assistant: Any) -> None:
+        identity = id(assistant)
+        if identity in self._bound_assistant_ids:
+            return
+        self._bound_assistant_ids.add(identity)
+        runner = getattr(assistant, "runner", None)
+        active_changed = getattr(runner, "activeChanged", None)
+        if active_changed is not None:
+            active_changed.connect(self._assistant_state_changed)
+        for name in (
+            "requestSubmitted",
+            "proposalReady",
+            "proposalApplied",
+            "requestRejected",
+        ):
+            signal = getattr(assistant, name, None)
+            if signal is not None:
+                signal.connect(self._assistant_state_changed)
+        self._assistant_state_changed()
+
+    @QtCore.pyqtSlot()
+    @QtCore.pyqtSlot(bool)
+    @QtCore.pyqtSlot(object)
+    @QtCore.pyqtSlot(str)
+    def _assistant_state_changed(self, _value: object = None) -> None:
+        try:
+            self._update_controls(self.status_snapshot)
+        except RuntimeError:
+            pass
+
+    def _figure_set_entries(self) -> list[dict[str, Any]]:
+        if self.project_dir is None:
+            return []
+        registry_path = self.project_dir / "studio" / "figure_set.json"
+        try:
+            registry = _read_json(registry_path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            return []
+        if registry.get("kind") != "sciplot_studio_figure_set":
+            return []
+        studio_root = (self.project_dir / "studio").resolve()
+        primary_figure_id = str(registry.get("primary_figure_id") or "").strip()
+        entries: list[dict[str, Any]] = []
+        for value in registry.get("figures", []):
+            if not isinstance(value, dict):
+                continue
+            figure_id = str(value.get("figure_id") or "").strip()
+            if (
+                not figure_id
+                or Path(figure_id).name != figure_id
+                or figure_id in {".", ".."}
+            ):
+                continue
+            document = (
+                studio_root / "document.vsz"
+                if figure_id == primary_figure_id
+                else studio_root / "figures" / f"{figure_id}.vsz"
+            ).resolve()
+            entries.append({**value, "document": str(document)})
+        return sorted(
+            entries,
+            key=lambda item: (
+                int(item.get("order") or 0),
+                str(item.get("figure_id") or ""),
+            ),
+        )
+
+    def _populate_figure_list(self) -> None:
+        entries = self._figure_set_entries()
+        selected_path = None
+        selected = self.figure_list.currentItem()
+        if selected is not None:
+            selected_path = selected.data(QtCore.Qt.ItemDataRole.UserRole)
+        self.figure_list.clear()
+        current_item: QtWidgets.QListWidgetItem | None = None
+        restored_item: QtWidgets.QListWidgetItem | None = None
+        for entry in entries:
+            title = str(entry.get("title") or entry.get("figure_id") or "Figure")
+            status = str(entry.get("status") or "unavailable")
+            suffix = "" if status == "ready" else f" — {status}"
+            item = QtWidgets.QListWidgetItem(f"{title}{suffix}")
+            document = str(entry["document"])
+            item.setData(QtCore.Qt.ItemDataRole.UserRole, document)
+            item.setData(QtCore.Qt.ItemDataRole.UserRole + 1, status)
+            if status != "ready" or not Path(document).is_file():
+                item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEnabled)
+                unavailable = entry.get("unavailable")
+                if isinstance(unavailable, dict):
+                    item.setToolTip(str(unavailable.get("message") or status))
+            elif Path(document).resolve() == self.document_path:
+                current_item = item
+                item.setText(f"{title} (current)")
+            if document == selected_path:
+                restored_item = item
+            self.figure_list.addItem(item)
+        self.figure_group.setVisible(bool(entries))
+        chosen = restored_item or current_item
+        if chosen is not None:
+            self.figure_list.setCurrentItem(chosen)
+        enabled = bool(
+            chosen is not None
+            and chosen.data(QtCore.Qt.ItemDataRole.UserRole + 1) == "ready"
+        )
+        self.open_figure_button.setEnabled(enabled)
+
+    def _figure_selection_changed(self, current: Any, _previous: Any) -> None:
+        self.open_figure_button.setEnabled(
+            bool(
+                not self._exporting
+                and self._document_context_blocker() is None
+                and current is not None
+                and current.data(QtCore.Qt.ItemDataRole.UserRole + 1) == "ready"
+            )
+        )
+
+    @QtCore.pyqtSlot()
+    def open_selected_figure(self) -> bool:
+        item = self.figure_list.currentItem()
+        if item is None:
+            return False
+        value = item.data(QtCore.Qt.ItemDataRole.UserRole)
+        if not isinstance(value, str) or not value.strip():
+            return False
+        document = Path(value).expanduser().resolve()
+        if (
+            item.data(QtCore.Qt.ItemDataRole.UserRole + 1) != "ready"
+            or not document.is_file()
+        ):
+            QtWidgets.QMessageBox.warning(
+                self.window,
+                "SciPlot figure unavailable",
+                "This planned metric has no valid saved VSZ. SciPlot did not "
+                "substitute another metric.",
+            )
+            return False
+        if document == self.document_path:
+            self.window.raise_()
+            self.window.activateWindow()
+            return True
+        created = type(self.window).CreateWindow(str(document))
+        return created is not None
+
     def _update_controls(self, status: dict[str, Any]) -> None:
         workflow = (
-            status.get("workflow")
-            if isinstance(status.get("workflow"), dict)
-            else {}
+            status.get("workflow") if isinstance(status.get("workflow"), dict) else {}
         )
-        exporting = bool(
-            self._exporting or workflow.get("state") == "exporting"
+        exporting = bool(self._exporting or workflow.get("state") == "exporting")
+        context_blocker = self._document_context_blocker()
+        context_changed = context_blocker is not None
+        self.refresh_button.setEnabled(not exporting and not context_changed)
+        figure_blocker = self._figure_set_export_blocker()
+        assistant_blocker = self._assistant_export_blocker()
+        export_blocker = context_blocker or figure_blocker or assistant_blocker
+        export_tooltip_blocker = (
+            "An exact-current export is already in progress."
+            if exporting
+            else export_blocker
         )
-        self.refresh_button.setEnabled(not exporting)
-        self.export_button.setEnabled(not exporting)
+        export_enabled = bool(not exporting and export_blocker is None)
+        self.export_button.setEnabled(export_enabled)
+        self.figure_list.setEnabled(not exporting and not context_changed)
+        selected_figure = self.figure_list.currentItem()
+        self.open_figure_button.setEnabled(
+            bool(
+                not exporting
+                and not context_changed
+                and selected_figure is not None
+                and selected_figure.data(QtCore.Qt.ItemDataRole.UserRole + 1)
+                == "ready"
+            )
+        )
+        if self.export_action is not None:
+            self.export_action.setEnabled(export_enabled)
+            self.export_action.setToolTip(
+                export_tooltip_blocker
+                or "Save the current Veusz document, export PDF/TIFF, and run "
+                "SciPlot artifact QA."
+            )
+        if self._figure_set_entries():
+            if self._figure_set_export_scope() == "standalone":
+                self.export_button.setText("Save && Export this figure")
+                self.export_button.setToolTip(
+                    export_tooltip_blocker
+                    or "Export this independent secondary VSZ with its own "
+                    "standalone exact-current PDF/TIFF receipt. It will not "
+                    "modify the primary G-prime project receipt."
+                )
+            else:
+                self.export_button.setText("Save && Export primary G′")
+                self.export_button.setToolTip(
+                    export_tooltip_blocker
+                    or "Export the primary G-prime document and publish the "
+                    "project delivery receipt."
+                )
+        else:
+            self.export_button.setText("Save && Export PDF/TIFF")
+            self.export_button.setToolTip(
+                export_tooltip_blocker
+                or "Save the current Veusz document, export PDF/TIFF, and run "
+                "SciPlot artifact QA."
+            )
         results = (
-            status.get("results")
-            if isinstance(status.get("results"), dict)
-            else {}
+            status.get("results") if isinstance(status.get("results"), dict) else {}
         )
         for key, button in (
             ("pdf", self.open_pdf_button),
             ("delivery", self.show_delivery_button),
             ("vsz", self.reveal_vsz_button),
         ):
-            target = (
-                results.get(key)
-                if isinstance(results.get(key), dict)
-                else {}
-            )
+            target = results.get(key) if isinstance(results.get(key), dict) else {}
             button.setEnabled(
-                bool(not exporting and target.get("available") is True)
+                bool(
+                    not exporting
+                    and not context_changed
+                    and target.get("available") is True
+                )
             )
 
     def _audit_failure_status(self, exc: Exception) -> dict[str, Any]:
@@ -1872,8 +2311,7 @@ class StudioProjectBridge(QtCore.QObject):
             }
         self.status_snapshot = status
         self.status_view.setPlainText(
-            f"{_status_text(status)}\n\n"
-            f"Audit error: {type(exc).__name__}: {exc}"
+            f"{_status_text(status)}\n\nAudit error: {type(exc).__name__}: {exc}"
         )
         self._update_controls(status)
         self.statusChanged.emit(status)
@@ -1885,17 +2323,16 @@ class StudioProjectBridge(QtCore.QObject):
         capture_render: bool = False,
         audit_source: bool = False,
     ) -> dict[str, Any]:
+        context_status = self.handle_document_context_changed()
+        if context_status is not None:
+            return context_status
         render_sha256 = (
             self._current_render_sha256()
             if capture_render
-            else self.status_snapshot.get("document", {}).get(
-                "live_render_sha256"
-            )
+            else self.status_snapshot.get("document", {}).get("live_render_sha256")
         )
         if self.status_snapshot:
-            previous_revision = self.status_snapshot.get("document", {}).get(
-                "revision"
-            )
+            previous_revision = self.status_snapshot.get("document", {}).get("revision")
             if previous_revision != int(self.document.changeset):
                 render_sha256 = None
         try:
@@ -1912,6 +2349,9 @@ class StudioProjectBridge(QtCore.QObject):
         return self._publish_status(status)
 
     def _refresh_document_state(self) -> dict[str, Any]:
+        context_status = self.handle_document_context_changed()
+        if context_status is not None:
+            return context_status
         if not self.status_snapshot:
             return self.refresh()
         previous_document = (
@@ -1930,9 +2370,7 @@ class StudioProjectBridge(QtCore.QObject):
             document_path=self.document_path,
             document=self.document,
             render_sha256=(
-                str(render_sha256)
-                if isinstance(render_sha256, str)
-                else None
+                str(render_sha256) if isinstance(render_sha256, str) else None
             ),
             saved_sha256=(
                 str(previous_document.get("saved_sha256"))
@@ -1944,11 +2382,7 @@ class StudioProjectBridge(QtCore.QObject):
             **self.status_snapshot,
             "document": live_document,
         }
-        previous_qa = (
-            status.get("qa")
-            if isinstance(status.get("qa"), dict)
-            else {}
-        )
+        previous_qa = status.get("qa") if isinstance(status.get("qa"), dict) else {}
         qa = dict(previous_qa)
         if qa.get("evidence") is not None:
             evidence_hash = qa.get("evidence_document_sha256")
@@ -1959,13 +2393,10 @@ class StudioProjectBridge(QtCore.QObject):
                 and live_document.get("saved_sha256") == evidence_hash
             )
             current_document = bool(
-                document_hash_current
-                and qa.get("exports_current") is True
+                document_hash_current and qa.get("exports_current") is True
             )
             qa_status, artifact_qa_current = _qa_display_status(
-                artifact_status=str(
-                    qa.get("artifact_status") or "not_run"
-                ),
+                artifact_status=str(qa.get("artifact_status") or "not_run"),
                 ready=qa.get("ready_to_use") is True,
                 current_document=current_document,
                 exports_current=qa.get("exports_current") is True,
@@ -1979,11 +2410,12 @@ class StudioProjectBridge(QtCore.QObject):
                 }
             )
         status["qa"] = qa
-        if status.get("mode") == "project":
+        if (
+            status.get("mode") == "project"
+            and status.get("document_scope") != "project_secondary_standalone_receipt"
+        ):
             mapping = (
-                status.get("mapping")
-                if isinstance(status.get("mapping"), dict)
-                else {}
+                status.get("mapping") if isinstance(status.get("mapping"), dict) else {}
             )
             mapping = _bind_mapping_to_artifact_qa(
                 mapping,
@@ -1999,16 +2431,28 @@ class StudioProjectBridge(QtCore.QObject):
                 "not_applied",
                 "verified",
             }
-            full_current = bool(
+            current_evidence = bool(
                 provenance.get("run_evidence_complete") is True
                 and provenance.get("source_current") is True
                 and mapping_current
                 and qa.get("artifact_qa_current") is True
             )
+            figure_set_scope_status = str(
+                provenance.get("figure_set_export_scope_status") or ""
+            )
+            primary_only_scope = bool(
+                figure_set_scope_status
+                in {"persisted", "recomputed_current_project"}
+                and _is_primary_figure_set_export_scope(
+                    provenance.get("figure_set_export_scope")
+                )
+            )
+            full_project_scope = figure_set_scope_status == "not_applicable"
+            delivery_scope_known = bool(primary_only_scope or full_project_scope)
+            primary_current = bool(current_evidence and primary_only_scope)
+            full_current = bool(current_evidence and full_project_scope)
             source = (
-                status.get("source")
-                if isinstance(status.get("source"), dict)
-                else {}
+                status.get("source") if isinstance(status.get("source"), dict) else {}
             )
             audit_pending = bool(
                 source.get("audit_status") == "not_computed"
@@ -2018,22 +2462,35 @@ class StudioProjectBridge(QtCore.QObject):
                 provenance.get("run_evidence_complete") is True
                 and qa.get("artifact_qa_current") is True
                 and audit_pending
+                and delivery_scope_known
             )
             provenance.update(
                 {
                     "status": (
-                        "current_full_project_evidence"
+                        "unknown_or_incomplete_figure_set_scope"
+                        if not delivery_scope_known
+                        else "current_full_project_evidence"
                         if full_current
+                        else "current_primary_figure_evidence"
+                        if primary_current
                         else "audit_pending_for_current_project"
                         if current_result_awaiting_audit
                         else "incomplete_or_stale_project_evidence"
                     ),
                     "complete": full_current,
                     "full_project_evidence_current": full_current,
-                    "audit_pending": current_result_awaiting_audit,
-                    "artifact_qa_current": (
-                        qa.get("artifact_qa_current") is True
+                    "primary_figure_evidence_current": primary_current,
+                    "delivery_scope_known": delivery_scope_known,
+                    "primary_figure_delivery_current": bool(
+                        provenance.get("project_delivery_current") is True
+                        and primary_only_scope
                     ),
+                    "full_project_delivery_current": bool(
+                        provenance.get("project_delivery_current") is True
+                        and full_project_scope
+                    ),
+                    "audit_pending": current_result_awaiting_audit,
+                    "artifact_qa_current": (qa.get("artifact_qa_current") is True),
                     "mapping_current": mapping_current,
                 }
             )
@@ -2043,15 +2500,8 @@ class StudioProjectBridge(QtCore.QObject):
             if isinstance(status.get("results"), dict)
             else {}
         )
-        pdf = (
-            dict(results.get("pdf"))
-            if isinstance(results.get("pdf"), dict)
-            else {}
-        )
-        pdf["current"] = bool(
-            pdf.get("path")
-            and qa.get("artifact_qa_current") is True
-        )
+        pdf = dict(results.get("pdf")) if isinstance(results.get("pdf"), dict) else {}
+        pdf["current"] = bool(pdf.get("path") and qa.get("artifact_qa_current") is True)
         results["pdf"] = pdf
         delivery = (
             dict(results.get("delivery"))
@@ -2061,10 +2511,8 @@ class StudioProjectBridge(QtCore.QObject):
         delivery["current"] = bool(
             delivery.get("path")
             and qa.get("artifact_qa_current") is True
-            and status.get("provenance", {}).get(
-                "project_delivery_current"
-            )
-            is True
+            and status.get("provenance", {}).get("project_delivery_current") is True
+            and status.get("provenance", {}).get("delivery_scope_known") is True
         )
         results["delivery"] = delivery
         status["results"] = results
@@ -2090,9 +2538,7 @@ class StudioProjectBridge(QtCore.QObject):
 
     def _open_local_path(self, path: Path) -> bool:
         return bool(
-            QtGui.QDesktopServices.openUrl(
-                QtCore.QUrl.fromLocalFile(str(path))
-            )
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(path)))
         )
 
     def _open_result_target(
@@ -2106,11 +2552,7 @@ class StudioProjectBridge(QtCore.QObject):
             if isinstance(self.status_snapshot.get("results"), dict)
             else {}
         )
-        target = (
-            results.get(key)
-            if isinstance(results.get(key), dict)
-            else {}
-        )
+        target = results.get(key) if isinstance(results.get(key), dict) else {}
         value = target.get("reveal_path") if reveal else target.get("path")
         if target.get("available") is not True or not isinstance(value, str):
             QtWidgets.QMessageBox.warning(
@@ -2128,18 +2570,12 @@ class StudioProjectBridge(QtCore.QObject):
                 else None
             )
             within_root = bool(
-                evidence_root is not None
-                and _is_within(path, evidence_root)
+                evidence_root is not None and _is_within(path, evidence_root)
             )
-            exists = (
-                path.is_dir()
-                if reveal or key == "delivery"
-                else path.is_file()
-            )
+            exists = path.is_dir() if reveal or key == "delivery" else path.is_file()
             expected_sha256 = str(target.get("sha256") or "").strip()
             hash_current = bool(
-                not expected_sha256
-                or existing_file_sha256(path) == expected_sha256
+                not expected_sha256 or existing_file_sha256(path) == expected_sha256
             )
         except (OSError, RuntimeError, ValueError):
             exists = False
@@ -2178,6 +2614,11 @@ class StudioProjectBridge(QtCore.QObject):
     def _project_export(self) -> dict[str, Any]:
         assert self.project_dir is not None
         assert self.request_path is not None
+        if self._figure_set_export_scope() != "project":
+            raise RuntimeError(
+                "Only the canonical project/studio/document.vsz may publish "
+                "a project delivery receipt."
+            )
         export_payload = export_studio_document(
             self.document_path,
             formats=["pdf", "tiff_300"],
@@ -2193,10 +2634,24 @@ class StudioProjectBridge(QtCore.QObject):
             exports=exports,
             export_document_sha256=export_document_sha256,
         )
-        return {
+        figure_set_export_scope = run.get("figure_set_export_scope")
+        if (
+            figure_set_export_scope is not None
+            and not _is_primary_figure_set_export_scope(figure_set_export_scope)
+        ):
+            raise RuntimeError(
+                "The project run returned a missing or malformed figure-set "
+                "delivery scope, so SciPlot did not accept it as ready."
+            )
+        scope = (
+            "primary_figure_project_delivery"
+            if _is_primary_figure_set_export_scope(figure_set_export_scope)
+            else "project_delivery"
+        )
+        result = {
             "kind": "sciplot_studio_menu_export",
             "version": 1,
-            "scope": "project_delivery",
+            "scope": scope,
             "status": "passed" if run.get("ready_to_use") is True else "failed",
             "state": run.get("state"),
             "ready_to_use": run.get("ready_to_use") is True,
@@ -2204,9 +2659,20 @@ class StudioProjectBridge(QtCore.QObject):
             "exports": json_safe(exports),
             "studio_run": json_safe(run),
         }
+        if isinstance(figure_set_export_scope, dict):
+            result["figure_set_export_scope"] = json_safe(figure_set_export_scope)
+        return result
 
     def _standalone_export(self) -> dict[str, Any]:
-        artifact_root = self.document_path.parent / "exports"
+        if (
+            self.project_dir is not None
+            and self._figure_set_export_scope() == "standalone"
+        ):
+            artifact_root = (
+                self.document_path.parent / "exports" / self.document_path.stem
+            )
+        else:
+            artifact_root = self.document_path.parent / "exports"
         export_payload = export_studio_document(
             self.document_path,
             formats=["pdf", "tiff_300"],
@@ -2255,8 +2721,7 @@ class StudioProjectBridge(QtCore.QObject):
                 pending = getattr(assistant, "_pending_batch", None)
             if pending is not None:
                 return (
-                    "Accept or reject the pending SciPlot AI proposal before "
-                    "exporting."
+                    "Accept or reject the pending SciPlot AI proposal before exporting."
                 )
         except Exception as exc:
             return (
@@ -2264,6 +2729,71 @@ class StudioProjectBridge(QtCore.QObject):
                 f"{type(exc).__name__}: {exc}"
             )
         return None
+
+    def _figure_set_export_scope(self) -> str:
+        if self.project_dir is None:
+            return "standalone"
+        canonical_primary = (self.project_dir / "studio" / "document.vsz").resolve()
+        return "project" if self.document_path == canonical_primary else "standalone"
+
+    def _current_project_figure_set_scope(self) -> dict[str, Any] | None:
+        if (
+            self.project_dir is None
+            or self.request_path is None
+            or self._figure_set_export_scope() != "project"
+        ):
+            return None
+        request = _read_json(self.request_path)
+        scope = _studio_figure_set_export_scope(
+            self.project_dir,
+            request=request,
+        )
+        return dict(scope) if _is_primary_figure_set_export_scope(scope) else None
+
+    def _figure_set_export_blocker(self) -> str | None:
+        if (
+            self.project_dir is None
+            or self.request_path is None
+            or self._figure_set_export_scope() != "project"
+        ):
+            return None
+        try:
+            request = _read_json(self.request_path)
+            scope = _studio_figure_set_export_scope(
+                self.project_dir,
+                request=request,
+            )
+        except Exception as exc:
+            return (
+                "SciPlot could not establish the current figure-set delivery "
+                f"scope: {type(exc).__name__}: {exc}"
+            )
+        if _is_primary_figure_set_export_scope(scope):
+            return None
+        if (
+            scope is not None
+            or (self.project_dir / "studio" / "figure_set.json").exists()
+        ):
+            return (
+                "SciPlot cannot establish a complete primary-only figure-set "
+                "scope from the current request and registry. Export is blocked "
+                "until that scope is repaired."
+            )
+        return None
+
+    def _project_delivery_scope(self) -> str:
+        if (
+            self.mode == "project"
+            and self._figure_set_export_scope() == "project"
+        ):
+            try:
+                scope = self._current_project_figure_set_scope()
+            except Exception:
+                scope = None
+            if _is_primary_figure_set_export_scope(scope):
+                return "primary_figure_project_delivery"
+            return "project_delivery"
+        return "standalone_exact_current_export"
 
     def _failed_export_payload(
         self,
@@ -2276,11 +2806,7 @@ class StudioProjectBridge(QtCore.QObject):
         payload: dict[str, Any] = {
             "kind": "sciplot_studio_menu_export",
             "version": 1,
-            "scope": (
-                "project_delivery"
-                if self.mode == "project"
-                else "standalone_exact_current_export"
-            ),
+            "scope": self._project_delivery_scope(),
             "status": "failed",
             "state": state,
             "ready_to_use": False,
@@ -2306,10 +2832,28 @@ class StudioProjectBridge(QtCore.QObject):
         *,
         show_dialog: bool = True,
     ) -> dict[str, Any]:
-        blocker = self._assistant_export_blocker()
+        if self._exporting:
+            return self._failed_export_payload(
+                state="export_in_progress",
+                message=(
+                    "An exact-current export is already in progress. Wait for "
+                    "it to finish before starting another export."
+                ),
+            )
+        context_blocker = self._document_context_blocker()
+        figure_blocker = self._figure_set_export_blocker()
+        blocker = context_blocker or figure_blocker
+        if blocker is None:
+            blocker = self._assistant_export_blocker()
         if blocker is not None:
             payload = self._failed_export_payload(
-                state="assistant_transaction_pending",
+                state=(
+                    "document_context_changed"
+                    if context_blocker is not None
+                    else "figure_set_scope_incomplete"
+                    if figure_blocker is not None
+                    else "assistant_transaction_pending"
+                ),
                 message=blocker,
             )
             if show_dialog:
@@ -2326,47 +2870,74 @@ class StudioProjectBridge(QtCore.QObject):
             try:
                 pre_save_revision = int(self.document.changeset)
                 pre_save_modified = bool(self.document.isModified())
-                self.document.save(str(self.document_path))
+                context_blocker = self._document_context_blocker()
+                if context_blocker is not None:
+                    raise RuntimeError(context_blocker)
+                save_receipt = atomic_save_veusz_document(
+                    self.document,
+                    self.document_path,
+                )
+                if (
+                    save_receipt.get("status") != "passed"
+                    or save_receipt.get("reopen_validated") is not True
+                    or save_receipt.get("ready_for_export") is not True
+                ):
+                    raise RuntimeError(
+                        "The Veusz document was saved atomically, but SciPlot "
+                        "could not validate a secure-mode structural reopen. "
+                        "Exact-current export is blocked until the document "
+                        "contains only safely reopenable commands."
+                    )
                 export_revision = int(self.document.changeset)
                 if bool(self.document.isModified()):
                     raise RuntimeError(
                         "The Veusz document remained modified after save."
                     )
-                export_document_sha256 = existing_file_sha256(
-                    self.document_path
-                )
+                export_document_sha256 = existing_file_sha256(self.document_path)
                 if not export_document_sha256:
                     raise RuntimeError(
                         "The saved Veusz document has no readable SHA-256."
                     )
-                blocker = self._assistant_export_blocker()
+                figure_blocker = self._figure_set_export_blocker()
+                blocker = figure_blocker or self._assistant_export_blocker()
+                context_blocker = self._document_context_blocker()
+                if context_blocker is not None:
+                    raise RuntimeError(context_blocker)
                 if blocker is not None:
                     raise RuntimeError(blocker)
                 accepted_export = (
                     self._project_export()
                     if self.mode == "project"
+                    and self._figure_set_export_scope() == "project"
                     else self._standalone_export()
                 )
                 post_revision = int(self.document.changeset)
                 post_modified = bool(self.document.isModified())
-                post_document_sha256 = existing_file_sha256(
-                    self.document_path
+                post_document_sha256 = existing_file_sha256(self.document_path)
+                post_figure_blocker = self._figure_set_export_blocker()
+                post_blocker = (
+                    post_figure_blocker or self._assistant_export_blocker()
                 )
-                post_blocker = self._assistant_export_blocker()
+                post_context_blocker = self._document_context_blocker()
                 changed_during_export = bool(
                     post_revision != export_revision
                     or post_modified
                     or post_document_sha256 != export_document_sha256
                     or post_blocker is not None
+                    or post_context_blocker is not None
                 )
                 if changed_during_export:
-                    details = (
+                    details = post_context_blocker or (
                         "The Veusz document or AI transaction state changed "
                         "while SciPlot was exporting. The written artifacts "
                         "were not accepted as current GUI evidence."
                     )
                     payload = self._failed_export_payload(
-                        state="document_changed_during_export",
+                        state=(
+                            "document_context_changed"
+                            if post_context_blocker is not None
+                            else "document_changed_during_export"
+                        ),
                         message=details,
                         unaccepted_export=accepted_export,
                     )
@@ -2383,9 +2954,14 @@ class StudioProjectBridge(QtCore.QObject):
                         },
                     }
             except Exception as exc:
+                context_blocker = self._document_context_blocker()
                 payload = self._failed_export_payload(
-                    state="export_exception",
-                    message=str(exc),
+                    state=(
+                        "document_context_changed"
+                        if context_blocker is not None
+                        else "export_exception"
+                    ),
+                    message=context_blocker or str(exc),
                     error_type=type(exc).__name__,
                 )
                 if show_dialog:
@@ -2398,7 +2974,8 @@ class StudioProjectBridge(QtCore.QObject):
                 if show_dialog:
                     self._show_export_message(payload)
         self._exporting = False
-        self.refresh(capture_render=False, audit_source=False)
+        if self.handle_document_context_changed() is None:
+            self.refresh(capture_render=False, audit_source=False)
         self.exportFinished.emit(payload)
         return payload
 

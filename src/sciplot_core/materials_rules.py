@@ -648,7 +648,7 @@ RULES: tuple[SemanticRule, ...] = (
         "rheology_dma",
         "point_line",
         RHEOLOGY_X_TEMPERATURE,
-        AxisSpec("Storage modulus", "Pa", "Storage modulus, E′ (Pa)", aliases=("E'", "storage modulus", "tan delta")),
+        AxisSpec("Storage modulus", "MPa", "Storage modulus, E′ (MPa)", aliases=("E'", "storage modulus", "tan delta")),
         keywords=("dma", "storagemodulusmpa", "tanδ", "tandelta"),
         path_keywords=("dma_temperature_sweep", "dma_temperature"),
         column_aliases=("temperature", "storage modulus", "loss factor", "tan delta"),

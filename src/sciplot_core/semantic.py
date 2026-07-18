@@ -843,6 +843,11 @@ def _retain_positive_saxs_log_domain(
             "log_domain_policy": (
                 "retain only finite q > 0 and intensity > 0 for logarithmic axes"
             ),
+            "retained_positive_values_preserved_without_scaling": True,
+            "sciplot_intensity_scale_factor": 1.0,
+            "sciplot_intensity_offset": 0.0,
+            "source_series_scaling_status": ("not_validated_from_source_metadata"),
+            "absolute_cross_series_intensity_comparison_validated": False,
             "intensity_offset_policy": (
                 "preserve source intensity values; do not infer or remove offsets"
             ),
@@ -1357,17 +1362,21 @@ def _find_rheology_sweep_headers(
 
 
 def _unit_conversion(source_unit: str, target_unit: str) -> tuple[str, float, str]:
-    source = source_unit.strip()
+    source = format_unit_label(source_unit.strip()).strip()
     target = format_unit_label(target_unit).strip()
     if source == target:
         return target, 1.0, "identity"
     conversions = {
         ("1", "%"): (100.0, "fraction_to_percent"),
         ("fraction", "%"): (100.0, "fraction_to_percent"),
+        ("%", "1"): (0.01, "percent_to_fraction"),
+        ("fraction", "1"): (1.0, "fraction_identity"),
         ("kPa", "Pa"): (1000.0, "kPa_to_Pa"),
         ("MPa", "Pa"): (1_000_000.0, "MPa_to_Pa"),
         ("Pa", "kPa"): (0.001, "Pa_to_kPa"),
         ("Pa", "MPa"): (0.000001, "Pa_to_MPa"),
+        ("mPa·s", "Pa·s"): (0.001, "mPa_s_to_Pa_s"),
+        ("cP", "Pa·s"): (0.001, "cP_to_Pa_s"),
     }
     conversion = conversions.get((source, target))
     if conversion is None:
@@ -1422,6 +1431,11 @@ def _read_rheology_sweep_sample(
     )
     source_x_unit = _unit_for(units, x_index, default_x_unit)
     x_unit, x_factor, x_method = _unit_conversion(source_x_unit, default_x_unit)
+    if x_method == "source_unit_preserved":
+        raise ValueError(
+            f"Unsupported rheology x unit `{source_x_unit}` in {source}; "
+            f"expected a validated conversion to `{format_unit_label(default_x_unit)}`."
+        )
     metric_units: dict[str, str] = {}
     metric_factors: dict[str, float] = {}
     metric_conversions: dict[str, dict[str, Any]] = {}
@@ -1431,6 +1445,12 @@ def _read_rheology_sweep_sample(
             continue
         source_unit = _unit_for(units, metric_index, default_unit)
         output_unit, factor, method = _unit_conversion(source_unit, default_unit)
+        if method == "source_unit_preserved":
+            raise ValueError(
+                f"Unsupported rheology unit `{source_unit}` for metric `{key}` "
+                f"in {source}; expected a validated conversion to "
+                f"`{format_unit_label(default_unit)}`."
+            )
         metric_units[key] = output_unit
         metric_factors[key] = factor
         metric_conversions[key] = {
@@ -1673,9 +1693,35 @@ def _confirmed_rheology_sweep_sample(
 
     unit_index = numeric_rows[0] - 1
     units = [_clean_text(value) for value in raw.iloc[unit_index].tolist()] if unit_index >= 0 else []
-    metric_units = {
-        key: _unit_for(units, metric_index, default_units.get(key, "")) for key, metric_index in metric_indexes.items()
-    }
+    source_x_unit = _unit_for(units, x_index, default_x_unit)
+    x_unit, x_factor, x_method = _unit_conversion(source_x_unit, default_x_unit)
+    if x_method == "source_unit_preserved":
+        raise ValueError(
+            f"Unsupported confirmed rheology x unit `{source_x_unit}` in "
+            f"{source}; expected a validated conversion to "
+            f"`{format_unit_label(default_x_unit)}`."
+        )
+    metric_units: dict[str, str] = {}
+    metric_factors: dict[str, float] = {}
+    metric_conversions: dict[str, dict[str, Any]] = {}
+    for key, metric_index in metric_indexes.items():
+        default_unit = default_units.get(key, "")
+        source_unit = _unit_for(units, metric_index, default_unit)
+        output_unit, factor, method = _unit_conversion(source_unit, default_unit)
+        if method == "source_unit_preserved":
+            raise ValueError(
+                f"Unsupported confirmed rheology unit `{source_unit}` for "
+                f"metric `{key}` in {source}; expected a validated "
+                f"conversion to `{format_unit_label(default_unit)}`."
+            )
+        metric_units[key] = output_unit
+        metric_factors[key] = factor
+        metric_conversions[key] = {
+            "source_unit": source_unit,
+            "output_unit": output_unit,
+            "factor": factor,
+            "method": method,
+        }
     should_derive_complex_modulus = (
         "complex_modulus" not in metric_indexes
         and "storage_modulus" in metric_indexes
@@ -1691,25 +1737,43 @@ def _confirmed_rheology_sweep_sample(
         x_value = _float(raw.iat[row_index, x_index])
         if x_value is None:
             continue
-        row: dict[str, float] = {"x": x_value}
+        row: dict[str, float] = {"x": x_value * x_factor}
         for key, metric_index in metric_indexes.items():
             y_value = _float(raw.iat[row_index, metric_index])
             if y_value is not None:
-                row[key] = y_value
+                row[key] = y_value * metric_factors[key]
         if should_derive_complex_modulus:
             storage = row.get("storage_modulus")
             loss = row.get("loss_modulus")
             if storage is not None and loss is not None:
                 row["complex_modulus"] = math.hypot(storage, loss)
         rows.append(row)
+    empty_metrics = [
+        key
+        for key in metric_indexes
+        if not any(key in row for row in rows)
+    ]
+    if empty_metrics:
+        raise ValueError(
+            f"Confirmed rheology columns contain no numeric values in {source}: "
+            f"{', '.join(empty_metrics)}."
+        )
 
     return RheologySweepSample(
         sample=_source_display_sample(source),
         source=source,
         x_label=x_label,
-        x_unit=_unit_for(units, x_index, default_x_unit),
+        x_unit=x_unit,
         metric_units=metric_units,
         rows=tuple(rows),
+        source_x_unit=source_x_unit,
+        x_conversion={
+            "source_unit": source_x_unit,
+            "output_unit": x_unit,
+            "factor": x_factor,
+            "method": x_method,
+        },
+        metric_conversions=metric_conversions,
     )
 
 
@@ -1721,11 +1785,17 @@ def _read_confirmed_rheology_sweep_samples(
     default_x_unit: str,
     metrics: tuple[tuple[str, str, tuple[str, ...], str], ...],
 ) -> list[RheologySweepSample]:
+    confirmations = _confirmed_column_items(column_confirmations)
+    if not confirmations:
+        return []
     samples: list[RheologySweepSample] = []
+    errors: list[str] = []
+    matched_confirmation_ids: set[int] = set()
     for candidate in _sweep_source_files(source):
         confirmation = _matching_column_confirmation(candidate, column_confirmations)
         if confirmation is None:
             continue
+        matched_confirmation_ids.add(id(confirmation))
         try:
             samples.append(
                 _confirmed_rheology_sweep_sample(
@@ -1736,8 +1806,26 @@ def _read_confirmed_rheology_sweep_samples(
                     metrics=metrics,
                 )
             )
-        except Exception:
+        except Exception as exc:
+            errors.append(f"{candidate.name}: {exc}")
+    for confirmation in confirmations:
+        if id(confirmation) in matched_confirmation_ids:
             continue
+        names = sorted(_confirmation_names(confirmation))
+        errors.append(
+            "unmatched confirmation "
+            + (f"for {', '.join(names)}" if names else "without a source name")
+        )
+    if errors:
+        raise ValueError(
+            "Confirmed rheology sweep preparation rejected one or more "
+            "confirmed samples; silent partial datasets are not allowed "
+            f"({'; '.join(errors[:3])})."
+        )
+    if not samples:
+        raise ValueError(
+            "Confirmed rheology sweep preparation found no confirmed samples."
+        )
     return sorted(samples, key=_sweep_sample_order_key)
 
 
@@ -2928,16 +3016,91 @@ def _write_curve_table(series_list: list[CurveSeriesPayload], output_path: Path)
     pd.DataFrame(rows).to_csv(output_path, header=False, index=False)
 
 
-def _dma_modulus_unit(value: object) -> tuple[str, float] | None:
-    text = _clean_text(value).casefold().replace(" ", "")
-    for token, canonical, factor in (
-        ("gpa", "GPa", 1.0e9),
-        ("mpa", "MPa", 1.0e6),
-        ("kpa", "kPa", 1.0e3),
-        ("pa", "Pa", 1.0),
-    ):
-        if token in text:
-            return canonical, factor
+def _dma_modulus_unit(
+    value: object,
+    *,
+    exact: bool = False,
+) -> tuple[str, float] | None:
+    pattern = r"^\s*[\[(]?\s*(?P<unit>[gmk]?pa)\s*[\])]?\s*$"
+    for candidate in _dma_unit_candidates(value, exact=exact):
+        match = re.fullmatch(pattern, candidate, flags=re.IGNORECASE)
+        if match is None:
+            continue
+        normalized = match.group("unit").casefold()
+        return {
+            "gpa": ("GPa", 1.0e9),
+            "mpa": ("MPa", 1.0e6),
+            "kpa": ("kPa", 1.0e3),
+            "pa": ("Pa", 1.0),
+        }[normalized]
+    return None
+
+
+_DMA_CANONICAL_MODULUS_UNIT = "Pa"
+_DMA_DISPLAY_MODULUS_UNIT = "MPa"
+_DMA_CANONICAL_TO_DISPLAY_FACTOR = 1.0e-6
+_DMA_CANONICAL_TEMPERATURE_UNIT = "°C"
+
+
+def _dma_unit_candidates(value: object, *, exact: bool) -> tuple[str, ...]:
+    text = _clean_text(value)
+    if exact:
+        return (text,)
+    bracketed = tuple(
+        _clean_text(candidate)
+        for candidate in re.findall(r"[\[(]\s*([^\])]+?)\s*[\])]", text)
+        if _clean_text(candidate)
+    )
+    if bracketed:
+        return bracketed
+    # Unbracketed headers may end in a standalone unit (for example,
+    # ``Temperature °C``).  Restrict that compatibility path to the complete
+    # trailing token so rate labels such as ``K/min`` and ``MPa/min`` cannot
+    # be mistaken for temperature or modulus units.
+    trailing = text.rsplit(maxsplit=1)[-1] if text else ""
+    return (trailing,)
+
+
+def _dma_temperature_unit(
+    value: object,
+    *,
+    exact: bool = False,
+) -> tuple[str, float, float, str] | None:
+    celsius_pattern = (
+        r"^\s*[\[(]?\s*(?:(?:°|o)\s*|deg(?:ree)?s?\s*)?c"
+        r"\s*[\])]?\s*$"
+    )
+    kelvin_pattern = r"^\s*[\[(]?\s*k\s*[\])]?\s*$"
+    for raw_candidate in _dma_unit_candidates(value, exact=exact):
+        candidate = (
+            raw_candidate.replace("℃", "°C")
+            .replace("º", "°")
+            .replace("˚", "°")
+            .replace("K", "K")
+        )
+        folded = candidate.casefold().strip(" []()")
+        if folded == "celsius" or re.fullmatch(
+            celsius_pattern,
+            candidate,
+            flags=re.IGNORECASE,
+        ):
+            return "°C", 1.0, 0.0, "identity_celsius"
+        if folded == "kelvin" or re.fullmatch(
+            kelvin_pattern,
+            candidate,
+            flags=re.IGNORECASE,
+        ):
+            return "K", 1.0, -273.15, "kelvin_to_celsius"
+    return None
+
+
+def _dma_explicit_unknown_unit(value: object) -> str | None:
+    text = _clean_text(value)
+    candidates = re.findall(r"[\[(]\s*([^\])]+?)\s*[\])]", text)
+    for candidate in candidates:
+        cleaned = _clean_text(candidate)
+        if cleaned and _float(cleaned) is None:
+            return cleaned
     return None
 
 
@@ -2957,7 +3120,11 @@ def _dma_temperature_sample_label(
         return label
     for row_index in range(header_index + 1, min(raw.shape[0], header_index + 4)):
         value = _clean_text(raw.iat[row_index, y_index])
-        if not value or _float(value) is not None or _dma_modulus_unit(value) is not None:
+        if (
+            not value
+            or _float(value) is not None
+            or _dma_modulus_unit(value, exact=True) is not None
+        ):
             continue
         return value
     return fallback
@@ -2983,13 +3150,66 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
     for pair_index, (x_index, y_index) in enumerate(pairs, start=1):
         x_header = _clean_text(raw.iat[header_index, x_index])
         y_header = _clean_text(raw.iat[header_index, y_index])
-        unit_match = _dma_modulus_unit(y_header)
-        if unit_match is None:
-            for row_index in range(header_index + 1, min(raw.shape[0], header_index + 4)):
-                unit_match = _dma_modulus_unit(raw.iat[row_index, y_index])
-                if unit_match is not None:
+        x_unit_match = _dma_temperature_unit(x_header)
+        x_unit_detection = "detected_from_header"
+        if x_unit_match is None:
+            for row_index in range(
+                header_index + 1, min(raw.shape[0], header_index + 4)
+            ):
+                x_unit_match = _dma_temperature_unit(
+                    raw.iat[row_index, x_index],
+                    exact=True,
+                )
+                if x_unit_match is not None:
+                    x_unit_detection = "detected_from_adjacent_unit_row"
                     break
-        source_unit, factor_to_pa = unit_match or ("Pa", 1.0)
+        if x_unit_match is None:
+            unknown_x_unit = _dma_explicit_unknown_unit(x_header)
+            if unknown_x_unit is not None:
+                raise ValueError(
+                    "Unsupported DMA temperature unit "
+                    f"`{unknown_x_unit}` in {source}; expected °C/C or K."
+                )
+            raise ValueError(
+                f"Missing DMA temperature unit in {source}; "
+                "expected °C/C or K in the temperature header or an "
+                "adjacent unit row."
+            )
+        (
+            source_x_unit,
+            x_factor_to_display,
+            x_offset_to_display,
+            x_conversion_method,
+        ) = x_unit_match
+
+        y_unit_match = _dma_modulus_unit(y_header)
+        y_unit_detection = "detected_from_header"
+        if y_unit_match is None:
+            for row_index in range(
+                header_index + 1,
+                min(raw.shape[0], header_index + 4),
+            ):
+                y_unit_match = _dma_modulus_unit(
+                    raw.iat[row_index, y_index],
+                    exact=True,
+                )
+                if y_unit_match is not None:
+                    y_unit_detection = "detected_from_adjacent_unit_row"
+                    break
+        if y_unit_match is None:
+            unknown_y_unit = _dma_explicit_unknown_unit(y_header)
+            if unknown_y_unit is not None:
+                raise ValueError(
+                    "Unsupported DMA storage-modulus unit "
+                    f"`{unknown_y_unit}` in {source}; "
+                    "expected Pa, kPa, MPa, or GPa."
+                )
+            raise ValueError(
+                f"Missing DMA storage-modulus unit in {source}; "
+                "expected Pa, kPa, MPa, or GPa in the storage-modulus "
+                "header or an adjacent unit row."
+            )
+        source_unit, factor_to_pa = y_unit_match
         sample = _dma_temperature_sample_label(
             raw,
             header_index=header_index,
@@ -2997,31 +3217,90 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
             y_header=y_header,
             fallback=f"{source.stem} {pair_index}" if len(pairs) > 1 else source.stem,
         )
+        factor_to_display = factor_to_pa * _DMA_CANONICAL_TO_DISPLAY_FACTOR
         points: list[tuple[float, float]] = []
+        negative_display_values: list[float] = []
         for row_index in range(header_index + 1, raw.shape[0]):
             x_value = _float(raw.iat[row_index, x_index])
             y_value = _float(raw.iat[row_index, y_index])
             if x_value is None or y_value is None:
                 continue
-            points.append((x_value, y_value * factor_to_pa))
+            display_x_value = x_value * x_factor_to_display + x_offset_to_display
+            # Compose the recorded source -> Pa -> MPa factors before
+            # applying them so MPa inputs retain their reported decimal
+            # precision instead of acquiring multiply/divide round-off.
+            display_y_value = y_value * factor_to_display
+            points.append((display_x_value, display_y_value))
+            if display_y_value < 0.0:
+                negative_display_values.append(display_y_value)
         if not points:
             continue
+        display_values = [y_value for _x_value, y_value in points]
+        positive_display_peak = max(
+            (value for value in display_values if value > 0.0),
+            default=0.0,
+        )
+        negative_to_positive_peak_fraction = (
+            max(abs(value) for value in negative_display_values) / positive_display_peak
+            if negative_display_values and positive_display_peak > 0.0
+            else None
+        )
         series_list.append(
             CurveSeriesPayload(
                 sample=sample,
                 x_label="Temperature",
                 x_unit="°C",
                 y_label="Storage modulus, E′",
-                y_unit="Pa",
+                y_unit=_DMA_DISPLAY_MODULUS_UNIT,
                 points=tuple(points),
                 diagnostics={
                     "source_file": str(source),
                     "source_x_header": x_header,
                     "source_y_header": y_header,
+                    "source_x_unit": source_x_unit,
+                    "source_x_unit_detection": x_unit_detection,
+                    "canonical_x_unit": (_DMA_CANONICAL_TEMPERATURE_UNIT),
+                    "display_x_unit": _DMA_CANONICAL_TEMPERATURE_UNIT,
+                    "source_x_to_display_factor": x_factor_to_display,
+                    "source_x_to_display_offset": x_offset_to_display,
+                    "x_conversion_method": x_conversion_method,
+                    "x_conversion_path": (
+                        f"{source_x_unit} -> {_DMA_CANONICAL_TEMPERATURE_UNIT} display"
+                    ),
                     "source_y_unit": source_unit,
-                    "canonical_y_unit": "Pa",
+                    "source_y_unit_detection": y_unit_detection,
+                    "canonical_y_unit": _DMA_CANONICAL_MODULUS_UNIT,
+                    "display_y_unit": _DMA_DISPLAY_MODULUS_UNIT,
+                    "source_to_canonical_factor": factor_to_pa,
+                    "canonical_to_display_factor": (_DMA_CANONICAL_TO_DISPLAY_FACTOR),
+                    "source_to_display_factor": factor_to_display,
+                    "conversion_path": (
+                        f"{source_unit} -> "
+                        f"{_DMA_CANONICAL_MODULUS_UNIT} canonical -> "
+                        f"{_DMA_DISPLAY_MODULUS_UNIT} display"
+                    ),
+                    # Retain the legacy key for readers of existing ledgers.
                     "conversion_factor_to_Pa": factor_to_pa,
                     "source_point_count": len(points),
+                    "display_point_count": len(points),
+                    "display_minimum": min(display_values),
+                    "display_maximum": max(display_values),
+                    "negative_display_point_count": len(negative_display_values),
+                    "minimum_negative_display_value": (
+                        min(negative_display_values)
+                        if negative_display_values
+                        else None
+                    ),
+                    "maximum_negative_to_positive_peak_fraction": (
+                        negative_to_positive_peak_fraction
+                    ),
+                    "default_y_min_clipped_point_count": len(negative_display_values),
+                    "negative_value_policy": (
+                        "Preserve finite negative acquisition values in the "
+                        "processed table; the registered y_min=0 display "
+                        "bound may clip them visually, and every potentially "
+                        "clipped point is counted here."
+                    ),
                 },
             )
         )
@@ -3038,9 +3317,14 @@ def _read_dma_temperature_series_list(source: Path) -> list[CurveSeriesPayload]:
             series_list.extend(_read_dma_temperature_series(path))
         except ValueError as exc:
             errors.append(f"{path.name}: {exc}")
+    if errors:
+        raise ValueError(
+            "DMA temperature preparation rejected one or more in-scope "
+            "source files; silent partial datasets are not allowed "
+            f"({'; '.join(errors)})."
+        )
     if not series_list:
-        detail = "; ".join(errors[:3])
-        raise ValueError(f"No DMA temperature-sweep tables found under {source}. {detail}".strip())
+        raise ValueError(f"No DMA temperature-sweep tables found under {source}.")
     return series_list
 
 
@@ -3919,18 +4203,31 @@ def prepare_semantic_source(
 
     if family == "rheology_frequency" and source.is_dir():
         processed_source = processed_dir / "rheology_frequency_comparison.xlsx"
-        samples = _read_rheology_frequency_comparison_samples(source)
-        if not samples:
-            samples = _read_confirmed_rheology_sweep_samples(
-                source,
-                column_confirmations,
-                x_label="Angular Frequency",
-                default_x_unit="rad/s",
-                metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
-            )
-        source_sample_count = len(samples)
-        source_sample_files = [str(sample.source) for sample in samples]
-        samples = _coalesce_replicate_sweep_samples(samples, replicate_mode=replicate_mode)
+        try:
+            source_samples = _read_rheology_frequency_comparison_samples(source)
+        except ValueError as automatic_error:
+            if not _confirmed_column_items(column_confirmations):
+                raise
+            try:
+                source_samples = _read_confirmed_rheology_sweep_samples(
+                    source,
+                    column_confirmations,
+                    x_label="Angular Frequency",
+                    default_x_unit="rad/s",
+                    metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
+                )
+            except ValueError as confirmed_error:
+                raise ValueError(
+                    "Rheology frequency preparation failed both automatic and "
+                    f"confirmed parsing (automatic: {automatic_error}; "
+                    f"confirmed: {confirmed_error})."
+                ) from confirmed_error
+        source_sample_count = len(source_samples)
+        source_sample_files = [str(sample.source) for sample in source_samples]
+        samples = _coalesce_replicate_sweep_samples(
+            source_samples,
+            replicate_mode=replicate_mode,
+        )
         samples = _ordered_sweep_samples(samples, series_order=series_order)
         if not samples:
             raise ValueError("Rheology frequency folders need at least one parseable sample export.")
@@ -3950,6 +4247,7 @@ def prepare_semantic_source(
                 "output_sample_count": len(samples),
                 "source_sample_files": source_sample_files,
                 "output_sample_labels": [sample.sample for sample in samples],
+                "unit_conversions": _rheology_unit_conversion_inventory(source_samples),
                 "mean_definition": "arithmetic mean at exactly matching x values",
                 "representative_definition": "longest trace then closest terminal storage modulus to group median",
                 "series_order": list(series_order) if isinstance(series_order, list | tuple) else [],
@@ -3958,15 +4256,25 @@ def prepare_semantic_source(
 
     if family == "rheology_temperature_sweep" and source.is_dir():
         processed_source = processed_dir / "rheology_temperature_comparison.xlsx"
-        samples = _read_rheology_temperature_comparison_samples(source)
-        if not samples:
-            samples = _read_confirmed_rheology_sweep_samples(
-                source,
-                column_confirmations,
-                x_label="Temperature",
-                default_x_unit="°C",
-                metrics=_RHEOLOGY_SWEEP_METRICS,
-            )
+        try:
+            samples = _read_rheology_temperature_comparison_samples(source)
+        except ValueError as automatic_error:
+            if not _confirmed_column_items(column_confirmations):
+                raise
+            try:
+                samples = _read_confirmed_rheology_sweep_samples(
+                    source,
+                    column_confirmations,
+                    x_label="Temperature",
+                    default_x_unit="°C",
+                    metrics=_RHEOLOGY_SWEEP_METRICS,
+                )
+            except ValueError as confirmed_error:
+                raise ValueError(
+                    "Rheology temperature preparation failed both automatic "
+                    f"and confirmed parsing (automatic: {automatic_error}; "
+                    f"confirmed: {confirmed_error})."
+                ) from confirmed_error
         source_sample_count = len(samples)
         source_sample_files = [str(sample.source) for sample in samples]
         interval_selections = [
@@ -4022,13 +4330,44 @@ def prepare_semantic_source(
             processed_source=processed_source,
             operation="extract_and_convert_dma_temperature_curves",
             parameters={
+                "canonical_x_unit": _DMA_CANONICAL_TEMPERATURE_UNIT,
+                "display_x_unit": _DMA_CANONICAL_TEMPERATURE_UNIT,
+                "temperature_conversion_policy": (
+                    "Require an explicit Celsius or Kelvin source unit; "
+                    "convert Kelvin values to Celsius before materializing "
+                    "the processed table."
+                ),
                 "y_metric": "storage_modulus",
-                "canonical_y_unit": "Pa",
+                "canonical_y_unit": _DMA_CANONICAL_MODULUS_UNIT,
+                "display_y_unit": _DMA_DISPLAY_MODULUS_UNIT,
+                "canonical_to_display_factor": (_DMA_CANONICAL_TO_DISPLAY_FACTOR),
+                "conversion_policy": (
+                    "Parse source units, canonicalize storage modulus to Pa, "
+                    "then materialize display values in MPa."
+                ),
                 "source_sample_count": len(series_list),
                 "series_order": [series.sample for series in series_list],
                 "source_selections": [
                     {"sample": series.sample, **(series.diagnostics or {})} for series in series_list
                 ],
+                "negative_display_point_count": sum(
+                    int(
+                        (series.diagnostics or {}).get(
+                            "negative_display_point_count",
+                            0,
+                        )
+                    )
+                    for series in series_list
+                ),
+                "default_y_min_clipped_point_count": sum(
+                    int(
+                        (series.diagnostics or {}).get(
+                            "default_y_min_clipped_point_count",
+                            0,
+                        )
+                    )
+                    for series in series_list
+                ),
                 "unit_conversion_recorded": True,
             },
         )

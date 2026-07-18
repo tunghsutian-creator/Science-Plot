@@ -23,11 +23,17 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 
 import pandas as pd
 
-from sciplot_core._paths import REPO_ROOT
 from sciplot_core._utils import json_safe, safe_filename, slug, unique_path
 from sciplot_core.assisted_cleanup import CLEANUP_REQUEST_FILENAME, CLEANUP_RESULT_FILENAME, write_cleanup_request
 from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex_job, start_codex_job
 from sciplot_core.ingest import smart_decode
+from sciplot_core.launchers import (
+    LEGACY_WEB_WORKBENCH_LAUNCHER,
+    PROJECT_EXPORT_LAUNCHER,
+    PROJECT_PRIMARY_LAUNCHER,
+    PROJECT_VEUSZ_LAUNCHER,
+    inspect_project_launcher_contract,
+)
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload, normal_mode_payload
 from sciplot_core.policy import (
@@ -56,6 +62,15 @@ _PREVIEW_DISPLAY_COLUMNS = 24
 _COLUMN_ROLES = {"auto", "x", "y", "series", "sample", "unit", "metadata", "ignore"}
 _COLUMN_TYPES = {"auto", "numeric", "text", "categorical", "datetime", "unit", "metadata", "ignore"}
 _REPLICATE_MODES = {"mean", "representative", "individual"}
+SAXS_SCALING_REVIEW_NOTE = (
+    "Retained positive SAXS source intensity values were preserved without "
+    "inferred vertical-offset correction; non-positive log-domain points were "
+    "excluded, and absolute cross-series magnitudes remain unvalidated unless "
+    "source metadata documents its scaling."
+)
+_LEGACY_SAXS_SCALING_REVIEW_NOTE_PREFIX = (
+    "SAXS source intensity values are preserved without inferred "
+)
 
 
 @dataclass(frozen=True)
@@ -76,6 +91,26 @@ class IntakeProjectRequest:
     manifest: dict[str, Any]
     request_path: Path
     request: dict[str, Any]
+
+
+def converge_material_review_notes(request: dict[str, Any]) -> bool:
+    """Converge managed scientific review notes from the final rule id."""
+
+    original = (
+        list(request.get("review_notes"))
+        if isinstance(request.get("review_notes"), list)
+        else []
+    )
+    notes = [
+        str(value)
+        for value in original
+        if str(value) != SAXS_SCALING_REVIEW_NOTE
+        and not str(value).startswith(_LEGACY_SAXS_SCALING_REVIEW_NOTE_PREFIX)
+    ]
+    if str(request.get("rule_id") or "").strip() == "saxs_profile":
+        notes.append(SAXS_SCALING_REVIEW_NOTE)
+    request["review_notes"] = notes
+    return notes != original
 
 
 INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
@@ -287,28 +322,58 @@ def _write_zip(project_dir: Path, zip_path: Path) -> None:
                 archive.write(path, path.relative_to(project_dir.parent))
 
 
-def _write_project_launcher(project_dir: Path, *, project_slug: str) -> str:
-    launcher = project_dir / "Open_SciPlot_Project.command"
-    launcher.write_text(
-        "\n".join(
-            [
-                "#!/bin/zsh",
-                "set -euo pipefail",
-                'PROJECT_DIR="${0:A:h}"',
-                'PROJECT_ROOT="${PROJECT_DIR:h}"',
-                f'cd "{REPO_ROOT}"',
-                (
-                    'skill/scripts/sciplot workbench '
-                    '--out "${PROJECT_ROOT}" '
-                    f'--project "{project_slug}"'
-                ),
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
+def _remove_legacy_project_launcher(project_dir: Path) -> bool:
+    legacy_launcher = project_dir / LEGACY_WEB_WORKBENCH_LAUNCHER
+    if not (legacy_launcher.is_file() or legacy_launcher.is_symlink()):
+        return False
+    legacy_launcher.unlink()
+    return True
+
+
+def _apply_launcher_contract_to_manifest(
+    manifest: dict[str, Any],
+    *,
+    contract: dict[str, object],
+) -> None:
+    primary = (
+        contract.get("primary") if isinstance(contract.get("primary"), dict) else {}
     )
-    launcher.chmod(0o755)
-    return str(launcher)
+    primary_path = primary.get("path")
+    if contract.get("ready") is True and isinstance(primary_path, str):
+        manifest["launcher"] = primary_path
+    else:
+        manifest.pop("launcher", None)
+    manifest["launcher_contract"] = json_safe(contract)
+
+
+def converge_intake_project_launchers(
+    project_dir: str | Path,
+    *,
+    update_manifests: bool = True,
+) -> dict[str, object]:
+    """Retire the ambiguous Web launcher and register the Veusz-first entry."""
+
+    project = Path(project_dir).expanduser().resolve()
+    _remove_legacy_project_launcher(project)
+    contract = inspect_project_launcher_contract(project)
+    if not update_manifests:
+        return contract
+    for manifest_path in [
+        project / "intake_manifest.json",
+        *sorted(project.glob("*.sciplot.json")),
+    ]:
+        manifest = _read_json_if_exists(manifest_path)
+        if manifest is None:
+            continue
+        _apply_launcher_contract_to_manifest(
+            manifest,
+            contract=contract,
+        )
+        manifest_path.write_text(
+            json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    return contract
 
 
 def refresh_intake_project_zip(project_dir: str | Path) -> Path:
@@ -406,21 +471,21 @@ def _download_info(path: Path) -> dict[str, Any]:
 
 
 def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, Any]:
-    launcher = project_dir / "Open_SciPlot_Project.command"
-    launcher_info = _artifact_info(launcher, project_slug=project_slug)
-    launcher_info["executable"] = bool(launcher_info["exists"] and (launcher.stat().st_mode & 0o111))
-    studio_launcher = project_dir / "Open_in_SciPlot_Studio.command"
+    launcher_contract = inspect_project_launcher_contract(project_dir)
+    studio_launcher = project_dir / PROJECT_PRIMARY_LAUNCHER
     studio_launcher_info = _artifact_info(studio_launcher, project_slug=project_slug)
     studio_launcher_info["executable"] = bool(
         studio_launcher_info["exists"] and (studio_launcher.stat().st_mode & 0o111)
     )
-    veusz_launcher = project_dir / "Open_in_Veusz.command"
+    veusz_launcher = project_dir / PROJECT_VEUSZ_LAUNCHER
     veusz_launcher_info = _artifact_info(veusz_launcher, project_slug=project_slug)
     veusz_launcher_info["executable"] = bool(
         veusz_launcher_info["exists"] and (veusz_launcher.stat().st_mode & 0o111)
     )
-    export_edited_launcher = project_dir / "Export_Edited_Veusz.command"
-    export_edited_launcher_info = _artifact_info(export_edited_launcher, project_slug=project_slug)
+    export_edited_launcher = project_dir / PROJECT_EXPORT_LAUNCHER
+    export_edited_launcher_info = _artifact_info(
+        export_edited_launcher, project_slug=project_slug
+    )
     export_edited_launcher_info["executable"] = bool(
         export_edited_launcher_info["exists"] and (export_edited_launcher.stat().st_mode & 0o111)
     )
@@ -434,31 +499,34 @@ def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, 
     ]
     zip_path = project_dir.parent / safe_filename(f"{project_slug}.zip")
     zip_info = _download_info(zip_path)
+    studio_complete = bool(
+        studio_launcher_info["exists"]
+        and studio_launcher_info["executable"]
+        and veusz_launcher_info["exists"]
+        and veusz_launcher_info["executable"]
+        and export_edited_launcher_info["exists"]
+        and export_edited_launcher_info["executable"]
+        and studio_documents
+        and all(item["exists"] for item in studio_documents)
+    )
     return {
         "kind": "sciplot_project_package_status",
         "complete": bool(
-            launcher_info["exists"]
-            and launcher_info["executable"]
+            launcher_contract["ready"] is True
+            and studio_complete
             and sciplot_manifests
             and all(item["exists"] for item in sciplot_manifests)
             and zip_info["exists"]
         ),
-        "launcher": launcher_info,
+        "launcher": studio_launcher_info,
+        "primary_launcher": studio_launcher_info,
+        "launcher_contract": json_safe(launcher_contract),
         "studio": {
             "launcher": studio_launcher_info,
             "veusz_launcher": veusz_launcher_info,
             "export_edited_launcher": export_edited_launcher_info,
             "documents": studio_documents,
-            "complete": bool(
-                studio_launcher_info["exists"]
-                and studio_launcher_info["executable"]
-                and veusz_launcher_info["exists"]
-                and veusz_launcher_info["executable"]
-                and export_edited_launcher_info["exists"]
-                and export_edited_launcher_info["executable"]
-                and studio_documents
-                and all(item["exists"] for item in studio_documents)
-            ),
+            "complete": studio_complete,
         },
         "sciplot_manifests": sciplot_manifests,
         "zip": zip_info,
@@ -480,6 +548,7 @@ def _studio_prepare_env() -> dict[str, str]:
 
 
 def _prepare_studio_project_package(project_dir: Path) -> None:
+    _remove_legacy_project_launcher(project_dir)
     try:
         subprocess.run(
             [
@@ -497,7 +566,8 @@ def _prepare_studio_project_package(project_dir: Path) -> None:
             env=_studio_prepare_env(),
         )
     except Exception:
-        return
+        pass
+    converge_intake_project_launchers(project_dir)
 
 
 def _preview_path_for_figure(path: Path) -> Path:
@@ -1443,8 +1513,10 @@ def create_intake_project(
     plot_request["explicit_render_option_keys"] = sorted(explicit_user_render_options)
     if template:
         plot_request["template"] = template
-    if rule_id:
-        plot_request["rule_id"] = rule_id
+    effective_rule_id = str(rule_id or recognition_payload.get("rule_id") or "").strip()
+    if effective_rule_id:
+        plot_request["rule_id"] = effective_rule_id
+    converge_material_review_notes(plot_request)
     if selected_column_confirmations:
         plot_request["column_confirmations"] = selected_column_confirmations
 
@@ -1476,7 +1548,6 @@ def create_intake_project(
     )
     plot_request["publication_intent"] = publication_intent
     plot_request["transform_ledger"] = transform_ledger
-    launcher_path = _write_project_launcher(project_dir, project_slug=project_slug)
     manifest = {
         "kind": "sciplot_intake_project",
         "version": 1,
@@ -1497,7 +1568,6 @@ def create_intake_project(
         "source_dir": str(source_dir),
         "plot_request": str(project_dir / "plot_request.json"),
         "outputs_dir": str(selected_output),
-        "launcher": launcher_path,
         "study_model": study_model,
         "publication_intent": publication_intent,
         "transform_ledger": transform_ledger,
@@ -1538,6 +1608,14 @@ def create_intake_project(
             "reason_code": str(getattr(exc, "reason_code", "studio_preparation_failed")),
             "error": str(exc),
         }
+    launcher_contract = converge_intake_project_launchers(
+        project_dir,
+        update_manifests=False,
+    )
+    _apply_launcher_contract_to_manifest(
+        manifest,
+        contract=launcher_contract,
+    )
     (project_dir / "intake_manifest.json").write_text(
         json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
         encoding="utf-8",
@@ -2213,8 +2291,11 @@ __all__ = [
     "IncomingFile",
     "IntakeGroupInput",
     "APPROVED_INTAKE_SIZE_PRESETS",
+    "SAXS_SCALING_REVIEW_NOTE",
     "create_and_run_intake_project",
     "apply_intake_project",
+    "converge_intake_project_launchers",
+    "converge_material_review_notes",
     "create_intake_project_from_session",
     "create_intake_project",
     "intake_catalog_payload",

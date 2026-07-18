@@ -13,9 +13,11 @@ import time
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable, Iterator
 
 from sciplot_core._utils import file_sha256, json_safe
+from sciplot_core.canvas.inspector import SUPPORTED_INSPECTOR_TYPES
 from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
 from sciplot_core.canvas.provider import (
     AssistantCancellationToken,
@@ -91,6 +93,15 @@ def _axis_widget(document: Any) -> Any:
         return (0 if visible else 1, preferred, str(axis.path))
 
     return sorted(axes, key=score)[0]
+
+
+def _widget_identity(widget: Any | None) -> dict[str, str] | None:
+    if widget is None:
+        return None
+    return {
+        "type": str(getattr(widget, "typename", "")),
+        "path": str(getattr(widget, "path", "")),
+    }
 
 
 def _axis_label_capability(request: AssistantRequest) -> dict[str, Any]:
@@ -363,6 +374,37 @@ def run_studio_assistant_probe(
             timeout_ms=2000,
         )
 
+        native_startup_widgets = list(window.treeedit.selwidgets)
+        native_startup_widget = (
+            native_startup_widgets[0] if native_startup_widgets else None
+        )
+        startup_selection = {
+            "selected_widget": _widget_identity(bridge.selected_widget),
+            "native_selected_widget": _widget_identity(native_startup_widget),
+            "selection_label": bridge.selection_label.text(),
+            "ask_enabled": bridge.ask_button.isEnabled(),
+            "provider_request_count": len(provider.requests),
+            "has_bridge_default_selector": hasattr(
+                bridge,
+                "_select_default_widget",
+            ),
+        }
+        checks.append(
+            _check(
+                "native_startup_selection_synchronized",
+                "Studio AI follows Veusz's real initial tree selection without a bridge-specific default",
+                native_startup_widget is not None
+                and bridge.selected_widget is native_startup_widget
+                and str(getattr(native_startup_widget, "typename", ""))
+                in SUPPORTED_INSPECTOR_TYPES
+                and str(native_startup_widget.path) in bridge.selection_label.text()
+                and bridge.ask_button.isEnabled()
+                and not provider.requests
+                and not hasattr(bridge, "_select_default_widget"),
+                startup_selection,
+            )
+        )
+
         axis = _axis_widget(window.document)
         bridge.set_selected_widget(axis)
         setting_path = f"{axis.path}/label"
@@ -373,6 +415,82 @@ def run_studio_assistant_probe(
             if str(original_label).strip()
             else "Frequency · AI"
         )
+
+        unsupported = SimpleNamespace(
+            typename="unsupported_probe_widget",
+            parent=None,
+        )
+        bridge._widgets_selected([unsupported], None)
+        unsupported_selection = {
+            "selected_widget": _widget_identity(bridge.selected_widget),
+            "selection_label": bridge.selection_label.text(),
+            "ask_enabled": bridge.ask_button.isEnabled(),
+        }
+        checks.append(
+            _check(
+                "unsupported_native_selection_clears",
+                "Selecting an unsupported native object clears the prior supported selection",
+                bridge.selected_widget is None
+                and "selected: none" in bridge.selection_label.text().casefold()
+                and not bridge.ask_button.isEnabled(),
+                unsupported_selection,
+            )
+        )
+
+        ancestor_proxy = SimpleNamespace(
+            typename="unsupported_probe_child",
+            parent=axis,
+        )
+        bridge._widgets_selected([ancestor_proxy], None)
+        ancestor_selection = {
+            "selected_path": (
+                str(bridge.selected_widget.path)
+                if bridge.selected_widget is not None
+                else None
+            ),
+            "axis_path": str(axis.path),
+            "ask_enabled": bridge.ask_button.isEnabled(),
+        }
+        checks.append(
+            _check(
+                "supported_ancestor_fallback",
+                "An unsupported clicked child resolves to its nearest supported Veusz ancestor",
+                bridge.selected_widget is axis and bridge.ask_button.isEnabled(),
+                ancestor_selection,
+            )
+        )
+
+        bridge._widgets_selected([], None)
+        provider_requests_before_blocked_ask = len(provider.requests)
+        blocked_ask_error: str | None = None
+        try:
+            bridge.submit_intent("This must not reuse the previously selected axis.")
+        except RuntimeError as exc:
+            blocked_ask_error = str(exc)
+        blocked_old_selection = {
+            "selected_widget": _widget_identity(bridge.selected_widget),
+            "selection_label": bridge.selection_label.text(),
+            "ask_enabled": bridge.ask_button.isEnabled(),
+            "error": blocked_ask_error,
+            "provider_requests_before": provider_requests_before_blocked_ask,
+            "provider_requests_after": len(provider.requests),
+        }
+        checks.append(
+            _check(
+                "empty_selection_blocks_old_object_request",
+                "An empty native selection cannot continue proposing changes for the old object",
+                bridge.selected_widget is None
+                and "selected: none" in bridge.selection_label.text().casefold()
+                and not bridge.ask_button.isEnabled()
+                and blocked_ask_error is not None
+                and "select a supported veusz object" in blocked_ask_error.casefold()
+                and len(provider.requests) == provider_requests_before_blocked_ask
+                and bridge._pending_request is None,
+                blocked_old_selection,
+            )
+        )
+
+        bridge.set_selected_widget(axis)
 
         identity = {
             "bridge_document_is_window_document": bridge.document is window.document,
@@ -441,6 +559,17 @@ def run_studio_assistant_probe(
             lambda: not bridge.dock.isVisible() and not assistant_action.isChecked(),
             timeout_ms=2000,
         )
+        native_layout_preserved = _wait_until(
+            application,
+            lambda: (
+                window.plot.geometry().getRect()[:3] == native_plot_geometry_before[:3]
+                and abs(
+                    window.plot.geometry().getRect()[3] - native_plot_geometry_before[3]
+                )
+                <= 8
+            ),
+            timeout_ms=2000,
+        )
         native_identity_after = {
             "document": id(window.document),
             "plot": id(window.plot),
@@ -459,6 +588,7 @@ def run_studio_assistant_probe(
             "action_in_sciplot_menu": action_in_sciplot_menu,
             "shown_by_toggle": dock_shown,
             "hidden_by_toggle": dock_hidden_again,
+            "native_layout_preserved": native_layout_preserved,
             "dock_area": int(window.dockWidgetArea(bridge.dock).value),
             "dock_floating": bridge.dock.isFloating(),
             "native_identity_before": native_identity_before,
@@ -475,11 +605,14 @@ def run_studio_assistant_probe(
                 and action_in_sciplot_menu
                 and dock_shown
                 and dock_hidden_again
+                and native_layout_preserved
                 and not bridge.dock.isFloating()
                 and native_identity_before
                 == identity_while_shown
                 == native_identity_after
-                and native_plot_geometry_before == native_plot_geometry_after,
+                and native_plot_geometry_before[:3] == native_plot_geometry_after[:3]
+                and abs(native_plot_geometry_before[3] - native_plot_geometry_after[3])
+                <= 8,
                 dock_behavior,
             )
         )
@@ -538,6 +671,59 @@ def run_studio_assistant_probe(
             )
         )
 
+        blocked_proposal_target = f"{original_label} · obsolete AI"
+        provider.configure(next_value=blocked_proposal_target)
+        blocked_proposal_request = bridge.submit_intent(
+            "Prepare a proposal that must be discarded when selection changes."
+        )
+        blocked_proposal_ready = _wait_until(
+            application,
+            lambda: bridge.pending_batch is not None and not bridge.runner.active,
+        )
+        if not blocked_proposal_ready:
+            raise RuntimeError(
+                "The old-object selection proposal did not become ready."
+            )
+        bridge._widgets_selected([unsupported], None)
+        blocked_proposal_apply = bridge.accept_pending()
+        blocked_proposal_history = [
+            event
+            for event in read_assistant_history(bridge.history_path)
+            if event.get("request_id") == blocked_proposal_request.request_id
+        ]
+        checks.append(
+            _check(
+                "old_object_proposal_discarded_on_selection_change",
+                "A ready proposal cannot continue after native selection leaves its target",
+                bridge.selected_widget is None
+                and not bridge.ask_button.isEnabled()
+                and not bridge.apply_button.isEnabled()
+                and bridge.pending_batch is None
+                and bridge._pending_request is None
+                and blocked_proposal_apply is None
+                and json_safe(label_setting.get()) == original_label
+                and [event.get("status") for event in blocked_proposal_history]
+                == ["submitted", "proposal_ready", "rejected"]
+                and blocked_proposal_history[-1].get("reason_code")
+                == "selected_object_changed",
+                {
+                    "statuses": [
+                        event.get("status") for event in blocked_proposal_history
+                    ],
+                    "terminal": (
+                        blocked_proposal_history[-1]
+                        if blocked_proposal_history
+                        else None
+                    ),
+                    "selected_widget": _widget_identity(bridge.selected_widget),
+                    "ask_enabled": bridge.ask_button.isEnabled(),
+                    "apply_enabled": bridge.apply_button.isEnabled(),
+                    "label_value": json_safe(label_setting.get()),
+                },
+            )
+        )
+        bridge.set_selected_widget(axis)
+
         provider.configure(next_value=ai_label)
         request = bridge.submit_intent(
             "Inspect the current plot and make the selected x-axis label visibly clearer."
@@ -558,7 +744,9 @@ def run_studio_assistant_probe(
         if manual_apply_result is None:
             raise RuntimeError("The deterministic Assistant proposal was not applied.")
 
-        provider_request = provider.requests[0]
+        provider_request = next(
+            item for item in provider.requests if item.request_id == request.request_id
+        )
         request_capability = _axis_label_capability(request)
         provider_preview = provider_request.visual_preview
         provider_png = _visual_preview_bytes(provider_preview)
@@ -816,6 +1004,7 @@ def run_studio_assistant_probe(
         provider.configure(next_value=stale_target, delayed=True)
         stale_history_before = len(window.document.historyundo)
         stale_applied_before = len(applied_events)
+        stale_rejected_before = len(rejected_events)
         stale_request = bridge.submit_intent(
             "Delay this bounded axis-label edit so concurrent native editing can be tested."
         )
@@ -837,7 +1026,10 @@ def run_studio_assistant_probe(
         provider.release()
         stale_completed = _wait_until(
             application,
-            lambda: bool(rejected_events) and not bridge.runner.active,
+            lambda: (
+                len(rejected_events) > stale_rejected_before
+                and not bridge.runner.active
+            ),
         )
         if not stale_completed:
             raise RuntimeError("The stale Assistant response was not resolved.")
