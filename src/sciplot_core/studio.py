@@ -3220,6 +3220,42 @@ def _palette_for_render_options(render_options: dict[str, Any]) -> tuple[str, ..
 
 
 def _veusz_style_contract(render_options: dict[str, Any]) -> _VeuszStyleContract:
+    requested_dimensions = {
+        key: render_options.get(key)
+        for key in (
+            "font_size_pt",
+            "legend_font_size_pt",
+            "axis_linewidth_pt",
+            "tick_width_pt",
+            "tick_length_pt",
+            "minor_tick_width_pt",
+            "minor_tick_length_pt",
+            "line_width_pt",
+            "marker_line_width_pt",
+        )
+    }
+    requested_dimensions["marker_size_pt"] = (
+        render_options.get("marker_size_pt")
+        if render_options.get("marker_size_pt") is not None
+        else render_options.get("marker_size")
+    )
+    invalid_requested_dimensions: list[str] = []
+    for name, value in requested_dimensions.items():
+        if value is None:
+            continue
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError):
+            invalid_requested_dimensions.append(name)
+            continue
+        if not math.isfinite(numeric_value) or numeric_value <= 0.0:
+            invalid_requested_dimensions.append(name)
+    if invalid_requested_dimensions:
+        raise ValueError(
+            "Veusz typography and stroke requests must be finite and positive: "
+            f"{invalid_requested_dimensions}."
+        )
+
     style_id = str(render_options.get("style_preset") or "nature")
     try:
         from sciplot_core.contract import load_plot_contract, normalize_style_alias
@@ -4890,7 +4926,9 @@ def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str,
                 )
             guide_contract.update(
                 {
-                    "line_width_pt": line_width_pt,
+                    # Validate the request above, then keep generated reference
+                    # lines on the same project-wide physical stroke contract.
+                    "line_width_pt": UNIFIED_LINE_WIDTH_PT,
                     "line_style": line_style,
                 }
             )
@@ -5034,10 +5072,7 @@ def _direct_label_contracts(
     if side not in {"left", "right"}:
         side = "left" if reverse_x else "right"
     align = "left" if side == "left" else "right"
-    label_size = max(
-        style.legend_font_size_pt,
-        min(style.font_size_pt, 6.2),
-    )
+    label_size = style.font_size_pt
     y_span = (
         axis_contract.y_max - axis_contract.y_min
         if axis_contract.y_max is not None
