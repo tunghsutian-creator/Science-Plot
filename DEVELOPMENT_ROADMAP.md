@@ -1,295 +1,131 @@
-# SciPlot Veusz-First Development Roadmap
+# SciPlot Development Roadmap
 
-Status: active product roadmap, 2026-07-18.
+Status: active maintenance roadmap.
 
-The original Veusz `MainWindow` is the final daily frontend. SciPlot adds
-deterministic scientific preparation, optional selected-object AI, project
-status, exact-current QA, export, and delivery to the same live Veusz
-`Document`. It does not replace Veusz's object tree, property editor,
-Datasets, plot interaction, menus, shortcuts, or native Undo/Redo.
+## Product truth
 
-## Current baseline
+SciPlot 已确定采用 Veusz-first 路线：
 
-M6 Veusz-first integration closed at `352049d`.
+- 原生 Veusz `MainWindow` 是唯一日用绘图前端；
+- `studio/document.vsz` 是唯一视觉权威；
+- SciPlot 只增加项目状态、exact-current 导出/QA/delivery 和可选 AI；
+- AI 只修改当前选中对象的安全属性，并共享 Veusz 原生 Undo；
+- Canvas、Composition、session evidence 和 promotion 流程不再属于代码库或产品路线；
+- 不再开发第二个编辑器、第二个渲染器或第二套文档模型。
 
-The certified baseline provides:
+## 现在的目标
 
-- one normal `studio` route into Veusz `MainWindow`;
-- one exact-current `studio/document.vsz` visual authority;
-- default-hidden, closable Project and AI docks;
-- AI visual context from the exact-current rendered page;
-- a selected-object, typed `set_setting` capability boundary;
-- one native Veusz Undo step for each accepted AI batch;
-- exact-current Save, close/reopen, PDF/TIFF, QA, and delivery;
-- all 23 ready rules certified through authorized real-data lifecycles;
-- `doctor=ready`, runtime smoke, packaged-wheel, and isolated-install gates;
-- one coherent `main` worktree with redundant branches removed.
+目标不是扩张功能数量，而是把已有能力做成可以长期维护的日用工具：
 
-The former Canvas-default cutover, Veusz-retirement plan, fifteen-session
-quota, and required Composition round are cancelled. Their code and version-1
-evidence contracts may remain readable as compatibility/regression history,
-but they do not govern the active product.
+1. 无 AI 完成受支持原始数据到可编辑 VSZ、PDF/TIFF、QA 和 delivery；
+2. 人工调整始终使用 Veusz 原生交互，保存和重开不丢失；
+3. 六类已实现生产模板 fail closed，不允许未知模板静默退化；
+4. 字体、字号、线宽、刻度、标记和普通图框由全局硬契约控制；热图的标量色带、
+   等高线和色条配色由显式热图颜色契约控制；
+5. 真实使用中重复出现的问题进入共享规则、policy、fixture 和测试；
+6. 生命周期、artifact QA、provenance、人工验证和期刊合规保持为不同声明。
 
-## North-star objective
+当前机器门可以证明工程路线成立，但不能代替连续人工日用。只有真实项目使用过、关闭重开、
+手工调整和交付均无阻塞，才能称为完成日用验证。
 
-Build a personal daily scientific plotting workbench that:
+## 维护优先级
 
-1. turns raw experimental data into an editable Veusz document;
-2. keeps ordinary geometry and low-frequency arbitrary edits fast by hand;
-3. uses AI only for ambiguity or bounded high-frequency micro-edits;
-4. moves repeated, verified decisions into deterministic rules and QA;
-5. preserves raw inputs, explicit transformations, exact-current VSZ
-   authority, PDF/TIFF, provenance, and delivery;
-6. reports lifecycle success, artifact QA, provenance completeness, human
-   validation, and journal-specific compliance as separate claims.
+### P0 — 日用可靠性
 
-## First-principles decisions
+- 保证 provider 缺失、无网络和未打开 AI dock 时主流程完整可用；
+- 保证手工 VSZ 是权威，导出不重新生成或覆盖人工修改；
+- 保证 `editing -> exporting -> ready` 与 `needs_fix` 状态可信；
+- 把来源审计状态与当前制品状态分开；
+- 对保存、导出、哈希、QA 和 delivery 使用失败可见、可恢复的边界；
+- 用真实项目记录操作摩擦，只修复实际出现的 P0/P1 问题。
 
-1. **Veusz interaction is the baseline.** Do not rebuild its general editor.
-2. **Geometry stays spatial.** Alignment, movement, sizing, and arbitrary
-   property work remain native Veusz operations.
-3. **Scientific meaning is explicit.** Prefer user-selected rules and
-   conservative confirmation over broad keyword guessing.
-4. **Execution is deterministic.** Parsing, transformation, rendering, QA,
-   export, and delivery remain software contracts.
-5. **There is one visual authority.** Manual and AI edits address the same
-   exact-current VSZ.
-6. **AI shares the native undo boundary.** It does not click the GUI, patch VSZ
-   text, execute arbitrary code, or modify raw values.
-7. **AI remains optional.** Provider absence never disables supported
-   deterministic work.
-8. **Evidence is proportional.** A local UI fix does not require inventing
-   fifteen sessions; a shared scientific contract change does require affected
-   real-data lifecycle evidence.
+### P1 — 契约收敛
 
-## M6.1 — Daily-use convergence
+- 生产语义模板固定为 `curve`、`point_line`、`stacked_curve`、`box`、
+  `box_strip` 和 `heatmap`；
+- 未实现模板在请求验证阶段失败；
+- `policy.py` 是 SciPlot 全局硬样式权威；
+- vendored `plot_contract.json`、ready 规则、figure profiles 和文档构建器必须通过
+  `style_contract.py` 的同源审计；
+- 模板只拥有语义选项，不能私有覆盖字体、线宽、刻度、标记或普通图框边距；
+- 热图颜色是显式例外：可以独立管理标量色带、等高线和色条配色，但不能借此私有覆盖
+  全局字号、线宽或物理图框；
+- 所有共享契约变化都增加 source-controlled 测试并重跑完整 ready-rule 生命周期。
 
-Purpose: prove that the completed Veusz-first baseline saves time on real work
-without expanding the editor.
+### P2 — 结构维护
 
-### D0 — Product truth and distribution hygiene
+- 按单一职责继续拆分 `studio.py` 和 `semantic.py`，每次只迁移一个明确 owner；
+- 缩小 `_vendor` 桥接面，禁止新增直接依赖；
+- 删除未被正常 CLI、Studio 或测试引用的遗留模块和文档；
+- 保持 README、架构、路线图和 CLI help 只描述当前产品；
+- 优先删除重复和死代码，不用抽象层掩盖相同逻辑；
+- 每次提取保持公开 CLI 和制品合同不变。
 
-- mark M6 complete everywhere;
-- make `frontend_default=veusz_mainwindow` explicit and keep the assistant
-  independent and hidden by default;
-- remove local-only historical audit documents from the GitHub distribution
-  index while keeping local copies and Git history;
-- keep only explicitly allowed legal/compatibility documents in the minimal
-  repository;
-- mark the version-1 Canvas session ledger as a legacy compatibility gate;
-- remove native composition from required `doctor` readiness;
-- keep historical commands callable but hide them from normal CLI help.
+### P3 — 人工日用证据
 
-Exit:
+至少覆盖这些真实任务族：
 
-- `git ls-files -ci --exclude-standard` is empty;
-- the minimal-repository CI policy accepts a clean checkout;
-- ordinary help emphasizes `studio`;
-- `doctor` reports Veusz `MainWindow`, optional hidden AI, and
-  `status=ready`;
-- old ledgers remain readable without controlling M6.1.
+- 多样品流变；
+- 光谱或衍射；
+- 热分析；
+- 力学或分类指标；
+- 标量场或另一种高级图。
 
-### D1 — Daily result clarity
-
-The Project dock has one result state machine:
+每个项目检查：
 
 ```text
-editing -> exporting -> ready
-                    \-> needs_fix
-```
-
-Deep audit state is independent:
-
-```text
-current | pending | stale | failed | not_applicable
-```
-
-`pending` means a deep source audit has not been recomputed. It must not be
-presented as stale when exact-current PDF/TIFF and delivery are valid.
-
-Deliver:
-
-- export-time control locking and visible status;
-- no contradictory success dialog and stale project text;
-- current PDF, delivery, and VSZ reveal actions constrained to verified local
-  evidence paths;
-- result actions disabled for old artifacts after a new document edit;
-- tampered or missing artifacts produce `needs_fix`.
-
-### D2 — Bounded AI audit
-
-The first daily AI surface remains selected-object-only.
-
-Deliver:
-
-- wording that clearly distinguishes rendered-page context from edit scope;
-- proposal confirmation by default rather than implicit auto-apply;
-- durable `assistant_history.jsonl` containing only whitelisted metadata,
-  request/operation hashes, revisions, and before/after render hashes;
-- no PNG/base64, API key, endpoint, absolute path, natural-language intent,
-  model understanding, warnings, rationale, or hidden reasoning in history;
-- `apply_started` fsynced before document mutation;
-- distinct `applied` and `applied_unverified` outcomes;
-- immediate release of in-memory base64 request data after terminal states.
-
-History is observational. Veusz native Undo/Redo remains the only user-facing
-edit rollback model.
-
-### D3 — Five real daily-use projects
-
-Run five owner-used projects:
-
-1. multi-sample rheology;
-2. FTIR or XRD;
-3. thermal analysis;
-4. mechanical or categorical metrics;
-5. scalar field or another advanced figure.
-
-For each:
-
-```text
-raw data
-  -> deterministic inspect
-  -> confirm only unresolved meaning
-  -> Veusz manual micro-adjustment
-  -> optional selected-object AI
-  -> save and close/reopen
+raw input
+  -> inspect / ready rule
+  -> 仅确认未解决的科学含义
+  -> Veusz 人工微调
+  -> 保存、关闭、重开
   -> exact-current PDF/TIFF
-  -> QA and delivery
+  -> QA 和 delivery
 ```
 
-Record only:
+记录是否需要改代码、确认次数、是否丢失编辑、制品是否一次生成成功，以及 AI 是否真的比
+手工更快。AI 没有收益也是有效结论。
 
-- whether completion required a code change;
-- recognition/grouping/axis/legend friction;
-- whether manual and AI edits survived reopen;
-- whether export and delivery completed once;
-- whether AI was faster than hand editing.
+## 非目标
 
-Exit:
+- 恢复独立 Canvas 或 Composition Board；
+- 自制 Veusz 对象树、属性编辑器、Datasets 或任意拼图器；
+- 广泛自主的整文档 AI；
+- AI 修改原始科学数值；
+- 用自动图像审查替代已经验证的确定性路径；
+- 用 synthetic smoke 冒充真实数据或人工日用证据；
+- 在证据不足时宣称通用期刊合规；
+- 在个人日用稳定前扩展云协作或跨平台产品化。
 
-- 5/5 raw inputs unchanged;
-- 5/5 final edits retained after close/reopen;
-- 5/5 VSZ/PDF/TIFF/delivery exact-current bindings pass;
-- zero lost edits, false-ready states, or contradictory status;
-- ambiguous tasks require at most one scientific confirmation;
-- at least three real AI micro-edits are usable and natively undoable, or AI is
-  honestly retained as non-beneficial for that task class.
+## 工程门
 
-### D4 — Real-failure-driven repair
+每个非平凡开发回合：
 
-Classify repeated problems by owner:
-
-- scientific meaning -> `materials_rules.py` / `semantic.py`;
-- common plot behavior -> `policy.py`, Veusz spec, or QA;
-- AI gap -> one additional closed typed field or operation;
-- UI state -> Project/Assistant bridge, not renderer code.
-
-Fix only P0 integrity failures and high-frequency P1 friction. Promote a
-decision into a shared rule only after it repeats naturally. Zero promotion is
-correct when no decision repeats.
-
-Verification:
-
-- focused probe for the changed behavior;
-- `doctor`;
-- runtime smoke;
-- affected authorized real-data lifecycle for scientific/rule changes;
-- full 23-rule acceptance only when a shared scientific or rendering contract
-  changes.
-
-## M6.2 — Use-driven maintenance
-
-Begin only after the five-project pilot.
-
-Potential work:
-
-1. move source audit/export work to immutable snapshots and background workers
-   if real projects show blocking latency;
-2. split `studio.py` around project/document lifecycle, Qt integration, and
-   export publication;
-3. split `semantic.py` by experiment-family preparation;
-4. split `intake.py` only when the browser compatibility route creates real
-   maintenance pain;
-5. narrow remaining migrated compatibility imports.
-
-Each extraction changes one owner, preserves public CLI behavior, and passes
-smoke plus an affected real project before the next extraction. No big-bang
-rewrite is allowed.
-
-## M7 — Future distribution
-
-Only after personal daily use is stable:
-
-- runtime bundling;
-- signed/notarized macOS application;
-- clean-machine installation;
-- update and rollback;
-- broader platform support.
-
-Distribution does not preempt daily-use convergence.
-
-## Explicit non-goals
-
-- a second frontend or Canvas-default revival;
-- productizing Composition Board or arbitrary figure puzzle assembly;
-- duplicating Veusz object/property/Datasets editors;
-- general-purpose Illustrator behavior;
-- broad autonomous whole-document AI;
-- AI modification of raw scientific values;
-- AI image review for every already validated deterministic input;
-- broad keyword recognition without repeated real evidence;
-- public cloud storage or collaboration;
-- blanket journal-compliance claims;
-- cross-platform distribution before the personal product is stable.
-
-## Engineering gates
-
-For every non-trivial implementation turn:
-
-1. preserve unrelated user changes;
-2. update local `DEVELOPMENT_LOG.md`;
-3. add or extend a source-controlled probe for changed public behavior;
-4. keep one `Document`/VSZ owner and native Undo/Redo;
-5. run:
+1. 保留无关用户修改；
+2. 更新本地 `DEVELOPMENT_LOG.md`；
+3. 为改变的公共行为增加或更新测试；
+4. 保持一个 Veusz `Document`、一个 VSZ 权威和原生 Undo；
+5. 运行：
 
    ```bash
-   python -m compileall -q src/sciplot_core src/sciplot_recipes
+   python -m pytest -q
    skill/scripts/sciplot doctor --json
    skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json
    git diff --check
    ```
 
-6. exercise save, close/reopen, Undo/Redo, and exact export for GUI/document
-   changes;
-7. test provider-disabled, invalid, stale, interrupted, and rollback paths for
-   AI changes;
-8. run affected authorized real-data lifecycles for scientific contract
-   changes;
-9. keep generated outputs under ignored directories;
-10. do not claim journal compliance or human daily-use validation from
-    synthetic probes.
+6. GUI/文档改动验证保存、Undo/Redo、关闭重开和 exact-current 导出；
+7. AI 改动验证 disabled、invalid、stale、interrupted 和 rollback 路径；
+8. 共享 style、renderer、rule、QA 或 delivery 改动运行完整
+   `acceptance rules`，并检查授权证据层级；
+9. 交付前从清理过的 `build/` 与 `*.egg-info/` 状态构建 wheel，禁用源码
+   `PYTHONPATH` 验证安装态 Doctor/Smoke，并检查 wheel 不含退役模块；
+10. 最后核对工作树、分支和提交状态。
 
-## Reliability targets
+runtime smoke 是变化门，不是真实数据证据。规则矩阵通过是范围证据，不是人工连续使用或
+期刊合规证据。
 
-- ordinary local setting-to-redraw p95 below 250 ms, excluding model time;
-- 100% native Undo recovery for accepted AI test scenarios;
-- zero silent raw-data mutation;
-- zero silent replacement of an edited VSZ;
-- zero accepted stale AI responses;
-- zero ready state for missing, changed, or hash-mismatched current artifacts;
-- supported deterministic work remains available without an AI provider.
+## 以后再做
 
-## Completion definition
-
-M6.1 is complete only when:
-
-1. public and local active documents describe one Veusz-first product;
-2. a clean checkout passes repository, doctor, smoke, and focused GUI gates;
-3. Project status never confuses audit pending with stale delivery;
-4. selected-object AI changes are accurately described, auditable, safe, and
-   natively undoable;
-5. five real projects finish the full raw-to-delivery lifecycle with no lost
-   edits or source mutation;
-6. unresolved issues are classified and the next work is selected from real
-   friction rather than speculative frontend expansion.
+只有个人日用稳定后才考虑打包、签名、公证、干净机器安装、更新/回滚和更广平台支持。
+分发工作不得抢占日用可靠性和可维护性。

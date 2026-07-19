@@ -422,8 +422,9 @@ def _write_rule_acceptance_markdown(path: Path, payload: dict[str, Any]) -> None
             "- `instrument_shaped_fixture` proves a parser/render contract only; it remains a real-data gap.",
             "- The manual-edit probe proves exact VSZ preservation. PDF/TIFF physical size is checked here, while "
             "the generated contact sheets still require an explicit visual decision.",
-            "- Native 183 mm Veusz composition is covered by its separate "
-            "native-composition lifecycle gate.",
+            "- Explicit publication composition uses deterministic 183 mm figure-level layout metadata. "
+            "This rule matrix does not infer composition from independent figures, and SciPlot has no "
+            "standalone composition UI.",
             "",
         ]
     )
@@ -534,8 +535,9 @@ def run_rule_acceptance_suite(
             "real-data breadth rather than journal compliance.",
             "Final PDF/TIFF dimensions are machine-checked, but contact-sheet visual review remains an explicit "
             "manual or agent decision.",
-            "Native 183 mm Veusz composition is covered by its separate "
-            "native-composition lifecycle gate.",
+            "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. "
+            "This rule matrix does not infer composition from independent figures, and SciPlot has no "
+            "standalone composition UI.",
         ],
     }
     summary_path = project_dir / "acceptance_summary.json"

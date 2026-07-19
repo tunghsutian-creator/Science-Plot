@@ -21,9 +21,16 @@ from sciplot_core.figure_profiles import (
     figure_profile_render_options,
     get_figure_profile,
 )
-from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY
+from sciplot_core.policy import (
+    DEFAULT_EXPORT_FORMATS_POLICY,
+    UNIFIED_FOREGROUND_COLOR,
+)
 from sciplot_core.qa import run_qa
 from sciplot_core.render import render_to_dir
+from sciplot_core.scalar_visual import (
+    normalize_opaque_colormap_colors,
+    opaque_color_to_veusz_rgba,
+)
 
 
 PLOT_READY_REQUEST_KIND = "sciplot_plot_ready_figure_request"
@@ -341,7 +348,7 @@ def build_shared_scalar_strip_spec(
             "tick_length_pt": profile.qa_contract["tick_length_pt"],
             "minor_tick_width_pt": profile.qa_contract["minor_tick_width_pt"],
             "minor_tick_length_pt": profile.qa_contract["minor_tick_length_pt"],
-            "foreground_color": "#273034",
+            "foreground_color": UNIFIED_FOREGROUND_COLOR,
         },
         "axes": {
             "x": {
@@ -359,6 +366,9 @@ def build_shared_scalar_strip_spec(
             "max": z_max,
             "ticks": z_ticks,
             "colormap_name": str(merged["colormap_name"]),
+            "colormap_colors": normalize_opaque_colormap_colors(
+                merged["colormap_colors"],
+            ),
             "color_invert": bool(merged.get("color_invert")),
             "shared_across_panels": True,
         },
@@ -457,6 +467,14 @@ def apply_shared_scalar_strip_spec(interface: Any, spec: dict[str, Any]) -> None
     panel_top = float(geometry["panel_top_mm"])
     panel_bottom = float(geometry["panel_bottom_mm"])
     graph_bottom_margin = page_height - panel_bottom
+    colors = normalize_opaque_colormap_colors(scalar["colormap_colors"])
+    colormap = [opaque_color_to_veusz_rgba(value) for value in colors]
+    interface.AddCustom(
+        "colormap",
+        str(scalar["colormap_name"]),
+        colormap,
+        mode="replace",
+    )
 
     for panel in panels:
         row = [float(value) for value in panel["z_values"]]

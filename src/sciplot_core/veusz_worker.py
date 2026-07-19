@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core._utils import file_sha256, json_safe
+from sciplot_core.policy import (
+    UNIFIED_LINE_WIDTH_PT,
+    UNIFIED_MARKER_LINE_WIDTH_PT,
+    UNIFIED_MARKER_SIZE_PT,
+)
 from sciplot_core.scalar_visual import scalar_visual_contract
 
 
@@ -117,24 +122,6 @@ def inspect_document_state(document_path: Path) -> dict[str, Any]:
     finally:
         if existing_app is None:
             app.quit()
-
-
-def audit_native_composition(
-    workspace_path: Path,
-    *,
-    variant_id: str | None = None,
-) -> dict[str, Any]:
-    """Audit one native Composition document in an isolated Qt runtime."""
-
-    from sciplot_core.composition_workspace import CompositionWorkspace
-    from sciplot_gui.composition_compiler import (
-        audit_native_composition_document,
-    )
-
-    return audit_native_composition_document(
-        CompositionWorkspace(workspace_path.expanduser().resolve()),
-        variant_id=variant_id,
-    )
 
 
 def _exact_numeric_token(value: object) -> str:
@@ -352,21 +339,33 @@ def _visible_mark_channels(node: Any) -> list[str]:
     channels: list[str] = []
     if widget_type == "xy":
         if _style_channel_visible(settings, "PlotLine") and _distance_is_positive(
-            _setting_value(settings, "PlotLine/width", "1pt")
+            _setting_value(
+                settings,
+                "PlotLine/width",
+                f"{UNIFIED_LINE_WIDTH_PT:g}pt",
+            )
         ):
             channels.append("line")
         marker = str(_setting_value(settings, "marker", "none") or "none")
         marker_visible = (
             marker != "none"
             and _distance_is_positive(
-                _setting_value(settings, "markerSize", "3pt")
+                _setting_value(
+                    settings,
+                    "markerSize",
+                    f"{UNIFIED_MARKER_SIZE_PT:g}pt",
+                )
             )
             and (
                 _style_channel_visible(settings, "MarkerFill")
                 or (
                     _style_channel_visible(settings, "MarkerLine")
                     and _distance_is_positive(
-                        _setting_value(settings, "MarkerLine/width", "0.5pt")
+                        _setting_value(
+                            settings,
+                            "MarkerLine/width",
+                            f"{UNIFIED_MARKER_LINE_WIDTH_PT:g}pt",
+                        )
                     )
                 )
             )
@@ -390,7 +389,11 @@ def _visible_mark_channels(node: Any) -> list[str]:
             ("Whisker", "box_whisker"),
         ):
             if _style_channel_visible(settings, group) and _distance_is_positive(
-                _setting_value(settings, f"{group}/width", "1pt")
+                _setting_value(
+                    settings,
+                    f"{group}/width",
+                    f"{UNIFIED_LINE_WIDTH_PT:g}pt",
+                )
             ):
                 channels.append(channel)
     elif widget_type == "image":
@@ -1022,10 +1025,10 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
 
     from PyQt6 import QtWidgets
 
+    from sciplot_core.scalar_visual import opaque_color_to_veusz_rgba
     from sciplot_core.studio import (
         _ensure_veusz_loader_compat,
         _ensure_veusz_on_path,
-        _hex_to_veusz_rgba,
         _reference_guide_line_contracts,
         _reference_guide_rect_contracts,
         _veusz_literal_text,
@@ -1611,7 +1614,7 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                     "contract."
                 )
             expected_colormap = [
-                list(_hex_to_veusz_rgba(value))
+                list(opaque_color_to_veusz_rgba(value))
                 for value in visual["colormap_colors"]
             ]
             matching_colormaps = [
@@ -2071,12 +2074,6 @@ def _build_parser() -> argparse.ArgumentParser:
         "audit-documents", help="Audit exact current Veusz documents."
     )
     audit_parser.add_argument("documents", nargs="+", type=Path)
-    composition_audit_parser = subparsers.add_parser(
-        "audit-native-composition",
-        help="Audit a native Composition document.",
-    )
-    composition_audit_parser.add_argument("workspace", type=Path)
-    composition_audit_parser.add_argument("--variant")
     spec_data_audit_parser = subparsers.add_parser(
         "audit-spec-data",
         help="Verify that an exact-current VSZ consumes one SciPlot data spec.",
@@ -2108,11 +2105,6 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif args.command == "audit-documents":
         payload = audit_documents(args.documents)
-    elif args.command == "audit-native-composition":
-        payload = audit_native_composition(
-            args.workspace,
-            variant_id=args.variant,
-        )
     elif args.command == "audit-spec-data":
         payload = audit_spec_data(args.document, args.spec)
     elif args.command == "inspect-document-state":
@@ -2129,7 +2121,6 @@ if __name__ == "__main__":
 
 __all__ = [
     "audit_documents",
-    "audit_native_composition",
     "audit_spec_data",
     "export_document",
     "export_request",

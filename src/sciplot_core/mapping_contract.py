@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from uuid import uuid4
 
-from sciplot_core.canvas._validation import (
+from sciplot_core.json_contract import (
     reject_unknown_keys,
     require_json_bool,
     require_json_int,
@@ -16,7 +16,7 @@ from sciplot_core.canvas._validation import (
     require_json_number,
     require_json_object,
 )
-from sciplot_core.canvas.operations import _validate_json_value
+from sciplot_core.assistant_operations import _validate_json_value
 
 DATA_MAPPING_PROPOSAL_KIND = "sciplot_data_mapping_proposal"
 DATA_MAPPING_PROPOSAL_VERSION = 2

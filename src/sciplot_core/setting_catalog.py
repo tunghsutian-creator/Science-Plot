@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import Any
 
-from sciplot_core._utils import json_safe
-
-INSPECTOR_MODEL_KIND = "sciplot_canvas_inspector"
-INSPECTOR_MODEL_VERSION = 1
 INSPECTOR_EDITORS = {
     "boolean",
     "choice",
@@ -908,188 +903,14 @@ OBJECT_INSPECTOR_SPECS: dict[str, tuple[InspectorFieldSpec, ...]] = {
 SUPPORTED_INSPECTOR_TYPES = frozenset(OBJECT_INSPECTOR_SPECS)
 
 
-@dataclass(frozen=True)
-class CanvasInspectorField:
-    field_id: str
-    section: str
-    label: str
-    setting_path: str
-    setting_type: str
-    editor: str
-    value: Any
-    immediate: bool = False
-    read_only: bool = False
-    choices: tuple[str, ...] = ()
-    minimum: float | int | None = None
-    maximum: float | int | None = None
-    step: float | int | None = None
-    decimals: int = 4
-    help_text: str = ""
-
-    def __post_init__(self) -> None:
-        _required_text(self.field_id, "field_id")
-        _required_text(self.section, "section")
-        _required_text(self.label, "label")
-        path = _required_text(self.setting_path, "setting_path")
-        if not path.startswith("/"):
-            raise ValueError("Inspector setting_path must be absolute.")
-        if self.editor not in INSPECTOR_EDITORS:
-            raise ValueError(f"Unsupported inspector editor: {self.editor!r}")
-        if self.read_only and self.immediate:
-            raise ValueError("Read-only inspector fields cannot be immediate.")
-        if self.editor == "choice" and not self.choices:
-            raise ValueError("Choice inspector fields require choices.")
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "field_id": self.field_id,
-            "section": self.section,
-            "label": self.label,
-            "setting_path": self.setting_path,
-            "setting_type": self.setting_type,
-            "editor": self.editor,
-            "value": json_safe(self.value),
-            "immediate": self.immediate,
-            "read_only": self.read_only,
-            "choices": list(self.choices),
-            "minimum": self.minimum,
-            "maximum": self.maximum,
-            "step": self.step,
-            "decimals": self.decimals,
-            "help_text": self.help_text,
-        }
-
-    def coerce_input(self, value: Any) -> Any:
-        if self.read_only:
-            raise ValueError(f"{self.label} is read-only.")
-        if self.editor == "boolean":
-            if not isinstance(value, bool):
-                raise ValueError(f"{self.label} must be true or false.")
-            return value
-        if self.editor == "choice":
-            text = _required_text(value, self.label)
-            if text not in self.choices:
-                raise ValueError(
-                    f"{self.label} must be one of: {', '.join(self.choices)}."
-                )
-            return text
-        if self.editor == "text":
-            if not isinstance(value, str):
-                raise ValueError(f"{self.label} must be text.")
-            return value
-        if self.editor in {"color", "distance"}:
-            return _required_text(value, self.label)
-        if self.editor == "integer":
-            if not isinstance(value, int) or isinstance(value, bool):
-                raise ValueError(f"{self.label} must be an integer.")
-            self._check_range(float(value))
-            return value
-        if self.editor == "number":
-            number = self._finite_number(value)
-            self._check_range(number)
-            return number
-        if self.editor == "number_or_auto":
-            if isinstance(value, str) and value.strip().casefold() == "auto":
-                return "Auto"
-            number = self._finite_number(value)
-            self._check_range(number)
-            return number
-        if self.editor == "scalar_list":
-            if isinstance(value, (list, tuple)):
-                if len(value) != 1:
-                    raise ValueError(f"{self.label} requires one numeric value.")
-                value = value[0]
-            number = self._finite_number(value)
-            self._check_range(number)
-            return [number]
-        if self.editor == "float_list":
-            if isinstance(value, str):
-                parts = [
-                    item.strip()
-                    for item in value.replace(";", ",").split(",")
-                    if item.strip()
-                ]
-                values = [self._finite_number(item) for item in parts]
-            elif isinstance(value, (list, tuple)):
-                values = [self._finite_number(item) for item in value]
-            else:
-                raise ValueError(f"{self.label} must be a numeric list.")
-            if not values:
-                raise ValueError(f"{self.label} cannot be empty.")
-            return values
-        raise ValueError(f"{self.label} cannot be edited with {self.editor!r}.")
-
-    def _finite_number(self, value: Any) -> float:
-        if isinstance(value, bool):
-            raise ValueError(f"{self.label} must be numeric.")
-        try:
-            number = float(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"{self.label} must be numeric.") from exc
-        if not math.isfinite(number):
-            raise ValueError(f"{self.label} must be finite.")
-        return number
-
-    def _check_range(self, value: float) -> None:
-        if self.minimum is not None and value < float(self.minimum):
-            raise ValueError(f"{self.label} must be at least {self.minimum}.")
-        if self.maximum is not None and value > float(self.maximum):
-            raise ValueError(f"{self.label} must be at most {self.maximum}.")
-
-
-@dataclass(frozen=True)
-class CanvasInspectorObject:
-    object_id: str
-    object_type: str
-    display_name: str
-    role_label: str
-    path: str
-
-    def to_dict(self) -> dict[str, str]:
-        return {
-            "object_id": self.object_id,
-            "object_type": self.object_type,
-            "display_name": self.display_name,
-            "role_label": self.role_label,
-            "path": self.path,
-        }
-
-
-@dataclass(frozen=True)
-class CanvasInspectorModel:
-    target: CanvasInspectorObject
-    breadcrumb: tuple[str, ...]
-    fields: tuple[CanvasInspectorField, ...]
-    related_objects: tuple[CanvasInspectorObject, ...]
-    point_selection: dict[str, Any] | None = None
-    direct_manipulation: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "kind": INSPECTOR_MODEL_KIND,
-            "version": INSPECTOR_MODEL_VERSION,
-            "target": self.target.to_dict(),
-            "breadcrumb": list(self.breadcrumb),
-            "fields": [field.to_dict() for field in self.fields],
-            "related_objects": [item.to_dict() for item in self.related_objects],
-            "point_selection": json_safe(self.point_selection),
-            "direct_manipulation": self.direct_manipulation,
-        }
-
-
 def specs_for_object_type(object_type: str) -> tuple[InspectorFieldSpec, ...]:
     return OBJECT_INSPECTOR_SPECS.get(str(object_type), ())
 
 
 __all__ = [
     "INSPECTOR_EDITORS",
-    "INSPECTOR_MODEL_KIND",
-    "INSPECTOR_MODEL_VERSION",
     "OBJECT_INSPECTOR_SPECS",
     "SUPPORTED_INSPECTOR_TYPES",
-    "CanvasInspectorField",
-    "CanvasInspectorModel",
-    "CanvasInspectorObject",
     "InspectorFieldSpec",
     "specs_for_object_type",
 ]

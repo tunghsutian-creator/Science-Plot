@@ -17,6 +17,7 @@ from sciplot_core.split import (
     build_split_plan,
     normalize_split_policy,
 )
+from sciplot_core.style_contract import validate_veusz_template_id
 from sciplot_core.terminal_request import project_terminal_render_request
 from sciplot_core.veusz_runtime import veusz_worker_environment
 
@@ -806,7 +807,7 @@ def render_to_dir(
     split_policy: dict[str, Any] | None = None,
     request_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    template = validate_template_name(template)
+    template = validate_veusz_template_id(validate_template_name(template))
     return _render_to_dir_veusz(
         input_path,
         template=template,

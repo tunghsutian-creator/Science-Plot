@@ -15,9 +15,9 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core._utils import json_safe
-from sciplot_core.canvas.model import CanvasSelection
-from sciplot_core.canvas.operations import CanvasOperationBatch
-from sciplot_core.canvas.provider import (
+from sciplot_core.assistant_selection import VeuszSelection
+from sciplot_core.assistant_operations import VeuszSettingOperationBatch
+from sciplot_core.assistant_provider import (
     ASSISTANT_CONTEXT_KIND,
     AssistantCancellationToken,
     AssistantCancelled,
@@ -167,7 +167,7 @@ def _model_draft(user_payload: dict[str, Any], scenario: str) -> str:
         {
             "status": "proposal",
             "understanding": "Rename only the selected bounded field.",
-            "proposal_kind": "canvas_operation_batch",
+            "proposal_kind": "veusz_setting_operation_batch",
             "rationale": "Apply the requested selected-object text refinement.",
             "operations": operations,
             "warnings": [],
@@ -430,7 +430,7 @@ class OpenAIProviderWireFixture:
 
 def _context(*, allowed: bool = True, version: int = 3) -> dict[str, Any]:
     target_id = "11111111-1111-4111-8111-111111111111"
-    selection = CanvasSelection(
+    selection = VeuszSelection(
         object_ids=[target_id],
         primary_object_id=target_id,
     ).to_dict()
@@ -505,7 +505,7 @@ def _request(
         intent=f"SCENARIO:{scenario} Rename the selected x-axis label.",
         base_revision=7,
         context=_context(allowed=allowed, version=version),
-        allowed_proposal_kinds=("canvas_operation_batch",),
+        allowed_proposal_kinds=("veusz_setting_operation_batch",),
         visual_preview=visual_preview,
     )
 
@@ -577,22 +577,22 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
                 insecure_rejected,
             )
         )
-        from sciplot_gui.app import resolve_canvas_assistant_provider
+        from sciplot_gui.assistant_runtime import resolve_assistant_provider
 
-        auto_provider = resolve_canvas_assistant_provider(
+        auto_provider = resolve_assistant_provider(
             environ={
                 "SCIPLOT_OPENAI_API_KEY": _PROBE_KEY,
                 "SCIPLOT_OPENAI_BASE_URL": "http://127.0.0.1:8765/v1",
                 "SCIPLOT_OPENAI_MODEL": "probe-model",
             }
         )
-        explicitly_disabled = resolve_canvas_assistant_provider(
+        explicitly_disabled = resolve_assistant_provider(
             None,
             environ={"SCIPLOT_OPENAI_API_KEY": _PROBE_KEY},
         )
         with warnings.catch_warnings(record=True) as caught_warnings:
             warnings.simplefilter("always")
-            invalid_config_provider = resolve_canvas_assistant_provider(
+            invalid_config_provider = resolve_assistant_provider(
                 environ={
                     "SCIPLOT_OPENAI_API_KEY": _PROBE_KEY,
                     "SCIPLOT_OPENAI_BASE_URL": "http://api.example.com/v1",
@@ -600,14 +600,14 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
             )
         checks.append(
             _check(
-                "canvas_automatic_activation",
-                "Canvas activates a valid provider and keeps the independent path for absent, disabled, or invalid configuration",
+                "assistant_automatic_activation",
+                "Studio activates a valid provider and keeps the independent path for absent, disabled, or invalid configuration",
                 auto_provider is not None
                 and auto_provider.descriptor.provider_id == OPENAI_PROVIDER_ID
                 and explicitly_disabled is None
                 and invalid_config_provider is None
                 and len(caught_warnings) == 1
-                and "continuing without OpenAI Assistant"
+                and "continuing without its optional AI assistant"
                 in str(caught_warnings[0].message),
                 {
                     "automatic_provider": (
@@ -781,7 +781,7 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
         )
 
         success, progress = _generate(provider, success_request)
-        batch = CanvasOperationBatch.from_dict(dict(success.proposal or {}))
+        batch = VeuszSettingOperationBatch.from_dict(dict(success.proposal or {}))
         operation = batch.operations[0]
         record = wire.records[-1]
         body = record["body"]
@@ -1013,7 +1013,7 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
         "error": error,
         "limitations": [
             "The probe uses an in-memory HTTP/SSE wire fixture; it does not call or evaluate a live OpenAI model.",
-            "The production provider currently advertises bounded CanvasOperationBatch edits only; data mapping remains a separately confirmed deterministic path.",
+            "The production provider currently advertises bounded selected-object set_setting batches only; data mapping remains a separately confirmed deterministic path.",
         ],
     }
     serialized = json.dumps(json_safe(payload), indent=2, ensure_ascii=False)

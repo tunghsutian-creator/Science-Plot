@@ -10,20 +10,23 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 from PyQt6 import QtCore, QtWidgets
 
 from sciplot_core._utils import json_safe
-from sciplot_core.canvas.inspector import (
+from sciplot_core.setting_catalog import (
     SUPPORTED_INSPECTOR_TYPES,
     specs_for_object_type,
 )
-from sciplot_core.canvas.model import CanvasSelection
-from sciplot_core.canvas.operations import CanvasOperationBatch
-from sciplot_core.canvas.provider import (
+from sciplot_core.assistant_selection import VeuszSelection
+from sciplot_core.assistant_operations import VeuszSettingOperationBatch
+from sciplot_core.assistant_provider import (
     ASSISTANT_CONTEXT_KIND,
     ASSISTANT_CONTEXT_VERSION,
     AssistantProvider,
     AssistantRequest,
     AssistantResponse,
 )
-from sciplot_gui.assistant_runtime import AssistantRequestRunner
+from sciplot_gui.assistant_runtime import (
+    AssistantRequestRunner,
+    resolve_assistant_provider,
+)
 from sciplot_gui.studio_assistant_history import (
     append_assistant_history_event,
     assistant_history_path,
@@ -34,9 +37,10 @@ from sciplot_gui.studio_assistant_history import (
 class StudioAssistantBridge(QtCore.QObject):
     """A narrow AI bridge over an existing Veusz MainWindow and Document.
 
-    The bridge deliberately does not own a Canvas session, Document, PlotWindow,
-    or undo stack. Human property edits and AI edits therefore share Veusz's
-    native document history and the saved VSZ remains the visual authority.
+    The bridge deliberately does not own a parallel editor, Document,
+    PlotWindow, or undo stack. Human property edits and AI edits therefore
+    share Veusz's native document history and the saved VSZ remains the visual
+    authority.
     """
 
     requestSubmitted = QtCore.pyqtSignal(object)
@@ -63,7 +67,7 @@ class StudioAssistantBridge(QtCore.QObject):
         self._selected_widget: Any | None = None
         self._pending_request: AssistantRequest | None = None
         self._pending_response: AssistantResponse | None = None
-        self._pending_batch: CanvasOperationBatch | None = None
+        self._pending_batch: VeuszSettingOperationBatch | None = None
         self._pending_capabilities: dict[tuple[str, str], dict[str, Any]] = {}
         self._last_render_sha256: str | None = None
 
@@ -86,7 +90,7 @@ class StudioAssistantBridge(QtCore.QObject):
         return self._selected_widget
 
     @property
-    def pending_batch(self) -> CanvasOperationBatch | None:
+    def pending_batch(self) -> VeuszSettingOperationBatch | None:
         return self._pending_batch
 
     def _window_document_path(self) -> Path | None:
@@ -140,7 +144,7 @@ class StudioAssistantBridge(QtCore.QObject):
         status: str,
         request: AssistantRequest,
         response: AssistantResponse | None = None,
-        batch: CanvasOperationBatch | None = None,
+        batch: VeuszSettingOperationBatch | None = None,
         operations: list[Any] | tuple[Any, ...] | None = None,
         reason_code: str | None = None,
         applied_revision: int | None = None,
@@ -421,7 +425,7 @@ class StudioAssistantBridge(QtCore.QObject):
         inventory = self._walk_widgets()
         object_types = Counter(str(item.typename) for item in inventory)
         object_id = self._object_id(widget)
-        selection = CanvasSelection(
+        selection = VeuszSelection(
             object_ids=[object_id],
             primary_object_id=object_id,
         )
@@ -532,11 +536,11 @@ class StudioAssistantBridge(QtCore.QObject):
         allowed = tuple(
             kind
             for kind in descriptor.proposal_kinds
-            if kind == "canvas_operation_batch"
+            if kind == "veusz_setting_operation_batch"
         )
         if not allowed:
             raise RuntimeError(
-                "The connected provider cannot propose bounded Canvas edits."
+                "The connected provider cannot propose bounded selected-object edits."
             )
         return AssistantRequest(
             transaction_id=str(uuid4()),
@@ -676,7 +680,7 @@ class StudioAssistantBridge(QtCore.QObject):
             finally:
                 self._clear_pending()
             return
-        if response.proposal_kind != "canvas_operation_batch":
+        if response.proposal_kind != "veusz_setting_operation_batch":
             self._reject_stale(
                 "The Assistant returned an unsupported proposal.",
                 reason_code="unsupported_proposal_kind",
@@ -684,7 +688,9 @@ class StudioAssistantBridge(QtCore.QObject):
             )
             return
         try:
-            batch = CanvasOperationBatch.from_dict(dict(response.proposal or {}))
+            batch = VeuszSettingOperationBatch.from_dict(
+                dict(response.proposal or {})
+            )
             self._prepare_native_operations(batch, request=request)
         except Exception as exc:
             self._reject_stale(
@@ -723,7 +729,7 @@ class StudioAssistantBridge(QtCore.QObject):
         self,
         response: AssistantResponse,
         *,
-        batch: CanvasOperationBatch | None,
+        batch: VeuszSettingOperationBatch | None,
     ) -> str:
         lines = [response.understanding]
         if response.warnings:
@@ -751,7 +757,7 @@ class StudioAssistantBridge(QtCore.QObject):
 
     def _prepare_native_operations(
         self,
-        batch: CanvasOperationBatch,
+        batch: VeuszSettingOperationBatch,
         *,
         request: AssistantRequest,
     ) -> tuple[list[Any], list[dict[str, Any]]]:
@@ -988,7 +994,7 @@ class StudioAssistantBridge(QtCore.QObject):
         *,
         reason_code: str,
         response: AssistantResponse | None = None,
-        batch: CanvasOperationBatch | None = None,
+        batch: VeuszSettingOperationBatch | None = None,
     ) -> None:
         request = self._pending_request
         history_failed = False
@@ -1083,9 +1089,7 @@ def attach_studio_assistant(
     if isinstance(existing, StudioAssistantBridge):
         return existing
     if provider is None and resolve_provider:
-        from sciplot_gui.app import resolve_canvas_assistant_provider
-
-        provider = resolve_canvas_assistant_provider()
+        provider = resolve_assistant_provider()
     bridge = StudioAssistantBridge(
         window,
         document_path,

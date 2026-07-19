@@ -5,7 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core._utils import json_safe, slug
-from sciplot_core.policy import LayoutPolicy, layout_policy_payload
+from sciplot_core.policy import (
+    UNIFIED_LINE_WIDTH_PT,
+    LayoutPolicy,
+    layout_policy_payload,
+)
 from sciplot_core.readiness import (
     HIGH_CONFIDENCE_THRESHOLD,
     INSIDE_VALIDATED_ENVELOPE,
@@ -21,8 +25,6 @@ ONE_STEP_MODEL_VERSION = 2
 READY_STATE = "ready"
 HUMAN_CONFIRMATION_STATE = "needs_human_confirmation"
 RULE_REPAIR_STATE = "needs_rule_repair"
-
-QUALITY_ACTION_LINE_WIDTH_PT = 1.2
 
 _LEGEND_INLINE_STRATEGY = {
     "object": "legend",
@@ -56,7 +58,7 @@ _ISSUE_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         "reason": "Curve strokes fall outside the publication-style line-weight contract.",
         "series_style_patch": {
             "target": "visible_series",
-            "line_width": QUALITY_ACTION_LINE_WIDTH_PT,
+            "line_width": UNIFIED_LINE_WIDTH_PT,
         },
     },
     "line_tick_hierarchy": {
@@ -65,7 +67,7 @@ _ISSUE_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         "reason": "Curve strokes are visually weaker than the tick hierarchy.",
         "series_style_patch": {
             "target": "visible_series",
-            "line_width": QUALITY_ACTION_LINE_WIDTH_PT,
+            "line_width": UNIFIED_LINE_WIDTH_PT,
         },
     },
     "stroke_hierarchy": {
@@ -74,7 +76,7 @@ _ISSUE_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         "reason": "The plotted stroke hierarchy is outside the visual QA contract.",
         "series_style_patch": {
             "target": "visible_series",
-            "line_width": QUALITY_ACTION_LINE_WIDTH_PT,
+            "line_width": UNIFIED_LINE_WIDTH_PT,
         },
     },
     "tick_label_overlap": {
@@ -255,7 +257,7 @@ _AUTOFIX_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         "reason": "Default strokes were raised to the publication-style line-weight floor.",
         "series_style_patch": {
             "target": "visible_series",
-            "line_width": QUALITY_ACTION_LINE_WIDTH_PT,
+                "line_width": UNIFIED_LINE_WIDTH_PT,
         },
     },
     "stacked_y_axis_compacted": {

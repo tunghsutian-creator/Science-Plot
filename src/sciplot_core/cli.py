@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -129,78 +128,6 @@ def _build_parser() -> argparse.ArgumentParser:
     readiness_certify_parser.add_argument("--out", type=Path, required=True)
     readiness_certify_parser.add_argument("--json", action="store_true")
 
-    learning_parser = subparsers.add_parser(
-        "learning",
-        help="Build powerless, owner-reviewed promotion evidence from real sessions.",
-    )
-    learning_subparsers = learning_parser.add_subparsers(
-        dest="learning_command",
-        required=True,
-    )
-    learning_collect_parser = learning_subparsers.add_parser(
-        "collect",
-        help="Replay completed session evidence and collect committed decisions.",
-    )
-    learning_collect_parser.add_argument("ledger", nargs="+", type=Path)
-    learning_collect_parser.add_argument("--out", type=Path, required=True)
-    learning_collect_parser.add_argument("--json", action="store_true")
-    learning_build_parser = learning_subparsers.add_parser(
-        "build",
-        help="Group canonical decisions without granting runtime authority.",
-    )
-    learning_build_parser.add_argument("collection", type=Path)
-    learning_build_parser.add_argument("--out", type=Path, required=True)
-    learning_build_parser.add_argument("--json", action="store_true")
-    learning_decide_parser = learning_subparsers.add_parser(
-        "decide",
-        help="Validate an externally authored explicit owner decision receipt.",
-    )
-    learning_decide_parser.add_argument("candidate_set", type=Path)
-    learning_decide_parser.add_argument("receipt", type=Path)
-    learning_decide_parser.add_argument("--out", type=Path, required=True)
-    learning_decide_parser.add_argument("--json", action="store_true")
-    learning_plan_parser = learning_subparsers.add_parser(
-        "plan",
-        help="Bind an approved candidate to a clean source baseline and gates.",
-    )
-    learning_plan_parser.add_argument("decision", type=Path)
-    learning_plan_parser.add_argument("--repo", type=Path, required=True)
-    learning_plan_parser.add_argument("--out", type=Path, required=True)
-    learning_plan_parser.add_argument("--json", action="store_true")
-    learning_session_binding_parser = learning_subparsers.add_parser(
-        "session-binding",
-        help=(
-            "Print the exact ledger-prefix, event, and authority hashes an "
-            "owner verification receipt must sign."
-        ),
-    )
-    learning_session_binding_parser.add_argument("ledger", type=Path)
-    learning_session_binding_parser.add_argument("session_id")
-    learning_session_binding_parser.add_argument(
-        "--json",
-        action="store_true",
-    )
-    learning_verify_parser = learning_subparsers.add_parser(
-        "verify",
-        help="Verify reviewed source, probe, and provider-disabled real evidence.",
-    )
-    learning_verify_parser.add_argument("plan", type=Path)
-    learning_verify_parser.add_argument("receipt", type=Path)
-    learning_verify_parser.add_argument("--repo", type=Path, required=True)
-    learning_verify_parser.add_argument("--out", type=Path, required=True)
-    learning_verify_parser.add_argument("--json", action="store_true")
-    learning_status_parser = learning_subparsers.add_parser(
-        "status",
-        help="Validate one powerless promotion artifact.",
-    )
-    learning_status_parser.add_argument("artifact", type=Path)
-    learning_status_parser.add_argument("--json", action="store_true")
-    learning_schema_parser = learning_subparsers.add_parser(
-        "schema",
-        help="Print thresholds, receipt contracts, and trust boundaries.",
-    )
-    learning_schema_parser.add_argument("--json", action="store_true")
-
     smoke_parser = subparsers.add_parser(
         "smoke",
         help="Run the fixture-free Studio lifecycle and delivery change gate.",
@@ -212,382 +139,6 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="Emit machine-readable JSON."
     )
 
-    sessions_parser = subparsers.add_parser(
-        "sessions",
-        help=(
-            "Read or verify the legacy Canvas-era session evidence contract."
-        ),
-    )
-    from sciplot_core.session_evidence import (
-        ACCEPTANCE_LANES,
-        CANONICAL_MODEL_TASKS,
-        ENTRY_ROUTES,
-        EXPECTED_EVIDENCE,
-        EXTERNAL_EDITOR_USES,
-        MODEL_SCORES,
-        SESSION_OUTCOMES,
-        SESSION_SCOPES,
-        SOURCE_CLASSES,
-    )
-
-    sessions_subparsers = sessions_parser.add_subparsers(
-        dest="sessions_command",
-        required=True,
-    )
-    sessions_preregister_parser = sessions_subparsers.add_parser(
-        "preregister",
-        help="Bind a natural task, source, owner, build, and journal before work.",
-    )
-    sessions_preregister_parser.add_argument("project", type=Path)
-    sessions_preregister_parser.add_argument(
-        "--ledger",
-        type=Path,
-        help="Evidence JSONL; defaults inside PROJECT/.sciplot_evidence.",
-    )
-    sessions_preregister_parser.add_argument(
-        "--source",
-        type=Path,
-        action="append",
-        required=True,
-        help="Explicit raw/source path; repeat for multiple sources.",
-    )
-    sessions_preregister_parser.add_argument(
-        "--lane",
-        choices=ACCEPTANCE_LANES,
-        required=True,
-    )
-    sessions_preregister_parser.add_argument(
-        "--scope",
-        choices=SESSION_SCOPES,
-        required=True,
-    )
-    sessions_preregister_parser.add_argument(
-        "--source-class",
-        choices=SOURCE_CLASSES,
-        required=True,
-    )
-    sessions_preregister_parser.add_argument("--task", required=True)
-    sessions_preregister_parser.add_argument(
-        "--round-id",
-        help="Required formal evaluation/qualification round identity.",
-    )
-    sessions_preregister_parser.add_argument("--owner", required=True)
-    sessions_preregister_parser.add_argument(
-        "--entry-route",
-        choices=ENTRY_ROUTES,
-        required=True,
-    )
-    sessions_preregister_parser.add_argument(
-        "--build-artifact",
-        type=Path,
-        required=True,
-    )
-    sessions_preregister_parser.add_argument(
-        "--repo",
-        type=Path,
-        help=(
-            "Explicit clean SciPlot Git checkout. Required when the active "
-            "CLI is installed outside that checkout."
-        ),
-    )
-    sessions_preregister_parser.add_argument(
-        "--veusz-root",
-        type=Path,
-        help=(
-            "Explicit Veusz runtime root. Required when it is not bundled "
-            "under the active SciPlot checkout."
-        ),
-    )
-    sessions_preregister_parser.add_argument(
-        "--expected",
-        action="append",
-        choices=EXPECTED_EVIDENCE,
-        required=True,
-        help="Closed evidence ID; repeat when the session covers several.",
-    )
-    sessions_preregister_parser.add_argument(
-        "--journal",
-        type=Path,
-        required=True,
-    )
-    sessions_preregister_parser.add_argument("--provider")
-    sessions_preregister_parser.add_argument("--model")
-    sessions_preregister_parser.add_argument(
-        "--canonical-task",
-        choices=CANONICAL_MODEL_TASKS,
-    )
-    sessions_preregister_parser.add_argument("--attempt", type=int)
-    sessions_preregister_parser.add_argument(
-        "--promotion-candidate-id",
-        help=(
-            "Candidate hash for a preregistered provider-disabled promotion "
-            "verification lifecycle."
-        ),
-    )
-    sessions_preregister_parser.add_argument(
-        "--promotion-decision-sha256",
-        help="Approved promotion decision hash; requires the other promotion bindings.",
-    )
-    sessions_preregister_parser.add_argument(
-        "--promotion-plan-sha256",
-        help="Promotion implementation-plan hash; requires the other promotion bindings.",
-    )
-    sessions_preregister_parser.add_argument(
-        "--promotion-assertion-id",
-        action="append",
-        help=(
-            "Owner-approved lifecycle assertion hash; repeat for every assertion "
-            "assigned to this lane."
-        ),
-    )
-    sessions_preregister_parser.add_argument("--session-id")
-    sessions_preregister_parser.add_argument("--json", action="store_true")
-
-    sessions_witness_parser = sessions_subparsers.add_parser(
-        "witness",
-        help="Record the owner-attested close/reopen against replayed authority.",
-    )
-    sessions_witness_parser.add_argument("ledger", type=Path)
-    sessions_witness_parser.add_argument("session_id")
-    sessions_witness_parser.add_argument("--owner", required=True)
-    sessions_witness_parser.add_argument(
-        "--journal",
-        type=Path,
-        required=True,
-    )
-    sessions_witness_parser.add_argument("--canvas-session", type=Path)
-    sessions_witness_parser.add_argument("--document", type=Path)
-    sessions_witness_parser.add_argument("--review", type=Path)
-    sessions_witness_parser.add_argument("--mapping-execution", type=Path)
-    sessions_witness_parser.add_argument("--composition", type=Path)
-    sessions_witness_parser.add_argument("--delivery-manifest", type=Path)
-    sessions_witness_parser.add_argument("--json", action="store_true")
-
-    sessions_complete_parser = sessions_subparsers.add_parser(
-        "complete",
-        help="Replay final authority, QA, exports, delivery, and counting rules.",
-    )
-    sessions_complete_parser.add_argument("ledger", type=Path)
-    sessions_complete_parser.add_argument("session_id")
-    sessions_complete_parser.add_argument("--owner", required=True)
-    sessions_complete_parser.add_argument(
-        "--outcome",
-        choices=SESSION_OUTCOMES,
-        required=True,
-    )
-    sessions_complete_parser.add_argument(
-        "--active-seconds",
-        type=float,
-        required=True,
-    )
-    sessions_complete_parser.add_argument("--manifest", type=Path)
-    sessions_complete_parser.add_argument(
-        "--fallback",
-        action="append",
-        default=[],
-        help="Closed fallback class plus reason as CLASS:reason.",
-    )
-    sessions_complete_parser.add_argument(
-        "--external-editor-use",
-        choices=EXTERNAL_EDITOR_USES,
-        default="none",
-    )
-    sessions_complete_parser.add_argument(
-        "--failure",
-        action="append",
-        default=[],
-    )
-    sessions_complete_parser.add_argument(
-        "--model-score",
-        choices=MODEL_SCORES,
-        default="not_applicable",
-    )
-    sessions_complete_parser.add_argument("--json", action="store_true")
-
-    sessions_status_parser = sessions_subparsers.add_parser(
-        "status",
-        help=(
-            "Verify chain integrity and report legacy M3/M6 gates without "
-            "inflating counts."
-        ),
-    )
-    sessions_status_parser.add_argument("ledger", type=Path)
-    sessions_status_parser.add_argument(
-        "--require",
-        action="append",
-        choices=("integrity", "m3", "m6"),
-        default=[],
-        help=(
-            "Exit nonzero unless the named legacy integrity/gate requirement "
-            "passes."
-        ),
-    )
-    sessions_status_parser.add_argument("--json", action="store_true")
-
-    sessions_recover_parser = sessions_subparsers.add_parser(
-        "recover",
-        help="Safely finish or clear a proven interrupted ledger append.",
-    )
-    sessions_recover_parser.add_argument("ledger", type=Path)
-    sessions_recover_parser.add_argument("--json", action="store_true")
-
-    sessions_schema_parser = sessions_subparsers.add_parser(
-        "schema",
-        help="Print the closed evidence enums, event fields, and aggregate gates.",
-    )
-    sessions_schema_parser.add_argument("--json", action="store_true")
-
-    sessions_freeze_parser = sessions_subparsers.add_parser(
-        "freeze-build",
-        help="Build and verify a wheel that exactly matches the active runtime.",
-    )
-    sessions_freeze_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(".tmp_verify") / "frozen_builds",
-    )
-    sessions_freeze_parser.add_argument(
-        "--repo",
-        type=Path,
-        help=(
-            "Clean SciPlot Git checkout to build; defaults to the active "
-            "source checkout."
-        ),
-    )
-    sessions_freeze_parser.add_argument(
-        "--veusz-root",
-        type=Path,
-        help=(
-            "Veusz runtime root to fingerprint; defaults to the configured "
-            "active runtime."
-        ),
-    )
-    sessions_freeze_parser.add_argument("--json", action="store_true")
-
-    session_evidence_probe_parser = subparsers.add_parser(
-        "session-evidence-probe",
-        help=argparse.SUPPRESS,
-    )
-    session_evidence_probe_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(".tmp_verify") / "session_evidence",
-    )
-    session_evidence_probe_parser.add_argument(
-        "--build-artifact",
-        type=Path,
-        help=argparse.SUPPRESS,
-    )
-    session_evidence_probe_parser.add_argument(
-        "--repo",
-        type=Path,
-        help=argparse.SUPPRESS,
-    )
-    session_evidence_probe_parser.add_argument(
-        "--veusz-root",
-        type=Path,
-        help=argparse.SUPPRESS,
-    )
-    session_evidence_probe_parser.add_argument("--json", action="store_true")
-
-    canvas_parser = subparsers.add_parser(
-        "canvas",
-        help="Open the experimental native SciPlot live Canvas.",
-    )
-    canvas_parser.add_argument(
-        "target",
-        type=Path,
-        help="Existing SciPlot project, plot_request.json, VSZ, or raw data path.",
-    )
-    canvas_parser.add_argument(
-        "--out",
-        type=Path,
-        default=None,
-        help="Project root when TARGET is raw data.",
-    )
-    canvas_parser.add_argument("--rule")
-    canvas_parser.add_argument("--template")
-    canvas_parser.add_argument("--name")
-    canvas_parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Resolve and print the Canvas workspace without opening the GUI.",
-    )
-    canvas_parser.add_argument("--probe", action="store_true", help=argparse.SUPPRESS)
-    canvas_parser.add_argument(
-        "--probe-out",
-        type=Path,
-        default=Path(".tmp_verify") / "canvas_app",
-        help=argparse.SUPPRESS,
-    )
-    canvas_parser.add_argument(
-        "--operations",
-        type=int,
-        default=50,
-        help=argparse.SUPPRESS,
-    )
-
-    compose_parser = subparsers.add_parser(
-        "compose",
-        help="Arrange standalone VSZ figures on a native 183 mm composition board.",
-    )
-    compose_parser.add_argument(
-        "targets",
-        type=Path,
-        nargs="+",
-        help="An existing composition project, or one or more source VSZ files.",
-    )
-    compose_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path("outputs") / "composition_projects",
-        help="Parent directory for a new composition project.",
-    )
-    compose_parser.add_argument("--name", help="Composition project name.")
-    compose_parser.add_argument(
-        "--layout",
-        help="Exact layout id; defaults from the number of source modules.",
-    )
-    compose_parser.add_argument(
-        "--height-mm",
-        type=float,
-        default=55.0,
-        help="Exact composition page height in millimetres.",
-    )
-    compose_parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Resolve or create the project without opening the GUI.",
-    )
-    compose_parser.add_argument(
-        "--export",
-        action="store_true",
-        help="Compile when needed, then export and verify exact-current delivery.",
-    )
-
-    canvas_probe_parser = subparsers.add_parser("canvas-probe", help=argparse.SUPPRESS)
-    canvas_probe_parser.add_argument("document", type=Path)
-    canvas_probe_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(".tmp_verify") / "canvas_characterization",
-    )
-    canvas_probe_parser.add_argument("--json", action="store_true")
-    composition_probe_parser = subparsers.add_parser(
-        "composition-probe",
-        help=argparse.SUPPRESS,
-    )
-    composition_probe_parser.add_argument(
-        "documents",
-        type=Path,
-        nargs="+",
-    )
-    composition_probe_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(".tmp_verify") / "composition_probe",
-    )
-    composition_probe_parser.add_argument("--json", action="store_true")
     readiness_probe_parser = subparsers.add_parser(
         "readiness-probe",
         help=argparse.SUPPRESS,
@@ -598,72 +149,6 @@ def _build_parser() -> argparse.ArgumentParser:
         default=Path(".tmp_verify") / "readiness_probe",
     )
     readiness_probe_parser.add_argument("--json", action="store_true")
-    promotion_probe_parser = subparsers.add_parser(
-        "promotion-probe",
-        help=argparse.SUPPRESS,
-    )
-    promotion_probe_parser.add_argument("--ledger", type=Path, required=True)
-    promotion_probe_parser.add_argument(
-        "--mapping-execution",
-        type=Path,
-        required=True,
-    )
-    promotion_probe_parser.add_argument(
-        "--canvas-project",
-        type=Path,
-        required=True,
-    )
-    promotion_probe_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(".tmp_verify") / "promotion_probe",
-    )
-    promotion_probe_parser.add_argument("--json", action="store_true")
-    canvas_inspector_probe_parser = subparsers.add_parser(
-        "canvas-inspector-probe",
-        help=argparse.SUPPRESS,
-    )
-    canvas_inspector_probe_parser.add_argument(
-        "documents",
-        type=Path,
-        nargs="+",
-    )
-    canvas_inspector_probe_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(".tmp_verify") / "canvas_inspector_matrix",
-    )
-    canvas_inspector_probe_parser.add_argument("--json", action="store_true")
-    canvas_review_probe_parser = subparsers.add_parser(
-        "canvas-review-probe",
-        help=argparse.SUPPRESS,
-    )
-    canvas_review_probe_parser.add_argument(
-        "target",
-        type=Path,
-        help="SciPlot project or VSZ used for the review lifecycle probe.",
-    )
-    canvas_review_probe_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(".tmp_verify") / "canvas_review",
-    )
-    canvas_review_probe_parser.add_argument("--json", action="store_true")
-    canvas_assistant_probe_parser = subparsers.add_parser(
-        "canvas-assistant-probe",
-        help=argparse.SUPPRESS,
-    )
-    canvas_assistant_probe_parser.add_argument(
-        "target",
-        type=Path,
-        help="SciPlot project or VSZ used for the Assistant lifecycle probe.",
-    )
-    canvas_assistant_probe_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(".tmp_verify") / "canvas_assistant",
-    )
-    canvas_assistant_probe_parser.add_argument("--json", action="store_true")
     openai_provider_probe_parser = subparsers.add_parser(
         "openai-provider-probe",
         help=argparse.SUPPRESS,
@@ -674,21 +159,6 @@ def _build_parser() -> argparse.ArgumentParser:
         default=Path(".tmp_verify") / "openai_provider",
     )
     openai_provider_probe_parser.add_argument("--json", action="store_true")
-    canvas_openai_probe_parser = subparsers.add_parser(
-        "canvas-openai-provider-probe",
-        help=argparse.SUPPRESS,
-    )
-    canvas_openai_probe_parser.add_argument(
-        "target",
-        type=Path,
-        help="SciPlot project or VSZ used for the production-provider UI probe.",
-    )
-    canvas_openai_probe_parser.add_argument(
-        "--out",
-        type=Path,
-        default=Path(".tmp_verify") / "canvas_openai_provider",
-    )
-    canvas_openai_probe_parser.add_argument("--json", action="store_true")
     data_mapping_probe_parser = subparsers.add_parser(
         "data-mapping-probe",
         help=argparse.SUPPRESS,
@@ -980,7 +450,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     app_parser = subparsers.add_parser(
-        "app", help="Open the local SciPlot Web app for manual plotting."
+        "app",
+        help=(
+            "Open the browser compatibility surface for source, grouping, "
+            "and export confirmation."
+        ),
     )
     app_parser.add_argument("input", nargs="?", type=Path)
     app_parser.add_argument(
@@ -1051,7 +525,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     studio_parser = subparsers.add_parser(
-        "studio", help="Open the GPL SciPlot Studio desktop editor."
+        "studio",
+        help="Open the Veusz-based SciPlot Studio workflow.",
     )
     studio_parser.add_argument(
         "target",
@@ -1127,10 +602,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     publication_parser = subparsers.add_parser(
         "publication",
-        help=(
-            "Inspect active publication profiles and optional legacy "
-            "composite layouts."
-        ),
+        help="Inspect publication profiles and deterministic figure-level layouts.",
     )
     publication_subparsers = publication_parser.add_subparsers(
         dest="publication_command", required=True
@@ -1145,11 +617,11 @@ def _build_parser() -> argparse.ArgumentParser:
     publication_profile_parser.add_argument("profile_id")
     publication_profile_parser.add_argument("--json", action="store_true")
     publication_layouts_parser = publication_subparsers.add_parser(
-        "layouts", help="List composite layouts."
+        "layouts", help="List deterministic figure-level layouts."
     )
     publication_layouts_parser.add_argument("--json", action="store_true")
     publication_layout_parser = publication_subparsers.add_parser(
-        "layout", help="Show one composite layout."
+        "layout", help="Show one deterministic figure-level layout."
     )
     publication_layout_parser.add_argument("layout_id")
     publication_layout_parser.add_argument("--height-mm", type=float, default=55.0)
@@ -1174,26 +646,14 @@ def _build_parser() -> argparse.ArgumentParser:
     figure_build_parser.add_argument("--json", action="store_true")
 
     hidden_compatibility_commands = {
-        "learning",
-        "sessions",
         "one-step",
         "quick",
         "prepare",
         "intake",
         "workbench",
-        "canvas",
-        "compose",
-        "promotion-probe",
-        "canvas-inspector-probe",
-        "canvas-review-probe",
-        "canvas-probe",
-        "composition-probe",
         "readiness-probe",
-        "canvas-assistant-probe",
         "openai-provider-probe",
-        "canvas-openai-provider-probe",
         "data-mapping-probe",
-        "session-evidence-probe",
     }
     subparsers._choices_actions[:] = [  # type: ignore[attr-defined]
         action
@@ -1305,76 +765,6 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"SciPlot readiness certification: {payload['status']}")
                 print(payload["registry"])
             return 0 if payload["status"] == "ready" else 1
-        if args.command == "learning":
-            from sciplot_core.promotion import (
-                build_promotion_candidates,
-                build_promotion_session_binding,
-                collect_promotion_observations,
-                decide_promotion_candidate,
-                plan_promotion_implementation,
-                promotion_schema,
-                promotion_status,
-                verify_promotion_implementation,
-            )
-
-            if args.learning_command == "collect":
-                payload = collect_promotion_observations(
-                    args.ledger,
-                    output_path=args.out,
-                )
-            elif args.learning_command == "build":
-                payload = build_promotion_candidates(
-                    args.collection,
-                    output_path=args.out,
-                )
-            elif args.learning_command == "decide":
-                payload = decide_promotion_candidate(
-                    args.candidate_set,
-                    args.receipt,
-                    output_path=args.out,
-                )
-            elif args.learning_command == "plan":
-                payload = plan_promotion_implementation(
-                    args.decision,
-                    repo_root=args.repo,
-                    output_path=args.out,
-                )
-            elif args.learning_command == "session-binding":
-                payload = build_promotion_session_binding(
-                    args.ledger,
-                    args.session_id,
-                )
-            elif args.learning_command == "verify":
-                payload = verify_promotion_implementation(
-                    args.plan,
-                    args.receipt,
-                    repo_root=args.repo,
-                    output_path=args.out,
-                )
-            elif args.learning_command == "status":
-                payload = promotion_status(args.artifact)
-            else:
-                payload = promotion_schema()
-            if args.json or args.learning_command == "session-binding":
-                _print_json(payload)
-            else:
-                print(
-                    "SciPlot reviewed learning: "
-                    f"{payload.get('status', 'unknown')}"
-                )
-                if isinstance(payload.get("summary"), dict):
-                    summary = payload["summary"]
-                    print(
-                        "Candidates ready for review: "
-                        f"{summary.get('ready_for_review_count', 0)}"
-                    )
-                print("Runtime effect: none")
-            return (
-                0
-                if args.learning_command == "session-binding"
-                or payload.get("status") in {"passed", "ready"}
-                else 1
-            )
         if args.command == "smoke":
             from sciplot_core.studio import maybe_reexec_with_qt_runtime
 
@@ -1389,329 +779,6 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"SciPlot runtime smoke: {payload['status']}")
                 print(payload["artifacts"]["summary"])
             return 0 if payload["status"] == "passed" else 1
-        if args.command == "sessions":
-            from sciplot_core.session_evidence import (
-                complete_session,
-                default_session_ledger,
-                preregister_session,
-                recover_session_ledger,
-                session_evidence_schema,
-                session_ledger_status,
-                witness_session_reopen,
-            )
-
-            requirements_passed = True
-            if args.sessions_command == "preregister":
-                if args.scope != "synthetic_probe" and args.ledger is None:
-                    raise ValueError(
-                        "Formal sessions require an explicit shared --ledger."
-                    )
-                ledger = args.ledger or default_session_ledger(args.project)
-                payload = preregister_session(
-                    ledger,
-                    project_path=args.project,
-                    source_paths=args.source,
-                    lane=args.lane,
-                    scope=args.scope,
-                    source_class=args.source_class,
-                    task=args.task,
-                    round_id=args.round_id,
-                    owner=args.owner,
-                    entry_route=args.entry_route,
-                    build_artifact=args.build_artifact,
-                    repo_root=args.repo,
-                    veusz_root=args.veusz_root,
-                    expected_evidence=args.expected,
-                    journal_path=args.journal,
-                    provider=args.provider,
-                    model=args.model,
-                    canonical_task=args.canonical_task,
-                    attempt=args.attempt,
-                    promotion_candidate_id=args.promotion_candidate_id,
-                    promotion_decision_sha256=(
-                        args.promotion_decision_sha256
-                    ),
-                    promotion_plan_sha256=args.promotion_plan_sha256,
-                    promotion_assertion_ids=args.promotion_assertion_id,
-                    session_id=args.session_id,
-                )
-            elif args.sessions_command == "witness":
-                payload = witness_session_reopen(
-                    args.ledger,
-                    args.session_id,
-                    owner=args.owner,
-                    journal_path=args.journal,
-                    canvas_session_path=args.canvas_session,
-                    document_path=args.document,
-                    review_path=args.review,
-                    mapping_execution_path=args.mapping_execution,
-                    composition_path=args.composition,
-                    composition_delivery_path=args.delivery_manifest,
-                )
-            elif args.sessions_command == "complete":
-                payload = complete_session(
-                    args.ledger,
-                    args.session_id,
-                    owner=args.owner,
-                    outcome=args.outcome,
-                    active_seconds=args.active_seconds,
-                    manifest_path=args.manifest,
-                    fallback_values=args.fallback,
-                    external_editor_use=args.external_editor_use,
-                    failures=args.failure,
-                    model_score=args.model_score,
-                )
-            elif args.sessions_command == "recover":
-                payload = recover_session_ledger(args.ledger)
-            elif args.sessions_command == "schema":
-                payload = session_evidence_schema()
-            elif args.sessions_command == "freeze-build":
-                from sciplot_core._paths import (
-                    REPO_ROOT,
-                    VEUSZ_ROOT,
-                    VEUSZ_UPSTREAM_COMMIT,
-                )
-                from sciplot_core.session_evidence_runtime import (
-                    freeze_runtime_wheel,
-                )
-
-                payload = freeze_runtime_wheel(
-                    repo_root=args.repo or REPO_ROOT,
-                    output_root=args.out,
-                    veusz_root=args.veusz_root or VEUSZ_ROOT,
-                    veusz_upstream_commit=VEUSZ_UPSTREAM_COMMIT,
-                )
-            else:
-                payload = session_ledger_status(args.ledger)
-                requested = sorted(set(args.require))
-                passed_requirements = {
-                    "integrity": payload.get("status") == "passed",
-                    "m3": bool(
-                        payload.get("status") == "passed"
-                        and isinstance(payload.get("m3"), dict)
-                        and payload["m3"].get("gate_passed") is True
-                    ),
-                    "m6": bool(
-                        payload.get("status") == "passed"
-                        and isinstance(payload.get("m6"), dict)
-                        and payload["m6"].get("gate_passed") is True
-                    ),
-                }
-                failed_requirements = [
-                    name for name in requested if not passed_requirements[name]
-                ]
-                requirements_passed = not failed_requirements
-                payload["requirements"] = {
-                    "requested": requested,
-                    "results": {name: passed_requirements[name] for name in requested},
-                    "passed": requirements_passed,
-                    "failed": failed_requirements,
-                }
-            if args.json:
-                _print_json(payload)
-            else:
-                print(
-                    f"SciPlot session evidence: "
-                    f"{payload.get('status') or payload.get('outcome')}"
-                )
-                if payload.get("session_id"):
-                    print(payload["session_id"])
-                elif isinstance(payload.get("summary"), dict):
-                    print(
-                        "Qualifying M6 sessions: "
-                        f"{payload['summary'].get('qualifying_m6_count', 0)}/15"
-                    )
-            return 0 if payload.get("status") != "failed" and requirements_passed else 1
-        if args.command == "session-evidence-probe":
-            from sciplot_core.studio import maybe_reexec_with_qt_runtime
-
-            original_argv = list(sys.argv[1:] if argv is None else argv)
-            maybe_reexec_with_qt_runtime(original_argv)
-            from sciplot_core.session_evidence_probe import (
-                run_session_evidence_probe,
-            )
-
-            payload = run_session_evidence_probe(
-                output_root=args.out,
-                frozen_build_artifact=args.build_artifact,
-                repo_root=args.repo,
-                veusz_root=args.veusz_root,
-            )
-            if args.json:
-                _print_json(payload)
-            else:
-                print(f"SciPlot session evidence probe: {payload['status']}")
-                print(payload["artifacts"]["summary"])
-            return 0 if payload["status"] == "passed" else 1
-        if args.command == "canvas":
-            target = _resolve_input(args.target)
-            if args.json and not args.probe:
-                from sciplot_gui.workspace import resolve_canvas_workspace
-
-                workspace = resolve_canvas_workspace(
-                    target,
-                    output_root=args.out,
-                    rule_id=args.rule,
-                    template=args.template,
-                    project_name=args.name,
-                )
-                _print_json(workspace.to_dict())
-                return 0
-            if args.probe:
-                os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-            from sciplot_core.studio import maybe_reexec_with_qt_runtime
-
-            original_argv = list(sys.argv[1:] if argv is None else argv)
-            maybe_reexec_with_qt_runtime(original_argv)
-            if args.probe:
-                from sciplot_core.canvas_app_probe import run_canvas_app_probe
-
-                payload = run_canvas_app_probe(
-                    target,
-                    output_root=args.probe_out,
-                    operation_count=args.operations,
-                )
-                if args.json:
-                    _print_json(payload)
-                else:
-                    print(f"SciPlot Canvas app probe: {payload['status']}")
-                    print(payload["artifacts"]["summary"])
-                return 0 if payload["status"] == "passed" else 1
-            from sciplot_gui.app import launch_canvas_application
-
-            return launch_canvas_application(
-                target,
-                output_root=args.out,
-                rule_id=args.rule,
-                template=args.template,
-                project_name=args.name,
-            )
-        if args.command == "compose":
-            targets = [
-                _resolve_input(target, kind="composition target")
-                for target in args.targets
-            ]
-            if args.export:
-                os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-                from sciplot_core.studio import maybe_reexec_with_qt_runtime
-
-                original_argv = list(sys.argv[1:] if argv is None else argv)
-                maybe_reexec_with_qt_runtime(original_argv)
-                from sciplot_gui.app import (
-                    resolve_composition_application_workspace,
-                )
-
-                workspace = resolve_composition_application_workspace(
-                    targets,
-                    output_root=args.out,
-                    name=args.name,
-                    layout_id=args.layout,
-                    canvas_height_mm=args.height_mm,
-                )
-                project = workspace.load()
-                variant = project.active_variant
-                document = workspace.variant_document_path(variant.variant_id)
-                compile_result = None
-                if variant.compiled_document_ref is None or not document.is_file():
-                    from sciplot_gui.composition_compiler import (
-                        compile_native_composition,
-                    )
-
-                    compile_result = compile_native_composition(workspace)
-                from sciplot_core.composition_delivery import (
-                    export_composition_delivery,
-                )
-
-                delivery = export_composition_delivery(workspace)
-                payload = {
-                    "kind": "sciplot_composition_export",
-                    "version": 1,
-                    "status": delivery.get("status"),
-                    "ready_to_use": delivery.get("ready_to_use") is True,
-                    "workspace": str(workspace.root),
-                    "composition": str(workspace.composition_path),
-                    "compile": compile_result,
-                    "delivery": delivery,
-                }
-                if args.json:
-                    _print_json(payload)
-                else:
-                    print(f"SciPlot Composition export: {payload['status']}")
-                    print(delivery.get("delivery_manifest"))
-                return 0 if payload["ready_to_use"] else 1
-            if args.json:
-                from sciplot_gui.app import (
-                    resolve_composition_application_workspace,
-                )
-
-                workspace = resolve_composition_application_workspace(
-                    targets,
-                    output_root=args.out,
-                    name=args.name,
-                    layout_id=args.layout,
-                    canvas_height_mm=args.height_mm,
-                )
-                _print_json(
-                    {
-                        "kind": "sciplot_composition_workspace",
-                        "version": 1,
-                        "root": str(workspace.root),
-                        "composition": str(workspace.composition_path),
-                        "project": workspace.load().to_dict(),
-                    }
-                )
-                return 0
-            from sciplot_core.studio import maybe_reexec_with_qt_runtime
-
-            original_argv = list(sys.argv[1:] if argv is None else argv)
-            maybe_reexec_with_qt_runtime(original_argv)
-            from sciplot_gui.app import launch_composition_application
-
-            return launch_composition_application(
-                targets,
-                output_root=args.out,
-                name=args.name,
-                layout_id=args.layout,
-                canvas_height_mm=args.height_mm,
-            )
-        if args.command == "canvas-probe":
-            from sciplot_core.studio import maybe_reexec_with_qt_runtime
-
-            original_argv = list(sys.argv[1:] if argv is None else argv)
-            maybe_reexec_with_qt_runtime(original_argv)
-            from sciplot_core.canvas_probe import run_canvas_characterization
-
-            payload = run_canvas_characterization(
-                _resolve_input(args.document, kind="VSZ document"),
-                output_root=args.out,
-            )
-            if args.json:
-                _print_json(payload)
-            else:
-                print(f"SciPlot Canvas characterization: {payload['status']}")
-                print(payload["artifacts"]["summary"])
-            return 0 if payload["status"] == "passed" else 1
-        if args.command == "composition-probe":
-            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-            from sciplot_core.studio import maybe_reexec_with_qt_runtime
-
-            original_argv = list(sys.argv[1:] if argv is None else argv)
-            maybe_reexec_with_qt_runtime(original_argv)
-            from sciplot_core.composition_probe import run_composition_probe
-
-            payload = run_composition_probe(
-                [
-                    _resolve_input(document, kind="composition probe VSZ")
-                    for document in args.documents
-                ],
-                output_root=args.out,
-            )
-            if args.json:
-                _print_json(payload)
-            else:
-                print(f"SciPlot Composition probe: {payload['status']}")
-                print(payload["artifacts"]["summary"])
-            return 0 if payload["status"] == "passed" else 1
         if args.command == "readiness-probe":
             from sciplot_core.readiness_probe import run_readiness_probe
 
@@ -1720,82 +787,6 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(f"SciPlot readiness probe: {payload['status']}")
-                print(payload["artifacts"]["summary"])
-            return 0 if payload["status"] == "passed" else 1
-        if args.command == "promotion-probe":
-            from sciplot_core.promotion_probe import run_promotion_probe
-
-            payload = run_promotion_probe(
-                output_root=args.out,
-                synthetic_session_ledger=args.ledger,
-                mapping_execution=args.mapping_execution,
-                canvas_project=args.canvas_project,
-            )
-            if args.json:
-                _print_json(payload)
-            else:
-                print(f"SciPlot promotion probe: {payload['status']}")
-                print(payload["artifacts"]["summary"])
-            return 0 if payload["status"] == "passed" else 1
-        if args.command == "canvas-inspector-probe":
-            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-            from sciplot_core.studio import maybe_reexec_with_qt_runtime
-
-            original_argv = list(sys.argv[1:] if argv is None else argv)
-            maybe_reexec_with_qt_runtime(original_argv)
-            from sciplot_core.canvas_inspector_probe import (
-                run_canvas_inspector_matrix_probe,
-            )
-
-            payload = run_canvas_inspector_matrix_probe(
-                [
-                    _resolve_input(document, kind="VSZ document")
-                    for document in args.documents
-                ],
-                output_root=args.out,
-            )
-            if args.json:
-                _print_json(payload)
-            else:
-                print(f"SciPlot Canvas inspector matrix: {payload['status']}")
-                print(payload["artifacts"]["summary"])
-            return 0 if payload["status"] == "passed" else 1
-        if args.command == "canvas-review-probe":
-            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-            from sciplot_core.studio import maybe_reexec_with_qt_runtime
-
-            original_argv = list(sys.argv[1:] if argv is None else argv)
-            maybe_reexec_with_qt_runtime(original_argv)
-            from sciplot_core.canvas_review_probe import run_canvas_review_probe
-
-            payload = run_canvas_review_probe(
-                _resolve_input(args.target, kind="Canvas review target"),
-                output_root=args.out,
-            )
-            if args.json:
-                _print_json(payload)
-            else:
-                print(f"SciPlot Canvas review probe: {payload['status']}")
-                print(payload["artifacts"]["summary"])
-            return 0 if payload["status"] == "passed" else 1
-        if args.command == "canvas-assistant-probe":
-            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-            from sciplot_core.studio import maybe_reexec_with_qt_runtime
-
-            original_argv = list(sys.argv[1:] if argv is None else argv)
-            maybe_reexec_with_qt_runtime(original_argv)
-            from sciplot_core.canvas_assistant_probe import (
-                run_canvas_assistant_probe,
-            )
-
-            payload = run_canvas_assistant_probe(
-                _resolve_input(args.target, kind="Canvas Assistant target"),
-                output_root=args.out,
-            )
-            if args.json:
-                _print_json(payload)
-            else:
-                print(f"SciPlot Canvas Assistant probe: {payload['status']}")
                 print(payload["artifacts"]["summary"])
             return 0 if payload["status"] == "passed" else 1
         if args.command == "openai-provider-probe":
@@ -1808,26 +799,6 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(payload)
             else:
                 print(f"SciPlot OpenAI provider probe: {payload['status']}")
-                print(payload["artifacts"]["summary"])
-            return 0 if payload["status"] == "passed" else 1
-        if args.command == "canvas-openai-provider-probe":
-            os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-            from sciplot_core.studio import maybe_reexec_with_qt_runtime
-
-            original_argv = list(sys.argv[1:] if argv is None else argv)
-            maybe_reexec_with_qt_runtime(original_argv)
-            from sciplot_core.canvas_openai_provider_probe import (
-                run_canvas_openai_provider_probe,
-            )
-
-            payload = run_canvas_openai_provider_probe(
-                _resolve_input(args.target, kind="Canvas OpenAI provider target"),
-                output_root=args.out,
-            )
-            if args.json:
-                _print_json(payload)
-            else:
-                print(f"SciPlot Canvas OpenAI provider probe: {payload['status']}")
                 print(payload["artifacts"]["summary"])
             return 0 if payload["status"] == "passed" else 1
         if args.command == "data-mapping-probe":

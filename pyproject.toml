@@ -25,6 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "pytest>=9,<10",
   "ruff>=0.15,<1",
 ]
 studio = [
@@ -32,7 +33,7 @@ studio = [
   "h5py",
   "iminuit",
   "PyQt6",
-  "sip",
+  "sip>=6.8,<7",
 ]
 
 [project.scripts]

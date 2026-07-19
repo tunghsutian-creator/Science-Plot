@@ -68,7 +68,9 @@ from sciplot_core.policy import (
     UNIFIED_AXIS_LINEWIDTH_PT,
     UNIFIED_FONT_FAMILY,
     UNIFIED_FONT_SIZE_PT,
+    UNIFIED_FOREGROUND_COLOR,
     UNIFIED_LEGEND_FONT_SIZE_PT,
+    UNIFIED_LEFT_MARGIN_MM,
     UNIFIED_LINE_WIDTH_PT,
     UNIFIED_MARKER_LINE_WIDTH_PT,
     UNIFIED_MARKER_SIZE_PT,
@@ -76,6 +78,9 @@ from sciplot_core.policy import (
     UNIFIED_MINOR_TICK_WIDTH_PT,
     UNIFIED_TICK_LENGTH_PT,
     UNIFIED_TICK_WIDTH_PT,
+    UNIFIED_RIGHT_MARGIN_MM,
+    UNIFIED_BOTTOM_MARGIN_MM,
+    UNIFIED_TOP_MARGIN_MM,
     anchored_log_decade_ticks,
     compact_linear_axis,
     is_removed_outside_legend_position,
@@ -93,11 +98,16 @@ from sciplot_core.publication import (
     write_publication_artifacts,
 )
 from sciplot_core.qa import run_qa
-from sciplot_core.scalar_visual import scalar_visual_contract
+from sciplot_core.scalar_visual import (
+    normalize_opaque_colormap_colors,
+    opaque_color_to_veusz_rgba,
+    scalar_visual_contract,
+)
 from sciplot_core.source_coverage import (
     evaluate_mapping_source_coverage,
     verify_rendered_mapping_source_coverage,
 )
+from sciplot_core.style_contract import validate_veusz_template_id
 from sciplot_core.study_model import (
     attach_run_artifacts_to_study_model,
     build_output_package_contract,
@@ -105,9 +115,9 @@ from sciplot_core.study_model import (
 )
 
 DEFAULT_PALETTE = DEFAULT_PALETTE_COLORS
-STACKED_TEMPLATE_IDS = {"stacked_curve", "segmented_stacked_curve"}
+STACKED_TEMPLATE_IDS = {"stacked_curve"}
 CATEGORICAL_TEMPLATE_IDS = {"box", "box_strip"}
-SCALAR_FIELD_TEMPLATE_IDS = {"heatmap", "contour_field", "annotated_heatmap"}
+SCALAR_FIELD_TEMPLATE_IDS = {"heatmap"}
 POINT_LINE_MARKERS = ("circle", "square", "diamond", "triangle")
 MARKER_MAP = {
     "circle": "circle",
@@ -177,10 +187,10 @@ class _VeuszStyleContract:
     ytick_major_pad_pt: float = 1.4
     legend_inset_fraction: float = 0.025
     legend_frameon: bool = False
-    left_margin_mm: float = 14.0
-    right_margin_mm: float = 4.5
-    bottom_margin_mm: float = 11.0
-    top_margin_mm: float = 5.5
+    left_margin_mm: float = UNIFIED_LEFT_MARGIN_MM
+    right_margin_mm: float = UNIFIED_RIGHT_MARGIN_MM
+    bottom_margin_mm: float = UNIFIED_BOTTOM_MARGIN_MM
+    top_margin_mm: float = UNIFIED_TOP_MARGIN_MM
 
 
 @dataclass(frozen=True)
@@ -4231,22 +4241,6 @@ def _studio_snapshot_sources(
     return [input_path.expanduser().resolve()] if input_path is not None else []
 
 
-def _studio_snapshot_source(
-    input_path: Path | None,
-    *,
-    project_dir: Path,
-    transform_ledger: dict[str, Any] | None,
-) -> Path | None:
-    """Compatibility wrapper returning the primary plotted snapshot."""
-
-    sources = _studio_snapshot_sources(
-        input_path,
-        project_dir=project_dir,
-        transform_ledger=transform_ledger,
-    )
-    return sources[0] if sources else None
-
-
 def _studio_metric_source(source: Path | None) -> Path | None:
     """Resolve one canonical plotted table without guessing among raw files."""
 
@@ -7389,11 +7383,15 @@ def _stack_studio_series(
 def _request_template(request: dict[str, Any]) -> str:
     template = request.get("template")
     if isinstance(template, str) and template.strip():
-        return template.strip()
+        return validate_veusz_template_id(template)
     recipe = request.get("recipe")
     if isinstance(recipe, str) and recipe.strip() and recipe.strip() != "auto":
-        return recipe.strip()
-    return "curve"
+        from sciplot_recipes.contracts import get_recipe_spec
+
+        return validate_veusz_template_id(
+            get_recipe_spec(recipe).default_template
+        )
+    return validate_veusz_template_id("curve")
 
 
 def _looks_like_wavenumber_axis(axis_info: dict[str, Any]) -> bool:
@@ -7805,42 +7803,10 @@ def _scalar_field_plot_contract(
     zscale = str(render_options.get("zscale") or "linear").strip().casefold()
     if zscale == "log" and z_min <= 0.0:
         raise ValueError("Scalar-field logarithmic color scaling requires z_min > 0.")
-    colors_value = render_options.get("colormap_colors")
-    if colors_value is None:
-        colors = list(DEFAULT_SCALAR_FIELD_COLORS)
-    else:
-        if not isinstance(colors_value, list | tuple) or len(colors_value) < 2:
-            raise ValueError(
-                "Scalar-field colormap_colors must contain at least two "
-                "opaque hexadecimal colors."
-            )
-        colors = [str(value) for value in colors_value]
-        if any(
-            re.fullmatch(
-                r"#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?",
-                value,
-            )
-            is None
-            for value in colors
-        ):
-            raise ValueError(
-                "Scalar-field colormap_colors must use #RRGGBB or "
-                "#RRGGBBAA hexadecimal values."
-            )
-        opaque_rgb: list[str] = []
-        for value in colors:
-            alpha = value[7:9] if len(value) == 9 else "FF"
-            if alpha.casefold() != "ff":
-                raise ValueError(
-                    "Scalar-field colormap_colors must be fully opaque so "
-                    "the scientific field cannot disappear."
-                )
-            opaque_rgb.append(value[:7].casefold())
-        if len(set(opaque_rgb)) < 2:
-            raise ValueError(
-                "Scalar-field colormap_colors must contain at least two "
-                "visually distinct colors."
-            )
+    colors = normalize_opaque_colormap_colors(
+        render_options.get("colormap_colors"),
+        default_colors=DEFAULT_SCALAR_FIELD_COLORS,
+    )
     try:
         field_transparency_raw = render_options.get("field_transparency")
         field_transparency = int(
@@ -8004,7 +7970,7 @@ def _scalar_field_plot_contract(
         for value in _float_tuple(render_options.get("highlight_contour_levels"))
         if z_min <= value <= z_max
     ]
-    show_contours = bool(contour_levels) or template_id == "contour_field"
+    show_contours = bool(contour_levels)
     return {
         **json_safe(source),
         "z_min": z_min,
@@ -8032,7 +7998,8 @@ def _scalar_field_plot_contract(
         "contour_labels": render_options.get("contour_labels") is True,
         "highlight_contour_levels": highlight_levels,
         "highlight_contour_color": str(
-            render_options.get("highlight_contour_color") or "#111111"
+            render_options.get("highlight_contour_color")
+            or UNIFIED_FOREGROUND_COLOR
         ),
         "highlight_contour_line_style": str(
             render_options.get("highlight_contour_line_style") or "dashed"
@@ -8053,7 +8020,8 @@ def _scalar_field_plot_contract(
         "colorbar_minor_tick_width_pt": style.minor_tick_width_pt,
         "colorbar_minor_tick_length_pt": style.minor_tick_length_pt,
         "colorbar_foreground_color": str(
-            render_options.get("colorbar_foreground_color") or "#111111"
+            render_options.get("colorbar_foreground_color")
+            or UNIFIED_FOREGROUND_COLOR
         ),
         "colorbar_background_color": background_color,
         "colorbar_background_transparency": (colorbar_background_transparency),
@@ -8131,7 +8099,9 @@ def _reference_guides_contract(render_options: dict[str, Any]) -> list[dict[str,
             line_width_value = item.get("line_width_pt")
             try:
                 line_width_pt = float(
-                    0.7 if line_width_value is None else line_width_value
+                    UNIFIED_LINE_WIDTH_PT
+                    if line_width_value is None
+                    else line_width_value
                 )
             except (TypeError, ValueError) as exc:
                 raise ValueError(
@@ -8198,7 +8168,7 @@ def _veusz_axes_spec(
             "max": axis_contract.x_max,
             "ticks": list(axis_contract.x_ticks),
             "reverse": render_options.get("reverse_x") is True,
-            "foreground_color": "black",
+            "foreground_color": UNIFIED_FOREGROUND_COLOR,
             "label_size_pt": style.font_size_pt,
             "tick_label_size_pt": style.font_size_pt,
             "line_width_pt": style.axis_linewidth_pt,
@@ -8236,7 +8206,7 @@ def _veusz_axes_spec(
             "max": axis_contract.y_max,
             "ticks": list(axis_contract.y_ticks),
             "show_ticks": render_options.get("show_y_ticks") is not False,
-            "foreground_color": "black",
+            "foreground_color": UNIFIED_FOREGROUND_COLOR,
             "label_size_pt": style.font_size_pt,
             "tick_label_size_pt": style.font_size_pt,
             "line_width_pt": style.axis_linewidth_pt,
@@ -8323,8 +8293,8 @@ def _direct_label_contracts(
                 "background_color": "white",
                 "background_transparency": 0,
                 "background_hide": True,
-                "border_color": "black",
-                "border_width_pt": 0.5,
+                "border_color": UNIFIED_FOREGROUND_COLOR,
+                "border_width_pt": style.axis_linewidth_pt,
                 "border_style": "solid",
                 "border_transparency": 0,
                 "border_hide": True,
@@ -8625,14 +8595,6 @@ def _save_veusz_document_from_spec(
                 app.quit()
 
 
-def _hex_to_veusz_rgba(value: str) -> tuple[int, int, int, int]:
-    text = str(value).strip().lstrip("#")
-    if len(text) not in {6, 8} or not re.fullmatch(r"[0-9A-Fa-f]+", text):
-        raise ValueError(f"Invalid scalar-field colormap color: {value}")
-    alpha = int(text[6:8], 16) if len(text) == 8 else 255
-    return int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16), alpha
-
-
 def _add_veusz_contour(
     interface: Any,
     *,
@@ -8669,7 +8631,12 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any]) -> None:
         ycent=[float(value) for value in scalar["y_values"]],
     )
     colormap_name = str(scalar["colormap_name"])
-    colormap = [_hex_to_veusz_rgba(value) for value in scalar["colormap_colors"]]
+    colormap = [
+        opaque_color_to_veusz_rgba(value)
+        for value in normalize_opaque_colormap_colors(
+            scalar["colormap_colors"]
+        )
+    ]
     interface.AddCustom("colormap", colormap_name, colormap, mode="replace")
     # Veusz paints graph children in reverse object-tree order. Add overlays
     # first and the opaque image last so contours and the colorbar remain
@@ -8690,7 +8657,10 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any]) -> None:
         name="field_highlight_contours",
         data_name=data_name,
         levels=[float(value) for value in scalar.get("highlight_contour_levels") or []],
-        color=str(scalar.get("highlight_contour_color") or "#111111"),
+        color=str(
+            scalar.get("highlight_contour_color")
+            or UNIFIED_FOREGROUND_COLOR
+        ),
         line_style=str(scalar.get("highlight_contour_line_style") or "dashed"),
         line_width_pt=UNIFIED_LINE_WIDTH_PT,
         show_labels=False,
@@ -8730,7 +8700,10 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any]) -> None:
         interface.Set("label", str(scalar.get("z_label") or "Z"))
         interface.Set("autoMirror", False)
         interface.Set("outerticks", True)
-        foreground_color = str(scalar.get("colorbar_foreground_color") or "#111111")
+        foreground_color = str(
+            scalar.get("colorbar_foreground_color")
+            or UNIFIED_FOREGROUND_COLOR
+        )
         interface.Set("Line/color", foreground_color)
         interface.Set("Line/width", _pt(float(scalar["colorbar_line_width_pt"])))
         interface.Set("Line/hide", False)

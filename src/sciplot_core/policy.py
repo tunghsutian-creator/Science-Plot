@@ -73,6 +73,11 @@ UNIFIED_MINOR_TICK_WIDTH_PT = 0.8
 UNIFIED_MINOR_TICK_LENGTH_PT = 1.5
 UNIFIED_MARKER_SIZE_PT = 2.0
 UNIFIED_MARKER_LINE_WIDTH_PT = 0.8
+UNIFIED_FOREGROUND_COLOR = "#111111"
+UNIFIED_LEFT_MARGIN_MM = 14.0
+UNIFIED_RIGHT_MARGIN_MM = 4.5
+UNIFIED_BOTTOM_MARGIN_MM = 11.0
+UNIFIED_TOP_MARGIN_MM = 5.5
 UNIFIED_HARD_OPTION_KEYS = frozenset(
     {
         "font_size_pt",
@@ -134,16 +139,6 @@ MIN_BOX_REPLICATES = 2
 CATEGORICAL_BOX_FILL_FRACTION = 0.36
 CATEGORICAL_BOX_FILL_TRANSPARENCY = 72
 CATEGORICAL_BOX_LINE_WIDTH_PT = UNIFIED_LINE_WIDTH_PT
-COMPOSITION_NATIVE_STYLE_POLICY: dict[str, str] = {
-    "font_family": "Arial",
-    "font_size": "7pt",
-    "axis_line_width": "0.7pt",
-    "major_tick_width": "0.7pt",
-    "minor_tick_width": "0.45pt",
-    "plot_line_width": "0.9pt",
-    "marker_line_width": "0.8pt",
-    "panel_label_size": "8pt",
-}
 
 # Public request keys accepted by the compatibility intake surface.  Keep this
 # contract explicit and renderer-independent so importing intake never starts
@@ -215,6 +210,7 @@ RENDER_OPTION_KEYS = frozenset(
         "color_invert",
         "field_mapping",
         "field_draw_mode",
+        "field_transparency",
         "contour_levels",
         "contour_color",
         "contour_line_style",
@@ -616,7 +612,7 @@ FTIR_SPECTRUM_RENDER_OPTIONS: dict[str, Any] = {
 
 @dataclass(frozen=True)
 class StrokePolicy:
-    default_line_width_pt: float = 1.2
+    default_line_width_pt: float = UNIFIED_LINE_WIDTH_PT
     min_line_width_pt: float = 1.0
     max_line_width_pt: float = 1.6
     min_line_to_tick_ratio: float = 0.9
@@ -804,14 +800,19 @@ __all__ = [
     "UNIFIED_AXIS_LINEWIDTH_PT",
     "UNIFIED_FONT_FAMILY",
     "UNIFIED_FONT_SIZE_PT",
+    "UNIFIED_FOREGROUND_COLOR",
     "UNIFIED_HARD_OPTION_KEYS",
     "UNIFIED_LEGEND_FONT_SIZE_PT",
+    "UNIFIED_LEFT_MARGIN_MM",
     "UNIFIED_LINE_WIDTH_PT",
     "UNIFIED_MARKER_LINE_WIDTH_PT",
     "UNIFIED_MARKER_SIZE_PT",
     "UNIFIED_MINOR_TICK_LENGTH_PT",
     "UNIFIED_MINOR_TICK_WIDTH_PT",
     "UNIFIED_PANEL_LABEL_SIZE_PT",
+    "UNIFIED_RIGHT_MARGIN_MM",
+    "UNIFIED_BOTTOM_MARGIN_MM",
+    "UNIFIED_TOP_MARGIN_MM",
     "UNIFIED_TICK_LENGTH_PT",
     "UNIFIED_TICK_WIDTH_PT",
     "DEFAULT_FIGURE_SIZE",
@@ -823,7 +824,6 @@ __all__ = [
     "DEFAULT_PALETTE_PRESET",
     "DEFAULT_RENDER_OPTIONS",
     "CURVE_RENDER_OPTIONS",
-    "COMPOSITION_NATIVE_STYLE_POLICY",
     "DELIVERY_DIR",
     "DELIVERY_DATA_DIR",
     "DELIVERY_EDITABLE_DIR",

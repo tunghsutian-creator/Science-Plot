@@ -16,7 +16,6 @@ from sciplot_core.policy import (
     CURVE_RENDER_OPTIONS,
     DEFAULT_RENDER_OPTIONS as _DEFAULT_RENDER_OPTIONS,
     DEFAULT_LOG_TICK_FORMAT,
-    DEFAULT_PALETTE_PRESET,
     FTIR_SPECTRUM_RENDER_OPTIONS,
     POINT_LINE_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_RENDER_OPTIONS,
@@ -2003,120 +2002,6 @@ def compute_analysis_metrics(
         ]
     _write_metrics_csv(rows, output_dir / "tables" / "analysis_metrics.csv")
     return rows
-
-
-JOURNAL_PRESETS: dict[str, dict[str, Any]] = {
-    "nature": {
-        "label": "SciPlot publication layout (legacy Nature alias)",
-        "sizes": ("60x55", "120x55", "180x55"),
-        "style_preset": "nature",
-        "palette_preset": DEFAULT_PALETTE_PRESET,
-        "exports": ("pdf", "tiff_300"),
-        "max_width_mm": 180,
-        "description": (
-            "Legacy compatibility alias. The 60/120/180 mm values are SciPlot panel widths, not verified Nature column widths or a compliance claim."
-        ),
-        "verified_compliance": False,
-        "compatibility_alias": True,
-        "publication_profile_id": "sciplot_composite_183_v1",
-    },
-    "acs": {
-        "label": "ACS",
-        "sizes": ("60x55", "120x55"),
-        "style_preset": "acs",
-        "palette_preset": DEFAULT_PALETTE_PRESET,
-        "exports": ("pdf", "tiff_300"),
-        "max_width_mm": 120,
-        "description": "Legacy unverified SciPlot style hint; not an ACS submission-compliance profile.",
-        "verified_compliance": False,
-        "compatibility_alias": True,
-        "publication_profile_id": "sciplot_composite_183_v1",
-    },
-    "science": {
-        "label": "Science",
-        "sizes": ("60x55", "120x55"),
-        "style_preset": "science",
-        "palette_preset": DEFAULT_PALETTE_PRESET,
-        "exports": ("pdf", "tiff_300"),
-        "max_width_mm": 120,
-        "description": "Legacy unverified SciPlot style hint; not a Science submission-compliance profile.",
-        "verified_compliance": False,
-        "compatibility_alias": True,
-        "publication_profile_id": "sciplot_composite_183_v1",
-    },
-    "elsevier": {
-        "label": "Elsevier",
-        "sizes": ("60x55", "120x55", "180x55"),
-        "style_preset": "elsevier",
-        "palette_preset": DEFAULT_PALETTE_PRESET,
-        "exports": ("pdf", "tiff_300"),
-        "max_width_mm": 180,
-        "description": "Legacy unverified SciPlot style hint; not an Elsevier submission-compliance profile.",
-        "verified_compliance": False,
-        "compatibility_alias": True,
-        "publication_profile_id": "sciplot_composite_183_v1",
-    },
-    "wiley": {
-        "label": "Wiley",
-        "sizes": ("60x55", "120x55", "180x55"),
-        "style_preset": "wiley",
-        "palette_preset": DEFAULT_PALETTE_PRESET,
-        "exports": ("pdf", "tiff_300"),
-        "max_width_mm": 180,
-        "description": "Legacy unverified SciPlot style hint; not a Wiley submission-compliance profile.",
-        "verified_compliance": False,
-        "compatibility_alias": True,
-        "publication_profile_id": "sciplot_composite_183_v1",
-    },
-    "acs_macromolecules": {
-        "label": "Macromolecules (ACS)",
-        "sizes": ("60x55", "120x55"),
-        "style_preset": "acs",
-        "palette_preset": DEFAULT_PALETTE_PRESET,
-        "exports": ("pdf", "tiff_300"),
-        "max_width_mm": 120,
-        "description": "Legacy unverified SciPlot style hint; not a Macromolecules compliance profile.",
-        "verified_compliance": False,
-        "compatibility_alias": True,
-        "publication_profile_id": "sciplot_composite_183_v1",
-    },
-    "polymer": {
-        "label": "Polymer (Elsevier)",
-        "sizes": ("60x55", "120x55", "180x55"),
-        "style_preset": "elsevier",
-        "palette_preset": DEFAULT_PALETTE_PRESET,
-        "exports": ("pdf", "tiff_300"),
-        "max_width_mm": 180,
-        "description": "Legacy unverified SciPlot style hint; not a Polymer submission-compliance profile.",
-        "verified_compliance": False,
-        "compatibility_alias": True,
-        "publication_profile_id": "sciplot_composite_183_v1",
-    },
-}
-
-
-def list_journal_presets() -> list[dict[str, Any]]:
-    return [
-        {
-            "id": preset_id,
-            "label": preset["label"],
-            "description": preset["description"],
-            "sizes": list(preset["sizes"]),
-            "style_preset": preset["style_preset"],
-            "palette_preset": preset["palette_preset"],
-            "verified_compliance": preset["verified_compliance"],
-            "compatibility_alias": preset["compatibility_alias"],
-            "publication_profile_id": preset["publication_profile_id"],
-        }
-        for preset_id, preset in JOURNAL_PRESETS.items()
-    ]
-
-
-def get_journal_preset(preset_id: str) -> dict[str, Any]:
-    if preset_id not in JOURNAL_PRESETS:
-        known = ", ".join(sorted(JOURNAL_PRESETS))
-        raise ValueError(f"Unknown journal preset `{preset_id}`. Available: {known}.")
-    return dict(JOURNAL_PRESETS[preset_id])
 
 
 __all__ = [

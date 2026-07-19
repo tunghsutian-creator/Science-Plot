@@ -15,13 +15,11 @@ from typing import Any
 
 from sciplot_core._paths import (
     REPO_ROOT,
-    VEUSZ_ROOT,
-    VEUSZ_UPSTREAM_COMMIT,
     VENDORED_CORE_ROOT,
 )
 from sciplot_core._utils import file_sha256, json_safe
 
-RUNTIME_SMOKE_VERSION = 23
+RUNTIME_SMOKE_VERSION = 25
 EXPECTED_RULE_ID = "ftir_spectrum"
 MANUAL_EDIT_MARKER = "# SciPlot runtime smoke manual-edit preservation probe"
 EXPECTED_SCALAR_VISUAL_ATTACK_IDS = frozenset(
@@ -663,7 +661,7 @@ def _data_mapping_studio_lifecycle_probe(
     source_path: Path,
     base_request_path: Path,
 ) -> dict[str, Any]:
-    from sciplot_core.canvas import (
+    from sciplot_core.mapping_contract import (
         DataColumnMapping,
         DataMappingProposal,
         DataSourceReference,
@@ -672,10 +670,6 @@ def _data_mapping_studio_lifecycle_probe(
         create_data_mapping_confirmation,
         execute_data_mapping_proposal,
         preview_data_mapping_proposal,
-    )
-    from sciplot_core.session_evidence_artifacts import (
-        artifact_content_record,
-        verify_regular_source_lineage,
     )
     from sciplot_core.studio import (
         export_studio_document,
@@ -775,60 +769,6 @@ def _data_mapping_studio_lifecycle_probe(
         for step in transform.get("steps", [])
         if isinstance(step, dict)
     ]
-    mapping_execution_path = project_dir / "execution.json"
-    mapping_execution = json.loads(mapping_execution_path.read_text(encoding="utf-8"))
-    source_record = artifact_content_record(source_path.parent)
-    source_evidence = {
-        "source_id": "source_01",
-        "kind": "directory",
-        "path": source_record["path"],
-        "file_count": source_record["member_count"],
-        "size_bytes": source_record["size_bytes"],
-        "tree_sha256": "",
-        "artifact_sha256": source_record["sha256"],
-        "members": source_record["members"],
-    }
-    witnessed_mapping = {
-        "path": str(mapping_execution_path.resolve()),
-        "sha256": file_sha256(mapping_execution_path),
-        "proposal_id": mapping_execution["proposal_id"],
-        "proposal_sha256": mapping_execution["proposal_sha256"],
-        "provider": mapping_execution["provider"],
-        "confirmation_id": mapping_execution["confirmation_id"],
-        "transform_ledger_sha256": mapping_execution["transform_ledger_sha256"],
-        "raw_inputs_unchanged": True,
-        "handoff_allowed": True,
-    }
-    try:
-        verified_lineage = verify_regular_source_lineage(
-            manifest,
-            preregistration={
-                "sources": [source_evidence],
-                "expected_evidence": ["data_mapping"],
-            },
-            witnessed_mapping=witnessed_mapping,
-        )
-        lineage_error = None
-    except (OSError, TypeError, ValueError) as exc:
-        verified_lineage = None
-        lineage_error = str(exc)
-    forged_manifest = copy.deepcopy(manifest)
-    forged_steps = (forged_manifest.get("transform_ledger") or {}).get("steps")
-    if isinstance(forged_steps, list) and forged_steps:
-        forged_steps[0]["operation"] = "forged_mapping_operation"
-    try:
-        verify_regular_source_lineage(
-            forged_manifest,
-            preregistration={
-                "sources": [source_evidence],
-                "expected_evidence": ["data_mapping"],
-            },
-            witnessed_mapping=witnessed_mapping,
-        )
-    except ValueError:
-        forged_mapping_rejected = True
-    else:
-        forged_mapping_rejected = False
     raw_hash_after = file_sha256(source_path)
     passed = bool(
         preview.get("writes_performed") is False
@@ -846,9 +786,6 @@ def _data_mapping_studio_lifecycle_probe(
         and manifest.get("ready_to_use") is True
         and (manifest.get("qa") or {}).get("status") == "passed"
         and (manifest.get("delivery_package") or {}).get("complete") is True
-        and isinstance(verified_lineage, dict)
-        and verified_lineage.get("mapping_bound") is True
-        and forged_mapping_rejected
     )
     return {
         "passed": passed,
@@ -862,9 +799,6 @@ def _data_mapping_studio_lifecycle_probe(
         "series_count": prepared.get("series_count"),
         "coverage": coverage,
         "operations": operations,
-        "verified_lineage": verified_lineage,
-        "lineage_error": lineage_error,
-        "forged_mapping_rejected": forged_mapping_rejected,
         "qa_status": (manifest.get("qa") or {}).get("status"),
         "publication_status": ((manifest.get("qa") or {}).get("publication") or {}).get(
             "status"
@@ -2608,22 +2542,6 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 detail=wrapper_probe,
             )
         )
-        from sciplot_core.canvas_probe import run_canvas_contract_probe
-
-        canvas_contract_probe = run_canvas_contract_probe(
-            output_root=run_root / "canvas_contract"
-        )
-        checks.append(
-            _check(
-                "canvas_contract_v7",
-                "CanvasSession, hash-bound provider requests and responses, "
-                "active Assistant transactions, journal outbox, contextual "
-                "inspector, typed edits, native review promotion, point "
-                "selection, and mapping proposals roundtrip without Qt",
-                canvas_contract_probe.get("status") == "passed",
-                detail=canvas_contract_probe,
-            )
-        )
         from sciplot_core.data_mapping_probe import run_data_mapping_probe
 
         data_mapping_probe = run_data_mapping_probe(
@@ -2666,111 +2584,6 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             )
         )
 
-        from sciplot_core.session_evidence_probe import (
-            run_session_evidence_probe,
-        )
-
-        session_evidence_probe = run_session_evidence_probe(
-            output_root=run_root / "session_evidence"
-        )
-        checks.append(
-            _check(
-                "session_evidence_contract_v1",
-                "Preregistered natural-task evidence is hash-chained, "
-                "reopen-witnessed, final-authority bound, duplicate-safe, "
-                "tamper-evident, and unable to promote synthetic probes into "
-                "M3/M6 counts",
-                session_evidence_probe.get("status") == "passed",
-                detail={
-                    "status": session_evidence_probe.get("status"),
-                    "summary": session_evidence_probe.get("summary"),
-                    "artifacts": session_evidence_probe.get("artifacts"),
-                    "limitations": session_evidence_probe.get("limitations"),
-                },
-            )
-        )
-
-        from sciplot_core.session_evidence_runtime import (
-            _linked_qt_binaries,
-            runtime_identity,
-        )
-
-        frozen_runtime = runtime_identity(
-            veusz_root=VEUSZ_ROOT,
-            veusz_upstream_commit=VEUSZ_UPSTREAM_COMMIT,
-        )
-        linked_qt = frozen_runtime.get("linked_qt_binaries")
-        linked_qt = linked_qt if isinstance(linked_qt, dict) else {}
-        linked_qt_binaries = linked_qt.get("binaries")
-        linked_qt_binaries = (
-            linked_qt_binaries if isinstance(linked_qt_binaries, list) else []
-        )
-        helper_count = len(list((VEUSZ_ROOT / "veusz" / "helpers").glob("*.so")))
-        no_helper_veusz_root = run_root / "runtime_identity_no_helpers"
-        no_helper_package = no_helper_veusz_root / "veusz"
-        no_helper_package.mkdir(parents=True, exist_ok=True)
-        (no_helper_package / "__init__.py").write_text(
-            "# Runtime identity no-helper contract fixture.\n",
-            encoding="utf-8",
-        )
-        no_helper_runtime = runtime_identity(
-            veusz_root=no_helper_veusz_root,
-            veusz_upstream_commit=VEUSZ_UPSTREAM_COMMIT,
-        )
-        no_helper_linked = (no_helper_runtime.get("linked_qt_binaries") or {}).get(
-            "binaries"
-        )
-        no_helper_linked = (
-            no_helper_linked if isinstance(no_helper_linked, list) else []
-        )
-        unresolved_qt_rejected = True
-        if sys.platform == "darwin":
-            try:
-                _linked_qt_binaries(
-                    no_helper_veusz_root,
-                    qt_binding_root=run_root / "missing_pyqt_runtime",
-                )
-            except ValueError:
-                pass
-            else:
-                unresolved_qt_rejected = False
-        checks.append(
-            _check(
-                "frozen_runtime_identity",
-                "The evidence candidate fingerprints active Veusz, every "
-                "PyQt/Qt binary, linked Qt helper runtimes, Python, platform, "
-                "and installed dependency versions",
-                bool(frozen_runtime.get("identity_sha256"))
-                and int((frozen_runtime.get("veusz") or {}).get("file_count") or 0) > 0
-                and int((frozen_runtime.get("qt_binding") or {}).get("file_count") or 0)
-                > 0
-                and (
-                    sys.platform != "darwin"
-                    or (
-                        bool(linked_qt_binaries)
-                        and bool(no_helper_linked)
-                        and unresolved_qt_rejected
-                    )
-                ),
-                detail={
-                    "identity_sha256": frozen_runtime.get("identity_sha256"),
-                    "veusz_file_count": (frozen_runtime.get("veusz") or {}).get(
-                        "file_count"
-                    ),
-                    "qt_binary_count": (frozen_runtime.get("qt_binding") or {}).get(
-                        "file_count"
-                    ),
-                    "veusz_helper_count": helper_count,
-                    "linked_qt_binary_count": len(linked_qt_binaries),
-                    "no_helper_linked_qt_binary_count": len(no_helper_linked),
-                    "unresolved_qt_rejected": unresolved_qt_rejected,
-                    "dependency_count": (frozen_runtime.get("dependencies") or {}).get(
-                        "count"
-                    ),
-                },
-            )
-        )
-
         from sciplot_core.doctor import doctor_payload
         from sciplot_core.studio import (
             export_studio_document,
@@ -2794,16 +2607,8 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             DEFAULT_LOG_MINOR_MULTIPLIERS,
             DEFAULT_LOG_MINOR_TICK_COUNT,
             RHEOLOGY_FREQUENCY_RENDER_OPTIONS,
-            UNIFIED_AXIS_LINEWIDTH_PT,
-            UNIFIED_FONT_FAMILY,
-            UNIFIED_FONT_SIZE_PT,
-            UNIFIED_LEGEND_FONT_SIZE_PT,
-            UNIFIED_LINE_WIDTH_PT,
-            UNIFIED_MARKER_SIZE_PT,
-            UNIFIED_MINOR_TICK_WIDTH_PT,
-            UNIFIED_PANEL_LABEL_SIZE_PT,
-            UNIFIED_TICK_WIDTH_PT,
         )
+        from sciplot_core.style_contract import audit_style_template_contract
 
         log_tick_policy = {
             "subdivisions_per_decade": DEFAULT_LOG_MINOR_TICK_COUNT,
@@ -2823,34 +2628,13 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 detail=log_tick_policy,
             )
         )
-        unified_style = {
-            "font_family": UNIFIED_FONT_FAMILY,
-            "font_size_pt": UNIFIED_FONT_SIZE_PT,
-            "legend_font_size_pt": UNIFIED_LEGEND_FONT_SIZE_PT,
-            "panel_label_size_pt": UNIFIED_PANEL_LABEL_SIZE_PT,
-            "line_width_pt": UNIFIED_LINE_WIDTH_PT,
-            "axis_linewidth_pt": UNIFIED_AXIS_LINEWIDTH_PT,
-            "tick_width_pt": UNIFIED_TICK_WIDTH_PT,
-            "minor_tick_width_pt": UNIFIED_MINOR_TICK_WIDTH_PT,
-            "marker_size_pt": UNIFIED_MARKER_SIZE_PT,
-        }
+        style_template_audit = audit_style_template_contract()
         checks.append(
             _check(
                 "unified_figure_style_contract",
-                "All templates use the same SciPlot typography, strokes, and marker size",
-                unified_style
-                == {
-                    "font_family": "Arial",
-                    "font_size_pt": 7.0,
-                    "legend_font_size_pt": 6.0,
-                    "panel_label_size_pt": 7.0,
-                    "line_width_pt": 1.2,
-                    "axis_linewidth_pt": 0.8,
-                    "tick_width_pt": 0.8,
-                    "minor_tick_width_pt": 0.8,
-                    "marker_size_pt": 2.0,
-                },
-                detail=unified_style,
+                "Templates and figure profiles consume the global style contract",
+                style_template_audit.get("status") == "passed",
+                detail=style_template_audit,
             )
         )
         qt_mainwindow_probe = _qt_mainwindow_probe()
@@ -3102,6 +2886,29 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 },
             )
         )
+        from sciplot_core.studio_assistant_probe import (
+            run_studio_assistant_probe,
+        )
+
+        studio_assistant_probe = run_studio_assistant_probe(
+            document_path,
+            output_root=run_root / "studio_assistant",
+        )
+        checks.append(
+            _check(
+                "veusz_mainwindow_assistant_integration",
+                "The optional selected-object Assistant shares the native Veusz "
+                "document, stays opt-in, applies bounded edits through native "
+                "undo, and preserves save/reopen/export authority",
+                studio_assistant_probe.get("status") == "passed",
+                detail={
+                    "status": studio_assistant_probe.get("status"),
+                    "summary": studio_assistant_probe.get("summary"),
+                    "artifacts": studio_assistant_probe.get("artifacts"),
+                    "limitations": studio_assistant_probe.get("limitations"),
+                },
+            )
+        )
         from sciplot_core.studio_figure_set_probe import (
             run_studio_figure_set_probe,
         )
@@ -3116,205 +2923,6 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 "fail closed on missing metrics, and never imply a composite",
                 studio_figure_set_probe.get("status") == "passed",
                 detail=studio_figure_set_probe,
-            )
-        )
-        from sciplot_core.canvas_probe import run_canvas_characterization
-
-        canvas_characterization = run_canvas_characterization(
-            document_path,
-            output_root=run_root / "canvas_characterization",
-        )
-        checks.append(
-            _check(
-                "embedded_canvas_characterization",
-                "Embedded PlotWindow supports live typed redraw, interaction, history, recovery, conflict detection, save/reopen, and exact export",
-                canvas_characterization.get("status") == "passed",
-                detail=canvas_characterization,
-            )
-        )
-        from sciplot_core.canvas_app_probe import run_canvas_app_probe
-
-        canvas_app_probe = run_canvas_app_probe(
-            project_dir,
-            output_root=run_root / "canvas_app",
-            operation_count=50,
-        )
-        canvas_app_evidence = canvas_app_probe.get("evidence")
-        canvas_app_evidence = (
-            canvas_app_evidence if isinstance(canvas_app_evidence, dict) else {}
-        )
-        checks.append(
-            _check(
-                "native_canvas_app_lifecycle",
-                "The SciPlot-owned Canvas completes contextual edits, point "
-                "selection, structural QA, 50 live redraws, save/reopen, exact "
-                "export, project delivery, and explicit recovery",
-                canvas_app_probe.get("status") == "passed",
-                detail={
-                    "status": canvas_app_probe.get("status"),
-                    "summary": canvas_app_probe.get("summary"),
-                    "operation_count": canvas_app_evidence.get("operation_count"),
-                    "revision": canvas_app_evidence.get("revision_after_operations"),
-                    "render_changes": canvas_app_evidence.get("render_changes"),
-                    "reopened_state": canvas_app_evidence.get("reopened_state"),
-                    "recovered_state": canvas_app_evidence.get("recovered_state"),
-                    "export": canvas_app_evidence.get("export"),
-                    "source_immutable": canvas_app_evidence.get("source_immutable"),
-                    "artifacts": canvas_app_probe.get("artifacts"),
-                },
-            )
-        )
-        session_runtime_probes = session_evidence_probe.get("runtime_probes")
-        session_runtime_probes = (
-            session_runtime_probes if isinstance(session_runtime_probes, dict) else {}
-        )
-        canvas_review_probe = session_runtime_probes.get("canvas_review")
-        if not isinstance(canvas_review_probe, dict):
-            from sciplot_core.canvas_review_probe import run_canvas_review_probe
-
-            canvas_review_probe = run_canvas_review_probe(
-                project_dir,
-                output_root=run_root / "canvas_review",
-            )
-        checks.append(
-            _check(
-                "native_canvas_review_lifecycle",
-                "The SciPlot-owned Canvas persists five review tools outside "
-                "publication exports, promotes four typed native annotations, "
-                "and preserves undo, reopen, QA, and audit semantics",
-                canvas_review_probe.get("status") == "passed",
-                detail={
-                    "status": canvas_review_probe.get("status"),
-                    "summary": canvas_review_probe.get("summary"),
-                    "evidence": canvas_review_probe.get("evidence"),
-                    "artifacts": canvas_review_probe.get("artifacts"),
-                },
-            )
-        )
-        composition_probe = session_runtime_probes.get("composition")
-        if not isinstance(composition_probe, dict):
-            from sciplot_core.composition_probe import run_composition_probe
-
-            composition_probe = run_composition_probe(
-                [document_path],
-                output_root=run_root / "composition",
-            )
-        checks.append(
-            _check(
-                "native_composition_lifecycle",
-                "The 183 mm Composition Board compiles all five native layouts, "
-                "routes a real drag through typed reversible operations, protects "
-                "manual edits, keeps variants and source VSZ files independent, "
-                "and passes exact-current PDF/TIFF delivery QA",
-                composition_probe.get("status") == "passed",
-                detail={
-                    "status": composition_probe.get("status"),
-                    "check_count": composition_probe.get("check_count"),
-                    "passed_count": composition_probe.get("passed_count"),
-                    "artifacts": composition_probe.get("artifacts"),
-                },
-            )
-        )
-        from sciplot_core.canvas_assistant_probe import (
-            run_canvas_assistant_probe,
-        )
-
-        canvas_assistant_probe = run_canvas_assistant_probe(
-            project_dir,
-            output_root=run_root / "canvas_assistant",
-        )
-        canvas_assistant_evidence = canvas_assistant_probe.get("evidence")
-        canvas_assistant_evidence = (
-            canvas_assistant_evidence
-            if isinstance(canvas_assistant_evidence, dict)
-            else {}
-        )
-        checks.append(
-            _check(
-                "native_canvas_assistant_transaction",
-                "The SciPlot-owned Canvas accepts a bounded provider request "
-                "off the GUI thread, shows progress, previews hash-bound typed "
-                "diffs without mutation, discards late cancelled results, "
-                "applies live, undoes, commits, rolls back exactly, and "
-                "recovers interrupted work; DataMappingProposal additionally "
-                "requires a zero-write preview and an explicit receipt before "
-                "building a separate mapped Canvas",
-                canvas_assistant_probe.get("status") == "passed",
-                detail={
-                    "status": canvas_assistant_probe.get("status"),
-                    "summary": canvas_assistant_probe.get("summary"),
-                    "first_apply_latency_ms": canvas_assistant_evidence.get(
-                        "first_apply_latency_ms"
-                    ),
-                    "journal_event_count": canvas_assistant_evidence.get(
-                        "journal_event_count"
-                    ),
-                    "provider_request_count": canvas_assistant_evidence.get(
-                        "provider_request_count"
-                    ),
-                    "provider_contract_guards": canvas_assistant_evidence.get(
-                        "provider_contract_guards"
-                    ),
-                    "provider_late_result_discarded": (
-                        canvas_assistant_evidence.get("provider_late_result_discarded")
-                    ),
-                    "source_hash_before": canvas_assistant_evidence.get(
-                        "source_hash_before"
-                    ),
-                    "source_hash_after": canvas_assistant_evidence.get(
-                        "source_hash_after"
-                    ),
-                    "artifacts": canvas_assistant_probe.get("artifacts"),
-                    "limitations": canvas_assistant_probe.get("limitations"),
-                },
-            )
-        )
-        from sciplot_core.promotion_probe import run_promotion_probe
-
-        session_evidence_artifacts = session_evidence_probe.get("artifacts")
-        session_evidence_artifacts = (
-            session_evidence_artifacts
-            if isinstance(session_evidence_artifacts, dict)
-            else {}
-        )
-        data_mapping_artifacts = data_mapping_probe.get("artifacts")
-        data_mapping_artifacts = (
-            data_mapping_artifacts if isinstance(data_mapping_artifacts, dict) else {}
-        )
-        canvas_assistant_artifacts = canvas_assistant_probe.get("artifacts")
-        canvas_assistant_artifacts = (
-            canvas_assistant_artifacts
-            if isinstance(canvas_assistant_artifacts, dict)
-            else {}
-        )
-        promotion_probe = run_promotion_probe(
-            output_root=run_root / "promotion",
-            synthetic_session_ledger=Path(
-                str(session_evidence_artifacts["canvas_ledger"])
-            ),
-            mapping_execution=Path(str(data_mapping_artifacts["execution"])),
-            canvas_project=(
-                Path(str(canvas_assistant_artifacts["run_root"])) / "project"
-            ),
-        )
-        checks.append(
-            _check(
-                "reviewed_promotion_mechanism",
-                "Replay-verified mapping executions and committed Canvas "
-                "transactions canonicalize into powerless candidates; "
-                "synthetic evidence, mixed-owner or duplicate-task vote "
-                "stuffing, unsigned or session-unbound receipts, rewritten "
-                "states, unrelated probes, mutable Git/index authority, "
-                "self-attested mapping effects, raw values, provider "
-                "identities, object IDs, and tampered collections cannot "
-                "cross the reviewed gate",
-                promotion_probe.get("status") == "passed",
-                detail={
-                    "status": promotion_probe.get("status"),
-                    "summary": promotion_probe.get("summary"),
-                    "artifacts": promotion_probe.get("artifacts"),
-                    "limitations": promotion_probe.get("limitations"),
-                },
             )
         )
         from sciplot_core.openai_provider_probe import run_openai_provider_probe
@@ -3334,30 +2942,6 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                     "summary": openai_provider_probe.get("summary"),
                     "artifacts": openai_provider_probe.get("artifacts"),
                     "limitations": openai_provider_probe.get("limitations"),
-                },
-            )
-        )
-        from sciplot_core.canvas_openai_provider_probe import (
-            run_canvas_openai_provider_probe,
-        )
-
-        canvas_openai_probe = run_canvas_openai_provider_probe(
-            project_dir,
-            output_root=run_root / "canvas_openai_provider",
-        )
-        checks.append(
-            _check(
-                "native_canvas_openai_provider_lifecycle",
-                "A natural-language request reaches the production adapter from "
-                "the visible Canvas, previews without mutation, applies through "
-                "the typed gateway, and rolls back exactly",
-                canvas_openai_probe.get("status") == "passed",
-                detail={
-                    "status": canvas_openai_probe.get("status"),
-                    "summary": canvas_openai_probe.get("summary"),
-                    "evidence": canvas_openai_probe.get("evidence"),
-                    "artifacts": canvas_openai_probe.get("artifacts"),
-                    "limitations": canvas_openai_probe.get("limitations"),
                 },
             )
         )
@@ -3615,10 +3199,6 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             "it does not replace the complete ready-rule acceptance matrix.",
             "The OpenAI provider gates use an in-memory HTTP/SSE wire fixture and do not "
             "claim live-model quality or a successful paid API call.",
-            "The session-evidence gate uses synthetic contracts and adversarial "
-            "mutations; it never counts as owner-operated M3/M6 evidence.",
-            "The promotion gate uses simulated threshold records and a replayed "
-            "synthetic ledger; it creates no real candidate or promotion.",
             "Lifecycle success and artifact QA do not establish blanket journal compliance.",
         ],
     }

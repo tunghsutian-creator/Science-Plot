@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from sciplot_core.canvas.provider import canonical_payload_sha256
+from sciplot_core.assistant_provider import canonical_payload_sha256
 
 ASSISTANT_HISTORY_KIND = "sciplot_studio_assistant_history_event"
 ASSISTANT_HISTORY_VERSION = 1

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -13,14 +14,33 @@ from sciplot_core.policy import (
     normalize_raw_point_jitter_fraction,
 )
 from sciplot_core.split import normalize_split_policy
+from sciplot_core.style_contract import (
+    VEUSZ_IMPLEMENTED_TEMPLATE_IDS,
+    validate_veusz_template_id,
+)
 from sciplot_core.study_model import sync_study_model_samples
 
 ensure_legacy_core()
 
-from src.plot_contract import load_plot_contract, template_contract  # noqa: E402
+from src.plot_contract import load_plot_contract  # noqa: E402
 
 _RENDER_PARAMETER_NAMES = RENDER_OPTION_KEYS
 _INTAKE_EXPORT_FORMATS = SUPPORTED_EXPORT_FORMATS
+
+
+def _validate_legacy_hard_style_options(options: Mapping[str, Any]) -> None:
+    for key in sorted(UNIFIED_HARD_OPTION_KEYS.intersection(options)):
+        value = options[key]
+        if isinstance(value, bool):
+            raise ValueError(f"`{key}` must be a finite positive number.")
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"`{key}` must be a finite positive number."
+            ) from exc
+        if not math.isfinite(numeric) or numeric <= 0.0:
+            raise ValueError(f"`{key}` must be a finite positive number.")
 
 
 def normalize_exports(exports: object) -> list[str]:
@@ -62,17 +82,12 @@ def _validate_template_render_option_keys(
     if not template:
         return
     contract = load_plot_contract()
-    resolved_template = str(template).strip()
+    resolved_template = validate_veusz_template_id(template)
     if resolved_template not in contract.templates:
-        known = ", ".join(sorted(contract.templates))
-        raise ValueError(
-            f"Unknown template: {resolved_template}. Supported templates: {known}"
+        raise RuntimeError(
+            f"Veusz template `{resolved_template}` is missing from the renderer contract."
         )
-    spec = (
-        contract.templates[resolved_template]
-        if resolved_template in contract.templates
-        else template_contract(resolved_template)
-    )
+    spec = contract.templates[resolved_template]
     unsupported = sorted(
         key
         for key in keys
@@ -105,6 +120,7 @@ def normalize_render_options(
     template: str | None = None,
 ) -> dict[str, Any]:
     if not isinstance(render_options, Mapping):
+        _validate_template_render_option_keys(set(), template=template)
         return {}
     selected: dict[str, Any] = {
         str(key): value
@@ -115,6 +131,7 @@ def normalize_render_options(
     # Keep old request files readable, but do not let legacy typography/stroke
     # options survive as effective settings.  The renderer owns one hard
     # project-wide style now.
+    _validate_legacy_hard_style_options(selected)
     selected = {
         key: value for key, value in selected.items() if key not in UNIFIED_HARD_OPTION_KEYS
     }
@@ -184,6 +201,15 @@ def apply_request_patch(
     review_note: str | None = None,
 ) -> dict[str, Any]:
     patched = dict(request)
+    effective_template = (
+        template
+        if template is not None
+        else (
+            str(patched["template"])
+            if patched.get("template") not in (None, "")
+            else None
+        )
+    )
     selected_exports = normalize_exports(
         exports if exports is not None else patched.get("exports")
     )
@@ -199,7 +225,10 @@ def apply_request_patch(
         else set(current_render_options)
     )
     clear_keys = set(
-        normalize_clear_render_options(clear_render_options, template=template)
+        normalize_clear_render_options(
+            clear_render_options,
+            template=effective_template,
+        )
     )
     explicit_keys -= clear_keys
     current_render_options = {
@@ -207,7 +236,10 @@ def apply_request_patch(
         for key, value in current_render_options.items()
         if key not in clear_keys
     }
-    normalized_patch = normalize_render_options(render_options, template=template)
+    normalized_patch = normalize_render_options(
+        render_options,
+        template=effective_template,
+    )
     selected_series = _selected_series_labels(series_order)
     explicit_order = _selected_series_labels(normalized_patch.get("series_order"))
     explicit_include = _selected_series_labels(normalized_patch.get("series_include"))
@@ -224,7 +256,7 @@ def apply_request_patch(
     merged_render_options = {**current_render_options, **normalized_patch}
     merged_render_options = normalize_render_options(
         merged_render_options,
-        template=template,
+        template=effective_template,
     )
 
     patched["exports"] = selected_exports
@@ -263,6 +295,7 @@ def apply_request_patch(
 
 
 __all__ = [
+    "VEUSZ_IMPLEMENTED_TEMPLATE_IDS",
     "apply_request_patch",
     "normalize_clear_render_options",
     "normalize_exports",

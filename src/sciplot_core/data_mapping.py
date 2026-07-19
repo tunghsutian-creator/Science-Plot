@@ -23,7 +23,7 @@ from sciplot_core._utils import (
     json_safe,
     safe_filename,
 )
-from sciplot_core.canvas.assistant_contract import (
+from sciplot_core.mapping_contract import (
     DataColumnMapping,
     DataMappingConfirmation,
     DataMappingProposal,

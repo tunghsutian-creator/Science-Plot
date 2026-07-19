@@ -15,6 +15,7 @@ from sciplot_core.publication import (
     list_composite_layouts,
 )
 from sciplot_core.readiness import validated_envelope_status
+from sciplot_core.style_contract import audit_style_template_contract
 
 
 def _check(
@@ -107,8 +108,8 @@ def _publication_foundation_available() -> bool:
     )
 
 
-def _optional_composition_available() -> bool:
-    """Report the retained composition regression without gating daily use."""
+def _publication_layout_inventory_available() -> bool:
+    """Report deterministic figure-level layout metadata without a UI claim."""
 
     try:
         layouts = list_composite_layouts()
@@ -169,6 +170,7 @@ def doctor_payload() -> dict[str, Any]:
     fixtures_ok, fixture_detail = _ready_rule_fixtures_exist(rules)
     veusz_qt_ok, veusz_qt_detail = _veusz_qt_runtime_status()
     envelope_ok, envelope_detail, envelope_payload = _validated_envelope_summary()
+    style_audit = audit_style_template_contract()
 
     checks = [
         _check(
@@ -212,13 +214,23 @@ def doctor_payload() -> dict[str, Any]:
             ),
         ),
         _check(
-            "optional_composition",
-            "Optional historical native-composition regression",
-            _optional_composition_available(),
+            "style_template_contract",
+            "Global style and implemented-template contract",
+            style_audit.get("status") == "passed",
+            detail=(
+                f"{len(style_audit.get('implemented_veusz_templates') or [])} "
+                "production Veusz templates; unified typography, strokes, "
+                "markers, and physical frame; explicit heatmap color contract"
+            ),
+        ),
+        _check(
+            "publication_layout_inventory",
+            "Optional figure-level publication layout inventory",
+            _publication_layout_inventory_available(),
             required=False,
             detail=(
-                "Retained for explicit regression only; it is not part of "
-                "Veusz-first daily readiness."
+                "Deterministic 183 mm layout metadata only; no standalone "
+                "layout editor is part of daily readiness."
             ),
         ),
         _check(
@@ -292,13 +304,21 @@ def doctor_payload() -> dict[str, Any]:
             "silent_data_omission_allowed": False,
         },
         "optional_capabilities": {
-            "native_composition": {
+            "publication_layout_inventory": {
                 "required_for_daily_readiness": False,
-                "available": _optional_composition_available(),
-                "canvas_width_mm": 183.0,
+                "available": _publication_layout_inventory_available(),
+                "figure_width_mm": 183.0,
                 "layout_ids": [layout["id"] for layout in layouts],
                 "profile": "sciplot_composite_183_v1",
             },
+        },
+        "style_template_contract": {
+            "status": style_audit.get("status"),
+            "implemented_veusz_templates": style_audit.get(
+                "implemented_veusz_templates"
+            )
+            or [],
+            "issues": style_audit.get("issues") or [],
         },
         "rule_summary": {
             "total": len(rules),
@@ -355,6 +375,11 @@ def _next_actions(required_failures: list[dict[str, Any]]) -> list[str]:
         actions.append(
             "Restore the single-panel publication profile, lineage contracts, "
             "and artifact QA."
+        )
+    if "style_template_contract" in failed_ids:
+        actions.append(
+            "Resolve template-private style or implementation drift before "
+            "returning the runtime to daily use."
         )
     if not actions:
         actions.append("Fix the failed required checks before normal use.")

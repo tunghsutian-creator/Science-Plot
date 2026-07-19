@@ -4,18 +4,26 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
+from sciplot_core.figure_layouts import (
+    RELATIVE_GRADIENT_STRIP_LAYOUT_ID,
+    get_figure_layout,
+)
 from sciplot_core.policy import (
     DEFAULT_LOG_MINOR_TICK_COUNT,
+    DEFAULT_SCALAR_FIELD_COLORMAP_ID,
+    DEFAULT_SCALAR_FIELD_COLORS,
     POINT_LINE_RENDER_OPTIONS,
     UNIFIED_AXIS_LINEWIDTH_PT,
     UNIFIED_FONT_FAMILY,
     UNIFIED_FONT_SIZE_PT,
+    UNIFIED_LEFT_MARGIN_MM,
     UNIFIED_LINE_WIDTH_PT,
     UNIFIED_MARKER_SIZE_PT,
     UNIFIED_MINOR_TICK_LENGTH_PT,
     UNIFIED_MINOR_TICK_WIDTH_PT,
     UNIFIED_TICK_LENGTH_PT,
     UNIFIED_TICK_WIDTH_PT,
+    UNIFIED_RIGHT_MARGIN_MM,
 )
 
 
@@ -30,6 +38,7 @@ class FigureProfile:
     frame_margins_mm: dict[str, float] | None
     qa_contract: dict[str, Any]
     description: str
+    publication_layout_id: str | None = None
 
     def to_payload(self) -> dict[str, Any]:
         return {
@@ -44,16 +53,11 @@ class FigureProfile:
             "frame_margins_mm": deepcopy(self.frame_margins_mm),
             "qa_contract": deepcopy(self.qa_contract),
             "description": self.description,
+            "publication_layout_id": self.publication_layout_id,
             "input_contract": "plot_ready_data_only",
         }
 
 
-_THICKNESS_FRAME_MM = {
-    "left": 13.0,
-    "right": 4.0,
-    "bottom": 10.5,
-    "top": 4.5,
-}
 _THICKNESS_MAJOR_TICKS = [-2.0, -1.0, 0.0, 1.0, 2.0]
 _THICKNESS_MINOR_TICKS = [
     round(value / 5.0, 10)
@@ -61,6 +65,9 @@ _THICKNESS_MINOR_TICKS = [
     if value not in {-5, 0, 5}
 ]
 _SPARSE_LOG_MINOR_MULTIPLIERS = (2.0, 4.0, 6.0, 8.0)
+_RELATIVE_GRADIENT_LAYOUT = get_figure_layout(
+    RELATIVE_GRADIENT_STRIP_LAYOUT_ID
+)
 
 
 def _thickness_curve_options(*, y_label: str) -> dict[str, Any]:
@@ -124,7 +131,7 @@ _PROFILES: dict[str, FigureProfile] = {
         template="point_line",
         size_mm=(120.0, 55.0),
         render_options=_thickness_curve_options(y_label="\\italic{G}′ (Pa)"),
-        frame_margins_mm=deepcopy(_THICKNESS_FRAME_MM),
+        frame_margins_mm=None,
         qa_contract={
             "filled_markers": True,
             "marker_size_pt": UNIFIED_MARKER_SIZE_PT,
@@ -135,11 +142,14 @@ _PROFILES: dict[str, FigureProfile] = {
                 "x": "Thickness position (mm)",
                 "y": "\\italic{G}′ (Pa)",
             },
-            "plot_frame_x_mm": [13.0, 116.0],
+            "plot_frame_x_mm": [
+                UNIFIED_LEFT_MARGIN_MM,
+                120.0 - UNIFIED_RIGHT_MARGIN_MM,
+            ],
         },
         description=(
-            "Symmetric full-thickness G′ curve with the 13–116 mm physical frame "
-            "used for direct alignment to the four-panel cloud strip."
+            "Symmetric full-thickness G′ curve using the shared SciPlot "
+            "publication frame."
         ),
     ),
     "thickness_gprime_ratio_v1": FigureProfile(
@@ -149,7 +159,7 @@ _PROFILES: dict[str, FigureProfile] = {
         template="point_line",
         size_mm=(120.0, 55.0),
         render_options=_thickness_curve_options(y_label="\\italic{G}′/\\italic{G}′_{0}"),
-        frame_margins_mm=deepcopy(_THICKNESS_FRAME_MM),
+        frame_margins_mm=None,
         qa_contract={
             "filled_markers": True,
             "marker_size_pt": UNIFIED_MARKER_SIZE_PT,
@@ -160,7 +170,10 @@ _PROFILES: dict[str, FigureProfile] = {
                 "x": "Thickness position (mm)",
                 "y": "\\italic{G}′/\\italic{G}′_{0}",
             },
-            "plot_frame_x_mm": [13.0, 116.0],
+            "plot_frame_x_mm": [
+                UNIFIED_LEFT_MARGIN_MM,
+                120.0 - UNIFIED_RIGHT_MARGIN_MM,
+            ],
         },
         description=(
             "SI companion for a precomputed sample-specific G′/G′₀ curve. "
@@ -172,9 +185,10 @@ _PROFILES: dict[str, FigureProfile] = {
         label="Shared-colorbar relative-gradient strip",
         figure_kind="shared_scalar_strip",
         template=None,
-        size_mm=(120.0, 42.0),
+        size_mm=_RELATIVE_GRADIENT_LAYOUT.size_mm,
         render_options={
-            "colormap_name": "parula",
+            "colormap_name": DEFAULT_SCALAR_FIELD_COLORMAP_ID,
+            "colormap_colors": list(DEFAULT_SCALAR_FIELD_COLORS),
             "color_invert": False,
             "x_min": -2.0,
             "x_max": 0.0,
@@ -183,13 +197,21 @@ _PROFILES: dict[str, FigureProfile] = {
             "x_label_override": "Thickness position (mm)",
             "z_label_override": "Γ_{G′}",
             "z_unit_override": "(mm⁻¹)",
-            "panel_gap_mm": 1.1,
-            "panel_top_mm": 6.0,
-            "panel_bottom_mm": 34.0,
-            "panel_outer_left_mm": 13.0,
-            "panel_outer_right_mm": 116.0,
-            "colorbar_left_mm": 8.2,
-            "colorbar_right_mm": 10.4,
+            "panel_gap_mm": _RELATIVE_GRADIENT_LAYOUT.panel_gap_mm,
+            "panel_top_mm": _RELATIVE_GRADIENT_LAYOUT.panel_frame_y_mm[0],
+            "panel_bottom_mm": _RELATIVE_GRADIENT_LAYOUT.panel_frame_y_mm[1],
+            "panel_outer_left_mm": (
+                _RELATIVE_GRADIENT_LAYOUT.outer_frame_x_mm[0]
+            ),
+            "panel_outer_right_mm": (
+                _RELATIVE_GRADIENT_LAYOUT.outer_frame_x_mm[1]
+            ),
+            "colorbar_left_mm": (
+                _RELATIVE_GRADIENT_LAYOUT.colorbar_frame_mm[0]
+            ),
+            "colorbar_right_mm": (
+                _RELATIVE_GRADIENT_LAYOUT.colorbar_frame_mm[2]
+            ),
         },
         frame_margins_mm=None,
         qa_contract={
@@ -202,10 +224,16 @@ _PROFILES: dict[str, FigureProfile] = {
                 "name": "Γ_{G′}",
                 "unit": "(mm⁻¹)",
             },
-            "outer_frame_x_mm": [13.0, 116.0],
-            "panel_frame_y_mm": [6.0, 34.0],
-            "colorbar_frame_mm": [8.2, 6.0, 10.4, 34.0],
-            "panel_gap_mm": 1.1,
+            "outer_frame_x_mm": list(
+                _RELATIVE_GRADIENT_LAYOUT.outer_frame_x_mm
+            ),
+            "panel_frame_y_mm": list(
+                _RELATIVE_GRADIENT_LAYOUT.panel_frame_y_mm
+            ),
+            "colorbar_frame_mm": list(
+                _RELATIVE_GRADIENT_LAYOUT.colorbar_frame_mm
+            ),
+            "panel_gap_mm": _RELATIVE_GRADIENT_LAYOUT.panel_gap_mm,
             "font_family": UNIFIED_FONT_FAMILY,
             "font_size_pt": UNIFIED_FONT_SIZE_PT,
             "axis_linewidth_pt": UNIFIED_AXIS_LINEWIDTH_PT,
@@ -220,6 +248,7 @@ _PROFILES: dict[str, FigureProfile] = {
             "A single explicit color range is shared by every panel; the profile "
             "deliberately supplies no scientific z-range default."
         ),
+        publication_layout_id=RELATIVE_GRADIENT_STRIP_LAYOUT_ID,
     ),
 }
 
@@ -232,6 +261,7 @@ def list_figure_profiles() -> list[dict[str, Any]]:
             "figure_kind": profile.figure_kind,
             "size_mm": list(profile.size_mm),
             "description": profile.description,
+            "publication_layout_id": profile.publication_layout_id,
         }
         for profile in _PROFILES.values()
     ]

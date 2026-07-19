@@ -182,7 +182,6 @@ def _copy_project_fixture(source_project: Path, run_root: Path) -> Path:
             "delivery",
             "exports",
             "*.zip",
-            ".sciplot_canvas",
         ),
     )
     request_path = copied_project / "plot_request.json"

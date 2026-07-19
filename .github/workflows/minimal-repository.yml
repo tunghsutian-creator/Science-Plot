@@ -9,6 +9,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
       - name: Enforce minimal runtime distribution
         shell: bash
         run: |
@@ -17,11 +21,11 @@ jobs:
             # A file cannot be both source-controlled and declared local-only.
             git ls-files -ci --exclude-standard
             git ls-files \
-              tests test examples example tmp tools outputs figures ftir_output .tmp_verify \
+              examples example tmp tools outputs figures ftir_output .tmp_verify \
               .superpowers sciplot-main .DS_Store AGENTS.md DEVELOPMENT_LOG.md Makefile \
               Launch_SciPlot_App.command
             git ls-files docs | grep -Ev \
-              '^docs/(THIRD_PARTY_NOTICES|SESSION_EVIDENCE|SCIPLOT_REVIEWED_PROMOTION)\.md$' \
+              '^docs/THIRD_PARTY_NOTICES\.md$' \
               || true
             git ls-files \
               third_party/veusz/tests \
@@ -40,9 +44,29 @@ jobs:
             exit 1
           fi
       - name: Compile SciPlot-owned Python
-        run: python3 -m compileall -q src/sciplot_core src/sciplot_recipes
+        run: python3 -m compileall -q src/sciplot_core src/sciplot_gui src/sciplot_recipes
+      - name: Install Veusz build toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends build-essential qt6-base-dev
       - name: Install local runtime
-        run: python3 -m pip install -e '.[studio]'
+        run: python3 -m pip install -e '.[studio,dev]'
+      - name: Build vendored Veusz helpers
+        working-directory: third_party/veusz
+        run: QMAKE_EXE="$(command -v qmake6)" python3 setup.py build_ext --inplace
+      - name: Verify vendored Veusz helpers
+        env:
+          PYTHONPATH: third_party/veusz
+        run: python3 -c 'from veusz.helpers import _nc_cntr, qtmml, qtloops, recordpaint, threed; assert all((qtloops, qtmml, recordpaint, threed, _nc_cntr))'
+      - name: Verify minimal wheel surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip wheel . --no-deps --no-build-isolation \
+            --wheel-dir /tmp/sciplot-wheel
+          python3 -c 'import glob, zipfile; wheel = glob.glob("/tmp/sciplot-wheel/*.whl")[0]; names = zipfile.ZipFile(wheel).namelist(); forbidden = ("sciplot_core/canvas", "sciplot_core/composition", "sciplot_core/promotion", "sciplot_core/session_evidence", "sciplot_gui/composition", "sciplot_gui/inspectors", "sciplot_gui/app.py", "sciplot_gui/main_window.py", "sciplot_gui/veusz_canvas.py"); bad = [name for name in names if name.startswith(forbidden)]; assert not bad, bad'
+      - name: Run deterministic unit tests
+        run: python3 -m pytest -q
       - name: Verify source-checkout wrapper bootstrap
         run: env -u PYTHONPATH SCIPLOT_PYTHON=python3 skill/scripts/sciplot --help >/dev/null
       - name: Run readiness check

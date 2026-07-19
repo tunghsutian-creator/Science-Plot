@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core._utils import file_sha256, json_safe
-from sciplot_core.canvas.persistence import atomic_write_json
+from sciplot_core._utils import atomic_write_json
 from sciplot_core.materials_rules import (
     SemanticRule,
     get_rule,
@@ -1508,7 +1508,6 @@ def validated_envelope_status(
             "journal_compliance_established": False,
             "human_daily_use_cutover_established": False,
             "human_daily_use_validation_established": False,
-            "canvas_cutover_applicable": False,
         },
         "limitations": list(resolved.limitations),
     }

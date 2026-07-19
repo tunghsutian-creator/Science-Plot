@@ -8,7 +8,7 @@ DEFAULT_SPLIT_MAX_SERIES_PER_PANEL = 4
 DEFAULT_SPLIT_DELIVERY = "multi_figure_same_metric"
 STACKED_TALL_FIGURE_HEIGHT_MM = 100.0
 SUPPORTED_SPLIT_MODES = frozenset({"series_chunks"})
-SUPPORTED_SPLIT_TEMPLATES = frozenset({"stacked_curve", "stacked_area", "segmented_stacked_curve"})
+SUPPORTED_SPLIT_TEMPLATES = frozenset({"stacked_curve"})
 DEFAULT_STACK_SPLIT_POLICY = {
     "trigger": "still_unreadable_after_taller_preset",
     "mode": "series_chunks",

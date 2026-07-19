@@ -17,9 +17,12 @@ from types import SimpleNamespace
 from typing import Any, Callable, Iterator
 
 from sciplot_core._utils import file_sha256, json_safe
-from sciplot_core.canvas.inspector import SUPPORTED_INSPECTOR_TYPES
-from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
-from sciplot_core.canvas.provider import (
+from sciplot_core.setting_catalog import SUPPORTED_INSPECTOR_TYPES
+from sciplot_core.assistant_operations import (
+    VeuszSettingOperation,
+    VeuszSettingOperationBatch,
+)
+from sciplot_core.assistant_provider import (
     AssistantCancellationToken,
     AssistantProgressEvent,
     AssistantProviderDescriptor,
@@ -164,7 +167,7 @@ class DeterministicStudioAssistantProvider:
             provider_id=_PROVIDER_ID,
             display_name="Offline Studio Assistant Probe",
             model_label="deterministic-fixture",
-            capabilities=("canvas_operation_batch", "cancellation"),
+            capabilities=("veusz_setting_operation_batch", "cancellation"),
         )
         self._lock = threading.Lock()
         self._next_value = ""
@@ -233,14 +236,14 @@ class DeterministicStudioAssistantProvider:
                 progress=0.9,
             )
         )
-        operation = CanvasOperation.set_setting(
+        operation = VeuszSettingOperation.set_setting(
             target_id=str(capability["target_id"]),
             setting_path=str(capability["setting_path"]),
             value=next_value,
             expected_value=capability["current_value"],
             require_expected_value=True,
         )
-        batch = CanvasOperationBatch(
+        batch = VeuszSettingOperationBatch(
             base_revision=restored.base_revision,
             provider=self.descriptor.provider_id,
             rationale="Offline Studio axis-label probe",
@@ -253,7 +256,7 @@ class DeterministicStudioAssistantProvider:
             request_sha256=restored.payload_sha256,
             status="proposal",
             understanding="The exact-current axis label has one bounded edit.",
-            proposal_kind="canvas_operation_batch",
+            proposal_kind="veusz_setting_operation_batch",
             proposal=batch.to_dict(),
         )
 
@@ -262,9 +265,9 @@ class DeterministicStudioAssistantProvider:
 def _injected_provider_resolution(
     provider: DeterministicStudioAssistantProvider | None,
 ) -> Iterator[None]:
-    from sciplot_gui import app as canvas_app
+    from sciplot_gui import studio_assistant as studio_assistant_module
 
-    original = canvas_app.resolve_canvas_assistant_provider
+    original = studio_assistant_module.resolve_assistant_provider
 
     def resolve(
         assistant_provider: object = None,
@@ -274,11 +277,11 @@ def _injected_provider_resolution(
         _ = assistant_provider, environ
         return provider
 
-    canvas_app.resolve_canvas_assistant_provider = resolve
+    studio_assistant_module.resolve_assistant_provider = resolve
     try:
         yield
     finally:
-        canvas_app.resolve_canvas_assistant_provider = original
+        studio_assistant_module.resolve_assistant_provider = original
 
 
 def _create_window(

@@ -1,30 +1,28 @@
 ---
 name: sciplot-materials-analysis
-description: Deterministic materials-science plotting with Veusz VSZ editing, artifact QA, delivery, and optional assisted rule/data repair.
+description: Deterministic materials-science plotting through editable Veusz VSZ projects, artifact QA, delivery, and optional selected-object AI.
 ---
 
 # SciPlot Materials Analysis
 
-Use the repository CLI. Do not make one-off Matplotlib figures or copy style,
-axis, legend, unit or extraction constants into ad-hoc scripts. Veusz is the
-only production renderer; `studio/document.vsz` is the advanced-editing truth.
+Use the repository CLI and shared contracts. Do not create one-off plotting
+scripts, copy style constants, or introduce another renderer or editor.
 
-## Active development direction
+## Product boundary
 
-For product-development work, read `DEVELOPMENT_ROADMAP.md` before changing
-the GUI, AI integration, or Studio ownership. The original Veusz `MainWindow`
-is the final daily frontend, not a transition surface. SciPlot adds only
-optional, closable Project and AI docks plus exact-current export actions to
-the same live Veusz `Document`.
+Veusz `MainWindow` is the only daily plotting frontend and
+`studio/document.vsz` is the visual authority. Keep object selection,
+alignment, arbitrary properties, Datasets, Save, and Undo/Redo in Veusz.
 
-Do not revive the standalone Canvas as a replacement frontend, rebuild
-Veusz's arbitrary property editor, add a second renderer or document model,
-automate the Veusz GUI with mouse clicks, or make native composition part of
-the ordinary readiness gate. The historical Canvas and Composition code may
-remain as bounded regression/reference capabilities, but daily development is
-driven by real Veusz-first tasks.
+SciPlot may add default-hidden Project and AI docks to the same live
+`Document`. AI is optional and may only propose validated `set_setting`
+operations for the currently selected supported object. Provider absence must
+not disable deterministic plotting, manual editing, QA, export, or delivery.
 
-## Daily route
+Do not recreate or reference removed Canvas, Composition, session-evidence, or
+promotion workflows. Do not automate Veusz with mouse clicks or patch VSZ text.
+
+## Standard workflow
 
 1. Check readiness:
 
@@ -32,22 +30,29 @@ driven by real Veusz-first tasks.
    skill/scripts/sciplot doctor --json
    ```
 
-   Stop unless `status=ready`.
+   Require `status=ready`.
 
-2. Run the single normal path:
+2. Inspect new input and local rules when needed:
 
    ```bash
-   skill/scripts/sciplot studio INPUT_PATH \
+   skill/scripts/sciplot inspect INPUT --json
+   skill/scripts/sciplot rules list --json
+   skill/scripts/sciplot rules show RULE_ID --json
+   ```
+
+3. Prefer the VSZ-first daily route:
+
+   ```bash
+   skill/scripts/sciplot studio INPUT \
      --out outputs/projects \
      --export pdf,tiff_300 \
      --json
    ```
 
-   When the user or Luna/Codex already knows the experiment and presentation,
-   pass explicit intent instead of forcing recognition:
+   When scientific or presentation intent is already known, pass it:
 
    ```bash
-   skill/scripts/sciplot studio INPUT_PATH \
+   skill/scripts/sciplot studio INPUT \
      --rule RULE_ID \
      --template TEMPLATE_ID \
      --out outputs/projects \
@@ -55,19 +60,17 @@ driven by real Veusz-first tasks.
      --json
    ```
 
-   `--rule` bypasses automatic recognition and must name a ready rule.
-   `--template` remains optional and independently user-selectable.
+   `--rule` must name a ready rule. `--template` must be implemented by the
+   production Veusz builder.
 
-3. If advanced correction is needed, open the user-facing
-   `RUN/delivery/Open_in_Veusz.command` launcher (the prepared project also
-   keeps `PROJECT/Open_in_Veusz.command` as a convenience entrypoint), save
-   the VSZ, then export the exact current document:
+4. For advanced changes, edit in Veusz and export the exact current document:
 
    ```bash
+   skill/scripts/sciplot studio PROJECT/studio/document.vsz --advanced-editor
    skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
    ```
 
-   For a standalone Veusz master without a SciPlot request, use:
+   For a standalone master:
 
    ```bash
    skill/scripts/sciplot studio FIGURE.vsz \
@@ -76,137 +79,123 @@ driven by real Veusz-first tasks.
      --json
    ```
 
-   Require `standalone_export.status=passed` and `export_ready=true`. Read
-   `standalone_export_receipt.json` and `qa_report.json`. A missing optional
-   `.spec.json` must be reported as absent, not treated as an export failure.
-   This route proves exact-current export only; it does not establish source
-   provenance, transform lineage, or a complete SciPlot project delivery.
+   A standalone receipt proves exact-current export and artifact QA only. It
+   does not establish source provenance or a complete project delivery.
 
-   When the native window is open, keep ordinary alignment, selection, object
-   properties, Datasets, Save, and Undo/Redo in Veusz. Open the optional
-   SciPlot Project dock for source/QA/delivery status and the optional SciPlot
-   AI dock only for bounded edits to the currently selected supported object.
-   Both docks operate on the same document and remain hidden by default.
+5. Before handoff, inspect state, current VSZ hash, `manifest.json`,
+   `review.html`, figures, `tables/analysis_metrics.csv`, QA, and `delivery/`.
+   Require ready state, passed QA, and complete delivery.
 
-4. Before reporting success, read the returned state, current VSZ hash,
-   `manifest.json`, `review.html`, figures, `tables/analysis_metrics.csv`, QA and
-   `delivery/`. Require `state=ready`, `qa.status=passed` and
-   `delivery.complete=true`.
+## Supported template boundary
 
-   The user-facing `delivery/` is intentionally small and has only this
-   structure:
+The production builder implements exactly:
 
-   ```text
-   delivery/
-     data/*.csv                 four-row plotting-data CSVs only
-     pdf/*.pdf                  PDF figures only
-     tiff/*_300dpi.tiff         300 dpi TIFF figures only
-     project/*.vsz              editable Veusz project documents
-     Open_in_Veusz.command      launcher for the project documents
-   ```
-
-   Runtime manifests, raw archives, analysis metrics, QA reports, and
-   provenance remain in the run output rather than being copied into this
-   handoff surface.
-
- Generated `.command` launchers support `--check` for a non-interactive real
- Veusz load check. They resolve SciPlot through `SCIPLOT_REPO`, an enclosing
-checkout, the generation-time fallback, or an installed `sciplot` command.
-For an isolated development worktree, keep `SCIPLOT_REPO`/`SCIPLOT_SOURCE_ROOT`
-on the development source and set `SCIPLOT_RUNTIME_REPO` to the trusted
-checkout that owns the compiled Veusz helpers and virtual environment. On
-macOS, use the wrapper rather than a bare Python invocation so its Qt framework
- bootstrap runs; require the `veusz_qt_runtime` doctor check to pass.
-
-## State handling
-
-- `ready`: hand off the reviewed delivery.
-- `needs_human_confirmation`: ask only for the unresolved scientific mapping.
-- `needs_rule_repair`: inspect intervention/cleanup artifacts, repair the
-  semantic rule or recipe, add a fixture/test, and rerun the same command.
-
-The frontend opens in independent mode. There is no user-facing mode switch.
-Do not ask the user to switch modes. Luna/Codex is optional and starts only
-after an explicit request or a deterministic blocker.
-
-Never turn empty/unreadable data into a placeholder series or fake workbook.
-Never allow a pending rule, skipped QA or incomplete delivery to masquerade as
-ready. Preserve raw inputs and scientific meaning.
-
-## Before rule work
-
-```bash
-skill/scripts/sciplot inspect INPUT --json
-skill/scripts/sciplot rules list --json
-skill/scripts/sciplot rules show RULE_ID --json
+```text
+curve
+point_line
+stacked_curve
+box
+box_strip
+heatmap
 ```
 
-`src/sciplot_core/materials_rules.py` owns experiment families, axes, aliases,
-units and deterministic metrics. Automatic matching uses fixture-backed ready
-rules only; new and pending rules require fixture coverage before production.
-Do not expand keyword recognition when the user or Luna/Codex can supply
-explicit `--rule` intent reliably.
+Unknown or reference-only templates must fail at request validation; never
+silently render them as curves.
+
+`src/sciplot_core/policy.py` owns global typography, stroke, tick, marker,
+ordinary frame, size, export, and delivery defaults. The vendored
+`plot_contract.json` and `src/sciplot_core/style_contract.py` enforce agreement
+across templates, ready rules, figure profiles, and render defaults.
+Templates and recipes must not own private font, line-width, tick, marker, or
+ordinary-margin constants.
+
+## States and repair
+
+- `ready`: inspect and hand off the reviewed delivery.
+- `needs_human_confirmation`: ask only for unresolved scientific meaning.
+- `needs_rule_repair`: repair the shared semantic rule, recipe, policy, or QA;
+  add a fixture/test and rerun the same request.
+
+Never turn empty or unreadable data into a placeholder series. Never let
+pending rules, skipped QA, or incomplete delivery appear ready. Preserve raw
+inputs and scientific meaning.
+
+When cleanup is necessary:
+
+1. preserve raw inputs;
+2. write and inspect `cleanup_result.json` when data is reshaped;
+3. patch the central owner rather than create a one-off plot;
+4. add representative fixture/test coverage;
+5. rerun Studio export and inspect the final delivery.
 
 Use existing recipe families before adding code: `tensile`,
 `stress_relaxation`, `rheology_dma`, `thermal`, `spectroscopy`, `scattering`,
 `chromatography`, and `metrics_swelling`.
 
-## Expert routes
+## Delivery contract
+
+The user-facing package is intentionally limited to:
+
+```text
+delivery/
+  data/*.csv
+  pdf/*.pdf
+  tiff/*_300dpi.tiff
+  project/*.vsz
+  Open_in_Veusz.command
+```
+
+Raw archives, manifests, analysis tables, QA, publication evidence, and
+transform lineage remain in the run output.
+
+## Other supported routes
 
 ```bash
 # Repeat a confirmed request
 skill/scripts/sciplot run plot_request.json
 
-# Stable supported script package
-skill/scripts/sciplot autoplot INPUT_PATH --out outputs/autoplot_projects --json
+# Stable supported package
+skill/scripts/sciplot autoplot INPUT --out outputs/autoplot_projects --json
 
-# Folder/real-data acceptance
+# Folder and rule acceptance
 skill/scripts/sciplot batch INPUT_DIR --out OUTDIR --mode smoke
-skill/scripts/sciplot batch INPUT_DIR --out OUTDIR --mode all --tensile-root PATH
 skill/scripts/sciplot acceptance rules --out outputs/acceptance --json
-skill/scripts/sciplot acceptance 3dpa INPUT_PATH --out outputs/acceptance --json
 
 # Torque event curation
-skill/scripts/sciplot curate torque INPUT_PATH --name PROJECT_NAME \
+skill/scripts/sciplot curate torque INPUT --name PROJECT_NAME \
   --out outputs/curation_projects --json
 
-# Browser compatibility confirmation, only when explicitly requested
+# Browser data-confirmation compatibility surface, only when requested
 skill/scripts/sciplot app --out outputs/intake_projects
 
-# Publication contracts and independent QA
-skill/scripts/sciplot publication layouts --json
-skill/scripts/sciplot publication profile nature_flagship_research_2026_v1 --json
-skill/scripts/sciplot qa OUTDIR --profile sciplot_composite_183_v1
+# Independent artifact QA
+skill/scripts/sciplot qa OUTDIR --strict-publication
 ```
 
-`acceptance rules` runs the exact Studio/VSZ/export/delivery lifecycle for all
-ready rules and writes JSON, CSV and Markdown evidence matrices. A passed
-instrument-shaped fixture remains a real-data gap; inspect the evidence tier
-before reporting breadth.
+The browser route is not a drawing frontend. Source, Inspect, and Samples are
+data-confirmation stages; Result Review appears only after rendered artifacts
+exist.
 
-Source, Inspect, and Samples are data-confirmation stages, not plot-preview
-stages. Result Review appears only after Export or assisted repair produces
-rendered artifacts. Do not use an empty plot preview as a placeholder during
-import, inspection, or grouping. Read Result Review artifacts (`review.html`,
-figures, manifest, metrics, and QA) before reporting output.
+## Verification and evidence
 
-## Assisted repair contract
+After every non-trivial code change:
 
-When `intervention_request.json`, `assisted_cleanup_request.json`,
-`needs_ai_intervention`, or `needs_rule_repair` appears:
+```bash
+python -m pytest -q
+skill/scripts/sciplot doctor --json
+skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json
+git diff --check
+```
 
-1. preserve raw inputs;
-2. write a reviewed `cleanup_result.json` when reshaping data;
-3. patch the central rule/recipe rather than create a one-off plot;
-4. add a representative fixture and test;
-5. rerun deterministic Studio export and inspect delivery.
+For shared style, renderer, rule, QA, or delivery changes, also run:
 
-`publication_intent.json`, `transform_ledger.json`, `journal_profile.json` and
-`publication_qa.json` are required review artifacts when present. Do not infer
-statistics, omit data, select results for visual strength, or call partial QA
-coverage journal compliance.
+```bash
+skill/scripts/sciplot acceptance rules --out outputs/acceptance --json
+```
 
-Default single-figure size is `60x55`. Use wider presets only when selected or
-documented by a central rule. Explicit 183 mm composites use 180, 90+90,
-120+60, 60+120 or 60+60+60 nominal tracks with recorded gutters; independent
-figure queue entries are not implicit panels.
+Inspect each evidence tier. Synthetic smoke is a runtime change gate, not
+real-data evidence. Passing automation does not prove sustained human daily
+use or blanket journal compliance.
+
+For every non-trivial development turn, update `DEVELOPMENT_LOG.md` with the
+change, current project state, and verification before reporting.

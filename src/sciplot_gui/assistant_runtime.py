@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import warnings
+from collections.abc import Mapping
+from typing import cast
+
 from PyQt6 import QtCore
 
-from sciplot_core.canvas.provider import (
+from sciplot_core.assistant_provider import (
     AssistantCancellationToken,
     AssistantCancelled,
     AssistantProgressEvent,
@@ -11,6 +15,31 @@ from sciplot_core.canvas.provider import (
     AssistantRequest,
     AssistantResponse,
 )
+
+_AUTO_ASSISTANT_PROVIDER = object()
+
+
+def resolve_assistant_provider(
+    assistant_provider: AssistantProvider | None | object = _AUTO_ASSISTANT_PROVIDER,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> AssistantProvider | None:
+    """Resolve the optional provider without importing a legacy frontend."""
+
+    if assistant_provider is not _AUTO_ASSISTANT_PROVIDER:
+        return cast(AssistantProvider | None, assistant_provider)
+    from sciplot_core.openai_provider import load_openai_provider_from_environment
+
+    try:
+        return load_openai_provider_from_environment(environ)
+    except ValueError as exc:
+        warnings.warn(
+            "SciPlot is continuing without its optional AI assistant because "
+            f"the provider configuration is invalid: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return None
 
 
 class _AssistantProviderWorker(QtCore.QObject):
@@ -220,4 +249,4 @@ class AssistantRequestRunner(QtCore.QObject):
         return bool(thread.wait(max(int(wait_ms), 0)))
 
 
-__all__ = ["AssistantRequestRunner"]
+__all__ = ["AssistantRequestRunner", "resolve_assistant_provider"]

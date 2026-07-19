@@ -3,12 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from sciplot_recipes.registry import get_recipe_module, iter_recipe_specs, list_recipe_names
+from sciplot_recipes.contracts import iter_recipe_specs, list_recipe_names
 
-for _recipe_name in list_recipe_names():
-    get_recipe_module(_recipe_name)
 
-del _recipe_name
+def get_recipe_module(name: str) -> Any:
+    from sciplot_recipes.registry import get_recipe_module as resolve
+
+    return resolve(name)
 
 
 def run_recipe(

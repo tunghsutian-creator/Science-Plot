@@ -12,8 +12,11 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 from urllib.parse import urlsplit
 
-from sciplot_core.canvas.operations import CanvasOperation, CanvasOperationBatch
-from sciplot_core.canvas.provider import (
+from sciplot_core.assistant_operations import (
+    VeuszSettingOperation,
+    VeuszSettingOperationBatch,
+)
+from sciplot_core.assistant_provider import (
     ASSISTANT_CONTEXT_VERSION,
     AssistantCancellationToken,
     AssistantCancelled,
@@ -52,7 +55,7 @@ OPENAI_ASSISTANT_OUTPUT_SCHEMA: dict[str, Any] = {
         "understanding": {"type": "string"},
         "proposal_kind": {
             "type": "string",
-            "enum": ["canvas_operation_batch", "none"],
+            "enum": ["veusz_setting_operation_batch", "none"],
         },
         "rationale": {"type": "string"},
         "operations": {
@@ -94,9 +97,9 @@ OPENAI_ASSISTANT_OUTPUT_SCHEMA: dict[str, Any] = {
 }
 
 _PROVIDER_INSTRUCTIONS = """\
-You are the bounded proposal planner inside SciPlot Canvas, a scientific-figure
-workbench. Return only the requested JSON object. Never claim that an edit was
-applied. SciPlot will preview, validate, and require the user to accept it.
+You are the bounded proposal planner in SciPlot's Veusz assistant. Return only
+the requested JSON object. Never claim that an edit was applied. SciPlot will
+preview, validate, and require the user to accept it.
 
 For a proposal, use only exact target_id and setting_path pairs listed in
 context.editing_capabilities.allowed_operations. Put the proposed setting value
@@ -116,7 +119,7 @@ class OpenAIProviderError(RuntimeError):
 
 
 class _AssistantContextUnavailable(ValueError):
-    """The current Canvas selection cannot yet form a provider request."""
+    """The current Veusz selection cannot yet form a provider request."""
 
 
 def _required_text(value: object, label: str, *, maximum: int) -> str:
@@ -723,7 +726,7 @@ def _model_envelope(text: str) -> dict[str, Any]:
         maximum=2000,
     )
     proposal_kind = value.get("proposal_kind")
-    if proposal_kind not in {"canvas_operation_batch", "none"}:
+    if proposal_kind not in {"veusz_setting_operation_batch", "none"}:
         raise ValueError("Model output has an unsupported proposal kind.")
     rationale = _free_text(
         value.get("rationale"),
@@ -778,8 +781,10 @@ def _model_envelope(text: str) -> dict[str, Any]:
     if len(set(warnings)) != len(warnings):
         raise ValueError("Model warnings must be unique.")
     if status == "proposal":
-        if proposal_kind != "canvas_operation_batch" or not operations:
-            raise ValueError("A proposal requires one or more Canvas operations.")
+        if proposal_kind != "veusz_setting_operation_batch" or not operations:
+            raise ValueError(
+                "A proposal requires one or more Veusz setting operations."
+            )
         if not rationale:
             raise ValueError("A proposal requires a rationale.")
     elif proposal_kind != "none" or operations:
@@ -900,7 +905,7 @@ class OpenAIResponsesProvider:
             provider_id=OPENAI_PROVIDER_ID,
             display_name="OpenAI Assistant",
             model_label=config.model,
-            capabilities=("canvas_operation_batch", "cancellation"),
+            capabilities=("veusz_setting_operation_batch", "cancellation"),
         )
         self._client = _ResponsesSSEClient(
             config,
@@ -914,13 +919,14 @@ class OpenAIResponsesProvider:
     def request_payload(self, request: AssistantRequest) -> dict[str, Any]:
         if request.provider_id != self.descriptor.provider_id:
             raise ValueError("Assistant request targets another provider.")
-        if request.allowed_proposal_kinds != ("canvas_operation_batch",):
+        if request.allowed_proposal_kinds != ("veusz_setting_operation_batch",):
             raise ValueError(
-                "OpenAI provider currently accepts only CanvasOperationBatch requests."
+                "OpenAI provider currently accepts only "
+                "VeuszSettingOperationBatch requests."
             )
         _provider_safe_context(request.context)
         user_payload = {
-            "task": "Propose a bounded SciPlot Canvas edit.",
+            "task": "Propose a bounded SciPlot Veusz selected-object edit.",
             "intent": request.intent,
             "base_revision": request.base_revision,
             "allowed_proposal_kinds": list(request.allowed_proposal_kinds),
@@ -970,7 +976,7 @@ class OpenAIResponsesProvider:
             "text": {
                 "format": {
                     "type": "json_schema",
-                    "name": "sciplot_canvas_assistant_response",
+                    "name": "sciplot_veusz_assistant_response",
                     "strict": True,
                     "schema": OPENAI_ASSISTANT_OUTPUT_SCHEMA,
                 }
@@ -984,7 +990,7 @@ class OpenAIResponsesProvider:
         status: str,
         understanding: str,
         warnings: tuple[str, ...] = (),
-        batch: CanvasOperationBatch | None = None,
+        batch: VeuszSettingOperationBatch | None = None,
     ) -> AssistantResponse:
         return AssistantResponse(
             request_id=request.request_id,
@@ -993,7 +999,9 @@ class OpenAIResponsesProvider:
             request_sha256=request.payload_sha256,
             status=status,
             understanding=understanding,
-            proposal_kind=("canvas_operation_batch" if batch is not None else None),
+            proposal_kind=(
+                "veusz_setting_operation_batch" if batch is not None else None
+            ),
             proposal=(batch.to_dict() if batch is not None else None),
             warnings=warnings,
         )
@@ -1015,7 +1023,7 @@ class OpenAIResponsesProvider:
             (item["target_id"], item["setting_path"]): item
             for item in capabilities["allowed_operations"]
         }
-        operations: list[CanvasOperation] = []
+        operations: list[VeuszSettingOperation] = []
         seen_paths: set[str] = set()
         for draft in envelope["operations"]:
             key = (draft["target_id"], draft["setting_path"])
@@ -1035,7 +1043,7 @@ class OpenAIResponsesProvider:
             if value == capability["current_value"]:
                 continue
             operations.append(
-                CanvasOperation.set_setting(
+                VeuszSettingOperation.set_setting(
                     target_id=draft["target_id"],
                     setting_path=draft["setting_path"],
                     value=value,
@@ -1053,7 +1061,7 @@ class OpenAIResponsesProvider:
                 ),
                 warnings=envelope["warnings"],
             )
-        batch = CanvasOperationBatch(
+        batch = VeuszSettingOperationBatch(
             base_revision=request.base_revision,
             operations=tuple(operations),
             provider=request.provider_id,
@@ -1107,7 +1115,7 @@ class OpenAIResponsesProvider:
                 restored,
                 status="needs_human_confirmation",
                 understanding=(
-                    "Select an editable Canvas object and submit the request again."
+                    "Select an editable Veusz object and submit the request again."
                 ),
                 warnings=(_redact(exc, secrets=()),),
             )
@@ -1172,7 +1180,7 @@ class OpenAIResponsesProvider:
             return self._response(
                 restored,
                 status="needs_human_confirmation",
-                understanding="The model declined to create a Canvas proposal.",
+                understanding="The model declined to create a Veusz edit proposal.",
                 warnings=(refusal,),
             )
         if result.incomplete_reason:
@@ -1196,8 +1204,8 @@ class OpenAIResponsesProvider:
                 restored,
                 status="needs_rule_repair",
                 understanding=(
-                    "The model response could not be converted into a safe Canvas "
-                    "proposal. The figure was not changed."
+                    "The model response could not be converted into a safe "
+                    "selected-object proposal. The figure was not changed."
                 ),
                 warnings=(f"Typed proposal rejected: {safe}",),
             )

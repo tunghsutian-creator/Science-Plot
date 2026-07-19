@@ -10,7 +10,7 @@ from typing import Any
 import pandas as pd
 
 from sciplot_core._utils import file_sha256
-from sciplot_core.canvas.composition import (
+from sciplot_core.publication_layouts import (
     COMPOSITE_CANVAS_WIDTH_MM,
     COMPOSITE_LAYOUT_KIND,
     COMPOSITE_LAYOUT_VERSION,
@@ -259,7 +259,8 @@ def build_publication_composition_plan(
     slots = [item for item in layout["slots"] if isinstance(item, dict)]
     if len(source_modules) != len(slots):
         raise ValueError(
-            f"Composition layout `{layout_id}` needs {len(slots)} explicit modules; received {len(source_modules)}."
+            f"Figure layout `{layout_id}` needs {len(slots)} explicit modules; "
+            f"received {len(source_modules)}."
         )
 
     slot_by_id = {str(slot["id"]): slot for slot in slots}
@@ -273,11 +274,12 @@ def build_publication_composition_plan(
             module.get("module_id") or module.get("id") or f"module_{index}"
         ).strip()
         if not module_id or module_id in used_module_ids:
-            raise ValueError("Composition module ids must be non-empty and unique.")
+            raise ValueError("Figure-layout module ids must be non-empty and unique.")
         slot_ref = str(module.get("slot_ref") or default_slot["id"]).strip()
         if slot_ref not in slot_by_id or slot_ref in used_slots:
             raise ValueError(
-                "Composition module slot refs must be unique ids from the selected layout."
+                "Figure-layout module slot refs must be unique ids from the "
+                "selected layout."
             )
         used_module_ids.add(module_id)
         used_slots.add(slot_ref)

@@ -16,10 +16,9 @@ ftir_output/
 *.pyc
 
 # GitHub carries only the minimal runnable SciPlot distribution. Keep all
-# research data, tests, examples, temporary audits and local project-management
-# material on the workstation.
-/tests/
-/test/
+# research data, examples, temporary audits and local project-management
+# material on the workstation.  Small deterministic tests are source-controlled
+# and run in CI; generated test caches remain covered by the global cache rules.
 /examples/
 /example/
 /tmp/
@@ -38,8 +37,6 @@ ftir_output/
 # Design/development documents are local-only. Retain the legal notice.
 /docs/*
 !/docs/THIRD_PARTY_NOTICES.md
-!/docs/SESSION_EVIDENCE.md
-!/docs/SCIPLOT_REVIEWED_PROMOTION.md
 
 # Vendored Veusz runtime only; upstream development material is local-only.
 /third_party/veusz/tests/

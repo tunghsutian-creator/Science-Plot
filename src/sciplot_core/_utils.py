@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import tempfile
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
@@ -87,6 +89,39 @@ def read_json_object(path: Path) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def atomic_write_json(path: Path, payload: dict[str, Any]) -> Path:
+    """Durably replace one JSON object without exposing a partial target."""
+
+    target = path.expanduser().resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            json.dump(
+                payload,
+                handle,
+                indent=2,
+                ensure_ascii=False,
+                allow_nan=False,
+            )
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, target)
+    finally:
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
+    return target
+
+
 def decode_text(path: Path) -> str:
     return decode_text_file(path)
 
@@ -119,6 +154,7 @@ def text_preview(path: Path, *, lines: int = 40) -> str:
 
 
 __all__ = [
+    "atomic_write_json",
     "clean_text",
     "decode_text",
     "existing_file_sha256",

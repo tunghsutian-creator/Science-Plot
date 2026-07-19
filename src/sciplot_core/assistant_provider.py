@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 from PIL import Image
 
-from sciplot_core.canvas._validation import (
+from sciplot_core.json_contract import (
     reject_unknown_keys,
     require_json_bool,
     require_json_int,
@@ -24,10 +24,10 @@ from sciplot_core.canvas._validation import (
     require_json_number,
     require_json_object,
 )
-from sciplot_core.canvas.assistant_contract import DataMappingProposal
-from sciplot_core.canvas.model import CanvasSelection
-from sciplot_core.canvas.operations import (
-    CanvasOperationBatch,
+from sciplot_core.mapping_contract import DataMappingProposal
+from sciplot_core.assistant_selection import VeuszSelection
+from sciplot_core.assistant_operations import (
+    VeuszSettingOperationBatch,
     _validate_json_value,
 )
 
@@ -49,7 +49,7 @@ ASSISTANT_DATA_MAPPING_STATE_KIND = "sciplot_assistant_data_mapping_state"
 ASSISTANT_DATA_MAPPING_STATE_VERSION = 2
 
 ASSISTANT_PROPOSAL_KINDS = frozenset(
-    {"canvas_operation_batch", "data_mapping_proposal"}
+    {"veusz_setting_operation_batch", "data_mapping_proposal"}
 )
 ASSISTANT_PROVIDER_CAPABILITIES = frozenset({*ASSISTANT_PROPOSAL_KINDS, "cancellation"})
 ASSISTANT_PROGRESS_STAGES = frozenset(
@@ -94,7 +94,7 @@ ASSISTANT_REQUEST_TERMINAL_STATUSES = frozenset(
         "rejected",
     }
 )
-ASSISTANT_CONTEXT_KIND = "sciplot_canvas_assistant_context"
+ASSISTANT_CONTEXT_KIND = "sciplot_veusz_assistant_context"
 ASSISTANT_CONTEXT_VERSION = 3
 ASSISTANT_CONTEXT_COMPATIBLE_VERSIONS = frozenset({2, ASSISTANT_CONTEXT_VERSION})
 ASSISTANT_DATA_POLICY = "structured_context_no_raw_dataset_arrays"
@@ -770,7 +770,7 @@ def _validate_context(context: dict[str, Any]) -> dict[str, Any]:
     page = require_json_int(value.get("page"), label="context page")
     if page < 0:
         raise ValueError("context page must be non-negative.")
-    selection = CanvasSelection.from_dict(
+    selection = VeuszSelection.from_dict(
         require_json_object(value.get("selection"), label="context selection")
     ).to_dict()
     selected = value.get("selected_object")
@@ -1269,8 +1269,8 @@ class AssistantResponse:
                 )
             if not isinstance(self.proposal, dict):
                 raise ValueError("Proposal response requires a proposal object.")
-            if self.proposal_kind == "canvas_operation_batch":
-                parsed = CanvasOperationBatch.from_dict(self.proposal)
+            if self.proposal_kind == "veusz_setting_operation_batch":
+                parsed = VeuszSettingOperationBatch.from_dict(self.proposal)
             else:
                 parsed = DataMappingProposal.from_dict(self.proposal)
             if parsed.provider != self.provider_id:
@@ -1305,11 +1305,12 @@ class AssistantResponse:
             raise ValueError(
                 "Assistant response uses a proposal kind not allowed by request."
             )
-        if self.proposal_kind == "canvas_operation_batch":
-            batch = CanvasOperationBatch.from_dict(dict(self.proposal or {}))
+        if self.proposal_kind == "veusz_setting_operation_batch":
+            batch = VeuszSettingOperationBatch.from_dict(dict(self.proposal or {}))
             if batch.base_revision != request.base_revision:
                 raise ValueError(
-                    "Assistant CanvasOperationBatch base_revision does not match request."
+                    "Assistant VeuszSettingOperationBatch base_revision does not "
+                    "match request."
                 )
 
     def to_dict(self) -> dict[str, Any]:
@@ -1459,7 +1460,7 @@ class AssistantDataMappingState:
             if self.preview.get("requires_confirmation_receipt") is not True:
                 raise ValueError("Mapping preview must require a confirmation receipt.")
         if self.confirmation is not None:
-            from sciplot_core.canvas.assistant_contract import (
+            from sciplot_core.mapping_contract import (
                 DataMappingConfirmation,
             )
 
@@ -1559,7 +1560,7 @@ class AssistantDataMappingState:
             ).expanduser().resolve() != Path(self.source_root):
                 raise ValueError("Mapping preview source-root binding is stale.")
         if self.confirmation is not None:
-            from sciplot_core.canvas.assistant_contract import (
+            from sciplot_core.mapping_contract import (
                 DataMappingConfirmation,
             )
 
@@ -1590,7 +1591,7 @@ class AssistantDataMappingState:
             if Path(self.mapped_document or "") != (
                 expected_root / "studio" / "document.vsz"
             ):
-                raise ValueError("Mapped Canvas document path is not confirmed.")
+                raise ValueError("Mapped Veusz document path is not confirmed.")
 
     def to_dict(self) -> dict[str, Any]:
         return {

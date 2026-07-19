@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pandas as pd
 
 from sciplot_core._utils import file_sha256, json_safe
-from sciplot_core.canvas import (
+from sciplot_core.mapping_contract import (
     DataColumnMapping,
     DataMappingConfirmation,
     DataMappingProposal,

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.autoplot import build_autoplot_summary
-from sciplot_core.canvas.persistence import atomic_write_json
+from sciplot_core._utils import atomic_write_json
 from sciplot_core.materials_rules import get_rule, semantic_payload_from_rule
 from sciplot_core.one_step import (
     _readiness,
