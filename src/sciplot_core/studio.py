@@ -38,15 +38,20 @@ from sciplot_core.materials_rules import (
     semantic_payload_from_rule,
 )
 from sciplot_core.operation_modes import normal_mode_payload
+from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY
 from sciplot_core.policy import (
     AUTO_LOG_BOUND_PADDING_FACTOR,
+    CATEGORICAL_BAR_FILL_TRANSPARENCY,
+    CATEGORICAL_BAR_WIDTH_FRACTION,
     CATEGORICAL_BOX_FILL_FRACTION,
     CATEGORICAL_BOX_FILL_TRANSPARENCY,
     CATEGORICAL_BOX_LINE_WIDTH_PT,
     CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
+    CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
     DEFAULT_CATEGORICAL_SUMMARY,
     DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
     DEFAULT_LEGEND_EDGE_PADDING_MM,
+    DEFAULT_CURVE_LINE_STYLE_SEQUENCE,
     DEFAULT_LINE_STYLE_SEQUENCE,
     DEFAULT_LOG_MINOR_MULTIPLIERS,
     DEFAULT_LOG_MINOR_TICK_COUNT,
@@ -62,9 +67,13 @@ from sciplot_core.policy import (
     MAX_LINEAR_LEGEND_RESERVE_FRACTION,
     MAX_LOG_LEGEND_RESERVE_DECADES,
     MAX_POINT_LINE_MARKERS_PER_SERIES,
+    MIN_VISUAL_EXTENT_CLEARANCE_MM,
     MIN_BOX_REPLICATES,
     POINT_LINE_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_X_RENDER_LABEL,
+    TENSILE_AXIS_PADDING_FRACTION,
+    TENSILE_X_AXIS_LABEL,
+    TENSILE_Y_AXIS_LABEL,
     UNIFIED_AXIS_LINEWIDTH_PT,
     UNIFIED_FONT_FAMILY,
     UNIFIED_FONT_SIZE_PT,
@@ -119,7 +128,7 @@ from sciplot_core.study_model import (
 
 DEFAULT_PALETTE = DEFAULT_PALETTE_COLORS
 STACKED_TEMPLATE_IDS = {"stacked_curve"}
-CATEGORICAL_TEMPLATE_IDS = {"box", "box_strip"}
+CATEGORICAL_TEMPLATE_IDS = {"bar", "box", "box_strip"}
 SCALAR_FIELD_TEMPLATE_IDS = {"heatmap"}
 POINT_LINE_MARKERS = ("circle", "square", "diamond", "triangle")
 MARKER_MAP = {
@@ -245,6 +254,7 @@ def prepare_studio_document(
     target: str | Path,
     *,
     output_root: Path | None = None,
+    delivery_root: Path | None = None,
     rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
@@ -254,6 +264,7 @@ def prepare_studio_document(
     target_info = _resolve_studio_target(
         resolved,
         output_root=output_root,
+        delivery_root=delivery_root,
         rule_id=rule_id,
         template=template,
         project_name=project_name,
@@ -267,6 +278,13 @@ def prepare_studio_document(
 
     request_path = target_info["request"]
     project_dir = target_info["project_dir"]
+    if delivery_root is not None:
+        request = _read_json(request_path)
+        request[REQUEST_DELIVERY_ROOT_KEY] = str(delivery_root.expanduser().resolve())
+        request_path.write_text(
+            json.dumps(json_safe(request), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
     existing_document = _project_studio_document(project_dir)
     if (
         target_info.get("mode") == "project"
@@ -442,6 +460,7 @@ def run_studio_command(
     *,
     target: Path | None = None,
     output_root: Path | None = None,
+    delivery_root: Path | None = None,
     rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
@@ -482,6 +501,7 @@ def run_studio_command(
         return launch_sciplot_studio(
             target,
             output_root=output_root,
+            delivery_root=delivery_root,
             rule_id=rule_id,
             template=template,
             project_name=project_name,
@@ -506,6 +526,7 @@ def run_studio_command(
     payload = prepare_studio_document(
         target,
         output_root=output_root,
+        delivery_root=delivery_root,
         rule_id=rule_id,
         template=template,
         project_name=project_name,
@@ -542,6 +563,8 @@ def run_studio_command(
                 export_document_sha256=str(export_payload["document_sha256"]),
             )
             payload["studio_run"] = studio_run
+            if isinstance(studio_run.get("exports"), list):
+                payload["exports"] = json_safe(studio_run["exports"])
             _register_studio_exports(
                 Path(payload["project_dir"]), payload["exports"], studio_run=studio_run
             )
@@ -991,6 +1014,7 @@ def launch_sciplot_studio(
     target: Path,
     *,
     output_root: Path | None,
+    delivery_root: Path | None = None,
     rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
@@ -998,6 +1022,7 @@ def launch_sciplot_studio(
     payload = prepare_studio_document(
         target.expanduser().resolve(),
         output_root=output_root,
+        delivery_root=delivery_root,
         rule_id=rule_id,
         template=template,
         project_name=project_name,
@@ -1606,7 +1631,7 @@ def _rheology_frequency_figure_request(
             render_options.pop("y_tick_format", None)
     metric_label = rheology_metric_axis_label(y_metric)
     if y_metric == "complex_viscosity":
-        metric_label = "|\\eta^{*}| (Pa·s)"
+        metric_label = "|\\eta^{*}| (mPa·s)"
     if metric_label is not None:
         render_options["y_label_override"] = metric_label
     figure_request["render_options"] = render_options
@@ -1677,7 +1702,7 @@ def _studio_figure_set_export_scope(
     *,
     request: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """Return the exact project-receipt scope for an independent figure set."""
+    """Return the all-or-nothing project scope for an independent figure set."""
 
     registry = _read_studio_figure_set(project_dir)
     queue = _rheology_frequency_figure_queue(request)
@@ -1757,6 +1782,7 @@ def _studio_figure_set_export_scope(
         primary_id not in available_set
         or available_set & unavailable_set
         or available_set | unavailable_set != planned_set
+        or unavailable_set
     ):
         return None
     export_contract = (
@@ -1764,32 +1790,26 @@ def _studio_figure_set_export_scope(
         if isinstance(registry.get("export_contract"), dict)
         else {}
     )
-    blocked_ids = [value for value in available_ids if value != primary_id]
-    blocker = str(export_contract.get("blocker") or "").strip() or (
-        "The project receipt binds one authoritative primary VSZ hash and one "
-        "primary PDF/TIFF pair. Each independent secondary VSZ must publish "
-        "its own standalone exact-current receipt."
-    )
     return {
         **json_safe(export_contract),
         "kind": "sciplot_figure_set_export_scope",
-        "version": 1,
-        "status": "primary_exact_current_only",
-        "scope": "primary_figure_project_delivery",
+        "version": 2,
+        "status": "full_figure_set_exact_current",
+        "scope": "full_figure_set_project_delivery",
         "primary_figure_id": primary_id,
-        "supported_figure_ids": [primary_id],
-        "blocked_figure_ids": list(dict.fromkeys(blocked_ids)),
+        "supported_figure_ids": list(dict.fromkeys(available_ids)),
+        "blocked_figure_ids": [],
         "planned_figure_ids": list(dict.fromkeys(planned_ids or available_ids)),
         "available_figure_ids": list(dict.fromkeys(available_ids)),
         "unavailable_figure_ids": list(dict.fromkeys(unavailable_ids)),
-        "secondary_receipt_scope": "standalone_exact_current_export",
-        "full_figure_set_delivery_complete": False,
-        "blocker": blocker,
+        "secondary_receipt_scope": "same_project_delivery",
+        "full_figure_set_delivery_complete": True,
+        "blocker": None,
     }
 
 
-def _is_primary_figure_set_export_scope(value: object) -> bool:
-    """Return whether *value* is the complete primary-only receipt contract."""
+def _is_full_figure_set_export_scope(value: object) -> bool:
+    """Return whether *value* is a complete all-figures delivery contract."""
 
     if not isinstance(value, dict):
         return False
@@ -1798,16 +1818,15 @@ def _is_primary_figure_set_export_scope(value: object) -> bool:
     planned_ids = value.get("planned_figure_ids")
     if (
         value.get("kind") != "sciplot_figure_set_export_scope"
-        or value.get("status") != "primary_exact_current_only"
-        or value.get("scope") != "primary_figure_project_delivery"
+        or value.get("status") != "full_figure_set_exact_current"
+        or value.get("scope") != "full_figure_set_project_delivery"
         or value.get("secondary_receipt_scope")
-        != "standalone_exact_current_export"
-        or value.get("full_figure_set_delivery_complete") is not False
+        != "same_project_delivery"
+        or value.get("full_figure_set_delivery_complete") is not True
         or not re.fullmatch(r"[a-z0-9][a-z0-9_]*", primary_id)
-        or supported_ids != [primary_id]
         or not isinstance(planned_ids, list)
         or primary_id not in planned_ids
-        or not str(value.get("blocker") or "").strip()
+        or value.get("blocker") not in {None, ""}
     ):
         return False
     normalized_lists: dict[str, list[str]] = {}
@@ -1837,23 +1856,29 @@ def _is_primary_figure_set_export_scope(value: object) -> bool:
         and primary_id not in unavailable_set
         and available_set.isdisjoint(unavailable_set)
         and available_set | unavailable_set == planned_set
-        and blocked_set == available_set - {primary_id}
+        and supported_ids == normalized_lists["available_figure_ids"]
+        and not blocked_set
+        and not unavailable_set
     )
 
 
+def _is_primary_figure_set_export_scope(value: object) -> bool:
+    """Compatibility alias for callers that predate full figure-set delivery."""
+
+    return _is_full_figure_set_export_scope(value)
+
+
 def _figure_set_export_review_note(scope: dict[str, Any]) -> str:
-    primary_id = str(scope.get("primary_figure_id") or "primary figure")
-    blocked = [
+    included = [
         str(value)
-        for value in scope.get("blocked_figure_ids", [])
+        for value in scope.get("supported_figure_ids", [])
         if str(value).strip()
     ]
-    secondary_text = ", ".join(f"`{value}`" for value in blocked) or "none"
+    figure_text = ", ".join(f"`{value}`" for value in included) or "none"
     return (
-        "Figure-set delivery scope: this project receipt and delivery contain "
-        f"only the primary figure `{primary_id}`. Secondary figure IDs "
-        f"({secondary_text}) are not included in this delivery; each must be "
-        "exported with its own standalone exact-current receipt."
+        "Figure-set delivery scope: one project receipt and one minimal delivery "
+        f"contain every registered figure ({figure_text}), with one exact-current "
+        "VSZ and matching PDF/TIFF pair per figure."
     )
 
 
@@ -2296,25 +2321,21 @@ def _prepare_rheology_frequency_figure_set(
         "figures": entries,
         "export_contract": {
             "kind": "sciplot_figure_set_export_scope",
-            "version": 1,
-            "status": "primary_exact_current_only",
-            "scope": "primary_figure_project_delivery",
+            "version": 2,
+            "status": "full_figure_set_exact_current",
+            "scope": "full_figure_set_project_delivery",
             "primary_figure_id": primary_id,
-            "supported_figure_ids": [primary_id],
-            "blocked_figure_ids": [
+            "supported_figure_ids": [
                 str(item["figure_id"])
                 for item in entries
-                if item["figure_id"] != primary_id and item.get("status") == "ready"
+                if item.get("status") == "ready"
             ],
-            "blocker": (
-                "The existing project publish receipt binds one authoritative "
-                "VSZ hash and one PDF/TIFF pair. Secondary documents are "
-                "generated, registered, and editable, but are not silently "
-                "published under the primary receipt until a multi-document "
-                "exact-current receipt is implemented."
+            "blocked_figure_ids": [],
+            "blocker": None,
+            "secondary_receipt_scope": "same_project_delivery",
+            "full_figure_set_delivery_complete": all(
+                item.get("status") == "ready" for item in entries
             ),
-            "secondary_receipt_scope": "standalone_exact_current_export",
-            "full_figure_set_delivery_complete": False,
         },
         "generated_from": str(request_path),
         "registry_path": str(_studio_figure_set_path(project_dir)),
@@ -2693,6 +2714,7 @@ def _verify_studio_delivery_binding(
     *,
     exports: list[dict[str, Any]],
     export_document_sha256: str,
+    document_hashes: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     issues: list[str] = []
     if not isinstance(delivery, dict):
@@ -2826,6 +2848,11 @@ def _verify_studio_delivery_binding(
     )
     if not project_records:
         issues.append("The delivery contains no editable Veusz document.")
+    expected_document_hashes = {
+        str(Path(path).expanduser().resolve()): str(value)
+        for path, value in (document_hashes or {}).items()
+        if str(path).strip() and str(value).strip()
+    }
     for record in project_records:
         if not isinstance(record, dict):
             issues.append("A delivery project-document record is invalid.")
@@ -2837,10 +2864,15 @@ def _verify_studio_delivery_binding(
         destination_hash = (
             existing_file_sha256(destination) if destination is not None else None
         )
+        source_path = Path(str(record.get("source") or "")).expanduser().resolve()
+        expected_project_hash = expected_document_hashes.get(
+            str(source_path),
+            export_document_sha256,
+        )
         if (
-            destination_hash != export_document_sha256
-            or str(record.get("source_sha256") or "") != export_document_sha256
-            or str(record.get("delivery_sha256") or "") != export_document_sha256
+            destination_hash != expected_project_hash
+            or str(record.get("source_sha256") or "") != expected_project_hash
+            or str(record.get("delivery_sha256") or "") != expected_project_hash
             or record.get("copy_hash_matches") is not True
             or record.get("hash_matches_export") is not True
         ):
@@ -3065,8 +3097,8 @@ def publish_studio_export_run(
     if resolved_document != canonical_document:
         raise RuntimeError(
             "A project delivery receipt can be published only from the "
-            "canonical project/studio/document.vsz. Independent secondary "
-            "figures require standalone exact-current receipts."
+            "canonical project/studio/document.vsz. Registered secondary "
+            "figures are exported automatically into the same project receipt."
         )
     project_dir = resolved_project
     request_path = resolved_request
@@ -3085,13 +3117,109 @@ def publish_studio_export_run(
         _studio_figure_set_path(project_dir).exists()
         or _rheology_frequency_figure_queue(request)
     )
-    if figure_set_scope_expected and not _is_primary_figure_set_export_scope(
+    if figure_set_scope_expected and not _is_full_figure_set_export_scope(
         figure_set_export_scope
     ):
         raise RuntimeError(
-            "SciPlot could not establish the complete primary-only figure-set "
+            "SciPlot could not establish the complete all-figures figure-set "
             "export scope. No project delivery receipt was published."
         )
+    figure_documents: list[dict[str, Any]] = [
+        {
+            "figure_id": (
+                str(figure_set_export_scope.get("primary_figure_id") or "primary")
+                if isinstance(figure_set_export_scope, dict)
+                else "primary"
+            ),
+            "document": str(document_path),
+            "document_sha256": export_document_sha256,
+            "exports": [
+                {
+                    **json_safe(item),
+                    "figure_id": (
+                        str(
+                            figure_set_export_scope.get("primary_figure_id")
+                            or "primary"
+                        )
+                        if isinstance(figure_set_export_scope, dict)
+                        else "primary"
+                    ),
+                    "document": str(document_path),
+                    "document_sha256": export_document_sha256,
+                }
+                for item in exports
+            ],
+        }
+    ]
+    if isinstance(figure_set_export_scope, dict):
+        registry = _read_studio_figure_set(project_dir)
+        if registry is None:
+            raise RuntimeError(
+                "The complete figure-set registry disappeared before export."
+            )
+        by_id = {
+            str(item.get("figure_id") or ""): item
+            for item in registry.get("figures", [])
+            if isinstance(item, dict)
+        }
+        requested_formats = list(
+            dict.fromkeys(str(item.get("format") or "") for item in exports)
+        )
+        primary_id = str(figure_set_export_scope["primary_figure_id"])
+        for figure_id in figure_set_export_scope["supported_figure_ids"]:
+            if figure_id == primary_id:
+                continue
+            entry = by_id.get(str(figure_id))
+            if not isinstance(entry, dict) or entry.get("status") != "ready":
+                raise RuntimeError(
+                    f"Registered figure is not ready for complete delivery: {figure_id}"
+                )
+            secondary_document = Path(str(entry.get("document") or "")).expanduser().resolve()
+            current_hash = existing_file_sha256(secondary_document)
+            if not current_hash:
+                raise RuntimeError(
+                    "A registered secondary VSZ is missing before the complete "
+                    f"figure set can be exported: {secondary_document}"
+                )
+            secondary_payload = export_studio_document(
+                secondary_document,
+                formats=requested_formats,
+                output_dir=project_dir / "studio" / "exports" / "figure_set",
+            )
+            secondary_exports = [
+                {
+                    **json_safe(item),
+                    "figure_id": str(figure_id),
+                    "document": str(secondary_document),
+                    "document_sha256": current_hash,
+                }
+                for item in secondary_payload["exports"]
+            ]
+            _verify_exact_current_export_binding(
+                document_path=secondary_document,
+                export_document_sha256=current_hash,
+                exports=secondary_exports,
+            )
+            figure_documents.append(
+                {
+                    "figure_id": str(figure_id),
+                    "document": str(secondary_document),
+                    "document_sha256": current_hash,
+                    "exports": secondary_exports,
+                }
+            )
+    exports = [
+        item
+        for figure in figure_documents
+        for item in figure["exports"]
+    ]
+    veusz_documents = [Path(str(item["document"])) for item in figure_documents]
+    veusz_document_hashes = {
+        str(Path(str(item["document"])).expanduser().resolve()): str(
+            item["document_sha256"]
+        )
+        for item in figure_documents
+    }
     effective_request, data_mapping_application = resolve_data_mapping_request(
         request,
         base_dir=request_path.parent,
@@ -3126,7 +3254,14 @@ def publish_studio_export_run(
                 "A project export changed before it could be copied into the "
                 f"run: {source}"
             )
-        destination = figures_dir / source.name
+        figure_id = str(item.get("figure_id") or "").strip()
+        if isinstance(figure_set_export_scope, dict) and figure_id:
+            export_suffix, _dpi = _export_suffix(
+                _normalize_export_format(str(item.get("format") or ""))
+            )
+            destination = figures_dir / f"{figure_id}{export_suffix}"
+        else:
+            destination = figures_dir / source.name
         shutil.copy2(source, destination)
         if existing_file_sha256(destination) != expected_hash:
             raise RuntimeError(f"Copied project export hash mismatch: {destination}")
@@ -3271,7 +3406,7 @@ def publish_studio_export_run(
         output_dir,
         publication_profile=publication_profile,
         strict_publication=bool(request.get("publication_strict")),
-        veusz_documents=[document_path],
+        veusz_documents=veusz_documents,
     )
     if qa.get("status") == "passed":
         _verify_qa_artifact_hashes(
@@ -3331,10 +3466,12 @@ def publish_studio_export_run(
         "data_mapping_application": json_safe(data_mapping_application),
         "data_mapping_coverage": json_safe(request.get("data_mapping_coverage")),
         "scope": (
-            "primary_figure_project_delivery"
-            if _is_primary_figure_set_export_scope(figure_set_export_scope)
+            "full_figure_set_project_delivery"
+            if _is_full_figure_set_export_scope(figure_set_export_scope)
             else "project_delivery"
         ),
+        "veusz_documents": [str(path) for path in veusz_documents],
+        "veusz_document_hashes": veusz_document_hashes,
     }
     if figure_set_export_scope is not None:
         result["figure_set_export_scope"] = json_safe(figure_set_export_scope)
@@ -3369,6 +3506,8 @@ def publish_studio_export_run(
         "render_engine": "veusz",
         "qa_target": "veusz_export",
         "veusz_document": str(document_path),
+        "veusz_documents": [str(path) for path in veusz_documents],
+        "veusz_document_hashes": veusz_document_hashes,
         "veusz_spec": str(_veusz_spec_path(document_path)),
         "manual_edit_hash": export_document_sha256,
         "document_authority": document_state["authority"],
@@ -3390,6 +3529,8 @@ def publish_studio_export_run(
             "render_engine": "veusz",
             "qa_target": "veusz_export",
             "document": str(document_path),
+            "veusz_documents": [str(path) for path in veusz_documents],
+            "veusz_document_hashes": veusz_document_hashes,
             "spec": str(_veusz_spec_path(document_path)),
             "manual_edit_hash": export_document_sha256,
             "document_authority": document_state["authority"],
@@ -3428,20 +3569,20 @@ def publish_studio_export_run(
             manifest["package_contract"]["figure_set_export_scope"] = json_safe(
                 figure_set_export_scope
             )
-            manifest["package_contract"]["full_figure_set_complete"] = False
+            manifest["package_contract"]["full_figure_set_complete"] = True
             manifest["package_contract"]["complete_scope"] = (
-                "primary_figure_exact_current_delivery"
+                "full_figure_set_exact_current_delivery"
             )
         manifest["delivery_package"] = build_delivery_package(
             output_dir,
             manifest=manifest,
         )
         if figure_set_export_scope is not None:
-            manifest["delivery_package"]["scope"] = "primary_figure_project_delivery"
+            manifest["delivery_package"]["scope"] = "full_figure_set_project_delivery"
             manifest["delivery_package"]["complete_scope"] = (
-                "primary_figure_exact_current_delivery"
+                "full_figure_set_exact_current_delivery"
             )
-            manifest["delivery_package"]["full_figure_set_complete"] = False
+            manifest["delivery_package"]["full_figure_set_complete"] = True
             manifest["delivery_package"]["figure_set_export_scope"] = json_safe(
                 figure_set_export_scope
             )
@@ -3452,12 +3593,18 @@ def publish_studio_export_run(
             manifest["delivery_package"],
             exports=copied_exports,
             export_document_sha256=export_document_sha256,
+            document_hashes=veusz_document_hashes,
         )
         failure_stage = "exact_current_binding"
         _verify_exact_current_export_binding(
             document_path=document_path,
             export_document_sha256=export_document_sha256,
-            exports=copied_exports,
+            exports=[
+                item
+                for item in copied_exports
+                if Path(str(item.get("document") or "")).expanduser().resolve()
+                == document_path
+            ],
         )
     except Exception as exc:
         manifest["state"] = "failed"
@@ -3492,6 +3639,7 @@ def publish_studio_export_run(
         "review_html": str(output_dir / "review.html"),
         "revision_brief": str(output_dir / "revision_brief.md"),
         "figures": figures,
+        "exports": copied_exports,
         "qa": qa,
         "package_contract": manifest["package_contract"],
         "delivery_package": manifest["delivery_package"],
@@ -3854,6 +4002,7 @@ def _resolve_studio_target(
     path: Path,
     *,
     output_root: Path | None = None,
+    delivery_root: Path | None = None,
     rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
@@ -3868,6 +4017,7 @@ def _resolve_studio_target(
             return _qt_first_project_from_source(
                 path,
                 output_root=output_root,
+                delivery_root=delivery_root,
                 rule_id=rule_id,
                 template=template,
                 project_name=project_name,
@@ -3879,6 +4029,7 @@ def _resolve_studio_target(
         return _qt_first_project_from_source(
             path,
             output_root=output_root,
+            delivery_root=delivery_root,
             rule_id=rule_id,
             template=template,
             project_name=project_name,
@@ -3892,6 +4043,7 @@ def _qt_first_project_from_source(
     path: Path,
     *,
     output_root: Path | None = None,
+    delivery_root: Path | None = None,
     rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
@@ -3917,6 +4069,15 @@ def _qt_first_project_from_source(
     project = create_intake_project_from_session(session)
     project_dir = Path(str(project["project_dir"])).expanduser().resolve()
     request = project_dir / "plot_request.json"
+    if delivery_root is not None:
+        request_payload = _read_json(request)
+        request_payload[REQUEST_DELIVERY_ROOT_KEY] = str(
+            delivery_root.expanduser().resolve()
+        )
+        request.write_text(
+            json.dumps(json_safe(request_payload), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
     _apply_studio_request_overrides(
         project_dir,
         request_path=request,
@@ -4804,6 +4965,11 @@ def _resolved_domain_render_options(
     series: list[StudioSeries],
 ) -> dict[str, Any]:
     render_options = _effective_render_options(request)
+    if "palette_preset" not in _explicit_render_options(request):
+        # Persisted requests may contain the default that was current when the
+        # project was created.  Non-explicit defaults follow the live shared
+        # policy; a user-selected palette remains authoritative.
+        render_options["palette_preset"] = DEFAULT_PALETTE_PRESET
     render_options = _apply_series_domain_contract_defaults(
         render_options,
         request=request,
@@ -5024,6 +5190,19 @@ def derive_terminal_render_data_contract(
         render_options,
         template_id=template_id,
         series=series,
+        explicit_render_options=_explicit_render_options(request),
+    )
+    width, height = _size_mm(str(render_options.get("size") or "60x55"))
+    axis_contract, _visual_extent_diagnostics = _expand_axis_for_visual_extents(
+        axis_contract,
+        request=request,
+        render_options=render_options,
+        template_id=template_id,
+        series=series,
+        categorical_contract=categorical,
+        style=style,
+        width_mm=width,
+        height_mm=height,
     )
     axes = _veusz_axes_spec(
         render_options=render_options,
@@ -5049,6 +5228,9 @@ def derive_terminal_render_data_contract(
         axis_contract=axis_contract,
         style=style,
         show_direct_labels=show_direct_labels,
+    )
+    direct_labels.extend(
+        _categorical_axis_label_contracts(categorical, style=style)
     )
     categorical_groups = {
         str(group.get("y_name") or ""): group
@@ -5974,7 +6156,7 @@ def _apply_series_options(
         marker_sequence = list(POINT_LINE_MARKERS)
     line_style_sequence = _string_list(render_options.get("line_style_sequence"))
     if not line_style_sequence:
-        line_style_sequence = list(DEFAULT_LINE_STYLE_SEQUENCE)
+        line_style_sequence = list(DEFAULT_CURVE_LINE_STYLE_SEQUENCE)
     duplicate_labels = sorted(
         label
         for label, count in Counter(item.label for item in series).items()
@@ -6164,6 +6346,8 @@ def _palette_for_render_options(render_options: dict[str, Any]) -> tuple[str, ..
     if explicit_palette:
         return tuple(explicit_palette)
     palette_id = str(render_options.get("palette_preset") or DEFAULT_PALETTE_PRESET)
+    if palette_id == DEFAULT_PALETTE_PRESET:
+        return DEFAULT_PALETTE
     try:
         from sciplot_core.contract import load_plot_contract
 
@@ -6315,6 +6499,12 @@ def _apply_domain_render_defaults(
         updated.setdefault("x_label_override", "Sample")
         updated.setdefault("legend_position", "none")
         updated.setdefault("series_label_mode", "none")
+        if "size" not in explicit_contract:
+            # Eight rotated categorical labels need the wider house profile;
+            # otherwise Veusz suppresses one label during overlap checking.
+            updated["size"] = "180x55" if len(category_positions) > 7 else "120x55"
+        if template_id == "bar":
+            updated.setdefault("y_min", 0.0)
         if str(request.get("rule_id") or "").strip() == "impact_metric":
             category_labels = [
                 str(value) for value in axis_info.get("category_labels") or []
@@ -6426,12 +6616,13 @@ def _apply_domain_render_defaults(
                 updated.pop("y_tick_format", None)
         else:
             updated.setdefault("y_tick_format", DEFAULT_LOG_TICK_FORMAT)
-    if _looks_like_tensile_axis(axis_info):
-        if "x_label_override" not in explicit_options:
-            updated["x_label_override"] = "Tensile Strain (%)"
-        if "y_label_override" not in explicit_options:
-            updated["y_label_override"] = "Tensile Stress (MPa)"
-        updated.setdefault("axis_mode", "auto_positive")
+    if (
+        template_id not in CATEGORICAL_TEMPLATE_IDS
+        and _looks_like_tensile_axis(axis_info)
+    ):
+        updated["x_label_override"] = TENSILE_X_AXIS_LABEL
+        updated["y_label_override"] = TENSILE_Y_AXIS_LABEL
+        updated["axis_mode"] = "auto"
     if str(request.get("rule_id") or "").strip() == "rheology_stress_relaxation":
         updated.setdefault("x_label_override", "Time (s)")
         updated.setdefault("y_label_override", "Normalized stress (\\sigma/\\sigma_0)")
@@ -7030,6 +7221,52 @@ def _apply_readability_render_defaults(
         )
     ).casefold()
     if (
+        template_id not in CATEGORICAL_TEMPLATE_IDS
+        and (
+            str(request.get("rule_id") or "").strip() == "tensile_curve"
+            or _looks_like_tensile_axis(axis_info)
+        )
+    ):
+        for axis, values in (
+            ("x", (value for item in series for value in item.x_values)),
+            ("y", (value for item in series for value in item.y_values)),
+        ):
+            if _axis_scale(updated, axis) != "linear":
+                continue
+            keys = {f"{axis}_min", f"{axis}_max", f"{axis}_ticks"}
+            if keys & explicit_options.keys():
+                continue
+            compact_axis = compact_linear_axis(
+                (value for value in values if math.isfinite(value)),
+                padding_fraction=TENSILE_AXIS_PADDING_FRACTION,
+            )
+            if compact_axis is None:
+                continue
+            axis_min, axis_max, axis_ticks = compact_axis
+            if len(axis_ticks) >= 2:
+                tick_step = min(
+                    right - left
+                    for left, right in zip(axis_ticks, axis_ticks[1:])
+                    if right > left
+                )
+                edge_step = tick_step / 2.0
+                axis_min = math.floor(axis_min / edge_step + 1e-12) * edge_step
+                axis_max = math.ceil(axis_max / edge_step - 1e-12) * edge_step
+                first_tick = math.ceil(axis_min / tick_step - 1e-12)
+                last_tick = math.floor(axis_max / tick_step + 1e-12)
+                axis_ticks = tuple(
+                    round(index * tick_step, 12)
+                    for index in range(first_tick, last_tick + 1)
+                )
+            updated.update(
+                {
+                    f"{axis}_min": float(axis_min),
+                    f"{axis}_max": float(axis_max),
+                    f"{axis}_ticks": list(axis_ticks),
+                }
+            )
+        autofixes.append("tensile_two_sided_axis_whitespace")
+    if (
         "temperature" in temperature_axis_text
         and _axis_scale(updated, "x") == "linear"
         and not {"x_min", "x_max", "x_ticks"} & explicit_options.keys()
@@ -7483,10 +7720,38 @@ def _write_veusz_document(
     )
     legend_mode = _veusz_legend_mode(render_options, template_id=template_id)
     style = _veusz_style_contract(render_options)
+    categorical_contract = _categorical_plot_contract(
+        series,
+        template_id=template_id,
+        render_options=render_options,
+    )
     axis_contract = _veusz_axis_contract(
-        render_options, template_id=template_id, series=series
+        render_options,
+        template_id=template_id,
+        series=series,
+        explicit_render_options=_explicit_render_options(request),
     )
     width, height = _size_mm(str(render_options.get("size") or "60x55"))
+    axis_contract, visual_extent_diagnostics = _expand_axis_for_visual_extents(
+        axis_contract,
+        request=request,
+        render_options=render_options,
+        template_id=template_id,
+        series=series,
+        categorical_contract=categorical_contract,
+        style=style,
+        width_mm=width,
+        height_mm=height,
+    )
+    render_options = dict(render_options)
+    render_options["_visual_extent_axis_diagnostics"] = visual_extent_diagnostics
+    if visual_extent_diagnostics.get("expanded_axes"):
+        render_options["_autofixes_applied"] = sorted(
+            {
+                *_string_list(render_options.get("_autofixes_applied")),
+                "physical_visual_extent_axis_clearance",
+            }
+        )
     show_key = _show_veusz_key(
         template_id=template_id, render_options=render_options, series_count=len(series)
     )
@@ -7544,6 +7809,15 @@ def _categorical_plot_contract(
         values = [
             float(value) for value in item.y_values if math.isfinite(float(value))
         ]
+        mean = math.fsum(values) / len(values)
+        error = (
+            math.sqrt(
+                math.fsum((value - mean) ** 2 for value in values)
+                / (len(values) - 1)
+            )
+            if len(values) >= 2
+            else 0.0
+        )
         position = float(
             item.category_position if item.category_position is not None else index
         )
@@ -7560,6 +7834,9 @@ def _categorical_plot_contract(
                 "replicate_count": len(values),
                 "boxplot_eligible": eligible,
                 "summary_status": (
+                    "bar_error"
+                    if template_id == "bar"
+                    else
                     "boxplot"
                     if eligible
                     else "raw_only"
@@ -7573,6 +7850,9 @@ def _categorical_plot_contract(
                     "q3": _quantile(values, 0.75),
                     "maximum": max(values),
                 },
+                "bar_mean": mean,
+                "bar_error": error,
+                "bar_error_statistic": "sd",
                 "raw_points_visible": (
                     template_id == "box_strip"
                     or summary_statistic == "raw_only"
@@ -7583,12 +7863,20 @@ def _categorical_plot_contract(
     return {
         "kind": "sciplot_categorical_replicate_contract",
         "version": 1,
-        "presentation_kind": "box_strip" if template_id == "box_strip" else "box",
+        "presentation_kind": (
+            "bar_error"
+            if template_id == "bar"
+            else "box_strip"
+            if template_id == "box_strip"
+            else "box"
+        ),
         "summary_statistic": summary_statistic,
         "minimum_box_replicates": MIN_BOX_REPLICATES,
         "box_whisker_mode": "1.5IQR",
         "mean_marker_visible": False,
+        "bar_error_statistic": "sd",
         "native_veusz_boxplot": summary_statistic == "median_iqr"
+        and template_id != "bar"
         and any(group["boxplot_eligible"] for group in groups),
         "raw_values_preserved": True,
         "raw_replicate_count": sum(group["replicate_count"] for group in groups),
@@ -7602,6 +7890,10 @@ def _categorical_plot_contract(
             "box_fill_fraction": CATEGORICAL_BOX_FILL_FRACTION,
             "box_line_mode": "series_color",
             "box_line_width_pt": CATEGORICAL_BOX_LINE_WIDTH_PT,
+            "bar_width_fraction": CATEGORICAL_BAR_WIDTH_FRACTION,
+            "bar_fill_transparency": CATEGORICAL_BAR_FILL_TRANSPARENCY,
+            "error_cap_to_bar_ratio": CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
+            "error_line_width_pt": UNIFIED_LINE_WIDTH_PT,
         },
         "groups": groups,
         "insufficient_replicate_groups": [
@@ -8278,6 +8570,51 @@ def _direct_label_contracts(
     return labels
 
 
+def _categorical_axis_label_contracts(
+    categorical_contract: dict[str, Any] | None,
+    *,
+    style: _VeuszStyleContract,
+) -> list[dict[str, Any]]:
+    """Build source-bound direct labels for categorical boxplot axes."""
+
+    if not isinstance(categorical_contract, dict):
+        return []
+    if categorical_contract.get("native_veusz_boxplot") is not True:
+        return []
+    labels: list[dict[str, Any]] = []
+    for index, group in enumerate(categorical_contract.get("groups", []), start=1):
+        if not isinstance(group, dict):
+            continue
+        labels.append(
+            {
+                "name": f"category_label_{index}",
+                "label": str(group.get("label") or ""),
+                "positioning": "axes",
+                "x_axis": "x",
+                "y_axis": "y",
+                "x": float(group["position"]),
+                "y": 0.0,
+                "align": "centre",
+                "valign": "top",
+                "angle_degrees": 45.0,
+                "margin_pt": 0.0,
+                "clip": False,
+                "text_size_pt": style.font_size_pt,
+                "text_color": UNIFIED_FOREGROUND_COLOR,
+                "text_hide": False,
+                "background_color": "white",
+                "background_transparency": 0,
+                "background_hide": True,
+                "border_color": UNIFIED_FOREGROUND_COLOR,
+                "border_width_pt": style.axis_linewidth_pt,
+                "border_style": "solid",
+                "border_transparency": 0,
+                "border_hide": True,
+            }
+        )
+    return labels
+
+
 def _build_veusz_plot_spec(
     *,
     request: dict[str, Any],
@@ -8311,8 +8648,29 @@ def _build_veusz_plot_spec(
         style=style,
         show_direct_labels=show_direct_labels,
     )
+    label_specs.extend(
+        _categorical_axis_label_contracts(categorical_contract, style=style)
+    )
     label_load = _label_load(series)
     layout_issues: list[dict[str, Any]] = []
+    visual_extent_diagnostics = render_options.get(
+        "_visual_extent_axis_diagnostics"
+    )
+    if isinstance(visual_extent_diagnostics, dict):
+        for violation in visual_extent_diagnostics.get("violations", []):
+            if not isinstance(violation, dict):
+                continue
+            layout_issues.append(
+                {
+                    "id": "visual_extent_outside_explicit_axis",
+                    "severity": "critical",
+                    "message": (
+                        "An explicit axis bound clips a marker, stroke, or "
+                        "categorical error-bar extent at final physical size."
+                    ),
+                    **json_safe(violation),
+                }
+            )
     spectral_coverage_issue = _spectral_x_coverage_issue(
         series,
         template_id=template_id,
@@ -8413,6 +8771,9 @@ def _build_veusz_plot_spec(
             },
         },
         "autofixes_applied": _string_list(render_options.get("_autofixes_applied")),
+        "visual_extent_axis_clearance": json_safe(
+            render_options.get("_visual_extent_axis_diagnostics") or {}
+        ),
         "layout_issues": layout_issues,
         "visual_data_transforms": _visual_data_transforms(
             template_id=template_id,
@@ -9069,6 +9430,21 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
                 for group in groups
             ),
         )
+        if categorical.get("presentation_kind") == "bar_error":
+            interface.ImportString(
+                "category_bar_positions(numeric)",
+                "\n".join(f"{float(group['position']):.12g}" for group in groups),
+            )
+            for bar_index, group in enumerate(groups, start=1):
+                interface.ImportString(
+                    f"category_bar_mean_{bar_index}(numeric)",
+                    "\n".join(
+                        f"{float(group['bar_mean']):.12g}"
+                        if item_index == bar_index
+                        else "nan"
+                        for item_index in range(1, len(groups) + 1)
+                    ),
+                )
     interface.Set("StyleSheet/Font/font", style["font_family"])
     interface.Set("StyleSheet/Font/size", _pt(float(style["font_size_pt"])))
     interface.Set("StyleSheet/Line/width", _pt(float(style["line_width_pt"])))
@@ -9172,6 +9548,140 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
             interface.Set("MarkersLine/hide", True)
             interface.Set("MarkersFill/hide", True)
             interface.To("..")
+    if categorical is not None and categorical.get("presentation_kind") == "bar_error":
+        bar_style = (
+            categorical.get("visual_style")
+            if isinstance(categorical.get("visual_style"), dict)
+            else {}
+        )
+        bar_width = float(
+            bar_style.get("bar_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION)
+        )
+        error_cap_half_width = (
+            bar_width
+            * float(
+                bar_style.get(
+                    "error_cap_to_bar_ratio", CATEGORICAL_ERROR_CAP_TO_BAR_RATIO
+                )
+            )
+            / 2.0
+        )
+        error_width = float(
+            bar_style.get("error_line_width_pt", UNIFIED_LINE_WIDTH_PT)
+        )
+        bar_groups = [
+            group
+            for group in categorical.get("groups", [])
+            if isinstance(group, dict)
+        ]
+        # Native Veusz bars provide the correct axis-coordinate geometry. Add
+        # the custom error lines first because graph children paint in reverse
+        # object-tree order and the error lines must remain visible above bars.
+        for bar_index, group in enumerate(bar_groups, start=1):
+            position = float(group["position"])
+            mean = float(group["bar_mean"])
+            error = float(group["bar_error"])
+            low = mean - error
+            high = mean + error
+            for line_index, (x_pos, y_pos, x_pos_2, y_pos_2) in enumerate(
+                (
+                    (position, low, position, high),
+                    (
+                        position - error_cap_half_width,
+                        high,
+                        position + error_cap_half_width,
+                        high,
+                    ),
+                    (
+                        position - error_cap_half_width,
+                        low,
+                        position + error_cap_half_width,
+                        low,
+                    ),
+                ),
+                start=1,
+            ):
+                line_name = f"categorical_bar_error_{bar_index}_{line_index}"
+                interface.Add("line", name=line_name, autoadd=False)
+                interface.To(line_name)
+                interface.Set("positioning", "axes")
+                interface.Set("xAxis", "x")
+                interface.Set("yAxis", "y")
+                interface.Set("mode", "point-to-point")
+                interface.Set("xPos", [x_pos])
+                interface.Set("yPos", [y_pos])
+                interface.Set("xPos2", [x_pos_2])
+                interface.Set("yPos2", [y_pos_2])
+                interface.Set("clip", True)
+                interface.Set("hide", False)
+                interface.Set("Line/color", UNIFIED_FOREGROUND_COLOR)
+                interface.Set("Line/width", _pt(error_width))
+                interface.Set("Line/style", "solid")
+                interface.Set("Line/transparency", 0)
+                interface.Set("Line/hide", False)
+                interface.Set("arrowleft", "none")
+                interface.Set("arrowright", "none")
+                interface.Set("Fill/hide", True)
+                interface.To("..")
+        bar_colors = [
+            str(
+                group.get("color")
+                or DEFAULT_PALETTE_COLORS[index % len(DEFAULT_PALETTE_COLORS)]
+            )
+            for index, group in enumerate(bar_groups)
+        ]
+        interface.Add("bar", name="categorical_bar", autoadd=False)
+        interface.To("categorical_bar")
+        interface.Set("direction", "vertical")
+        # Each sparse length dataset has a finite value at exactly one category.
+        # Stacked mode therefore keeps every bar centred on its category while
+        # still allowing one fill colour per sample.
+        interface.Set("mode", "stacked")
+        interface.Set("posn", "category_bar_positions")
+        interface.Set(
+            "lengths",
+            tuple(
+                f"category_bar_mean_{bar_index}"
+                for bar_index in range(1, len(bar_groups) + 1)
+            ),
+        )
+        interface.Set(
+            "barfill",
+            bar_width,
+        )
+        interface.Set("groupfill", 0.75)
+        interface.Set("errorstyle", "none")
+        interface.Set(
+            "BarFill/fills",
+            [
+                (
+                    "solid",
+                    color,
+                    False,
+                    int(
+                        bar_style.get(
+                            "bar_fill_transparency",
+                            CATEGORICAL_BAR_FILL_TRANSPARENCY,
+                        )
+                    ),
+                    "0.5pt",
+                    "solid",
+                    "5pt",
+                    "white",
+                    0,
+                    True,
+                )
+                for color in bar_colors
+            ],
+        )
+        interface.Set(
+            "BarLine/lines",
+            [
+                ("solid", _pt(float(style["axis_linewidth_pt"])), color, False)
+                for color in bar_colors
+            ],
+        )
+        interface.To("..")
     for item in spec["series"]:
         interface.Add("xy", name=item["name"], autoadd=False)
         interface.To(item["name"])
@@ -9186,6 +9696,9 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("MarkerLine/color", item["color"])
         interface.Set("MarkerLine/width", _pt(float(style["marker_line_width_pt"])))
         interface.Set("marker", item["marker"])
+        if str(item.get("marker") or "none").strip().casefold() == "none":
+            interface.Set("MarkerFill/hide", True)
+            interface.Set("MarkerLine/hide", True)
         if item.get("plot_line_hide") is True:
             interface.Set("PlotLine/hide", True)
         if item.get("raw_points_visible") is False:
@@ -9218,7 +9731,12 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.To("category_axis_label_provider")
         interface.Set("xData", "category_axis_x")
         interface.Set("yData", "category_axis_y")
-        interface.Set("labels", "category_axis_labels")
+        interface.Set(
+            "labels",
+            "category_axis_labels"
+            if categorical.get("presentation_kind") == "bar_error"
+            else "",
+        )
         interface.Set("marker", "none")
         interface.Set("PlotLine/hide", True)
         interface.Set("MarkerFill/hide", True)
@@ -9346,6 +9864,12 @@ def _add_veusz_axis(
     )
     interface.Set("TickLabels/color", foreground_color)
     interface.Set("TickLabels/format", str(axis_spec.get("tick_format") or "Auto"))
+    if (
+        axis == "x"
+        and axis_spec.get("mode") == "labels"
+        and len(axis_spec.get("category_labels") or []) > 4
+    ):
+        interface.Set("TickLabels/rotate", "45")
     tick_offset = (
         style["xtick_major_pad_pt"] if axis == "x" else style["ytick_major_pad_pt"]
     )
@@ -9406,24 +9930,275 @@ def _trim_empty_terminal_log_decades(
     )
 
 
+def _expand_axis_for_visual_extents(
+    axis_contract: _VeuszAxisContract,
+    *,
+    request: dict[str, Any],
+    render_options: dict[str, Any],
+    template_id: str,
+    series: list[StudioSeries],
+    categorical_contract: dict[str, Any] | None,
+    style: _VeuszStyleContract,
+    width_mm: float,
+    height_mm: float,
+) -> tuple[_VeuszAxisContract, dict[str, Any]]:
+    """Reserve data-space bounds for point-sized plot glyphs before clipping."""
+
+    point_to_mm = 25.4 / 72.0
+    stroke_extent_mm = (
+        max(style.line_width_pt, style.marker_line_width_pt) * 0.5 * point_to_mm
+        + MIN_VISUAL_EXTENT_CLEARANCE_MM
+    )
+    marker_extent_mm = (
+        style.marker_size_pt + style.marker_line_width_pt * 0.5
+    ) * point_to_mm + MIN_VISUAL_EXTENT_CLEARANCE_MM
+    x_values: list[float] = []
+    y_values: list[float] = []
+    x_extent_mm = stroke_extent_mm
+    y_extent_mm = stroke_extent_mm
+    categorical_kind = (
+        str(categorical_contract.get("presentation_kind") or "")
+        if isinstance(categorical_contract, dict)
+        else ""
+    )
+
+    for item in series:
+        finite_x = [float(value) for value in item.x_values if math.isfinite(value)]
+        finite_y = [float(value) for value in item.y_values if math.isfinite(value)]
+        x_values.extend(finite_x)
+        y_values.extend(finite_y)
+        marker = str(item.marker or "none").strip().casefold()
+        if item.presentation_kind != "categorical_replicates" and marker != "none":
+            item_marker_size = float(item.marker_size or style.marker_size_pt)
+            item_extent_mm = (
+                item_marker_size + style.marker_line_width_pt * 0.5
+            ) * point_to_mm + MIN_VISUAL_EXTENT_CLEARANCE_MM
+            x_extent_mm = max(x_extent_mm, item_extent_mm)
+            y_extent_mm = max(y_extent_mm, item_extent_mm)
+
+    if isinstance(categorical_contract, dict):
+        visual_style = (
+            categorical_contract.get("visual_style")
+            if isinstance(categorical_contract.get("visual_style"), dict)
+            else {}
+        )
+        groups = [
+            group
+            for group in categorical_contract.get("groups", [])
+            if isinstance(group, dict)
+        ]
+        if categorical_kind == "bar_error":
+            bar_width = float(
+                visual_style.get("bar_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION)
+            )
+            cap_ratio = float(
+                visual_style.get(
+                    "error_cap_to_bar_ratio", CATEGORICAL_ERROR_CAP_TO_BAR_RATIO
+                )
+            )
+            error_width_pt = float(
+                visual_style.get("error_line_width_pt", style.line_width_pt)
+            )
+            error_extent_mm = (
+                error_width_pt * 0.5 * point_to_mm
+                + MIN_VISUAL_EXTENT_CLEARANCE_MM
+            )
+            x_extent_mm = max(x_extent_mm, error_extent_mm)
+            y_extent_mm = max(y_extent_mm, error_extent_mm)
+            for group in groups:
+                position = float(group["position"])
+                half_width = max(bar_width * 0.5, bar_width * cap_ratio * 0.5)
+                x_values.extend((position - half_width, position + half_width))
+                mean = float(group["bar_mean"])
+                error = float(group["bar_error"])
+                y_values.extend((mean - error, mean + error))
+        elif categorical_kind in {"box", "box_strip"}:
+            box_width = float(
+                visual_style.get("box_fill_fraction", CATEGORICAL_BOX_FILL_FRACTION)
+            )
+            for group in groups:
+                position = float(group["position"])
+                x_values.extend((position - box_width * 0.5, position + box_width * 0.5))
+            if categorical_kind == "box_strip":
+                x_extent_mm = max(x_extent_mm, marker_extent_mm)
+                y_extent_mm = max(y_extent_mm, marker_extent_mm)
+
+    explicit = _explicit_render_options(request)
+    diagnostics: dict[str, Any] = {
+        "kind": "sciplot_physical_visual_extent_axis_clearance",
+        "version": 1,
+        "minimum_extra_clearance_mm": MIN_VISUAL_EXTENT_CLEARANCE_MM,
+        "expanded_axes": [],
+        "violations": [],
+        "axes": {},
+    }
+
+    def expand_axis(
+        axis: str,
+        minimum: float | None,
+        maximum: float | None,
+        values: list[float],
+        required_extent_mm: float,
+        graph_size_mm: float,
+    ) -> tuple[float | None, float | None]:
+        if minimum is None or maximum is None or not values or graph_size_mm <= 0.0:
+            return minimum, maximum
+        reverse = minimum > maximum
+        low, high = sorted((float(minimum), float(maximum)))
+        scale = _axis_scale(render_options, axis)
+        finite_values = [value for value in values if math.isfinite(value)]
+        if scale == "log":
+            finite_values = [value for value in finite_values if value > 0.0]
+            if low <= 0.0 or not finite_values:
+                return minimum, maximum
+            transform = math.log10
+            inverse = lambda value: 10.0**value
+        else:
+            if not finite_values:
+                return minimum, maximum
+            transform = float
+            inverse = float
+        anchor_low = min(transform(value) for value in finite_values)
+        anchor_high = max(transform(value) for value in finite_values)
+        transformed_low = transform(low)
+        transformed_high = transform(high)
+        original = (low, high)
+        fraction = min(max(required_extent_mm / graph_size_mm, 0.0), 0.20)
+        lower_explicit = f"{axis}_min" in explicit
+        upper_explicit = f"{axis}_max" in explicit
+        for _ in range(4):
+            span = transformed_high - transformed_low
+            if span <= 0.0:
+                break
+            if not lower_explicit and anchor_low - transformed_low < fraction * span:
+                transformed_low = min(
+                    transformed_low,
+                    (anchor_low - fraction * transformed_high) / (1.0 - fraction),
+                )
+            span = transformed_high - transformed_low
+            if not upper_explicit and transformed_high - anchor_high < fraction * span:
+                transformed_high = max(
+                    transformed_high,
+                    (anchor_high - fraction * transformed_low) / (1.0 - fraction),
+                )
+        low = inverse(transformed_low)
+        high = inverse(transformed_high)
+        span = transformed_high - transformed_low
+        lower_clearance_mm = (
+            (anchor_low - transformed_low) / span * graph_size_mm if span > 0.0 else 0.0
+        )
+        upper_clearance_mm = (
+            (transformed_high - anchor_high) / span * graph_size_mm if span > 0.0 else 0.0
+        )
+        expanded = not (
+            math.isclose(low, original[0], rel_tol=1e-12, abs_tol=1e-12)
+            and math.isclose(high, original[1], rel_tol=1e-12, abs_tol=1e-12)
+        )
+        if expanded:
+            diagnostics["expanded_axes"].append(axis)
+        diagnostics["axes"][axis] = {
+            "scale": scale,
+            "original_bounds": list(original),
+            "final_bounds": [low, high],
+            "visual_anchor_bounds": [min(finite_values), max(finite_values)],
+            "required_extent_mm": required_extent_mm,
+            "lower_clearance_mm": lower_clearance_mm,
+            "upper_clearance_mm": upper_clearance_mm,
+            "lower_bound_explicit": lower_explicit,
+            "upper_bound_explicit": upper_explicit,
+            "status": "safe",
+        }
+        tolerance = 1e-6
+        for side, clearance, is_explicit in (
+            ("lower", lower_clearance_mm, lower_explicit),
+            ("upper", upper_clearance_mm, upper_explicit),
+        ):
+            if clearance + tolerance >= required_extent_mm:
+                continue
+            diagnostics["axes"][axis]["status"] = "unsafe_explicit_bound"
+            diagnostics["violations"].append(
+                {
+                    "axis": axis,
+                    "side": side,
+                    "bound_explicit": is_explicit,
+                    "required_extent_mm": required_extent_mm,
+                    "measured_clearance_mm": clearance,
+                }
+            )
+        return (high, low) if reverse else (low, high)
+
+    graph_width_mm = max(width_mm - style.left_margin_mm - style.right_margin_mm, 1.0)
+    graph_height_mm = max(
+        height_mm - style.bottom_margin_mm - style.top_margin_mm, 1.0
+    )
+    x_min, x_max = expand_axis(
+        "x",
+        axis_contract.x_min,
+        axis_contract.x_max,
+        x_values,
+        x_extent_mm,
+        graph_width_mm,
+    )
+    y_min, y_max = expand_axis(
+        "y",
+        axis_contract.y_min,
+        axis_contract.y_max,
+        y_values,
+        y_extent_mm,
+        graph_height_mm,
+    )
+    return (
+        _VeuszAxisContract(
+            x_min=x_min,
+            x_max=x_max,
+            y_min=y_min,
+            y_max=y_max,
+            x_ticks=axis_contract.x_ticks,
+            y_ticks=axis_contract.y_ticks,
+        ),
+        diagnostics,
+    )
+
+
 def _veusz_axis_contract(
     render_options: dict[str, Any],
     *,
     template_id: str,
     series: list[StudioSeries],
+    explicit_render_options: dict[str, Any] | None = None,
 ) -> _VeuszAxisContract:
-    explicit_x_min = _optional_float(render_options.get("x_min")) is not None
-    explicit_x_max = _optional_float(render_options.get("x_max")) is not None
-    explicit_y_min = _optional_float(render_options.get("y_min")) is not None
-    explicit_y_max = _optional_float(render_options.get("y_max")) is not None
+    compact_auto_log_bounds = explicit_render_options is not None
+    explicit_keys = (
+        set(render_options)
+        if explicit_render_options is None
+        else set(explicit_render_options)
+    )
+    explicit_x_min = "x_min" in explicit_keys
+    explicit_x_max = "x_max" in explicit_keys
+    explicit_y_min = "y_min" in explicit_keys
+    explicit_y_max = "y_max" in explicit_keys
     x_min = _optional_float(render_options.get("x_min"))
     x_max = _optional_float(render_options.get("x_max"))
     y_min = _optional_float(render_options.get("y_min"))
     y_max = _optional_float(render_options.get("y_max"))
     x_ticks = _float_tuple(render_options.get("x_ticks"))
     y_ticks = _float_tuple(render_options.get("y_ticks"))
-    explicit_x_ticks = bool(x_ticks)
-    explicit_y_ticks = bool(y_ticks)
+    explicit_x_ticks = bool(x_ticks) and "x_ticks" in explicit_keys
+    explicit_y_ticks = bool(y_ticks) and "y_ticks" in explicit_keys
+    placement_diagnostics = render_options.get("_legend_placement_diagnostics")
+    legend_axis_reserve = (
+        placement_diagnostics.get("axis_reserve")
+        if isinstance(placement_diagnostics, dict)
+        else None
+    )
+    legend_reserves_y_min = (
+        isinstance(legend_axis_reserve, dict)
+        and legend_axis_reserve.get("side") == "bottom"
+    )
+    legend_reserves_y_max = (
+        isinstance(legend_axis_reserve, dict)
+        and legend_axis_reserve.get("side") == "top"
+    )
 
     if series:
         try:
@@ -9474,13 +10249,15 @@ def _veusz_axis_contract(
             if math.isfinite(value) and value > 0
         ]
         x_ticks = anchored_log_decade_ticks(positive_x_values)
-        if x_ticks:
+        if x_ticks and compact_auto_log_bounds:
+            data_min = min(positive_x_values)
+            data_max = max(positive_x_values)
             if not explicit_x_min:
-                x_min = (
-                    min(float(x_min), x_ticks[0]) if x_min is not None else x_ticks[0]
-                )
+                compact_min = min(x_ticks[0], data_min / AUTO_LOG_BOUND_PADDING_FACTOR)
+                x_min = float(x_min) if x_min is not None else compact_min
+                if x_min < compact_min / MAX_AUTO_LOG_EMPTY_RANGE_FACTOR:
+                    x_min = compact_min
             if not explicit_x_max:
-                data_max = max(positive_x_values)
                 x_ticks, compact_max = _trim_empty_terminal_log_decades(
                     x_ticks,
                     data_max=data_max,
@@ -9488,11 +10265,12 @@ def _veusz_axis_contract(
                 if compact_max is not None:
                     x_max = compact_max
                 else:
-                    x_max = (
-                        max(float(x_max), x_ticks[-1])
-                        if x_max is not None
-                        else x_ticks[-1]
+                    compact_max = max(
+                        x_ticks[-1], data_max * AUTO_LOG_BOUND_PADDING_FACTOR
                     )
+                    x_max = float(x_max) if x_max is not None else compact_max
+                    if x_max > compact_max * MAX_AUTO_LOG_EMPTY_RANGE_FACTOR:
+                        x_max = compact_max
     if series and _axis_scale(render_options, "y") == "log" and not explicit_y_ticks:
         positive_y_values = [
             value
@@ -9501,13 +10279,15 @@ def _veusz_axis_contract(
             if math.isfinite(value) and value > 0
         ]
         y_ticks = anchored_log_decade_ticks(positive_y_values)
-        if y_ticks:
-            if not explicit_y_min:
-                y_min = (
-                    min(float(y_min), y_ticks[0]) if y_min is not None else y_ticks[0]
-                )
-            if not explicit_y_max:
-                data_max = max(positive_y_values)
+        if y_ticks and compact_auto_log_bounds:
+            data_min = min(positive_y_values)
+            data_max = max(positive_y_values)
+            if not explicit_y_min and not legend_reserves_y_min:
+                compact_min = min(y_ticks[0], data_min / AUTO_LOG_BOUND_PADDING_FACTOR)
+                y_min = float(y_min) if y_min is not None else compact_min
+                if y_min < compact_min / MAX_AUTO_LOG_EMPTY_RANGE_FACTOR:
+                    y_min = compact_min
+            if not explicit_y_max and not legend_reserves_y_max:
                 y_ticks, compact_max = _trim_empty_terminal_log_decades(
                     y_ticks,
                     data_max=data_max,
@@ -9515,11 +10295,12 @@ def _veusz_axis_contract(
                 if compact_max is not None:
                     y_max = compact_max
                 else:
-                    y_max = (
-                        max(float(y_max), y_ticks[-1])
-                        if y_max is not None
-                        else y_ticks[-1]
+                    compact_max = max(
+                        y_ticks[-1], data_max * AUTO_LOG_BOUND_PADDING_FACTOR
                     )
+                    y_max = float(y_max) if y_max is not None else compact_max
+                    if y_max > compact_max * MAX_AUTO_LOG_EMPTY_RANGE_FACTOR:
+                        y_max = compact_max
     if x_ticks:
         if not explicit_x_min:
             x_min = (

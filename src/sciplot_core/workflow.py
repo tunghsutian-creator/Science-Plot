@@ -18,7 +18,11 @@ from sciplot_core.assisted_cleanup import (
 )
 from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.delivery import build_delivery_package
-from sciplot_core.materials_rules import compute_analysis_metrics
+from sciplot_core.materials_rules import (
+    ELONGATION_AT_BREAK_LABEL,
+    ELONGATION_AT_BREAK_METRIC,
+    compute_analysis_metrics,
+)
 from sciplot_core.managed_output import managed_output_transaction
 from sciplot_core.one_step import build_one_step_project, build_quality_actions
 from sciplot_core.operation_modes import normal_mode_payload
@@ -41,6 +45,7 @@ from sciplot_core.publication import (
     link_intent_to_transform_ledger,
     write_publication_artifacts,
 )
+from sciplot_core.request_contract import normalize_render_options
 from sciplot_core.publish_state import build_publish_state
 from sciplot_core.qa import run_qa
 from sciplot_core.render import render_to_dir
@@ -402,24 +407,21 @@ _TENSILE_SUMMARY_FIGURES: tuple[dict[str, str], ...] = (
         "metric": "strength_MPa",
         "label": "Tensile strength (MPa)",
         "unit": "MPa",
+        "template": "bar",
     },
     {
-        "id": "strain_at_break_by_sample",
-        "metric": "strain_at_break_percent",
-        "label": "Strain at break (%)",
+        "id": "elongation_at_break_by_sample",
+        "metric": ELONGATION_AT_BREAK_METRIC,
+        "label": ELONGATION_AT_BREAK_LABEL,
         "unit": "%",
+        "template": "bar",
     },
     {
         "id": "tensile_modulus_by_sample",
         "metric": "modulus_MPa",
         "label": "Tensile modulus (MPa)",
         "unit": "MPa",
-    },
-    {
-        "id": "toughness_by_sample",
-        "metric": "toughness_MJ_m3",
-        "label": "Toughness (MJ m⁻³)",
-        "unit": "MJ/m3",
+        "template": "bar",
     },
 )
 
@@ -678,13 +680,21 @@ def _tensile_summary_sources(
             "x_label_override": "Sample",
             "y_label_override": contract["label"],
             "summary_statistic": "median_iqr",
+            "template": contract["template"],
         }
         if compact_axis is not None:
+            axis_values = (
+                [0.0]
+                + [value for values in group_values for value in values]
+                if contract.get("template") == "bar"
+                else [value for values in group_values for value in values]
+            )
+            bar_axis = compact_linear_axis(axis_values) if contract.get("template") == "bar" else compact_axis
             metric_options.update(
                 {
-                    "y_min": compact_axis[0],
-                    "y_max": compact_axis[1],
-                    "y_ticks": list(compact_axis[2]),
+                    "y_min": 0.0 if contract.get("template") == "bar" else compact_axis[0],
+                    "y_max": bar_axis[1] if bar_axis is not None else compact_axis[1],
+                    "y_ticks": list(bar_axis[2] if bar_axis is not None else compact_axis[2]),
                 }
             )
         metric_sources.append(
@@ -715,11 +725,13 @@ def _render_veusz_tensile_bundle(
         return None
     figures_dir = output_dir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
+    curve_options = dict(options)
+    curve_options.setdefault("legend_position", "auto")
     render_jobs: list[tuple[str, Path, str, dict[str, Any]]] = [
-        ("stress_vs_strain", input_path, str(request.get("template") or "curve"), dict(options))
+        ("stress_vs_strain", input_path, str(request.get("template") or "curve"), curve_options)
     ]
     render_jobs.extend(
-        (metric_id, metric_source, "box_strip", metric_options)
+        (metric_id, metric_source, str(metric_options.pop("template", "bar")), metric_options)
         for metric_id, metric_source, metric_options in metric_sources
     )
     combined_outputs: list[str] = []
@@ -736,6 +748,12 @@ def _render_veusz_tensile_bundle(
             output_dir=metric_dir,
             options=metric_options,
             export_formats=export_formats,
+            request_context={
+                **request,
+                "explicit_render_option_keys": request.get(
+                    "explicit_render_option_keys", []
+                ),
+            },
         )
         outputs, exports = _rename_metric_exports(payload, metric_id=metric_id, figures_dir=figures_dir)
         combined_outputs.extend(outputs)
@@ -835,6 +853,12 @@ def _render_veusz_sweep_bundle(
             output_dir=metric_dir,
             options=metric_render_options,
             export_formats=export_formats,
+            request_context={
+                **request,
+                "explicit_render_option_keys": request.get(
+                    "explicit_render_option_keys", []
+                ),
+            },
         )
         outputs, exports = _rename_metric_exports(payload, metric_id=metric_id, figures_dir=figures_dir)
         combined_outputs.extend(outputs)
@@ -1480,6 +1504,7 @@ def run_one_step(
     *,
     output_root: Path,
     project_name: str | None = None,
+    delivery_root: Path | None = None,
 ) -> dict[str, Any]:
     input_path = input_path.expanduser().resolve()
     output_root = output_root.expanduser().resolve()
@@ -1492,8 +1517,10 @@ def run_one_step(
         "input": str(input_path),
         "output": str(run_dir),
         "exports": list(DEFAULT_EXPORT_FORMATS_POLICY),
-        "render_options": dict(DEFAULT_RENDER_OPTIONS),
+        "render_options": normalize_render_options(DEFAULT_RENDER_OPTIONS),
     }
+    if delivery_root is not None:
+        request["delivery_output"] = str(delivery_root.expanduser().resolve())
     request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")
     try:
         manifest = run_request(request_path)

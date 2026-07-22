@@ -21,6 +21,12 @@ from sciplot_core.one_step import (
     build_render_request_package,
 )
 from sciplot_core.publish_state import build_publish_state
+from sciplot_core.policy import (
+    DELIVERY_DATA_DIR,
+    DELIVERY_PDF_DIR,
+    DELIVERY_PROJECT_DIR,
+    DELIVERY_TIFF_DIR,
+)
 from sciplot_core.study_model import build_output_package_contract
 from sciplot_core.readiness import (
     INSIDE_VALIDATED_ENVELOPE,
@@ -54,11 +60,11 @@ def _check(
 
 
 def _write_probe_delivery(root: Path) -> dict[str, Any]:
-    data_dir = root / "data"
-    pdf_dir = root / "pdf"
-    tiff_dir = root / "tiff"
-    project_dir = root / "project"
-    for directory in (data_dir, pdf_dir, tiff_dir, project_dir):
+    data_dir = root / DELIVERY_DATA_DIR
+    pdf_dir = root / DELIVERY_PDF_DIR
+    tiff_dir = root / DELIVERY_TIFF_DIR
+    project_dir = root / DELIVERY_PROJECT_DIR
+    for directory in {data_dir, pdf_dir, tiff_dir, project_dir}:
         directory.mkdir(parents=True, exist_ok=True)
     data = data_dir / "probe_plot_data.csv"
     pdf = pdf_dir / "probe.pdf"

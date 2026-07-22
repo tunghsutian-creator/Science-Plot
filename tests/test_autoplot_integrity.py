@@ -19,10 +19,10 @@ from sciplot_core.study_model import build_output_package_contract
 
 def _delivery_record(delivery: Path) -> dict[str, object]:
     data_dir = delivery / "data"
-    pdf_dir = delivery / "pdf"
-    tiff_dir = delivery / "tiff"
+    pdf_dir = delivery / "figures"
+    tiff_dir = pdf_dir
     project_dir = delivery / "project"
-    for directory in (data_dir, pdf_dir, tiff_dir, project_dir):
+    for directory in {data_dir, pdf_dir, tiff_dir, project_dir}:
         directory.mkdir(parents=True)
     data = data_dir / "figure_plot_data.csv"
     pdf = pdf_dir / "figure.pdf"
@@ -66,8 +66,7 @@ def _delivery_record(delivery: Path) -> dict[str, object]:
         "launcher_contract": launcher_contract,
         "artifacts": [
             {"id": "data", "path": str(data_dir), "exists": True},
-            {"id": "pdf", "path": str(pdf_dir), "exists": True},
-            {"id": "tiff", "path": str(tiff_dir), "exists": True},
+            {"id": "figures", "path": str(pdf_dir), "exists": True},
             {"id": "project", "path": str(project_dir), "exists": True},
             {"id": "launcher", "path": str(launcher), "exists": True},
         ],
@@ -210,7 +209,7 @@ def test_autoplot_rejects_deleted_delivery_artifact(
     )
     result = _ready_result(tmp_path)
     run_output = Path(str(result["run_output"]))
-    (run_output / "delivery" / "pdf" / "figure.pdf").unlink()
+    (run_output / "delivery" / "figures" / "figure.pdf").unlink()
 
     summary = autoplot.build_autoplot_summary(result)
 

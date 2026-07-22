@@ -1344,17 +1344,34 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                     "Veusz specification contains an invalid direct label."
                 )
             label_name = str(raw_label.get("name") or "").strip()
-            match = re.fullmatch(r"label_(\d+)", label_name)
-            if match is None:
-                raise ValueError(
-                    "Veusz direct-label identity is not series-bound."
+            series_match = re.fullmatch(r"label_(\d+)", label_name)
+            category_match = re.fullmatch(r"category_label_(\d+)", label_name)
+            if series_match is not None:
+                label_index = int(series_match.group(1)) - 1
+                expected_label = (
+                    str(series[label_index].get("label") or "")
+                    if 0 <= label_index < len(series)
+                    else None
                 )
-            series_index = int(match.group(1)) - 1
+            elif category_match is not None and isinstance(categorical, dict):
+                label_index = int(category_match.group(1)) - 1
+                x_axis = (
+                    spec.get("axes", {}).get("x")
+                    if isinstance(spec.get("axes"), dict)
+                    and isinstance(spec["axes"].get("x"), dict)
+                    else {}
+                )
+                category_labels = list(x_axis.get("category_labels") or [])
+                expected_label = (
+                    str(category_labels[label_index])
+                    if 0 <= label_index < len(category_labels)
+                    else None
+                )
+            else:
+                expected_label = None
             if (
-                series_index < 0
-                or series_index >= len(series)
-                or str(raw_label.get("label") or "")
-                != str(series[series_index].get("label") or "")
+                expected_label is None
+                or str(raw_label.get("label") or "") != expected_label
                 or label_name in seen_direct_label_names
             ):
                 raise ValueError(
@@ -1832,7 +1849,13 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             allowed_dataset_paths = {"xData", "yData"}
             if record["name"] == "category_axis_label_provider":
                 allowed_dataset_paths.add("labels")
-                if bindings["labels"] != "category_axis_labels":
+                expected_provider_labels = "category_axis_labels"
+                if (
+                    isinstance(categorical, dict)
+                    and categorical.get("native_veusz_boxplot") is True
+                ):
+                    expected_provider_labels = ""
+                if bindings["labels"] != expected_provider_labels:
                     raise ValueError(
                         "Categorical axis provider does not consume its exact "
                         "label dataset."
@@ -1908,9 +1931,17 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
         }
 
         def inspect_widget(path: str, node: Any) -> None:
+            widget_type = str(getattr(node, "typename", ""))
+            if (
+                widget_type == "bar"
+                and str(getattr(node, "name", ""))
+                == "category_axis_tick_label_provider"
+            ):
+                # This zero-width, hidden-style native bar exists only so
+                # Veusz can source categorical tick labels for boxplots.
+                return
             if not _node_is_visible(node):
                 return
-            widget_type = str(getattr(node, "typename", ""))
             if widget_type in {"xy", "boxplot", "image", "contour"}:
                 return
             if widget_type in {

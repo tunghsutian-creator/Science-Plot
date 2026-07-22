@@ -276,12 +276,12 @@ def doctor_payload() -> dict[str, Any]:
             "daily_entrypoint": "sciplot studio PATH",
             "interactive_entrypoint": "sciplot studio PATH",
             "headless_export_entrypoint": (
-                "sciplot studio PATH --out outputs/projects "
+                "sciplot studio PATH --out /path/to/Visible_Figure_Project "
                 "--export pdf,tiff_300 --json"
             ),
             "explicit_intent_entrypoint": (
                 "sciplot studio PATH --rule RULE_ID --template TEMPLATE_ID "
-                "--out outputs/projects"
+                "--out /path/to/Visible_Figure_Project"
             ),
             "frontend_default": "veusz_mainwindow",
             "assistant_default": "independent",

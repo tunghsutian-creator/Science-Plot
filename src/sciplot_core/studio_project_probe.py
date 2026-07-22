@@ -800,12 +800,12 @@ def run_studio_project_probe(
             frequency_scope_contract_ok = bool(
                 isinstance(frequency_scope_before, dict)
                 and frequency_scope_before.get("scope")
-                == "primary_figure_project_delivery"
+                == "full_figure_set_project_delivery"
                 and frequency_scope_before.get(
                     "full_figure_set_delivery_complete"
                 )
-                is False
-                and bool(frequency_scope_before.get("blocked_figure_ids"))
+                is True
+                and frequency_scope_before.get("blocked_figure_ids") == []
                 and frequency_scope_after == frequency_scope_before
                 and frequency_blocker_before is None
                 and frequency_blocker_after is None
@@ -1541,8 +1541,8 @@ def run_studio_project_probe(
         if figure_entries:
             baseline_scope_current = bool(
                 baseline_status["provenance"]["status"]
-                == "current_primary_figure_evidence"
-                and baseline_status["provenance"]["complete"] is False
+                == "current_full_project_evidence"
+                and baseline_status["provenance"]["complete"] is True
                 and baseline_status["provenance"][
                     "primary_figure_evidence_current"
                 ]
@@ -1550,9 +1550,9 @@ def run_studio_project_probe(
                 and baseline_status["provenance"][
                     "full_project_evidence_current"
                 ]
-                is False
+                is True
                 and baseline_status["workflow"]["audit_state"]
-                == "current_primary_figure"
+                == "current"
             )
         else:
             baseline_scope_current = bool(
@@ -1777,7 +1777,7 @@ def run_studio_project_probe(
                     and missing_scope_status.get("provenance", {}).get(
                         "full_project_evidence_current"
                     )
-                    is False
+                    is True
                     and malformed_scope_status.get("provenance", {}).get(
                         "figure_set_export_scope_status"
                     )
@@ -1789,7 +1789,7 @@ def run_studio_project_probe(
                     and malformed_scope_status.get("provenance", {}).get(
                         "full_project_evidence_current"
                     )
-                    is False
+                    is True
                     and unknown_scope_status.get("provenance", {}).get("status")
                     == "unknown_or_incomplete_figure_set_scope"
                     and unknown_scope_status.get("provenance", {}).get(
@@ -1873,40 +1873,28 @@ def run_studio_project_probe(
             )
             checks.append(
                 _check(
-                    "figure_set_primary_delivery_scope_is_persisted",
-                    "A rheology project run, review, analysis, delivery, and registered last-run state all say that only the primary figure is included",
-                    persisted_scope.get("status") == "primary_exact_current_only"
+                    "figure_set_full_delivery_scope_is_persisted",
+                    "A rheology project run, review, analysis, delivery, and registered last-run state all include every ready figure in one delivery",
+                    persisted_scope.get("status") == "full_figure_set_exact_current"
                     and updated_export.get("scope")
-                    == "primary_figure_project_delivery"
+                    == "full_figure_set_project_delivery"
                     and updated_run.get("scope")
-                    == "primary_figure_project_delivery"
+                    == "full_figure_set_project_delivery"
                     and updated_manifest.get("scope")
-                    == "primary_figure_project_delivery"
+                    == "full_figure_set_project_delivery"
                     and persisted_scope.get("scope")
-                    == "primary_figure_project_delivery"
+                    == "full_figure_set_project_delivery"
                     and persisted_scope.get("primary_figure_id")
                     == expected_primary_figure_id
-                    and persisted_scope.get("supported_figure_ids")
-                    == [expected_primary_figure_id]
-                    and set(persisted_scope.get("blocked_figure_ids") or [])
-                    == expected_blocked_figure_ids
-                    and bool(str(persisted_scope.get("blocker") or "").strip())
+                    and set(persisted_scope.get("supported_figure_ids") or [])
+                    == {expected_primary_figure_id, *expected_blocked_figure_ids}
+                    and persisted_scope.get("blocked_figure_ids") == []
+                    and persisted_scope.get("blocker") is None
                     and persisted_scope.get("secondary_receipt_scope")
-                    == "standalone_exact_current_export"
+                    == "same_project_delivery"
                     and persisted_scope.get("full_figure_set_delivery_complete")
-                    is False
-                    and missing_registry_scope.get("planned_figure_ids")
-                    == [
-                        str(item.get("id"))
-                        for item in canonical_request_payload.get(
-                            "study_model", {}
-                        ).get("figure_queue", [])
-                        if isinstance(item, dict) and item.get("id")
-                    ]
-                    and missing_registry_figure_id
-                    in missing_registry_scope.get("unavailable_figure_ids", [])
-                    and missing_registry_figure_id
-                    not in missing_registry_scope.get("available_figure_ids", [])
+                    is True
+                    and missing_registry_scope == {}
                     and request_snapshot == canonical_request_payload
                     and "figure_set_export_scope" not in request_snapshot
                     and updated_manifest.get("request") == canonical_request_payload
@@ -1923,16 +1911,27 @@ def run_studio_project_probe(
                     and updated_manifest.get("package_contract", {}).get(
                         "full_figure_set_complete"
                     )
-                    is False
-                    and delivery.get("scope") == "primary_figure_project_delivery"
+                    is True
+                    and delivery.get("scope") == "full_figure_set_project_delivery"
                     and delivery.get("complete") is True
-                    and delivery.get("full_figure_set_complete") is False
+                    and delivery.get("full_figure_set_complete") is True
                     and delivery.get("figure_set_export_scope") == persisted_scope
-                    and len(delivery_project_documents) == 1
-                    and Path(
-                        str(delivery_project_documents[0].get("source") or "")
-                    ).resolve()
-                    == copied_document
+                    and len(delivery_project_documents)
+                    == 1 + len(expected_blocked_figure_ids)
+                    and {
+                        Path(str(item.get("source") or "")).resolve()
+                        for item in delivery_project_documents
+                    }
+                    == {
+                        copied_document,
+                        *{
+                            copied_project
+                            / "studio"
+                            / "figures"
+                            / f"{figure_id}.vsz"
+                            for figure_id in expected_blocked_figure_ids
+                        },
+                    }
                     and "Figure-set delivery scope" in analysis_report_text
                     and "Figure-set delivery scope" in review_html_text
                     and expected_primary_figure_id in analysis_report_text
@@ -1972,13 +1971,13 @@ def run_studio_project_probe(
             )
             checks.append(
                 _check(
-                    "primary_scoped_delivery_is_not_full_figure_set_evidence",
-                    "A ready primary result stays usable while provenance explicitly refuses to call the incomplete four-figure set complete",
+                    "full_figure_set_delivery_is_full_project_evidence",
+                    "One complete all-figures delivery is recorded as current full-project evidence",
                     updated_status.get("workflow", {}).get("state") == "ready"
                     and updated_status.get("workflow", {}).get("audit_state")
-                    == "current_primary_figure"
+                    == "current"
                     and updated_status.get("provenance", {}).get("status")
-                    == "current_primary_figure_evidence"
+                    == "current_full_project_evidence"
                     and updated_status.get("provenance", {}).get(
                         "primary_figure_evidence_current"
                     )
@@ -1986,8 +1985,8 @@ def run_studio_project_probe(
                     and updated_status.get("provenance", {}).get(
                         "full_project_evidence_current"
                     )
-                    is False
-                    and updated_status.get("provenance", {}).get("complete") is False
+                    is True
+                    and updated_status.get("provenance", {}).get("complete") is True
                     and updated_status.get("provenance", {}).get(
                         "project_delivery_current"
                     )
@@ -1995,7 +1994,7 @@ def run_studio_project_probe(
                     and updated_status.get("provenance", {}).get(
                         "full_figure_set_delivery_complete"
                     )
-                    is False
+                    is True
                     and updated_export.get("figure_set_export_scope")
                     == persisted_scope,
                     {

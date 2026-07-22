@@ -6,7 +6,7 @@ from typing import Any
 
 from sciplot_core._utils import json_safe
 from sciplot_core.delivery import verify_delivery_package
-from sciplot_core.policy import DELIVERY_DIR
+from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.publish_state import build_publish_state
 from sciplot_core.readiness import validated_envelope_evaluation_ready
 from sciplot_core.study_model import verify_output_package_contract
@@ -272,7 +272,10 @@ def build_autoplot_summary(one_step_result: dict[str, Any]) -> dict[str, Any]:
     delivery_path_exists = bool(
         delivery_path is not None and delivery_path.is_dir()
     )
-    expected_delivery_path = (run_output / DELIVERY_DIR).resolve()
+    expected_delivery_path = requested_delivery_root(
+        manifest,
+        run_output=run_output,
+    )
     delivery_path_canonical = bool(
         delivery_path is not None
         and delivery_path_exists
@@ -472,9 +475,13 @@ def run_autoplot(
     *,
     output_root: Path,
     project_name: str | None = None,
+    delivery_root: Path | None = None,
 ) -> dict[str, Any]:
     result = run_one_step(
-        input_path, output_root=output_root, project_name=project_name
+        input_path,
+        output_root=output_root,
+        project_name=project_name,
+        delivery_root=delivery_root,
     )
     summary = build_autoplot_summary(result)
     run_output = Path(str(summary["run_output"]))

@@ -8,6 +8,7 @@ TERMINAL_RENDER_REQUEST_FIELDS = frozenset(
     {
         "template",
         "render_options",
+        "explicit_render_option_keys",
         "x_metric",
         "y_metric",
         "series_order",
@@ -70,6 +71,15 @@ def project_terminal_render_request(
         raise ValueError("A terminal render request needs a template.")
     if not isinstance(request_context, dict):
         return request
+    explicit_keys = request_context.get("explicit_render_option_keys")
+    if isinstance(explicit_keys, list | tuple | set):
+        request["explicit_render_option_keys"] = sorted(
+            {
+                str(key)
+                for key in explicit_keys
+                if str(key) in request["render_options"]
+            }
+        )
     x_metric, y_metric = _terminal_metric_pair(request_context)
     if x_metric is not None:
         request["x_metric"] = x_metric

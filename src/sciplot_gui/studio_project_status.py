@@ -537,7 +537,7 @@ def _verify_export_artifacts(
             qa_hashes_by_path[qa_path] = (export_format, qa_hash)
     if not records:
         issues.append("No export artifact records are present.")
-    seen_formats: set[str] = set()
+    seen_bindings: set[tuple[str, str]] = set()
     seen_paths: set[Path] = set()
     for index, record in enumerate(records):
         export_format = _normalized_export_format(record.get("format"))
@@ -565,11 +565,18 @@ def _verify_export_artifacts(
                 f"Export artifact is outside the evidence directory: {artifact_path}"
             )
             continue
-        if export_format in seen_formats:
-            issues.append(f"Duplicate export format record: {export_format}")
+        figure_binding = str(
+            record.get("figure_id") or record.get("document") or "primary"
+        ).strip()
+        binding = (figure_binding, export_format)
+        if binding in seen_bindings:
+            issues.append(
+                "Duplicate export format record for one figure: "
+                f"{figure_binding} / {export_format}"
+            )
         if artifact_path in seen_paths:
             issues.append(f"Duplicate export artifact path: {artifact_path}")
-        seen_formats.add(export_format)
+        seen_bindings.add(binding)
         seen_paths.add(artifact_path)
         qa_binding = qa_hashes_by_path.get(artifact_path)
         if qa_binding is not None and qa_binding[0] != export_format:
@@ -1121,13 +1128,17 @@ def _provenance_status(
         if _is_primary_figure_set_export_scope(figure_set_export_scope)
         else None
     )
-    primary_only_scope = bool(
+    full_figure_set_scope = bool(
         normalized_figure_scope is not None
         and figure_set_scope_status in {"persisted", "recomputed_current_project"}
     )
-    full_project_scope = figure_set_scope_status == "not_applicable"
-    delivery_scope_known = bool(primary_only_scope or full_project_scope)
-    primary_figure_evidence_current = bool(current_evidence and primary_only_scope)
+    full_project_scope = bool(
+        figure_set_scope_status == "not_applicable" or full_figure_set_scope
+    )
+    delivery_scope_known = full_project_scope
+    primary_figure_evidence_current = bool(
+        current_evidence and full_figure_set_scope
+    )
     full_project_evidence_current = bool(current_evidence and full_project_scope)
     audit_pending = bool(
         source.get("audit_status") == "not_computed"
@@ -1158,13 +1169,15 @@ def _provenance_status(
         "figure_set_export_scope_status": figure_set_scope_status,
         "delivery_scope_known": delivery_scope_known,
         "delivery_scope": (
-            "primary_figure_project_delivery"
-            if primary_only_scope
+            "full_figure_set_project_delivery"
+            if full_figure_set_scope
             else "project_delivery"
             if full_project_scope
             else "unknown"
         ),
-        "full_figure_set_delivery_complete": (False if primary_only_scope else None),
+        "full_figure_set_delivery_complete": (
+            True if full_figure_set_scope else None
+        ),
         "audit_pending": current_result_awaiting_audit,
         "run_evidence_complete": run_evidence_complete,
         "request_snapshot_current": latest_path is not None,
@@ -1187,7 +1200,7 @@ def _provenance_status(
         "project_delivery_current": delivery_current,
         "delivery_verification": json_safe(delivery_verification),
         "primary_figure_delivery_current": bool(
-            delivery_current and primary_only_scope
+            delivery_current and full_figure_set_scope
         ),
         "full_project_delivery_current": bool(delivery_current and full_project_scope),
     }
@@ -1229,8 +1242,8 @@ def _resolve_figure_set_export_scope(
     figure_set_indicated = bool(
         persisted_present
         or (project_dir / "studio" / "figure_set.json").exists()
-        or delivery.get("scope") == "primary_figure_project_delivery"
-        or package.get("full_figure_set_complete") is False
+        or delivery.get("scope") == "full_figure_set_project_delivery"
+        or package.get("full_figure_set_complete") is True
     )
     return (
         (None, "unknown_or_incomplete")
@@ -1553,15 +1566,14 @@ def export_result_message(
             else {}
         )
         scope_note = (
-            "\n\nFigure set: only the primary G-prime document is bound "
-            "to this receipt; registered secondary VSZ files remain saved "
-            "but unpublished."
-            if figure_scope.get("status") == "primary_exact_current_only"
+            "\n\nFigure set: every registered VSZ and its matching "
+            "PDF/TIFF pair are bound to this one delivery."
+            if figure_scope.get("status") == "full_figure_set_exact_current"
             else ""
         )
         delivery_summary = (
-            "PDF/TIFF, QA, and the primary-figure scoped portable delivery passed."
-            if payload.get("scope") == "primary_figure_project_delivery"
+            "All figure PDF/TIFF pairs, QA, and the portable delivery passed."
+            if payload.get("scope") == "full_figure_set_project_delivery"
             else "PDF/TIFF, QA, and the portable project delivery passed."
         )
         return (

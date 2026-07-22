@@ -62,7 +62,7 @@ promotion workflows. Do not automate Veusz with mouse clicks or patch VSZ text.
 3. For interactive daily work, prepare the project and open native Veusz:
 
    ```bash
-   skill/scripts/sciplot studio INPUT --out outputs/projects
+   skill/scripts/sciplot studio INPUT --out /path/to/Visible_Figure_Project
    ```
 
    When scientific or presentation intent is already known:
@@ -71,7 +71,7 @@ promotion workflows. Do not automate Veusz with mouse clicks or patch VSZ text.
    skill/scripts/sciplot studio INPUT \
      --rule RULE_ID \
      --template TEMPLATE_ID \
-     --out outputs/projects
+     --out /path/to/Visible_Figure_Project
    ```
 
    `--rule` must name a ready rule. `--template` must be implemented by the
@@ -81,7 +81,7 @@ promotion workflows. Do not automate Veusz with mouse clicks or patch VSZ text.
 
    ```bash
    skill/scripts/sciplot studio INPUT \
-     --out outputs/projects \
+     --out /path/to/Visible_Figure_Project \
      --export pdf,tiff_300 \
      --json
    ```
@@ -155,8 +155,9 @@ When cleanup is necessary:
 
 ## Template, style, and delivery contracts
 
-The production builder implements exactly `curve`, `point_line`,
-`stacked_curve`, `box`, `box_strip`, and `heatmap`. Unknown or reference-only
+The production builder implements exactly `curve`, `point_line`, `stacked_curve`,
+`bar`, `box`, `box_strip`, and `heatmap`. The `bar` template uses mean ± SD
+error bars for categorical replicate groups. Unknown or reference-only
 templates must fail at request validation.
 
 `src/sciplot_core/policy.py` owns global typography, stroke, tick, marker,
@@ -164,19 +165,25 @@ ordinary frame, size, export, and delivery defaults. Templates and recipes may
 not own private hard-style constants. Heatmap scalar, contour, and colorbar
 colors are the explicit semantic color exception.
 
+For raw input, ``--out`` names the dedicated visible handoff directory.  When
+omitted, create ``SOURCE_SciPlot/`` beside the source.  Put runtime evidence,
+history, raw snapshots, manifests, and QA under the sibling hidden ``.sciplot/``
+workspace; never make a normal user traverse ``outputs/.../runs/.../delivery``.
+
 The user-facing package is limited to:
 
 ```text
-delivery/
+SOURCE_SciPlot/  # or the explicit --out directory
   data/*.csv
-  pdf/*.pdf
-  tiff/*_300dpi.tiff
+  figures/*.pdf
+  figures/*_300dpi.tiff
   project/*.vsz
   Open_in_Veusz.command
 ```
 
-Raw archives, manifests, analysis tables, QA, publication evidence, and
-transform lineage remain in the run output.
+The VSZ files embed all plotted data and Veusz objects and remain the portable
+editable authority. Raw archives, manifests, analysis tables, QA, publication
+evidence, and transform lineage remain in the hidden runtime workspace.
 
 ## Specialized preparation and verification
 

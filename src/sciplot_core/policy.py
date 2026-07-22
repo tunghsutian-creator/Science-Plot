@@ -14,7 +14,8 @@ STACKED_SPECTRUM_FIGURE_SIZE = "120x110"
 JAMA_EDITORIAL_PALETTE_ID = "jama_editorial"
 NPG_MODERN_PALETTE_ID = "npg_modern"
 TOL_BRIGHT_PALETTE_ID = "tol_bright"
-DEFAULT_PALETTE_PRESET = JAMA_EDITORIAL_PALETTE_ID
+CONTROL_FIRST_BRIGHT_PALETTE_ID = "control_first_bright"
+DEFAULT_PALETTE_PRESET = CONTROL_FIRST_BRIGHT_PALETTE_ID
 JAMA_EDITORIAL_COLORS = (
     "#374E55",
     "#DF8F44",
@@ -45,7 +46,19 @@ TOL_BRIGHT_COLORS = (
     "#66CCEE",
     "#BBBBBB",
 )
-DEFAULT_PALETTE_COLORS = JAMA_EDITORIAL_COLORS
+# Ordinary plots use a stable positional contract: index 0 is the control in
+# near-black, followed by six categorical colors in fixed order.  Heatmap,
+# contour, and colorbar colors remain independently owned scientific semantics.
+CONTROL_FIRST_BRIGHT_COLORS = (
+    "#222222",
+    "#3568C0",
+    "#C83E4D",
+    "#2A9D8F",
+    "#D99A24",
+    "#7C9ED9",
+    "#7B61A8",
+)
+DEFAULT_PALETTE_COLORS = CONTROL_FIRST_BRIGHT_COLORS
 DEFAULT_SCALAR_FIELD_COLORMAP_ID = "sciplot_cividis"
 DEFAULT_SCALAR_FIELD_COLORS = (
     "#00204C",
@@ -107,6 +120,7 @@ DEFAULT_LINE_STYLE_SEQUENCE = (
     "dashed-fine",
     "dotted-fine",
 )
+DEFAULT_CURVE_LINE_STYLE_SEQUENCE = ("solid",)
 FIGURE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
 
 DEFAULT_EXPORT_FORMATS_POLICY = ("pdf", "tiff_300")
@@ -180,6 +194,10 @@ DEFAULT_LINEAR_TARGET_MAJOR_TICKS = 5
 DEFAULT_LINEAR_AXIS_PADDING_FRACTION = 0.02
 DEFAULT_LEGEND_CURVE_CLEARANCE_MM = 2.0
 DEFAULT_LEGEND_EDGE_PADDING_MM = 1.0
+# Extra graph-local clearance beyond the physical marker/error-stroke envelope.
+# Axis limits use data units while glyphs use points, so this reserve protects
+# against vector stroke caps and raster rounding at the final physical size.
+MIN_VISUAL_EXTENT_CLEARANCE_MM = 0.25
 MAX_LEGEND_RESERVE_ITERATIONS = 6
 MAX_LOG_LEGEND_RESERVE_DECADES = 0.70
 MAX_LINEAR_LEGEND_RESERVE_FRACTION = 0.60
@@ -196,6 +214,12 @@ MIN_BOX_REPLICATES = 2
 CATEGORICAL_BOX_FILL_FRACTION = 0.36
 CATEGORICAL_BOX_FILL_TRANSPARENCY = 72
 CATEGORICAL_BOX_LINE_WIDTH_PT = UNIFIED_LINE_WIDTH_PT
+CATEGORICAL_BAR_WIDTH_FRACTION = 0.36
+CATEGORICAL_BAR_FILL_TRANSPARENCY = 15
+CATEGORICAL_ERROR_CAP_TO_BAR_RATIO = 0.50
+TENSILE_X_AXIS_LABEL = "Strain (%)"
+TENSILE_Y_AXIS_LABEL = "Stress (MPa)"
+TENSILE_AXIS_PADDING_FRACTION = 0.06
 
 # Public request keys accepted by the compatibility intake surface.  Keep this
 # contract explicit and renderer-independent so importing intake never starts
@@ -374,10 +398,14 @@ VALIDATED_VISUAL_OVERRIDE_KEYS = frozenset(
 ) - UNIFIED_HARD_OPTION_KEYS
 
 DELIVERY_DIR = "delivery"
-# User-facing delivery has exactly four artifact groups plus one launcher.
+# The visible user handoff has three artifact groups plus one launcher.  PDF
+# and TIFF are both figures and therefore share one directory.  DELIVERY_DIR
+# remains the compatibility fallback for development callers that do not
+# record an explicit visible delivery root.
 DELIVERY_DATA_DIR = "data"
-DELIVERY_PDF_DIR = "pdf"
-DELIVERY_TIFF_DIR = "tiff"
+DELIVERY_FIGURES_DIR = "figures"
+DELIVERY_PDF_DIR = DELIVERY_FIGURES_DIR
+DELIVERY_TIFF_DIR = DELIVERY_FIGURES_DIR
 DELIVERY_PROJECT_DIR = "project"
 DELIVERY_LAUNCHER = "Open_in_Veusz.command"
 
@@ -386,7 +414,6 @@ DELIVERY_LAUNCHER = "Open_in_Veusz.command"
 # stays in the ordinary run output instead.
 DELIVERY_EDITABLE_DIR = "editable"
 DELIVERY_INTERNAL_DIR = "_sciplot_internal"
-DELIVERY_FIGURES_DIR = "figures"
 
 DEFAULT_RENDER_OPTIONS: dict[str, Any] = {
     "legend_position": "auto",
@@ -844,6 +871,8 @@ def layout_policy_payload(policy: LayoutPolicy) -> dict[str, Any]:
     }
 __all__ = [
     "CANONICAL_EXPORT_FORMATS",
+    "CONTROL_FIRST_BRIGHT_COLORS",
+    "CONTROL_FIRST_BRIGHT_PALETTE_ID",
     "DEFAULT_EXPORT_FORMATS_POLICY",
     "EXPORT_FORMAT_ALIASES",
     "AUTO_LOG_BOUND_PADDING_FACTOR",
@@ -865,14 +894,20 @@ __all__ = [
     "UNIFIED_TOP_MARGIN_MM",
     "UNIFIED_TICK_LENGTH_PT",
     "UNIFIED_TICK_WIDTH_PT",
+    "TENSILE_AXIS_PADDING_FRACTION",
+    "TENSILE_X_AXIS_LABEL",
+    "TENSILE_Y_AXIS_LABEL",
     "DEFAULT_FIGURE_SIZE",
     "DEFAULT_LAYOUT_POLICY",
     "DEFAULT_LOG_MINOR_MULTIPLIERS",
     "DEFAULT_LOG_MINOR_TICK_COUNT",
     "DEFAULT_LOG_TICK_FORMAT",
+    "MIN_VISUAL_EXTENT_CLEARANCE_MM",
     "DEFAULT_PALETTE_COLORS",
     "DEFAULT_PALETTE_PRESET",
     "DEFAULT_RENDER_OPTIONS",
+    "DEFAULT_SCALAR_FIELD_COLORS",
+    "DEFAULT_SCALAR_FIELD_COLORMAP_ID",
     "CURVE_RENDER_OPTIONS",
     "DELIVERY_DIR",
     "DELIVERY_DATA_DIR",

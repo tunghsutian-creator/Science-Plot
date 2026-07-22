@@ -136,7 +136,7 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
     """Verify the small user-facing delivery surface and its CSV contract."""
 
     delivery_path = Path(str(delivery.get("path") or "")).expanduser().resolve()
-    expected_entries = {"data", "pdf", "tiff", "project", "Open_in_Veusz.command"}
+    expected_entries = {"data", "figures", "project", "Open_in_Veusz.command"}
     actual_entries = (
         {path.name for path in delivery_path.iterdir()}
         if delivery_path.is_dir()
@@ -145,7 +145,8 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
     forbidden_names = {
         "_sciplot_internal",
         "editable",
-        "figures",
+        "pdf",
+        "tiff",
         "README.md",
         ".sciplot",
         "manifest.json",
@@ -196,7 +197,7 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
             "format": record.get("format"),
             "in_expected_folder": (
                 Path(str(record.get("path") or "")).parent
-                == delivery_path / ("pdf" if record.get("format") == "pdf" else "tiff")
+                == delivery_path / "figures"
             ),
         }
         for record in figure_records
@@ -2494,6 +2495,11 @@ def _run_hash_failure_probe(
 
     mismatched_manifest = copy.deepcopy(manifest)
     mismatched_manifest["exported_document_hash"] = "0" * 64
+    if isinstance(mismatched_manifest.get("veusz_document_hashes"), dict):
+        mismatched_manifest["veusz_document_hashes"] = {
+            path: "0" * 64
+            for path in mismatched_manifest["veusz_document_hashes"]
+        }
     rejected = build_delivery_package(output_dir, manifest=mismatched_manifest)
     hash_gate = _delivery_artifact(rejected, "editable_vsz_hash_match")
     rejected_as_expected = (

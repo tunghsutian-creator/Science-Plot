@@ -9,6 +9,7 @@ from sciplot_core.launchers import (
     inspect_delivery_launcher_contract,
     write_delivery_launcher,
 )
+from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.plot_data import build_plot_data_exports
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
@@ -32,7 +33,7 @@ PUBLICATION_ARTIFACT_KINDS = {
     "journal_profile.json": "sciplot_publication_profile",
     "publication_qa.json": "sciplot_publication_qa",
 }
-DELIVERY_PACKAGE_CONTRACT_VERSION = 4
+DELIVERY_PACKAGE_CONTRACT_VERSION = 5
 
 
 def _project_slug(output_dir: Path, manifest: dict[str, Any]) -> str:
@@ -134,6 +135,15 @@ def _copy_project_documents(
     records: list[dict[str, Any]] = []
     used_names: set[str] = set()
     expected_hash = str(manifest.get("exported_document_hash") or "").strip()
+    expected_hashes = {
+        str(Path(path).expanduser().resolve()): str(value)
+        for path, value in (
+            manifest.get("veusz_document_hashes", {}).items()
+            if isinstance(manifest.get("veusz_document_hashes"), dict)
+            else []
+        )
+        if str(path).strip() and str(value).strip()
+    }
     for index, source_document in enumerate(documents, start=1):
         base_name = _editable_project_name(source_document, index=index)
         name = base_name
@@ -146,11 +156,18 @@ def _copy_project_documents(
         shutil.copy2(source_document, destination)
         source_hash = existing_file_sha256(source_document)
         delivery_hash = existing_file_sha256(destination)
+        document_expected_hash = expected_hashes.get(
+            str(source_document.resolve()),
+            expected_hash,
+        )
         hash_matches_export = bool(
             source_hash
             and delivery_hash
             and source_hash == delivery_hash
-            and (not expected_hash or delivery_hash == expected_hash)
+            and (
+                not document_expected_hash
+                or delivery_hash == document_expected_hash
+            )
         )
         records.append(
             {
@@ -444,18 +461,41 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
 
     Internal manifests, QA reports, raw archives, analysis tables, and
     provenance stay in the run output.  They are intentionally not copied
-    into ``delivery/``.
+    into the visible handoff.  New user workflows record that handoff beside
+    the source (or at ``--out``); legacy/development callers fall back to
+    ``RUN/delivery``.
     """
 
     output_dir = output_dir.expanduser().resolve()
-    delivery_dir = output_dir / DELIVERY_DIR
+    delivery_dir = requested_delivery_root(manifest, run_output=output_dir)
     if delivery_dir.exists():
-        shutil.rmtree(delivery_dir)
+        if not delivery_dir.is_dir() or delivery_dir.is_symlink():
+            raise ValueError(
+                "The visible SciPlot output must be a dedicated real directory."
+            )
+        managed_names = {
+            DELIVERY_DATA_DIR,
+            DELIVERY_PDF_DIR,
+            DELIVERY_TIFF_DIR,
+            DELIVERY_PROJECT_DIR,
+            DELIVERY_LAUNCHER,
+        }
+        unknown = {path.name for path in delivery_dir.iterdir()} - managed_names
+        if unknown:
+            raise ValueError(
+                "Refusing to replace a non-dedicated SciPlot output directory; "
+                f"unexpected entries: {', '.join(sorted(unknown))}."
+            )
+        for path in delivery_dir.iterdir():
+            if path.is_dir() and not path.is_symlink():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
     data_dir = delivery_dir / DELIVERY_DATA_DIR
     pdf_dir = delivery_dir / DELIVERY_PDF_DIR
     tiff_dir = delivery_dir / DELIVERY_TIFF_DIR
     project_dir = delivery_dir / DELIVERY_PROJECT_DIR
-    for directory in (data_dir, pdf_dir, tiff_dir, project_dir):
+    for directory in {data_dir, pdf_dir, tiff_dir, project_dir}:
         directory.mkdir(parents=True, exist_ok=True)
 
     project = _project_slug(output_dir, manifest)

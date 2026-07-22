@@ -293,32 +293,54 @@ def run_studio_figure_set_probe(
                 item["scope"] is None and item["accepted"] is False
                 for item in tampered_registry_results.values()
             )
-            and studio_module._is_primary_figure_set_export_scope(restored_scope),
+            and restored_scope is None,
             {
                 "attacks": tampered_registry_results,
                 "restored_scope": restored_scope,
             },
         )
     )
+    planned_ids = [
+        str(item.get("figure_id"))
+        for item in synthetic.get("registry", {}).get("figures", [])
+        if isinstance(item, dict) and item.get("figure_id")
+    ]
+    primary_id = str(
+        synthetic.get("registry", {}).get("primary_figure_id") or ""
+    )
+    complete_scope = {
+        "kind": "sciplot_figure_set_export_scope",
+        "version": 2,
+        "status": "full_figure_set_exact_current",
+        "scope": "full_figure_set_project_delivery",
+        "primary_figure_id": primary_id,
+        "supported_figure_ids": planned_ids,
+        "blocked_figure_ids": [],
+        "planned_figure_ids": planned_ids,
+        "available_figure_ids": planned_ids,
+        "unavailable_figure_ids": [],
+        "secondary_receipt_scope": "same_project_delivery",
+        "full_figure_set_delivery_complete": True,
+        "blocker": None,
+    }
     partition_attacks: dict[str, bool] = {}
-    if isinstance(restored_scope, dict):
-        primary_id = str(restored_scope["primary_figure_id"])
-        primary_unavailable = json.loads(json.dumps(restored_scope))
+    if studio_module._is_primary_figure_set_export_scope(complete_scope):
+        primary_unavailable = json.loads(json.dumps(complete_scope))
         primary_unavailable["available_figure_ids"].remove(primary_id)
         primary_unavailable["unavailable_figure_ids"].append(primary_id)
-        missing_blocked = json.loads(json.dumps(restored_scope))
-        if missing_blocked["blocked_figure_ids"]:
-            missing_blocked["blocked_figure_ids"].pop()
-        orphan_planned = json.loads(json.dumps(restored_scope))
+        missing_supported = json.loads(json.dumps(complete_scope))
+        if len(missing_supported["supported_figure_ids"]) > 1:
+            missing_supported["supported_figure_ids"].pop()
+        orphan_planned = json.loads(json.dumps(complete_scope))
         orphan_planned["planned_figure_ids"].append("orphan_metric")
-        overlap = json.loads(json.dumps(restored_scope))
-        if overlap["blocked_figure_ids"]:
+        overlap = json.loads(json.dumps(complete_scope))
+        if overlap["available_figure_ids"]:
             overlap["unavailable_figure_ids"].append(
-                overlap["blocked_figure_ids"][0]
+                overlap["available_figure_ids"][0]
             )
         for attack_id, scope in (
             ("primary_marked_unavailable", primary_unavailable),
-            ("secondary_missing_from_blocked", missing_blocked),
+            ("secondary_missing_from_supported", missing_supported),
             ("orphan_planned_id", orphan_planned),
             ("available_unavailable_overlap", overlap),
         ):
@@ -328,13 +350,13 @@ def run_studio_figure_set_probe(
     checks.append(
         _check(
             "figure_set_scope_partition_is_complete",
-            "A primary-only receipt requires one available primary, every ready secondary blocked, and a complete disjoint planned availability partition",
+            "A full figure-set receipt requires every planned figure to be available, supported, and in one complete disjoint partition",
             bool(partition_attacks)
             and not any(partition_attacks.values())
-            and studio_module._is_primary_figure_set_export_scope(restored_scope),
+            and studio_module._is_primary_figure_set_export_scope(complete_scope),
             {
                 "attack_acceptance": partition_attacks,
-                "restored_scope": restored_scope,
+                "complete_scope": complete_scope,
             },
         )
     )
@@ -476,13 +498,13 @@ def run_studio_figure_set_probe(
             "storage_modulus": "\\italic{G}′ (Pa)",
             "loss_modulus": "\\italic{G}″ (Pa)",
             "loss_factor": "tan \\delta",
-            "complex_viscosity": "|\\eta^{*}| (Pa·s)",
+            "complex_viscosity": "|\\eta^{*}| (mPa·s)",
         }
         expected_first_y = {
             "storage_modulus": 29642.0,
             "loss_modulus": 40357.0,
             "loss_factor": 1.361,
-            "complex_viscosity": 500.73,
+            "complex_viscosity": 500730.0,
         }
         expected_sample_order = [
             "A0E6Z0",
@@ -542,10 +564,10 @@ def run_studio_figure_set_probe(
         )
         checks.append(
             _check(
-                "real_complex_viscosity_is_canonical_pa_s",
-                "The D3 complex-viscosity figure uses converted Pa-s values rather than source mPa-s magnitudes",
+                "real_complex_viscosity_is_canonical_mpa_s",
+                "The D3 complex-viscosity figure preserves canonical mPa-s source magnitudes",
                 isinstance(viscosity.get("first_y"), int | float)
-                and 1.0 <= float(viscosity["first_y"]) < 100000.0,
+                and 1000.0 <= float(viscosity["first_y"]) < 100000000.0,
                 viscosity,
             )
         )
@@ -620,13 +642,21 @@ def run_studio_figure_set_probe(
     )
     checks.append(
         _check(
-            "secondary_publish_scope_is_explicit",
-            "Until a multi-document receipt exists, secondary documents are explicitly blocked from the primary exact-current publish scope",
-            export_contract.get("status") == "primary_exact_current_only"
+            "partial_figure_set_cannot_claim_full_publish_scope",
+            "A fixture with unavailable planned figures cannot claim a complete project delivery scope",
+            export_contract.get("status") == "full_figure_set_exact_current"
             and export_contract.get("supported_figure_ids")
-            == [registry.get("primary_figure_id")]
-            and bool(export_contract.get("blocked_figure_ids"))
-            and bool(export_contract.get("blocker")),
+            == [
+                str(item.get("figure_id"))
+                for item in registry.get("figures", [])
+                if isinstance(item, dict) and item.get("status") == "ready"
+            ]
+            and export_contract.get("blocked_figure_ids") == []
+            and export_contract.get("blocker") is None
+            and export_contract.get("secondary_receipt_scope")
+            == "same_project_delivery"
+            and export_contract.get("full_figure_set_delivery_complete") is False
+            and restored_scope is None,
             export_contract,
         )
     )

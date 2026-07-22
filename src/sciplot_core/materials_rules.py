@@ -21,6 +21,8 @@ from sciplot_core.policy import (
     RHEOLOGY_FREQUENCY_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_X_LABEL,
     RHEOLOGY_TEMPERATURE_RENDER_OPTIONS,
+    TENSILE_X_AXIS_LABEL,
+    TENSILE_Y_AXIS_LABEL,
     TORQUE_CURVE_RENDER_OPTIONS,
 )
 from sciplot_core.study_model import experiment_recommendation_payload
@@ -28,6 +30,12 @@ from sciplot_core.study_model import experiment_recommendation_payload
 ensure_vendored_core()
 
 from src.data_loader import read_raw_table  # noqa: E402
+
+
+ELONGATION_AT_BREAK_METRIC = "elongation_at_break_percent"
+LEGACY_STRAIN_AT_BREAK_METRIC = "strain_at_break_percent"
+ELONGATION_AT_BREAK_IQR_METRIC = "elongation_at_break_iqr_percent"
+ELONGATION_AT_BREAK_LABEL = "Elongation at break (%)"
 
 
 def normalize_token(value: object) -> str:
@@ -259,8 +267,8 @@ RHEOLOGY_X_FREQUENCY = AxisSpec(
 )
 RHEOLOGY_X_TEMPERATURE = AxisSpec("Temperature", "C", "Temperature (°C)", aliases=("temperature", "temp", "温度"))
 TIME_AXIS = AxisSpec("Time", "s", "Time (s)", aliases=("time", "时间"))
-STRAIN_AXIS = AxisSpec("Strain", "%", "Strain (%)", aliases=("strain", "拉伸应变", "shear strain", "γ"))
-STRESS_AXIS = AxisSpec("Stress", "MPa", "Stress (MPa)", aliases=("stress", "拉伸应力", "σ"))
+STRAIN_AXIS = AxisSpec("Strain", "%", TENSILE_X_AXIS_LABEL, aliases=("strain", "拉伸应变", "shear strain", "γ"))
+STRESS_AXIS = AxisSpec("Stress", "MPa", TENSILE_Y_AXIS_LABEL, aliases=("stress", "拉伸应力", "σ"))
 TORQUE_AXIS = AxisSpec("Screw torque", "N·m", "Screw torque (N·m)", aliases=("screw torque", "torque", "转矩"))
 
 
@@ -488,15 +496,15 @@ RULES: tuple[SemanticRule, ...] = (
         "tensile_curve",
         "tensile",
         "curve",
-        AxisSpec("Strain", "%", "Tensile Strain (%)", aliases=("strain", "拉伸应变", "shear strain", "γ")),
-        AxisSpec("Stress", "MPa", "Tensile Stress (MPa)", aliases=("stress", "拉伸应力", "σ")),
+        STRAIN_AXIS,
+        STRESS_AXIS,
         keywords=("tensile", "拉伸", "结果表格2"),
         path_keywords=("tensile", ".is_tens_exports"),
         vendor_models=("tensile_curve",),
         analysis=(
             AnalysisSpec("modulus_MPa", "low-strain linear slope", ("strain", "stress"), "MPa"),
             AnalysisSpec("strength_MPa", "maximum stress", ("stress",), "MPa"),
-            AnalysisSpec("strain_at_break_percent", "last strain", ("strain",), "%"),
+            AnalysisSpec(ELONGATION_AT_BREAK_METRIC, "last strain", ("strain",), "%"),
             AnalysisSpec(
                 "toughness_MJ_m3",
                 "area under stress-strain curve using engineering strain as a fraction",
@@ -1104,8 +1112,10 @@ def tensile_curve_metric_values(
     )
     strength_source = "instrument_report" if reported_strength is not None else "curve_maximum"
 
-    reported_break = reported.get("strain_at_break_percent")
-    strain_at_break = (
+    reported_break = reported.get(ELONGATION_AT_BREAK_METRIC)
+    if reported_break is None:
+        reported_break = reported.get(LEGACY_STRAIN_AT_BREAK_METRIC)
+    elongation_at_break = (
         float(reported_break)
         if reported_break is not None and np.isfinite(float(reported_break))
         else float(data["strain"].iloc[-1])
@@ -1134,16 +1144,16 @@ def tensile_curve_metric_values(
     )
     modulus_source = "instrument_report_0.05_to_0.25_percent" if reported_modulus is not None else "curve_fit"
 
-    clipped = data[data["strain"] <= strain_at_break].copy()
-    after_break = data[data["strain"] > strain_at_break]
-    if not clipped.empty and not after_break.empty and float(clipped["strain"].iloc[-1]) < strain_at_break:
+    clipped = data[data["strain"] <= elongation_at_break].copy()
+    after_break = data[data["strain"] > elongation_at_break]
+    if not clipped.empty and not after_break.empty and float(clipped["strain"].iloc[-1]) < elongation_at_break:
         left = clipped.iloc[-1]
         right = after_break.iloc[0]
         x0, y0 = float(left["strain"]), float(left["stress"])
         x1, y1 = float(right["strain"]), float(right["stress"])
         if x1 > x0:
-            y_break = y0 + (strain_at_break - x0) * (y1 - y0) / (x1 - x0)
-            clipped = pd.concat([clipped, pd.DataFrame([{"strain": strain_at_break, "stress": y_break}])], ignore_index=True)
+            y_break = y0 + (elongation_at_break - x0) * (y1 - y0) / (x1 - x0)
+            clipped = pd.concat([clipped, pd.DataFrame([{"strain": elongation_at_break, "stress": y_break}])], ignore_index=True)
     if len(clipped) >= 2:
         toughness = float(
             np.trapezoid(
@@ -1153,7 +1163,7 @@ def tensile_curve_metric_values(
     else:
         toughness = float("nan")
 
-    if reported_break is not None and float(data["strain"].iloc[-1]) >= strain_at_break:
+    if reported_break is not None and float(data["strain"].iloc[-1]) >= elongation_at_break:
         toughness_source = "curve_integral_to_reported_break"
     elif reported_break is not None:
         toughness_source = "curve_integral_over_available_excerpt_before_reported_break"
@@ -1163,8 +1173,8 @@ def tensile_curve_metric_values(
     return {
         "strength_MPa": strength,
         "strength_source": strength_source,
-        "strain_at_break_percent": strain_at_break,
-        "strain_at_break_source": break_source,
+        ELONGATION_AT_BREAK_METRIC: elongation_at_break,
+        "elongation_at_break_source": break_source,
         "modulus_MPa": modulus,
         "modulus_source": modulus_source,
         "toughness_MJ_m3": toughness,
@@ -1257,14 +1267,16 @@ def _creep_metrics(processed_source: Path) -> list[dict[str, Any]]:
 
 def _tensile_summary_metrics(summary_source: Path) -> list[dict[str, Any]]:
     summary = pd.read_csv(summary_source)
-    required = {"sample", "strength_MPa", "strain_at_break_percent", "modulus_MPa", "toughness_MJ_m3"}
+    if ELONGATION_AT_BREAK_METRIC not in summary.columns and LEGACY_STRAIN_AT_BREAK_METRIC in summary.columns:
+        summary[ELONGATION_AT_BREAK_METRIC] = summary[LEGACY_STRAIN_AT_BREAK_METRIC]
+    required = {"sample", "strength_MPa", ELONGATION_AT_BREAK_METRIC, "modulus_MPa", "toughness_MJ_m3"}
     if not required <= set(summary.columns):
         return []
     samples = [str(value) for value in summary["sample"].dropna().drop_duplicates().tolist()]
     rows: list[dict[str, Any]] = []
     metric_contract = (
         ("strength_MPa", "MPa", "strength_iqr_MPa"),
-        ("strain_at_break_percent", "%", "strain_at_break_iqr_percent"),
+        (ELONGATION_AT_BREAK_METRIC, "%", ELONGATION_AT_BREAK_IQR_METRIC),
         ("modulus_MPa", "MPa", "modulus_iqr_MPa"),
         ("toughness_MJ_m3", "MJ/m3", "toughness_iqr_MJ_m3"),
     )
@@ -1309,7 +1321,7 @@ def _tensile_metrics(processed_source: Path) -> list[dict[str, Any]]:
     rows.extend(
         [
             _metric("strength_MPa", float(values["strength_MPa"]), "MPa"),
-            _metric("strain_at_break_percent", float(values["strain_at_break_percent"]), "%"),
+            _metric(ELONGATION_AT_BREAK_METRIC, float(values[ELONGATION_AT_BREAK_METRIC]), "%"),
             _metric("modulus_MPa", modulus if modulus_status == "ok" else None, "MPa", modulus_status, modulus_reason),
             _metric(
                 "toughness_MJ_m3",
@@ -1990,6 +2002,10 @@ def compute_analysis_metrics(
 __all__ = [
     "AnalysisSpec",
     "AxisSpec",
+    "ELONGATION_AT_BREAK_IQR_METRIC",
+    "ELONGATION_AT_BREAK_LABEL",
+    "ELONGATION_AT_BREAK_METRIC",
+    "LEGACY_STRAIN_AT_BREAK_METRIC",
     "SemanticRule",
     "UnitRule",
     "compute_analysis_metrics",

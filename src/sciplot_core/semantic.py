@@ -21,6 +21,7 @@ from sciplot_core._utils import (
 )
 from sciplot_core.ingest import normalized_source
 from sciplot_core.materials_rules import (
+    ELONGATION_AT_BREAK_METRIC,
     format_unit_label,
     get_rule,
     match_rule,
@@ -90,7 +91,7 @@ _RHEOLOGY_SWEEP_METRICS = (
     ("storage_modulus", "Storage Modulus", ("storagemodulus", "storage modulus", "g'", "g′"), "Pa"),
     ("loss_modulus", "Loss Modulus", ("lossmodulus", 'g"', "g″"), "Pa"),
     ("loss_factor", "Loss Factor", ("lossfactor", "tandelta", "tanδ"), "1"),
-    ("complex_viscosity", "Complex Viscosity", ("complexviscosity", "viscosity"), "Pa·s"),
+    ("complex_viscosity", "Complex Viscosity", ("complexviscosity", "viscosity"), "mPa·s"),
 )
 _RHEOLOGY_COMPLEX_MODULUS_METRIC = (
     "complex_modulus",
@@ -1406,8 +1407,8 @@ def _unit_conversion(source_unit: str, target_unit: str) -> tuple[str, float, st
         ("MPa", "Pa"): (1_000_000.0, "MPa_to_Pa"),
         ("Pa", "kPa"): (0.001, "Pa_to_kPa"),
         ("Pa", "MPa"): (0.000001, "Pa_to_MPa"),
-        ("mPa·s", "Pa·s"): (0.001, "mPa_s_to_Pa_s"),
-        ("cP", "Pa·s"): (0.001, "cP_to_Pa_s"),
+        ("Pa·s", "mPa·s"): (1000.0, "Pa_s_to_mPa_s"),
+        ("cP", "mPa·s"): (1.0, "cP_to_mPa_s"),
     }
     conversion = conversions.get((source, target))
     if conversion is None:
@@ -2737,7 +2738,7 @@ def _reported_tensile_metrics(lines: list[str], *, stop_index: int | None) -> di
         )
         for metric_name, value, header in (
             ("strength_MPa", strength, strength_header),
-            ("strain_at_break_percent", strain, strain_header),
+            (ELONGATION_AT_BREAK_METRIC, strain, strain_header),
             ("modulus_MPa", modulus, modulus_header),
         ):
             if value is not None and metric_name not in reported:
@@ -2834,6 +2835,114 @@ def _read_tensile_workbook_series(source: Path) -> list[CurveSeriesPayload]:
     if not series_list:
         raise ValueError("No tensile curves found by structure scan.")
     return series_list
+
+
+def _read_tensile_workbook_directory(
+    source: Path,
+) -> tuple[list[CurveSeriesPayload], list[dict[str, Any]]]:
+    """Read curated tensile workbooks as representative curves plus repeats.
+
+    These workbooks are already reduced exports: ``Representative_Curve`` is
+    the authoritative curve for each sample, while ``All_Specimens`` is the
+    authoritative replicate table for summary metrics.  Do not scan
+    ``All_Curves`` here, because that would replace the requested
+    representative-only presentation with every specimen trace.
+    """
+
+    workbook_paths = sorted(
+        path
+        for path in source.rglob("*")
+        if path.is_file() and path.suffix.casefold() in {".xlsx", ".xls"}
+    )
+    if not workbook_paths:
+        raise ValueError(f"No tensile workbook files found under {source}.")
+
+    representatives: list[CurveSeriesPayload] = []
+    summary_rows: list[dict[str, Any]] = []
+    for workbook_path in workbook_paths:
+        try:
+            representative = pd.read_excel(
+                workbook_path,
+                sheet_name="Representative_Curve",
+                header=None,
+            ).dropna(how="all").dropna(axis=1, how="all")
+            if representative.shape[0] < 4 or representative.shape[1] < 2:
+                raise ValueError("Representative_Curve has no two-column data.")
+            points = tuple(
+                (x_value, y_value)
+                for x_value, y_value in (
+                    (_float(representative.iat[row_index, 0]), _float(representative.iat[row_index, 1]))
+                    for row_index in range(3, representative.shape[0])
+                )
+                if x_value is not None and y_value is not None
+            )
+            if len(points) < 2:
+                raise ValueError("Representative_Curve has fewer than two numeric points.")
+            sample = workbook_path.stem
+            try:
+                metadata = pd.read_excel(workbook_path, sheet_name="DataStudio_Metadata", header=None)
+                for row_index in range(metadata.shape[0]):
+                    if _clean_text(metadata.iat[row_index, 0]).casefold() == "label":
+                        sample = _clean_text(metadata.iat[row_index, 1]) or sample
+                        break
+            except (KeyError, ValueError, IndexError):
+                pass
+            representatives.append(
+                CurveSeriesPayload(
+                    sample=sample,
+                    x_label=_clean_text(representative.iat[0, 0]) or "Tensile strain",
+                    x_unit=_clean_text(representative.iat[1, 0]) or "%",
+                    y_label=_clean_text(representative.iat[0, 1]) or "Tensile stress",
+                    y_unit=_clean_text(representative.iat[1, 1]) or "MPa",
+                    points=points,
+                    diagnostics={
+                        "source_file": str(workbook_path),
+                        "source_table": "Representative_Curve",
+                        "representative_source": "workbook Representative_Curve sheet",
+                    },
+                )
+            )
+
+            specimens = pd.read_excel(workbook_path, sheet_name="All_Specimens")
+            metric_columns: dict[str, object] = {}
+            for column in specimens.columns:
+                token = _token(column)
+                if "strength" in token and "strength_MPa" not in metric_columns:
+                    metric_columns["strength_MPa"] = column
+                elif "modulus" in token and "modulus_MPa" not in metric_columns:
+                    metric_columns["modulus_MPa"] = column
+                elif "elongation" in token and ELONGATION_AT_BREAK_METRIC not in metric_columns:
+                    metric_columns[ELONGATION_AT_BREAK_METRIC] = column
+            for row_index, row in specimens.iterrows():
+                metrics = {
+                    metric: _float(row[column])
+                    for metric, column in metric_columns.items()
+                }
+                metrics = {metric: value for metric, value in metrics.items() if value is not None}
+                if not metrics:
+                    continue
+                replicate = _clean_text(row.iloc[0]) if len(row) else ""
+                summary_rows.append(
+                    {
+                        "sample": sample,
+                        "replicate": replicate or f"{workbook_path.stem}_{row_index + 1}",
+                        **metrics,
+                        "source_file": f"{workbook_path}:{replicate or row_index + 1}",
+                        "reported_metric_headers": json.dumps(
+                            {metric: str(column) for metric, column in metric_columns.items()},
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        ),
+                    }
+                )
+        except (KeyError, ValueError, IndexError) as exc:
+            raise ValueError(f"Could not read tensile workbook {workbook_path.name}: {exc}") from exc
+
+    if not representatives:
+        raise ValueError(f"No representative tensile curves found under {source}.")
+    if not summary_rows:
+        raise ValueError(f"No tensile specimen metrics found under {source}.")
+    return representatives, summary_rows
 
 
 def _canonical_impact_unit(value: object) -> str | None:
@@ -4077,7 +4186,7 @@ def _write_tensile_summary_table(series_list: list[CurveSeriesPayload], output: 
         diagnostics = series.diagnostics or {}
         reported = {
             key: float(diagnostics[key])
-            for key in ("strength_MPa", "strain_at_break_percent", "modulus_MPa")
+            for key in ("strength_MPa", ELONGATION_AT_BREAK_METRIC, "modulus_MPa")
             if diagnostics.get(key) is not None
         }
         metrics = tensile_curve_metric_values(
@@ -4596,6 +4705,34 @@ def prepare_semantic_source(
             },
         )
 
+    if family == "tensile_curve" and source.is_dir():
+        csv_sources = _tensile_export_files(source)
+        workbook_sources = [
+            path
+            for path in sorted(source.rglob("*"))
+            if path.is_file() and path.suffix.lower() in {".xlsx", ".xls"}
+        ]
+        if not csv_sources and workbook_sources:
+            processed_source = processed_dir / f"{source.stem}_tensile_curves.csv"
+            series_list, summary_rows = _read_tensile_workbook_directory(source)
+            series_list = _order_curve_series(series_list, series_order)
+            _write_curve_table(series_list, processed_source)
+            summary_source = processed_source.with_name(f"{processed_source.stem}_summary.csv")
+            pd.DataFrame(summary_rows).to_csv(summary_source, index=False)
+            return _semantic_preparation_result(
+                source,
+                processed_source=processed_source,
+                operation="extract_tensile_workbook_directory",
+                parameters={
+                    "input_workbooks": [str(path) for path in workbook_sources],
+                    "output_series_labels": [series.sample for series in series_list],
+                    "representative_definition": "Representative_Curve sheet from each workbook",
+                    "summary_metric_source": "All_Specimens sheet from each workbook",
+                    "summary_replicate_count": len(summary_rows),
+                },
+                additional_outputs=(summary_source,),
+            )
+
     if family == "tensile_curve" and (source.is_dir() or source.suffix.lower() == ".csv"):
         processed_source = processed_dir / f"{source.stem}_tensile_curves.csv"
         series_list = _read_tensile_export_series_list(source)
@@ -4635,7 +4772,7 @@ def prepare_semantic_source(
                 "summary_replicate_count": len(input_series_labels),
                 "summary_metric_definitions": {
                     "strength_MPa": "instrument-reported maximum tensile stress, else curve maximum",
-                    "strain_at_break_percent": "instrument-reported break strain, else curve terminal strain",
+                    ELONGATION_AT_BREAK_METRIC: "instrument-reported elongation at break, else curve terminal strain",
                     "modulus_MPa": (
                         "instrument-reported 0.05%-0.25% program-segment modulus, else curve fit with "
                         "percent strain converted to a fraction"

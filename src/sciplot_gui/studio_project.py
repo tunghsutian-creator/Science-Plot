@@ -756,15 +756,18 @@ class StudioProjectBridge(QtCore.QObject):
             figure_set_scope_status = str(
                 provenance.get("figure_set_export_scope_status") or ""
             )
-            primary_only_scope = bool(
+            full_figure_set_scope = bool(
                 figure_set_scope_status in {"persisted", "recomputed_current_project"}
                 and _is_primary_figure_set_export_scope(
                     provenance.get("figure_set_export_scope")
                 )
             )
-            full_project_scope = figure_set_scope_status == "not_applicable"
-            delivery_scope_known = bool(primary_only_scope or full_project_scope)
-            primary_current = bool(current_evidence and primary_only_scope)
+            full_project_scope = bool(
+                figure_set_scope_status == "not_applicable"
+                or full_figure_set_scope
+            )
+            delivery_scope_known = full_project_scope
+            primary_current = bool(current_evidence and full_figure_set_scope)
             full_current = bool(current_evidence and full_project_scope)
             source = (
                 status.get("source") if isinstance(status.get("source"), dict) else {}
@@ -798,7 +801,7 @@ class StudioProjectBridge(QtCore.QObject):
                     "delivery_scope_known": delivery_scope_known,
                     "primary_figure_delivery_current": bool(
                         provenance.get("project_delivery_current") is True
-                        and primary_only_scope
+                        and full_figure_set_scope
                     ),
                     "full_project_delivery_current": bool(
                         provenance.get("project_delivery_current") is True
@@ -960,7 +963,7 @@ class StudioProjectBridge(QtCore.QObject):
                 "delivery scope, so SciPlot did not accept it as ready."
             )
         scope = (
-            "primary_figure_project_delivery"
+            "full_figure_set_project_delivery"
             if _is_primary_figure_set_export_scope(figure_set_export_scope)
             else "project_delivery"
         )
@@ -972,7 +975,7 @@ class StudioProjectBridge(QtCore.QObject):
             "state": run.get("state"),
             "ready_to_use": run.get("ready_to_use") is True,
             "export_payload": json_safe(export_payload),
-            "exports": json_safe(exports),
+            "exports": json_safe(run.get("exports") or exports),
             "studio_run": json_safe(run),
         }
         if isinstance(figure_set_export_scope, dict):
@@ -1091,7 +1094,7 @@ class StudioProjectBridge(QtCore.QObject):
             or (self.project_dir / "studio" / "figure_set.json").exists()
         ):
             return (
-                "SciPlot cannot establish a complete primary-only figure-set "
+                "SciPlot cannot establish a complete all-figures figure-set "
                 "scope from the current request and registry. Export is blocked "
                 "until that scope is repaired."
             )
@@ -1104,7 +1107,7 @@ class StudioProjectBridge(QtCore.QObject):
             except Exception:
                 scope = None
             if _is_primary_figure_set_export_scope(scope):
-                return "primary_figure_project_delivery"
+                return "full_figure_set_project_delivery"
             return "project_delivery"
         return "standalone_exact_current_export"
 

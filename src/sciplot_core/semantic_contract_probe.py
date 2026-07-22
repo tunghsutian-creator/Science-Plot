@@ -1170,32 +1170,32 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         ),
         _check(
             "rheology_complex_viscosity_canonical_unit",
-            "Rheology frequency converts source mPa-s viscosity to canonical Pa-s with explicit provenance",
+            "Rheology frequency preserves source mPa-s viscosity as the canonical plotting unit with explicit provenance",
             (
                 viscosity_before == viscosity_after
-                and viscosity_sample.metric_units.get("complex_viscosity") == "Pa·s"
+                and viscosity_sample.metric_units.get("complex_viscosity") == "mPa·s"
                 and viscosity_canonical_values
-                == [value * 0.001 for value in viscosity_source_values]
-                and viscosity_processed.iat[2, 4] == "Pa·s"
+                == viscosity_source_values
+                and viscosity_processed.iat[2, 4] == "mPa·s"
                 and [
                     float(viscosity_processed.iat[row_index, 4]) for row_index in (3, 4)
                 ]
                 == viscosity_canonical_values
                 and viscosity_provenance.get("source_unit") == "mPa·s"
-                and viscosity_provenance.get("output_unit") == "Pa·s"
-                and viscosity_provenance.get("factor") == 0.001
-                and viscosity_provenance.get("method") == "mPa_s_to_Pa_s"
+                and viscosity_provenance.get("output_unit") == "mPa·s"
+                and viscosity_provenance.get("factor") == 1.0
+                and viscosity_provenance.get("method") == "identity"
             ),
             {
                 "source_sha256_before": viscosity_before,
                 "source_sha256_after": viscosity_after,
                 "source_complex_viscosity_mPa_s": viscosity_source_values,
-                "canonical_complex_viscosity_Pa_s": (viscosity_canonical_values),
+                "canonical_complex_viscosity_mPa_s": (viscosity_canonical_values),
                 "processed_output_unit": viscosity_processed.iat[2, 4],
                 "processed_output_values": [
                     float(viscosity_processed.iat[row_index, 4]) for row_index in (3, 4)
                 ],
-                "expected_source_to_canonical_factor": 0.001,
+                "expected_source_to_canonical_factor": 1.0,
                 "transform_unit_conversions": viscosity_inventory,
             },
         ),
@@ -1206,26 +1206,26 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                 unsupported_viscosity_blocked
                 and "Unsupported rheology unit" in unsupported_viscosity_error
                 and "complex_viscosity" in unsupported_viscosity_error
-                and "Pa·s" in unsupported_viscosity_error
+                and "mPa·s" in unsupported_viscosity_error
             ),
             {"error": unsupported_viscosity_error},
         ),
         _check(
             "confirmed_rheology_complex_viscosity_canonical_unit",
-            "Confirmed rheology columns convert mPa-s values to Pa-s before writing the canonical workbook",
+            "Confirmed rheology columns preserve mPa-s values in the canonical workbook",
             (
                 confirmed_viscosity_before == confirmed_viscosity_after
-                and confirmed_viscosity_processed.iat[2, 4] == "Pa·s"
+                and confirmed_viscosity_processed.iat[2, 4] == "mPa·s"
                 and [
                     float(confirmed_viscosity_processed.iat[row_index, 4])
                     for row_index in (3, 4)
                 ]
-                == [500.0, 50.0]
+                == [500_000.0, 50_000.0]
                 and confirmed_viscosity_provenance.get("source_unit") == "mPa·s"
-                and confirmed_viscosity_provenance.get("output_unit") == "Pa·s"
-                and confirmed_viscosity_provenance.get("factor") == 0.001
+                and confirmed_viscosity_provenance.get("output_unit") == "mPa·s"
+                and confirmed_viscosity_provenance.get("factor") == 1.0
                 and confirmed_viscosity_provenance.get("method")
-                == "mPa_s_to_Pa_s"
+                == "identity"
             ),
             {
                 "source_sha256_before": confirmed_viscosity_before,

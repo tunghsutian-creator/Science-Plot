@@ -19,6 +19,9 @@ SciPlot 已确定采用 Veusz-first 路线：
 - 浏览器只做首次数据/分组/命名/顺序/尺寸/导出确认和只读结果审查；
 - Canvas、Composition、session evidence、promotion 和第二编辑器不再属于产品路线；
 - 生命周期、artifact QA、provenance、人工验证和期刊合规保持为不同声明。
+- 数据源旁的 `SOURCE_SciPlot/`（或显式 `--out`）只显示 `figures/`、
+  `data/`、`project/` 和 `Open_in_Veusz.command`；内部运行历史与证据进入同级
+  隐藏 `.sciplot/`。
 
 `autoplot` 是唯一公开的程序化全自动项目、QA 和 delivery 入口，内部复用
 one-step/`run_request`；它不是第三个 renderer。`one-step` 只保留为内部
@@ -50,7 +53,7 @@ readiness/manifest 合同。
 ## P1 — 契约单一来源
 
 - 生产语义模板固定为 `curve`、`point_line`、`stacked_curve`、`box`、
-  `box_strip` 和 `heatmap`；未实现模板在请求验证阶段失败；
+  `bar`、`box_strip` 和 `heatmap`；未实现模板在请求验证阶段失败；
 - `policy.py` 是全局硬样式权威；模板不能私有覆盖字体、线宽、刻度、标记或普通图框；
 - 热图颜色是显式例外，只管理标量色带、等高线和色条配色；
 - vendored `plot_contract.json`、ready 规则和文档构建器持续通过

@@ -209,7 +209,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     autoplot_parser.add_argument("input", type=Path)
     autoplot_parser.add_argument(
-        "--out", type=Path, default=Path("outputs") / "autoplot_projects"
+        "--out",
+        type=Path,
+        default=None,
+        help=(
+            "Dedicated visible handoff directory. Defaults beside the data "
+            "source; runtime evidence is stored in a sibling hidden .sciplot directory."
+        ),
     )
     autoplot_parser.add_argument(
         "--name", help="Project name. Defaults to the input file or folder name."
@@ -476,8 +482,9 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help=(
-            "Project root for raw input, or artifact root for standalone VSZ export. "
-            "Raw input defaults to outputs/intake_projects; standalone VSZ defaults beside the document."
+            "Dedicated visible handoff directory for raw input or a project, "
+            "or artifact root for standalone VSZ export. Raw input defaults "
+            "beside the source; runtime evidence stays in a sibling hidden .sciplot directory."
         ),
     )
     studio_parser.add_argument(
@@ -796,10 +803,19 @@ def main(argv: list[str] | None = None) -> int:
                 else 1
             )
         if args.command == "autoplot":
-            payload = run_autoplot(
-                _resolve_input(args.input),
-                output_root=args.out.expanduser(),
+            from sciplot_core.output_contract import resolve_user_output_layout
+
+            source = _resolve_input(args.input)
+            layout = resolve_user_output_layout(
+                source,
+                requested_delivery_root=args.out,
                 project_name=args.name,
+            )
+            payload = run_autoplot(
+                source,
+                output_root=layout.workspace_root / "autoplot_projects",
+                project_name=args.name,
+                delivery_root=layout.delivery_root,
             )
             if args.json:
                 _print_json(payload)
@@ -1075,9 +1091,34 @@ def main(argv: list[str] | None = None) -> int:
             from sciplot_core.studio import run_studio_command
 
             original_argv = list(sys.argv[1:] if argv is None else argv)
+            studio_target = args.target.expanduser() if args.target else None
+            studio_output_root = args.out.expanduser() if args.out else None
+            studio_delivery_root = None
+            if studio_target is not None:
+                resolved_target = studio_target.resolve()
+                is_vsz = resolved_target.suffix.casefold() == ".vsz"
+                is_request = resolved_target.suffix.casefold() == ".json"
+                is_project = resolved_target.is_dir() and (
+                    resolved_target / "plot_request.json"
+                ).is_file()
+                if not is_vsz:
+                    from sciplot_core.output_contract import resolve_user_output_layout
+
+                    if is_project or is_request:
+                        studio_delivery_root = studio_output_root
+                        studio_output_root = None
+                    else:
+                        layout = resolve_user_output_layout(
+                            resolved_target,
+                            requested_delivery_root=studio_output_root,
+                            project_name=args.name,
+                        )
+                        studio_delivery_root = layout.delivery_root
+                        studio_output_root = layout.workspace_root / "projects"
             return run_studio_command(
-                target=args.target.expanduser() if args.target else None,
-                output_root=args.out.expanduser() if args.out else None,
+                target=studio_target,
+                output_root=studio_output_root,
+                delivery_root=studio_delivery_root,
                 rule_id=args.rule,
                 template=args.template,
                 project_name=args.name,

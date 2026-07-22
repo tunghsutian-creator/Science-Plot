@@ -37,6 +37,7 @@ VEUSZ_IMPLEMENTED_TEMPLATE_IDS = frozenset(
         "curve",
         "point_line",
         "stacked_curve",
+        "bar",
         "box",
         "box_strip",
         "heatmap",

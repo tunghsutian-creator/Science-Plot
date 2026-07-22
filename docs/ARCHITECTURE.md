@@ -16,7 +16,8 @@ raw files + hashes
   -> exact-current studio/document.vsz
   -> Veusz PDF/TIFF export
   -> artifact QA
-  -> minimal delivery
+  -> visible SOURCE_SciPlot/ or --out handoff
+  -> sibling hidden .sciplot/ runtime evidence
 ```
 
 - raw files are data truth;
@@ -96,6 +97,7 @@ research-plots/
       intake.py                headless project preparation/domain logic
       intake_server.py         thin browser HTTP adapter
       qa.py                    artifact/publication QA
+      output_contract.py       visible handoff and hidden workspace paths
       delivery.py              minimal handoff package
       smoke.py                 synthetic runtime change gate
       _vendor/                 migrated compatibility black box
@@ -129,7 +131,8 @@ development logs are local workspace material, not package source.
 ## Template and style boundary
 
 The production document builder implements exactly `curve`, `point_line`,
-`stacked_curve`, `box`, `box_strip`, and `heatmap`. Vendored reference
+`stacked_curve`, `bar`, `box`, `box_strip`, and `heatmap`. The `bar` template
+uses mean ± SD error bars for categorical replicate groups. Vendored reference
 templates are not automatically production features; unsupported requests fail
 closed.
 
