@@ -234,6 +234,18 @@ def classify_source(
     match_vendor_model = vendor_model
     match_experiment_family = experiment_family
     structured_temperature_comparison = bool(path.is_dir() and is_rheology_temperature_comparison_dir(path))
+    explicit_instrument_temperature_sweep = bool(
+        vendor_model == "frequency_metric_sheet"
+        and (
+            "temperaturesweep" in compact_evidence
+            or "temperatureramp" in compact_evidence
+        )
+        and "temperature" in compact_evidence
+        and any(
+            token in compact_evidence
+            for token in ("storagemodulus", "lossmodulus", "complexmodulus")
+        )
+    )
     if vendor_model == "frequency_metric_sheet" and (
         "temperaturesweep" in compact_evidence
         or "temperatureramp" in compact_evidence
@@ -246,13 +258,17 @@ def classify_source(
         # override stronger experiment semantics.
         match_vendor_model = None
         match_experiment_family = None
-    if requested_rule_id is None and structured_temperature_comparison:
+    if requested_rule_id is None and (
+        structured_temperature_comparison
+        or explicit_instrument_temperature_sweep
+    ):
         return semantic_payload_from_rule(
             get_rule("rheology_temperature_sweep"),
             confidence=94.0,
             reason=(
-                "Detected a temperature-sweep folder with at least two structurally parseable sample exports; "
-                "temperature semantics take precedence over constant angular-frequency columns."
+                "Detected explicit rheology temperature-sweep metadata and a "
+                "temperature response column; the declared varying independent "
+                "variable takes precedence over logged constant angular-frequency columns."
             ),
             vendor_model=vendor_model,
             vendor_error=vendor_error,
@@ -417,6 +433,34 @@ def _sample_from_interval_metadata(raw: pd.DataFrame, fallback: str) -> str:
         if row and _token(row[0]) == "test" and len(row) > 1 and row[1]:
             return row[1]
     return fallback
+
+
+def _rheology_test_sections(
+    raw: pd.DataFrame,
+    *,
+    fallback: str,
+) -> list[tuple[str, pd.DataFrame]]:
+    """Split a concatenated instrument export into authoritative test blocks.
+
+    Anton Paar text exports can contain several complete ``Test:`` sections in
+    one file.  A filename is only a container label in that format; the test
+    metadata inside each block owns sample identity.
+    """
+
+    starts = [
+        row_index
+        for row_index in range(raw.shape[0])
+        if raw.shape[1] and _token(raw.iat[row_index, 0]) == "test"
+    ]
+    if not starts:
+        return [(fallback, raw.reset_index(drop=True))]
+    sections: list[tuple[str, pd.DataFrame]] = []
+    for index, start in enumerate(starts):
+        stop = starts[index + 1] if index + 1 < len(starts) else raw.shape[0]
+        block = raw.iloc[start:stop].reset_index(drop=True).dropna(how="all")
+        sample = _sample_from_interval_metadata(block, fallback)
+        sections.append((sample, block))
+    return sections
 
 
 def _find_column(headers: list[str], candidates: tuple[str, ...]) -> int:
@@ -1143,8 +1187,13 @@ def _read_rheology_interval_series(
     y_label: str,
     y_unit: str,
     preferred_result_tokens: tuple[str, ...] = (),
+    raw: pd.DataFrame | None = None,
 ) -> CurveSeriesPayload:
-    raw = _read_raw_table_normalized(source).dropna(axis=1, how="all")
+    raw = (
+        _read_raw_table_normalized(source)
+        if raw is None
+        else raw.copy()
+    ).dropna(axis=1, how="all")
     result_markers: list[tuple[int, str]] = []
     header_indexes: list[int] = []
     for row_index in range(raw.shape[0]):
@@ -1440,8 +1489,14 @@ def _read_rheology_sweep_sample(
     default_x_unit: str,
     interval_selection: str = "all_numeric_rows",
     metrics: tuple[tuple[str, str, tuple[str, ...], str], ...] = _RHEOLOGY_SWEEP_METRICS,
+    raw: pd.DataFrame | None = None,
+    sample: str | None = None,
 ) -> RheologySweepSample:
-    raw = _read_raw_table_normalized(source).dropna(axis=1, how="all")
+    raw = (
+        _read_raw_table_normalized(source)
+        if raw is None
+        else raw.copy()
+    ).dropna(axis=1, how="all")
     header_indexes = _find_rheology_sweep_headers(raw, x_aliases=x_aliases, metrics=metrics)
     select_last_interval = interval_selection == "last_numeric_interval"
     header_index = header_indexes[-1] if select_last_interval else header_indexes[0]
@@ -1522,7 +1577,9 @@ def _read_rheology_sweep_sample(
     if not rows:
         raise ValueError(f"No numeric rheology sweep points found in {source}.")
     return RheologySweepSample(
-        sample=_source_display_sample(source),
+        sample=sample or _sample_from_interval_metadata(
+            raw, _source_display_sample(source)
+        ),
         source=source,
         x_label=x_label,
         x_unit=x_unit,
@@ -1559,16 +1616,23 @@ def _read_rheology_sweep_comparison_samples(
     errors: list[str] = []
     for candidate in candidates:
         try:
-            samples.append(
-                _read_rheology_sweep_sample(
-                    candidate,
-                    x_aliases=x_aliases,
-                    x_label=x_label,
-                    default_x_unit=default_x_unit,
-                    interval_selection=interval_selection,
-                    metrics=metrics,
+            raw = _read_raw_table_normalized(candidate).dropna(axis=1, how="all")
+            for sample, block in _rheology_test_sections(
+                raw,
+                fallback=_source_display_sample(candidate),
+            ):
+                samples.append(
+                    _read_rheology_sweep_sample(
+                        candidate,
+                        x_aliases=x_aliases,
+                        x_label=x_label,
+                        default_x_unit=default_x_unit,
+                        interval_selection=interval_selection,
+                        metrics=metrics,
+                        raw=block,
+                        sample=sample,
+                    )
                 )
-            )
         except Exception as exc:
             errors.append(f"{candidate.name}: {exc}")
     if errors and strict_scope:
@@ -2465,6 +2529,8 @@ def _normalize_strain_controlled_hold(
 
 def _read_strain_controlled_stress_relaxation_series(
     source: Path,
+    *,
+    raw: pd.DataFrame | None = None,
 ) -> CurveSeriesPayload:
     response = _read_rheology_interval_series(
         source,
@@ -2472,6 +2538,7 @@ def _read_strain_controlled_stress_relaxation_series(
         y_label="Shear stress",
         y_unit="Pa",
         preferred_result_tokens=("stress relaxation", "relaxation"),
+        raw=raw,
     )
     control = _read_rheology_interval_series(
         source,
@@ -2479,6 +2546,7 @@ def _read_strain_controlled_stress_relaxation_series(
         y_label="Shear strain",
         y_unit="%",
         preferred_result_tokens=("stress relaxation", "relaxation"),
+        raw=raw,
     )
     return _normalize_strain_controlled_hold(response, control)
 
@@ -2529,30 +2597,64 @@ def _retain_positive_stress_relaxation_time(
 
 
 def _read_stress_relaxation_source_series(source: Path) -> list[CurveSeriesPayload]:
-    sample = _source_display_sample(source)
-    try:
-        normalized = _read_strain_controlled_stress_relaxation_series(source)
-        normalized = _retain_positive_stress_relaxation_time(normalized)
-        return [_with_series_sample(normalized, sample)]
-    except _StressRelaxationHoldError:
-        raise
-    except ValueError:
+    fallback = _source_display_sample(source)
+    raw = _read_raw_table_normalized(source).dropna(axis=1, how="all")
+    sections = _rheology_test_sections(raw, fallback=fallback)
+    parsed: list[CurveSeriesPayload] = []
+    section_errors: list[str] = []
+    for sample, block in sections:
         try:
-            series_list = _read_wide_stress_relaxation_series(source)
-        except ValueError:
-            raise ValueError(
-                "The stress-relaxation contract requires shear stress, "
-                "normalized stress, or a strain-controlled stress response. "
-                "Relaxation modulus G(t) needs a separate G/G0 axis and metric "
-                "contract and is not relabeled as sigma/sigma0."
+            normalized = _read_strain_controlled_stress_relaxation_series(
+                source,
+                raw=block,
             )
-        series_list = [
-            _retain_positive_stress_relaxation_time(series)
-            for series in series_list
-        ]
-        if len(series_list) == 1:
-            return [_with_series_sample(series_list[0], sample)]
-        return series_list
+            normalized = _retain_positive_stress_relaxation_time(normalized)
+            parsed.append(
+                _with_series_sample(
+                    CurveSeriesPayload(
+                        sample=normalized.sample,
+                        x_label=normalized.x_label,
+                        x_unit=normalized.x_unit,
+                        y_label=normalized.y_label,
+                        y_unit=normalized.y_unit,
+                        points=normalized.points,
+                        diagnostics={
+                            **(normalized.diagnostics or {}),
+                            "source_file": str(source),
+                            "source_test_label": sample,
+                        },
+                    ),
+                    sample,
+                )
+            )
+        except _StressRelaxationHoldError:
+            raise
+        except ValueError as exc:
+            section_errors.append(f"{sample}: {exc}")
+    if parsed:
+        if section_errors:
+            raise ValueError(
+                "Stress-relaxation preparation rejected one or more test "
+                f"sections ({'; '.join(section_errors[:3])})."
+            )
+        return parsed
+
+    try:
+        series_list = _read_wide_stress_relaxation_series(source)
+    except ValueError as exc:
+        raise ValueError(
+            "The stress-relaxation contract requires shear stress, "
+            "normalized stress, or a strain-controlled stress response. "
+            "Relaxation modulus G(t) needs a separate G/G0 axis and metric "
+            "contract and is not relabeled as sigma/sigma0."
+        ) from exc
+    series_list = [
+        _retain_positive_stress_relaxation_time(series)
+        for series in series_list
+    ]
+    if len(series_list) == 1:
+        return [_with_series_sample(series_list[0], fallback)]
+    return series_list
 
 
 def _read_stress_relaxation_series_list(source: Path) -> list[CurveSeriesPayload]:
@@ -2576,7 +2678,43 @@ def _read_stress_relaxation_series_list(source: Path) -> list[CurveSeriesPayload
             "Stress-relaxation preparation rejected one or more in-scope "
             f"source files; silent partial datasets are not allowed ({detail})."
         )
-    return series_list
+    unique: dict[
+        tuple[str, str, str, tuple[tuple[float, float], ...]],
+        CurveSeriesPayload,
+    ] = {}
+    duplicate_sources: dict[
+        tuple[str, str, str, tuple[tuple[float, float], ...]],
+        list[str],
+    ] = {}
+    for series in series_list:
+        key = (series.sample, series.x_unit, series.y_unit, series.points)
+        source_file = str((series.diagnostics or {}).get("source_file") or "")
+        if key not in unique:
+            unique[key] = series
+            duplicate_sources[key] = [source_file] if source_file else []
+        elif source_file and source_file not in duplicate_sources[key]:
+            duplicate_sources[key].append(source_file)
+    deduplicated: list[CurveSeriesPayload] = []
+    for key, series in unique.items():
+        sources = duplicate_sources[key]
+        diagnostics = dict(series.diagnostics or {})
+        diagnostics["equivalent_source_files"] = sources
+        diagnostics["equivalent_source_file_count"] = len(sources)
+        diagnostics["deduplication_policy"] = (
+            "same internal test label, units, and exact normalized points"
+        )
+        deduplicated.append(
+            CurveSeriesPayload(
+                sample=series.sample,
+                x_label=series.x_label,
+                x_unit=series.x_unit,
+                y_label=series.y_label,
+                y_unit=series.y_unit,
+                points=series.points,
+                diagnostics=diagnostics,
+            )
+        )
+    return deduplicated
 
 
 def _normalize_series(series: CurveSeriesPayload, *, y_label: str, y_unit: str) -> CurveSeriesPayload:
@@ -3036,6 +3174,58 @@ def _read_impact_canonical_tables(source: Path) -> ImpactReplicatePayload:
         label = f"{sample} ({sheet_label})" if sample_counts[sample] > 1 and sheet_label else sample
         groups.setdefault(label, []).extend(values)
     return _impact_payload(groups, unit=_validated_impact_unit(unit_candidates))
+
+
+def read_impact_condition_payloads(
+    source: Path,
+) -> list[tuple[str, ImpactReplicatePayload]]:
+    """Return independently controlled workbook sheets as separate figures."""
+
+    if source.suffix.casefold() not in {".xlsx", ".xls", ".xlsm"}:
+        return []
+    conditions: list[tuple[str, ImpactReplicatePayload]] = []
+    for table_name, raw in _read_candidate_tables(source):
+        raw = raw.dropna(axis=1, how="all")
+        if raw.shape[0] < 4:
+            continue
+        groups: dict[str, list[float]] = {}
+        unit_candidates: list[object] = []
+        for column in range(raw.shape[1]):
+            metric_token = _token(raw.iat[0, column])
+            if not (
+                metric_token == "re"
+                or "impact" in metric_token
+                or "冲击" in metric_token
+            ):
+                continue
+            sample = _clean_text(raw.iat[2, column])
+            if not sample:
+                continue
+            values = [
+                value
+                for row_index in range(3, raw.shape[0])
+                if (value := _float(raw.iat[row_index, column])) is not None
+            ]
+            if values:
+                groups.setdefault(sample, []).extend(values)
+                unit_candidates.append(raw.iat[1, column])
+        if not groups:
+            continue
+        condition = (
+            table_name.split(":", 1)[-1]
+            if ":" in table_name
+            else table_name
+        )
+        conditions.append(
+            (
+                condition,
+                _impact_payload(
+                    groups,
+                    unit=_validated_impact_unit(unit_candidates),
+                ),
+            )
+        )
+    return conditions
 
 
 def _read_impact_block_table(source: Path) -> ImpactReplicatePayload:
@@ -4403,7 +4593,7 @@ def prepare_semantic_source(
             },
         )
 
-    if family == "rheology_temperature_sweep" and source.is_dir():
+    if family == "rheology_temperature_sweep":
         processed_source = processed_dir / "rheology_temperature_comparison.xlsx"
         try:
             samples = _read_rheology_temperature_comparison_samples(source)
@@ -4442,7 +4632,10 @@ def prepare_semantic_source(
             }
             for sample in samples
         ]
-        samples = _coalesce_replicate_sweep_samples(samples, replicate_mode=replicate_mode)
+        samples = _coalesce_replicate_sweep_samples(
+            samples,
+            replicate_mode=replicate_mode,
+        )
         samples = _ordered_sweep_samples(samples, series_order=series_order)
         if not samples:
             raise ValueError("Rheology temperature folders need at least one parseable sample export.")

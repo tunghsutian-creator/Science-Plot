@@ -300,12 +300,18 @@ def prepare_studio_document(
                 json.dumps(json_safe(request), indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
-        figure_set = _prepare_rheology_frequency_figure_set(
+        impact_queue = _impact_condition_figure_queue(
+            request,
+            base_dir=request_path.parent,
+            project_dir=project_dir,
+        )
+        figure_set = _prepare_studio_figure_set(
             project_dir=project_dir,
             request_path=request_path,
             request=request,
             primary_document=existing_document,
             preserve_existing=True,
+            queue_override=impact_queue or None,
         )
         launcher = _write_studio_launcher(project_dir)
         veusz_launcher = _write_veusz_launcher(project_dir, existing_document)
@@ -356,7 +362,16 @@ def prepare_studio_document(
     document_path = project_dir / "studio" / "document.vsz"
     document_path.parent.mkdir(parents=True, exist_ok=True)
     _archive_manual_document_if_needed(project_dir, document_path)
-    primary_render_request = _rheology_frequency_primary_request(request)
+    impact_queue = _impact_condition_figure_queue(
+        request,
+        base_dir=request_path.parent,
+        project_dir=project_dir,
+    )
+    primary_render_request = (
+        _impact_condition_figure_request(request, impact_queue[0])
+        if impact_queue
+        else _rheology_frequency_primary_request(request)
+    )
     series, axis_info, transform_steps, source_root = _series_from_request(
         primary_render_request,
         base_dir=request_path.parent,
@@ -415,7 +430,7 @@ def prepare_studio_document(
         series=series,
         axis_info=axis_info,
     )
-    figure_set = _prepare_rheology_frequency_figure_set(
+    figure_set = _prepare_studio_figure_set(
         project_dir=project_dir,
         request_path=request_path,
         request=request,
@@ -423,6 +438,7 @@ def prepare_studio_document(
         primary_series_count=len(series),
         primary_generated_hash=existing_file_sha256(document_path),
         preserve_existing=False,
+        queue_override=impact_queue or None,
     )
     launcher = _write_studio_launcher(project_dir)
     veusz_launcher = _write_veusz_launcher(project_dir, document_path)
@@ -1653,6 +1669,90 @@ def _rheology_frequency_primary_request(
     )
 
 
+def _impact_condition_figure_queue(
+    request: dict[str, Any],
+    *,
+    base_dir: Path,
+    project_dir: Path,
+) -> list[dict[str, Any]]:
+    """Materialize one canonical categorical source per workbook condition."""
+
+    if str(request.get("rule_id") or "").strip() != "impact_metric":
+        return []
+    source = _resolve_request_input(request, base_dir=base_dir)
+    if source is None:
+        return []
+    if source.is_dir():
+        workbooks = sorted(
+            path
+            for path in source.rglob("*")
+            if path.is_file()
+            and path.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}
+        )
+        if len(workbooks) != 1:
+            return []
+        source = workbooks[0]
+    if not source.is_file():
+        return []
+    from sciplot_core.semantic import read_impact_condition_payloads
+
+    conditions = read_impact_condition_payloads(source)
+    if len(conditions) <= 1:
+        return []
+    output_dir = project_dir / "studio" / "processed" / "impact_conditions"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    queue: list[dict[str, Any]] = []
+    used_ids: set[str] = set()
+    for order, (condition, payload) in enumerate(conditions, start=1):
+        token = re.sub(
+            r"[^a-z0-9]+",
+            "_",
+            str(condition).casefold(),
+        ).strip("_") or f"condition_{order}"
+        figure_id = f"impact_{token}"
+        suffix = 2
+        while figure_id in used_ids:
+            figure_id = f"impact_{token}_{suffix}"
+            suffix += 1
+        used_ids.add(figure_id)
+        condition_source = output_dir / f"{figure_id}.csv"
+        pd.DataFrame(payload.rows).to_csv(
+            condition_source,
+            header=False,
+            index=False,
+        )
+        queue.append(
+            {
+                "id": figure_id,
+                "title": f"Impact strength - {condition}",
+                "condition": str(condition),
+                "condition_source": str(condition_source),
+                "sample_order": list(payload.samples),
+                "replicate_counts": dict(
+                    zip(payload.samples, payload.replicate_counts, strict=True)
+                ),
+                "x_metric": "sample",
+                "y_metric": "impact_strength",
+                "metric": "impact_strength",
+                "default_template": "box_strip",
+            }
+        )
+    return queue
+
+
+def _impact_condition_figure_request(
+    request: dict[str, Any],
+    figure: dict[str, Any],
+) -> dict[str, Any]:
+    figure_request = deepcopy(request)
+    figure_request["input"] = str(figure["condition_source"])
+    figure_request["template"] = "box_strip"
+    figure_request["x_metric"] = "sample"
+    figure_request["y_metric"] = "impact_strength"
+    figure_request["series_order"] = list(figure.get("sample_order") or [])
+    return figure_request
+
+
 def _studio_figure_set_path(project_dir: Path) -> Path:
     return project_dir / "studio" / "figure_set.json"
 
@@ -1922,7 +2022,7 @@ def _figure_registry_entry(
         "figure_id": str(figure["id"]),
         "title": str(figure.get("title") or figure["id"]),
         "metric": str(figure["y_metric"]),
-        "x_metric": "angular_frequency",
+        "x_metric": str(figure["x_metric"]),
         "y_metric": str(figure["y_metric"]),
         "order": int(figure.get("order") or 0),
         "status": status,
@@ -2145,7 +2245,7 @@ def _commit_studio_figure_set_transaction(
                     pass
 
 
-def _prepare_rheology_frequency_figure_set(
+def _prepare_studio_figure_set(
     *,
     project_dir: Path,
     request_path: Path,
@@ -2154,8 +2254,13 @@ def _prepare_rheology_frequency_figure_set(
     primary_series_count: int | None = None,
     primary_generated_hash: str | None = None,
     preserve_existing: bool,
+    queue_override: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
-    queue = _rheology_frequency_figure_queue(request)
+    queue = (
+        list(queue_override)
+        if queue_override is not None
+        else _rheology_frequency_figure_queue(request)
+    )
     if not queue:
         return None
     figures_dir = project_dir / "studio" / "figures"
@@ -2169,8 +2274,14 @@ def _prepare_rheology_frequency_figure_set(
     entries: list[dict[str, Any]] = []
     replacements: list[dict[str, Any]] = []
     manual_archive_requests: list[dict[str, Any]] = []
-    primary_id = next(
-        item["id"] for item in queue if item["y_metric"] == "storage_modulus"
+    primary_id = (
+        str(queue[0]["id"])
+        if queue_override is not None
+        else next(
+            item["id"]
+            for item in queue
+            if item["y_metric"] == "storage_modulus"
+        )
     )
     try:
         for figure in queue:
@@ -2213,7 +2324,11 @@ def _prepare_rheology_frequency_figure_set(
                 )
                 continue
             spec_path = _veusz_spec_path(document_path)
-            figure_request = _rheology_frequency_figure_request(request, figure)
+            figure_request = (
+                _impact_condition_figure_request(request, figure)
+                if queue_override is not None
+                else _rheology_frequency_figure_request(request, figure)
+            )
             staged_document = document_path.with_name(
                 f".sciplot-figure-set-transaction-{uuid4().hex}.vsz"
             )
@@ -2307,7 +2422,7 @@ def _prepare_rheology_frequency_figure_set(
     registry = {
         "kind": "sciplot_studio_figure_set",
         "version": 1,
-        "rule_id": "rheology_frequency_sweep",
+        "rule_id": str(request.get("rule_id") or ""),
         "status": (
             "ready"
             if all(item.get("status") == "ready" for item in entries)
@@ -5401,9 +5516,34 @@ def _mapping_series_coverage(
 
 
 def _veusz_axis_label(value: object) -> str:
-    """Translate legacy Matplotlib math delimiters to Veusz markup."""
+    """Translate abstract/Matplotlib labels into unambiguous Veusz text."""
 
     label = str(value or "").replace("$", "")
+    superscript_map = str.maketrans(
+        {
+            "0": "⁰",
+            "1": "¹",
+            "2": "²",
+            "3": "³",
+            "4": "⁴",
+            "5": "⁵",
+            "6": "⁶",
+            "7": "⁷",
+            "8": "⁸",
+            "9": "⁹",
+            "+": "⁺",
+            "-": "⁻",
+            "−": "⁻",
+        }
+    )
+    # Unit powers are ordinary Unicode typography at the renderer boundary.
+    # This prevents Veusz markup scope from swallowing following punctuation,
+    # as in ``Wavenumber (cm^{-1})`` where the closing parenthesis was reduced.
+    label = re.sub(
+        r"\^\{([+\-−]?\d+)\}",
+        lambda match: match.group(1).translate(superscript_map),
+        label,
+    )
     # Veusz can keep an unbraced numeric subscript active for the following
     # punctuation (for example, ``\sigma_0)`` rendered ``0)`` at script size).
     # Group the common single-digit form so only the intended glyph is reduced.

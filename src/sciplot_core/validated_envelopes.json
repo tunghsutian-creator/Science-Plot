@@ -304,7 +304,7 @@
         "vsz_reopen_export"
       ],
       "limitations": [
-        "All 40 workbook observations are retained; sheet thickness is appended only to disambiguate repeated sample names."
+        "All workbook observations are retained; each independently controlled thickness sheet is rendered and delivered as its own exact-current figure instead of being collapsed into sample categories."
       ]
     },
     {
