@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-import re
 import shutil
 from pathlib import Path
 from typing import Any
 
 from sciplot_core._utils import existing_file_sha256, slug
-from sciplot_core.launchers import portable_sciplot_prelude
+from sciplot_core.launchers import (
+    inspect_delivery_launcher_contract,
+    write_delivery_launcher,
+)
 from sciplot_core.plot_data import build_plot_data_exports
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
@@ -15,6 +17,7 @@ from sciplot_core.policy import (
     DELIVERY_PDF_DIR,
     DELIVERY_PROJECT_DIR,
     DELIVERY_TIFF_DIR,
+    canonical_figure_stem,
 )
 
 PUBLICATION_ARTIFACT_FILENAMES = (
@@ -29,6 +32,7 @@ PUBLICATION_ARTIFACT_KINDS = {
     "journal_profile.json": "sciplot_publication_profile",
     "publication_qa.json": "sciplot_publication_qa",
 }
+DELIVERY_PACKAGE_CONTRACT_VERSION = 4
 
 
 def _project_slug(output_dir: Path, manifest: dict[str, Any]) -> str:
@@ -43,11 +47,6 @@ def _project_slug(output_dir: Path, manifest: dict[str, Any]) -> str:
     return slug(output_dir.name)
 
 
-def _canonical_figure_stem(path_value: object) -> str:
-    stem = Path(str(path_value)).stem
-    return re.sub(r"_\d+dpi$", "", stem, flags=re.IGNORECASE).casefold()
-
-
 def _delivery_figure_pairing(figure_records: list[dict[str, Any]]) -> dict[str, Any]:
     pdf_index: dict[str, list[str]] = {}
     tiff_index: dict[str, list[str]] = {}
@@ -55,9 +54,9 @@ def _delivery_figure_pairing(figure_records: list[dict[str, Any]]) -> dict[str, 
     for record in figure_records:
         path = Path(str(record["path"]))
         if path.suffix.casefold() == ".pdf":
-            pdf_index.setdefault(_canonical_figure_stem(path), []).append(str(path))
+            pdf_index.setdefault(canonical_figure_stem(path), []).append(str(path))
         elif path.suffix.casefold() in {".tif", ".tiff"}:
-            tiff_index.setdefault(_canonical_figure_stem(path), []).append(str(path))
+            tiff_index.setdefault(canonical_figure_stem(path), []).append(str(path))
             if not path.name.casefold().endswith("_300dpi.tiff"):
                 invalid_tiff_names.append(str(path))
 
@@ -122,61 +121,6 @@ def _editable_project_name(document: Path, *, index: int) -> str:
     if candidate in {"", "_veusz", "figures", "studio"}:
         candidate = document.stem if document.stem not in {"", "document"} else f"figure_{index:02d}"
     return slug(candidate) or f"figure_{index:02d}"
-
-
-def _write_executable(path: Path, lines: list[str]) -> None:
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    path.chmod(0o755)
-
-
-def _write_delivery_launcher(delivery_dir: Path) -> Path:
-    launcher = delivery_dir / DELIVERY_LAUNCHER
-    _write_executable(
-        launcher,
-        [
-            *portable_sciplot_prelude(directory_var="DELIVERY_DIR"),
-            "",
-            'documents=("${DELIVERY_DIR}"/project/*.vsz(N))',
-            'if (( ${#documents[@]} == 0 )); then',
-            '  die "No Veusz project files found in ${DELIVERY_DIR}/project"',
-            "fi",
-            'if [[ "${1:-}" == "--check" ]]; then',
-            '  for DOCUMENT in "${documents[@]}"; do',
-            '    "${SCIPLOT_CMD}" studio "${DOCUMENT}" --qt-smoke',
-            "  done",
-            "  exit 0",
-            "fi",
-            'if (( $# > 0 )); then',
-            '  DOCUMENT="$1"',
-            '  [[ "${DOCUMENT}" = /* ]] || DOCUMENT="${DELIVERY_DIR}/project/${DOCUMENT}"',
-            "elif (( ${#documents[@]} == 1 )); then",
-            '  DOCUMENT="${documents[1]}"',
-            "else",
-            '  print "Select a figure to edit in Veusz:"',
-            '  for index in {1..${#documents[@]}}; do',
-            '    print "${index}) ${documents[$index]:t:r}"',
-            "  done",
-            '  while true; do',
-            '    read "choice?> "',
-            '    if [[ "${choice}" = <-> ]] && (( choice >= 1 && choice <= ${#documents[@]} )); then',
-            '      DOCUMENT="${documents[$choice]}"',
-            "      break",
-            "    fi",
-            '    print -u2 "Enter a number from 1 to ${#documents[@]}."',
-            "  done",
-            "fi",
-            'if [[ ! -f "${DOCUMENT}" ]]; then',
-            '  print -u2 "Veusz document not found: ${DOCUMENT}"',
-            "  exit 1",
-            "fi",
-            'if [[ "${SCIPLOT_LAUNCH_DRY_RUN:-0}" == "1" ]]; then',
-            '  print -r -- "${DOCUMENT}"',
-            "  exit 0",
-            "fi",
-            'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --advanced-editor',
-        ],
-    )
-    return launcher
 
 
 def _copy_project_documents(
@@ -273,75 +217,225 @@ def _publication_status(output_dir: Path) -> tuple[bool, list[dict[str, Any]]]:
     return True, statuses
 
 
-def build_minimal_user_delivery(
-    destination: Path,
+def _recorded_file_set(
+    records: object,
     *,
-    figures: list[tuple[str, Path]],
-    data_files: list[tuple[str, Path]],
-    veusz_documents: list[tuple[str, Path]],
+    directory: Path,
+    suffixes: set[str],
+    hash_field: str,
 ) -> dict[str, Any]:
-    """Build the same four-group handoff used by the normal export path."""
-
-    resolved_destination = destination.expanduser().resolve()
-    if resolved_destination.exists():
-        shutil.rmtree(resolved_destination)
-    data_dir = resolved_destination / DELIVERY_DATA_DIR
-    pdf_dir = resolved_destination / DELIVERY_PDF_DIR
-    tiff_dir = resolved_destination / DELIVERY_TIFF_DIR
-    project_dir = resolved_destination / DELIVERY_PROJECT_DIR
-    for directory in (data_dir, pdf_dir, tiff_dir, project_dir):
-        directory.mkdir(parents=True, exist_ok=True)
-
-    def copy_named(
-        records: list[tuple[str, Path]],
-        target_dir: Path,
-        *,
-        allowed_suffixes: set[str] | None = None,
-    ) -> list[Path]:
-        copied: list[Path] = []
-        used_names: set[str] = set()
-        for name, source in records:
-            if not name or Path(name).name != name:
-                raise ValueError(f"Minimal delivery artifact needs a plain filename: {name!r}")
-            if allowed_suffixes is not None and Path(name).suffix.casefold() not in allowed_suffixes:
-                suffixes = ", ".join(sorted(allowed_suffixes))
-                raise ValueError(f"Minimal delivery artifact {name!r} must use one of: {suffixes}")
-            if name in used_names:
-                raise ValueError(f"Duplicate minimal delivery filename: {name}")
-            resolved_source = source.expanduser().resolve()
-            if not resolved_source.is_file():
-                raise FileNotFoundError(resolved_source)
-            destination_path = target_dir / name
-            shutil.copy2(resolved_source, destination_path)
-            copied.append(destination_path)
-            used_names.add(name)
-        return copied
-
-    copied_pdf = copy_named(
-        [(name, path) for name, path in figures if path.suffix.casefold() == ".pdf"],
-        pdf_dir,
-        allowed_suffixes={".pdf"},
-    )
-    copied_tiff = copy_named(
-        [(name, path) for name, path in figures if path.suffix.casefold() in {".tif", ".tiff"}],
-        tiff_dir,
-        allowed_suffixes={".tif", ".tiff"},
-    )
-    copied_data = copy_named(data_files, data_dir, allowed_suffixes={".csv"})
-    copied_documents = copy_named(veusz_documents, project_dir, allowed_suffixes={".vsz"})
-    if not copied_documents:
-        raise ValueError("Minimal delivery needs at least one editable Veusz document.")
-    launcher = _write_delivery_launcher(resolved_destination)
+    live_files = {
+        path.resolve()
+        for path in directory.iterdir()
+        if path.is_file() and path.suffix.casefold() in suffixes
+    } if directory.is_dir() else set()
+    recorded_files: set[Path] = set()
+    invalid: list[dict[str, Any]] = []
+    if not isinstance(records, list):
+        return {
+            "passed": False,
+            "live_files": sorted(str(path) for path in live_files),
+            "recorded_files": [],
+            "invalid": [{"reason": "records_missing"}],
+        }
+    for record in records:
+        if not isinstance(record, dict):
+            invalid.append({"reason": "record_not_object"})
+            continue
+        path_value = record.get("path")
+        if not isinstance(path_value, str) or not path_value.strip():
+            invalid.append({"reason": "path_missing", "record": record})
+            continue
+        path = Path(path_value).expanduser().resolve()
+        expected_hash = str(record.get(hash_field) or "").strip()
+        actual_hash = existing_file_sha256(path)
+        valid = bool(
+            path.parent == directory.resolve()
+            and path.suffix.casefold() in suffixes
+            and path.is_file()
+            and path.stat().st_size > 0
+            and expected_hash
+            and actual_hash == expected_hash
+        )
+        if not valid:
+            invalid.append(
+                {
+                    "reason": "file_or_hash_invalid",
+                    "path": str(path),
+                    "expected_sha256": expected_hash or None,
+                    "actual_sha256": actual_hash,
+                }
+            )
+        recorded_files.add(path)
     return {
-        "kind": "sciplot_user_delivery_package",
-        "version": 3,
-        "root": str(resolved_destination),
-        "pdf": [str(path) for path in copied_pdf],
-        "tiff": [str(path) for path in copied_tiff],
-        "data": [str(path) for path in copied_data],
-        "project": [str(path) for path in copied_documents],
-        "launcher": str(launcher),
-        "file_count": len(copied_pdf) + len(copied_tiff) + len(copied_data) + len(copied_documents) + 1,
+        "passed": bool(live_files)
+        and not invalid
+        and live_files == recorded_files,
+        "live_files": sorted(str(path) for path in live_files),
+        "recorded_files": sorted(str(path) for path in recorded_files),
+        "invalid": invalid,
+    }
+
+
+def verify_delivery_package(
+    delivery_package: object,
+    *,
+    expected_root: Path,
+) -> dict[str, Any]:
+    """Revalidate the persisted minimal delivery against live files and hashes."""
+
+    record = delivery_package if isinstance(delivery_package, dict) else {}
+    expected = expected_root.expanduser().resolve()
+    path_value = record.get("path")
+    recorded_root = (
+        Path(path_value).expanduser().resolve()
+        if isinstance(path_value, str) and path_value.strip()
+        else None
+    )
+    root_ready = bool(
+        recorded_root == expected and expected.is_dir()
+    )
+    expected_top_level = {
+        DELIVERY_DATA_DIR,
+        DELIVERY_PDF_DIR,
+        DELIVERY_TIFF_DIR,
+        DELIVERY_PROJECT_DIR,
+        DELIVERY_LAUNCHER,
+    }
+    actual_top_level = (
+        {path.name for path in expected.iterdir()} if expected.is_dir() else set()
+    )
+    data_check = _recorded_file_set(
+        record.get("data_csvs"),
+        directory=expected / DELIVERY_DATA_DIR,
+        suffixes={".csv"},
+        hash_field="sha256",
+    )
+    figure_records = record.get("figures")
+    pdf_records = [
+        item
+        for item in figure_records
+        if isinstance(item, dict)
+        and Path(str(item.get("path") or "")).suffix.casefold() == ".pdf"
+    ] if isinstance(figure_records, list) else None
+    tiff_records = [
+        item
+        for item in figure_records
+        if isinstance(item, dict)
+        and Path(str(item.get("path") or "")).suffix.casefold() in {".tif", ".tiff"}
+    ] if isinstance(figure_records, list) else None
+    pdf_check = _recorded_file_set(
+        pdf_records,
+        directory=expected / DELIVERY_PDF_DIR,
+        suffixes={".pdf"},
+        hash_field="delivery_sha256",
+    )
+    tiff_check = _recorded_file_set(
+        tiff_records,
+        directory=expected / DELIVERY_TIFF_DIR,
+        suffixes={".tif", ".tiff"},
+        hash_field="delivery_sha256",
+    )
+    project_check = _recorded_file_set(
+        record.get("project_documents"),
+        directory=expected / DELIVERY_PROJECT_DIR,
+        suffixes={".vsz"},
+        hash_field="delivery_sha256",
+    )
+    live_figure_records = [
+        {"path": path}
+        for directory, suffixes in (
+            (expected / DELIVERY_PDF_DIR, {".pdf"}),
+            (expected / DELIVERY_TIFF_DIR, {".tif", ".tiff"}),
+        )
+        if directory.is_dir()
+        for path in directory.iterdir()
+        if path.is_file() and path.suffix.casefold() in suffixes
+    ]
+    pairing = _delivery_figure_pairing(live_figure_records)
+    launcher = expected / DELIVERY_LAUNCHER
+    live_launcher_contract = inspect_delivery_launcher_contract(expected)
+    recorded_launcher_contract = (
+        record.get("launcher_contract")
+        if isinstance(record.get("launcher_contract"), dict)
+        else {}
+    )
+    recorded_launcher_path = record.get("open_in_veusz")
+    launcher_path_current = bool(
+        isinstance(recorded_launcher_path, str)
+        and recorded_launcher_path.strip()
+        and Path(recorded_launcher_path).expanduser().resolve() == launcher.resolve()
+    )
+    recorded_launcher_sha256 = str(
+        record.get("open_in_veusz_sha256") or ""
+    ).strip()
+    launcher_hash_current = bool(
+        recorded_launcher_sha256
+        and recorded_launcher_sha256 == live_launcher_contract.get("content_sha256")
+    )
+    launcher_structure_current = bool(
+        live_launcher_contract.get("ready") is True
+        and live_launcher_contract.get("canonical_structure") is True
+        and live_launcher_contract.get("required_command_present") is True
+    )
+    launcher_contract_current = bool(
+        recorded_launcher_contract
+        and recorded_launcher_contract == live_launcher_contract
+    )
+    launcher_ready = bool(
+        launcher_path_current
+        and launcher_hash_current
+        and launcher_structure_current
+        and launcher_contract_current
+    )
+    artifacts = record.get("artifacts")
+    artifact_records_ready = bool(
+        isinstance(artifacts, list)
+        and artifacts
+        and all(
+            isinstance(item, dict)
+            and item.get("exists") is True
+            and isinstance(item.get("path"), str)
+            and Path(str(item["path"])).expanduser().exists()
+            for item in artifacts
+        )
+    )
+    checks = {
+        "record_kind_current": record.get("kind") == "sciplot_user_delivery_package"
+        and record.get("version") == DELIVERY_PACKAGE_CONTRACT_VERSION,
+        "recorded_complete": record.get("complete") is True,
+        "canonical_root": root_ready,
+        "minimal_top_level": actual_top_level == expected_top_level,
+        "data_files_current": data_check["passed"],
+        "pdf_files_current": pdf_check["passed"],
+        "tiff_files_current": tiff_check["passed"],
+        "project_files_current": project_check["passed"],
+        "canonical_pdf_tiff_pairs": pairing["passed"],
+        "launcher_path_current": launcher_path_current,
+        "launcher_hash_current": launcher_hash_current,
+        "launcher_structure_current": launcher_structure_current,
+        "launcher_contract_current": launcher_contract_current,
+        "launcher_current": launcher_ready,
+        "artifact_records_current": artifact_records_ready,
+    }
+    return {
+        "kind": "sciplot_delivery_verification",
+        "version": 1,
+        "passed": all(checks.values()),
+        "checks": checks,
+        "failed_checks": [key for key, passed in checks.items() if not passed],
+        "expected_root": str(expected),
+        "recorded_root": str(recorded_root) if recorded_root is not None else None,
+        "top_level": {
+            "expected": sorted(expected_top_level),
+            "actual": sorted(actual_top_level),
+        },
+        "data": data_check,
+        "pdf": pdf_check,
+        "tiff": tiff_check,
+        "project": project_check,
+        "pairing": pairing,
+        "launcher": live_launcher_contract,
     }
 
 
@@ -394,7 +488,8 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
 
     data_records = build_plot_data_exports(manifest, destination=data_dir)
     project_records = _copy_project_documents(manifest, output_dir=output_dir, project_dir=project_dir)
-    launcher = _write_delivery_launcher(delivery_dir)
+    launcher = write_delivery_launcher(delivery_dir)
+    launcher_contract = inspect_delivery_launcher_contract(delivery_dir)
     figure_pairing = _delivery_figure_pairing(figure_records)
     qa_hash_evidence = _qa_hash_evidence(manifest, figure_records)
     qa_hashes_match = bool(qa_hash_evidence) and all(
@@ -440,7 +535,9 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
         {
             "id": "open_in_veusz",
             "path": str(launcher),
-            "exists": launcher.exists() and bool(project_records),
+            "exists": launcher_contract.get("ready") is True
+            and bool(project_records),
+            "details": launcher_contract,
         },
         {
             "id": "qa_passed",
@@ -495,7 +592,7 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
         }
     delivery_record: dict[str, Any] = {
         "kind": "sciplot_user_delivery_package",
-        "version": 3,
+        "version": DELIVERY_PACKAGE_CONTRACT_VERSION,
         "path": str(delivery_dir),
         "project": project,
         "data_dir": str(data_dir),
@@ -507,29 +604,28 @@ def build_delivery_package(output_dir: Path, *, manifest: dict[str, Any]) -> dic
         "project_file": project_file,
         "project_documents": project_records,
         "open_in_veusz": str(launcher),
+        "open_in_veusz_sha256": launcher_contract["content_sha256"],
+        "launcher_contract": launcher_contract,
         "editable": str(project_dir),
         "editable_vsz": editable_vsz,
         "editable_vsz_projects": project_records,
         "artifacts": artifact_status,
     }
     delivery_record["complete"] = all(item["exists"] for item in artifact_status)
+    verification = verify_delivery_package(
+        delivery_record,
+        expected_root=delivery_dir,
+    )
+    delivery_record["verification"] = verification
+    delivery_record["complete"] = bool(
+        delivery_record["complete"] and verification["passed"]
+    )
 
-    one_step = manifest.get("one_step")
-    if isinstance(one_step, dict):
-        one_step["delivery_package"] = delivery_record
-        figure_qa = one_step.get("figure_qa_report")
-        if isinstance(figure_qa, dict):
-            figure_qa["delivery_complete"] = bool(delivery_record["complete"])
-        if delivery_record["complete"]:
-            reasons = [
-                str(reason)
-                for reason in one_step.get("state_reasons", [])
-                if str(reason) != "delivery_package_incomplete"
-            ]
-            one_step["state_reasons"] = reasons or ["all_programmatic_gates_passed"]
-            if one_step.get("state") == "needs_rule_repair" and not reasons:
-                one_step["state"] = "ready"
     return delivery_record
 
 
-__all__ = ["build_delivery_package"]
+__all__ = [
+    "DELIVERY_PACKAGE_CONTRACT_VERSION",
+    "build_delivery_package",
+    "verify_delivery_package",
+]

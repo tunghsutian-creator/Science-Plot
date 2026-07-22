@@ -11,7 +11,7 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core._bootstrap import ensure_legacy_core
+from sciplot_core._bootstrap import ensure_vendored_core
 from sciplot_core._utils import (
     clean_text as _clean_text,
     decode_text as _decode_text,
@@ -31,7 +31,7 @@ from sciplot_core.operation_modes import assisted_cleanup_mode_payload
 from sciplot_core.policy import DEFAULT_RENDER_OPTIONS as _DEFAULT_RENDER_OPTIONS
 from sciplot_core.publication import build_transform_step
 
-ensure_legacy_core()
+ensure_vendored_core()
 
 from src.data_loader import read_raw_table  # noqa: E402
 from src.rendering.recommendation import inspect_input_file  # noqa: E402
@@ -172,12 +172,43 @@ def _classification(
     }
 
 
-def _is_tensile_export_dir(path: Path) -> bool:
-    return path.is_dir() and path.name.casefold().endswith(".is_tens_exports")
+TENSILE_EXPORT_DIR_SUFFIX = ".is_tens_exports"
 
 
-def _has_tensile_export_parent(path: Path) -> bool:
-    return any(parent.name.casefold().endswith(".is_tens_exports") for parent in path.parents)
+def is_tensile_export_dir(path: Path) -> bool:
+    return path.is_dir() and path.name.casefold().endswith(
+        TENSILE_EXPORT_DIR_SUFFIX
+    )
+
+
+def has_tensile_export_parent(path: Path) -> bool:
+    return any(
+        parent.name.casefold().endswith(TENSILE_EXPORT_DIR_SUFFIX)
+        for parent in path.parents
+    )
+
+
+def tensile_export_sample_name(path: Path) -> str:
+    """Return the sample name encoded by a tensile-export directory."""
+
+    if not is_tensile_export_dir(path):
+        raise ValueError(f"Not a tensile export directory: {path}")
+    return path.name[: -len(TENSILE_EXPORT_DIR_SUFFIX)].strip()
+
+
+def tensile_export_csv_files(path: Path) -> list[Path]:
+    """Return tensile CSV members with case-insensitive suffix handling."""
+
+    if not is_tensile_export_dir(path):
+        return []
+    return sorted(
+        (
+            candidate
+            for candidate in path.rglob("*")
+            if candidate.is_file() and candidate.suffix.casefold() == ".csv"
+        ),
+        key=lambda candidate: candidate.as_posix().casefold(),
+    )
 
 
 def classify_source(
@@ -249,7 +280,7 @@ def classify_source(
             matched_rule,
             confidence=confidence,
             reason=(
-                f"Explicit material rule `{matched_rule.rule_id}` selected by the user or Luna/Codex."
+                f"Explicit material rule `{matched_rule.rule_id}` selected by the user or an assistant."
                 if requested_rule_id
                 else matched_rule.reason or f"Matched material rule `{matched_rule.rule_id}`."
             ),
@@ -257,7 +288,7 @@ def classify_source(
             vendor_error=vendor_error,
         )
 
-    if _is_tensile_export_dir(path) or _has_tensile_export_parent(path) or "结果表格2" in compact_evidence:
+    if is_tensile_export_dir(path) or has_tensile_export_parent(path) or "结果表格2" in compact_evidence:
         return _classification(
             semantic_family="tensile_curve",
             recommended_recipe="tensile",
@@ -3957,15 +3988,24 @@ def _read_torque_series(source: Path, *, curation: dict[str, Any] | None = None)
 
 
 def _tensile_export_files(input_path: Path) -> list[Path]:
+    if is_tensile_export_dir(input_path):
+        return tensile_export_csv_files(input_path)
     if input_path.is_dir():
-        return sorted(input_path.rglob("*.csv"))
+        return sorted(
+            (
+                path
+                for path in input_path.rglob("*")
+                if path.is_file() and path.suffix.casefold() == ".csv"
+            ),
+            key=lambda path: path.as_posix().casefold(),
+        )
     return [input_path]
 
 
 def _read_tensile_export_series_list(source: Path) -> list[CurveSeriesPayload]:
     series_list: list[CurveSeriesPayload] = []
     errors: list[str] = []
-    direct_export_group = source.name[: -len(".is_tens_Exports")].strip() if _is_tensile_export_dir(source) else ""
+    direct_export_group = tensile_export_sample_name(source) if is_tensile_export_dir(source) else ""
     for path in _tensile_export_files(source):
         try:
             series = _read_tensile_export_series(path)
@@ -4761,7 +4801,12 @@ def _intervention_action(category: str) -> str:
 __all__ = [
     "build_intervention_request",
     "classify_source",
+    "has_tensile_export_parent",
+    "is_tensile_export_dir",
     "is_rheology_frequency_comparison_dir",
     "is_rheology_temperature_comparison_dir",
     "prepare_semantic_source",
+    "TENSILE_EXPORT_DIR_SUFFIX",
+    "tensile_export_csv_files",
+    "tensile_export_sample_name",
 ]

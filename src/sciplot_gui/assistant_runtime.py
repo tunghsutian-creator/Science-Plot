@@ -24,7 +24,7 @@ def resolve_assistant_provider(
     *,
     environ: Mapping[str, str] | None = None,
 ) -> AssistantProvider | None:
-    """Resolve the optional provider without importing a legacy frontend."""
+    """Resolve the optional provider without importing a standalone app."""
 
     if assistant_provider is not _AUTO_ASSISTANT_PROVIDER:
         return cast(AssistantProvider | None, assistant_provider)

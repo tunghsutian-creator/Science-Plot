@@ -8,13 +8,20 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.autoplot import build_autoplot_summary
-from sciplot_core._utils import atomic_write_json
+from sciplot_core._utils import atomic_write_json, existing_file_sha256
+from sciplot_core.delivery import DELIVERY_PACKAGE_CONTRACT_VERSION
+from sciplot_core.launchers import (
+    inspect_delivery_launcher_contract,
+    write_delivery_launcher,
+)
 from sciplot_core.materials_rules import get_rule, semantic_payload_from_rule
 from sciplot_core.one_step import (
     _readiness,
     build_mapping_package,
     build_render_request_package,
 )
+from sciplot_core.publish_state import build_publish_state
+from sciplot_core.study_model import build_output_package_contract
 from sciplot_core.readiness import (
     INSIDE_VALIDATED_ENVELOPE,
     NEEDS_HUMAN_CONFIRMATION,
@@ -43,6 +50,54 @@ def _check(
         "label": label,
         "status": "passed" if passed else "failed",
         "detail": detail,
+    }
+
+
+def _write_probe_delivery(root: Path) -> dict[str, Any]:
+    data_dir = root / "data"
+    pdf_dir = root / "pdf"
+    tiff_dir = root / "tiff"
+    project_dir = root / "project"
+    for directory in (data_dir, pdf_dir, tiff_dir, project_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+    data = data_dir / "probe_plot_data.csv"
+    pdf = pdf_dir / "probe.pdf"
+    tiff = tiff_dir / "probe_300dpi.tiff"
+    project = project_dir / "probe.vsz"
+    data.write_text("x,y\n1,2\n", encoding="utf-8")
+    pdf.write_bytes(b"pdf")
+    tiff.write_bytes(b"tiff")
+    project.write_text("# Veusz saved document\n", encoding="utf-8")
+    launcher = write_delivery_launcher(root)
+    launcher_contract = inspect_delivery_launcher_contract(root)
+    return {
+        "kind": "sciplot_user_delivery_package",
+        "version": DELIVERY_PACKAGE_CONTRACT_VERSION,
+        "path": str(root),
+        "data_csvs": [
+            {"path": str(data), "sha256": existing_file_sha256(data)}
+        ],
+        "figures": [
+            {"path": str(pdf), "delivery_sha256": existing_file_sha256(pdf)},
+            {"path": str(tiff), "delivery_sha256": existing_file_sha256(tiff)},
+        ],
+        "project_documents": [
+            {
+                "path": str(project),
+                "delivery_sha256": existing_file_sha256(project),
+            }
+        ],
+        "open_in_veusz": str(launcher),
+        "open_in_veusz_sha256": launcher_contract["content_sha256"],
+        "launcher_contract": launcher_contract,
+        "artifacts": [
+            {"id": "data", "path": str(data_dir), "exists": True},
+            {"id": "pdf", "path": str(pdf_dir), "exists": True},
+            {"id": "tiff", "path": str(tiff_dir), "exists": True},
+            {"id": "project", "path": str(project_dir), "exists": True},
+            {"id": "launcher", "path": str(launcher), "exists": True},
+        ],
+        "complete": True,
     }
 
 
@@ -487,21 +542,68 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
         figure_qa_report=passing_qa,
         validated_envelope=incomplete_envelope,
     )
+    valid_autoplot_run = run_root / "valid_autoplot"
+    valid_autoplot_run.mkdir(parents=True, exist_ok=True)
+    valid_autoplot_delivery = valid_autoplot_run / "delivery"
+    valid_autoplot_delivery_record = _write_probe_delivery(
+        valid_autoplot_delivery
+    )
+    valid_autoplot_one_step = {
+        "state": "ready",
+        "delivery_package": valid_autoplot_delivery_record,
+        "figure_qa_report": passing_qa,
+        "render_request": ready_render_request,
+        "validated_envelope": ready,
+    }
+    valid_autoplot_qa = {"status": "passed"}
+    atomic_write_json(valid_autoplot_run / "request_snapshot.json", {})
+    atomic_write_json(valid_autoplot_run / "manifest.json", {})
+    (valid_autoplot_run / "review.html").write_text(
+        "<html></html>\n", encoding="utf-8"
+    )
+    (valid_autoplot_run / "revision_brief.md").write_text(
+        "# Ready\n", encoding="utf-8"
+    )
+    valid_autoplot_manifest_seed = {
+        "figures": [
+            str(item["path"])
+            for item in valid_autoplot_delivery_record["figures"]
+            if isinstance(item, dict)
+        ],
+        "qa": valid_autoplot_qa,
+        "result": {},
+    }
+    valid_autoplot_package = build_output_package_contract(
+        valid_autoplot_run,
+        manifest=valid_autoplot_manifest_seed,
+    )
+    valid_autoplot_publish = build_publish_state(
+        qa=valid_autoplot_qa,
+        package_contract=valid_autoplot_package,
+        delivery_package=valid_autoplot_one_step["delivery_package"],
+        prerequisite_state=valid_autoplot_one_step["state"],
+    )
+    atomic_write_json(
+        valid_autoplot_run / "manifest.json",
+        {
+            "kind": "sciplot_run",
+            **valid_autoplot_manifest_seed,
+            "qa": valid_autoplot_qa,
+            "package_contract": valid_autoplot_package,
+            "delivery_package": valid_autoplot_one_step["delivery_package"],
+            "one_step": valid_autoplot_one_step,
+            **valid_autoplot_publish,
+        },
+    )
+    atomic_write_json(
+        valid_autoplot_run / "one_step_status.json", valid_autoplot_one_step
+    )
     valid_autoplot = build_autoplot_summary(
         {
             "status": "ready",
-            "run_output": str(run_root / "valid_autoplot"),
+            "run_output": str(valid_autoplot_run),
             "project_dir": str(run_root / "valid_project"),
-            "one_step": {
-                "state": "ready",
-                "delivery_package": {
-                    "complete": True,
-                    "path": str(run_root / "valid_delivery"),
-                },
-                "figure_qa_report": passing_qa,
-                "render_request": ready_render_request,
-                "validated_envelope": ready,
-            },
+            "one_step": valid_autoplot_one_step,
         }
     )
     forged_envelope = deepcopy(ready)
@@ -598,22 +700,23 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
             },
         }
     )
+    persisted_repair_status = deepcopy(valid_autoplot_one_step)
+    persisted_repair_status["state"] = NEEDS_RULE_REPAIR
+    atomic_write_json(
+        valid_autoplot_run / "one_step_status.json",
+        persisted_repair_status,
+    )
     mismatched_autoplot = build_autoplot_summary(
         {
             "status": "ready",
-            "run_output": str(run_root / "mismatched_autoplot"),
-            "project_dir": str(run_root / "mismatched_project"),
-            "one_step": {
-                "state": NEEDS_RULE_REPAIR,
-                "delivery_package": {
-                    "complete": True,
-                    "path": str(run_root / "mismatched_delivery"),
-                },
-                "figure_qa_report": passing_qa,
-                "render_request": ready_render_request,
-                "validated_envelope": ready,
-            },
+            "run_output": str(valid_autoplot_run),
+            "project_dir": str(run_root / "valid_project"),
+            "one_step": valid_autoplot_one_step,
         }
+    )
+    atomic_write_json(
+        valid_autoplot_run / "one_step_status.json",
+        valid_autoplot_one_step,
     )
 
     serialized = json.dumps(registry.to_dict(), ensure_ascii=False)

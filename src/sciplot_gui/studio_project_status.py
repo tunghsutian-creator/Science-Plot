@@ -6,11 +6,15 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core._utils import existing_file_sha256, json_safe
+from sciplot_core._paths import resolved_path_is_within
 from sciplot_core.data_mapping import resolve_data_mapping_request
+from sciplot_core.delivery import verify_delivery_package
+from sciplot_core.policy import DELIVERY_DIR, canonical_export_format
 from sciplot_core.studio import (
     _is_primary_figure_set_export_scope,
     _studio_figure_set_export_scope,
 )
+from sciplot_core.study_model import verify_output_package_contract
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -35,14 +39,6 @@ def _validate_project_request_pair(
 ) -> None:
     if (project_dir is None) != (request_path is None):
         raise ValueError("project_dir and request_path must be provided together.")
-
-
-def _is_within(path: Path, root: Path) -> bool:
-    try:
-        path.relative_to(root)
-    except ValueError:
-        return False
-    return True
 
 
 def _canonical_json_sha256(payload: dict[str, Any]) -> str:
@@ -118,7 +114,7 @@ def _registered_manifest_candidates(
     for candidate in [*local_candidates, *registered_candidates]:
         if (
             candidate.name != "manifest.json"
-            or not _is_within(candidate, runs_root)
+            or not resolved_path_is_within(candidate, runs_root)
             or candidate in seen
         ):
             continue
@@ -452,10 +448,10 @@ def _mapping_status(
 
 
 def _normalized_export_format(value: object) -> str:
-    normalized = str(value or "").strip().casefold()
-    if normalized in {"tif", "tiff", "tiff300", "tiff_300dpi"}:
-        return "tiff_300"
-    return normalized
+    try:
+        return canonical_export_format(value, allow_legacy=True)
+    except ValueError:
+        return ""
 
 
 def _export_records(
@@ -561,7 +557,7 @@ def _verify_export_artifacts(
         except (OSError, RuntimeError, ValueError) as exc:
             issues.append(f"Export record {index + 1} path is invalid: {exc}")
             continue
-        if evidence_root is None or not _is_within(
+        if evidence_root is None or not resolved_path_is_within(
             artifact_path,
             evidence_root,
         ):
@@ -1039,7 +1035,7 @@ def _evidence_path(
         candidate = candidate.resolve()
     except (OSError, RuntimeError, ValueError):
         return None
-    return candidate if _is_within(candidate, evidence_root) else None
+    return candidate if resolved_path_is_within(candidate, evidence_root) else None
 
 
 def _nonempty_evidence_path(
@@ -1060,97 +1056,10 @@ def _nonempty_evidence_path(
     return False
 
 
-def _recorded_file_current(
-    record: dict[str, Any],
-    *,
-    evidence_root: Path,
-    hash_fields: tuple[str, ...],
-) -> bool:
-    candidate = _evidence_path(
-        record.get("path"),
-        evidence_root=evidence_root,
-    )
-    if candidate is None:
-        return False
-    try:
-        if not candidate.is_file() or candidate.stat().st_size <= 0:
-            return False
-        actual_hash = existing_file_sha256(candidate)
-    except OSError:
-        return False
-    expected_hash = next(
-        (
-            str(record.get(field) or "").strip()
-            for field in hash_fields
-            if str(record.get(field) or "").strip()
-        ),
-        "",
-    )
-    return bool(expected_hash and actual_hash == expected_hash)
-
-
-def _contract_artifacts_current(
-    contract: object,
-    *,
-    evidence_root: Path,
-) -> bool:
-    if not isinstance(contract, dict) or contract.get("complete") is not True:
-        return False
-    artifacts = contract.get("artifacts")
-    if not isinstance(artifacts, list) or not artifacts:
-        return False
-    for record in artifacts:
-        if not isinstance(record, dict) or record.get("exists") is not True:
-            return False
-        path_value = record.get("path")
-        if isinstance(path_value, str) and path_value.strip():
-            candidate = _evidence_path(
-                path_value,
-                evidence_root=evidence_root,
-            )
-            if candidate is None or not candidate.exists():
-                return False
-    return True
-
-
-def _delivery_artifacts_current(
-    delivery: object,
-    *,
-    evidence_root: Path,
-) -> bool:
-    if not _contract_artifacts_current(
-        delivery,
-        evidence_root=evidence_root,
-    ):
-        return False
-    assert isinstance(delivery, dict)
-    for key, hash_fields in (
-        ("data_csvs", ("sha256",)),
-        ("figures", ("delivery_sha256",)),
-        ("project_documents", ("delivery_sha256",)),
-    ):
-        records = delivery.get(key)
-        if not isinstance(records, list) or not records:
-            return False
-        if not all(
-            isinstance(record, dict)
-            and _recorded_file_current(
-                record,
-                evidence_root=evidence_root,
-                hash_fields=hash_fields,
-            )
-            for record in records
-        ):
-            return False
-    return _nonempty_evidence_path(
-        delivery.get("open_in_veusz"),
-        evidence_root=evidence_root,
-    )
-
-
 def _provenance_status(
     *,
     latest_path: Path | None,
+    latest_run: dict[str, Any],
     transform_status: str,
     raw_archive_path: Path | None,
     package: object,
@@ -1170,20 +1079,25 @@ def _provenance_status(
             evidence_root=evidence_root,
         )
     )
-    package_current = bool(
-        evidence_root is not None
-        and _contract_artifacts_current(
+    package_verification = (
+        verify_output_package_contract(
             package,
-            evidence_root=evidence_root,
+            output_dir=evidence_root,
+            manifest=latest_run,
         )
+        if evidence_root is not None
+        else {"passed": False, "failed_checks": ["evidence_root_missing"]}
     )
-    delivery_current = bool(
-        evidence_root is not None
-        and _delivery_artifacts_current(
+    delivery_verification = (
+        verify_delivery_package(
             delivery,
-            evidence_root=evidence_root,
+            expected_root=evidence_root / DELIVERY_DIR,
         )
+        if evidence_root is not None
+        else {"passed": False, "failed_checks": ["evidence_root_missing"]}
     )
+    package_current = package_verification.get("passed") is True
+    delivery_current = delivery_verification.get("passed") is True
     run_evidence_complete = bool(
         latest_path is not None
         and transform_status in {"runtime_recorded", "confirmed"}
@@ -1266,10 +1180,12 @@ def _provenance_status(
             isinstance(package, dict) and package.get("complete") is True
         ),
         "package_current": package_current,
+        "package_verification": json_safe(package_verification),
         "project_delivery_complete": (
             isinstance(delivery, dict) and delivery.get("complete") is True
         ),
         "project_delivery_current": delivery_current,
+        "delivery_verification": json_safe(delivery_verification),
         "primary_figure_delivery_current": bool(
             delivery_current and primary_only_scope
         ),
@@ -1563,6 +1479,7 @@ def build_studio_project_status(
     )
     provenance = _provenance_status(
         latest_path=latest_path,
+        latest_run=latest_run,
         transform_status=transform_status,
         raw_archive_path=raw_archive_path,
         package=package,

@@ -16,7 +16,7 @@ from sciplot_core.policy import (
     UNIFIED_TICK_WIDTH_PT,
 )
 from sciplot_core.studio import StudioSeries, _apply_series_options, _veusz_style_contract
-from sciplot_core.workbench_contract import normalize_render_options
+from sciplot_core.request_contract import normalize_render_options
 
 
 def test_all_public_styles_share_the_unified_typography_and_strokes() -> None:
@@ -117,7 +117,7 @@ def test_invalid_legacy_hard_style_options_fail_before_they_are_removed() -> Non
             )
 
 
-def test_renderer_owned_axis_minor_tick_options_survive_workbench_validation() -> None:
+def test_renderer_owned_axis_minor_tick_options_survive_request_validation() -> None:
     normalized = normalize_render_options(
         {
             "x_minor_tick_count": 5,

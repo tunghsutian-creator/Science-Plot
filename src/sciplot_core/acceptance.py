@@ -9,7 +9,7 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core._bootstrap import ensure_legacy_core
+from sciplot_core._bootstrap import ensure_vendored_core
 from sciplot_core._paths import (
     REPO_ROOT,
     local_reference_root,
@@ -34,7 +34,7 @@ from sciplot_core.studio import (
 from sciplot_core.visual_review import write_final_size_visual_review
 from sciplot_core.workflow import run_request
 
-ensure_legacy_core()
+ensure_vendored_core()
 
 from src.data_loader import read_raw_table  # noqa: E402
 
@@ -533,8 +533,8 @@ def run_rule_acceptance_suite(
             "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
             "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and "
             "real-data breadth rather than journal compliance.",
-            "Final PDF/TIFF dimensions are machine-checked, but contact-sheet visual review remains an explicit "
-            "manual or agent decision.",
+            "Final PDF/TIFF dimensions are machine-checked. Contact sheets are uncalibrated overview previews "
+            "whose explicit manual or agent decision does not prove final-physical-size readability.",
             "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. "
             "This rule matrix does not infer composition from independent figures, and SciPlot has no "
             "standalone composition UI.",

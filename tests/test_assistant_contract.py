@@ -3,6 +3,10 @@ from __future__ import annotations
 import pytest
 
 import sciplot_core.setting_catalog as setting_catalog
+from sciplot_core.assistant_provider import (
+    ASSISTANT_PROPOSAL_KINDS,
+    AssistantProviderDescriptor,
+)
 from sciplot_core.assistant_operations import (
     SUPPORTED_VEUSZ_SETTING_OPERATIONS,
     VEUSZ_SETTING_OPERATION_BATCH_KIND,
@@ -21,6 +25,21 @@ def test_assistant_operation_contract_is_set_setting_only() -> None:
             operation_type="add_widget",
             target_id="selected",
             arguments={"widget_type": "label"},
+        )
+
+
+def test_assistant_provider_rejects_retired_data_mapping_proposals() -> None:
+    assert ASSISTANT_PROPOSAL_KINDS == frozenset(
+        {"veusz_setting_operation_batch"}
+    )
+    with pytest.raises(
+        ValueError,
+        match="provider capabilities contains unsupported values",
+    ):
+        AssistantProviderDescriptor(
+            provider_id="legacy-mapping-provider",
+            display_name="Legacy mapping provider",
+            capabilities=("data_mapping_proposal",),
         )
 
 

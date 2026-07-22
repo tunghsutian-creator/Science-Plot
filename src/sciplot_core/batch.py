@@ -12,6 +12,8 @@ from sciplot_core.render import DEFAULT_EXPORT_FORMATS, inspect_payload
 from sciplot_core.semantic import (
     build_intervention_request,
     classify_source,
+    has_tensile_export_parent,
+    is_tensile_export_dir,
     is_rheology_frequency_comparison_dir,
     is_rheology_temperature_comparison_dir,
 )
@@ -56,21 +58,13 @@ def _smoke_priority(path: Path) -> tuple[int, str]:
     return (3, text)
 
 
-def _is_tensile_export_dir(path: Path) -> bool:
-    return path.is_dir() and path.name.casefold().endswith(".is_tens_exports")
-
-
-def _is_under_tensile_export_dir(path: Path) -> bool:
-    return any(parent.name.casefold().endswith(".is_tens_exports") for parent in path.parents)
-
-
 def _is_tensile_related(path: Path) -> bool:
     text = path.as_posix().casefold()
     return (
         "/tensile/" in text
         or "/拉伸/" in text
-        or path.name.casefold().endswith(".is_tens_exports")
-        or _is_under_tensile_export_dir(path)
+        or is_tensile_export_dir(path)
+        or has_tensile_export_parent(path)
     )
 
 
@@ -123,7 +117,7 @@ def _candidate_sources(
         )
     )
     tensile_dirs = sorted(
-        (path for path in input_dir.rglob("*") if _is_tensile_export_dir(path)),
+        (path for path in input_dir.rglob("*") if is_tensile_export_dir(path)),
         key=lambda path: path.as_posix(),
     )
     table_files = sorted(
@@ -131,7 +125,7 @@ def _candidate_sources(
             path
             for path in all_files
             if (path.suffix.lower() in _TABLE_SUFFIXES or _is_torque_text_export(path))
-            and not _is_under_tensile_export_dir(path)
+            and not has_tensile_export_parent(path)
             and not _is_under_any_dir(path, rheology_comparison_dirs)
         ),
         key=_smoke_priority,

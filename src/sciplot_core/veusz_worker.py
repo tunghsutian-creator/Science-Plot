@@ -446,32 +446,6 @@ def _dataset_setting_bindings(settings: Any, *, prefix: str = "") -> dict[str, A
     return bindings
 
 
-def _visible_consumers(
-    loaded_document: Any,
-    *,
-    widget_type: str,
-    bindings: dict[str, str],
-    require_mark: bool = True,
-) -> list[str]:
-    consumers: list[str] = []
-
-    def collect(path: str, node: Any) -> None:
-        if str(getattr(node, "typename", "")) != widget_type:
-            return
-        if not _node_is_visible(node):
-            return
-        settings = getattr(node, "settings", None)
-        for setting_name, expected in bindings.items():
-            if str(_setting_value(settings, setting_name, "")) != expected:
-                return
-        if require_mark and not _visible_mark_channels(node):
-            return
-        consumers.append(str(path))
-
-    loaded_document.walkNodes(collect, nodetypes=("widget",))
-    return sorted(set(consumers))
-
-
 def _visible_data_bindings(
     loaded_document: Any,
     *,
@@ -779,43 +753,6 @@ def _colorbar_record_matches_contract(
                 "TickLabels/color",
             )
         )
-    )
-
-
-def _colorbar_background_matches_contract(
-    record: dict[str, Any],
-    *,
-    visual: dict[str, Any],
-) -> bool:
-    bindings = record["bindings"]
-    return (
-        record["name"] == "field_colorbar_background"
-        and str(bindings["positioning"]) == "relative"
-        and _numeric_sequence_equal(
-            bindings["xPos"],
-            [visual["colorbar_background_x_fraction"]],
-        )
-        and _numeric_sequence_equal(
-            bindings["yPos"],
-            [visual["colorbar_background_y_fraction"]],
-        )
-        and _numeric_sequence_equal(
-            bindings["width"],
-            [visual["colorbar_background_width_fraction"]],
-        )
-        and _numeric_sequence_equal(
-            bindings["height"],
-            [visual["colorbar_background_height_fraction"]],
-        )
-        and bool(bindings["clip"])
-        and str(bindings["Fill/color"])
-        == str(visual["colorbar_background_color"])
-        and not bool(bindings["Fill/hide"])
-        and _numeric_setting_equal(
-            bindings["Fill/transparency"],
-            visual["colorbar_background_transparency"],
-        )
-        and bool(bindings["Border/hide"])
     )
 
 

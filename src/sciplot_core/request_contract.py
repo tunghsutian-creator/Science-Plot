@@ -1,16 +1,22 @@
+"""Shared validation for persisted plot requests and confirmation inputs.
+
+This module is renderer-facing domain code.  It is not a Web workbench or a
+second plotting frontend.
+"""
+
 from __future__ import annotations
 
 import math
 from collections.abc import Mapping
 from typing import Any
 
-from sciplot_core._bootstrap import ensure_legacy_core
+from sciplot_core._bootstrap import ensure_vendored_core
 from sciplot_core.policy import (
     DEFAULT_EXPORT_FORMATS_POLICY,
     RENDER_OPTION_KEYS,
-    SUPPORTED_EXPORT_FORMATS,
     UNIFIED_HARD_OPTION_KEYS,
     normalize_categorical_summary,
+    normalize_export_formats,
     normalize_raw_point_jitter_fraction,
 )
 from sciplot_core.split import normalize_split_policy
@@ -20,12 +26,11 @@ from sciplot_core.style_contract import (
 )
 from sciplot_core.study_model import sync_study_model_samples
 
-ensure_legacy_core()
+ensure_vendored_core()
 
 from src.plot_contract import load_plot_contract  # noqa: E402
 
 _RENDER_PARAMETER_NAMES = RENDER_OPTION_KEYS
-_INTAKE_EXPORT_FORMATS = SUPPORTED_EXPORT_FORMATS
 
 
 def _validate_legacy_hard_style_options(options: Mapping[str, Any]) -> None:
@@ -44,18 +49,12 @@ def _validate_legacy_hard_style_options(options: Mapping[str, Any]) -> None:
 
 
 def normalize_exports(exports: object) -> list[str]:
-    if not isinstance(exports, list | tuple):
-        return list(DEFAULT_EXPORT_FORMATS_POLICY)
-    selected = [str(item).strip().lower() for item in exports if str(item).strip()]
-    if not selected:
-        return list(DEFAULT_EXPORT_FORMATS_POLICY)
-    unknown = [item for item in selected if item not in _INTAKE_EXPORT_FORMATS]
-    if unknown:
-        known = ", ".join(sorted(_INTAKE_EXPORT_FORMATS))
-        raise ValueError(
-            f"Unsupported export format(s): {', '.join(unknown)}. Available exports: {known}."
+    return list(
+        normalize_export_formats(
+            exports,
+            default=DEFAULT_EXPORT_FORMATS_POLICY,
         )
-    return selected
+    )
 
 
 def _selected_series_labels(*values: object) -> list[str]:

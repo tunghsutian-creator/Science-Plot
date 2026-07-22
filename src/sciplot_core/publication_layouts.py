@@ -78,8 +78,8 @@ def build_composite_layout(
 ) -> dict[str, Any]:
     """Return the pure publication geometry contract for one 183 mm layout.
 
-    This module intentionally contains no composition editor, mutable project,
-    renderer, or GUI implementation.  Publication metadata may describe a
+    This module intentionally contains no multi-panel editor, mutable project,
+    renderer, or GUI implementation. Publication metadata may describe a
     confirmed layout without making figure assembly part of daily readiness.
     """
 
@@ -153,7 +153,7 @@ def build_composite_layout(
         "slots": slots,
         "renderer_contract": {
             "engine": "veusz",
-            "future_widget_tree": "page/grid/native_graphs",
+            "metadata_only": True,
             "raster_panel_composition_allowed": False,
             "grid_outer_margins_must_be_explicit": True,
         },
@@ -162,21 +162,6 @@ def build_composite_layout(
 
 def list_composite_layouts() -> list[dict[str, Any]]:
     return [build_composite_layout(layout_id) for layout_id in _LAYOUTS]
-
-
-def default_layout_for_module_count(module_count: int) -> str:
-    try:
-        return {
-            1: "single_180",
-            2: "double_equal_90",
-            3: "triple_equal_60",
-        }[int(module_count)]
-    except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError(
-            "Publication layouts support one, two, or three panels."
-        ) from exc
-
-
 __all__ = [
     "COMPOSITE_CANVAS_WIDTH_MM",
     "COMPOSITE_LAYOUT_KIND",
@@ -187,6 +172,5 @@ __all__ = [
     "MIN_COMPOSITION_HEIGHT_MM",
     "build_composite_layout",
     "composite_layout_ids",
-    "default_layout_for_module_count",
     "list_composite_layouts",
 ]

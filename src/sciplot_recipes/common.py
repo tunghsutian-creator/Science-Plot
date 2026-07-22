@@ -60,6 +60,17 @@ def run_material_recipe(
     default_template: str,
     options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    resolved_input = input_path.expanduser()
+    source_candidates = _table_sources(resolved_input)
+    if len(source_candidates) > 1:
+        candidates = "\n".join(f"- {path}" for path in source_candidates)
+        raise ValueError(
+            "Recipe input directories must resolve to exactly one table. "
+            "Pass the intended file explicitly; SciPlot will not silently "
+            f"choose among these candidates:\n{candidates}"
+        )
+    source = source_candidates[0]
+
     output_dir.mkdir(parents=True, exist_ok=True)
     for folder in ("processed", "figures", "tables"):
         (output_dir / folder).mkdir(parents=True, exist_ok=True)
@@ -68,8 +79,6 @@ def run_material_recipe(
     render_options = dict(options.get("render_options") or {})
     export_formats = options.get("exports") or options.get("export_formats")
     template = str(options.get("template") or default_template)
-    source_candidates = _table_sources(input_path.expanduser())
-    source = source_candidates[0]
     processed_source = output_dir / "processed" / source.name
     if source.resolve() != processed_source.resolve():
         shutil.copy2(source, processed_source)
@@ -80,15 +89,13 @@ def run_material_recipe(
         output_path=source,
         implementation_ref="sciplot_recipes.common._table_sources",
         parameters={
-            "selection_policy": "first_supported_table_in_suffix_then_path_order",
-            "candidate_count": len(source_candidates),
-            "candidate_paths": [str(path) for path in source_candidates],
+            "selection_policy": "only_supported_table_or_explicit_file",
+            "candidate_count": 1,
+            "candidate_paths": [str(source)],
             "selected_path": str(source),
-            "requires_human_confirmation": len(source_candidates) > 1,
+            "requires_human_confirmation": False,
         },
     )
-    if len(source_candidates) > 1:
-        selection_step["confirmation_status"] = "requires_human_confirmation"
     materialize_step = build_transform_step(
         step_id="recipe_processed_copy",
         operation="materialize_processed_source",

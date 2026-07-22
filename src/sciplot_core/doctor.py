@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import ast
 import importlib.util
-import json
 import sys
 from pathlib import Path
 from typing import Any
 
 from sciplot_core._paths import REPO_ROOT, VEUSZ_ROOT, resolve_fixture_path
-from sciplot_core._utils import json_safe
 from sciplot_core.materials_rules import iter_rules
 from sciplot_core.publication import (
     get_publication_profile,
@@ -275,10 +273,15 @@ def doctor_payload() -> dict[str, Any]:
         "status": "ready" if not required_failures else "blocked",
         "repo_root": str(REPO_ROOT),
         "normal_mode": {
-            "daily_entrypoint": "sciplot studio PATH --out outputs/projects --export pdf,tiff_300 --json",
+            "daily_entrypoint": "sciplot studio PATH",
+            "interactive_entrypoint": "sciplot studio PATH",
+            "headless_export_entrypoint": (
+                "sciplot studio PATH --out outputs/projects "
+                "--export pdf,tiff_300 --json"
+            ),
             "explicit_intent_entrypoint": (
                 "sciplot studio PATH --rule RULE_ID --template TEMPLATE_ID "
-                "--out outputs/projects --export pdf,tiff_300 --json"
+                "--out outputs/projects"
             ),
             "frontend_default": "veusz_mainwindow",
             "assistant_default": "independent",
@@ -287,9 +290,36 @@ def doctor_payload() -> dict[str, Any]:
             "user_switch_required": False,
             "automatic_recognition_required": False,
         },
+        "command_surface": {
+            "interactive_family": {
+                "command": "studio",
+                "interactive": "sciplot studio PATH",
+                "headless": (
+                    "sciplot studio PATH --export pdf,tiff_300 --json"
+                ),
+                "role": "project preparation, native Veusz editing, exact-current export, QA, and delivery",
+            },
+            "automation_family": {
+                "command": "autoplot",
+                "role": "public automated project, QA, and delivery orchestration over the internal request and one-step status pipeline",
+                "separate_renderer": False,
+            },
+            "request_replay": {
+                "command": "run",
+                "role": "repeat an already confirmed plot_request.json",
+            },
+            "browser_confirmation": {
+                "command": "app",
+                "role": "pre-render data confirmation and read-only result review",
+                "drawing_frontend": False,
+            },
+            "developer_primitives": ["render", "recipe"],
+            "developer_validation_routes": ["smoke", "acceptance", "batch"],
+            "internal_models": ["one_step"],
+        },
         "vsz_lifecycle": {
             "canonical_artifact": "studio/document.vsz",
-            "advanced_editor": "veusz",
+            "editor": "veusz_mainwindow",
             "open_preserves_document": True,
             "manual_edit_detection": "sha256",
             "archive_before_explicit_regeneration": True,
@@ -351,7 +381,7 @@ def _next_actions(required_failures: list[dict[str, Any]]) -> list[str]:
     if not required_failures:
         return [
             "Use the Studio daily entrypoint for deterministic plotting and delivery.",
-            "Open Open_in_Veusz.command only when advanced correction is needed.",
+            "Use Open_in_Veusz.command when the generated document needs manual correction.",
             "Use assisted repair only when the deterministic result reports a blocking state.",
         ]
     actions: list[str] = []
@@ -384,10 +414,4 @@ def _next_actions(required_failures: list[dict[str, Any]]) -> list[str]:
     if not actions:
         actions.append("Fix the failed required checks before normal use.")
     return actions
-
-
-def print_doctor(payload: dict[str, Any]) -> None:
-    print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
-
-
-__all__ = ["doctor_payload", "print_doctor"]
+__all__ = ["doctor_payload"]

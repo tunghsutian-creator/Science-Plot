@@ -54,6 +54,16 @@ def resolve_fixture_path(value: str | Path, *, repo_root: Path = REPO_ROOT) -> P
     return tracked
 
 
+def resolved_path_is_within(path: Path, root: Path) -> bool:
+    """Return whether the fully resolved path stays inside the resolved root."""
+
+    try:
+        path.expanduser().resolve().relative_to(root.expanduser().resolve())
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return True
+
+
 __all__ = [
     "PACKAGE_ROOT",
     "REPO_ROOT",
@@ -63,5 +73,6 @@ __all__ = [
     "VEUSZ_UPSTREAM_COMMIT",
     "local_reference_root",
     "real_world_fixture_root",
+    "resolved_path_is_within",
     "resolve_fixture_path",
 ]

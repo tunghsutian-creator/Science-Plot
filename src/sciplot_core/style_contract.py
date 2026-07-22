@@ -4,14 +4,11 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from sciplot_core.contract import PlotContract, load_plot_contract
-from sciplot_core.figure_layouts import get_figure_layout
-from sciplot_core.figure_profiles import get_figure_profile, list_figure_profiles
 from sciplot_core.materials_rules import iter_public_rules
 from sciplot_core.policy import (
     DEFAULT_RENDER_OPTIONS,
     DEFAULT_SCALAR_FIELD_COLORMAP_ID,
     DEFAULT_SCALAR_FIELD_COLORS,
-    FIGURE_SIZE_PRESETS,
     UNIFIED_AXIS_LINEWIDTH_PT,
     UNIFIED_BOTTOM_MARGIN_MM,
     UNIFIED_FONT_FAMILY,
@@ -34,7 +31,7 @@ from sciplot_core.policy import (
 from sciplot_recipes.contracts import iter_recipe_specs
 # These are the templates implemented by the production Veusz document builder.
 # The vendored contract also describes reference-only templates; advertising
-# those through the workbench would make a request validate before failing later.
+# those through request validation would make a request pass before failing later.
 VEUSZ_IMPLEMENTED_TEMPLATE_IDS = frozenset(
     {
         "curve",
@@ -361,197 +358,6 @@ def audit_style_template_contract(
             }
         )
 
-    profile_ids: list[str] = []
-    allowed_sizes = {
-        tuple(float(part) for part in size.split("x", 1))
-        for size in FIGURE_SIZE_PRESETS
-    }
-    expected_profile_hard = {
-        "font_family": UNIFIED_FONT_FAMILY,
-        "font_size_pt": UNIFIED_FONT_SIZE_PT,
-        "axis_linewidth_pt": UNIFIED_AXIS_LINEWIDTH_PT,
-        "line_width_pt": UNIFIED_LINE_WIDTH_PT,
-        "tick_width_pt": UNIFIED_TICK_WIDTH_PT,
-        "tick_length_pt": UNIFIED_TICK_LENGTH_PT,
-        "minor_tick_width_pt": UNIFIED_MINOR_TICK_WIDTH_PT,
-        "minor_tick_length_pt": UNIFIED_MINOR_TICK_LENGTH_PT,
-    }
-    for summary in list_figure_profiles():
-        profile = get_figure_profile(str(summary["profile_id"]))
-        profile_ids.append(profile.profile_id)
-        if (
-            profile.template is not None
-            and profile.template not in VEUSZ_IMPLEMENTED_TEMPLATE_IDS
-        ):
-            issues.append(
-                {
-                    "code": "figure_profile_uses_unimplemented_template",
-                    "profile_id": profile.profile_id,
-                    "template": profile.template,
-                }
-            )
-        if profile.frame_margins_mm is not None:
-            issues.append(
-                {
-                    "code": "figure_profile_private_frame",
-                    "profile_id": profile.profile_id,
-                    "expected": None,
-                    "actual": profile.frame_margins_mm,
-                }
-            )
-        if tuple(float(value) for value in profile.size_mm) not in allowed_sizes:
-            if not profile.publication_layout_id:
-                issues.append(
-                    {
-                        "code": "nonstandard_profile_without_layout_authority",
-                        "profile_id": profile.profile_id,
-                        "size_mm": list(profile.size_mm),
-                    }
-                )
-        if profile.publication_layout_id:
-            try:
-                layout = get_figure_layout(profile.publication_layout_id)
-            except ValueError:
-                issues.append(
-                    {
-                        "code": "figure_profile_unknown_layout_authority",
-                        "profile_id": profile.profile_id,
-                        "layout_id": profile.publication_layout_id,
-                    }
-                )
-            else:
-                layout_checks = {
-                    "size_mm": (
-                        list(profile.size_mm),
-                        list(layout.size_mm),
-                    ),
-                    "outer_frame_x_mm": (
-                        profile.qa_contract.get("outer_frame_x_mm"),
-                        list(layout.outer_frame_x_mm),
-                    ),
-                    "panel_frame_y_mm": (
-                        profile.qa_contract.get("panel_frame_y_mm"),
-                        list(layout.panel_frame_y_mm),
-                    ),
-                    "panel_gap_mm": (
-                        profile.qa_contract.get("panel_gap_mm"),
-                        layout.panel_gap_mm,
-                    ),
-                    "colorbar_frame_mm": (
-                        profile.qa_contract.get("colorbar_frame_mm"),
-                        list(layout.colorbar_frame_mm),
-                    ),
-                    "render_outer_frame_x_mm": (
-                        [
-                            profile.render_options.get(
-                                "panel_outer_left_mm"
-                            ),
-                            profile.render_options.get(
-                                "panel_outer_right_mm"
-                            ),
-                        ],
-                        list(layout.outer_frame_x_mm),
-                    ),
-                    "render_panel_frame_y_mm": (
-                        [
-                            profile.render_options.get("panel_top_mm"),
-                            profile.render_options.get("panel_bottom_mm"),
-                        ],
-                        list(layout.panel_frame_y_mm),
-                    ),
-                    "render_panel_gap_mm": (
-                        profile.render_options.get("panel_gap_mm"),
-                        layout.panel_gap_mm,
-                    ),
-                    "render_colorbar_frame_mm": (
-                        [
-                            profile.render_options.get("colorbar_left_mm"),
-                            profile.render_options.get("panel_top_mm"),
-                            profile.render_options.get("colorbar_right_mm"),
-                            profile.render_options.get("panel_bottom_mm"),
-                        ],
-                        list(layout.colorbar_frame_mm),
-                    ),
-                }
-                drifted_layout = {
-                    key: {"actual": actual, "expected": expected}
-                    for key, (actual, expected) in layout_checks.items()
-                    if actual != expected
-                }
-                if drifted_layout:
-                    issues.append(
-                        {
-                            "code": "figure_profile_layout_drift",
-                            "profile_id": profile.profile_id,
-                            "layout_id": profile.publication_layout_id,
-                            "values": drifted_layout,
-                        }
-                    )
-        for owner, values in (
-            ("render_options", profile.render_options),
-            ("qa_contract", profile.qa_contract),
-        ):
-            profile_hard = {
-                key: values[key] for key in expected_profile_hard if key in values
-            }
-            drifted_profile_hard = {
-                key: {
-                    "expected": expected_profile_hard[key],
-                    "actual": value,
-                }
-                for key, value in profile_hard.items()
-                if value != expected_profile_hard[key]
-            }
-            if drifted_profile_hard:
-                issues.append(
-                    {
-                        "code": "figure_profile_hard_style_drift",
-                        "profile_id": profile.profile_id,
-                        "owner": owner,
-                        "values": drifted_profile_hard,
-                    }
-                )
-        if profile.figure_kind == "shared_scalar_strip":
-            scalar_style = {
-                "colormap_name": profile.render_options.get("colormap_name"),
-                "colormap_colors": tuple(
-                    profile.render_options.get("colormap_colors") or ()
-                ),
-            }
-            expected_scalar_style = {
-                "colormap_name": DEFAULT_SCALAR_FIELD_COLORMAP_ID,
-                "colormap_colors": DEFAULT_SCALAR_FIELD_COLORS,
-            }
-            if scalar_style != expected_scalar_style:
-                issues.append(
-                    {
-                        "code": "figure_profile_scalar_style_drift",
-                        "profile_id": profile.profile_id,
-                        "expected": expected_scalar_style,
-                        "actual": scalar_style,
-                    }
-                )
-        expected_outer_frame = [
-            UNIFIED_LEFT_MARGIN_MM,
-            float(profile.size_mm[0]) - UNIFIED_RIGHT_MARGIN_MM,
-        ]
-        for key in ("plot_frame_x_mm", "outer_frame_x_mm"):
-            if key not in profile.qa_contract:
-                continue
-            actual_outer_frame = [
-                float(value) for value in profile.qa_contract[key]
-            ]
-            if actual_outer_frame != expected_outer_frame:
-                issues.append(
-                    {
-                        "code": "figure_profile_outer_frame_drift",
-                        "profile_id": profile.profile_id,
-                        "field": key,
-                        "expected": expected_outer_frame,
-                        "actual": actual_outer_frame,
-                    }
-                )
-
     return {
         "kind": "sciplot_style_template_contract_audit",
         "version": 3,
@@ -567,7 +373,6 @@ def audit_style_template_contract(
             template_id: sorted(options)
             for template_id, options in sorted(VEUSZ_TEMPLATE_COLOR_OPTIONS.items())
         },
-        "figure_profiles": sorted(profile_ids),
         "hard_style_values": {
             "render_defaults": expected_render,
             "optional_render_values": expected_optional_hard,

@@ -26,8 +26,6 @@ PUBLICATION_INTENT_KIND = "sciplot_publication_intent"
 PUBLICATION_INTENT_VERSION = 1
 TRANSFORM_LEDGER_KIND = "sciplot_transform_ledger"
 TRANSFORM_LEDGER_VERSION = 1
-COMPOSITION_PLAN_KIND = "sciplot_publication_composition_plan"
-COMPOSITION_PLAN_VERSION = 1
 
 DEFAULT_STANDALONE_PROFILE_ID = "sciplot_single_panel_v1"
 DEFAULT_COMPOSITE_PROFILE_ID = "sciplot_composite_183_v1"
@@ -46,7 +44,7 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
         "label": "SciPlot 183 mm composite",
         "compliance_status": "house_profile",
         "description": (
-            "SciPlot composition strategy: a 183 mm figure canvas carries 180 mm of nominal panel "
+            "SciPlot multi-panel layout: a 183 mm figure frame carries 180 mm of nominal panel "
             "width plus 3 mm of gutters or outer margin. It is not, by itself, proof of journal compliance."
         ),
         "checked_at": "2026-07-12",
@@ -99,7 +97,7 @@ _PUBLICATION_PROFILES: dict[str, dict[str, Any]] = {
         "compliance_status": "official_source_checked",
         "description": (
             "Source-checked profile for Nature flagship primary-research figures. Internal 60/90/120/180 mm "
-            "panel tracks remain a SciPlot composition strategy, not an official Nature subdivision rule."
+            "panel tracks remain a SciPlot house layout, not an official Nature subdivision rule."
         ),
         "checked_at": "2026-07-12",
         "source_urls": [
@@ -177,7 +175,7 @@ _standalone_profile.update(
         "label": "SciPlot ordinary single-panel figure",
         "description": (
             "SciPlot house profile for ordinary independent 60, 120, or 180 mm figures. "
-            "It is separate from the explicit 183 mm publication-composition contract and is not, "
+            "It is separate from the explicit 183 mm multi-panel layout contract and is not, "
             "by itself, proof of journal compliance."
         ),
         "page": {
@@ -189,241 +187,6 @@ _standalone_profile.update(
     }
 )
 _PUBLICATION_PROFILES[DEFAULT_STANDALONE_PROFILE_ID] = _standalone_profile
-
-
-def _composition_signature(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-
-
-def _normalized_legend_signature(value: object) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    fields = (
-        "series_id",
-        "label",
-        "color",
-        "marker",
-        "line_style",
-        "line_width_pt",
-        "marker_fill_mode",
-    )
-    return [
-        {key: deepcopy(item[key]) for key in fields if key in item}
-        for item in value
-        if isinstance(item, dict) and any(key in item for key in fields)
-    ]
-
-
-def _composition_axis_groups(
-    modules: list[dict[str, Any]], axis: str
-) -> list[dict[str, Any]]:
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for module in modules:
-        axis_signature = module.get("axis_signature")
-        signature = (
-            axis_signature.get(axis) if isinstance(axis_signature, dict) else None
-        )
-        if not isinstance(signature, dict) or not signature:
-            continue
-        grouped.setdefault(_composition_signature(signature), []).append(module)
-    return [
-        {
-            "id": f"{axis}_axis_group_{index}",
-            "axis": axis,
-            "member_module_ids": [str(module["module_id"]) for module in members],
-            "signature": deepcopy(members[0]["axis_signature"][axis]),
-            "shared_scale_and_ticks_allowed": len(members) > 1,
-            "late_bound_to_final_context": True,
-        }
-        for index, members in enumerate(grouped.values(), start=1)
-        if len(members) > 1
-    ]
-
-
-def build_publication_composition_plan(
-    layout_id: str,
-    modules: Iterable[dict[str, Any]],
-    *,
-    canvas_height_mm: float = 55.0,
-    legend_policy: str = "auto",
-) -> dict[str, Any]:
-    """Plan modular Veusz composition without mutating standalone VSZ files."""
-
-    normalized_policy = str(legend_policy or "auto").strip().casefold()
-    if normalized_policy not in {"auto", "shared_when_equivalent", "per_panel"}:
-        raise ValueError(
-            "Legend policy must be `auto`, `shared_when_equivalent`, or `per_panel`."
-        )
-    layout = build_composite_layout(layout_id, canvas_height_mm=canvas_height_mm)
-    source_modules = [deepcopy(item) for item in modules if isinstance(item, dict)]
-    slots = [item for item in layout["slots"] if isinstance(item, dict)]
-    if len(source_modules) != len(slots):
-        raise ValueError(
-            f"Figure layout `{layout_id}` needs {len(slots)} explicit modules; "
-            f"received {len(source_modules)}."
-        )
-
-    slot_by_id = {str(slot["id"]): slot for slot in slots}
-    used_slots: set[str] = set()
-    used_module_ids: set[str] = set()
-    normalized_modules: list[dict[str, Any]] = []
-    for index, (module, default_slot) in enumerate(
-        zip(source_modules, slots, strict=True), start=1
-    ):
-        module_id = str(
-            module.get("module_id") or module.get("id") or f"module_{index}"
-        ).strip()
-        if not module_id or module_id in used_module_ids:
-            raise ValueError("Figure-layout module ids must be non-empty and unique.")
-        slot_ref = str(module.get("slot_ref") or default_slot["id"]).strip()
-        if slot_ref not in slot_by_id or slot_ref in used_slots:
-            raise ValueError(
-                "Figure-layout module slot refs must be unique ids from the "
-                "selected layout."
-            )
-        used_module_ids.add(module_id)
-        used_slots.add(slot_ref)
-        slot = slot_by_id[slot_ref]
-        axis_signature = (
-            module.get("axis_signature")
-            if isinstance(module.get("axis_signature"), dict)
-            else {}
-        )
-        relationship_tags = module.get("relationship_tags")
-        normalized_modules.append(
-            {
-                "module_id": module_id,
-                "slot_ref": slot_ref,
-                "panel_label": str(slot.get("panel_label") or ""),
-                "target_size_mm": [float(slot["width_mm"]), float(slot["height_mm"])],
-                "source_vsz": str(module.get("source_vsz") or "").strip() or None,
-                "source_request_ref": str(
-                    module.get("source_request_ref") or ""
-                ).strip()
-                or None,
-                "legend_group": str(module.get("legend_group") or "").strip() or None,
-                "legend_signature": _normalized_legend_signature(
-                    module.get("legend_signature")
-                ),
-                "axis_signature": deepcopy(axis_signature),
-                "relationship_tags": (
-                    [str(item) for item in relationship_tags if str(item).strip()]
-                    if isinstance(relationship_tags, list)
-                    else []
-                ),
-                "standalone_document_policy": "preserve_unchanged",
-            }
-        )
-
-    legend_buckets: dict[str, list[dict[str, Any]]] = {}
-    for module in normalized_modules:
-        explicit_group = module.get("legend_group")
-        signature = module["legend_signature"]
-        if explicit_group:
-            bucket = f"declared:{explicit_group}"
-        elif signature:
-            bucket = f"signature:{_composition_signature(signature)}"
-        else:
-            bucket = f"module:{module['module_id']}"
-        legend_buckets.setdefault(bucket, []).append(module)
-
-    legend_groups: list[dict[str, Any]] = []
-    legend_action_by_module: dict[str, str] = {}
-    for index, members in enumerate(legend_buckets.values(), start=1):
-        signatures = [
-            _composition_signature(member["legend_signature"]) for member in members
-        ]
-        signatures_are_equivalent = (
-            bool(members[0]["legend_signature"]) and len(set(signatures)) == 1
-        )
-        shared = (
-            normalized_policy != "per_panel"
-            and len(members) > 1
-            and signatures_are_equivalent
-        )
-        mode = (
-            "shared"
-            if shared
-            else ("per_panel_aligned" if len(members) > 1 else "per_panel")
-        )
-        group = {
-            "id": f"legend_group_{index}",
-            "mode": mode,
-            "member_module_ids": [str(member["module_id"]) for member in members],
-            "signature": deepcopy(members[0]["legend_signature"])
-            if signatures_are_equivalent
-            else [],
-            "equivalence_rule": "exact_ordered_series_visual_signature",
-            "merge_allowed": shared,
-            "alignment_policy": "same_anchor_and_row_geometry_at_final_size",
-        }
-        if shared:
-            group["host_policy"] = {
-                "preferred": "safest_member_panel_key",
-                "selection_stage": "after_final_panel_geometry_and_curve_footprints_are_known",
-                "fallback": "dedicated_veusz_legend_host_graph",
-            }
-            action = "late_bound_shared_host"
-        else:
-            group["reason_not_shared"] = (
-                "single_module"
-                if len(members) == 1
-                else "legend_signatures_differ_or_are_incomplete"
-            )
-            action = "keep_and_align"
-        legend_groups.append(group)
-        for member in members:
-            legend_action_by_module[str(member["module_id"])] = action
-
-    module_patches = [
-        {
-            "module_id": str(module["module_id"]),
-            "slot_ref": str(module["slot_ref"]),
-            "target_size_mm": list(module["target_size_mm"]),
-            "legend_action": legend_action_by_module[str(module["module_id"])],
-            "apply_to": "composition_variant_only",
-            "preserve_source_vsz": True,
-            "final_context_reflow_required": True,
-        }
-        for module in normalized_modules
-    ]
-    return {
-        "kind": COMPOSITION_PLAN_KIND,
-        "version": COMPOSITION_PLAN_VERSION,
-        "layout": layout,
-        "modules": normalized_modules,
-        "legend_policy": normalized_policy,
-        "legend_groups": legend_groups,
-        "alignment_groups": {
-            "plot_frames": {
-                "member_module_ids": [
-                    str(module["module_id"]) for module in normalized_modules
-                ],
-                "align_outer_frames": True,
-                "synchronize_typography_and_strokes": True,
-            },
-            "x_axes": _composition_axis_groups(normalized_modules, "x"),
-            "y_axes": _composition_axis_groups(normalized_modules, "y"),
-        },
-        "module_patches": module_patches,
-        "renderer_plan": {
-            "engine": "veusz",
-            "python_role": "contract_orchestration_and_veusz_command_generation_only",
-            "python_draws_or_composes_pixels": False,
-            "matplotlib_allowed": False,
-            "document_shape": "one_page_grid_native_graphs",
-            "shared_legend_implementation": "member_key_or_dedicated_graph_with_proxy_plotters",
-            "raster_panel_composition_allowed": False,
-        },
-        "authority_policy": {
-            "standalone_vsz_files_remain_unchanged": True,
-            "composition_variants_are_separate_artifacts": True,
-            "composite_vsz_becomes_visual_authority_after_manual_save": True,
-            "regeneration_must_archive_current_composite_vsz": True,
-            "arbitrary_manual_child_vsz_merge_is_not_automatic": True,
-        },
-        "state": "planned_not_compiled",
-    }
 
 
 def list_publication_profiles() -> list[dict[str, Any]]:
@@ -670,6 +433,17 @@ def build_publication_intent(
 ) -> dict[str, Any]:
     request = request if isinstance(request, dict) else {}
     existing = deepcopy(existing) if isinstance(existing, dict) else {}
+    removed_keys = sorted(
+        key
+        for key in ("composition_modules", "composition_legend_policy")
+        if key in request
+    )
+    if removed_keys:
+        raise ValueError(
+            "Removed publication Composition request key(s): "
+            f"{', '.join(removed_keys)}. Assemble multi-panel figures in native "
+            "Veusz and use `publication_layout` only as metadata/QA intent."
+        )
     layout_is_explicit, explicit_layout = _explicit_request_text(
         request, "publication_layout"
     )
@@ -777,32 +551,6 @@ def build_publication_intent(
     if "palette_preset" in render_options:
         palette_policy["palette_id"] = render_options.get("palette_preset")
 
-    existing_composition = (
-        existing.get("composition_plan")
-        if isinstance(existing.get("composition_plan"), dict)
-        else None
-    )
-    if "composition_modules" in request:
-        composition_modules = request.get("composition_modules")
-    elif existing_composition is not None:
-        composition_modules = existing_composition.get("modules")
-    else:
-        composition_modules = None
-    composition_plan = None
-    if layout_id and isinstance(composition_modules, list) and composition_modules:
-        composition_plan = build_publication_composition_plan(
-            layout_id,
-            composition_modules,
-            canvas_height_mm=float(layout["canvas_height_mm"])
-            if layout
-            else _figure_height_mm(request),
-            legend_policy=str(
-                request.get("composition_legend_policy")
-                or (existing_composition or {}).get("legend_policy")
-                or "auto"
-            ),
-        )
-
     layout_slot_count = len(layout.get("slots", [])) if isinstance(layout, dict) else 0
     panel_count_mismatch = bool(layout and len(panel_contracts) != layout_slot_count)
     review_risk = {
@@ -845,7 +593,6 @@ def build_publication_intent(
         "layout_id": layout_id,
         "layout_status": layout_status,
         "figure_layout": layout,
-        "composition_plan": composition_plan,
         "figure_contracts": figure_contracts,
         "panels": panel_contracts,
         "exact_labels": deepcopy(existing.get("exact_labels") or {}),
@@ -855,7 +602,7 @@ def build_publication_intent(
         "review_risk": review_risk,
     }
     for key, value in existing.items():
-        if key not in payload:
+        if key not in payload and key != "composition_plan":
             payload[key] = deepcopy(value)
     return payload
 
@@ -1041,12 +788,6 @@ def build_transform_ledger(
         if key not in payload:
             payload[key] = deepcopy(value)
     return payload
-
-
-def publication_target_is_confirmed(intent: dict[str, Any] | None) -> bool:
-    return bool(isinstance(intent, dict) and intent.get("target_status") == "confirmed")
-
-
 def link_intent_to_transform_ledger(
     publication_intent: dict[str, Any],
     transform_ledger: dict[str, Any],
@@ -1121,8 +862,6 @@ __all__ = [
     "COMPOSITE_LAYOUT_KIND",
     "COMPOSITE_LAYOUT_VERSION",
     "COMPOSITE_NOMINAL_CONTENT_WIDTH_MM",
-    "COMPOSITION_PLAN_KIND",
-    "COMPOSITION_PLAN_VERSION",
     "PUBLICATION_INTENT_KIND",
     "PUBLICATION_INTENT_VERSION",
     "PUBLICATION_PROFILE_KIND",
@@ -1131,7 +870,6 @@ __all__ = [
     "TRANSFORM_LEDGER_VERSION",
     "artifact_record",
     "build_composite_layout",
-    "build_publication_composition_plan",
     "build_publication_intent",
     "build_transform_ledger",
     "build_transform_step",
@@ -1139,7 +877,6 @@ __all__ = [
     "list_composite_layouts",
     "list_publication_profiles",
     "link_intent_to_transform_ledger",
-    "publication_target_is_confirmed",
     "resolve_publication_profile",
     "write_publication_artifacts",
 ]

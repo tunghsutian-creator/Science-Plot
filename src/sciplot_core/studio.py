@@ -82,9 +82,11 @@ from sciplot_core.policy import (
     UNIFIED_BOTTOM_MARGIN_MM,
     UNIFIED_TOP_MARGIN_MM,
     anchored_log_decade_ticks,
+    canonical_export_format,
     compact_linear_axis,
     is_removed_outside_legend_position,
     normalize_categorical_summary,
+    normalize_export_formats,
     normalize_legend_position,
     normalize_raw_point_jitter_fraction,
     rheology_metric_axis_label,
@@ -97,6 +99,7 @@ from sciplot_core.publication import (
     link_intent_to_transform_ledger,
     write_publication_artifacts,
 )
+from sciplot_core.publish_state import build_publish_state
 from sciplot_core.qa import run_qa
 from sciplot_core.scalar_visual import (
     normalize_opaque_colormap_colors,
@@ -443,7 +446,6 @@ def run_studio_command(
     template: str | None = None,
     project_name: str | None = None,
     new: bool = False,
-    advanced_editor: bool = False,
     export: str | None = None,
     json_output: bool = False,
     prepare_only: bool = False,
@@ -474,12 +476,6 @@ def run_studio_command(
 
     if target is None:
         raise ValueError("studio needs PATH or --new.")
-
-    if advanced_editor:
-        maybe_reexec_with_qt_runtime(
-            original_argv or ["studio", str(target), "--advanced-editor"]
-        )
-        return launch_veusz_gui(target.expanduser())
 
     if not (json_output or prepare_only or export):
         maybe_reexec_with_qt_runtime(original_argv or ["studio", str(target)])
@@ -2380,9 +2376,7 @@ def export_studio_document(
         veusz_worker_environment,
     )
 
-    normalized_formats = list(
-        dict.fromkeys(_normalize_export_format(item) for item in formats)
-    )
+    normalized_formats = list(normalize_export_formats(formats, default=()))
     if not normalized_formats:
         raise ValueError("At least one export format is required.")
     resolved_output_dir = (
@@ -3384,7 +3378,7 @@ def publish_studio_export_run(
         "layout_policy": {
             "kind": "sciplot_layout_policy",
             "policy_id": "veusz_native_document",
-            "review_mode": "safe_preview_with_optional_advanced_editor",
+            "review_mode": "native_veusz_mainwindow",
         },
         "layout_quality": layout_quality,
         "operation_mode": normal_mode_payload(route="studio"),
@@ -3473,14 +3467,15 @@ def publish_studio_export_run(
         manifest["failure_reason"] = str(exc)
         _write_json_atomic(output_dir / "manifest.json", manifest)
         raise
-    ready_to_use = bool(
-        qa.get("status") == "passed"
-        and manifest["package_contract"].get("complete") is True
-        and manifest["delivery_package"].get("complete") is True
-        and manifest["delivery_verification"].get("passed") is True
+    manifest.update(
+        build_publish_state(
+            qa=qa,
+            package_contract=manifest["package_contract"],
+            delivery_package=manifest["delivery_package"],
+            delivery_verification=manifest["delivery_verification"],
+        )
     )
-    manifest["state"] = "ready" if ready_to_use else "needs_rule_repair"
-    manifest["ready_to_use"] = ready_to_use
+    ready_to_use = bool(manifest["ready_to_use"])
     manifest["publish_complete"] = True
     manifest["failure_stage"] = None if ready_to_use else "quality_or_delivery_gate"
     manifest["failure_reason"] = (
@@ -3956,7 +3951,7 @@ def _apply_studio_request_overrides(
         semantic_payload_from_rule(
             selected_rule,
             confidence=100.0,
-            reason=f"Explicit material rule `{selected_rule.rule_id}` selected by the user or Luna/Codex.",
+            reason=f"Explicit material rule `{selected_rule.rule_id}` selected by the user or an assistant.",
         )
         if selected_rule is not None
         else None
@@ -4073,7 +4068,7 @@ def _apply_studio_request_overrides(
             recognition.update(
                 {
                     "confidence": 100.0,
-                    "reason": f"Explicit material rule `{selected_rule.rule_id}` selected by the user or Luna/Codex.",
+                    "reason": f"Explicit material rule `{selected_rule.rule_id}` selected by the user or an assistant.",
                     "needs_ai_intervention": False,
                     "production_status": "ready",
                 }
@@ -6257,26 +6252,6 @@ def _veusz_style_contract(render_options: dict[str, Any]) -> _VeuszStyleContract
             )
     except Exception:
         base = _VeuszStyleContract()
-    # A small set of named figure profiles may own a special physical frame.
-    # Arbitrary request-level margins remain unsupported: the registry is the
-    # trust boundary that prevents one-off layouts from changing global
-    # 60 × 55 mm defaults.
-    try:
-        from sciplot_core.figure_profiles import figure_profile_frame_margins
-
-        profile_margins = figure_profile_frame_margins(
-            render_options.get("_figure_profile_id")
-        )
-    except (ImportError, ValueError):
-        profile_margins = None
-    if profile_margins is not None:
-        base = replace(
-            base,
-            left_margin_mm=float(profile_margins["left"]),
-            right_margin_mm=float(profile_margins["right"]),
-            bottom_margin_mm=float(profile_margins["bottom"]),
-            top_margin_mm=float(profile_margins["top"]),
-        )
     required_visible_dimensions = {
         "font_size_pt": base.font_size_pt,
         "axis_linewidth_pt": base.axis_linewidth_pt,
@@ -8421,9 +8396,6 @@ def _build_veusz_plot_spec(
         "render_engine": "veusz",
         "qa_target": "veusz_export",
         "template": template_id,
-        "figure_profile_id": _normalize_optional_string(
-            render_options.get("_figure_profile_id")
-        ),
         "source_request": json_safe(request),
         "render_options": json_safe(render_options),
         "size_mm": [width_mm, height_mm],
@@ -9054,11 +9026,6 @@ def _add_veusz_direct_labels(interface: Any, spec: dict[str, Any]) -> None:
 
 
 def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
-    if spec.get("kind") == "sciplot_shared_scalar_strip_spec":
-        from sciplot_core.figure_workflow import apply_shared_scalar_strip_spec
-
-        apply_shared_scalar_strip_spec(interface, spec)
-        return
     style = spec["style"]
     axes = spec["axes"]
     size_mm = spec["size_mm"]
@@ -9460,9 +9427,9 @@ def _veusz_axis_contract(
 
     if series:
         try:
-            from sciplot_core._bootstrap import ensure_legacy_core
+            from sciplot_core._bootstrap import ensure_vendored_core
 
-            ensure_legacy_core()
+            ensure_vendored_core()
             from src.plotting_primitives import compute_axis_limits
 
             limits = compute_axis_limits(
@@ -9753,7 +9720,7 @@ def _write_veusz_launcher(project_dir: Path, document_path: Path) -> Path:
         'if [[ "${1:-}" == "--check" ]]; then',
         '  exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --qt-smoke',
         "fi",
-        'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --advanced-editor',
+        'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}"',
     ]
     launcher.write_text(
         "\n".join(lines) + "\n",
@@ -10095,31 +10062,12 @@ def _qt_framework_paths() -> list[Path]:
 
 
 def _split_formats(value: str) -> list[str]:
-    formats = [
-        _normalize_export_format(item) for item in value.split(",") if item.strip()
-    ]
-    return formats or ["pdf"]
+    formats = [item for item in value.split(",") if item.strip()]
+    return list(normalize_export_formats(formats, default=("pdf",)))
 
 
 def _normalize_export_format(fmt: str) -> str:
-    normalized = str(fmt).strip().casefold()
-    aliases = {
-        "pdf": "pdf",
-        "tif_300": "tiff_300",
-        "tiff": "tiff_300",
-        "tiff_300": "tiff_300",
-        "png": "png_300",
-        "png_300": "png_300",
-        "png_600": "png_600",
-        "svg": "svg",
-    }
-    try:
-        return aliases[normalized]
-    except KeyError as exc:
-        supported = ", ".join(("pdf", "tiff_300", "png_300", "png_600", "svg"))
-        raise ValueError(
-            f"Unsupported export format {fmt!r}. Supported formats: {supported}."
-        ) from exc
+    return canonical_export_format(fmt)
 
 
 def _export_suffix(fmt: str) -> tuple[str, int | None]:

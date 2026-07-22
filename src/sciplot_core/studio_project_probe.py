@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core._utils import file_sha256, json_safe
+from sciplot_core._paths import resolved_path_is_within
 
 
 STUDIO_PROJECT_PROBE_KIND = "sciplot_studio_project_probe"
@@ -75,14 +76,6 @@ def _read_json_object(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _is_within(path: Path, root: Path) -> bool:
-    try:
-        path.expanduser().resolve().relative_to(root.expanduser().resolve())
-    except ValueError:
-        return False
-    return True
-
-
 def _source_mutation_target(
     source_path: object,
     *,
@@ -93,7 +86,7 @@ def _source_mutation_target(
     source = Path(source_path).expanduser().resolve()
     candidates = [source] if source.is_file() else sorted(source.rglob("*"))
     for candidate in candidates:
-        if candidate.is_file() and _is_within(candidate, project_dir):
+        if candidate.is_file() and resolved_path_is_within(candidate, project_dir):
             return candidate.resolve()
     return None
 
@@ -1502,11 +1495,11 @@ def run_studio_project_probe(
                 and light_pdf.get("available") is True
                 and light_delivery.get("available") is True
                 and light_vsz.get("available") is True
-                and _is_within(
+                and resolved_path_is_within(
                     Path(str(light_pdf["path"])),
                     light_evidence.parent,
                 )
-                and _is_within(
+                and resolved_path_is_within(
                     Path(str(light_delivery["path"])),
                     light_evidence.parent,
                 ),
@@ -2202,11 +2195,11 @@ def run_studio_project_probe(
                 "external_registered_run_is_not_adopted",
                 "Absolute and traversal-style run registrations outside the project cannot become current evidence",
                 escaped_evidence_path is not None
-                and _is_within(
+                and resolved_path_is_within(
                     escaped_evidence_path,
                     copied_project / "runs",
                 )
-                and not _is_within(
+                and not resolved_path_is_within(
                     escaped_evidence_path,
                     external_run_root,
                 ),
@@ -2363,11 +2356,12 @@ def run_studio_project_probe(
             or (
                 context_figure_entries
                 and any(
-                    value and not _is_within(Path(value), context_project)
+                    value
+                    and not resolved_path_is_within(Path(value), context_project)
                     for value in context_registry_documents
                 )
                 and all(
-                    _is_within(
+                    resolved_path_is_within(
                         Path(str(item["document"])),
                         context_project / "studio",
                     )

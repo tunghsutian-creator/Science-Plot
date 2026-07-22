@@ -24,6 +24,7 @@ from sciplot_core.policy import (
     RENDER_OPTION_KEYS,
     SUPPORTED_EXPORT_FORMATS,
     VALIDATED_VISUAL_OVERRIDE_KEYS,
+    canonical_export_format,
 )
 
 VALIDATED_ENVELOPE_REGISTRY_KIND = "sciplot_validated_envelope_registry"
@@ -204,17 +205,6 @@ def _required_text(
     if len(text) > maximum:
         raise ValueError(f"{label} exceeds {maximum} characters.")
     return text
-
-
-def _optional_text(
-    value: object,
-    label: str,
-    *,
-    maximum: int = 2048,
-) -> str | None:
-    if value is None:
-        return None
-    return _required_text(value, label, maximum=maximum)
 
 
 def _required_bool(value: object, label: str) -> bool:
@@ -458,15 +448,6 @@ def render_request_contract_payload(
         "series_order": deepcopy(json_safe(render_request.get("series_order"))),
         "explicit_render_option_keys": normalized_explicit_keys,
     }
-
-
-def render_request_contract_sha256(
-    rule: SemanticRule | str,
-    render_request: dict[str, Any],
-) -> str:
-    return _canonical_sha256(render_request_contract_payload(rule, render_request))
-
-
 def _render_request_policy_evaluation(
     rule: SemanticRule,
     render_request: object,
@@ -554,11 +535,12 @@ def _render_request_policy_evaluation(
             except ValueError:
                 repair_reasons.append("render_exports_invalid")
                 continue
-            normalized_exports.append(export)
+            try:
+                normalized_exports.append(canonical_export_format(export))
+            except ValueError:
+                repair_reasons.append("render_export_unsupported")
         if len(set(normalized_exports)) != len(normalized_exports):
             repair_reasons.append("render_exports_not_unique")
-        if any(value not in SUPPORTED_EXPORT_FORMATS for value in normalized_exports):
-            repair_reasons.append("render_export_unsupported")
         if not set(DEFAULT_EXPORT_FORMATS_POLICY).issubset(normalized_exports):
             repair_reasons.append("canonical_pdf_tiff_exports_missing")
 
@@ -576,7 +558,7 @@ def _render_request_policy_evaluation(
             requested_template if requested_template == rule.template else rule.template
         )
         try:
-            from sciplot_core.workbench_contract import normalize_render_options
+            from sciplot_core.request_contract import normalize_render_options
 
             normalized_options = normalize_render_options(
                 render_options,
@@ -1238,9 +1220,9 @@ def build_validated_envelope_registry(
     if not isinstance(visual, dict):
         raise ValueError("Acceptance visual_review must be an object.")
     if visual.get("automated_status") != "passed":
-        raise ValueError("Acceptance automated visual review did not pass.")
+        raise ValueError("Acceptance automated physical-artifact review did not pass.")
     if visual.get("manual_visual_status") != "passed":
-        raise ValueError("Acceptance manual visual review was not approved.")
+        raise ValueError("Acceptance manual preview review was not approved.")
 
     matrix = payload.get("matrix")
     if not isinstance(matrix, list):
@@ -1936,7 +1918,6 @@ __all__ = [
     "evaluate_validated_envelope",
     "load_validated_envelope_registry",
     "render_request_contract_payload",
-    "render_request_contract_sha256",
     "rule_contract_payload",
     "rule_contract_sha256",
     "rule_semantic_contract_sha256",

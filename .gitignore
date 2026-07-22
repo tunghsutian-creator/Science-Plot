@@ -34,8 +34,9 @@ ftir_output/
 /sciplot-main/
 /third_party/labplot_reference/
 
-# Design/development documents are local-only. Retain the legal notice.
+# Historical design notes are local-only. Retain current architecture and legal notice.
 /docs/*
+!/docs/ARCHITECTURE.md
 !/docs/THIRD_PARTY_NOTICES.md
 
 # Vendored Veusz runtime only; upstream development material is local-only.

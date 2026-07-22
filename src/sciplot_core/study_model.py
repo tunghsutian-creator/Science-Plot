@@ -6,6 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.policy import canonical_figure_stem
+
 STUDY_MODEL_KIND = "sciplot_study_model"
 STUDY_MODEL_VERSION = 2
 
@@ -717,10 +719,7 @@ def sync_study_model_samples(
 
 
 def _figure_artifact_key(path: str) -> str:
-    stem = Path(path).stem
-    if stem.endswith("_300dpi"):
-        stem = stem[: -len("_300dpi")]
-    return stem
+    return canonical_figure_stem(path)
 
 
 def _json_contract_matches(path: Path, expected_kind: str) -> bool:
@@ -759,7 +758,7 @@ def attach_run_artifacts_to_study_model(
         figure_id = str(figure.get("id") or "")
         normalized_id = _figure_artifact_key(figure_id) if figure_id else ""
         semantic_tokens = {
-            token
+            token.casefold()
             for field in ("id", "metric", "y_metric")
             if (token := str(figure.get(field) or "").strip())
         }
@@ -835,7 +834,10 @@ def build_output_package_contract(output_dir: Path, *, manifest: dict[str, Any])
         for artifact_id, path in required
     ]
     has_pdf = any(path.suffix.lower() == ".pdf" and path.exists() for path in figures)
-    has_tiff_300 = any(path.name.endswith("_300dpi.tiff") and path.exists() for path in figures)
+    has_tiff_300 = any(
+        path.name.casefold().endswith("_300dpi.tiff") and path.exists()
+        for path in figures
+    )
     artifact_status.extend(
         [
             {"id": "pdf", "path": "", "exists": has_pdf},
@@ -897,12 +899,46 @@ def build_output_package_contract(output_dir: Path, *, manifest: dict[str, Any])
     }
 
 
+def verify_output_package_contract(
+    package_contract: object,
+    *,
+    output_dir: Path,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    """Rebuild the output contract from live artifacts and compare it exactly."""
+
+    recorded = package_contract if isinstance(package_contract, dict) else {}
+    expected = build_output_package_contract(
+        output_dir.expanduser().resolve(),
+        manifest=manifest,
+    )
+    checks = {
+        "record_kind_current": recorded.get("kind")
+        == "sciplot_output_package_contract"
+        and recorded.get("version") == 1,
+        "recorded_complete": recorded.get("complete") is True,
+        "live_complete": expected.get("complete") is True,
+        "artifact_records_match_live": recorded.get("artifacts")
+        == expected.get("artifacts"),
+    }
+    return {
+        "kind": "sciplot_output_package_verification",
+        "version": 1,
+        "passed": all(checks.values()),
+        "checks": checks,
+        "failed_checks": [key for key, passed in checks.items() if not passed],
+        "recorded": copy.deepcopy(recorded),
+        "expected": copy.deepcopy(expected),
+    }
+
+
 __all__ = [
     "REPLICATE_MODES",
     "STUDY_MODEL_KIND",
     "STUDY_MODEL_VERSION",
     "attach_run_artifacts_to_study_model",
     "build_output_package_contract",
+    "verify_output_package_contract",
     "build_study_model",
     "experiment_recommendation_payload",
     "normalize_replicate_mode",

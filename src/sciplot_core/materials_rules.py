@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from sciplot_core._bootstrap import ensure_legacy_core
+from sciplot_core._bootstrap import ensure_vendored_core
 from sciplot_core._utils import token as _utils_token
 from sciplot_core.policy import (
     CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
@@ -25,7 +25,7 @@ from sciplot_core.policy import (
 )
 from sciplot_core.study_model import experiment_recommendation_payload
 
-ensure_legacy_core()
+ensure_vendored_core()
 
 from src.data_loader import read_raw_table  # noqa: E402
 
@@ -1373,23 +1373,6 @@ def _tga_metrics(source_path: Path) -> list[dict[str, Any]]:
         else:
             rows.append(_metric(metric, float(below["temperature"].iloc[0]), "C"))
     return rows
-
-
-def _generic_peak_metrics(source_path: Path, *, metric_name: str, x_unit: str) -> list[dict[str, Any]]:
-    raw = _raw_table(source_path)
-    numeric = raw.apply(pd.to_numeric, errors="coerce")
-    best: tuple[float, float] | None = None
-    for col in range(0, numeric.shape[1] - 1):
-        pair = numeric.iloc[:, [col, col + 1]].dropna()
-        if pair.empty:
-            continue
-        idx = pair.iloc[:, 1].abs().idxmax()
-        candidate = (float(pair.loc[idx].iloc[0]), float(abs(pair.loc[idx].iloc[1])))
-        if best is None or candidate[1] > best[1]:
-            best = candidate
-    if best is None:
-        return [_metric(metric_name, None, x_unit, "skipped", "No numeric peak trace found.")]
-    return [_metric(metric_name, best[0], x_unit)]
 
 
 def _paired_extreme_position_metrics(

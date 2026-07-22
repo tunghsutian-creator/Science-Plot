@@ -19,6 +19,7 @@ from sciplot_core.assisted_cleanup import (
 from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.materials_rules import compute_analysis_metrics
+from sciplot_core.managed_output import managed_output_transaction
 from sciplot_core.one_step import build_one_step_project, build_quality_actions
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import (
@@ -40,6 +41,7 @@ from sciplot_core.publication import (
     link_intent_to_transform_ledger,
     write_publication_artifacts,
 )
+from sciplot_core.publish_state import build_publish_state
 from sciplot_core.qa import run_qa
 from sciplot_core.render import render_to_dir
 from sciplot_core.semantic import build_intervention_request, classify_source, prepare_semantic_source
@@ -57,6 +59,30 @@ from sciplot_core.study_model import (
     study_model_from_request,
 )
 from sciplot_recipes import run_recipe
+
+
+_MANAGED_OUTPUT_DIRECTORIES = (
+    "processed",
+    "figures",
+    "tables",
+    "raw",
+    DELIVERY_DIR,
+)
+_MANAGED_OUTPUT_FILES = (
+    "request_snapshot.json",
+    "manifest.json",
+    "analysis_report.md",
+    "revision_brief.md",
+    "review.html",
+    "intervention_request.json",
+    CLEANUP_REQUEST_FILENAME,
+    "publication_intent.json",
+    "transform_ledger.json",
+    "journal_profile.json",
+    "publication_qa.json",
+    "one_step_status.json",
+    "autoplot_summary.json",
+)
 
 
 def _load_request(request_path: Path) -> dict[str, Any]:
@@ -142,27 +168,11 @@ def _bind_result_data_snapshots(
     return result
 
 
-def _clear_managed_artifacts(output_dir: Path) -> None:
-    for folder in ("processed", "figures", "tables", "raw", DELIVERY_DIR):
-        path = output_dir / folder
-        if path.exists():
-            shutil.rmtree(path)
-    for filename in (
-        "request_snapshot.json",
-        "manifest.json",
-        "analysis_report.md",
-        "revision_brief.md",
-        "review.html",
-        "intervention_request.json",
-        CLEANUP_REQUEST_FILENAME,
-        "publication_intent.json",
-        "transform_ledger.json",
-        "journal_profile.json",
-        "publication_qa.json",
-    ):
-        path = output_dir / filename
-        if path.exists():
-            path.unlink()
+def _managed_output_transaction(output_dir: Path):
+    return managed_output_transaction(
+        output_dir,
+        managed_names=(*_MANAGED_OUTPUT_DIRECTORIES, *_MANAGED_OUTPUT_FILES),
+    )
 
 
 def _request_options(request: dict[str, Any]) -> dict[str, Any]:
@@ -981,9 +991,12 @@ def _next_run_dir(project_dir: Path) -> Path:
     index = 1
     while True:
         candidate = runs_dir / f"run_{index:03d}"
-        if not candidate.exists():
+        try:
+            candidate.mkdir(exist_ok=False)
+        except FileExistsError:
+            index += 1
+        else:
             return candidate
-        index += 1
 
 
 def _one_step_project_dir(input_path: Path, output_root: Path, project_name: str | None) -> Path:
@@ -1134,9 +1147,24 @@ def run_request(request_path: Path) -> dict[str, Any]:
     request_path = request_path.expanduser().resolve()
     source_request = _load_request(request_path)
     base_dir = request_path.parent
-    original_input_path = _resolve_request_path(source_request.get("input"), base_dir=base_dir, field="input")
     output_dir = _resolve_request_path(source_request.get("output"), base_dir=base_dir, field="output")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    with _managed_output_transaction(output_dir):
+        return _run_request_in_managed_output(
+            request_path=request_path,
+            source_request=source_request,
+            base_dir=base_dir,
+            output_dir=output_dir,
+        )
+
+
+def _run_request_in_managed_output(
+    *,
+    request_path: Path,
+    source_request: dict[str, Any],
+    base_dir: Path,
+    output_dir: Path,
+) -> dict[str, Any]:
+    original_input_path = _resolve_request_path(source_request.get("input"), base_dir=base_dir, field="input")
     mapped_request, mapping_application = resolve_data_mapping_request(
         source_request,
         base_dir=base_dir,
@@ -1152,7 +1180,6 @@ def run_request(request_path: Path) -> dict[str, Any]:
             "replace the same input in one run."
         )
     input_path = _resolve_request_path(request.get("input"), base_dir=base_dir, field="input")
-    _clear_managed_artifacts(output_dir)
     raw_archive = _archive_raw_input(
         original_input_path if mapping_application is not None else input_path,
         output_dir,
@@ -1421,18 +1448,6 @@ def run_request(request_path: Path) -> dict[str, Any]:
     _write_review_html(output_dir, manifest=manifest)
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     manifest["package_contract"] = build_output_package_contract(output_dir, manifest=manifest)
-    manifest["one_step"] = build_one_step_project(
-        input_path=input_path,
-        request_path=request_path,
-        request=request,
-        semantic=semantic,
-        raw_archive=raw_archive,
-        study_model=study_model,
-        layout_policy=layout_policy,
-        layout_quality=manifest["layout_quality"],
-        qa=qa,
-        delivery_package=None,
-    )
     manifest["delivery_package"] = build_delivery_package(output_dir, manifest=manifest)
     manifest["one_step"] = build_one_step_project(
         input_path=input_path,
@@ -1445,6 +1460,14 @@ def run_request(request_path: Path) -> dict[str, Any]:
         layout_quality=manifest["layout_quality"],
         qa=qa,
         delivery_package=manifest["delivery_package"],
+    )
+    manifest.update(
+        build_publish_state(
+            qa=qa,
+            package_contract=manifest["package_contract"],
+            delivery_package=manifest["delivery_package"],
+            prerequisite_state=manifest["one_step"]["state"],
+        )
     )
     _write_one_step_status(output_dir, manifest["one_step"])
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -1490,7 +1513,7 @@ def run_one_step(
         }
     return {
         "kind": "sciplot_one_step_result",
-        "status": manifest.get("one_step", {}).get("state") or "ready",
+        "status": manifest.get("state") or "needs_rule_repair",
         "project_dir": str(project_dir),
         "request_path": str(request_path),
         "run_output": str(run_dir),

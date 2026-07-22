@@ -34,7 +34,14 @@ def test_status_module_has_no_qt_import() -> None:
     assert "veusz" not in imported_roots
 
 
-def test_legacy_module_reexports_status_builders(tmp_path: Path) -> None:
+def test_status_export_aliases_use_the_shared_contract() -> None:
+    assert studio_project_status._normalized_export_format("png") == "png_300"
+    assert studio_project_status._normalized_export_format("tif_300") == "tiff_300"
+    assert studio_project_status._normalized_export_format("tiff300") == "tiff_300"
+    assert studio_project_status._normalized_export_format("unknown") == ""
+
+
+def test_qt_bridge_delegates_to_pure_status_builders(tmp_path: Path) -> None:
     document_path = tmp_path / "document.vsz"
     document_path.write_text("# minimal test document\n", encoding="utf-8")
     expected = studio_project_status.build_studio_project_status(
@@ -55,7 +62,7 @@ def test_legacy_module_reexports_status_builders(tmp_path: Path) -> None:
     )
 
 
-def test_legacy_figure_scope_injection_point_is_preserved(
+def test_qt_bridge_injects_the_live_figure_scope_builder(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:

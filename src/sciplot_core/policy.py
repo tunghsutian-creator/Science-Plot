@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Iterable
 from copy import deepcopy
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 DEFAULT_FIGURE_SIZE = "60x55"
@@ -108,9 +110,64 @@ DEFAULT_LINE_STYLE_SEQUENCE = (
 FIGURE_SIZE_PRESETS = ("60x55", "120x55", "180x55", "60x110", "120x110", "180x110")
 
 DEFAULT_EXPORT_FORMATS_POLICY = ("pdf", "tiff_300")
-SUPPORTED_EXPORT_FORMATS = frozenset(
-    {"pdf", "svg", "png", "png_300", "png_600", "tiff", "tiff_300"}
+CANONICAL_EXPORT_FORMATS = frozenset(
+    {"pdf", "svg", "png_300", "png_600", "tiff_300"}
 )
+EXPORT_FORMAT_ALIASES = {
+    "pdf": "pdf",
+    "svg": "svg",
+    "png": "png_300",
+    "png_300": "png_300",
+    "png_600": "png_600",
+    "tif_300": "tiff_300",
+    "tiff": "tiff_300",
+    "tiff_300": "tiff_300",
+}
+_LEGACY_RECORDED_EXPORT_ALIASES = {
+    "tif": "tiff_300",
+    "tiff300": "tiff_300",
+    "tiff_300dpi": "tiff_300",
+}
+SUPPORTED_EXPORT_FORMATS = frozenset(EXPORT_FORMAT_ALIASES)
+
+
+def canonical_export_format(value: object, *, allow_legacy: bool = False) -> str:
+    normalized = str(value or "").strip().casefold().replace("-", "_")
+    canonical = EXPORT_FORMAT_ALIASES.get(normalized)
+    if canonical is None and allow_legacy:
+        canonical = _LEGACY_RECORDED_EXPORT_ALIASES.get(normalized)
+    if canonical is None:
+        supported = ", ".join(sorted(SUPPORTED_EXPORT_FORMATS))
+        raise ValueError(
+            f"Unsupported export format {value!r}. Supported formats: {supported}."
+        )
+    return canonical
+
+
+def canonical_figure_stem(path_value: object) -> str:
+    """Return the shared PDF/TIFF pairing key for one exported figure."""
+
+    stem = Path(str(path_value)).stem
+    return re.sub(r"_\d+dpi$", "", stem, flags=re.IGNORECASE).casefold()
+
+
+def normalize_export_formats(
+    values: object,
+    *,
+    default: tuple[str, ...] = DEFAULT_EXPORT_FORMATS_POLICY,
+) -> tuple[str, ...]:
+    if not isinstance(values, list | tuple):
+        return tuple(default)
+    requested = [value for value in values if str(value).strip()]
+    if not requested:
+        return tuple(default)
+    canonical = [canonical_export_format(value) for value in requested]
+    if len(set(canonical)) != len(canonical):
+        raise ValueError(
+            "Export aliases that produce the same output artifact cannot be "
+            "requested together. Choose one name for each format/DPI."
+        )
+    return tuple(canonical)
 DEFAULT_LOG_TICK_FORMAT = "%Ve"
 # Five subdivisions per decade give four visible minor ticks (2, 4, 6, 8),
 # matching the sparse publication style used for rheology modulus axes.
@@ -785,17 +842,10 @@ def layout_policy_payload(policy: LayoutPolicy) -> dict[str, Any]:
             "max_line_to_tick_ratio": policy.stroke_policy.max_line_to_tick_ratio,
         },
     }
-
-
-def render_options_copy(options: dict[str, Any] | None = None) -> dict[str, Any]:
-    base = deepcopy(DEFAULT_RENDER_OPTIONS)
-    if options:
-        base.update(deepcopy(options))
-    return base
-
-
 __all__ = [
+    "CANONICAL_EXPORT_FORMATS",
     "DEFAULT_EXPORT_FORMATS_POLICY",
+    "EXPORT_FORMAT_ALIASES",
     "AUTO_LOG_BOUND_PADDING_FACTOR",
     "UNIFIED_AXIS_LINEWIDTH_PT",
     "UNIFIED_FONT_FAMILY",
@@ -859,9 +909,11 @@ __all__ = [
     "VALIDATED_VISUAL_OVERRIDE_KEYS",
     "WIDE_FIGURE_SIZE",
     "anchored_log_decade_ticks",
+    "canonical_export_format",
+    "canonical_figure_stem",
     "compact_linear_axis",
     "layout_policy_for_semantic",
     "layout_policy_payload",
-    "render_options_copy",
+    "normalize_export_formats",
     "rheology_metric_axis_label",
 ]

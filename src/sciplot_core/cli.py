@@ -60,17 +60,11 @@ def _print_json(payload: object) -> None:
 
 
 def serve_intake(**kwargs: Any) -> None:
-    """Lazy compatibility seam; keeps CLI startup independent of the Web app."""
+    """Keep CLI startup independent of the optional browser adapter."""
 
     from sciplot_core.intake import serve_intake as _serve_intake
 
     _serve_intake(**kwargs)
-
-
-def run_one_step(*args: Any, **kwargs: Any) -> dict[str, Any]:
-    from sciplot_core.workflow import run_one_step as _run_one_step
-
-    return _run_one_step(*args, **kwargs)
 
 
 def run_autoplot(*args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -96,7 +90,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     doctor_parser = subparsers.add_parser(
-        "doctor", help="Check whether this SciPlot install is ready for alpha use."
+        "doctor", help="Check whether this SciPlot install is ready for supported daily use."
     )
     doctor_parser.add_argument(
         "--json", action="store_true", help="Emit machine-readable JSON."
@@ -171,7 +165,8 @@ def _build_parser() -> argparse.ArgumentParser:
     data_mapping_probe_parser.add_argument("--json", action="store_true")
 
     render_parser = subparsers.add_parser(
-        "render", help="Render a source through the SciPlot renderer."
+        "render",
+        help="Low-level primitive: render an already plot-ready source.",
     )
     render_parser.add_argument("input", type=Path)
     render_parser.add_argument(
@@ -190,7 +185,8 @@ def _build_parser() -> argparse.ArgumentParser:
     render_parser.add_argument("--out", type=Path, required=True)
 
     recipe_parser = subparsers.add_parser(
-        "recipe", help="Run an experiment-family recipe."
+        "recipe",
+        help="Low-level primitive: run a known experiment-family recipe.",
     )
     recipe_parser.add_argument("name")
     recipe_parser.add_argument("input", type=Path)
@@ -199,27 +195,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     recipe_parser.add_argument("--out", type=Path, required=True)
 
-    run_parser = subparsers.add_parser("run", help="Run a plot_request.json workflow.")
+    run_parser = subparsers.add_parser(
+        "run", help="Replay an already confirmed plot_request.json."
+    )
     run_parser.add_argument("request", type=Path)
-
-    one_step_parser = subparsers.add_parser(
-        "one-step",
-        help=argparse.SUPPRESS,
-    )
-    one_step_parser.add_argument("input", type=Path)
-    one_step_parser.add_argument(
-        "--out", type=Path, default=Path("outputs") / "one_step_projects"
-    )
-    one_step_parser.add_argument(
-        "--name", help="Project name. Defaults to the input file or folder name."
-    )
-    one_step_parser.add_argument(
-        "--json", action="store_true", help="Emit machine-readable JSON."
-    )
 
     autoplot_parser = subparsers.add_parser(
         "autoplot",
-        help="One-command local plotting entrypoint with stable delivery and optional assistant handoff policy.",
+        help=(
+            "Fully automated non-interactive project orchestration with QA, "
+            "delivery, and a structured assistant handoff summary."
+        ),
     )
     autoplot_parser.add_argument("input", type=Path)
     autoplot_parser.add_argument(
@@ -273,22 +259,37 @@ def _build_parser() -> argparse.ArgumentParser:
     acceptance_rules_parser.add_argument(
         "--json", action="store_true", help="Emit machine-readable JSON."
     )
-
-    quick_parser = subparsers.add_parser("quick", help=argparse.SUPPRESS)
-    quick_parser.add_argument("input", type=Path)
-    quick_parser.add_argument("--host", default="127.0.0.1")
-    quick_parser.add_argument(
-        "--port", type=int, default=0, help="Use 0 to choose a free local port."
+    acceptance_visual_review_parser = acceptance_subparsers.add_parser(
+        "visual-review",
+        help="Record the explicit contact-sheet decision for a rules acceptance run.",
     )
-    quick_parser.add_argument(
-        "--out", type=Path, default=Path("outputs") / "intake_projects"
+    acceptance_visual_review_parser.add_argument(
+        "review_json",
+        type=Path,
+        help="Path to final_size_visual_review/final_size_visual_review.json.",
     )
-    quick_parser.add_argument(
-        "--no-open", action="store_true", help="Do not open a browser automatically."
+    acceptance_visual_review_parser.add_argument(
+        "--decision",
+        choices=("passed", "failed"),
+        required=True,
+    )
+    acceptance_visual_review_parser.add_argument("--reviewer", required=True)
+    acceptance_visual_review_parser.add_argument(
+        "--note",
+        dest="notes",
+        action="append",
+        help="Optional review note; repeat to record more than one.",
+    )
+    acceptance_visual_review_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
     )
 
     curate_parser = subparsers.add_parser(
-        "curate", help="Create a reviewable curation project."
+        "curate",
+        help=(
+            "Prepare a reviewable scientific curation project for Studio; "
+            "does not replace Studio export or delivery."
+        ),
     )
     curate_subparsers = curate_parser.add_subparsers(
         dest="curate_command", required=True
@@ -308,15 +309,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     curate_torque_parser.add_argument(
         "--open", action="store_true", help="Open the review HTML after export."
-    )
-
-    prepare_parser = subparsers.add_parser("prepare", help=argparse.SUPPRESS)
-    prepare_parser.add_argument("input", type=Path)
-    prepare_parser.add_argument(
-        "--out", type=Path, default=Path("outputs") / "intake_projects"
-    )
-    prepare_parser.add_argument(
-        "--json", action="store_true", help="Emit machine-readable JSON."
     )
 
     rules_parser = subparsers.add_parser(
@@ -452,20 +444,11 @@ def _build_parser() -> argparse.ArgumentParser:
     app_parser = subparsers.add_parser(
         "app",
         help=(
-            "Open the browser compatibility surface for source, grouping, "
-            "and export confirmation."
+            "Open optional browser source/grouping/export confirmation and "
+            "read-only result review."
         ),
     )
     app_parser.add_argument("input", nargs="?", type=Path)
-    app_parser.add_argument(
-        "--catalog", action="store_true", help="Print the intake data type catalog."
-    )
-    app_parser.add_argument(
-        "--all", action="store_true", help="Include pending internal catalog entries."
-    )
-    app_parser.add_argument(
-        "--json", action="store_true", help="Emit machine-readable JSON."
-    )
     app_parser.add_argument("--host", default="127.0.0.1")
     app_parser.add_argument("--port", type=int, default=8765)
     app_parser.add_argument(
@@ -478,55 +461,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-open", action="store_true", help="Do not open a browser automatically."
     )
 
-    intake_parser = subparsers.add_parser("intake", help=argparse.SUPPRESS)
-    intake_parser.add_argument("input", nargs="?", type=Path)
-    intake_parser.add_argument(
-        "--catalog", action="store_true", help="Print the intake data type catalog."
-    )
-    intake_parser.add_argument(
-        "--all", action="store_true", help="Include pending internal catalog entries."
-    )
-    intake_parser.add_argument(
-        "--json", action="store_true", help="Emit machine-readable JSON."
-    )
-    intake_parser.add_argument("--host", default="127.0.0.1")
-    intake_parser.add_argument("--port", type=int, default=8765)
-    intake_parser.add_argument(
-        "--out", type=Path, default=Path("outputs") / "intake_projects"
-    )
-    intake_parser.add_argument(
-        "--project", help="Open an existing intake project under --out."
-    )
-    intake_parser.add_argument(
-        "--no-open", action="store_true", help="Do not open a browser automatically."
-    )
-
-    workbench_parser = subparsers.add_parser("workbench", help=argparse.SUPPRESS)
-    workbench_parser.add_argument("input", nargs="?", type=Path)
-    workbench_parser.add_argument(
-        "--catalog", action="store_true", help="Print the intake data type catalog."
-    )
-    workbench_parser.add_argument(
-        "--all", action="store_true", help="Include pending internal catalog entries."
-    )
-    workbench_parser.add_argument(
-        "--json", action="store_true", help="Emit machine-readable JSON."
-    )
-    workbench_parser.add_argument("--host", default="127.0.0.1")
-    workbench_parser.add_argument("--port", type=int, default=8765)
-    workbench_parser.add_argument(
-        "--out", type=Path, default=Path("outputs") / "intake_projects"
-    )
-    workbench_parser.add_argument(
-        "--project", help="Open an existing intake project under --out."
-    )
-    workbench_parser.add_argument(
-        "--no-open", action="store_true", help="Do not open a browser automatically."
-    )
-
     studio_parser = subparsers.add_parser(
         "studio",
-        help="Open the Veusz-based SciPlot Studio workflow.",
+        help="Prepare, open, or exact-current export a Veusz project.",
     )
     studio_parser.add_argument(
         "target",
@@ -545,7 +482,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     studio_parser.add_argument(
         "--rule",
-        help="Explicit ready material rule selected by the user or Luna/Codex; bypass automatic recognition.",
+        help="Explicit ready material rule selected by the user or an assistant; bypass automatic recognition.",
     )
     studio_parser.add_argument(
         "--template",
@@ -555,12 +492,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--name", help="Preselect the SciPlot project/figure name."
     )
     studio_parser.add_argument(
-        "--new", action="store_true", help="Open an empty embedded Veusz Studio window."
-    )
-    studio_parser.add_argument(
-        "--advanced-editor",
-        action="store_true",
-        help="Open the full upstream Veusz editor for a generated .vsz document.",
+        "--new", action="store_true", help="Open an empty native Veusz MainWindow."
     )
     studio_parser.add_argument(
         "--export", help="Comma-separated export formats, e.g. pdf,tiff_300."
@@ -573,12 +505,12 @@ def _build_parser() -> argparse.ArgumentParser:
     studio_parser.add_argument(
         "--prepare-only",
         action="store_true",
-        help="Generate/register the Studio document only.",
+        help=argparse.SUPPRESS,
     )
     studio_parser.add_argument(
         "--qt-smoke",
         action="store_true",
-        help="Run a headless PyQt/Veusz embedding smoke test.",
+        help=argparse.SUPPRESS,
     )
 
     qa_parser = subparsers.add_parser("qa", help="Validate rendered SciPlot outputs.")
@@ -627,41 +559,19 @@ def _build_parser() -> argparse.ArgumentParser:
     publication_layout_parser.add_argument("--height-mm", type=float, default=55.0)
     publication_layout_parser.add_argument("--json", action="store_true")
 
-    figure_parser = subparsers.add_parser(
-        "figure",
-        help="Build plot-ready curve and shared-colorbar figure profiles without scientific data processing.",
-    )
-    figure_subparsers = figure_parser.add_subparsers(dest="figure_command", required=True)
-    figure_profiles_parser = figure_subparsers.add_parser("profiles", help="List reusable figure profiles.")
-    figure_profiles_parser.add_argument("--json", action="store_true")
-    figure_profile_parser = figure_subparsers.add_parser("profile", help="Show one reusable figure profile.")
-    figure_profile_parser.add_argument("profile_id")
-    figure_profile_parser.add_argument("--json", action="store_true")
-    figure_build_parser = figure_subparsers.add_parser(
-        "build",
-        help="Build a VSZ/PDF/TIFF package from an explicit plot-ready figure request.",
-    )
-    figure_build_parser.add_argument("request", type=Path)
-    figure_build_parser.add_argument("--out", type=Path, required=True)
-    figure_build_parser.add_argument("--json", action="store_true")
-
-    hidden_compatibility_commands = {
-        "one-step",
-        "quick",
-        "prepare",
-        "intake",
-        "workbench",
+    internal_commands = {
         "readiness-probe",
         "openai-provider-probe",
         "data-mapping-probe",
+        "batch",
     }
     subparsers._choices_actions[:] = [  # type: ignore[attr-defined]
         action
         for action in subparsers._choices_actions
-        if action.dest not in hidden_compatibility_commands
+        if action.dest not in internal_commands
     ]
     public_commands = [
-        name for name in subparsers.choices if name not in hidden_compatibility_commands
+        name for name in subparsers.choices if name not in internal_commands
     ]
     subparsers.metavar = "{" + ",".join(public_commands) + "}"
 
@@ -874,26 +784,17 @@ def main(argv: list[str] | None = None) -> int:
 
             payload = run_request(_resolve_input(args.request, kind="Request file"))
             _print_json(payload)
-            request = (
-                payload.get("request")
-                if isinstance(payload.get("request"), dict)
+            one_step = (
+                payload.get("one_step")
+                if isinstance(payload.get("one_step"), dict)
                 else {}
             )
-            qa = payload.get("qa") if isinstance(payload.get("qa"), dict) else {}
-            if bool(request.get("publication_strict")) and qa.get("status") != "passed":
-                return 1
-            return 0
-        if args.command == "one-step":
-            payload = run_one_step(
-                _resolve_input(args.input),
-                output_root=args.out.expanduser(),
-                project_name=args.name,
+            state = str(payload.get("state") or one_step.get("state") or "").strip()
+            return (
+                0
+                if state == "ready" and payload.get("ready_to_use") is True
+                else 1
             )
-            if args.json:
-                _print_json(payload)
-            else:
-                print(payload["run_output"])
-            return 0 if payload.get("status") == "ready" else 1
         if args.command == "autoplot":
             payload = run_autoplot(
                 _resolve_input(args.input),
@@ -907,7 +808,7 @@ def main(argv: list[str] | None = None) -> int:
             return (
                 0
                 if payload.get("state") == "ready"
-                and payload.get("ready_to_use") is not False
+                and payload.get("ready_to_use") is True
                 else 1
             )
         if args.command == "acceptance":
@@ -943,15 +844,22 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     print(payload["artifacts"]["matrix_markdown"])
                 return 0 if payload["selected_state"] == "ready" else 1
-        if args.command == "quick":
-            serve_intake(
-                input_path=_resolve_input(args.input),
-                host=args.host,
-                port=args.port,
-                output_root=args.out.expanduser(),
-                open_browser=not args.no_open,
-            )
-            return 0
+            if args.acceptance_command == "visual-review":
+                from sciplot_core.visual_review import (
+                    record_final_size_visual_decision,
+                )
+
+                payload = record_final_size_visual_decision(
+                    _resolve_input(args.review_json, kind="Visual review JSON"),
+                    reviewer=args.reviewer,
+                    decision=args.decision,
+                    notes=args.notes or (),
+                )
+                if args.json:
+                    _print_json(payload)
+                else:
+                    print(payload["decision_path"])
+                return 0 if args.decision == "passed" else 1
         if args.command == "curate":
             if args.curate_command == "torque":
                 from sciplot_core.studio import maybe_reexec_with_qt_runtime
@@ -971,17 +879,6 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     print(payload["review_html"])
                 return 0
-        if args.command == "prepare":
-            from sciplot_core.intake import prepare_intake_session
-
-            payload = prepare_intake_session(
-                args.input.expanduser(), output_root=args.out.expanduser()
-            )
-            if args.json:
-                _print_json(payload)
-            else:
-                print(payload["session_path"])
-            return 0
         if args.command == "rules":
             from sciplot_core.materials_rules import (
                 list_rules_payload,
@@ -1162,19 +1059,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             return 0
-        if args.command in {"app", "intake", "workbench"}:
-            from sciplot_core.intake import intake_catalog_payload
-
-            if args.catalog:
-                payload = intake_catalog_payload(include_pending=args.all)
-                if args.json:
-                    _print_json(payload)
-                else:
-                    for data_type in payload["data_types"]:
-                        print(data_type["label"])
-                        for experiment in data_type["experiments"]:
-                            print(f"  {experiment['id']}: {experiment['label']}")
-                return 0
+        if args.command == "app":
             serve_kwargs: dict[str, Any] = {
                 "input_path": args.input.expanduser() if args.input else None,
                 "host": args.host,
@@ -1197,7 +1082,6 @@ def main(argv: list[str] | None = None) -> int:
                 template=args.template,
                 project_name=args.name,
                 new=args.new,
-                advanced_editor=args.advanced_editor,
                 export=args.export,
                 json_output=args.json,
                 prepare_only=args.prepare_only,
@@ -1230,38 +1114,6 @@ def main(argv: list[str] | None = None) -> int:
                 )
             if args.json:
                 _print_json(payload)
-            else:
-                print(json.dumps(payload, indent=2, ensure_ascii=False))
-            return 0
-        if args.command == "figure":
-            from sciplot_core.figure_profiles import (
-                figure_profile_payload,
-                list_figure_profiles,
-            )
-
-            if args.figure_command == "profiles":
-                payload = {
-                    "kind": "sciplot_figure_profiles",
-                    "version": 1,
-                    "profiles": list_figure_profiles(),
-                }
-            elif args.figure_command == "profile":
-                payload = figure_profile_payload(args.profile_id)
-            else:
-                from sciplot_core.studio import maybe_reexec_with_qt_runtime
-
-                original_argv = list(sys.argv[1:] if argv is None else argv)
-                maybe_reexec_with_qt_runtime(original_argv)
-                from sciplot_core.figure_workflow import run_plot_ready_figure_request
-
-                payload = run_plot_ready_figure_request(
-                    _resolve_input(args.request, kind="Figure request file"),
-                    output_dir=args.out.expanduser(),
-                )
-            if args.json:
-                _print_json(payload)
-            elif args.figure_command == "build":
-                print(payload["delivery"])
             else:
                 print(json.dumps(payload, indent=2, ensure_ascii=False))
             return 0

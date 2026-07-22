@@ -20,7 +20,7 @@ from sciplot_core.style_contract import (
     validate_veusz_template_id,
 )
 from sciplot_core.studio import _request_template
-from sciplot_core.workbench_contract import (
+from sciplot_core.request_contract import (
     apply_request_patch,
     normalize_render_options,
 )
@@ -56,16 +56,18 @@ def test_contract_audit_reports_private_style_and_rule_template_drift() -> None:
 
 
 @pytest.mark.parametrize("template", sorted(VEUSZ_IMPLEMENTED_TEMPLATE_IDS))
-def test_workbench_accepts_only_implemented_veusz_templates(template: str) -> None:
+def test_request_contract_accepts_only_implemented_veusz_templates(
+    template: str,
+) -> None:
     assert normalize_render_options({}, template=template) == {}
 
 
-def test_workbench_rejects_reference_only_vendor_template() -> None:
+def test_request_contract_rejects_reference_only_vendor_template() -> None:
     with pytest.raises(ValueError, match="not implemented by SciPlot"):
         normalize_render_options({}, template="bar")
 
 
-def test_heatmap_workbench_accepts_the_runtime_scalar_contract() -> None:
+def test_heatmap_request_contract_accepts_the_runtime_scalar_contract() -> None:
     options = {
         "data_variables": {"x": "x", "y": "y", "z": "z"},
         "z_min": 1.0,

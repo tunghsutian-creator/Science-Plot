@@ -64,7 +64,7 @@ jobs:
           set -euo pipefail
           python3 -m pip wheel . --no-deps --no-build-isolation \
             --wheel-dir /tmp/sciplot-wheel
-          python3 -c 'import glob, zipfile; wheel = glob.glob("/tmp/sciplot-wheel/*.whl")[0]; names = zipfile.ZipFile(wheel).namelist(); forbidden = ("sciplot_core/canvas", "sciplot_core/composition", "sciplot_core/promotion", "sciplot_core/session_evidence", "sciplot_gui/composition", "sciplot_gui/inspectors", "sciplot_gui/app.py", "sciplot_gui/main_window.py", "sciplot_gui/veusz_canvas.py"); bad = [name for name in names if name.startswith(forbidden)]; assert not bad, bad'
+          python3 -c 'import glob, zipfile; wheel = glob.glob("/tmp/sciplot-wheel/*.whl")[0]; names = zipfile.ZipFile(wheel).namelist(); forbidden = ("sciplot_core/canvas", "sciplot_core/composition", "sciplot_core/promotion", "sciplot_core/session_evidence", "sciplot_core/codex_jobs.py", "sciplot_core/figure_layouts.py", "sciplot_core/figure_profiles.py", "sciplot_core/figure_workflow.py", "sciplot_core/scalar_strip_renderer.py", "sciplot_core/workbench_contract.py", "sciplot_gui/composition", "sciplot_gui/inspectors", "sciplot_gui/app.py", "sciplot_gui/main_window.py", "sciplot_gui/veusz_canvas.py"); bad = [name for name in names if name.startswith(forbidden)]; assert not bad, bad'
       - name: Run deterministic unit tests
         run: python3 -m pytest -q
       - name: Verify source-checkout wrapper bootstrap

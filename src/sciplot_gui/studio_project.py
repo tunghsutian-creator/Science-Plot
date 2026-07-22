@@ -7,6 +7,7 @@ from typing import Any
 from PyQt6 import QtCore, QtGui, QtWidgets
 
 from sciplot_core._utils import existing_file_sha256, json_safe
+from sciplot_core._paths import resolved_path_is_within
 from sciplot_core.studio import (
     _is_primary_figure_set_export_scope,
     _studio_figure_set_export_scope,
@@ -19,7 +20,6 @@ from sciplot_core.studio import (
 from .studio_project_status import (
     _bind_mapping_to_artifact_qa,
     _finalize_status,
-    _is_within,
     _live_document_payload,
     _qa_display_status,
     _read_json,
@@ -885,7 +885,8 @@ class StudioProjectBridge(QtCore.QObject):
                 else None
             )
             within_root = bool(
-                evidence_root is not None and _is_within(path, evidence_root)
+                evidence_root is not None
+                and resolved_path_is_within(path, evidence_root)
             )
             exists = path.is_dir() if reveal or key == "delivery" else path.is_file()
             expected_sha256 = str(target.get("sha256") or "").strip()

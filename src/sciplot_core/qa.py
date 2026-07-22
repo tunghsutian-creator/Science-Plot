@@ -15,6 +15,7 @@ import numpy as np
 from PIL import Image
 
 from sciplot_core._utils import file_sha256, read_json_object
+from sciplot_core.policy import canonical_export_format, canonical_figure_stem
 from sciplot_core.publication import resolve_publication_profile
 
 
@@ -78,16 +79,11 @@ def _canonical_artifacts(output_dir: Path, suffixes: tuple[str, ...]) -> list[Pa
 
 
 def _normalized_export_format(value: object) -> str | None:
-    normalized = str(value or "").strip().casefold().replace("-", "_")
-    aliases = {
-        "pdf": "pdf",
-        "tif": "tiff_300",
-        "tiff": "tiff_300",
-        "tiff300": "tiff_300",
-        "tiff_300dpi": "tiff_300",
-        "tiff_300": "tiff_300",
-    }
-    return aliases.get(normalized)
+    try:
+        normalized = canonical_export_format(value, allow_legacy=True)
+    except ValueError:
+        return None
+    return normalized if normalized in {"pdf", "tiff_300"} else None
 
 
 def _required_export_formats(output_dir: Path, profile: dict[str, Any]) -> dict[str, Any]:
@@ -118,11 +114,6 @@ def _required_export_formats(output_dir: Path, profile: dict[str, Any]) -> dict[
     return {"formats": sorted(required), "sources": sources}
 
 
-def _canonical_figure_stem(path_value: object) -> str:
-    stem = Path(str(path_value)).stem
-    return re.sub(r"_\d+dpi$", "", stem, flags=re.IGNORECASE).casefold()
-
-
 def _canonical_pairing_report(
     pdfs: list[dict[str, Any]],
     tiffs: list[dict[str, Any]],
@@ -132,9 +123,9 @@ def _canonical_pairing_report(
     pdf_index: dict[str, list[str]] = {}
     tiff_index: dict[str, list[str]] = {}
     for report in pdfs:
-        pdf_index.setdefault(_canonical_figure_stem(report["path"]), []).append(str(report["path"]))
+        pdf_index.setdefault(canonical_figure_stem(report["path"]), []).append(str(report["path"]))
     for report in tiffs:
-        tiff_index.setdefault(_canonical_figure_stem(report["path"]), []).append(str(report["path"]))
+        tiff_index.setdefault(canonical_figure_stem(report["path"]), []).append(str(report["path"]))
 
     pdf_stems = set(pdf_index)
     tiff_stems = set(tiff_index)
@@ -568,8 +559,8 @@ def _font_embedding_evidence(pdf: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _matching_pdf(tiff: dict[str, Any], pdfs: list[dict[str, Any]]) -> dict[str, Any] | None:
-    tiff_stem = _canonical_figure_stem(tiff["path"])
-    return next((pdf for pdf in pdfs if _canonical_figure_stem(pdf["path"]) == tiff_stem), None)
+    tiff_stem = canonical_figure_stem(tiff["path"])
+    return next((pdf for pdf in pdfs if canonical_figure_stem(pdf["path"]) == tiff_stem), None)
 
 
 def _candidate_path(value: object, *, base_dir: Path) -> Path | None:

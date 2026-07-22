@@ -2761,7 +2761,7 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
             )
         )
 
-        from sciplot_core.workbench_contract import apply_request_patch
+        from sciplot_core.request_contract import apply_request_patch
 
         option_provenance_probe = apply_request_patch(
             {

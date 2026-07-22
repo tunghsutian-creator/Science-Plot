@@ -9,9 +9,11 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from sciplot_core._paths import REPO_ROOT
+from sciplot_core.policy import DELIVERY_LAUNCHER
 
 
-PROJECT_LAUNCHER_CONTRACT_VERSION = 3
+DELIVERY_LAUNCHER_CONTRACT_VERSION = 1
+PROJECT_LAUNCHER_CONTRACT_VERSION = 4
 PROJECT_PRIMARY_LAUNCHER = "Open_in_SciPlot_Studio.command"
 PROJECT_VEUSZ_LAUNCHER = "Open_in_Veusz.command"
 PROJECT_EXPORT_LAUNCHER = "Export_Edited_Veusz.command"
@@ -180,15 +182,83 @@ def _sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def _mask_portable_assignments(lines: list[str]) -> list[str]:
+    masked = list(lines)
+    for index, line in enumerate(masked):
+        for name in _PORTABLE_PATH_ASSIGNMENTS:
+            if line.startswith(f"{name}="):
+                masked[index] = f"{name}={_PORTABLE_PATH_PLACEHOLDER}"
+                break
+    return masked
+
+
+def _delivery_launcher_lines() -> list[str]:
+    return [
+        *portable_sciplot_prelude(directory_var="DELIVERY_DIR"),
+        "",
+        'documents=("${DELIVERY_DIR}"/project/*.vsz(N))',
+        'if (( ${#documents[@]} == 0 )); then',
+        '  die "No Veusz project files found in ${DELIVERY_DIR}/project"',
+        "fi",
+        'if [[ "${1:-}" == "--check" ]]; then',
+        '  for DOCUMENT in "${documents[@]}"; do',
+        '    "${SCIPLOT_CMD}" studio "${DOCUMENT}" --qt-smoke',
+        "  done",
+        "  exit 0",
+        "fi",
+        'if (( $# > 0 )); then',
+        '  DOCUMENT="$1"',
+        '  [[ "${DOCUMENT}" = /* ]] || DOCUMENT="${DELIVERY_DIR}/project/${DOCUMENT}"',
+        'elif (( ${#documents[@]} == 1 )); then',
+        '  DOCUMENT="${documents[1]}"',
+        "else",
+        '  print "Select a figure to edit in Veusz:"',
+        '  for index in {1..${#documents[@]}}; do',
+        '    print "${index}) ${documents[$index]:t:r}"',
+        "  done",
+        "  while true; do",
+        '    read "choice?> "',
+        '    if [[ "${choice}" = <-> ]] && (( choice >= 1 && choice <= ${#documents[@]} )); then',
+        '      DOCUMENT="${documents[$choice]}"',
+        "      break",
+        "    fi",
+        '    print -u2 "Enter a number from 1 to ${#documents[@]}."',
+        "  done",
+        "fi",
+        'if [[ ! -f "${DOCUMENT}" ]]; then',
+        '  print -u2 "Veusz document not found: ${DOCUMENT}"',
+        "  exit 1",
+        "fi",
+        'if [[ "${SCIPLOT_LAUNCH_DRY_RUN:-0}" == "1" ]]; then',
+        '  print -r -- "${DOCUMENT}"',
+        "  exit 0",
+        "fi",
+        'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}"',
+    ]
+
+
+def write_delivery_launcher(delivery_dir: str | Path) -> Path:
+    """Write the canonical portable launcher for one minimal delivery."""
+
+    root = Path(delivery_dir).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    launcher = root / DELIVERY_LAUNCHER
+    launcher.write_text(
+        "\n".join(_delivery_launcher_lines()) + "\n",
+        encoding="utf-8",
+    )
+    launcher.chmod(0o755)
+    return launcher
+
+
+def _canonical_delivery_launcher_lines() -> list[str]:
+    return _mask_portable_assignments(_delivery_launcher_lines())
+
+
 def _canonical_project_launcher_lines(role: str) -> list[str]:
     """Return the generator-owned launcher structure with portable values masked."""
 
-    prelude = portable_sciplot_prelude()
-    for index, line in enumerate(prelude):
-        for name in _PORTABLE_PATH_ASSIGNMENTS:
-            if line.startswith(f"{name}="):
-                prelude[index] = f"{name}={_PORTABLE_PATH_PLACEHOLDER}"
-                break
+    prelude = _mask_portable_assignments(portable_sciplot_prelude())
 
     if role == "supporting_direct_veusz_editor":
         sentinel = Path("/__sciplot_launcher_contract__/document.vsz")
@@ -204,7 +274,7 @@ def _canonical_project_launcher_lines(role: str) -> list[str]:
             'if [[ "${1:-}" == "--check" ]]; then',
             '  exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --qt-smoke',
             "fi",
-            'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --advanced-editor',
+            'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}"',
         ]
     elif role == "supporting_exact_current_export":
         finder = portable_vsz_finder()
@@ -291,12 +361,13 @@ def _normalize_vsz_name_assignment(line: str) -> str | None:
     return f"{name}={_PORTABLE_VSZ_NAME_PLACEHOLDER}"
 
 
-def _project_launcher_structure(
+def _launcher_structure(
     content: str,
     *,
-    role: str,
+    expected_lines: list[str],
+    required_command_line: str,
+    directory_var: str,
 ) -> dict[str, object]:
-    expected_lines = _canonical_project_launcher_lines(role)
     expected_text = "\n".join(expected_lines) + "\n"
     normalized_lines: list[str] = []
     errors: list[str] = []
@@ -353,21 +424,8 @@ def _project_launcher_structure(
     if not structure_matches and "structure_mismatch" not in errors:
         errors.append("structure_mismatch")
 
-    required_command_lines = {
-        "primary_veusz_first_project": (
-            'exec "${SCIPLOT_CMD}" studio "${PROJECT_DIR}"'
-        ),
-        "supporting_direct_veusz_editor": (
-            'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}" --advanced-editor'
-        ),
-        "supporting_exact_current_export": (
-            'exec "${SCIPLOT_CMD}" studio "${PROJECT_DIR}" '
-            "--export pdf,tiff_300 --json"
-        ),
-    }
-    required_command_line = required_command_lines[role]
     required_command_present = required_command_line in actual_lines
-    prelude_line_count = len(portable_sciplot_prelude())
+    prelude_line_count = len(portable_sciplot_prelude(directory_var=directory_var))
     portable_resolution = bool(
         len(normalized_lines) >= prelude_line_count
         and normalized_lines[:prelude_line_count]
@@ -381,6 +439,72 @@ def _project_launcher_structure(
         "structure_sha256": structure_sha256,
         "expected_structure_sha256": expected_structure_sha256,
         "validation_errors": errors,
+    }
+
+
+def _project_launcher_structure(
+    content: str,
+    *,
+    role: str,
+) -> dict[str, object]:
+    required_command_lines = {
+        "primary_veusz_first_project": (
+            'exec "${SCIPLOT_CMD}" studio "${PROJECT_DIR}"'
+        ),
+        "supporting_direct_veusz_editor": (
+            'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}"'
+        ),
+        "supporting_exact_current_export": (
+            'exec "${SCIPLOT_CMD}" studio "${PROJECT_DIR}" '
+            "--export pdf,tiff_300 --json"
+        ),
+    }
+    return _launcher_structure(
+        content,
+        expected_lines=_canonical_project_launcher_lines(role),
+        required_command_line=required_command_lines[role],
+        directory_var="PROJECT_DIR",
+    )
+
+
+def _delivery_launcher_structure(content: str) -> dict[str, object]:
+    return _launcher_structure(
+        content,
+        expected_lines=_canonical_delivery_launcher_lines(),
+        required_command_line='exec "${SCIPLOT_CMD}" studio "${DOCUMENT}"',
+        directory_var="DELIVERY_DIR",
+    )
+
+
+def inspect_delivery_launcher_contract(
+    delivery_dir: str | Path,
+) -> dict[str, object]:
+    """Inspect the generated launcher that is part of a minimal delivery."""
+
+    root = Path(delivery_dir).expanduser().resolve()
+    launcher = root / DELIVERY_LAUNCHER
+    exists = launcher.is_file()
+    executable = bool(exists and launcher.stat().st_mode & 0o111)
+    try:
+        content = launcher.read_text(encoding="utf-8") if exists else ""
+    except (OSError, UnicodeError):
+        content = ""
+    structure = _delivery_launcher_structure(content)
+    ready = bool(
+        exists
+        and executable
+        and structure["canonical_structure"] is True
+        and structure["required_command_present"] is True
+    )
+    return {
+        "kind": "sciplot_delivery_launcher_contract",
+        "version": DELIVERY_LAUNCHER_CONTRACT_VERSION,
+        "path": str(launcher),
+        "name": launcher.name,
+        "exists": exists,
+        "executable": executable,
+        **structure,
+        "ready": ready,
     }
 
 
@@ -483,12 +607,15 @@ def inspect_project_launcher_contract(project_dir: str | Path) -> dict[str, obje
 
 
 __all__ = [
+    "DELIVERY_LAUNCHER_CONTRACT_VERSION",
     "LEGACY_WEB_WORKBENCH_LAUNCHER",
     "PROJECT_EXPORT_LAUNCHER",
     "PROJECT_LAUNCHER_CONTRACT_VERSION",
     "PROJECT_PRIMARY_LAUNCHER",
     "PROJECT_VEUSZ_LAUNCHER",
+    "inspect_delivery_launcher_contract",
     "inspect_project_launcher_contract",
     "portable_sciplot_prelude",
     "portable_vsz_finder",
+    "write_delivery_launcher",
 ]

@@ -45,5 +45,4 @@ export SCIPLOT_SOURCE_ROOT="$SOURCE_ROOT"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-${TMPDIR:-/tmp}/sciplot-mpl}"
 mkdir -p "$MPLCONFIGDIR"
 
-cd "$REPO"
 exec "$PYTHON" -m sciplot_core.cli "$@"

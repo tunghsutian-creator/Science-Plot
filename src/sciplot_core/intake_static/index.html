@@ -189,7 +189,7 @@ a { color: inherit; text-decoration: none; }
 .flow-main,
 .inspector,
 .figure-rail,
-.canvas-shell,
+.result-shell,
 .modal-box {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
@@ -379,34 +379,7 @@ a { color: inherit; text-decoration: none; }
   background: var(--surface-soft);
 }
 
-.check-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
-}
-.check-row:last-child { border-bottom: 0; }
-.check-row input { accent-color: var(--accent); }
-.series-control {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px 64px;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-.mini-input {
-  width: 100%;
-  height: 26px;
-  padding: 0 6px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fff;
-  font-size: 11px;
-}
-
-.workbench-screen {
+.review-screen {
   display: grid;
   grid-template-columns: 204px minmax(520px, 1fr) 284px;
   gap: clamp(28px, 5vw, 76px);
@@ -416,7 +389,7 @@ a { color: inherit; text-decoration: none; }
 
 .figure-rail,
 .inspector,
-.canvas-shell {
+.result-shell {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -428,13 +401,13 @@ a { color: inherit; text-decoration: none; }
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
-.workbench-screen > .figure-rail,
-.workbench-screen > .inspector {
+.review-screen > .figure-rail,
+.review-screen > .inspector {
   align-self: start;
   max-height: calc(100vh - 148px);
 }
 
-.workbench-screen > .figure-rail {
+.review-screen > .figure-rail {
   min-height: min(68vh, 640px);
 }
 
@@ -471,13 +444,13 @@ a { color: inherit; text-decoration: none; }
 .figure-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 720; font-size: 12px; }
 .figure-meta { color: var(--muted); font-size: 10px; }
 
-.canvas-shell {
+.result-shell {
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
-.canvas-top {
+.result-top {
   height: 0;
   padding: 0;
   display: none;
@@ -487,14 +460,14 @@ a { color: inherit; text-decoration: none; }
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.72);
 }
-.canvas-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 760; }
-.canvas-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.result-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 760; }
+.result-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
 .status-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--quiet); }
 .status-dot.ok { background: var(--ok); }
 .status-dot.busy { background: var(--amber); animation: pulse 1s var(--ease) infinite; }
 .status-dot.warn { background: var(--rose); }
 
-.canvas-body {
+.result-body {
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -559,19 +532,6 @@ a { color: inherit; text-decoration: none; }
   color: var(--quiet);
 }
 
-.inspector-tabs {
-  display: none;
-}
-.tab {
-  height: 30px;
-  border-radius: 7px;
-  color: var(--muted);
-  font-weight: 720;
-  font-size: 11px;
-  transition: background var(--motion-fast) var(--ease), color var(--motion-fast) var(--ease);
-}
-.tab.active { color: var(--ink); background: #fff; box-shadow: var(--shadow-sm); }
-
 .section {
   display: grid;
   gap: 10px;
@@ -601,8 +561,6 @@ a { color: inherit; text-decoration: none; }
   font-size: 11px;
 }
 .segment.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
-.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-
 .collapsed-row {
   min-height: 42px;
   display: flex;
@@ -685,18 +643,6 @@ a { color: inherit; text-decoration: none; }
   font-size: 11px;
   line-height: 1.35;
 }
-.quality-action-button {
-  justify-self: start;
-  min-height: 26px;
-  padding: 0 9px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
-  background: #fff;
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 760;
-}
-
 .toast {
   position: fixed;
   right: 16px;
@@ -756,7 +702,7 @@ a { color: inherit; text-decoration: none; }
 
 @media (max-width: 1080px) {
   .topbar { grid-template-columns: 210px minmax(0, 1fr) auto; }
-  .workbench-screen { grid-template-columns: 160px minmax(0, 1fr); }
+  .review-screen { grid-template-columns: 160px minmax(0, 1fr); }
   .inspector {
     position: fixed;
     left: 12px;
@@ -780,13 +726,13 @@ a { color: inherit; text-decoration: none; }
   .flow-screen { padding: 10px; place-items: stretch; }
   .flow-shell { height: 100%; min-height: 0; grid-template-columns: 1fr; }
   .inspect-grid { grid-template-columns: 1fr; }
-  .workbench-screen { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); padding: 8px; }
-  .workbench-screen > .figure-rail { min-height: 0; max-height: 136px; }
+  .review-screen { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); padding: 8px; }
+  .review-screen > .figure-rail { min-height: 0; max-height: 136px; }
   .figure-rail { grid-template-rows: auto auto; }
   .figure-list { display: flex; overflow-x: auto; }
   .figure-rail .panel-foot { display: none; }
   .figure-row { min-width: 150px; }
-  .canvas-body { align-items: start; padding: 12px; }
+  .result-body { align-items: start; padding: 12px; }
   .figure-stage { width: 100%; height: min(44vh, 360px); min-height: 260px; }
 }
 
@@ -822,7 +768,7 @@ a { color: inherit; text-decoration: none; }
 
   <main class="main">
     <section class="screen flow-screen" id="flowScreen"></section>
-    <section class="screen workbench-screen hidden" id="workbenchScreen"></section>
+    <section class="screen review-screen hidden" id="reviewScreen"></section>
   </main>
 </div>
 
@@ -852,39 +798,20 @@ const figureSizeOptions = [
 ];
 const exportOptions = [{ v: "pdf", l: "PDF" }, { v: "tiff_300", l: "TIFF 300" }, { v: "png_300", l: "PNG 300" }];
 const roleOptions = ["auto", "x", "y", "series", "sample", "unit", "metadata", "ignore"];
-const scaleOptions = [{ v: "", l: "Auto" }, { v: "linear", l: "Linear" }, { v: "log", l: "Log" }];
-const legendOptions = [{ v: "", l: "Auto" }, { v: "upper_right", l: "Upper right" }, { v: "upper_left", l: "Upper left" }, { v: "lower_right", l: "Lower right" }, { v: "lower_left", l: "Lower left" }];
-const labelModeOptions = [{ v: "", l: "Auto" }, { v: "legend", l: "Legend" }, { v: "inline", l: "Inline" }];
-const styleOptions = [{ v: "", l: "Auto" }, { v: "nature", l: "Nature" }, { v: "acs", l: "ACS" }, { v: "science", l: "Science" }, { v: "wiley", l: "Wiley" }];
-const paletteOptions = [
-  { v: "", l: "Auto (JAMA-inspired Editorial)" },
-  { v: "jama_editorial", l: "JAMA-inspired Editorial (Default)" },
-  { v: "npg_modern", l: "NPG-inspired Modern" },
-  { v: "tol_bright", l: "Tol Bright" }
-];
-const tickDensityOptions = [{ v: "", l: "Auto" }, { v: "sparse", l: "Sparse" }, { v: "dense", l: "Dense" }];
-const baselineOptions = [{ v: "", l: "Auto" }, { v: "none", l: "None" }, { v: "linear_endpoints", l: "Linear endpoints" }];
 
 const icon = {
   files: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6.5h6l2 2h8v9.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/></svg>',
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7Z"/></svg>',
-  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
-  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m20 6-11 11-5-5"/></svg>',
-  download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
-  more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 1-15.5 6.3"/><path d="M3 12A9 9 0 0 1 18.5 5.7"/><path d="M18 2v5h5"/><path d="M6 22v-5H1"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
   x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>',
-  cursor: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 3 7.5 17 2.5-7 6-2.5Z"/></svg>',
-  crosshair: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v5M12 16v5M3 12h5M16 12h5"/><circle cx="12" cy="12" r="3"/></svg>',
-  fit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/><path d="M3 3l6 6M21 3l-6 6M3 21l6-6M21 21l-6-6"/></svg>',
-  gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>',
   chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>'
 };
 
 const S = {
   stage: "source",
+  sessionId: "",
   catalog: [],
   projectName: "SciPlot project",
   dataTypeId: "",
@@ -903,11 +830,6 @@ const S = {
   lastProject: null,
   projectStatus: null,
   activeFigure: 0,
-  inspectorTab: "axes",
-  refineOptions: {},
-  clearRenderOptions: [],
-  splitPolicy: null,
-  refineDirty: false,
   busy: "",
   toast: "",
   error: "",
@@ -940,13 +862,6 @@ function applyCurrentExperimentDefaults({ forceSize = false } = {}) {
   if (options.size && (forceSize || !S.figureSizeTouched)) {
     S.figureSize = String(options.size);
   }
-  if (S.stage === "review") {
-    const next = { ...S.refineOptions };
-    ["palette_preset", "series_label_mode", "baseline", "reverse_x", "x_min", "x_max", "x_tick_density"].forEach(key => {
-      if (options[key] !== undefined && next[key] === undefined) next[key] = options[key];
-    });
-    S.refineOptions = next;
-  }
 }
 function allFiles() {
   const files = [];
@@ -967,59 +882,6 @@ function canInspect() {
 function canRender() {
   return canInspect() && S.exports.length > 0 && !S.busy;
 }
-function savedRenderOptions() {
-  return S.projectStatus?.manifest?.plot_options?.render_options || S.lastProject?.plot_options?.render_options || {};
-}
-function renderOptionsPayload() {
-  const options = {};
-  Object.entries(S.refineOptions).forEach(([key, value]) => {
-    if (value !== "" && value !== null && value !== undefined) options[key] = value;
-  });
-  options.size = S.figureSize;
-  return options;
-}
-function clearRenderOptionsPayload() {
-  return Array.from(new Set(S.clearRenderOptions.filter(Boolean)));
-}
-function splitPolicyPayload() {
-  if (!S.splitPolicy || typeof S.splitPolicy !== "object") return null;
-  return Object.keys(S.splitPolicy).length ? S.splitPolicy : null;
-}
-function workbenchPayload(extra = {}) {
-  const splitPolicy = splitPolicyPayload();
-  return {
-    exports: S.exports,
-    render_options: renderOptionsPayload(),
-    clear_render_options: clearRenderOptionsPayload(),
-    ...(splitPolicy ? { split_policy: splitPolicy } : {}),
-    series_order: selectedSeriesOrder(),
-    ...extra
-  };
-}
-function selectedSeriesOrder() {
-  return visibleGroups().map(group => group.sample.trim()).filter(Boolean);
-}
-function hasFigureSize(size) {
-  return figureSizeOptions.some(item => item.v === size);
-}
-function tallerFigureSize(size) {
-  const parts = String(size || "").split("x");
-  if (parts.length !== 2) return "";
-  const width = Number(parts[0]);
-  const height = Number(parts[1]);
-  if (!Number.isFinite(width) || !Number.isFinite(height)) return "";
-  const tall = `${width}x110`;
-  if (height < 110 && hasFigureSize(tall)) return tall;
-  return "";
-}
-function draftFigureSize(size) {
-  if (!hasFigureSize(size)) return false;
-  S.figureSize = size;
-  const next = { ...S.refineOptions };
-  delete next.size;
-  S.refineOptions = next;
-  return true;
-}
 function resultFigures() {
   const figures = (S.projectStatus?.figures || S.lastProject?.last_run?.figures?.map(path => ({
     name: String(path).split("/").pop(),
@@ -1030,7 +892,10 @@ function resultFigures() {
   const grouped = new Map();
   figures.forEach(item => {
     const name = String(item.name || "Figure");
-    const stem = name.replace(/\.(pdf|png|jpe?g|tiff?)$/i, "").replace(/_300dpi$/i, "");
+    const stem = String(item.canonical_figure_stem || name
+      .replace(/\.(pdf|png|jpe?g|tiff?)$/i, "")
+      .replace(/_\d+dpi$/i, ""))
+      .toLocaleLowerCase("en-US");
     const prior = grouped.get(stem);
     const score = /\.(png|jpe?g)$/i.test(name) ? 2 : 1;
     if (!prior || score > prior.score) grouped.set(stem, { ...item, score, stem });
@@ -1073,7 +938,7 @@ function stageLabel() {
   if (oneStep) return `Review · ${oneStep}`;
   const qa = S.projectStatus?.last_run?.qa?.status || "";
   if (qa) return `Review · QA ${qa}`;
-  return S.refineDirty ? "Review · unapplied changes" : "Review";
+  return "Review";
 }
 function topbarStateLabel() {
   if (S.busy) return `${titleCase(S.stage)}  •  ${S.busy}`;
@@ -1085,7 +950,7 @@ function topbarStateLabel() {
   const qa = String(S.projectStatus?.last_run?.qa?.status || "").toLowerCase();
   if (qa === "passed") return "Review  •  QA ready";
   if (qa) return `Review  •  QA ${qa}`;
-  return S.refineDirty ? "Review  •  Draft changes" : "Review  •  Ready";
+  return "Review  •  Ready";
 }
 function titleCase(value) {
   const text = String(value || "");
@@ -1121,10 +986,10 @@ function render() {
   renderActions();
   if (S.stage === "review") {
     document.getElementById("flowScreen").classList.add("hidden");
-    document.getElementById("workbenchScreen").classList.remove("hidden");
-    renderWorkbench();
+    document.getElementById("reviewScreen").classList.remove("hidden");
+    renderReview();
   } else {
-    document.getElementById("workbenchScreen").classList.add("hidden");
+    document.getElementById("reviewScreen").classList.add("hidden");
     document.getElementById("flowScreen").classList.remove("hidden");
     renderFlow();
   }
@@ -1136,9 +1001,7 @@ function renderActions() {
   const actions = document.getElementById("topActions");
   if (S.stage === "review") {
     actions.innerHTML = `
-      <button class="button primary" id="applyBtn" ${busy || !S.lastProject ? "disabled" : ""}>${icon.check}Apply</button>
-      <button class="button" id="exportBtn" ${busy || !S.lastProject ? "disabled" : ""}>${icon.download}Export</button>
-      <button class="icon-button" id="openProjectBtn" title="More">${icon.more}</button>
+      <button class="button subtle" id="openProjectBtn" ${busy ? "disabled" : ""}>${icon.folder}Projects</button>
     `;
     return;
   }
@@ -1349,25 +1212,25 @@ function figureSurfaceInfo() {
   };
 }
 
-function renderWorkbench() {
-  const screen = document.getElementById("workbenchScreen");
+function renderReview() {
+  const screen = document.getElementById("reviewScreen");
   screen.innerHTML = `
     <aside class="figure-rail">
       <div class="panel-head"><div class="panel-title">Figures</div><span class="preview-meta">${resultFigures().length}</span></div>
       <div class="figure-list">${renderFigureList()}</div>
     </aside>
-    <section class="canvas-shell">
-      <div class="canvas-top">
-        <div class="canvas-title">${esc(currentFigure()?.stem || currentFigure()?.name || "SciPlot figure")}</div>
-        <div class="canvas-meta"><span class="status-dot ${S.busy ? "busy" : S.error ? "warn" : hasRenderedArtifacts() ? "ok" : ""}"></span><span>${esc(S.busy || (S.refineDirty ? "Draft" : "Ready"))}</span></div>
+    <section class="result-shell">
+      <div class="result-top">
+        <div class="result-title">${esc(currentFigure()?.stem || currentFigure()?.name || "SciPlot figure")}</div>
+        <div class="result-meta"><span class="status-dot ${S.busy ? "busy" : S.error ? "warn" : hasRenderedArtifacts() ? "ok" : ""}"></span><span>${esc(S.busy || "Ready")}</span></div>
       </div>
-      <div class="canvas-body">
+      <div class="result-body">
         <div class="figure-stage${S.busy ? " busy" : ""}">${renderFigureSurface()}</div>
       </div>
     </section>
     <aside class="inspector" id="inspector">
-      <div class="inspector-head">${esc(inspectorTitle())}<button class="inspector-close" title="Close inspector">${icon.x}</button></div>
-      <div class="inspector-body">${renderInspector()}${renderInspectorRows()}</div>
+      <div class="inspector-head">Result Review</div>
+      <div class="inspector-body">${renderReviewPanel()}</div>
     </aside>
   `;
 }
@@ -1395,132 +1258,17 @@ function renderFigureSurface() {
     return `<img src="${esc(surface.imageUrl)}" alt="SciPlot rendered figure" onerror="this.parentElement.innerHTML='<div class=&quot;empty-state&quot;><b>Preview failed</b></div>'">`;
   }
   if (S.busy) return `<div class="empty-state"><b>${esc(S.busy)}</b><span>Rendering through SciPlot</span></div>`;
-  return `<div class="empty-state"><b>No rendered figure</b><span>Use Export to generate SciPlot artifacts.</span></div>`;
+  return `<div class="empty-state"><b>No rendered figure</b><span>Return to Inspect and render the confirmed project.</span></div>`;
 }
 
-function renderInspector() {
-  if (S.inspectorTab === "legend") return renderLegendInspector();
-  if (S.inspectorTab === "appearance") return renderAppearanceInspector();
-  if (S.inspectorTab === "page") return renderPageInspector();
-  if (S.inspectorTab === "series") return renderSeriesInspector();
-  if (S.inspectorTab === "export") return renderExportInspector();
-  return renderAxesInspector();
-}
-
-function inspectorTitle() {
-  const labels = {
-    page: "Page",
-    axes: "Axes",
-    series: "Series",
-    legend: "Legend",
-    appearance: "Appearance",
-    export: "Export"
-  };
-  return labels[S.inspectorTab] || "Axes";
-}
-
-function renderPageInspector() {
-  return `
-    <div class="section">
-      <div class="section-title">Size</div>
-      <div class="segmented">${figureSizeOptions.map(item => `<button class="segment${S.figureSize === item.v ? " active" : ""}" data-size="${esc(item.v)}">${esc(item.l)}</button>`).join("")}</div>
-    </div>
-  `;
-}
-
-function renderAppearanceInspector() {
-  return `
-    <div class="section">
-      <div class="section-title">Style</div>
-      <select class="select" data-refine="style_preset">${selectOptions(styleOptions, refineVal("style_preset"))}</select>
-      <label class="label">Palette</label><select class="select" data-refine="palette_preset">${selectOptions(paletteOptions, refineVal("palette_preset"))}</select>
-      <label class="label">Baseline</label><select class="select" data-refine="baseline">${selectOptions(baselineOptions, refineVal("baseline"))}</select>
-      <label class="label">Stack gap</label><input class="input" type="number" min="0.05" step="0.05" data-refine="stack_spacing_scale" placeholder="Auto" value="${esc(refineVal("stack_spacing_scale"))}">
-    </div>
-  `;
-}
-
-function renderLegendInspector() {
-  return `
-    <div class="section">
-      <div class="section-title">Labels</div>
-      <label class="label">Mode</label><select class="select" data-refine="series_label_mode">${selectOptions(labelModeOptions, refineVal("series_label_mode"))}</select>
-      <label class="label">Legend position</label><select class="select" data-refine="legend_position">${selectOptions(legendOptions, refineVal("legend_position"))}</select>
-    </div>
-  `;
-}
-
-function renderAxesInspector() {
-  return `
-    <div class="section">
-      <div class="section-title">X axis</div>
-      <label class="label">Scale</label><select class="select" data-refine="xscale">${selectOptions(scaleOptions, refineVal("xscale"))}</select>
-      <label class="check-row"><span>Reverse</span><input type="checkbox" data-refine-check="reverse_x" ${refineChecked("reverse_x")}></label>
-      <label class="label">Limits</label>
-      <div class="field-grid">
-        <input class="input" data-refine="x_min" placeholder="Auto" value="${esc(refineVal("x_min"))}">
-        <input class="input" data-refine="x_max" placeholder="Auto" value="${esc(refineVal("x_max"))}">
-      </div>
-      <label class="label">Ticks</label><select class="select" data-refine="x_tick_density">${selectOptions(tickDensityOptions, refineVal("x_tick_density"))}</select>
-      <label class="label">Label</label>
-      <input class="input" data-refine="x_label_override" placeholder="X axis label" value="${esc(refineVal("x_label_override"))}">
-    </div>
-    <div class="section">
-      <div class="section-title">Y axis</div>
-      <label class="label">Scale</label><select class="select" data-refine="yscale">${selectOptions(scaleOptions, refineVal("yscale"))}</select>
-      <label class="label">Limits</label>
-      <div class="field-grid">
-        <input class="input" data-refine="y_min" placeholder="Auto" value="${esc(refineVal("y_min"))}">
-        <input class="input" data-refine="y_max" placeholder="Auto" value="${esc(refineVal("y_max"))}">
-      </div>
-      <label class="label">Ticks</label><select class="select" data-refine="y_tick_density">${selectOptions(tickDensityOptions, refineVal("y_tick_density"))}</select>
-      <label class="label">Label</label>
-      <input class="input" data-refine="y_label_override" placeholder="Y axis label" value="${esc(refineVal("y_label_override"))}">
-    </div>
-  `;
-}
-
-function renderInspectorRows() {
-  const row = (tab, label, glyph) => `<button class="collapsed-row${S.inspectorTab === tab ? " active" : ""}" data-tab="${tab}"><span>${glyph}${label}</span>${icon.chevron}</button>`;
-  return `
-    ${row("axes", "Axes", icon.crosshair)}
-    ${row("page", "Page", icon.fit)}
-    ${row("series", "Series", icon.cursor)}
-    ${row("legend", "Legend", icon.more)}
-    ${row("appearance", "Appearance", icon.gear)}
-    ${row("export", "Export", icon.download)}
-  `;
-}
-
-function renderSeriesInspector() {
-  const series = visibleGroups().map(group => ({ label: group.sample }));
-  if (!series.length) return `<div class="empty-state"><b>No series</b></div>`;
-  return `<div class="section"><div class="section-title">Series</div>${series.map(item => renderSeriesRow(String(item.label || item.series_id || "Series"), item.color || "#087783")).join("")}</div>`;
-}
-
-function renderSeriesRow(label, color) {
-  const enabled = seriesStyle(label, "enabled", true) !== false;
-  const currentColor = seriesStyle(label, "color", color);
-  const lineWidth = seriesStyle(label, "line_width", "");
-  return `
-    <div class="check-row">
-      <div class="series-control">
-        <label style="display:flex;align-items:center;gap:8px;min-width:0">
-          <input type="checkbox" data-series-enabled="${esc(label)}" ${enabled ? "checked" : ""}>
-          <span class="column-name">${esc(label)}</span>
-        </label>
-        <input type="color" value="${esc(currentColor)}" data-series-color="${esc(label)}" style="width:32px;height:26px;border:1px solid var(--line);border-radius:6px;background:#fff">
-        <input class="mini-input" type="number" min="0.2" step="0.1" value="${esc(lineWidth)}" placeholder="lw" data-series-line-width="${esc(label)}">
-      </div>
-    </div>
-  `;
-}
-
-function renderExportInspector() {
+function renderReviewPanel() {
   const review = artifact("review_html");
   const metrics = artifact("analysis_metrics");
   const manifest = artifact("manifest");
   const packageZip = S.projectStatus?.project_package?.zip;
+  const studio = S.projectStatus?.project_package?.studio || {};
+  const veuszLauncher = studio.veusz_launcher;
+  const exportLauncher = studio.export_edited_launcher;
   const oneStep = oneStepStatus();
   const figureQA = oneStep.figure_qa_report || {};
   const issues = Array.isArray(figureQA.issue_ids) ? figureQA.issue_ids : [];
@@ -1534,12 +1282,13 @@ function renderExportInspector() {
         <div class="artifact-link"><span>Ink</span><b>${esc(exportInkLabel())}</b></div>
         <div class="artifact-link"><span>Issues</span><b>${esc(issues.length ? issues.join(", ") : "none")}</b></div>
       </div>
-      ${renderQualityActions(actions)}
+      ${renderQualityNotes(actions)}
     </div>
     <div class="section">
       <div class="section-title">Formats</div>
-      <div class="segmented">${exportOptions.map(item => `<button class="segment${S.exports.includes(item.v) ? " active" : ""}" data-export="${esc(item.v)}">${esc(item.l)}</button>`).join("")}</div>
-      <input class="input" id="plotOutputInput" value="${esc(S.plotOutput)}">
+      <div class="artifact-links">
+        ${exportOptions.filter(item => S.exports.includes(item.v)).map(item => `<div class="artifact-link"><span>${esc(item.l)}</span><b>selected</b></div>`).join("")}
+      </div>
     </div>
     <div class="section">
       <div class="section-title">Artifacts</div>
@@ -1550,14 +1299,21 @@ function renderExportInspector() {
         ${artifactLink("ZIP", packageZip)}
       </div>
     </div>
+    <div class="section">
+      <div class="section-title">Continue in Veusz</div>
+      <p class="quality-action-reason">Result Review is read-only. Continue visual editing in native Veusz; save the VSZ there, then use the exact-current export launcher for PDF/TIFF.</p>
+      <div class="artifact-links">
+        ${artifactLink("Open_in_Veusz.command", veuszLauncher)}
+        ${artifactLink("Export_Edited_Veusz.command", exportLauncher)}
+      </div>
+    </div>
   `;
 }
 
-function renderQualityActions(actions) {
+function renderQualityNotes(actions) {
   if (!actions.length) return "";
   return `<div class="quality-actions">${actions.map(action => {
     const status = String(action.status || "suggested");
-    const canApply = qualityActionCanApply(action);
     const detail = qualityActionDetails(action);
     return `
       <div class="quality-action">
@@ -1567,20 +1323,9 @@ function renderQualityActions(actions) {
         </div>
         <div class="quality-action-reason">${esc(action.reason || action.evidence_id || "")}</div>
         ${detail ? `<div class="quality-action-reason">${esc(detail)}</div>` : ""}
-        ${canApply ? `<button class="quality-action-button" data-quality-action="${esc(action.id)}">Draft refine</button>` : ""}
       </div>
     `;
   }).join("")}</div>`;
-}
-function qualityActionCanApply(action) {
-  if (!action || String(action.status || "suggested") === "applied" || !action.can_apply_as_refine_draft) return false;
-  if (action.render_options_patch || action.clear_render_options || action.series_style_patch) return true;
-  if (action.split_policy) return true;
-  const sizePatch = action.figure_size_patch && typeof action.figure_size_patch === "object" ? action.figure_size_patch : null;
-  if (sizePatch?.mode === "increase_height") {
-    return Boolean(tallerFigureSize(S.figureSize) || (!hasFigureSize(S.figureSize) && sizePatch.fallback_size));
-  }
-  return Boolean(sizePatch);
 }
 function qualityActionDetails(action) {
   const strategy = action.layout_strategy && typeof action.layout_strategy === "object" ? action.layout_strategy : null;
@@ -1593,110 +1338,13 @@ function qualityActionDetails(action) {
     return `Split policy: ${split.mode}${count}`;
   }
   const sizePatch = action.figure_size_patch && typeof action.figure_size_patch === "object" ? action.figure_size_patch : null;
-  if (sizePatch?.mode === "increase_height") return "Draft: taller figure preset";
+  if (sizePatch?.mode === "increase_height") return "Suggestion: taller figure preset";
   return "";
 }
 
 function artifactLink(label, info) {
   if (!info?.url) return `<span class="artifact-link">${esc(label)}</span>`;
   return `<a class="artifact-link ready" href="${esc(info.url)}" target="_blank" rel="noreferrer">${esc(label)}</a>`;
-}
-
-function selectOptions(options, value) {
-  return options.map(item => `<option value="${esc(item.v)}"${(value || "") === item.v ? " selected" : ""}>${esc(item.l)}</option>`).join("");
-}
-function refineVal(key) {
-  return S.refineOptions[key] ?? "";
-}
-function refineChecked(key, fallback = false) {
-  const value = S.refineOptions[key];
-  const checked = value === "" || value === undefined ? Boolean(fallback) : Boolean(value);
-  return checked ? "checked" : "";
-}
-function markClearRenderOption(key) {
-  if (!key || key === "size") return;
-  S.clearRenderOptions = Array.from(new Set([...S.clearRenderOptions, key]));
-}
-function unmarkClearRenderOption(key) {
-  S.clearRenderOptions = S.clearRenderOptions.filter(item => item !== key);
-}
-function setRefine(key, value) {
-  S.refineOptions = { ...S.refineOptions, [key]: value };
-  if (value === "" || value === null || value === undefined) {
-    if (Object.prototype.hasOwnProperty.call(savedRenderOptions(), key)) markClearRenderOption(key);
-  } else {
-    unmarkClearRenderOption(key);
-  }
-  S.refineDirty = true;
-  render();
-}
-function seriesStyles() {
-  return Array.isArray(S.refineOptions.series_styles) ? S.refineOptions.series_styles : [];
-}
-function seriesStyle(label, key, fallback) {
-  const item = seriesStyles().find(style => String(style.series_id || "") === label) || {};
-  return item[key] === undefined || item[key] === null ? fallback : item[key];
-}
-function writeSeriesStyle(label, key, value) {
-  const existing = seriesStyles().filter(style => String(style.series_id || "") !== label);
-  const current = { ...(seriesStyles().find(style => String(style.series_id || "") === label) || {}), series_id: label };
-  if (key === "enabled") current[key] = Boolean(value);
-  else if (value === "" || value === null || value === undefined) delete current[key];
-  else current[key] = value;
-  S.refineOptions = { ...S.refineOptions, series_styles: [...existing, current] };
-}
-function setSeriesStyle(label, key, value) {
-  writeSeriesStyle(label, key, value);
-  S.refineDirty = true;
-  render();
-}
-function currentSeriesLabels() {
-  const series = visibleGroups().map(group => ({ label: group.sample }));
-  return series.map(item => String(item.label || item.series_id || "").trim()).filter(Boolean);
-}
-function applyQualityActionDraft(actionId) {
-  const action = qualityActions().find(item => String(item.id) === String(actionId));
-  if (!action) return;
-  const renderPatch = action.render_options_patch && typeof action.render_options_patch === "object" ? action.render_options_patch : {};
-  Object.entries(renderPatch).forEach(([key, value]) => {
-    if (value === null || value === undefined || value === "") {
-      const next = { ...S.refineOptions };
-      delete next[key];
-      S.refineOptions = next;
-      markClearRenderOption(key);
-    } else if (key === "size") {
-      if (draftFigureSize(String(value))) unmarkClearRenderOption(key);
-    } else {
-      S.refineOptions = { ...S.refineOptions, [key]: value };
-      unmarkClearRenderOption(key);
-    }
-  });
-  const sizePatch = action.figure_size_patch && typeof action.figure_size_patch === "object" ? action.figure_size_patch : null;
-  if (sizePatch?.mode === "increase_height") {
-    const nextSize = tallerFigureSize(S.figureSize) || (!hasFigureSize(S.figureSize) ? String(sizePatch.fallback_size || "") : "");
-    if (nextSize) draftFigureSize(nextSize);
-  }
-  const clearKeys = Array.isArray(action.clear_render_options) ? action.clear_render_options : [];
-  clearKeys.forEach(key => {
-    const next = { ...S.refineOptions };
-    delete next[key];
-    S.refineOptions = next;
-    markClearRenderOption(String(key));
-  });
-  const seriesPatch = action.series_style_patch && typeof action.series_style_patch === "object" ? action.series_style_patch : null;
-  if (seriesPatch?.target === "visible_series") {
-    const labels = currentSeriesLabels();
-    labels.forEach(label => {
-      Object.entries(seriesPatch).forEach(([key, value]) => {
-        if (key !== "target") writeSeriesStyle(label, key, value);
-      });
-    });
-  }
-  const splitPatch = action.split_policy && typeof action.split_policy === "object" ? action.split_policy : null;
-  if (splitPatch?.mode) S.splitPolicy = { ...splitPatch };
-  S.refineDirty = true;
-  showToast("QA refine draft ready");
-  render();
 }
 
 function renderToast() {
@@ -1761,14 +1409,12 @@ function selectFamily(id) {
 function toggleExport(value) {
   S.exports = S.exports.includes(value) ? S.exports.filter(item => item !== value) : [...S.exports, value];
   if (!S.exports.length) S.exports = ["pdf"];
-  S.refineDirty = S.stage === "review" ? true : S.refineDirty;
   render();
 }
 function setSize(value) {
   S.figureSizeTouched = true;
   S.figureSize = value;
-  if (S.stage === "review") setRefine("size", value);
-  else render();
+  render();
 }
 
 async function fileToBase64(file) {
@@ -1824,7 +1470,10 @@ async function ensureTablePreview(item) {
   S.tablePreviews = { ...S.tablePreviews, [item.key]: { loading: true } };
   try {
     const payload = { name: item.file.name };
-    if (item.file.source_path) payload.source_path = item.file.source_path;
+    if (item.file.source_path) {
+      payload.source_path = item.file.source_path;
+      if (S.sessionId) payload.session_id = S.sessionId;
+    }
     else payload.content_base64 = await fileToBase64(item.file.file);
     const response = await fetch("/api/table-preview", {
       method: "POST",
@@ -1856,6 +1505,7 @@ async function createAndRenderProject() {
       render_options: { size: S.figureSize },
       replicate_mode: S.replicateMode,
       column_confirmations: collectColumnConfirmations(),
+      session_id: S.sessionId || undefined,
       run_after_create: true
     };
     const response = await fetch("/api/projects", {
@@ -1867,7 +1517,6 @@ async function createAndRenderProject() {
     if (!response.ok) throw new Error(json.error || "Render failed");
     S.lastProject = json;
     await refreshStatus();
-    resetRefine();
     S.stage = "review";
     S.busy = "";
     showToast(json.run_failed ? "Render needs attention" : "SciPlot artifacts ready");
@@ -1907,92 +1556,11 @@ function applyManifest(manifest) {
   if (plotOptions.output) S.plotOutput = plotOptions.output;
   if (plotOptions.exports?.length) S.exports = plotOptions.exports;
   if (plotOptions.render_options?.size) S.figureSize = plotOptions.render_options.size;
-  if (plotOptions.split_policy && typeof plotOptions.split_policy === "object") {
-    S.splitPolicy = plotOptions.split_policy;
-  }
-}
-
-function resetRefine() {
-  const options = S.projectStatus?.manifest?.plot_options?.render_options || S.lastProject?.plot_options?.render_options || {};
-  const splitPolicy = S.projectStatus?.manifest?.plot_options?.split_policy || S.lastProject?.plot_options?.split_policy || null;
-  S.refineOptions = {
-    size: options.size || S.figureSize,
-    xscale: options.xscale || "",
-    yscale: options.yscale || "",
-    x_min: options.x_min ?? "",
-    x_max: options.x_max ?? "",
-    y_min: options.y_min ?? "",
-    y_max: options.y_max ?? "",
-    reverse_x: options.reverse_x ?? "",
-    x_tick_density: options.x_tick_density || "",
-    y_tick_density: options.y_tick_density || "",
-    x_label_override: options.x_label_override || "",
-    y_label_override: options.y_label_override || "",
-    legend_position: options.legend_position || "",
-    series_label_mode: options.series_label_mode || "",
-    style_preset: options.style_preset || "",
-    palette_preset: options.palette_preset || "",
-    baseline: options.baseline || "",
-    stack_spacing_scale: options.stack_spacing_scale ?? "",
-    series_styles: Array.isArray(options.series_styles) ? options.series_styles : []
-  };
-  S.clearRenderOptions = [];
-  S.splitPolicy = splitPolicy && typeof splitPolicy === "object" ? splitPolicy : null;
-  S.refineDirty = false;
-}
-
-async function applyProject() {
-  if (!S.lastProject?.project_slug || S.busy) return;
-  S.busy = "Applying";
-  S.error = "";
-  render();
-  try {
-    const response = await fetch(`/api/projects/${encodeURIComponent(S.lastProject.project_slug)}/workbench/apply`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(workbenchPayload({ review_note: "" }))
-    });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.error || "Apply failed");
-    S.lastProject = { ...S.lastProject, ...json };
-    await refreshStatus();
-    resetRefine();
-    showToast("Applied");
-  } catch (error) {
-    S.error = error.message;
-    showToast(error.message);
-  }
-  S.busy = "";
-  render();
-}
-
-async function exportProject() {
-  if (!S.lastProject?.project_slug || S.busy) return;
-  S.busy = "Exporting";
-  S.error = "";
-  render();
-  try {
-    const response = await fetch(`/api/projects/${encodeURIComponent(S.lastProject.project_slug)}/rerun`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(workbenchPayload({ review_note: "" }))
-    });
-    const json = await response.json();
-    if (!response.ok) throw new Error(json.error || "Export failed");
-    S.lastProject = json;
-    await refreshStatus();
-    resetRefine();
-    showToast(json.run_failed ? "Export needs attention" : "Export complete");
-  } catch (error) {
-    S.error = error.message;
-    showToast(error.message);
-  }
-  S.busy = "";
-  render();
 }
 
 async function loadProject(slug) {
   try {
+    S.sessionId = "";
     const response = await fetch(`/api/projects/${encodeURIComponent(slug)}/status`);
     const json = await response.json();
     if (!response.ok) throw new Error(json.error || "Open failed");
@@ -2006,7 +1574,6 @@ async function loadProject(slug) {
       download_name: `${json.project_slug}.zip`
     };
     if (json.manifest) applyManifest(json.manifest);
-    resetRefine();
     S.stage = hasRenderedArtifacts() ? "review" : "inspect";
     showToast("Project opened");
   } catch (error) {
@@ -2057,6 +1624,7 @@ async function loadFromSession() {
   const session = new URLSearchParams(window.location.search).get("session");
   if (!session) return;
   try {
+    S.sessionId = session;
     const response = await fetch(`/api/session/${encodeURIComponent(session)}`);
     const json = await response.json();
     if (!response.ok) return;
@@ -2093,8 +1661,6 @@ document.addEventListener("click", event => {
   if (target.id === "backToSourceBtn" || target.id === "backSourceInline") setStage("source");
   if (target.id === "newSampleBtn") addGroup();
   if (target.id === "renderProjectBtn" || target.id === "renderProjectInline") createAndRenderProject();
-  if (target.id === "applyBtn" || target.id === "applyFloatBtn") applyProject();
-  if (target.id === "exportBtn" || target.id === "exportFloatBtn") exportProject();
   if (target.id === "loadPreviewBtn") {
     const selected = allFiles().find(item => item.key === S.previewKey) || allFiles()[0];
     if (selected) {
@@ -2105,14 +1671,9 @@ document.addEventListener("click", event => {
   if (target.dataset.family) selectFamily(target.dataset.family);
   if (target.dataset.size) setSize(target.dataset.size);
   if (target.dataset.export) toggleExport(target.dataset.export);
-  if (target.dataset.qualityAction) applyQualityActionDraft(target.dataset.qualityAction);
   if (target.dataset.stageButton) setStage(target.dataset.stageButton);
   if (target.dataset.figureIndex) {
     S.activeFigure = Number(target.dataset.figureIndex);
-    render();
-  }
-  if (target.dataset.tab) {
-    S.inspectorTab = target.dataset.tab;
     render();
   }
   if (target.dataset.removeGroup) removeGroup(Number(target.dataset.removeGroup));
@@ -2130,7 +1691,6 @@ document.addEventListener("input", event => {
   }
   if (target.id === "plotOutputInput") S.plotOutput = target.value;
   if (target.dataset.sampleName !== undefined) S.groups[Number(target.dataset.sampleName)].sample = target.value;
-  if (target.dataset.refine) setRefine(target.dataset.refine, target.value);
 });
 
 document.addEventListener("change", event => {
@@ -2146,11 +1706,6 @@ document.addEventListener("change", event => {
     render();
   }
   if (target.dataset.columnRole) S.columnRoles[target.dataset.columnRole] = target.value;
-  if (target.dataset.refine) setRefine(target.dataset.refine, target.value);
-  if (target.dataset.refineCheck) setRefine(target.dataset.refineCheck, target.checked);
-  if (target.dataset.seriesEnabled) setSeriesStyle(target.dataset.seriesEnabled, "enabled", target.checked);
-  if (target.dataset.seriesColor) setSeriesStyle(target.dataset.seriesColor, "color", target.value);
-  if (target.dataset.seriesLineWidth) setSeriesStyle(target.dataset.seriesLineWidth, "line_width", target.value);
 });
 
 document.addEventListener("dragstart", event => {

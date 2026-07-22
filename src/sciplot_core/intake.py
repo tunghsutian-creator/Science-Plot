@@ -14,18 +14,15 @@ import webbrowser
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from socketserver import TCPServer
 from typing import Any
-from urllib.parse import parse_qs, quote, unquote, urlparse
+from urllib.parse import quote
 
 import pandas as pd
 
 from sciplot_core._utils import json_safe, safe_filename, slug, unique_path
+from sciplot_core._paths import resolved_path_is_within
 from sciplot_core.assisted_cleanup import CLEANUP_REQUEST_FILENAME, CLEANUP_RESULT_FILENAME, write_cleanup_request
-from sciplot_core.codex_jobs import codex_available, list_codex_jobs, load_codex_job, start_codex_job
 from sciplot_core.ingest import smart_decode
 from sciplot_core.launchers import (
     LEGACY_WEB_WORKBENCH_LAUNCHER,
@@ -37,21 +34,23 @@ from sciplot_core.launchers import (
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload, normal_mode_payload
 from sciplot_core.policy import (
-    DEFAULT_EXPORT_FORMATS_POLICY,
     FIGURE_SIZE_PRESETS,
     FTIR_SPECTRUM_RENDER_OPTIONS,
     TORQUE_OFFSET_STACK_RENDER_OPTIONS,
+    canonical_figure_stem,
 )
 from sciplot_core.publication import build_publication_intent, build_transform_ledger, get_publication_profile
 from sciplot_core.semantic import (
     classify_source,
+    is_tensile_export_dir,
     is_rheology_frequency_comparison_dir,
     is_rheology_temperature_comparison_dir,
+    tensile_export_csv_files,
+    tensile_export_sample_name,
 )
-from sciplot_core.study_model import build_study_model, sync_study_model_samples
-from sciplot_core.workbench_contract import apply_request_patch, normalize_exports, normalize_render_options
+from sciplot_core.study_model import build_study_model
+from sciplot_core.request_contract import normalize_exports, normalize_render_options
 
-_STATIC_DIR = Path(__file__).with_name("intake_static")
 _DEFAULT_OUTPUT_ROOT = Path("outputs") / "intake_projects"
 APPROVED_INTAKE_SIZE_PRESETS = FIGURE_SIZE_PRESETS
 _TEXT_EXTENSIONS = {".csv", ".tsv", ".txt"}
@@ -83,14 +82,6 @@ class IncomingFile:
 class IntakeGroupInput:
     sample: str
     files: tuple[IncomingFile, ...]
-
-
-@dataclass(frozen=True)
-class IntakeProjectRequest:
-    project_dir: Path
-    manifest: dict[str, Any]
-    request_path: Path
-    request: dict[str, Any]
 
 
 def converge_material_review_notes(request: dict[str, Any]) -> bool:
@@ -389,14 +380,6 @@ def refresh_intake_project_zip(project_dir: str | Path) -> Path:
     return zip_path
 
 
-def _path_within(path: Path, root: Path) -> bool:
-    try:
-        path.resolve().relative_to(root.resolve())
-    except ValueError:
-        return False
-    return True
-
-
 def _read_json_if_exists(path: Path) -> dict[str, Any] | None:
     if not path.exists() or not path.is_file():
         return None
@@ -437,7 +420,7 @@ def _write_render_failure_cleanup_request(
 def _project_dir_fromslug(output_root: Path, project_slug: str) -> Path:
     safe_slug = safe_filename(project_slug)
     project_dir = (output_root.expanduser().resolve() / safe_slug).resolve()
-    if not _path_within(project_dir, output_root.expanduser().resolve()):
+    if not resolved_path_is_within(project_dir, output_root):
         raise PermissionError("Project path is outside the configured output root.")
     return project_dir
 
@@ -571,10 +554,7 @@ def _prepare_studio_project_package(project_dir: Path) -> None:
 
 
 def _preview_path_for_figure(path: Path) -> Path:
-    stem = path.stem
-    if stem.endswith("_300dpi"):
-        stem = stem[: -len("_300dpi")]
-    return path.with_name(f"{stem}_preview.png")
+    return path.with_name(f"{canonical_figure_stem(path)}_preview.png")
 
 
 def _preview_is_fresh(preview_path: Path, source_path: Path, *, min_width_px: int = 0) -> bool:
@@ -731,12 +711,12 @@ def _resolve_project_artifact(project_dir: Path, artifact_path: str) -> Path:
     roots = _allowed_artifact_roots(project_dir)
     if requested.is_absolute():
         candidate = requested.resolve()
-        if any(_path_within(candidate, root) for root in roots):
+        if any(resolved_path_is_within(candidate, root) for root in roots):
             return candidate
         raise PermissionError("Artifact path is outside this SciPlot project.")
     for root in roots:
         candidate = (root / requested).resolve()
-        if _path_within(candidate, root):
+        if resolved_path_is_within(candidate, root):
             return candidate
     raise PermissionError("Artifact path is outside this SciPlot project.")
 
@@ -774,7 +754,13 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         if isinstance(item, dict) and isinstance(item.get("path"), str) and item.get("path")
     ]
     figure_paths = [Path(str(path)) for path in last_run.get("figures", []) if isinstance(path, str)]
-    figures = [_artifact_info(path, project_slug=project_slug) for path in figure_paths]
+    figures = [
+        {
+            **_artifact_info(path, project_slug=project_slug),
+            "canonical_figure_stem": canonical_figure_stem(path),
+        }
+        for path in figure_paths
+    ]
     preview_figure = _figure_preview_info(figure_paths, project_slug=project_slug)
     cleanup_result = _read_json_if_exists(cleanup_result_path)
     cleanup_ready = bool(cleanup_result and cleanup_result.get("ready_for_normal_mode") is True)
@@ -789,8 +775,6 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         if needs_assisted_cleanup
         else normal_mode_payload(route="web")
     )
-    assistant_available = codex_available()
-    assistant_jobs = list_codex_jobs(project_path)
     return {
         "kind": "sciplot_project_status",
         "project_slug": project_slug,
@@ -803,49 +787,35 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         "project_package": _project_package_info(project_path, project_slug=project_slug),
         "figures": figures,
         "preview_figure": preview_figure,
-        "workbench": {
-            "apply_url": f"/api/projects/{quote(project_slug)}/workbench/apply",
+        "review": {
+            "mode": "read_only",
             "preview_source": "rendered_artifacts_only",
         },
         "operation_mode": operation_mode,
         "needs_assisted_cleanup": needs_assisted_cleanup,
-        "needs_codex": needs_assisted_cleanup,
         "cleanup": {
             "request": artifacts["assisted_cleanup_request"],
             "result": artifacts["cleanup_result"],
             "ready_for_normal_mode": cleanup_ready,
             "payload": json_safe(cleanup_result) if cleanup_result is not None else None,
         },
-        "assistant": {
-            "provider": "codex",
-            "available": assistant_available,
-            "jobs": assistant_jobs,
-        },
-        "codex": {
-            "available": assistant_available,
-            "jobs": assistant_jobs,
-        },
-}
+    }
 
 
 def _decode_text_preview(path: Path, *, max_bytes: int = 8192) -> str:
     return smart_decode(path.read_bytes()[:max_bytes])[0]
 
 
-def _looks_like_tensile_export_dir(path: Path) -> bool:
-    return path.is_dir() and path.name.casefold().endswith(".is_tens_exports")
-
-
 def _tensile_export_dirs(source: Path) -> list[Path]:
-    if _looks_like_tensile_export_dir(source):
+    if is_tensile_export_dir(source):
         return [source]
     if not source.is_dir():
         return []
-    direct = [path for path in source.iterdir() if _looks_like_tensile_export_dir(path)]
+    direct = [path for path in source.iterdir() if is_tensile_export_dir(path)]
     if direct:
         return sorted(direct, key=lambda path: path.name.casefold())
     return sorted(
-        (path for path in source.rglob("*") if _looks_like_tensile_export_dir(path)),
+        (path for path in source.rglob("*") if is_tensile_export_dir(path)),
         key=lambda path: path.name,
     )
 
@@ -1138,11 +1108,14 @@ def prepare_intake_session(
         data_type_id = str(data_type["id"])
         experiment_type_id = str(experiment["id"])
         rule_id = selected_rule.rule_id
-        reason = f"Explicit material rule `{selected_rule.rule_id}` selected by the user or Luna/Codex."
+        reason = f"Explicit material rule `{selected_rule.rule_id}` selected by the user or an assistant."
         confidence = 100.0
         if selected_rule.rule_id == "tensile_curve" and tensile_dirs:
             groups = [
-                _group_payload(path.name.removesuffix(".is_tens_Exports"), sorted(path.glob("*.csv")))
+                _group_payload(
+                    tensile_export_sample_name(path),
+                    tensile_export_csv_files(path),
+                )
                 for path in tensile_dirs
             ]
         else:
@@ -1159,7 +1132,10 @@ def prepare_intake_session(
         reason = "Detected tensile export directories and mapped each export folder to one sample group."
         confidence = 98.0
         groups = [
-            _group_payload(path.name.removesuffix(".is_tens_Exports"), sorted(path.glob("*.csv")))
+            _group_payload(
+                tensile_export_sample_name(path),
+                tensile_export_csv_files(path),
+            )
             for path in tensile_dirs
         ]
     elif frequency_files:
@@ -1289,40 +1265,6 @@ def _selected_render_options(
     template: str | None = None,
 ) -> dict[str, Any]:
     return normalize_render_options(render_options, template=template)
-
-
-def _selected_series_order(series_order: object) -> list[str] | None:
-    if not isinstance(series_order, list | tuple):
-        return None
-    selected: list[str] = []
-    seen: set[str] = set()
-    for item in series_order:
-        label = str(item).strip()
-        if not label:
-            continue
-        key = label.casefold()
-        if key in seen:
-            continue
-        selected.append(label)
-        seen.add(key)
-    return selected or None
-
-
-def _filter_manifest_groups(groups: object, series_order: list[str] | None) -> list[dict[str, Any]] | None:
-    if not series_order or not isinstance(groups, list | tuple):
-        return None
-    ordered: list[dict[str, Any]] = []
-    used: set[int] = set()
-    for label in series_order:
-        for index, group in enumerate(groups):
-            if index in used or not isinstance(group, dict):
-                continue
-            if str(group.get("sample") or "").strip() != label:
-                continue
-            ordered.append(dict(group))
-            used.add(index)
-            break
-    return ordered or None
 
 
 def _experiment_template(experiment: dict[str, Any]) -> str | None:
@@ -1685,7 +1627,6 @@ def create_and_run_intake_project(
             "failure": str(exc),
             "operation_mode": assisted_cleanup_mode_payload(reason="render_failure"),
             "needs_assisted_cleanup": True,
-            "needs_codex": True,
             "intervention_request": str(intervention) if intervention.exists() else None,
             "assisted_cleanup_request": cleanup_request,
         }
@@ -1719,221 +1660,6 @@ def create_and_run_intake_project(
     }
 
 
-def _write_intake_manifest(project_dir: Path, manifest: dict[str, Any]) -> None:
-    (project_dir / "intake_manifest.json").write_text(
-        json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    for path in sorted(project_dir.glob("*.sciplot.json")):
-        path.write_text(json.dumps(json_safe(manifest), indent=2, ensure_ascii=False), encoding="utf-8")
-
-
-def _resolve_project_plot_request(project_dir: Path, manifest: dict[str, Any]) -> Path:
-    request_value = str(manifest.get("plot_request") or "plot_request.json")
-    request_path = Path(request_value).expanduser()
-    if not request_path.is_absolute():
-        request_path = project_dir / request_path
-    request_path = request_path.resolve()
-    if not _path_within(request_path, project_dir):
-        raise PermissionError("Plot request must belong to the intake project.")
-    return request_path
-
-
-def _load_intake_project_request(project_dir: str | Path) -> IntakeProjectRequest:
-    project_path = Path(project_dir).expanduser().resolve()
-    manifest_path = project_path / "intake_manifest.json"
-    manifest = _read_json_if_exists(manifest_path)
-    if manifest is None:
-        raise FileNotFoundError(f"No intake project manifest found at {manifest_path}.")
-    request_path = _resolve_project_plot_request(project_path, manifest)
-    request = json.loads(request_path.read_text(encoding="utf-8"))
-    if not isinstance(request, dict):
-        raise ValueError("Plot request must be a JSON object.")
-    return IntakeProjectRequest(
-        project_dir=project_path,
-        manifest=manifest,
-        request_path=request_path,
-        request=request,
-    )
-
-
-def _project_template_for_contract(
-    project_dir: Path,
-    intake_manifest: dict[str, Any],
-    request: dict[str, Any],
-) -> str | None:
-    template = request.get("template")
-    if isinstance(template, str) and template.strip():
-        return template.strip()
-    last_run = intake_manifest.get("last_run") if isinstance(intake_manifest.get("last_run"), dict) else {}
-    output = last_run.get("output") or intake_manifest.get("outputs_dir")
-    if isinstance(output, str) and output.strip():
-        manifest_path = Path(output).expanduser()
-        if not manifest_path.is_absolute():
-            manifest_path = project_dir / manifest_path
-        run_manifest = _read_json_if_exists(manifest_path / "manifest.json") or {}
-        result = run_manifest.get("result") if isinstance(run_manifest.get("result"), dict) else {}
-        result_template = result.get("template")
-        if isinstance(result_template, str) and result_template.strip():
-            return result_template.strip()
-    experiment = intake_manifest.get("experiment") if isinstance(intake_manifest.get("experiment"), dict) else {}
-    for key in ("template", "chart"):
-        value = experiment.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def apply_intake_project(
-    project_dir: str | Path,
-    *,
-    exports: list[str] | tuple[str, ...] | None = None,
-    render_options: dict[str, Any] | None = None,
-    clear_render_options: list[str] | tuple[str, ...] | None = None,
-    split_policy: dict[str, Any] | None = None,
-    series_order: list[str] | tuple[str, ...] | None = None,
-    review_note: str | None = None,
-) -> dict[str, Any]:
-    project = _load_intake_project_request(project_dir)
-    intake_manifest = project.manifest
-    template = _project_template_for_contract(project.project_dir, intake_manifest, project.request)
-    patched_request = apply_request_patch(
-        project.request,
-        exports=exports,
-        render_options=render_options,
-        clear_render_options=clear_render_options,
-        split_policy=split_policy,
-        series_order=series_order,
-        template=template,
-        review_note=review_note,
-    )
-    project.request_path.write_text(
-        json.dumps(json_safe(patched_request), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-
-    render_patch = (
-        patched_request.get("render_options")
-        if isinstance(patched_request.get("render_options"), dict)
-        else {}
-    )
-    selected_series = _selected_series_order(patched_request.get("series_order"))
-    plot_options = intake_manifest.get("plot_options") if isinstance(intake_manifest.get("plot_options"), dict) else {}
-    intake_manifest["plot_options"] = {
-        **plot_options,
-        "exports": patched_request.get("exports", list(DEFAULT_EXPORT_FORMATS_POLICY)),
-        "render_options": render_patch,
-        **(
-            {"split_policy": patched_request["split_policy"]}
-            if isinstance(patched_request.get("split_policy"), dict)
-            else {}
-        ),
-        **({"series_order": selected_series} if selected_series is not None else {}),
-    }
-    filtered_groups = _filter_manifest_groups(intake_manifest.get("groups"), selected_series)
-    if filtered_groups is not None:
-        intake_manifest["groups"] = filtered_groups
-    patched_study_model = patched_request.get("study_model")
-    if isinstance(patched_study_model, dict):
-        intake_manifest["study_model"] = sync_study_model_samples(
-            patched_study_model,
-            sample_order=selected_series,
-        )
-    _write_intake_manifest(project.project_dir, intake_manifest)
-    refreshed_zip = refresh_intake_project_zip(project.project_dir)
-    return {
-        **intake_manifest,
-        "project_dir": str(project.project_dir),
-        "zip_path": str(refreshed_zip),
-        "download_name": refreshed_zip.name,
-        "last_run": intake_manifest.get("last_run", {}),
-    }
-
-
-def rerun_intake_project(
-    project_dir: str | Path,
-    *,
-    exports: list[str] | tuple[str, ...] | None = None,
-    render_options: dict[str, Any] | None = None,
-    clear_render_options: list[str] | tuple[str, ...] | None = None,
-    split_policy: dict[str, Any] | None = None,
-    series_order: list[str] | tuple[str, ...] | None = None,
-    review_note: str | None = None,
-) -> dict[str, Any]:
-    from sciplot_core.workflow import run_request
-
-    project_path = Path(project_dir).expanduser().resolve()
-    applied = apply_intake_project(
-        project_path,
-        exports=exports,
-        render_options=render_options,
-        clear_render_options=clear_render_options,
-        split_policy=split_policy,
-        series_order=series_order,
-        review_note=review_note,
-    )
-    project = _load_intake_project_request(project_path)
-    intake_manifest = project.manifest
-
-    try:
-        run_manifest = run_request(project.request_path)
-    except Exception as exc:
-        run_output_value = (
-            project.request.get("output")
-            or intake_manifest.get("outputs_dir")
-            or project_path / "runs" / "run_001"
-        )
-        run_output = Path(str(run_output_value))
-        intervention = run_output / "intervention_request.json"
-        cleanup_request = _write_render_failure_cleanup_request(
-            run_output=run_output,
-            request=project.request,
-            request_path=project.request_path,
-            intervention=intervention,
-        )
-        failed_run = {
-            "failed_at": datetime.now(UTC).isoformat(),
-            "output": str(run_output),
-            "figures": [],
-            "analysis_metrics": [],
-            "qa": {},
-            "failure": str(exc),
-            "operation_mode": assisted_cleanup_mode_payload(reason="render_failure"),
-            "needs_assisted_cleanup": True,
-            "needs_codex": True,
-            "intervention_request": str(intervention) if intervention.exists() else None,
-            "assisted_cleanup_request": cleanup_request,
-        }
-        intake_manifest = _read_json_if_exists(project_path / "intake_manifest.json") or intake_manifest
-        intake_manifest["last_run"] = failed_run
-        intake_manifest["run_failed"] = True
-        intake_manifest["failure"] = str(exc)
-        _write_intake_manifest(project_path, intake_manifest)
-        refreshed_zip = refresh_intake_project_zip(project_path)
-        return {
-            **intake_manifest,
-            "project_dir": str(project_path),
-            "zip_path": str(refreshed_zip),
-            "download_name": refreshed_zip.name,
-            "last_run": failed_run,
-        }
-
-    intake_manifest = _read_json_if_exists(project_path / "intake_manifest.json") or intake_manifest
-    intake_manifest.pop("run_failed", None)
-    intake_manifest.pop("failure", None)
-    _write_intake_manifest(project_path, intake_manifest)
-    _prepare_studio_project_package(project_path)
-    refreshed_zip = refresh_intake_project_zip(project_path)
-    return {
-        **applied,
-        **intake_manifest,
-        "project_dir": str(project_path),
-        "zip_path": str(refreshed_zip),
-        "download_name": refreshed_zip.name,
-        "last_run": intake_manifest.get("last_run", run_manifest),
-    }
-
-
 def _decode_group_payload(payload: dict[str, Any]) -> list[IntakeGroupInput]:
     groups: list[IntakeGroupInput] = []
     for group in payload.get("groups", []):
@@ -1954,297 +1680,6 @@ def _decode_group_payload(payload: dict[str, Any]) -> list[IntakeGroupInput]:
     return groups
 
 
-class _IntakeHandler(BaseHTTPRequestHandler):
-    server: _IntakeServer
-
-    def log_message(self, _format: str, *args: object) -> None:
-        return
-
-    def _send_json(self, payload: object, status: HTTPStatus = HTTPStatus.OK) -> None:
-        body = json.dumps(json_safe(payload), ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _send_file(self, path: Path) -> None:
-        if not path.exists() or not path.is_file():
-            self.send_error(HTTPStatus.NOT_FOUND)
-            return
-        body = path.read_bytes()
-        content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _send_text(self, text: str, status: HTTPStatus = HTTPStatus.OK) -> None:
-        body = text.encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _project_dir_from_request(self, project_slug: str) -> Path:
-        return _project_dir_fromslug(self.server.output_root, unquote(project_slug))
-
-    def _respond_error(self, exc: Exception) -> None:
-        detail = str(exc) or type(exc).__name__
-        if isinstance(exc, FileNotFoundError):
-            self._send_json(
-                {"error": detail, "code": "not_found", "hint": "The requested resource was not found."},
-                status=HTTPStatus.NOT_FOUND,
-            )
-        elif isinstance(exc, PermissionError):
-            self._send_json({"error": detail, "code": "forbidden"}, status=HTTPStatus.FORBIDDEN)
-        elif isinstance(exc, (ValueError, TypeError)):
-            self._send_json({"error": detail, "code": "invalid_input"}, status=HTTPStatus.BAD_REQUEST)
-        elif isinstance(exc, OSError):
-            self._send_json({"error": detail, "code": "io_error"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
-        else:
-            self._send_json({"error": detail, "code": "internal_error"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
-
-    def do_GET(self) -> None:
-        parsed = urlparse(self.path)
-        if parsed.path in {"/", "/index.html"}:
-            self._send_file(_STATIC_DIR / "index.html")
-            return
-        if parsed.path == "/api/catalog":
-            query = parse_qs(parsed.query)
-            include_pending = query.get("all", ["0"])[0] in {"1", "true", "yes"}
-            self._send_json(intake_catalog_payload(include_pending=include_pending))
-            return
-        if parsed.path.startswith("/api/session/"):
-            session_id = safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
-            self._send_file(self.server.output_root / "sessions" / f"{session_id}.json")
-            return
-        if parsed.path == "/api/session":
-            query = parse_qs(parsed.query)
-            session_id = safe_filename(query.get("id", [""])[0])
-            self._send_file(self.server.output_root / "sessions" / f"{session_id}.json")
-            return
-        if parsed.path == "/api/projects":
-            query = parse_qs(parsed.query)
-            search = str(query.get("search", [""])[0]).strip().lower()
-            all_projects = list_intake_projects(self.server.output_root)
-            if search:
-                all_projects = [
-                    p for p in all_projects
-                    if search in p["slug"].lower() or search in str(p.get("project_name", "")).lower()
-                ]
-            self._send_json({"kind": "sciplot_project_list", "projects": all_projects})
-            return
-        if parsed.path.startswith("/api/download/"):
-            filename = safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
-            self._send_file(self.server.output_root / filename)
-            return
-        if parsed.path.startswith("/api/projects/"):
-            parts = parsed.path.strip("/").split("/")
-            if len(parts) >= 4 and parts[0] == "api" and parts[1] == "projects":
-                project_dir = self._project_dir_from_request(parts[2])
-                try:
-                    if parts[3] == "status":
-                        self._send_json(intake_project_status(project_dir))
-                        return
-                    if parts[3] == "artifact":
-                        query = parse_qs(parsed.query)
-                        artifact_path = query.get("path", [""])[0]
-                        artifact = _resolve_project_artifact(project_dir, artifact_path)
-                        self._send_file(artifact)
-                        return
-                except PermissionError as exc:
-                    self.send_error(HTTPStatus.FORBIDDEN, str(exc))
-                    return
-                except FileNotFoundError:
-                    self.send_error(HTTPStatus.NOT_FOUND)
-                    return
-                except ValueError as exc:
-                    self._respond_error(exc)
-                    return
-        if parsed.path.startswith("/api/codex/jobs/"):
-            parts = parsed.path.strip("/").split("/")
-            query = parse_qs(parsed.query)
-            project_slug = query.get("project", [""])[0]
-            if len(parts) >= 4 and project_slug:
-                try:
-                    project_dir = self._project_dir_from_request(project_slug)
-                    job_dir = project_dir / "codex_jobs" / safe_filename(unquote(parts[3]))
-                    if len(parts) == 5 and parts[4] == "logs":
-                        stdout_path = job_dir / "stdout.jsonl"
-                        self._send_text(stdout_path.read_text(encoding="utf-8") if stdout_path.exists() else "")
-                        return
-                    self._send_json(load_codex_job(job_dir))
-                    return
-                except (FileNotFoundError, OSError):
-                    self.send_error(HTTPStatus.NOT_FOUND)
-                    return
-                except PermissionError as exc:
-                    self.send_error(HTTPStatus.FORBIDDEN, str(exc))
-                    return
-        if parsed.path == "/api/reveal":
-            query = parse_qs(parsed.query)
-            target = str(query.get("path", [""])[0])
-            if not target:
-                self._send_json({"error": "Path required"}, status=HTTPStatus.BAD_REQUEST)
-                return
-            target_path = Path(target).expanduser().resolve()
-            if not target_path.exists():
-                self._send_json({"error": f"Path not found: {target_path}"}, status=HTTPStatus.NOT_FOUND)
-                return
-            if not _path_within(target_path, self.server.output_root.expanduser().resolve()):
-                raise PermissionError("Reveal path is outside the configured output root.")
-            import subprocess
-
-            subprocess.Popen(["open", str(target_path)])
-            self._send_json({"revealed": str(target_path)})
-            return
-        self.send_error(HTTPStatus.NOT_FOUND)
-
-    def do_POST(self) -> None:
-        parsed = urlparse(self.path)
-        if parsed.path == "/api/table-preview":
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
-                source_path = str(payload.get("source_path") or "").strip()
-                content_base64 = str(payload.get("content_base64") or "")
-                content: bytes | None = None
-                if content_base64:
-                    if "," in content_base64:
-                        content_base64 = content_base64.split(",", 1)[1]
-                    content = base64.b64decode(content_base64)
-                preview = preview_table_payload(
-                    name=str(payload.get("name") or Path(source_path).name or "table"),
-                    content=content,
-                    source_path=source_path or None,
-                )
-            except Exception as exc:
-                self._respond_error(exc)
-                return
-            self._send_json(preview)
-            return
-        if parsed.path == "/api/codex/jobs":
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-                payload = json.loads(self.rfile.read(length).decode("utf-8"))
-                project_slug = str(payload.get("project_slug") or "").strip()
-                project_dir_value = str(payload.get("project_dir") or "").strip()
-                if project_slug:
-                    project_dir = self._project_dir_from_request(project_slug)
-                elif project_dir_value:
-                    project_dir = Path(project_dir_value).expanduser().resolve()
-                    if not _path_within(project_dir, self.server.output_root):
-                        raise PermissionError("Assistant jobs must belong to an intake project.")
-                else:
-                    raise ValueError("Assistant job payload must include `project_slug` or `project_dir`.")
-                job = start_codex_job(
-                    project_dir=project_dir,
-                    plot_request=payload.get("plot_request"),
-                    run_output=payload.get("run_output"),
-                    intervention_request=payload.get("intervention_request"),
-                    failure=payload.get("failure"),
-                    user_goal=payload.get("user_goal"),
-                    run_async=True,
-                )
-            except PermissionError as exc:
-                self.send_error(HTTPStatus.FORBIDDEN, str(exc))
-                return
-            except Exception as exc:
-                self._respond_error(exc)
-                return
-            self._send_json(job)
-            return
-        if parsed.path.startswith("/api/projects/"):
-            parts = parsed.path.strip("/").split("/")
-            if len(parts) == 5 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "workbench":
-                try:
-                    length = int(self.headers.get("Content-Length", "0"))
-                    payload = json.loads(self.rfile.read(length).decode("utf-8"))
-                    project_dir = self._project_dir_from_request(parts[2])
-                    if parts[4] == "apply":
-                        project = apply_intake_project(
-                            project_dir,
-                            exports=payload.get("exports"),
-                            render_options=payload.get("render_options"),
-                            clear_render_options=payload.get("clear_render_options"),
-                            split_policy=payload.get("split_policy"),
-                            series_order=payload.get("series_order"),
-                            review_note=payload.get("review_note"),
-                        )
-                    else:
-                        self.send_error(HTTPStatus.NOT_FOUND)
-                        return
-                except PermissionError as exc:
-                    self.send_error(HTTPStatus.FORBIDDEN, str(exc))
-                    return
-                except Exception as exc:
-                    self._respond_error(exc)
-                    return
-                self._send_json(project)
-                return
-            if len(parts) == 4 and parts[0] == "api" and parts[1] == "projects" and parts[3] == "rerun":
-                try:
-                    length = int(self.headers.get("Content-Length", "0"))
-                    payload = json.loads(self.rfile.read(length).decode("utf-8"))
-                    project_dir = self._project_dir_from_request(parts[2])
-                    project = rerun_intake_project(
-                        project_dir,
-                        exports=payload.get("exports"),
-                        render_options=payload.get("render_options"),
-                        clear_render_options=payload.get("clear_render_options"),
-                        split_policy=payload.get("split_policy"),
-                        series_order=payload.get("series_order"),
-                        review_note=payload.get("review_note"),
-                    )
-                except PermissionError as exc:
-                    self.send_error(HTTPStatus.FORBIDDEN, str(exc))
-                    return
-                except Exception as exc:
-                    self._respond_error(exc)
-                    return
-                self._send_json(project)
-                return
-        if parsed.path != "/api/projects":
-            self.send_error(HTTPStatus.NOT_FOUND)
-            return
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            payload = json.loads(self.rfile.read(length).decode("utf-8"))
-            create_project = create_and_run_intake_project if payload.get("run_after_create") else create_intake_project
-            project = create_project(
-                project_name=str(payload.get("project_name") or ""),
-                data_type_id=str(payload.get("data_type_id") or ""),
-                experiment_type_id=str(payload.get("experiment_type_id") or ""),
-                groups=_decode_group_payload(payload),
-                output_root=self.server.output_root,
-                plot_output=payload.get("plot_output"),
-                exports=payload.get("exports"),
-                render_options=payload.get("render_options"),
-                column_confirmations=payload.get("column_confirmations"),
-                replicate_mode=payload.get("replicate_mode"),
-            )
-        except Exception as exc:
-            self._respond_error(exc)
-            return
-        self._send_json(project)
-
-
-class _IntakeServer(ThreadingHTTPServer):
-    def server_bind(self) -> None:
-        TCPServer.server_bind(self)
-        self.server_name = str(self.server_address[0])
-        self.server_port = int(self.server_address[1])
-
-    def __init__(self, server_address: tuple[str, int], output_root: Path):
-        super().__init__(server_address, _IntakeHandler)
-        self.output_root = output_root.expanduser().resolve()
-        self.output_root.mkdir(parents=True, exist_ok=True)
-
-
 def serve_intake(
     *,
     input_path: str | Path | None = None,
@@ -2254,6 +1689,11 @@ def serve_intake(
     output_root: Path = _DEFAULT_OUTPUT_ROOT,
     open_browser: bool = True,
 ) -> None:
+    # Keep HTTP ownership outside the intake domain module.  The lazy import
+    # avoids a cycle because the thin server adapter calls domain functions
+    # defined above.
+    from sciplot_core.intake_server import _IntakeServer
+
     requested_port = port
     try:
         server = _IntakeServer((host, port), output_root)
@@ -2293,7 +1733,6 @@ __all__ = [
     "APPROVED_INTAKE_SIZE_PRESETS",
     "SAXS_SCALING_REVIEW_NOTE",
     "create_and_run_intake_project",
-    "apply_intake_project",
     "converge_intake_project_launchers",
     "converge_material_review_notes",
     "create_intake_project_from_session",
@@ -2304,6 +1743,5 @@ __all__ = [
     "prepare_intake_session",
     "preview_table_payload",
     "refresh_intake_project_zip",
-    "rerun_intake_project",
     "serve_intake",
 ]

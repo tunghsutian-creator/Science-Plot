@@ -4,8 +4,13 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import html
 import json
+import os
+import shutil
+import tempfile
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -13,14 +18,99 @@ from typing import Any
 import fitz
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-from sciplot_core._utils import file_sha256, json_safe
+from sciplot_core._utils import atomic_write_json, file_sha256, json_safe
 from sciplot_core.policy import DEFAULT_FIGURE_SIZE
+from sciplot_core.readiness import READY_RULE_ACCEPTANCE_VERSION
 
 PHYSICAL_SIZE_TOLERANCE_MM = 0.25
 TIFF_DPI_TOLERANCE = 0.5
 CONTACT_SHEET_COLUMNS = 4
 CONTACT_SHEET_ROWS = 2
 CONTACT_SHEET_TILE_SIZE = (620, 660)
+FINAL_SIZE_VISUAL_REVIEW_VERSION = 2
+FINAL_SIZE_VISUAL_DECISION_VERSION = 2
+REVIEW_SURFACE = "uncalibrated_screen_preview"
+PENDING_REVIEW_STATUS = "pending_uncalibrated_preview_review"
+REQUIRED_PREVIEW_CHECKS = (
+    "labels_visible_in_uncalibrated_preview",
+    "legend_not_occluding_data_in_preview",
+    "no_visible_text_or_data_clipping_in_preview",
+    "markers_and_lines_distinguishable_in_preview",
+    "no_unexplained_blank_or_corrupt_panel_in_preview",
+)
+
+
+def _json_bytes(payload: dict[str, Any]) -> bytes:
+    return (
+        json.dumps(
+            json_safe(payload),
+            indent=2,
+            ensure_ascii=False,
+            allow_nan=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def _bytes_sha256(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def _stage_bytes(target: Path, content: bytes) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="wb",
+        dir=target.parent,
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
+        return Path(handle.name)
+
+
+def _replace_files_transactionally(outputs: dict[Path, bytes]) -> None:
+    """Replace a related artifact set and restore every target on failure."""
+
+    resolved_outputs = {path.expanduser().resolve(): content for path, content in outputs.items()}
+    if len(resolved_outputs) != len(outputs):
+        raise ValueError("Transactional output paths must be unique.")
+
+    originals: dict[Path, bytes | None] = {}
+    staged: dict[Path, Path] = {}
+    committed: list[Path] = []
+    try:
+        for target in resolved_outputs:
+            if target.exists() and not target.is_file():
+                raise ValueError(f"Transactional output target is not a file: {target}")
+            originals[target] = target.read_bytes() if target.is_file() else None
+        for target, content in resolved_outputs.items():
+            staged[target] = _stage_bytes(target, content)
+        for target in resolved_outputs:
+            os.replace(staged[target], target)
+            committed.append(target)
+    except Exception as exc:
+        rollback_errors: list[str] = []
+        for target in reversed(committed):
+            try:
+                original = originals[target]
+                if original is None:
+                    target.unlink(missing_ok=True)
+                else:
+                    os.replace(_stage_bytes(target, original), target)
+            except Exception as rollback_exc:  # pragma: no cover - catastrophic filesystem failure
+                rollback_errors.append(f"{target}: {rollback_exc}")
+        if rollback_errors:
+            raise RuntimeError(
+                "Visual-review transaction failed and rollback was incomplete: "
+                + "; ".join(rollback_errors)
+            ) from exc
+        raise
+    finally:
+        for temporary in staged.values():
+            temporary.unlink(missing_ok=True)
 
 
 def _parse_size_mm(value: object) -> tuple[float, float]:
@@ -262,6 +352,32 @@ def _write_contact_sheets(output_dir: Path, records: list[dict[str, Any]]) -> li
     return paths
 
 
+def _contact_sheet_metadata(path: Path) -> dict[str, Any]:
+    resolved = path.expanduser().resolve()
+    if resolved.suffix.casefold() != ".png" or not resolved.is_file():
+        raise ValueError(f"Review preview must be a PNG file: {resolved}")
+    try:
+        with Image.open(resolved) as image:
+            if image.format != "PNG":
+                raise ValueError(f"Review preview is not encoded as PNG: {resolved}")
+            image.verify()
+        with Image.open(resolved) as image:
+            pixels = [int(image.width), int(image.height)]
+            frame_count = int(getattr(image, "n_frames", 1))
+    except (OSError, SyntaxError, ValueError) as exc:
+        raise ValueError(f"Review preview is not a decodable PNG: {resolved}") from exc
+    if min(pixels) <= 0 or frame_count != 1:
+        raise ValueError(f"Review preview has invalid image dimensions or frames: {resolved}")
+    return {
+        "path": str(resolved),
+        "sha256": file_sha256(resolved),
+        "pixels": pixels,
+        "format": "PNG",
+        "frame_count": frame_count,
+        "review_surface": REVIEW_SURFACE,
+    }
+
+
 def _write_csv(path: Path, records: list[dict[str, Any]]) -> None:
     fields = [
         "rule_id",
@@ -310,15 +426,15 @@ def _write_csv(path: Path, records: list[dict[str, Any]]) -> None:
             )
 
 
-def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
+def _markdown_text(payload: dict[str, Any]) -> str:
     summary = payload["summary"]
     lines = [
-        "# SciPlot final-size visual review",
+        "# SciPlot physical-size QA and review preview",
         "",
         f"Generated: {payload['generated_at']}",
         "",
         f"- Physical size passed: {summary['physical_size_passed_count']}/{summary['eligible_rule_count']}",
-        f"- Contact sheets: {summary['contact_sheet_count']}",
+        f"- Uncalibrated review previews: {summary['contact_sheet_count']}",
         f"- Automated status: `{summary['automated_status']}`",
         f"- Manual visual status: `{summary['manual_visual_status']}`",
         "",
@@ -339,16 +455,21 @@ def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
             "",
             "## Review boundary",
             "",
-            "Physical dimensions and TIFF DPI are machine-checked. Contact sheets are generated for human review "
-            "of labels, legends, clipping, occlusion, and final-size readability. This artifact does not claim "
-            "journal compliance or a completed manual review.",
+            "Physical dimensions and TIFF DPI are machine-checked. Contact sheets are uncalibrated screen "
+            "previews for visible corruption, clipping, occlusion, and basic distinguishability only. They do "
+            "not establish final-size legibility. Inspect the canonical PDF/TIFF at a calibrated physical size "
+            "when final-size readability is required. This artifact does not claim journal compliance.",
             "",
         ]
     )
-    path.write_text("\n".join(lines), encoding="utf-8")
+    return "\n".join(lines)
 
 
-def _write_html(path: Path, payload: dict[str, Any], contact_sheets: list[Path]) -> None:
+def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(_markdown_text(payload), encoding="utf-8")
+
+
+def _html_text(payload: dict[str, Any], contact_sheets: list[Path], *, parent: Path) -> str:
     summary = payload["summary"]
     rows = []
     for record in payload["records"]:
@@ -364,13 +485,13 @@ def _write_html(path: Path, payload: dict[str, Any], contact_sheets: list[Path])
             f'<td><span class="pill {css}">{html.escape(record["status"])}</span></td></tr>'
         )
     images = "".join(
-        f'<figure><img src="{html.escape(sheet.relative_to(path.parent).as_posix(), quote=True)}" '
-        f'alt="Final-size contact sheet {index}"><figcaption>Contact sheet {index}</figcaption></figure>'
+        f'<figure><img src="{html.escape(sheet.relative_to(parent).as_posix(), quote=True)}" '
+        f'alt="Uncalibrated review preview {index}"><figcaption>Uncalibrated review preview {index}</figcaption></figure>'
         for index, sheet in enumerate(contact_sheets, start=1)
     )
     document = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SciPlot final-size visual review</title><style>
+<title>SciPlot physical-size QA and review preview</title><style>
 :root{{--ink:#17211d;--muted:#607068;--line:#dbe3de;--paper:#f5f7f5;--green:#176b46;--red:#9f2d2d}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 ui-sans-serif,system-ui,sans-serif}}
 main{{max-width:1500px;margin:auto;padding:34px 28px 60px}}h1{{margin:0 0 4px;font-size:28px}}.lede{{color:var(--muted)}}
@@ -378,15 +499,22 @@ main{{max-width:1500px;margin:auto;padding:34px 28px 60px}}h1{{margin:0 0 4px;fo
 .table-wrap{{overflow:auto;background:white;border:1px solid var(--line);border-radius:12px}}table{{border-collapse:collapse;width:100%}}th,td{{padding:10px;border-bottom:1px solid var(--line);text-align:left}}th{{background:#eef2ef}}
 .pill{{border-radius:999px;padding:2px 8px;font-size:12px}}.pill.ok{{background:#e3f3ea;color:var(--green)}}.pill.bad{{background:#f8e2e2;color:var(--red)}}.pill.muted{{background:#eef1ef;color:var(--muted)}}
 figure{{margin:24px 0;background:white;border:1px solid var(--line);border-radius:12px;padding:12px}}img{{display:block;width:100%;height:auto}}figcaption{{color:var(--muted);padding-top:8px}}
-</style></head><body><main><h1>SciPlot final-size visual review</h1>
-<p class="lede">Machine-checked physical dimensions plus contact sheets for human inspection. Lifecycle and journal compliance remain separate.</p>
+</style></head><body><main><h1>SciPlot physical-size QA and review preview</h1>
+<p class="lede">Physical dimensions are machine-checked. The mosaics below are uncalibrated screen previews and do not establish final-size legibility.</p>
 <section class="cards"><article class="card"><span>Eligible rules</span><strong>{summary['eligible_rule_count']}</strong></article>
 <article class="card"><span>Physical size passed</span><strong>{summary['physical_size_passed_count']}</strong></article>
-<article class="card"><span>Contact sheets</span><strong>{summary['contact_sheet_count']}</strong></article>
+<article class="card"><span>Review previews</span><strong>{summary['contact_sheet_count']}</strong></article>
 <article class="card"><span>Manual visual status</span><strong>{html.escape(summary['manual_visual_status'])}</strong></article></section>
 <div class="table-wrap"><table><thead><tr><th>Rule</th><th>Expected mm</th><th>PDF mm</th><th>TIFF mm</th><th>TIFF dpi</th><th>Status</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>
 <section>{images}</section></main></body></html>"""
-    path.write_text(document, encoding="utf-8")
+    return document
+
+
+def _write_html(path: Path, payload: dict[str, Any], contact_sheets: list[Path]) -> None:
+    path.write_text(
+        _html_text(payload, contact_sheets, parent=path.parent),
+        encoding="utf-8",
+    )
 
 
 def write_final_size_visual_review(
@@ -397,9 +525,12 @@ def write_final_size_visual_review(
 ) -> dict[str, Any]:
     timestamp = generated_at or datetime.now(UTC).isoformat()
     review_dir = output_dir / "final_size_visual_review"
+    if review_dir.exists():
+        shutil.rmtree(review_dir)
     review_dir.mkdir(parents=True, exist_ok=True)
     records = [_record_for_row(row) for row in rows]
     contact_sheets = _write_contact_sheets(review_dir / "contact_sheets", records)
+    contact_sheet_sources = [_contact_sheet_metadata(path) for path in contact_sheets]
     eligible = [record for record in records if record["status"] != "not_run"]
     passed_count = sum(record["status"] == "passed" for record in eligible)
     failed_count = sum(record["status"] == "failed" for record in eligible)
@@ -411,26 +542,23 @@ def write_final_size_visual_review(
         "not_run_count": sum(record["status"] == "not_run" for record in records),
         "contact_sheet_count": len(contact_sheets),
         "automated_status": "passed" if eligible and not failed_count else ("not_run" if not eligible else "failed"),
-        "manual_visual_status": "pending_contact_sheet_review" if contact_sheets else "not_available",
+        "manual_visual_status": PENDING_REVIEW_STATUS if contact_sheets else "not_available",
+        "review_surface": REVIEW_SURFACE,
         "physical_size_tolerance_mm": PHYSICAL_SIZE_TOLERANCE_MM,
         "tiff_dpi_tolerance": TIFF_DPI_TOLERANCE,
     }
     payload = {
         "kind": "sciplot_final_size_visual_review",
-        "version": 1,
+        "version": FINAL_SIZE_VISUAL_REVIEW_VERSION,
         "generated_at": timestamp,
         "summary": summary,
         "records": records,
         "contact_sheets": [str(path) for path in contact_sheets],
+        "contact_sheet_sources": contact_sheet_sources,
         "manual_review": {
             "status": summary["manual_visual_status"],
-            "required_checks": [
-                "labels_legible_at_final_size",
-                "legend_not_occluding_data",
-                "no_text_or_data_clipping",
-                "markers_and_lines_distinguishable",
-                "no_unexplained_blank_or_corrupt_panel",
-            ],
+            "review_surface": REVIEW_SURFACE,
+            "required_checks": list(REQUIRED_PREVIEW_CHECKS),
             "decision": None,
             "reviewed_at": None,
             "reviewer": None,
@@ -438,7 +566,8 @@ def write_final_size_visual_review(
         },
         "limitations": [
             "Automated checks validate physical page size, TIFF pixel density, and delivery-copy identity.",
-            "Generated contact sheets require an explicit human or agent visual decision.",
+            "Generated contact sheets are uncalibrated screen previews for visible defects only.",
+            "A preview decision does not establish legibility at the canonical artifact's physical size.",
             "This review is not a journal-compliance claim and does not replace exact-current publication QA.",
         ],
     }
@@ -446,7 +575,7 @@ def write_final_size_visual_review(
     csv_path = review_dir / "final_size_visual_review.csv"
     markdown_path = review_dir / "final_size_visual_review.md"
     html_path = review_dir / "final_size_visual_review.html"
-    json_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(json_path, json_safe(payload))
     _write_csv(csv_path, records)
     _write_markdown(markdown_path, payload)
     _write_html(html_path, payload, contact_sheets)
@@ -466,6 +595,336 @@ def write_final_size_visual_review(
     }
 
 
+def _read_json_object_strict(path: Path, *, label: str) -> dict[str, Any]:
+    if not path.is_file():
+        raise FileNotFoundError(f"{label} not found: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{label} is not valid JSON: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must contain one object: {path}")
+    return payload
+
+
+def _strict_nonnegative_int(value: object, *, label: str) -> int:
+    if type(value) is not int or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer.")
+    return value
+
+
+def _strict_positive_pair(value: object, *, label: str) -> tuple[float, float]:
+    if not isinstance(value, list | tuple) or len(value) != 2:
+        raise ValueError(f"{label} must contain two positive numbers.")
+    if any(isinstance(item, bool) or not isinstance(item, int | float) for item in value):
+        raise ValueError(f"{label} must contain two positive numbers.")
+    pair = float(value[0]), float(value[1])
+    if min(pair) <= 0:
+        raise ValueError(f"{label} must contain two positive numbers.")
+    return pair
+
+
+def _validate_passed_record(record: dict[str, Any], *, rule_id: str) -> None:
+    if record.get("errors") != []:
+        raise ValueError(f"Passed visual-review record `{rule_id}` contains errors.")
+    _strict_positive_pair(
+        record.get("expected_size_mm"),
+        label=f"{rule_id} expected_size_mm",
+    )
+    pdf = record.get("pdf")
+    tiff = record.get("tiff")
+    if not isinstance(pdf, dict) or not isinstance(tiff, dict):
+        raise ValueError(f"Passed visual-review record `{rule_id}` is missing PDF/TIFF evidence.")
+    _strict_positive_pair(pdf.get("physical_size_mm"), label=f"{rule_id} PDF size")
+    _strict_positive_pair(tiff.get("physical_size_mm"), label=f"{rule_id} TIFF size")
+    _strict_positive_pair(tiff.get("dpi"), label=f"{rule_id} TIFF DPI")
+    pixels = tiff.get("pixels")
+    if (
+        not isinstance(pixels, list | tuple)
+        or len(pixels) != 2
+        or any(type(value) is not int or value <= 0 for value in pixels)
+    ):
+        raise ValueError(f"Passed visual-review record `{rule_id}` has invalid TIFF pixels.")
+    if any(
+        value is not True
+        for value in (
+            pdf.get("within_tolerance"),
+            pdf.get("copy_hash_matches"),
+            tiff.get("within_tolerance"),
+            tiff.get("dpi_is_300"),
+            tiff.get("copy_hash_matches"),
+        )
+    ):
+        raise ValueError(f"Passed visual-review record `{rule_id}` has failed artifact checks.")
+    for label, artifact in (("PDF", pdf), ("TIFF", tiff)):
+        if not isinstance(artifact.get("path"), str) or not artifact["path"].strip():
+            raise ValueError(f"Passed visual-review record `{rule_id}` has no {label} path.")
+
+
+def _validate_records(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or not value:
+        raise ValueError("Final-size visual review records must be a non-empty list.")
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for record in value:
+        if not isinstance(record, dict):
+            raise ValueError("Final-size visual review records must contain objects.")
+        rule_id = record.get("rule_id")
+        if not isinstance(rule_id, str) or not rule_id.strip() or rule_id != rule_id.strip():
+            raise ValueError("Final-size visual review rule ids must be non-empty normalized strings.")
+        if rule_id in seen:
+            raise ValueError(f"Duplicate visual-review rule id `{rule_id}`.")
+        seen.add(rule_id)
+        status = record.get("status")
+        if status not in {"passed", "failed", "not_run"}:
+            raise ValueError(f"Visual-review record `{rule_id}` has invalid status `{status}`.")
+        errors = record.get("errors")
+        if not isinstance(errors, list) or not all(
+            isinstance(error, str) and error.strip() for error in errors
+        ):
+            raise ValueError(f"Visual-review record `{rule_id}` has invalid errors.")
+        if status == "passed":
+            _validate_passed_record(record, rule_id=rule_id)
+        elif status == "failed" and not errors:
+            raise ValueError(f"Failed visual-review record `{rule_id}` has no error evidence.")
+        elif status == "not_run" and (
+            errors or record.get("manifest") is not None
+        ):
+            raise ValueError(f"Not-run visual-review record `{rule_id}` contains artifact evidence.")
+        records.append(record)
+    return records
+
+
+def _validate_summary(
+    value: object,
+    *,
+    records: list[dict[str, Any]],
+    contact_sheet_count: int,
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("Final-size visual review summary must be an object.")
+    counts = {
+        "rule_count": len(records),
+        "eligible_rule_count": sum(record["status"] != "not_run" for record in records),
+        "physical_size_passed_count": sum(record["status"] == "passed" for record in records),
+        "physical_size_failed_count": sum(record["status"] == "failed" for record in records),
+        "not_run_count": sum(record["status"] == "not_run" for record in records),
+        "contact_sheet_count": contact_sheet_count,
+    }
+    for key, expected in counts.items():
+        observed = _strict_nonnegative_int(value.get(key), label=f"summary {key}")
+        if observed != expected:
+            raise ValueError(
+                f"Final-size visual review summary `{key}` is {observed}; expected {expected}."
+            )
+    eligible = counts["eligible_rule_count"]
+    failed = counts["physical_size_failed_count"]
+    expected_automated = "passed" if eligible and not failed else ("not_run" if not eligible else "failed")
+    if value.get("automated_status") != expected_automated:
+        raise ValueError("Final-size visual review automated status does not match its records.")
+    if value.get("manual_visual_status") not in {
+        PENDING_REVIEW_STATUS,
+        "passed",
+        "failed",
+    }:
+        raise ValueError("Final-size visual review manual status is invalid.")
+    if value.get("review_surface") != REVIEW_SURFACE:
+        raise ValueError("Final-size visual review must declare an uncalibrated preview surface.")
+    if value.get("physical_size_tolerance_mm") != PHYSICAL_SIZE_TOLERANCE_MM:
+        raise ValueError("Final-size visual review physical-size tolerance drifted.")
+    if value.get("tiff_dpi_tolerance") != TIFF_DPI_TOLERANCE:
+        raise ValueError("Final-size visual review TIFF-DPI tolerance drifted.")
+    return value
+
+
+def _validate_manual_source(value: object, *, summary: dict[str, Any]) -> list[str]:
+    if not isinstance(value, dict):
+        raise ValueError("Final-size visual review manual-review contract is missing.")
+    if value.get("status") != summary["manual_visual_status"]:
+        raise ValueError("Manual-review status does not match the visual-review summary.")
+    if value.get("review_surface") != REVIEW_SURFACE:
+        raise ValueError("Manual review must declare an uncalibrated preview surface.")
+    checks = value.get("required_checks")
+    if (
+        not isinstance(checks, list)
+        or len(checks) != len(REQUIRED_PREVIEW_CHECKS)
+        or set(checks) != set(REQUIRED_PREVIEW_CHECKS)
+        or not all(isinstance(check, str) for check in checks)
+    ):
+        raise ValueError("Final-size visual review required-check set is invalid.")
+    return list(REQUIRED_PREVIEW_CHECKS)
+
+
+def _validate_contact_sheets(
+    payload: dict[str, Any],
+    *,
+    review_path: Path,
+) -> tuple[list[Path], list[dict[str, Any]]]:
+    raw_paths = payload.get("contact_sheets")
+    if not isinstance(raw_paths, list) or not raw_paths or not all(
+        isinstance(value, str) and value.strip() for value in raw_paths
+    ):
+        raise ValueError("Final-size visual review contact sheets are invalid.")
+    contact_sheets = [Path(value).expanduser().resolve() for value in raw_paths]
+    if len(set(contact_sheets)) != len(contact_sheets):
+        raise ValueError("Final-size visual review contact sheets must be unique.")
+    preview_root = (review_path.parent / "contact_sheets").resolve()
+    for index, sheet in enumerate(contact_sheets, start=1):
+        expected = preview_root / f"contact_sheet_{index:02d}.png"
+        if sheet != expected:
+            raise ValueError(
+                "Visual-review previews must use the generated contact_sheets/contact_sheet_NN.png paths."
+            )
+    actual_sources = [_contact_sheet_metadata(path) for path in contact_sheets]
+    stored_sources = payload.get("contact_sheet_sources")
+    if stored_sources != actual_sources:
+        raise ValueError("Visual-review preview hashes or image metadata no longer match generation.")
+    return contact_sheets, actual_sources
+
+
+def _resolved_artifact_path(value: object, *, root: Path, label: str) -> Path:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Acceptance artifact `{label}` is missing.")
+    path = Path(value).expanduser()
+    return (root / path if not path.is_absolute() else path).resolve()
+
+
+def _validate_acceptance_binding(
+    acceptance: dict[str, Any],
+    *,
+    acceptance_path: Path,
+    review_path: Path,
+    review_payload: dict[str, Any],
+    records: list[dict[str, Any]],
+    contact_sheets: list[Path],
+    evidence_path: Path,
+    decision_path: Path,
+    source_sha256: str,
+) -> None:
+    if acceptance.get("kind") != "sciplot_ready_rule_acceptance":
+        raise ValueError("Not a SciPlot ready-rule acceptance summary.")
+    version = acceptance.get("version")
+    if type(version) is not int or version != READY_RULE_ACCEPTANCE_VERSION:
+        raise ValueError("Unsupported ready-rule acceptance version.")
+    if acceptance.get("generated_at") != review_payload["generated_at"]:
+        raise ValueError("Acceptance and visual-review generation timestamps do not match.")
+    if acceptance.get("visual_review") != review_payload["summary"]:
+        raise ValueError("Acceptance visual-review summary is not the supplied review source.")
+    artifacts = acceptance.get("artifacts")
+    if not isinstance(artifacts, dict):
+        raise ValueError("Acceptance artifacts are missing.")
+    root = acceptance_path.parent
+    expected_artifacts = {
+        "summary": acceptance_path,
+        "visual_review_json": review_path,
+        "visual_review_csv": review_path.with_suffix(".csv"),
+        "visual_review_markdown": review_path.with_suffix(".md"),
+        "visual_review_html": review_path.with_suffix(".html"),
+        "evidence_json": evidence_path,
+    }
+    for key, expected in expected_artifacts.items():
+        if _resolved_artifact_path(artifacts.get(key), root=root, label=key) != expected:
+            raise ValueError(f"Acceptance artifact `{key}` is not bound to this review run.")
+    expected_sheet_keys = {
+        f"visual_contact_sheet_{index:02d}" for index in range(1, len(contact_sheets) + 1)
+    }
+    actual_sheet_keys = {
+        str(key) for key in artifacts if str(key).startswith("visual_contact_sheet_")
+    }
+    if actual_sheet_keys != expected_sheet_keys:
+        raise ValueError("Acceptance contact-sheet artifact set does not match the review source.")
+    for index, sheet in enumerate(contact_sheets, start=1):
+        key = f"visual_contact_sheet_{index:02d}"
+        if _resolved_artifact_path(artifacts.get(key), root=root, label=key) != sheet:
+            raise ValueError(f"Acceptance artifact `{key}` is not bound to the reviewed PNG.")
+    stored_review_hash = artifacts.get("visual_review_json_sha256")
+    if stored_review_hash is not None and stored_review_hash != source_sha256:
+        raise ValueError("Acceptance visual-review source hash no longer matches.")
+    stored_decision = artifacts.get("manual_visual_review_decision")
+    if stored_decision is not None and (
+        _resolved_artifact_path(stored_decision, root=root, label="manual_visual_review_decision")
+        != decision_path
+    ):
+        raise ValueError("Acceptance manual-decision artifact points outside this review run.")
+
+    matrix = acceptance.get("matrix")
+    if not isinstance(matrix, list) or not all(isinstance(row, dict) for row in matrix):
+        raise ValueError("Acceptance matrix is invalid.")
+    matrix_ids = [row.get("rule_id") for row in matrix]
+    record_ids = [record["rule_id"] for record in records]
+    if matrix_ids != record_ids or len(set(matrix_ids)) != len(matrix_ids):
+        raise ValueError("Acceptance matrix rule ids do not match the visual-review records.")
+    for row, record in zip(matrix, records, strict=True):
+        if row.get("artifact_review") != record:
+            raise ValueError(
+                f"Acceptance artifact review for `{record['rule_id']}` does not match the review source."
+            )
+    selected = acceptance.get("selected_rule_ids")
+    if not isinstance(selected, list) or len(set(selected)) != len(selected):
+        raise ValueError("Acceptance selected rule ids are invalid.")
+    eligible_ids = {record["rule_id"] for record in records if record["status"] != "not_run"}
+    if set(selected) != eligible_ids:
+        raise ValueError("Acceptance selected rule ids do not match eligible visual-review records.")
+
+
+def _validate_evidence_binding(
+    evidence: dict[str, Any],
+    *,
+    acceptance: dict[str, Any],
+    generated_at: str,
+    record_ids: list[str],
+) -> None:
+    if evidence.get("kind") != "sciplot_23_rule_evidence_status":
+        raise ValueError("Not a SciPlot rule-evidence status artifact.")
+    if type(evidence.get("version")) is not int or evidence["version"] != 1:
+        raise ValueError("Unsupported rule-evidence status version.")
+    if evidence.get("generated_at") != generated_at:
+        raise ValueError("Evidence and visual-review generation timestamps do not match.")
+    if not isinstance(evidence.get("summary"), dict):
+        raise ValueError("Evidence summary is invalid.")
+    if acceptance.get("evidence_status") != evidence["summary"]:
+        raise ValueError("Acceptance and evidence summaries are not bound.")
+    matrix = evidence.get("matrix")
+    if not isinstance(matrix, list) or not all(isinstance(row, dict) for row in matrix):
+        raise ValueError("Evidence matrix is invalid.")
+    if [row.get("rule_id") for row in matrix] != record_ids:
+        raise ValueError("Evidence matrix rule ids do not match the visual-review records.")
+
+
+def _validate_existing_decision(
+    decision: dict[str, Any],
+    *,
+    decision_path: Path,
+    review_path: Path,
+    acceptance: dict[str, Any],
+) -> None:
+    if decision.get("kind") != "sciplot_final_size_visual_decision":
+        raise ValueError("Existing manual visual decision has the wrong kind.")
+    if (
+        type(decision.get("version")) is not int
+        or decision["version"] != FINAL_SIZE_VISUAL_DECISION_VERSION
+    ):
+        raise ValueError("Existing manual visual decision has an unsupported version.")
+    if Path(str(decision.get("review_source") or "")).expanduser().resolve() != review_path:
+        raise ValueError("Existing manual visual decision belongs to another review source.")
+    artifacts = acceptance.get("artifacts")
+    if not isinstance(artifacts, dict):
+        raise ValueError("Acceptance artifacts are missing.")
+    root = decision_path.parent.parent
+    if (
+        _resolved_artifact_path(
+            artifacts.get("manual_visual_review_decision"),
+            root=root,
+            label="manual_visual_review_decision",
+        )
+        != decision_path
+    ):
+        raise ValueError("Acceptance is not bound to the existing manual decision.")
+    expected_hash = artifacts.get("manual_visual_review_decision_sha256")
+    if expected_hash != file_sha256(decision_path):
+        raise ValueError("Existing manual visual decision hash no longer matches acceptance.")
+
+
 def record_final_size_visual_decision(
     review_json: Path,
     *,
@@ -473,93 +932,160 @@ def record_final_size_visual_decision(
     decision: str,
     notes: list[str] | tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    """Record the explicit visual decision after all generated contact sheets are inspected."""
+    """Record a decision about uncalibrated previews after strict run binding."""
 
     review_path = review_json.expanduser().resolve()
+    if review_path.name != "final_size_visual_review.json" or review_path.parent.name != "final_size_visual_review":
+        raise ValueError("Visual review must use final_size_visual_review/final_size_visual_review.json.")
     normalized_decision = str(decision).strip().casefold()
     if normalized_decision not in {"passed", "failed"}:
         raise ValueError("Visual decision must be `passed` or `failed`.")
-    payload = json.loads(review_path.read_text(encoding="utf-8"))
-    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
-    if normalized_decision == "passed" and summary.get("automated_status") != "passed":
-        raise ValueError("Cannot record a passing visual decision while automated size checks are not passed.")
-    contact_sheets = [Path(str(value)) for value in payload.get("contact_sheets", [])]
-    missing = [str(path) for path in contact_sheets if not path.exists()]
-    if not contact_sheets or missing:
-        raise FileNotFoundError(f"Visual decision requires all contact sheets; missing: {missing or 'all'}")
+    normalized_reviewer = str(reviewer).strip()
+    if not normalized_reviewer:
+        raise ValueError("Visual decision reviewer must be a non-empty name.")
+
+    project_dir = review_path.parent.parent
+    acceptance_path = project_dir / "acceptance_summary.json"
+    evidence_path = project_dir / "evidence_status.json"
+    decision_path = review_path.parent / "manual_visual_review_decision.json"
+
+    payload = _read_json_object_strict(review_path, label="Visual review JSON")
+    acceptance = _read_json_object_strict(acceptance_path, label="Acceptance summary")
+    evidence = _read_json_object_strict(evidence_path, label="Evidence status")
+    if payload.get("kind") != "sciplot_final_size_visual_review":
+        raise ValueError("Not a SciPlot final-size visual review artifact.")
+    version = payload.get("version")
+    if type(version) is not int or version != FINAL_SIZE_VISUAL_REVIEW_VERSION:
+        raise ValueError("Unsupported final-size visual review version.")
+    generated_at = payload.get("generated_at")
+    if not isinstance(generated_at, str) or not generated_at.strip():
+        raise ValueError("Final-size visual review is missing generated_at.")
+
+    records = _validate_records(payload.get("records"))
+    contact_sheets, contact_sheet_sources = _validate_contact_sheets(
+        payload,
+        review_path=review_path,
+    )
+    summary = _validate_summary(
+        payload.get("summary"),
+        records=records,
+        contact_sheet_count=len(contact_sheets),
+    )
+    required_checks = _validate_manual_source(payload.get("manual_review"), summary=summary)
+    if normalized_decision == "passed" and summary["automated_status"] != "passed":
+        raise ValueError("Cannot pass preview review while automated artifact checks are not passed.")
+
+    source_sha256 = file_sha256(review_path)
+    _validate_acceptance_binding(
+        acceptance,
+        acceptance_path=acceptance_path,
+        review_path=review_path,
+        review_payload=payload,
+        records=records,
+        contact_sheets=contact_sheets,
+        evidence_path=evidence_path,
+        decision_path=decision_path,
+        source_sha256=source_sha256,
+    )
+    _validate_evidence_binding(
+        evidence,
+        acceptance=acceptance,
+        generated_at=generated_at,
+        record_ids=[record["rule_id"] for record in records],
+    )
+    if decision_path.exists():
+        existing_decision = _read_json_object_strict(
+            decision_path,
+            label="Existing manual visual decision",
+        )
+        _validate_existing_decision(
+            existing_decision,
+            decision_path=decision_path,
+            review_path=review_path,
+            acceptance=acceptance,
+        )
 
     reviewed_at = datetime.now(UTC).isoformat()
     reviewed_rules = [
-        str(record["rule_id"])
-        for record in payload.get("records", [])
-        if isinstance(record, dict) and record.get("status") != "not_run"
+        record["rule_id"] for record in records if record["status"] != "not_run"
     ]
-    required_checks = list((payload.get("manual_review") or {}).get("required_checks") or [])
-    source_sha256 = file_sha256(review_path)
     manual_review = {
         "status": "completed",
         "decision": normalized_decision,
         "reviewed_at": reviewed_at,
-        "reviewer": str(reviewer).strip() or "unspecified",
+        "reviewer": normalized_reviewer,
+        "review_surface": REVIEW_SURFACE,
+        "required_checks": required_checks,
         "reviewed_rule_ids": reviewed_rules,
         "contact_sheets_inspected": [str(path) for path in contact_sheets],
+        "contact_sheet_sources": contact_sheet_sources,
         "checks": {check_id: normalized_decision == "passed" for check_id in required_checks},
-        "notes": [str(note) for note in notes if str(note).strip()],
+        "notes": [str(note).strip() for note in notes if str(note).strip()],
     }
-    payload["manual_review"] = manual_review
-    summary["manual_visual_status"] = normalized_decision
-    summary["manual_reviewed_at"] = reviewed_at
-    payload["summary"] = summary
-    review_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
-    _write_markdown(review_path.with_suffix(".md"), payload)
-    _write_html(review_path.with_suffix(".html"), payload, contact_sheets)
+    updated_payload = deepcopy(payload)
+    updated_summary = deepcopy(summary)
+    updated_summary["manual_visual_status"] = normalized_decision
+    updated_summary["manual_reviewed_at"] = reviewed_at
+    updated_payload["manual_review"] = manual_review
+    updated_payload["summary"] = updated_summary
+    review_bytes = _json_bytes(updated_payload)
+    review_sha256_after = _bytes_sha256(review_bytes)
 
     decision_payload = {
         "kind": "sciplot_final_size_visual_decision",
-        "version": 1,
+        "version": FINAL_SIZE_VISUAL_DECISION_VERSION,
         "review_source": str(review_path),
         "review_source_sha256_before_decision": source_sha256,
-        "automated_status": summary.get("automated_status"),
+        "review_source_sha256_after_decision": review_sha256_after,
+        "automated_status": updated_summary["automated_status"],
         **manual_review,
         "limitations": [
-            "This records final-size artifact inspection, not broader journal compliance.",
-            "Scientific claims and publication intent remain independently reviewable contracts.",
+            "This records inspection of uncalibrated screen previews, not final-size legibility.",
+            "Scientific claims, calibrated physical-size inspection, and journal compliance remain separate.",
         ],
     }
-    decision_path = review_path.parent / "manual_visual_review_decision.json"
-    decision_path.write_text(
-        json.dumps(json_safe(decision_payload), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    decision_bytes = _json_bytes(decision_payload)
 
-    project_dir = review_path.parent.parent
-    acceptance_path = project_dir / "acceptance_summary.json"
-    if acceptance_path.exists():
-        acceptance = json.loads(acceptance_path.read_text(encoding="utf-8"))
-        acceptance["visual_review"] = summary
-        artifacts = acceptance.get("artifacts") if isinstance(acceptance.get("artifacts"), dict) else {}
-        artifacts["manual_visual_review_decision"] = str(decision_path)
-        acceptance["artifacts"] = artifacts
-        if normalized_decision == "failed":
-            acceptance["state"] = "needs_rule_repair"
-            acceptance["selected_state"] = "needs_rule_repair"
-        acceptance_path.write_text(
-            json.dumps(json_safe(acceptance), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-    evidence_path = project_dir / "evidence_status.json"
-    if evidence_path.exists():
-        evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
-        evidence_summary = evidence.get("summary") if isinstance(evidence.get("summary"), dict) else {}
-        evidence_summary["manual_visual_status"] = normalized_decision
-        evidence_summary["manual_reviewed_at"] = reviewed_at
-        evidence["summary"] = evidence_summary
-        evidence_path.write_text(json.dumps(json_safe(evidence), indent=2, ensure_ascii=False), encoding="utf-8")
+    updated_acceptance = deepcopy(acceptance)
+    updated_acceptance["visual_review"] = updated_summary
+    updated_artifacts = deepcopy(acceptance["artifacts"])
+    updated_artifacts["visual_review_json_sha256"] = review_sha256_after
+    updated_artifacts["manual_visual_review_decision"] = str(decision_path)
+    updated_artifacts["manual_visual_review_decision_sha256"] = _bytes_sha256(decision_bytes)
+    updated_acceptance["artifacts"] = updated_artifacts
+    if normalized_decision == "failed":
+        updated_acceptance["state"] = "needs_rule_repair"
+        updated_acceptance["selected_state"] = "needs_rule_repair"
+
+    updated_evidence = deepcopy(evidence)
+    updated_evidence_summary = deepcopy(evidence["summary"])
+    updated_evidence_summary["manual_visual_status"] = normalized_decision
+    updated_evidence_summary["manual_reviewed_at"] = reviewed_at
+    updated_evidence_summary["review_surface"] = REVIEW_SURFACE
+    updated_evidence["summary"] = updated_evidence_summary
+    updated_acceptance["evidence_status"] = updated_evidence_summary
+
+    markdown_path = review_path.with_suffix(".md")
+    html_path = review_path.with_suffix(".html")
+    _replace_files_transactionally(
+        {
+            review_path: review_bytes,
+            markdown_path: _markdown_text(updated_payload).encode("utf-8"),
+            html_path: _html_text(
+                updated_payload,
+                contact_sheets,
+                parent=html_path.parent,
+            ).encode("utf-8"),
+            decision_path: decision_bytes,
+            acceptance_path: _json_bytes(updated_acceptance),
+            evidence_path: _json_bytes(updated_evidence),
+        }
+    )
     return {
         "decision": decision_payload,
         "decision_path": str(decision_path),
         "review_path": str(review_path),
-        "acceptance_summary": str(acceptance_path) if acceptance_path.exists() else None,
+        "acceptance_summary": str(acceptance_path),
     }
 
 
