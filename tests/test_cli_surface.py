@@ -134,3 +134,37 @@ def test_autoplot_exit_code_fails_closed_on_ready_to_use(
     monkeypatch.setattr(cli, "run_autoplot", lambda *_args, **_kwargs: payload)
 
     assert cli.main(["autoplot", str(source), "--json"]) == 1
+
+
+def test_autoplot_cli_forwards_explicit_presentation_template(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    source.write_bytes(b"fixture")
+    captured: dict[str, object] = {}
+
+    def fake_run_autoplot(*_args: object, **kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {
+            "state": "ready",
+            "ready_to_use": True,
+            "delivery": str(tmp_path / "delivery"),
+            "run_output": str(tmp_path / "run"),
+        }
+
+    monkeypatch.setattr(cli, "run_autoplot", fake_run_autoplot)
+
+    assert (
+        cli.main(
+            [
+                "autoplot",
+                str(source),
+                "--template",
+                "bar",
+                "--json",
+            ]
+        )
+        == 0
+    )
+    assert captured["template"] == "bar"

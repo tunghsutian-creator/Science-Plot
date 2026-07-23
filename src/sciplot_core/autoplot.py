@@ -476,12 +476,14 @@ def run_autoplot(
     output_root: Path,
     project_name: str | None = None,
     delivery_root: Path | None = None,
+    template: str | None = None,
 ) -> dict[str, Any]:
     result = run_one_step(
         input_path,
         output_root=output_root,
         project_name=project_name,
         delivery_root=delivery_root,
+        template=template,
     )
     summary = build_autoplot_summary(result)
     run_output = Path(str(summary["run_output"]))

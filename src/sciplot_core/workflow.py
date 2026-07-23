@@ -22,14 +22,16 @@ from sciplot_core.materials_rules import (
     ELONGATION_AT_BREAK_LABEL,
     ELONGATION_AT_BREAK_METRIC,
     compute_analysis_metrics,
+    get_rule,
+    resolve_rule_template,
 )
 from sciplot_core.managed_output import managed_output_transaction
 from sciplot_core.one_step import build_one_step_project, build_quality_actions
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.policy import (
+    AUTOPLOT_RENDER_OPTIONS,
     CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
     DEFAULT_EXPORT_FORMATS_POLICY,
-    DEFAULT_RENDER_OPTIONS,
     DELIVERY_DIR,
     RHEOLOGY_METRIC_AXIS_LABELS,
     anchored_log_decade_ticks,
@@ -49,7 +51,12 @@ from sciplot_core.request_contract import normalize_render_options
 from sciplot_core.publish_state import build_publish_state
 from sciplot_core.qa import run_qa
 from sciplot_core.render import render_to_dir
-from sciplot_core.semantic import build_intervention_request, classify_source, prepare_semantic_source
+from sciplot_core.semantic import (
+    build_intervention_request,
+    classify_source,
+    prepare_semantic_source,
+    read_impact_condition_payloads,
+)
 from sciplot_core.source_coverage import (
     verify_rendered_mapping_source_coverage,
 )
@@ -600,6 +607,64 @@ def _rename_metric_exports(
     return outputs, exports
 
 
+def _impact_condition_sources(
+    source_input: Path,
+    *,
+    request: dict[str, Any],
+    output_dir: Path,
+) -> list[tuple[str, Path, dict[str, Any]]]:
+    """Materialize one canonical categorical source per impact workbook sheet."""
+
+    if str(request.get("rule_id") or "").strip() != "impact_metric":
+        return []
+    source = source_input
+    if source.is_dir():
+        workbooks = sorted(
+            path
+            for path in source.rglob("*")
+            if path.is_file()
+            and path.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}
+        )
+        if len(workbooks) != 1:
+            return []
+        source = workbooks[0]
+    if not source.is_file():
+        return []
+    conditions = read_impact_condition_payloads(source)
+    if len(conditions) <= 1:
+        return []
+
+    source_dir = output_dir / "processed" / "veusz_metric_sources"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    condition_sources: list[tuple[str, Path, dict[str, Any]]] = []
+    used_ids: set[str] = set()
+    for index, (condition, payload) in enumerate(conditions, start=1):
+        condition_token = slug(str(condition).replace(" ", "")) or f"condition-{index}"
+        figure_id = f"impact_{condition_token}"
+        suffix = 2
+        while figure_id in used_ids:
+            figure_id = f"impact_{condition_token}_{suffix}"
+            suffix += 1
+        used_ids.add(figure_id)
+        metric_source = source_dir / f"{figure_id}.csv"
+        pd.DataFrame(payload.rows).to_csv(metric_source, header=False, index=False)
+        condition_sources.append(
+            (
+                figure_id,
+                metric_source,
+                {
+                    "legend_position": "none",
+                    "series_label_mode": "none",
+                    "x_label_override": "Sample",
+                    "y_label_override": "Impact strength (kJ/m²)",
+                    "summary_statistic": "median_iqr",
+                    "size": "60x55",
+                },
+            )
+        )
+    return condition_sources
+
+
 def _tensile_summary_sources(
     input_path: Path,
     *,
@@ -825,6 +890,128 @@ def _render_veusz_tensile_bundle(
     }
 
 
+def _render_veusz_impact_bundle(
+    source_input: Path,
+    *,
+    output_dir: Path,
+    options: dict[str, Any],
+    export_formats: object,
+    request: dict[str, Any],
+) -> dict[str, Any] | None:
+    condition_sources = _impact_condition_sources(
+        source_input,
+        request=request,
+        output_dir=output_dir,
+    )
+    if not condition_sources:
+        return None
+    impact_template = resolve_rule_template(
+        "impact_metric",
+        request.get("template")
+        if isinstance(request.get("template"), str)
+        else None,
+    )
+    figures_dir = output_dir / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    combined_outputs: list[str] = []
+    combined_exports: list[dict[str, Any]] = []
+    combined_reports: list[dict[str, Any]] = []
+    combined_documents: list[str] = []
+    combined_specs: list[str] = []
+    combined_terminal_requests: list[dict[str, Any]] = []
+    for figure_id, metric_source, metric_options in condition_sources:
+        metric_dir = figures_dir / f"_{figure_id}_render"
+        payload = render_to_dir(
+            metric_source,
+            template=impact_template,
+            output_dir=metric_dir,
+            options={**options, **metric_options},
+            export_formats=export_formats,
+            request_context={
+                **request,
+                "template": impact_template,
+                "explicit_render_option_keys": request.get(
+                    "explicit_render_option_keys", []
+                ),
+            },
+        )
+        outputs, exports = _rename_metric_exports(
+            payload,
+            metric_id=figure_id,
+            figures_dir=figures_dir,
+        )
+        combined_outputs.extend(outputs)
+        combined_exports.extend(exports)
+        metric_worker = figures_dir / "_veusz" / figure_id
+        if metric_worker.exists():
+            shutil.rmtree(metric_worker)
+        source_worker = metric_dir / "_veusz"
+        if source_worker.exists():
+            metric_worker.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(source_worker, metric_worker)
+        mapped_documents: list[str] = []
+        for item in payload.get("veusz_documents", []):
+            source_path = Path(str(item))
+            try:
+                destination = metric_worker / source_path.relative_to(source_worker)
+            except ValueError:
+                continue
+            if destination.exists():
+                mapped_documents.append(str(destination))
+        mapped_specs: list[str] = []
+        for item in payload.get("veusz_specs", []):
+            source_path = Path(str(item))
+            try:
+                destination = metric_worker / source_path.relative_to(source_worker)
+            except ValueError:
+                continue
+            if destination.exists():
+                mapped_specs.append(str(destination))
+        combined_documents.extend(mapped_documents)
+        combined_specs.extend(mapped_specs)
+        combined_terminal_requests.extend(
+            item
+            for item in payload.get("terminal_render_requests", [])
+            if isinstance(item, dict)
+        )
+        for report in payload.get("qa_reports", []):
+            if not isinstance(report, dict):
+                continue
+            copied_report = dict(report)
+            summary = report.get("layout_summary")
+            if isinstance(summary, dict):
+                copied_summary = dict(summary)
+                if mapped_documents:
+                    copied_summary["document"] = mapped_documents[0]
+                copied_summary["outputs"] = list(outputs)
+                copied_report["layout_summary"] = copied_summary
+            combined_reports.append(copied_report)
+        if metric_dir.exists():
+            shutil.rmtree(metric_dir)
+    return {
+        "kind": "sciplot_render_result",
+        "template": impact_template,
+        "input": str(source_input),
+        "sheet": None,
+        "render_engine": "veusz",
+        "qa_target": "veusz_export",
+        "export_formats": list(export_formats or DEFAULT_EXPORT_FORMATS_POLICY),
+        "exports": combined_exports,
+        "outputs": combined_outputs,
+        "qa_reports": combined_reports,
+        "veusz_documents": combined_documents,
+        "veusz_specs": combined_specs,
+        "terminal_render_requests": combined_terminal_requests,
+        "multi_metric_bundle": {
+            "kind": "impact_condition_bundle",
+            "metric_ids": [
+                figure_id
+                for figure_id, _source, _options in condition_sources
+            ],
+        },
+    }
+
+
 def _render_veusz_sweep_bundle(
     input_path: Path,
     *,
@@ -930,9 +1117,180 @@ def _render_veusz_sweep_bundle(
     }
 
 
+def _dsc_phase_sources(
+    source: Path,
+    *,
+    request: dict[str, Any],
+    output_dir: Path,
+) -> list[tuple[str, Path, dict[str, Any]]]:
+    if (
+        str(request.get("rule_id") or "").strip() != "dsc_curve"
+        or source.suffix.lower() != ".csv"
+    ):
+        return []
+    frame = pd.read_csv(source, header=None)
+    if frame.shape[0] < 4 or frame.shape[1] < 4 or frame.shape[1] % 2:
+        return []
+    phase_contracts = (
+        ("Cooling", "dsc_cooling"),
+        ("Second heating", "dsc_second_heating"),
+    )
+    sources_dir = output_dir / "processed" / "veusz_metric_sources"
+    sources_dir.mkdir(parents=True, exist_ok=True)
+    phase_sources: list[tuple[str, Path, dict[str, Any]]] = []
+    for phase_label, figure_id in phase_contracts:
+        selected_columns: list[int] = []
+        clean_samples: list[str] = []
+        for column in range(0, frame.shape[1], 2):
+            sample = str(frame.iat[2, column]).strip()
+            prefix = f"{phase_label} "
+            if not sample.startswith(prefix):
+                continue
+            selected_columns.extend([column, column + 1])
+            clean_samples.extend([sample[len(prefix) :], sample[len(prefix) :]])
+        if not selected_columns:
+            continue
+        phase_frame = frame.iloc[:, selected_columns].copy()
+        phase_frame.iloc[2, :] = clean_samples
+        phase_source = sources_dir / f"{figure_id}.csv"
+        phase_frame.to_csv(phase_source, header=False, index=False)
+        phase_sources.append(
+            (
+                figure_id,
+                phase_source,
+                {
+                    "legend_position": "none",
+                    "series_label_mode": "inline",
+                    "series_label_side": (
+                        "right" if phase_label == "Cooling" else "left"
+                    ),
+                    "show_y_ticks": False,
+                    "baseline": "none",
+                    "stack_peak_envelope": True,
+                    "x_label_override": "Temperature (°C)",
+                    "y_label_override": "Heat flow (W/g)",
+                    "palette_preset": "control_first_bright",
+                },
+            )
+        )
+    return phase_sources if len(phase_sources) == len(phase_contracts) else []
+
+
+def _render_veusz_dsc_bundle(
+    input_path: Path,
+    *,
+    output_dir: Path,
+    options: dict[str, Any],
+    export_formats: object,
+    request: dict[str, Any],
+) -> dict[str, Any] | None:
+    phase_sources = _dsc_phase_sources(
+        input_path, request=request, output_dir=output_dir
+    )
+    if not phase_sources:
+        return None
+    figures_dir = output_dir / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    combined_outputs: list[str] = []
+    combined_exports: list[dict[str, Any]] = []
+    combined_reports: list[dict[str, Any]] = []
+    combined_documents: list[str] = []
+    combined_specs: list[str] = []
+    combined_terminal_requests: list[dict[str, Any]] = []
+    for phase_id, phase_source, phase_options in phase_sources:
+        phase_dir = figures_dir / f"_{phase_id}_render"
+        payload = render_to_dir(
+            phase_source,
+            template="stacked_curve",
+            output_dir=phase_dir,
+            options={**options, **phase_options},
+            export_formats=export_formats,
+            request_context={
+                **request,
+                "template": "stacked_curve",
+                "explicit_render_option_keys": request.get(
+                    "explicit_render_option_keys", []
+                ),
+            },
+        )
+        outputs, exports = _rename_metric_exports(
+            payload, metric_id=phase_id, figures_dir=figures_dir
+        )
+        combined_outputs.extend(outputs)
+        combined_exports.extend(exports)
+        phase_worker = figures_dir / "_veusz" / phase_id
+        if phase_worker.exists():
+            shutil.rmtree(phase_worker)
+        source_worker = phase_dir / "_veusz"
+        if source_worker.exists():
+            phase_worker.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(source_worker, phase_worker)
+        mapped_documents: list[str] = []
+        mapped_specs: list[str] = []
+        for item in payload.get("veusz_documents", []):
+            source_path = Path(str(item))
+            try:
+                destination = phase_worker / source_path.relative_to(source_worker)
+            except ValueError:
+                continue
+            if destination.exists():
+                mapped_documents.append(str(destination))
+        for item in payload.get("veusz_specs", []):
+            source_path = Path(str(item))
+            try:
+                destination = phase_worker / source_path.relative_to(source_worker)
+            except ValueError:
+                continue
+            if destination.exists():
+                mapped_specs.append(str(destination))
+        combined_documents.extend(mapped_documents)
+        combined_specs.extend(mapped_specs)
+        combined_terminal_requests.extend(
+            item
+            for item in payload.get("terminal_render_requests", [])
+            if isinstance(item, dict)
+        )
+        for report in payload.get("qa_reports", []):
+            if not isinstance(report, dict):
+                continue
+            copied_report = dict(report)
+            summary = report.get("layout_summary")
+            if isinstance(summary, dict):
+                copied_summary = dict(summary)
+                if mapped_documents:
+                    copied_summary["document"] = mapped_documents[0]
+                copied_summary["outputs"] = list(outputs)
+                copied_report["layout_summary"] = copied_summary
+            combined_reports.append(copied_report)
+        if phase_dir.exists():
+            shutil.rmtree(phase_dir)
+    return {
+        "kind": "sciplot_render_result",
+        "template": str(request.get("template") or "curve"),
+        "input": str(input_path),
+        "sheet": None,
+        "render_engine": "veusz",
+        "qa_target": "veusz_export",
+        "export_formats": list(export_formats or DEFAULT_EXPORT_FORMATS_POLICY),
+        "exports": combined_exports,
+        "outputs": combined_outputs,
+        "qa_reports": combined_reports,
+        "veusz_documents": combined_documents,
+        "veusz_specs": combined_specs,
+        "terminal_render_requests": combined_terminal_requests,
+        "multi_metric_bundle": {
+            "kind": "dsc_cycle_phase_bundle",
+            "metric_ids": [
+                phase_id for phase_id, _source, _options in phase_sources
+            ],
+        },
+    }
+
+
 def _render_with_auto_split(
     input_path: Path,
     *,
+    source_input: Path | None = None,
     template: str,
     output_dir: Path,
     options: dict[str, Any],
@@ -940,6 +1298,15 @@ def _render_with_auto_split(
     request: dict[str, Any],
 ) -> dict[str, Any]:
     figures_dir = output_dir / "figures"
+    impact_bundle = _render_veusz_impact_bundle(
+        source_input or input_path,
+        output_dir=output_dir,
+        options=options,
+        export_formats=export_formats,
+        request=request,
+    )
+    if impact_bundle is not None:
+        return impact_bundle
     tensile_bundle = _render_veusz_tensile_bundle(
         input_path,
         output_dir=output_dir,
@@ -949,6 +1316,15 @@ def _render_with_auto_split(
     )
     if tensile_bundle is not None:
         return tensile_bundle
+    dsc_bundle = _render_veusz_dsc_bundle(
+        input_path,
+        output_dir=output_dir,
+        options=options,
+        export_formats=export_formats,
+        request=request,
+    )
+    if dsc_bundle is not None:
+        return dsc_bundle
     bundle = _render_veusz_sweep_bundle(
         input_path,
         output_dir=output_dir,
@@ -965,7 +1341,12 @@ def _render_with_auto_split(
         options=options,
         export_formats=export_formats,
         split_policy=request.get("split_policy"),
-        request_context=request,
+        request_context={
+            **request,
+            "explicit_render_option_keys": request.get(
+                "explicit_render_option_keys", []
+            ),
+        },
     )
     layout_quality = _layout_quality_from_result(result)
     policy = _auto_split_policy_for_result(request=request, template=template, layout_quality=layout_quality)
@@ -982,7 +1363,12 @@ def _render_with_auto_split(
         options=split_options,
         export_formats=export_formats,
         split_policy=policy,
-        request_context=request,
+        request_context={
+            **request,
+            "explicit_render_option_keys": request.get(
+                "explicit_render_option_keys", []
+            ),
+        },
     )
     split_result["auto_split"] = {
         "applied": True,
@@ -1217,6 +1603,14 @@ def _run_request_in_managed_output(
 
     requested_rule_id = request.get("rule_id") if isinstance(request.get("rule_id"), str) else None
     semantic = classify_source(input_path, requested_rule_id=requested_rule_id)
+    semantic_rule_id = semantic.get("rule_id")
+    if isinstance(semantic_rule_id, str) and semantic_rule_id.strip():
+        resolve_rule_template(
+            get_rule(semantic_rule_id),
+            request.get("template")
+            if isinstance(request.get("template"), str)
+            else None,
+        )
     study_model = study_model_from_request(request=request, semantic=semantic, input_path=input_path)
     publication_intent = build_publication_intent(
         study_model,
@@ -1329,6 +1723,7 @@ def _run_request_in_managed_output(
         }
         result = _render_with_auto_split(
             Path(str(prepared["source"])),
+            source_input=input_path,
             template=str(template),
             output_dir=output_dir,
             options=render_options,
@@ -1505,6 +1900,7 @@ def run_one_step(
     output_root: Path,
     project_name: str | None = None,
     delivery_root: Path | None = None,
+    template: str | None = None,
 ) -> dict[str, Any]:
     input_path = input_path.expanduser().resolve()
     output_root = output_root.expanduser().resolve()
@@ -1517,8 +1913,10 @@ def run_one_step(
         "input": str(input_path),
         "output": str(run_dir),
         "exports": list(DEFAULT_EXPORT_FORMATS_POLICY),
-        "render_options": normalize_render_options(DEFAULT_RENDER_OPTIONS),
+        "render_options": normalize_render_options(AUTOPLOT_RENDER_OPTIONS),
     }
+    if template is not None and str(template).strip():
+        request["template"] = str(template).strip()
     if delivery_root is not None:
         request["delivery_output"] = str(delivery_root.expanduser().resolve())
     request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")

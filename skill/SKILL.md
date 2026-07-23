@@ -160,6 +160,14 @@ The production builder implements exactly `curve`, `point_line`, `stacked_curve`
 error bars for categorical replicate groups. Unknown or reference-only
 templates must fail at request validation.
 
+Do not bind a categorical scientific metric to one chart form. The semantic
+rule owns recognition, units, replicate preservation, and analysis; its
+versioned presentation contract separately declares a default template and
+the supported explicit alternatives. For `impact_metric`, `bar`, `box`, and
+`box_strip` must all consume the same prepared replicate data. An explicit
+supported choice is a normal validated request, while an unsupported choice
+fails closed.
+
 `src/sciplot_core/policy.py` owns global typography, stroke, tick, marker,
 ordinary frame, size, export, and delivery defaults. Templates and recipes may
 not own private hard-style constants. Heatmap scalar, contour, and colorbar

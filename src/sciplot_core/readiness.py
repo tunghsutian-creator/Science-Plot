@@ -15,6 +15,7 @@ from sciplot_core.materials_rules import (
     SemanticRule,
     get_rule,
     iter_public_rules,
+    resolve_rule_template,
     semantic_payload_from_rule,
 )
 from sciplot_core.policy import (
@@ -33,8 +34,8 @@ VALIDATED_ENVELOPE_EVALUATION_KIND = "sciplot_validated_envelope_evaluation"
 VALIDATED_ENVELOPE_EVALUATION_VERSION = 2
 VALIDATED_RENDER_REQUEST_CONTRACT_KIND = "sciplot_validated_render_request"
 VALIDATED_RENDER_REQUEST_CONTRACT_VERSION = 1
-VALIDATED_RENDER_REQUEST_POLICY_VERSION = 1
-RULE_CONTRACT_VERSION = 3
+VALIDATED_RENDER_REQUEST_POLICY_VERSION = 2
+RULE_CONTRACT_VERSION = 4
 READY_RULE_ACCEPTANCE_VERSION = 3
 DEFAULT_VALIDATED_ENVELOPE_REGISTRY = Path(__file__).with_name(
     "validated_envelopes.json"
@@ -86,6 +87,7 @@ _SEMANTIC_CONTRACT_FIELDS = (
     "semantic_family",
     "recommended_recipe",
     "template",
+    "presentation_contract",
     "render_options",
     "rule_readiness",
     "axis_plan",
@@ -369,7 +371,9 @@ def validated_render_request_policy_payload(
     return {
         "version": VALIDATED_RENDER_REQUEST_POLICY_VERSION,
         "allowed_routes": ["auto"],
-        "template_policy": "exact_rule_template",
+        "template_policy": "explicit_supported_template_or_default",
+        "default_template": resolved.template,
+        "supported_templates": list(resolved.presentation_templates),
         "effective_recipe": resolved.recipe,
         "required_exports": list(DEFAULT_EXPORT_FORMATS_POLICY),
         "allowed_exports": sorted(SUPPORTED_EXPORT_FORMATS),
@@ -414,7 +418,7 @@ def render_request_contract_payload(
     )
     effective_recipe = resolved.recipe if route == "auto" else requested_recipe
     effective_template = (
-        requested_template or resolved.template
+        resolve_rule_template(resolved, requested_template)
         if route == "auto"
         else requested_template
     )
@@ -515,8 +519,11 @@ def _render_request_policy_evaluation(
     )
     if route != "auto":
         confirmation_reasons.append("render_route_outside_validated_policy")
-    if requested_template is not None and requested_template != rule.template:
-        confirmation_reasons.append("render_template_requires_confirmation")
+    if (
+        requested_template is not None
+        and requested_template not in rule.presentation_templates
+    ):
+        repair_reasons.append("render_template_unsupported_for_rule")
     if package.get("render_engine") != "veusz":
         repair_reasons.append("render_engine_contract_invalid")
 
@@ -555,7 +562,9 @@ def _render_request_policy_evaluation(
         if unknown_keys:
             repair_reasons.append("render_options_unsupported")
         effective_template = (
-            requested_template if requested_template == rule.template else rule.template
+            requested_template
+            if requested_template in rule.presentation_templates
+            else rule.template
         )
         try:
             from sciplot_core.request_contract import normalize_render_options

@@ -966,6 +966,7 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
     from sciplot_core.studio import (
         _ensure_veusz_loader_compat,
         _ensure_veusz_on_path,
+        _categorical_line_contracts,
         _reference_guide_line_contracts,
         _reference_guide_rect_contracts,
         _veusz_literal_text,
@@ -1798,7 +1799,10 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                 **contract,
                 "path": f"/page1/graph1/{contract['name']}",
             }
-            for contract in _reference_guide_line_contracts(spec)
+            for contract in (
+                _categorical_line_contracts(spec)
+                + _reference_guide_line_contracts(spec)
+            )
         ]
         actual_lines_by_path = {
             str(record["path"]): record for record in line_records
@@ -1818,8 +1822,8 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             )
         ):
             raise ValueError(
-                "Exact-current Veusz native reference-line inventory differs "
-                "from its closed geometry and style contract."
+                "Exact-current Veusz native line inventory differs from its "
+                "closed categorical/reference geometry and style contract."
             )
         if not units:
             raise ValueError(
@@ -1850,11 +1854,6 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             if record["name"] == "category_axis_label_provider":
                 allowed_dataset_paths.add("labels")
                 expected_provider_labels = "category_axis_labels"
-                if (
-                    isinstance(categorical, dict)
-                    and categorical.get("native_veusz_boxplot") is True
-                ):
-                    expected_provider_labels = ""
                 if bindings["labels"] != expected_provider_labels:
                     raise ValueError(
                         "Categorical axis provider does not consume its exact "

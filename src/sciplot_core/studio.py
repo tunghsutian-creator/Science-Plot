@@ -35,6 +35,7 @@ from sciplot_core.launchers import portable_sciplot_prelude, portable_vsz_finder
 from sciplot_core.materials_rules import (
     compute_analysis_metrics,
     get_rule,
+    resolve_rule_template,
     semantic_payload_from_rule,
 )
 from sciplot_core.operation_modes import normal_mode_payload
@@ -42,8 +43,12 @@ from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY
 from sciplot_core.policy import (
     AUTO_LOG_BOUND_PADDING_FACTOR,
     CATEGORICAL_BAR_FILL_TRANSPARENCY,
+    CATEGORICAL_BAR_LINE_WIDTH_PT,
+    CATEGORICAL_BAR_MAX_ERROR_FRACTION,
+    CATEGORICAL_BAR_TARGET_MEAN_FRACTION,
     CATEGORICAL_BAR_WIDTH_FRACTION,
     CATEGORICAL_BOX_FILL_FRACTION,
+    CATEGORICAL_BOX_NATIVE_FILL_SCALE,
     CATEGORICAL_BOX_FILL_TRANSPARENCY,
     CATEGORICAL_BOX_LINE_WIDTH_PT,
     CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
@@ -92,6 +97,8 @@ from sciplot_core.policy import (
     UNIFIED_TOP_MARGIN_MM,
     anchored_log_decade_ticks,
     canonical_export_format,
+    categorical_fill_color,
+    categorical_keyline_color,
     compact_linear_axis,
     is_removed_outside_legend_position,
     normalize_categorical_summary,
@@ -1735,6 +1742,8 @@ def _impact_condition_figure_queue(
                 "y_metric": "impact_strength",
                 "metric": "impact_strength",
                 "default_template": "box_strip",
+                "supported_templates": ["bar", "box", "box_strip"],
+                "presentation_data_shape": "categorical_replicates",
             }
         )
     return queue
@@ -1746,7 +1755,12 @@ def _impact_condition_figure_request(
 ) -> dict[str, Any]:
     figure_request = deepcopy(request)
     figure_request["input"] = str(figure["condition_source"])
-    figure_request["template"] = "box_strip"
+    figure_request["template"] = resolve_rule_template(
+        "impact_metric",
+        request.get("template")
+        if isinstance(request.get("template"), str)
+        else str(figure.get("default_template") or "box_strip"),
+    )
     figure_request["x_metric"] = "sample"
     figure_request["y_metric"] = "impact_strength"
     figure_request["series_order"] = list(figure.get("sample_order") or [])
@@ -4232,8 +4246,11 @@ def _apply_studio_request_overrides(
         if selected_rule is not None
         else None
     )
-    selected_template = _normalize_optional_string(template) or (
-        selected_rule.template if selected_rule else None
+    requested_template = _normalize_optional_string(template)
+    selected_template = (
+        resolve_rule_template(selected_rule, requested_template)
+        if selected_rule is not None
+        else requested_template
     )
     selected_project_name = _normalize_optional_string(project_name)
     if not selected_rule and not selected_template and not selected_project_name:
@@ -5345,7 +5362,9 @@ def derive_terminal_render_data_contract(
         show_direct_labels=show_direct_labels,
     )
     direct_labels.extend(
-        _categorical_axis_label_contracts(categorical, style=style)
+        _categorical_axis_label_contracts(
+            categorical, axis_contract=axis_contract, style=style
+        )
     )
     categorical_groups = {
         str(group.get("y_name") or ""): group
@@ -6640,9 +6659,16 @@ def _apply_domain_render_defaults(
         updated.setdefault("legend_position", "none")
         updated.setdefault("series_label_mode", "none")
         if "size" not in explicit_contract:
-            # Eight rotated categorical labels need the wider house profile;
-            # otherwise Veusz suppresses one label during overlap checking.
-            updated["size"] = "180x55" if len(category_positions) > 7 else "120x55"
+            # Choose the narrowest house frame that can carry the observed
+            # category count. Four ordinary sample labels fit the canonical
+            # 60 mm frame; broader frames are reserved for genuinely denser
+            # categorical axes.
+            if len(category_positions) <= 4:
+                updated["size"] = "60x55"
+            elif len(category_positions) <= 7:
+                updated["size"] = "120x55"
+            else:
+                updated["size"] = "180x55"
         if template_id == "bar":
             updated.setdefault("y_min", 0.0)
         if str(request.get("rule_id") or "").strip() == "impact_metric":
@@ -6669,11 +6695,12 @@ def _apply_domain_render_defaults(
             "reverse_x": True,
             "x_min": 400.0,
             "x_max": 4000.0,
+            "x_ticks": [400.0, 1000.0, 2000.0, 3000.0, 4000.0],
             "baseline": "none",
             "series_label_side": "left",
             "show_single_series_label": series_count == 1,
             "show_y_ticks": False,
-            "x_label_override": "Wavenumber (cm^-1)",
+            "x_label_override": "Wavenumber (cm⁻¹)",
             "size": "120x55" if series_count == 1 else "120x110",
         }
         for key, value in domain_defaults.items():
@@ -7337,6 +7364,44 @@ def _marker_thin_factor(item: StudioSeries, *, template_id: str) -> int:
     return max(1, math.ceil(point_count / MAX_POINT_LINE_MARKERS_PER_SERIES))
 
 
+def _categorical_bar_axis_defaults(
+    series: list[StudioSeries],
+) -> dict[str, Any] | None:
+    """Give positive bar charts enough headroom for both means and SD bars."""
+
+    groups: list[tuple[float, float]] = []
+    for item in series:
+        if item.presentation_kind != "categorical_replicates":
+            continue
+        values = [
+            float(value) for value in item.y_values if math.isfinite(float(value))
+        ]
+        if not values or min(values) < 0.0:
+            return None
+        mean = math.fsum(values) / len(values)
+        error = (
+            math.sqrt(
+                math.fsum((value - mean) ** 2 for value in values)
+                / (len(values) - 1)
+            )
+            if len(values) >= 2
+            else 0.0
+        )
+        groups.append((mean, error))
+    if not groups:
+        return None
+    required_upper = max(
+        max(mean for mean, _error in groups) / CATEGORICAL_BAR_TARGET_MEAN_FRACTION,
+        max(mean + error for mean, error in groups)
+        / CATEGORICAL_BAR_MAX_ERROR_FRACTION,
+    )
+    compact_axis = compact_linear_axis((0.0, required_upper), padding_fraction=0.0)
+    if compact_axis is None:
+        return None
+    _axis_min, axis_max, axis_ticks = compact_axis
+    return {"y_min": 0.0, "y_max": float(axis_max), "y_ticks": list(axis_ticks)}
+
+
 def _apply_readability_render_defaults(
     render_options: dict[str, Any],
     *,
@@ -7475,6 +7540,29 @@ def _apply_readability_render_defaults(
         autofixes.append("legend_outside_removed")
 
     if template_id in STACKED_TEMPLATE_IDS:
+        if (
+            (
+                str(request.get("rule_id") or "").strip() == "dsc_curve"
+                or updated.get("stack_peak_envelope") is True
+            )
+            and _axis_scale(updated, "y") == "linear"
+            and not {"y_min", "y_max", "y_ticks"} & explicit_options.keys()
+        ):
+            compact_axis = compact_linear_axis(
+                (
+                    value
+                    for item in series
+                    for value in item.y_values
+                    if math.isfinite(value)
+                ),
+                padding_fraction=0.08,
+            )
+            if compact_axis is not None:
+                y_min, y_max, y_ticks = compact_axis
+                updated.update(
+                    {"y_min": y_min, "y_max": y_max, "y_ticks": list(y_ticks)}
+                )
+                autofixes.append("dsc_full_peak_envelope_axis")
         if _looks_like_wavenumber_axis(axis_info):
             y_label = str(
                 updated.get("y_label_override") or axis_info.get("y_label") or ""
@@ -7534,13 +7622,13 @@ def _apply_readability_render_defaults(
                 autofixes.append("single_spectrum_raw_y_scale")
             elif len(series) > 1:
                 updated["show_y_ticks"] = False
+                # Stacking is a presentation transform, not the measured
+                # quantity. Keep the scientific axis name unchanged instead
+                # of appending implementation language such as "(offset)".
                 if "transmittance" in y_label.casefold():
-                    updated["y_label_override"] = "Transmittance (offset)"
-                elif (
-                    "absorbance" in y_label.casefold()
-                    and "offset" not in y_label.casefold()
-                ):
-                    updated["y_label_override"] = "Absorbance (offset)"
+                    updated["y_label_override"] = "Transmittance (%)"
+                elif "absorbance" in y_label.casefold():
+                    updated["y_label_override"] = "Absorbance"
         if label_mode in {"inline", "edge", "auto"} and (
             len(series) > 1 or updated.get("show_single_series_label") is True
         ):
@@ -7551,6 +7639,15 @@ def _apply_readability_render_defaults(
             updated["_autofixes_applied"] = sorted(set(autofixes))
         return updated
     if template_id in CATEGORICAL_TEMPLATE_IDS:
+        if (
+            template_id == "bar"
+            and _axis_scale(updated, "y") == "linear"
+            and not {"y_min", "y_max", "y_ticks"} & explicit_options.keys()
+        ):
+            bar_axis = _categorical_bar_axis_defaults(series)
+            if bar_axis is not None:
+                updated.update(bar_axis)
+                autofixes.append("categorical_bar_mean_and_error_headroom")
         if autofixes:
             updated["_autofixes_applied"] = sorted(set(autofixes))
         return updated
@@ -7634,7 +7731,14 @@ def _apply_template_series_transforms(
     if baseline_mode != "none":
         transformed = [_baseline_correct_series(item) for item in transformed]
     if _request_template(request) in STACKED_TEMPLATE_IDS:
-        transformed = _stack_studio_series(transformed, render_options=render_options)
+        transformed = _stack_studio_series(
+            transformed,
+            render_options=render_options,
+            full_peak_envelope=(
+                str(request.get("rule_id") or "").strip() == "dsc_curve"
+                or render_options.get("stack_peak_envelope") is True
+            ),
+        )
     return transformed
 
 
@@ -7673,10 +7777,38 @@ def _baseline_correct_series(item: StudioSeries) -> StudioSeries:
 
 
 def _stack_studio_series(
-    series: list[StudioSeries], *, render_options: dict[str, Any]
+    series: list[StudioSeries],
+    *,
+    render_options: dict[str, Any],
+    full_peak_envelope: bool = False,
 ) -> list[StudioSeries]:
     if len(series) <= 1:
         return series
+
+    if full_peak_envelope:
+        prepared_full: list[tuple[StudioSeries, tuple[float, ...], float]] = []
+        full_spans: list[float] = []
+        for item in series:
+            finite = _finite_values(item.y_values)
+            data_min = min(finite) if finite else 0.0
+            data_max = max(finite) if finite else data_min
+            span = max(data_max - data_min, sys.float_info.epsilon)
+            shifted = tuple(
+                y_value - data_min if math.isfinite(y_value) else y_value
+                for y_value in item.y_values
+            )
+            prepared_full.append((item, shifted, span))
+            full_spans.append(span)
+        maximum_span = max(full_spans) if full_spans else 1.0
+        gap = max(0.22 * maximum_span, sys.float_info.epsilon)
+        cursor = 0.08 * maximum_span
+        stacked_full: list[StudioSeries] = []
+        for item, shifted, span in prepared_full:
+            stacked_full.append(
+                replace(item, y_values=tuple(value + cursor for value in shifted))
+            )
+            cursor += span + gap
+        return stacked_full
 
     prepared: list[tuple[StudioSeries, tuple[float, ...], float, float]] = []
     spans: list[float] = []
@@ -7968,6 +8100,8 @@ def _categorical_plot_contract(
             {
                 "label": item.label,
                 "color": item.color,
+                "fill_color": categorical_fill_color(item.color),
+                "keyline_color": categorical_keyline_color(item.color),
                 "position": position,
                 "y_name": item.y_name,
                 "raw_values": values,
@@ -8028,10 +8162,18 @@ def _categorical_plot_contract(
             "box_fill_mode": "series_color",
             "box_fill_transparency": CATEGORICAL_BOX_FILL_TRANSPARENCY,
             "box_fill_fraction": CATEGORICAL_BOX_FILL_FRACTION,
-            "box_line_mode": "series_color",
+            "box_native_fill_scale": CATEGORICAL_BOX_NATIVE_FILL_SCALE,
+            "box_line_mode": str(
+                render_options.get("box_line_mode") or "series_color"
+            ),
+            "raw_point_color_mode": "series_color",
+            "raw_point_alpha": float(
+                render_options.get("marker_alpha", 0.80)
+            ),
             "box_line_width_pt": CATEGORICAL_BOX_LINE_WIDTH_PT,
             "bar_width_fraction": CATEGORICAL_BAR_WIDTH_FRACTION,
             "bar_fill_transparency": CATEGORICAL_BAR_FILL_TRANSPARENCY,
+            "bar_line_width_pt": CATEGORICAL_BAR_LINE_WIDTH_PT,
             "error_cap_to_bar_ratio": CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
             "error_line_width_pt": UNIFIED_LINE_WIDTH_PT,
         },
@@ -8713,46 +8855,12 @@ def _direct_label_contracts(
 def _categorical_axis_label_contracts(
     categorical_contract: dict[str, Any] | None,
     *,
+    axis_contract: _VeuszAxisContract,
     style: _VeuszStyleContract,
 ) -> list[dict[str, Any]]:
-    """Build source-bound direct labels for categorical boxplot axes."""
+    """Categorical labels are owned by the shared native Veusz x-axis."""
 
-    if not isinstance(categorical_contract, dict):
-        return []
-    if categorical_contract.get("native_veusz_boxplot") is not True:
-        return []
-    labels: list[dict[str, Any]] = []
-    for index, group in enumerate(categorical_contract.get("groups", []), start=1):
-        if not isinstance(group, dict):
-            continue
-        labels.append(
-            {
-                "name": f"category_label_{index}",
-                "label": str(group.get("label") or ""),
-                "positioning": "axes",
-                "x_axis": "x",
-                "y_axis": "y",
-                "x": float(group["position"]),
-                "y": 0.0,
-                "align": "centre",
-                "valign": "top",
-                "angle_degrees": 45.0,
-                "margin_pt": 0.0,
-                "clip": False,
-                "text_size_pt": style.font_size_pt,
-                "text_color": UNIFIED_FOREGROUND_COLOR,
-                "text_hide": False,
-                "background_color": "white",
-                "background_transparency": 0,
-                "background_hide": True,
-                "border_color": UNIFIED_FOREGROUND_COLOR,
-                "border_width_pt": style.axis_linewidth_pt,
-                "border_style": "solid",
-                "border_transparency": 0,
-                "border_hide": True,
-            }
-        )
-    return labels
+    return []
 
 
 def _build_veusz_plot_spec(
@@ -8781,6 +8889,12 @@ def _build_veusz_plot_spec(
         template_id=template_id,
         render_options=render_options,
     )
+    categorical_visual_style = (
+        categorical_contract.get("visual_style")
+        if isinstance(categorical_contract, dict)
+        and isinstance(categorical_contract.get("visual_style"), dict)
+        else {}
+    )
     label_specs = _direct_label_contracts(
         series,
         render_options=render_options,
@@ -8789,7 +8903,9 @@ def _build_veusz_plot_spec(
         show_direct_labels=show_direct_labels,
     )
     label_specs.extend(
-        _categorical_axis_label_contracts(categorical_contract, style=style)
+        _categorical_axis_label_contracts(
+            categorical_contract, axis_contract=axis_contract, style=style
+        )
     )
     label_load = _label_load(series)
     layout_issues: list[dict[str, Any]] = []
@@ -8934,7 +9050,9 @@ def _build_veusz_plot_spec(
             "minor_tick_length_pt": style.minor_tick_length_pt,
             "line_width_pt": style.line_width_pt,
             "line_alpha": style.line_alpha,
-            "marker_alpha": style.marker_alpha,
+            "marker_alpha": float(
+                categorical_visual_style.get("raw_point_alpha", style.marker_alpha)
+            ),
             "marker_size_pt": style.marker_size_pt,
             "marker_line_width_pt": style.marker_line_width_pt,
             "axes_labelpad_pt": style.axes_labelpad_pt,
@@ -8976,16 +9094,19 @@ def _build_veusz_plot_spec(
                     item, template_id=template_id
                 ),
                 "marker_fill_color": (
-                    "white"
-                    if str(
-                        render_options.get("marker_fill_mode") or "filled"
-                    ).casefold()
+                    item.color
+                    if item.presentation_kind == "categorical_replicates"
+                    else "white"
+                    if str(render_options.get("marker_fill_mode") or "filled").casefold()
                     == "open"
                     else item.color
                 ),
                 "presentation_kind": item.presentation_kind,
                 "category_position": item.category_position,
                 "plot_line_hide": item.presentation_kind == "categorical_replicates",
+                "marker_line_hide": (
+                    item.presentation_kind == "categorical_replicates"
+                ),
                 "raw_points_visible": (
                     next(
                         (
@@ -9006,6 +9127,90 @@ def _build_veusz_plot_spec(
         ],
         "direct_labels": label_specs,
     }
+
+
+def _add_veusz_xy_series(
+    interface: Any,
+    item: dict[str, Any],
+    style: dict[str, Any],
+) -> None:
+    interface.Add("xy", name=item["name"], autoadd=False)
+    interface.To(item["name"])
+    interface.Set("xData", item["x_name"])
+    interface.Set("yData", item["y_name"])
+    interface.Set("key", _veusz_literal_text(item["label"]))
+    interface.Set("PlotLine/color", item["color"])
+    interface.Set("PlotLine/style", item.get("line_style") or "solid")
+    interface.Set("MarkerFill/color", item.get("marker_fill_color") or item["color"])
+    interface.Set("MarkerLine/color", item["color"])
+    interface.Set("MarkerLine/width", _pt(float(style["marker_line_width_pt"])))
+    interface.Set("marker", item["marker"])
+    if str(item.get("marker") or "none").strip().casefold() == "none":
+        interface.Set("MarkerFill/hide", True)
+        interface.Set("MarkerLine/hide", True)
+    if item.get("marker_line_hide") is True:
+        interface.Set("MarkerLine/hide", True)
+    if item.get("plot_line_hide") is True:
+        interface.Set("PlotLine/hide", True)
+    if item.get("raw_points_visible") is False:
+        interface.Set("MarkerFill/hide", True)
+        interface.Set("MarkerLine/hide", True)
+    interface.Set(
+        "PlotLine/transparency", _alpha_to_transparency(float(style["line_alpha"]))
+    )
+    interface.Set(
+        "MarkerFill/transparency",
+        _alpha_to_transparency(float(style["marker_alpha"])),
+    )
+    interface.Set(
+        "MarkerLine/transparency",
+        _alpha_to_transparency(float(style["marker_alpha"])),
+    )
+    if item.get("line_width_pt") is not None:
+        interface.Set("PlotLine/width", _pt(float(item["line_width_pt"])))
+    marker = str(item.get("marker") or "none")
+    if item.get("marker_size_pt") is not None:
+        interface.Set("markerSize", _pt(float(item["marker_size_pt"])))
+    elif marker != "none":
+        interface.Set("markerSize", _pt(float(style["marker_size_pt"])))
+    marker_thin_factor = max(1, int(item.get("marker_thin_factor") or 1))
+    if marker_thin_factor > 1:
+        interface.Set("thinfactor", marker_thin_factor)
+    interface.To("..")
+
+
+def _add_veusz_axis_line(
+    interface: Any,
+    *,
+    name: str,
+    x_pos: float,
+    y_pos: float,
+    x_pos_2: float,
+    y_pos_2: float,
+    color: str,
+    width_pt: float,
+) -> None:
+    interface.Add("line", name=name, autoadd=False)
+    interface.To(name)
+    interface.Set("positioning", "axes")
+    interface.Set("xAxis", "x")
+    interface.Set("yAxis", "y")
+    interface.Set("mode", "point-to-point")
+    interface.Set("xPos", [x_pos])
+    interface.Set("yPos", [y_pos])
+    interface.Set("xPos2", [x_pos_2])
+    interface.Set("yPos2", [y_pos_2])
+    interface.Set("clip", True)
+    interface.Set("hide", False)
+    interface.Set("Line/color", color)
+    interface.Set("Line/width", _pt(width_pt))
+    interface.Set("Line/style", "solid")
+    interface.Set("Line/transparency", 0)
+    interface.Set("Line/hide", False)
+    interface.Set("arrowleft", "none")
+    interface.Set("arrowright", "none")
+    interface.Set("Fill/hide", True)
+    interface.To("..")
 
 
 def _save_veusz_document_from_spec(
@@ -9382,6 +9587,161 @@ def _reference_guide_rect_contracts(
     return contracts
 
 
+def _categorical_line_contracts(
+    spec: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Derive the closed native line inventory for categorical summaries."""
+
+    categorical = spec.get("categorical")
+    if not isinstance(categorical, dict):
+        return []
+    style = (
+        categorical.get("visual_style")
+        if isinstance(categorical.get("visual_style"), dict)
+        else {}
+    )
+    groups = [
+        group
+        for group in categorical.get("groups", [])
+        if isinstance(group, dict)
+    ]
+    contracts: list[dict[str, Any]] = []
+
+    def append(
+        *,
+        name: str,
+        x_pos: float,
+        y_pos: float,
+        x_pos_2: float,
+        y_pos_2: float,
+        color: str,
+        width_pt: float,
+    ) -> None:
+        contracts.append(
+            {
+                "name": name,
+                "positioning": "axes",
+                "x_axis": "x",
+                "y_axis": "y",
+                "mode": "point-to-point",
+                "xPos": [x_pos],
+                "yPos": [y_pos],
+                "xPos2": [x_pos_2],
+                "yPos2": [y_pos_2],
+                "clip": True,
+                "hide": False,
+                "line_color": color,
+                "line_width_pt": width_pt,
+                "line_style": "solid",
+                "line_transparency": 0,
+                "line_hide": False,
+                "arrow_left": "none",
+                "arrow_right": "none",
+                "fill_hide": True,
+            }
+        )
+
+    if categorical.get("native_veusz_boxplot") is True:
+        fill_fraction = float(
+            style.get("box_fill_fraction", CATEGORICAL_BOX_FILL_FRACTION)
+        )
+        box_groups = [
+            group for group in groups if group.get("boxplot_eligible") is True
+        ]
+        for box_index, group in enumerate(box_groups, start=1):
+            position = float(group["position"])
+            left = position - fill_fraction / 2.0
+            right = position + fill_fraction / 2.0
+            statistics = group["descriptive_statistics"]
+            median = float(statistics["median"])
+            append(
+                name=f"categorical_box_median_{box_index}",
+                x_pos=left,
+                y_pos=median,
+                x_pos_2=right,
+                y_pos_2=median,
+                color=UNIFIED_FOREGROUND_COLOR,
+                width_pt=UNIFIED_LINE_WIDTH_PT,
+            )
+
+    if categorical.get("presentation_kind") == "bar_error":
+        bar_width = float(
+            style.get("bar_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION)
+        )
+        error_cap_half_width = (
+            bar_width
+            * float(
+                style.get(
+                    "error_cap_to_bar_ratio", CATEGORICAL_ERROR_CAP_TO_BAR_RATIO
+                )
+            )
+            / 2.0
+        )
+        error_width = float(
+            style.get("error_line_width_pt", UNIFIED_LINE_WIDTH_PT)
+        )
+        bar_line_width = float(
+            style.get("bar_line_width_pt", CATEGORICAL_BAR_LINE_WIDTH_PT)
+        )
+        for bar_index, group in enumerate(groups, start=1):
+            position = float(group["position"])
+            mean = float(group["bar_mean"])
+            error = float(group["bar_error"])
+            low = mean - error
+            high = mean + error
+            for line_index, (x_pos, y_pos, x_pos_2, y_pos_2) in enumerate(
+                (
+                    (position, low, position, high),
+                    (
+                        position - error_cap_half_width,
+                        high,
+                        position + error_cap_half_width,
+                        high,
+                    ),
+                    (
+                        position - error_cap_half_width,
+                        low,
+                        position + error_cap_half_width,
+                        low,
+                    ),
+                ),
+                start=1,
+            ):
+                append(
+                    name=f"categorical_bar_error_{bar_index}_{line_index}",
+                    x_pos=x_pos,
+                    y_pos=y_pos,
+                    x_pos_2=x_pos_2,
+                    y_pos_2=y_pos_2,
+                    color=UNIFIED_FOREGROUND_COLOR,
+                    width_pt=error_width,
+                )
+            left = position - bar_width / 2.0
+            right = position + bar_width / 2.0
+            keyline_color = str(
+                group.get("keyline_color")
+                or categorical_keyline_color(group.get("color"))
+            )
+            for outline_index, (x_pos, y_pos, x_pos_2, y_pos_2) in enumerate(
+                (
+                    (left, 0.0, left, mean),
+                    (right, 0.0, right, mean),
+                    (left, mean, right, mean),
+                ),
+                start=1,
+            ):
+                append(
+                    name=f"categorical_bar_outline_{bar_index}_{outline_index}",
+                    x_pos=x_pos,
+                    y_pos=y_pos,
+                    x_pos_2=x_pos_2,
+                    y_pos_2=y_pos_2,
+                    color=keyline_color,
+                    width_pt=bar_line_width,
+                )
+    return contracts
+
+
 def _reference_guide_line_contracts(
     spec: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -9635,6 +9995,12 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("Background/hide", not bool(style["legend_frameon"]))
         interface.Set("Border/hide", not bool(style["legend_frameon"]))
         interface.To("..")
+    # Veusz paints graph children in reverse object-tree order.  Categorical
+    # replicate markers are therefore added before their filled summaries so
+    # they remain the topmost data layer.
+    for item in spec["series"]:
+        if item.get("presentation_kind") == "categorical_replicates":
+            _add_veusz_xy_series(interface, item, style)
     if categorical is not None and categorical.get("native_veusz_boxplot") is True:
         categorical_style = (
             categorical.get("visual_style")
@@ -9654,25 +10020,52 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
                 group.get("color")
                 or DEFAULT_PALETTE_COLORS[(box_index - 1) % len(DEFAULT_PALETTE_COLORS)]
             )
+            fill_fraction = float(
+                categorical_style.get(
+                    "box_fill_fraction", CATEGORICAL_BOX_FILL_FRACTION
+                )
+            )
+            native_fill_fraction = fill_fraction * float(
+                categorical_style.get(
+                    "box_native_fill_scale", CATEGORICAL_BOX_NATIVE_FILL_SCALE
+                )
+            )
+            position = float(group["position"])
+            median = float(group["descriptive_statistics"]["median"])
+            median_name = f"categorical_box_median_{box_index}"
+            left = position - fill_fraction / 2.0
+            right = position + fill_fraction / 2.0
+            _add_veusz_axis_line(
+                interface,
+                name=median_name,
+                x_pos=left,
+                y_pos=median,
+                x_pos_2=right,
+                y_pos_2=median,
+                color=UNIFIED_FOREGROUND_COLOR,
+                width_pt=UNIFIED_LINE_WIDTH_PT,
+            )
+            keyline_color = str(
+                group.get("keyline_color") or categorical_keyline_color(box_color)
+            )
             box_name = f"categorical_boxplot_{box_index}"
             interface.Add("boxplot", name=box_name, autoadd=False)
             interface.To(box_name)
             interface.Set("values", (str(group["y_name"]),))
-            interface.Set("posn", [float(group["position"])])
+            interface.Set("posn", [position])
             interface.Set(
                 "whiskermode", str(categorical.get("box_whisker_mode") or "1.5IQR")
             )
-            interface.Set(
-                "fillfraction",
-                float(
-                    categorical_style.get(
-                        "box_fill_fraction", CATEGORICAL_BOX_FILL_FRACTION
-                    )
-                ),
-            )
+            # A one-group Veusz boxplot occupies roughly twice the requested
+            # categorical fraction. Apply the shared native conversion so the
+            # final visible box width matches the publication-width contract.
+            interface.Set("fillfraction", native_fill_fraction)
             interface.Set("meanmarker", "none")
             interface.Set("outliersmarker", "none")
-            interface.Set("Fill/color", box_color)
+            interface.Set(
+                "Fill/color",
+                str(group.get("fill_color") or categorical_fill_color(box_color)),
+            )
             interface.Set(
                 "Fill/transparency",
                 int(
@@ -9681,10 +10074,14 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
                     )
                 ),
             )
-            interface.Set("Border/color", box_color)
+            # The native border shares the exact box geometry with the fill.
+            # Using its thin mid-tone role prevents the fill from protruding
+            # beyond separately positioned line widgets at raster scale.
+            interface.Set("Border/color", keyline_color)
             interface.Set("Border/width", _pt(box_line_width))
-            interface.Set("Whisker/color", box_color)
-            interface.Set("Whisker/width", _pt(box_line_width))
+            interface.Set("Border/hide", False)
+            interface.Set("Whisker/color", UNIFIED_FOREGROUND_COLOR)
+            interface.Set("Whisker/width", _pt(UNIFIED_LINE_WIDTH_PT))
             interface.Set("MarkersLine/hide", True)
             interface.Set("MarkersFill/hide", True)
             interface.To("..")
@@ -9708,6 +10105,9 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         )
         error_width = float(
             bar_style.get("error_line_width_pt", UNIFIED_LINE_WIDTH_PT)
+        )
+        bar_line_width = float(
+            bar_style.get("bar_line_width_pt", CATEGORICAL_BAR_LINE_WIDTH_PT)
         )
         bar_groups = [
             group
@@ -9763,13 +10163,45 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
                 interface.Set("arrowright", "none")
                 interface.Set("Fill/hide", True)
                 interface.To("..")
-        bar_colors = [
+        bar_line_colors = [
             str(
-                group.get("color")
+                group.get("keyline_color")
+                or categorical_keyline_color(group.get("color"))
                 or DEFAULT_PALETTE_COLORS[index % len(DEFAULT_PALETTE_COLORS)]
             )
             for index, group in enumerate(bar_groups)
         ]
+        bar_fill_colors = [
+            str(
+                group.get("fill_color")
+                or categorical_fill_color(bar_line_colors[index])
+            )
+            for index, group in enumerate(bar_groups)
+        ]
+        for bar_index, group in enumerate(bar_groups, start=1):
+            position = float(group["position"])
+            mean = float(group["bar_mean"])
+            left = position - bar_width / 2.0
+            right = position + bar_width / 2.0
+            line_color = bar_line_colors[bar_index - 1]
+            for outline_index, (x_pos, y_pos, x_pos_2, y_pos_2) in enumerate(
+                (
+                    (left, 0.0, left, mean),
+                    (right, 0.0, right, mean),
+                    (left, mean, right, mean),
+                ),
+                start=1,
+            ):
+                _add_veusz_axis_line(
+                    interface,
+                    name=f"categorical_bar_outline_{bar_index}_{outline_index}",
+                    x_pos=x_pos,
+                    y_pos=y_pos,
+                    x_pos_2=x_pos_2,
+                    y_pos_2=y_pos_2,
+                    color=line_color,
+                    width_pt=bar_line_width,
+                )
         interface.Add("bar", name="categorical_bar", autoadd=False)
         interface.To("categorical_bar")
         interface.Set("direction", "vertical")
@@ -9811,61 +10243,21 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
                     0,
                     True,
                 )
-                for color in bar_colors
+                for color in bar_fill_colors
             ],
         )
         interface.Set(
             "BarLine/lines",
             [
-                ("solid", _pt(float(style["axis_linewidth_pt"])), color, False)
-                for color in bar_colors
+                ("solid", _pt(bar_line_width), color, True)
+                for color in bar_line_colors
             ],
         )
         interface.To("..")
     for item in spec["series"]:
-        interface.Add("xy", name=item["name"], autoadd=False)
-        interface.To(item["name"])
-        interface.Set("xData", item["x_name"])
-        interface.Set("yData", item["y_name"])
-        interface.Set("key", _veusz_literal_text(item["label"]))
-        interface.Set("PlotLine/color", item["color"])
-        interface.Set("PlotLine/style", item.get("line_style") or "solid")
-        interface.Set(
-            "MarkerFill/color", item.get("marker_fill_color") or item["color"]
-        )
-        interface.Set("MarkerLine/color", item["color"])
-        interface.Set("MarkerLine/width", _pt(float(style["marker_line_width_pt"])))
-        interface.Set("marker", item["marker"])
-        if str(item.get("marker") or "none").strip().casefold() == "none":
-            interface.Set("MarkerFill/hide", True)
-            interface.Set("MarkerLine/hide", True)
-        if item.get("plot_line_hide") is True:
-            interface.Set("PlotLine/hide", True)
-        if item.get("raw_points_visible") is False:
-            interface.Set("MarkerFill/hide", True)
-            interface.Set("MarkerLine/hide", True)
-        interface.Set(
-            "PlotLine/transparency", _alpha_to_transparency(float(style["line_alpha"]))
-        )
-        interface.Set(
-            "MarkerFill/transparency",
-            _alpha_to_transparency(float(style["marker_alpha"])),
-        )
-        interface.Set(
-            "MarkerLine/transparency",
-            _alpha_to_transparency(float(style["marker_alpha"])),
-        )
-        if item.get("line_width_pt") is not None:
-            interface.Set("PlotLine/width", _pt(float(item["line_width_pt"])))
-        marker = str(item.get("marker") or "none")
-        if item.get("marker_size_pt") is not None:
-            interface.Set("markerSize", _pt(float(item["marker_size_pt"])))
-        elif marker != "none":
-            interface.Set("markerSize", _pt(float(style["marker_size_pt"])))
-        marker_thin_factor = max(1, int(item.get("marker_thin_factor") or 1))
-        if marker_thin_factor > 1:
-            interface.Set("thinfactor", marker_thin_factor)
-        interface.To("..")
+        if item.get("presentation_kind") == "categorical_replicates":
+            continue
+        _add_veusz_xy_series(interface, item, style)
     if categorical is not None:
         interface.Add("xy", name="category_axis_label_provider", autoadd=False)
         interface.To("category_axis_label_provider")
@@ -9873,14 +10265,19 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("yData", "category_axis_y")
         interface.Set(
             "labels",
-            "category_axis_labels"
-            if categorical.get("presentation_kind") == "bar_error"
-            else "",
+            "category_axis_labels",
         )
         interface.Set("marker", "none")
         interface.Set("PlotLine/hide", True)
-        interface.Set("MarkerFill/hide", True)
-        interface.Set("MarkerLine/hide", True)
+        # A labels-mode axis ignores a fully hidden XY provider when the
+        # categorical summary is a native bar plotter.  A ``none`` marker is
+        # still visually empty, while leaving its styles enabled keeps the
+        # provider eligible for native tick-label lookup.
+        label_provider_style_hidden = (
+            categorical.get("presentation_kind") != "bar_error"
+        )
+        interface.Set("MarkerFill/hide", label_provider_style_hidden)
+        interface.Set("MarkerLine/hide", label_provider_style_hidden)
         interface.Set("ErrorBarLine/hide", True)
         interface.Set("Label/hide", True)
         interface.To("..")

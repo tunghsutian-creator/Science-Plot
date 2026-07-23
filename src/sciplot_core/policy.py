@@ -201,7 +201,7 @@ MIN_VISUAL_EXTENT_CLEARANCE_MM = 0.25
 MAX_LEGEND_RESERVE_ITERATIONS = 6
 MAX_LOG_LEGEND_RESERVE_DECADES = 0.70
 MAX_LINEAR_LEGEND_RESERVE_FRACTION = 0.60
-MAX_POINT_LINE_MARKERS_PER_SERIES = 32
+MAX_POINT_LINE_MARKERS_PER_SERIES = 13
 INSIDE_LEGEND_POSITIONS = ("upper_right", "lower_right", "upper_left", "lower_left")
 REMOVED_OUTSIDE_LEGEND_POSITIONS = frozenset(
     {"outside", "outside_right", "right_outside"}
@@ -211,15 +211,72 @@ CATEGORICAL_SUMMARY_OPTIONS = ("median_iqr", "raw_only")
 DEFAULT_RAW_POINT_JITTER_FRACTION = 0.12
 MAX_RAW_POINT_JITTER_FRACTION = 0.35
 MIN_BOX_REPLICATES = 2
-CATEGORICAL_BOX_FILL_FRACTION = 0.36
-CATEGORICAL_BOX_FILL_TRANSPARENCY = 72
-CATEGORICAL_BOX_LINE_WIDTH_PT = UNIFIED_LINE_WIDTH_PT
-CATEGORICAL_BAR_WIDTH_FRACTION = 0.36
-CATEGORICAL_BAR_FILL_TRANSPARENCY = 15
+CATEGORICAL_FILL_COLORS_BY_BASE = {
+    "#222222": "#B7B7B7",
+    "#3568C0": "#AFC6ED",
+    "#C83E4D": "#F0B4BA",
+    "#2A9D8F": "#A7D9D2",
+    "#D99A24": "#EED59F",
+    "#7C9ED9": "#CCD9EF",
+    "#7B61A8": "#D0C5E0",
+}
+CATEGORICAL_KEYLINE_COLORS_BY_BASE = {
+    "#222222": "#696969",
+    "#3568C0": "#7898D1",
+    "#C83E4D": "#D97D87",
+    "#2A9D8F": "#67B7AC",
+    "#D99A24": "#E0B761",
+    "#7C9ED9": "#A7BCE0",
+    "#7B61A8": "#A999C2",
+}
+CATEGORICAL_BOX_FILL_FRACTION = 0.38
+CATEGORICAL_BOX_NATIVE_FILL_SCALE = 0.50
+CATEGORICAL_BOX_FILL_TRANSPARENCY = 0
+CATEGORICAL_KEYLINE_WIDTH_PT = 0.70
+CATEGORICAL_BOX_LINE_WIDTH_PT = CATEGORICAL_KEYLINE_WIDTH_PT
+CATEGORICAL_BAR_WIDTH_FRACTION = 0.32
+CATEGORICAL_BAR_FILL_TRANSPARENCY = 0
+CATEGORICAL_BAR_LINE_WIDTH_PT = CATEGORICAL_KEYLINE_WIDTH_PT
+CATEGORICAL_BAR_TARGET_MEAN_FRACTION = 0.65
+CATEGORICAL_BAR_MAX_ERROR_FRACTION = 0.78
 CATEGORICAL_ERROR_CAP_TO_BAR_RATIO = 0.50
 TENSILE_X_AXIS_LABEL = "Strain (%)"
 TENSILE_Y_AXIS_LABEL = "Stress (MPa)"
 TENSILE_AXIS_PADDING_FRACTION = 0.06
+
+
+def categorical_fill_color(value: object) -> str:
+    """Return the opaque light-role colour for one categorical palette root."""
+
+    text = str(value or "").strip()
+    normalized = text.upper()
+    mapped = CATEGORICAL_FILL_COLORS_BY_BASE.get(normalized)
+    if mapped is not None:
+        return mapped
+    match = re.fullmatch(r"#([0-9A-F]{6})", normalized)
+    if match is None:
+        return text
+    packed = match.group(1)
+    channels = [int(packed[index : index + 2], 16) for index in (0, 2, 4)]
+    lightened = [round(channel * 0.45 + 255.0 * 0.55) for channel in channels]
+    return "#{:02X}{:02X}{:02X}".format(*lightened)
+
+
+def categorical_keyline_color(value: object) -> str:
+    """Return the mid-tone edge role for one categorical palette root."""
+
+    text = str(value or "").strip()
+    normalized = text.upper()
+    mapped = CATEGORICAL_KEYLINE_COLORS_BY_BASE.get(normalized)
+    if mapped is not None:
+        return mapped
+    match = re.fullmatch(r"#([0-9A-F]{6})", normalized)
+    if match is None:
+        return text
+    packed = match.group(1)
+    channels = [int(packed[index : index + 2], 16) for index in (0, 2, 4)]
+    softened = [round(channel * 0.65 + 255.0 * 0.35) for channel in channels]
+    return "#{:02X}{:02X}{:02X}".format(*softened)
 
 # Public request keys accepted by the compatibility intake surface.  Keep this
 # contract explicit and renderer-independent so importing intake never starts
@@ -272,6 +329,7 @@ RENDER_OPTION_KEYS = frozenset(
         "marker_line_width_pt",
         "series_offsets",
         "stack_spacing_scale",
+        "stack_peak_envelope",
         "legend_position",
         "legend_curve_clearance_mm",
         "legend_edge_padding_mm",
@@ -432,6 +490,20 @@ DEFAULT_RENDER_OPTIONS: dict[str, Any] = {
     "line_width_pt": UNIFIED_LINE_WIDTH_PT,
     "marker_size": UNIFIED_MARKER_SIZE_PT,
     "marker_line_width_pt": UNIFIED_MARKER_LINE_WIDTH_PT,
+}
+
+# Autoplot does not know the semantic template until after source
+# classification. Its persisted request therefore contains only options that
+# are valid for every production template; template-owned legend and label
+# defaults are merged from the selected semantic rule later.
+AUTOPLOT_RENDER_OPTIONS: dict[str, Any] = {
+    key: DEFAULT_RENDER_OPTIONS[key]
+    for key in (
+        "visual_theme_id",
+        "style_preset",
+        "size",
+        "palette_preset",
+    )
 }
 
 
@@ -617,10 +689,11 @@ CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS: dict[str, Any] = {
     "series_label_mode": "none",
     "marker_sequence": ["circle"],
     "marker_fill_mode": "filled",
-    "raw_point_jitter_fraction": 0.18,
+    "raw_point_jitter_fraction": 0.14,
     "palette_preset": DEFAULT_PALETTE_PRESET,
     "line_alpha": 1.0,
-    "marker_alpha": 0.78,
+    "marker_alpha": 0.80,
+    "box_line_mode": "series_color",
 }
 
 
@@ -876,6 +949,7 @@ __all__ = [
     "DEFAULT_EXPORT_FORMATS_POLICY",
     "EXPORT_FORMAT_ALIASES",
     "AUTO_LOG_BOUND_PADDING_FACTOR",
+    "AUTOPLOT_RENDER_OPTIONS",
     "UNIFIED_AXIS_LINEWIDTH_PT",
     "UNIFIED_FONT_FAMILY",
     "UNIFIED_FONT_SIZE_PT",

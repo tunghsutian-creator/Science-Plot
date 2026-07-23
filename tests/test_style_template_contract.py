@@ -8,8 +8,16 @@ import pytest
 import sciplot_core.workflow as workflow
 
 from sciplot_core.policy import (
+    AUTOPLOT_RENDER_OPTIONS,
     CATEGORICAL_BAR_FILL_TRANSPARENCY,
+    CATEGORICAL_BAR_LINE_WIDTH_PT,
+    CATEGORICAL_BAR_MAX_ERROR_FRACTION,
+    CATEGORICAL_BAR_TARGET_MEAN_FRACTION,
     CATEGORICAL_BAR_WIDTH_FRACTION,
+    CATEGORICAL_BOX_FILL_TRANSPARENCY,
+    CATEGORICAL_BOX_FILL_FRACTION,
+    CATEGORICAL_BOX_LINE_WIDTH_PT,
+    CATEGORICAL_BOX_NATIVE_FILL_SCALE,
     CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
     CONTROL_FIRST_BRIGHT_COLORS,
     CONTROL_FIRST_BRIGHT_PALETTE_ID,
@@ -23,6 +31,8 @@ from sciplot_core.policy import (
     UNIFIED_HARD_OPTION_KEYS,
     UNIFIED_LEFT_MARGIN_MM,
     UNIFIED_RIGHT_MARGIN_MM,
+    categorical_fill_color,
+    categorical_keyline_color,
 )
 
 
@@ -42,7 +52,9 @@ from sciplot_core.studio import (
     _VeuszStyleContract,
     _apply_domain_render_defaults,
     _apply_readability_render_defaults,
+    _categorical_axis_label_contracts,
     _expand_axis_for_visual_extents,
+    _marker_thin_factor,
     _request_template,
     _resolved_domain_render_options,
     _veusz_axis_contract,
@@ -170,6 +182,134 @@ def test_tensile_summary_bar_keeps_metric_axis_labels() -> None:
 
     assert options["x_label_override"] == "Sample"
     assert "y_label_override" not in options
+    assert options["size"] == "60x55"
+
+
+def test_point_line_marker_density_keeps_about_thirteen_markers() -> None:
+    series = StudioSeries(
+        label="E0",
+        x_name="temperature",
+        y_name="storage_modulus",
+        x_values=tuple(float(index) for index in range(121)),
+        y_values=tuple(float(index + 1) for index in range(121)),
+        color="#222222",
+        marker="circle",
+    )
+
+    assert _marker_thin_factor(series, template_id="point_line") == 10
+    assert _marker_thin_factor(series, template_id="curve") == 1
+
+
+def test_categorical_bar_headroom_targets_mean_and_error_extent() -> None:
+    series = [
+        StudioSeries(
+            label="E0",
+            x_name="x_e0",
+            y_name="y_e0",
+            x_values=(1.0, 1.0, 1.0),
+            y_values=(30.0, 36.0, 42.0),
+            color="#222222",
+            presentation_kind="categorical_replicates",
+            category_position=1.0,
+        ),
+        StudioSeries(
+            label="E2",
+            x_name="x_e2",
+            y_name="y_e2",
+            x_values=(2.0, 2.0, 2.0),
+            y_values=(20.0, 22.0, 24.0),
+            color="#3568C0",
+            presentation_kind="categorical_replicates",
+            category_position=2.0,
+        ),
+    ]
+    options = _apply_readability_render_defaults(
+        {},
+        request={"template": "bar", "render_options": {}},
+        axis_info={"x_label": "Sample", "y_label": "Strength"},
+        series=series,
+        template_id="bar",
+    )
+    mean = 36.0
+    sample_sd = 6.0
+
+    assert mean / options["y_max"] == pytest.approx(
+        CATEGORICAL_BAR_TARGET_MEAN_FRACTION
+    )
+    assert (mean + sample_sd) / options["y_max"] <= (
+        CATEGORICAL_BAR_MAX_ERROR_FRACTION + 1e-12
+    )
+    explicit = _apply_readability_render_defaults(
+        {"y_max": 80.0},
+        request={
+            "template": "bar",
+            "render_options": {"y_max": 80.0},
+            "explicit_render_option_keys": ["y_max"],
+        },
+        axis_info={"x_label": "Sample", "y_label": "Strength"},
+        series=series,
+        template_id="bar",
+    )
+    assert explicit["y_max"] == 80.0
+
+
+def test_categorical_axis_labels_are_owned_by_shared_native_axis() -> None:
+    categorical = {
+        "native_veusz_boxplot": True,
+        "groups": [
+            {"label": label, "position": float(index)}
+            for index, label in enumerate(("E0", "E2", "E3", "E4"), start=1)
+        ],
+    }
+
+    labels = _categorical_axis_label_contracts(
+        categorical,
+        axis_contract=_VeuszAxisContract(y_min=-2.5, y_max=10.0),
+        style=_VeuszStyleContract(),
+    )
+
+    assert labels == []
+
+
+def test_ftir_stacked_defaults_keep_scientific_labels_without_offset_suffix() -> None:
+    request = {
+        "rule_id": "ftir_spectrum",
+        "template": "stacked_curve",
+        "render_options": {},
+    }
+    axis_info = {
+        "x_label": "Wavenumber",
+        "x_unit": "cm^-1",
+        "y_label": "Transmittance (%)",
+        "series_count": 4,
+    }
+    series = [
+        StudioSeries(
+            label=label,
+            x_name=f"x_{label}",
+            y_name=f"y_{label}",
+            x_values=(400.0, 1000.0, 4000.0),
+            y_values=(80.0, 70.0, 90.0),
+            color="#374E55",
+        )
+        for label in ("E0", "E2", "E3", "E4")
+    ]
+
+    options = _apply_domain_render_defaults(
+        {}, request=request, axis_info=axis_info
+    )
+    options = _apply_readability_render_defaults(
+        options,
+        request=request,
+        axis_info=axis_info,
+        series=series,
+        template_id="stacked_curve",
+    )
+
+    assert options["x_label_override"] == "Wavenumber (cm⁻¹)"
+    assert options["x_ticks"] == [400.0, 1000.0, 2000.0, 3000.0, 4000.0]
+    assert options["y_label_override"] == "Transmittance (%)"
+    assert "offset" not in options["y_label_override"].casefold()
 
 
 def test_autoplot_writes_a_canonical_default_render_request(
@@ -190,8 +330,32 @@ def test_autoplot_writes_a_canonical_default_render_request(
 
     assert result["status"] == "ready"
     assert captured["render_options"] == normalize_render_options(
-        DEFAULT_RENDER_OPTIONS
+        AUTOPLOT_RENDER_OPTIONS
     )
+    assert "legend_position" not in captured["render_options"]
+    assert "series_label_mode" not in captured["render_options"]
+
+
+def test_autoplot_preserves_an_explicit_supported_presentation_template(
+    tmp_path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_request(request_path: Path) -> dict[str, object]:
+        captured.update(json.loads(request_path.read_text(encoding="utf-8")))
+        return {"state": "ready", "one_step": {}}
+
+    monkeypatch.setattr(workflow, "run_request", fake_run_request)
+    result = workflow.run_one_step(
+        tmp_path / "impact.xlsx",
+        output_root=tmp_path / "outputs",
+        project_name="impact_bar",
+        template="bar",
+    )
+
+    assert result["status"] == "ready"
+    assert captured["recipe"] == "auto"
+    assert captured["template"] == "bar"
 
 
 def test_style_and_template_contract_audit_passes_current_registry() -> None:
@@ -375,8 +539,9 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
         assert "Set('mode', 'stacked')" in text
         assert f"Set('barfill', {CATEGORICAL_BAR_WIDTH_FRACTION})" in text
         assert (
-            f"('solid', '#222222', False, {CATEGORICAL_BAR_FILL_TRANSPARENCY}, "
-            "'0.5pt', 'solid', '5pt', 'white', 0, True)"
+            f"('solid', '{categorical_fill_color('#222222')}', False, "
+            f"{CATEGORICAL_BAR_FILL_TRANSPARENCY}, '0.5pt', 'solid', "
+            "'5pt', 'white', 0, True)"
         ) in text
         cap_half_width = (
             CATEGORICAL_BAR_WIDTH_FRACTION
@@ -390,11 +555,110 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
         assert error_line_count % 3 == 0
         for chunk in text.split("Add('line', name='categorical_bar_error_")[1:]:
             assert "Set('Line/color', '#111111')" in chunk.split("To('..')", 1)[0]
+        bar_groups = spec["categorical"]["groups"]
+        assert text.count("Add('line', name='categorical_bar_outline_") == (
+            3 * len(bar_groups)
+        )
+        for group, chunks in zip(
+            bar_groups,
+            [
+                text.split(
+                    f"Add('line', name='categorical_bar_outline_{index}_"
+                )[1:]
+                for index in range(1, len(bar_groups) + 1)
+            ],
+            strict=True,
+        ):
+            assert len(chunks) == 3
+            for chunk in chunks:
+                outline_chunk = chunk.split("To('..')", 1)[0]
+                assert (
+                    f"Set('Line/color', '{group['keyline_color']}')"
+                    in outline_chunk
+                )
+                assert (
+                    f"Set('Line/width', '{CATEGORICAL_BAR_LINE_WIDTH_PT}pt')"
+                    in outline_chunk
+                )
+        assert (
+            f"('solid', '{CATEGORICAL_BAR_LINE_WIDTH_PT}pt', "
+            f"'{categorical_keyline_color('#222222')}', True)"
+        ) in text
+        assert text.find("Add('xy', name='series_1'") < text.find(
+            "Add('bar', name='categorical_bar'"
+        )
+        label_provider_chunk = text.split(
+            "Add('xy', name='category_axis_label_provider'", 1
+        )[1].split("To('..')", 1)[0]
+        assert "Set('marker', 'none')" in label_provider_chunk
+        assert "Set('MarkerFill/hide', False)" in label_provider_chunk
+        assert "Set('MarkerLine/hide', False)" in label_provider_chunk
         highest_error = max(
             group["bar_mean"] + group["bar_error"]
             for group in spec["categorical"]["groups"]
         )
         assert spec["axes"]["y"]["max"] > highest_error
+    if template in {"box", "box_strip"}:
+        text = document.read_text(encoding="utf-8")
+        assert f"Set('Fill/transparency', {CATEGORICAL_BOX_FILL_TRANSPARENCY})" in text
+        assert (
+            f"Set('fillfraction', "
+            f"{CATEGORICAL_BOX_FILL_FRACTION * CATEGORICAL_BOX_NATIVE_FILL_SCALE})"
+            in text
+        )
+        box_chunks = [
+            chunk.split("To('..')", 1)[0]
+            for chunk in text.split(
+                "Add('boxplot', name='categorical_boxplot_"
+            )[1:]
+        ]
+        assert len(box_chunks) == len(
+            [
+                group
+                for group in spec["categorical"]["groups"]
+                if group["boxplot_eligible"]
+            ]
+        )
+        for group, box_chunk in zip(
+            [
+                group
+                for group in spec["categorical"]["groups"]
+                if group["boxplot_eligible"]
+            ],
+            box_chunks,
+            strict=True,
+        ):
+            assert f"Set('Fill/color', '{group['fill_color']}')" in box_chunk
+            assert f"Set('Border/color', '{group['keyline_color']}')" in box_chunk
+            assert (
+                f"Set('Border/width', '{CATEGORICAL_BOX_LINE_WIDTH_PT}pt')"
+                in box_chunk
+            )
+            assert "Set('Border/hide', False)" in box_chunk
+            assert "Set('Whisker/color', '#111111')" in box_chunk
+        for group in spec["categorical"]["groups"]:
+            assert f"Set('MarkerFill/color', '{group['color']}')" in text
+            assert f"Set('MarkerLine/color', '{group['color']}')" in text
+        assert "Set('MarkerFill/transparency', 20)" in text
+        assert "Set('MarkerLine/transparency', 20)" in text
+        if template == "box_strip":
+            for chunk in text.split("Add('xy', name='series_")[1:]:
+                series_chunk = chunk.split("To('..')", 1)[0]
+                if "Set('PlotLine/hide', True)" in series_chunk:
+                    assert "Set('MarkerFill/hide', True)" not in series_chunk
+                    assert "Set('MarkerLine/hide', True)" in series_chunk
+        assert text.count("Add('line', name='categorical_box_median_") == len(
+            box_chunks
+        )
+        for chunk in text.split("Add('line', name='categorical_box_median_")[1:]:
+            median_chunk = chunk.split("To('..')", 1)[0]
+            assert "Set('Line/color', '#111111')" in median_chunk
+        assert "Add('line', name='categorical_box_outline_" not in text
+        assert text.find("Add('xy', name='series_1'") < text.find(
+            "Add('boxplot', name='categorical_boxplot_"
+        )
+        assert "Set('labels', 'category_axis_labels')" in text
+        assert "Add('label', name='category_label_" not in text
     if template == "curve":
         text = document.read_text(encoding="utf-8")
         assert "Set('keyLength', '0.40cm')" in text

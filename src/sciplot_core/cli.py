@@ -221,6 +221,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--name", help="Project name. Defaults to the input file or folder name."
     )
     autoplot_parser.add_argument(
+        "--template",
+        help=(
+            "Explicit supported presentation template. For categorical "
+            "replicate data this can select bar, box, or box_strip without "
+            "changing the detected scientific data type."
+        ),
+    )
+    autoplot_parser.add_argument(
         "--json", action="store_true", help="Emit machine-readable JSON."
     )
 
@@ -816,6 +824,7 @@ def main(argv: list[str] | None = None) -> int:
                 output_root=layout.workspace_root / "autoplot_projects",
                 project_name=args.name,
                 delivery_root=layout.delivery_root,
+                template=args.template,
             )
             if args.json:
                 _print_json(payload)

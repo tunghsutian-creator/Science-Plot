@@ -1,8 +1,11 @@
 from pathlib import Path
 
+import pandas as pd
+
 from sciplot_core.semantic import (
     _read_rheology_temperature_comparison_samples,
     _read_stress_relaxation_series_list,
+    _read_tensile_workbook_directory,
     classify_source,
 )
 
@@ -88,3 +91,46 @@ def test_stress_relaxation_uses_internal_test_labels_and_deduplicates_exports(
         for item in series
     )
     assert all(len(item.points) >= 2 for item in series)
+
+
+def test_tensile_workbook_filename_sample_code_outranks_condition_metadata(
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "2mm"
+    source_dir.mkdir()
+    workbook = source_dir / "e2.xlsx"
+    with pd.ExcelWriter(workbook) as writer:
+        pd.DataFrame(
+            [
+                ["Tensile strain", "Tensile stress"],
+                ["%", "MPa"],
+                ["e2 2mm", "e2 2mm"],
+                [0.0, 0.0],
+                [1.0, 10.0],
+                [2.0, 15.0],
+            ]
+        ).to_excel(
+            writer,
+            sheet_name="Representative_Curve",
+            header=False,
+            index=False,
+        )
+        pd.DataFrame(
+            {
+                "Specimen": ["e2-1", "e2-2"],
+                "Tensile Strength (MPa)": [15.0, 14.0],
+                "Tensile Modulus (MPa)": [800.0, 780.0],
+                "Elongation at Break (%)": [2.0, 1.8],
+            }
+        ).to_excel(writer, sheet_name="All_Specimens", index=False)
+        pd.DataFrame([["label", "e2 2mm"]]).to_excel(
+            writer,
+            sheet_name="DataStudio_Metadata",
+            header=False,
+            index=False,
+        )
+
+    series, summary_rows = _read_tensile_workbook_directory(source_dir)
+
+    assert [item.sample for item in series] == ["E2"]
+    assert {row["sample"] for row in summary_rows} == {"E2"}

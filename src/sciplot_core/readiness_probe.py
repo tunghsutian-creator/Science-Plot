@@ -471,6 +471,25 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
         render_request=direct_recipe_render_request,
         registry=registry,
     )
+    impact_semantic = semantic_payload_from_rule(
+        get_rule("impact_metric"),
+        confidence=95.0,
+        reason="Readiness probe categorical presentation contract.",
+    )
+    impact_source, impact_mapping = _packages(
+        impact_semantic,
+        mapping_state="auto",
+    )
+    supported_presentation_evaluation = evaluate_validated_envelope(
+        semantic=impact_semantic,
+        source_package=impact_source,
+        mapping_package=impact_mapping,
+        render_request=_render_request(
+            impact_semantic,
+            request_patch={"template": "bar"},
+        ),
+        registry=registry,
+    )
     incomplete_exports_render_request = _render_request(
         _semantic(confidence=95.0),
         request_patch={"exports": ["pdf"]},
@@ -788,7 +807,7 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
         _check(
             "rule_contract_binds_recognition",
             "The accepted rule contract includes declarative recognition inputs",
-            rule_contract.get("version") == 3
+            rule_contract.get("version") == 4
             and rule_contract.get("matcher", {}).get("version") == 1
             and set(rule_contract.get("recognition", {}))
             == {
@@ -803,9 +822,9 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
         _check(
             "rule_contract_binds_render_request_policy",
             "The full rule certificate binds a closed runtime render-request policy",
-            rule_contract.get("render_request_policy", {}).get("version") == 1
+            rule_contract.get("render_request_policy", {}).get("version") == 2
             and rule_contract.get("render_request_policy", {}).get("template_policy")
-            == "exact_rule_template"
+            == "explicit_supported_template_or_default"
             and rule_contract.get("render_request_policy", {}).get("split_policy")
             == "empty_only"
             and {"pdf", "tiff_300"}
@@ -915,13 +934,25 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
         ),
         _check(
             "render_route_and_template_are_certificate_bound",
-            "Changed templates or direct recipe routes leave the automatic envelope",
-            changed_template_evaluation["state"] == NEEDS_HUMAN_CONFIRMATION
+            "Unsupported templates fail closed and direct recipe routes leave the automatic envelope",
+            changed_template_evaluation["state"] == NEEDS_RULE_REPAIR
+            and "render_template_unsupported_for_rule"
+            in changed_template_evaluation["repair_reasons"]
             and direct_recipe_evaluation["state"] == NEEDS_HUMAN_CONFIRMATION,
             detail={
                 "changed_template": changed_template_evaluation,
                 "direct_recipe": direct_recipe_evaluation,
             },
+        ),
+        _check(
+            "supported_presentation_template_is_certificate_bound",
+            "A rule-declared alternate presentation stays inside the automatic envelope",
+            supported_presentation_evaluation["state"]
+            == INSIDE_VALIDATED_ENVELOPE
+            and supported_presentation_evaluation["ready_without_ai"] is True
+            and supported_presentation_evaluation["repair_reasons"] == []
+            and supported_presentation_evaluation["confirmation_reasons"] == [],
+            detail=supported_presentation_evaluation,
         ),
         _check(
             "canonical_exports_are_request_bound",

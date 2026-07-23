@@ -138,6 +138,17 @@ skill/scripts/sciplot autoplot PATH \
   --json
 ```
 
+分类重复数据的科学识别与图形表达彼此独立。规则负责样品、重复值、单位和指标语义；
+presentation contract 负责允许的图形。以抗冲击强度为例，同一数据可显式选择：
+
+```bash
+skill/scripts/sciplot autoplot PATH --template bar --out /path/to/bar_project
+skill/scripts/sciplot autoplot PATH --template box --out /path/to/box_project
+skill/scripts/sciplot autoplot PATH --template box_strip --out /path/to/box_strip_project
+```
+
+未指定时使用规则记录的默认图形；显式选择不会改变数据类型、统计原始值或单位。
+
 生产绘图最终都由同一 Veusz 路线完成。不同编排入口不表示存在另一个前端、renderer 或
 视觉权威。
 
@@ -148,6 +159,7 @@ skill/scripts/sciplot autoplot PATH \
 - `curve`
 - `point_line`
 - `stacked_curve`
+- `bar`
 - `box`
 - `box_strip`
 - `heatmap`

@@ -114,6 +114,8 @@ class SemanticRule:
     template: str
     x_axis: AxisSpec
     y_axis: AxisSpec
+    presentation_data_shape: str = "series"
+    supported_templates: tuple[str, ...] = ()
     keywords: tuple[str, ...] = ()
     path_keywords: tuple[str, ...] = ()
     column_aliases: tuple[str, ...] = ()
@@ -127,12 +129,27 @@ class SemanticRule:
     priority: int = 100
     reason: str = ""
 
+    @property
+    def presentation_templates(self) -> tuple[str, ...]:
+        return self.supported_templates or (self.template,)
+
+    def presentation_contract_payload(self) -> dict[str, Any]:
+        return {
+            "kind": "sciplot_presentation_contract",
+            "version": 1,
+            "data_shape": self.presentation_data_shape,
+            "default_template": self.template,
+            "supported_templates": list(self.presentation_templates),
+            "selection_policy": "explicit_supported_template_or_default",
+        }
+
     def to_payload(self) -> dict[str, Any]:
         return {
             "rule_id": self.rule_id,
             "semantic_family": self.semantic_family,
             "recipe": self.recipe,
             "template": self.template,
+            "presentation_contract": self.presentation_contract_payload(),
             "axis_plan": {"x": self.x_axis.to_payload(), "y": self.y_axis.to_payload()},
             "unit_plan": {
                 "x": format_unit_label(self.x_axis.canonical_unit),
@@ -232,7 +249,21 @@ def _rule(
     fixture_status: str = "pending",
     priority: int = 100,
     reason: str = "",
+    presentation_data_shape: str = "series",
+    supported_templates: tuple[str, ...] = (),
 ) -> SemanticRule:
+    normalized_templates = tuple(
+        dict.fromkeys(
+            str(item).strip()
+            for item in (supported_templates or (template,))
+            if str(item).strip()
+        )
+    )
+    if template not in normalized_templates:
+        raise ValueError(
+            f"Default template `{template}` must be included in supported_templates "
+            f"for material rule `{rule_id}`."
+        )
     default_options = {"point_line": POINT_LINE_RENDER_OPTIONS, "curve": CURVE_RENDER_OPTIONS}.get(
         template, _DEFAULT_RENDER_OPTIONS
     )
@@ -243,6 +274,8 @@ def _rule(
         template=template,
         x_axis=x,
         y_axis=y,
+        presentation_data_shape=presentation_data_shape,
+        supported_templates=normalized_templates,
         keywords=keywords,
         path_keywords=path_keywords,
         column_aliases=column_aliases,
@@ -598,6 +631,8 @@ RULES: tuple[SemanticRule, ...] = (
         reason=(
             "Impact-strength groups preserve every raw observation; groups with at least two replicates use a native Veusz median/IQR box summary, while smaller groups remain raw-point only."
         ),
+        presentation_data_shape="categorical_replicates",
+        supported_templates=("bar", "box", "box_strip"),
     ),
     _rule(
         "dsc_curve",
@@ -848,6 +883,27 @@ def get_rule(rule_id: str) -> SemanticRule:
         raise ValueError(f"Unknown material rule `{rule_id}`. Available rules: {known}.") from exc
 
 
+def resolve_rule_template(
+    rule: SemanticRule | str,
+    requested_template: str | None = None,
+) -> str:
+    """Resolve presentation independently from the rule's scientific semantics."""
+
+    resolved = get_rule(rule) if isinstance(rule, str) else rule
+    selected = (
+        str(requested_template).strip()
+        if requested_template is not None and str(requested_template).strip()
+        else resolved.template
+    )
+    if selected not in resolved.presentation_templates:
+        supported = ", ".join(resolved.presentation_templates)
+        raise ValueError(
+            f"Template `{selected}` is not supported by material rule "
+            f"`{resolved.rule_id}`. Supported presentation templates: {supported}."
+        )
+    return selected
+
+
 def _is_ready_rule(rule: SemanticRule) -> bool:
     return rule.fixture_status == "ready"
 
@@ -873,6 +929,8 @@ def list_rules_payload(*, include_pending: bool = False) -> dict[str, Any]:
                 "semantic_family": rule.semantic_family,
                 "recipe": rule.recipe,
                 "template": rule.template,
+                "supported_templates": list(rule.presentation_templates),
+                "presentation_data_shape": rule.presentation_data_shape,
                 "x": rule.x_axis.display_label,
                 "y": rule.y_axis.display_label,
                 "fixture_status": rule.fixture_status,
@@ -958,6 +1016,7 @@ def semantic_payload_from_rule(
         "semantic_family": rule.semantic_family,
         "recommended_recipe": rule.recipe,
         "template": rule.template,
+        "presentation_contract": payload["presentation_contract"],
         "render_options": render_options,
         "confidence": confidence if rule_ready else 0.0,
         "reason": (

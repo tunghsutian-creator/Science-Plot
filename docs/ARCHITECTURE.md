@@ -136,6 +136,14 @@ uses mean ± SD error bars for categorical replicate groups. Vendored reference
 templates are not automatically production features; unsupported requests fail
 closed.
 
+Scientific semantics and presentation selection are separate contracts.
+`SemanticRule` owns recognition, axes, units, replicate preservation, and
+analysis. Its versioned `presentation_contract` owns the default template and
+the explicit supported alternatives. The automated and Studio routes must
+resolve that contract instead of rewriting a recognized metric back to a
+single hard-coded chart. `impact_metric`, for example, supports `bar`, `box`,
+and `box_strip` over the same categorical-replicate source.
+
 Templates may define semantic behavior and editable options. They may not
 privately override global typography, strokes, ticks, markers, or ordinary
 frame margins. Heatmap scalar, contour, and colorbar colors are the explicit
