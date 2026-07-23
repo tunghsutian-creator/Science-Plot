@@ -71,7 +71,6 @@ from sciplot_core.policy import (
     MAX_LEGEND_RESERVE_ITERATIONS,
     MAX_LINEAR_LEGEND_RESERVE_FRACTION,
     MAX_LOG_LEGEND_RESERVE_DECADES,
-    MAX_POINT_LINE_MARKERS_PER_SERIES,
     MIN_VISUAL_EXTENT_CLEARANCE_MM,
     MIN_BOX_REPLICATES,
     POINT_LINE_RENDER_OPTIONS,
@@ -7351,17 +7350,10 @@ def _reserve_vertical_legend_clearance(
 
 
 def _marker_thin_factor(item: StudioSeries, *, template_id: str) -> int:
-    """Keep point-line markers legible while preserving every line sample."""
+    """Render a marker at every measured point for point-line series."""
 
-    marker = str(item.marker or "none").strip().casefold()
-    if (
-        template_id != "point_line"
-        or marker == "none"
-        or item.presentation_kind == "categorical_replicates"
-    ):
-        return 1
-    point_count = min(len(item.x_values), len(item.y_values))
-    return max(1, math.ceil(point_count / MAX_POINT_LINE_MARKERS_PER_SERIES))
+    del item, template_id
+    return 1
 
 
 def _categorical_bar_axis_defaults(
@@ -9145,6 +9137,14 @@ def _add_veusz_xy_series(
     interface.Set("MarkerLine/color", item["color"])
     interface.Set("MarkerLine/width", _pt(float(style["marker_line_width_pt"])))
     interface.Set("marker", item["marker"])
+    # Veusz's XY legend renderer always asks the error-bar painter to draw a
+    # key sample.  With the default ``bar`` error style, datasets without
+    # errors still produce zero-length strokes at the centre of the legend
+    # line, which rasterize as a small dot.  Studio XY series do not carry
+    # error datasets, so hide that unused channel explicitly for every shared
+    # XY-based template (curve, point_line, stacked_curve, and raw-point
+    # layers).  Real categorical error bars are separate native line objects.
+    interface.Set("ErrorBarLine/hide", True)
     if str(item.get("marker") or "none").strip().casefold() == "none":
         interface.Set("MarkerFill/hide", True)
         interface.Set("MarkerLine/hide", True)

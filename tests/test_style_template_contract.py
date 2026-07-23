@@ -185,7 +185,7 @@ def test_tensile_summary_bar_keeps_metric_axis_labels() -> None:
     assert options["size"] == "60x55"
 
 
-def test_point_line_marker_density_keeps_about_thirteen_markers() -> None:
+def test_point_line_marker_density_keeps_every_measured_point() -> None:
     series = StudioSeries(
         label="E0",
         x_name="temperature",
@@ -196,7 +196,7 @@ def test_point_line_marker_density_keeps_about_thirteen_markers() -> None:
         marker="circle",
     )
 
-    assert _marker_thin_factor(series, template_id="point_line") == 10
+    assert _marker_thin_factor(series, template_id="point_line") == 1
     assert _marker_thin_factor(series, template_id="curve") == 1
 
 
@@ -529,6 +529,15 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
             clearance["axes"]["y"]["upper_clearance_mm"]
             >= clearance["axes"]["y"]["required_extent_mm"] - 1e-6
         )
+        if template in {"curve", "point_line", "stacked_curve"}:
+            text = document.read_text(encoding="utf-8")
+            series_chunks = [
+                chunk.split("To('..')", 1)[0]
+                for chunk in text.split("Add('xy', name='series_")[1:]
+            ]
+            assert series_chunks
+            for series_chunk in series_chunks:
+                assert "Set('ErrorBarLine/hide', True)" in series_chunk
     else:
         assert spec["scalar_field"]["colormap_colors"] == list(
             DEFAULT_SCALAR_FIELD_COLORS
