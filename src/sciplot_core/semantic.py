@@ -29,7 +29,13 @@ from sciplot_core.materials_rules import (
     tensile_curve_metric_values,
 )
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload
-from sciplot_core.policy import DEFAULT_RENDER_OPTIONS as _DEFAULT_RENDER_OPTIONS
+from sciplot_core.policy import (
+    COMPRESSION_X_AXIS_LABEL,
+    COMPRESSION_Y_AXIS_LABEL,
+    DEFAULT_RENDER_OPTIONS as _DEFAULT_RENDER_OPTIONS,
+    FLEXURAL_X_AXIS_LABEL,
+    FLEXURAL_Y_AXIS_LABEL,
+)
 from sciplot_core.publication import build_transform_step
 
 ensure_vendored_core()
@@ -4613,6 +4619,252 @@ def _write_tensile_summary_table(series_list: list[CurveSeriesPayload], output: 
     return output
 
 
+_NON_TENSILE_MECHANICAL_CONTRACTS: dict[str, dict[str, Any]] = {
+    "compression_curve": {
+        "x_label": COMPRESSION_X_AXIS_LABEL.removesuffix(" (%)"),
+        "y_label": COMPRESSION_Y_AXIS_LABEL.removesuffix(" (MPa)"),
+        "x_aliases": ("strain", "compressive strain", "compression strain", "压缩应变"),
+        "y_aliases": ("stress", "compressive stress", "compression stress", "压缩应力", "σ"),
+        "strength_metric": "compressive_strength_MPa",
+        "magnitude": True,
+    },
+    "flexural_curve": {
+        "x_label": FLEXURAL_X_AXIS_LABEL.removesuffix(" (%)"),
+        "y_label": FLEXURAL_Y_AXIS_LABEL.removesuffix(" (MPa)"),
+        "x_aliases": ("strain", "flexural strain", "bending strain", "弯曲应变"),
+        "y_aliases": ("stress", "flexural stress", "bending stress", "弯曲应力", "σ"),
+        "strength_metric": "flexural_strength_MPa",
+        "magnitude": False,
+    },
+}
+
+
+def _read_non_tensile_mechanical_series(
+    source: Path,
+    *,
+    family: str,
+) -> list[CurveSeriesPayload]:
+    contract = _NON_TENSILE_MECHANICAL_CONTRACTS[family]
+    paths = (
+        [
+            path
+            for path in sorted(source.rglob("*"))
+            if path.is_file()
+            and path.suffix.casefold() in {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
+        ]
+        if source.is_dir()
+        else [source]
+    )
+    series_list: list[CurveSeriesPayload] = []
+    errors: list[str] = []
+    for path in paths:
+        try:
+            parsed = _scan_curve_series_source(
+                path,
+                x_aliases=contract["x_aliases"],
+                y_aliases=contract["y_aliases"],
+                x_label=str(contract["x_label"]),
+                y_label=str(contract["y_label"]),
+                default_x_unit="%",
+                default_y_unit="MPa",
+                sample_prefix=path.stem,
+            )
+        except (OSError, ValueError) as exc:
+            errors.append(f"{path.name}: {exc}")
+            continue
+        series_list.extend(parsed)
+    if not series_list:
+        detail = "; ".join(errors[:3])
+        raise ValueError(
+            f"No {family.removesuffix('_curve')} stress-strain curves found under "
+            f"{source}. {detail}".strip()
+        )
+    return series_list
+
+
+def _read_non_tensile_mechanical_workbook_directory(
+    source: Path,
+    *,
+    family: str,
+) -> tuple[list[CurveSeriesPayload], list[dict[str, Any]]] | None:
+    """Read curated mechanical workbooks using tensile's sheet contract."""
+
+    contract = _NON_TENSILE_MECHANICAL_CONTRACTS[family]
+    workbook_paths = sorted(
+        path
+        for path in source.rglob("*")
+        if path.is_file() and path.suffix.casefold() in {".xlsx", ".xls"}
+    )
+    if not workbook_paths:
+        return None
+    required_sheets = {"Representative_Curve", "All_Specimens"}
+    if not all(
+        required_sheets <= set(pd.ExcelFile(path).sheet_names)
+        for path in workbook_paths
+    ):
+        return None
+
+    representatives: list[CurveSeriesPayload] = []
+    summary_rows: list[dict[str, Any]] = []
+    strength_metric = str(contract["strength_metric"])
+    for workbook_path in workbook_paths:
+        representative = pd.read_excel(
+            workbook_path,
+            sheet_name="Representative_Curve",
+            header=None,
+        ).dropna(how="all").dropna(axis=1, how="all")
+        if representative.shape[0] < 4 or representative.shape[1] < 2:
+            raise ValueError(
+                f"Representative_Curve has no two-column data in "
+                f"{workbook_path.name}."
+            )
+        points = tuple(
+            (strain, stress)
+            for strain, stress in (
+                (
+                    _float(representative.iat[row_index, 0]),
+                    _float(representative.iat[row_index, 1]),
+                )
+                for row_index in range(3, representative.shape[0])
+            )
+            if strain is not None and stress is not None
+        )
+        if len(points) < 2:
+            raise ValueError(
+                f"Representative_Curve has fewer than two numeric points in "
+                f"{workbook_path.name}."
+            )
+        sample = workbook_path.stem
+        try:
+            metadata = pd.read_excel(
+                workbook_path,
+                sheet_name="DataStudio_Metadata",
+                header=None,
+            )
+            for row_index in range(metadata.shape[0]):
+                if _clean_text(metadata.iat[row_index, 0]).casefold() == "label":
+                    sample = (
+                        _clean_text(metadata.iat[row_index, 1])
+                        or workbook_path.stem
+                    )
+                    break
+        except (KeyError, ValueError, IndexError):
+            pass
+        representatives.append(
+            CurveSeriesPayload(
+                sample=sample,
+                x_label=str(contract["x_label"]),
+                x_unit=_clean_text(representative.iat[1, 0]) or "%",
+                y_label=str(contract["y_label"]),
+                y_unit=_clean_text(representative.iat[1, 1]) or "MPa",
+                points=points,
+                diagnostics={
+                    "source_file": str(workbook_path),
+                    "source_table": "Representative_Curve",
+                    "representative_source": (
+                        "workbook Representative_Curve sheet"
+                    ),
+                },
+            )
+        )
+
+        specimens = pd.read_excel(
+            workbook_path,
+            sheet_name="All_Specimens",
+        )
+        strength_column = next(
+            (
+                column
+                for column in specimens.columns
+                if "strength" in _token(column)
+            ),
+            None,
+        )
+        if strength_column is None:
+            raise ValueError(
+                f"All_Specimens has no strength column in "
+                f"{workbook_path.name}."
+            )
+        for row_index, row in specimens.iterrows():
+            strength = _float(row[strength_column])
+            if strength is None:
+                continue
+            replicate = _clean_text(row.iloc[0]) if len(row) else ""
+            summary_rows.append(
+                {
+                    "sample": sample,
+                    "replicate": (
+                        replicate
+                        or f"{workbook_path.stem}_{row_index + 1}"
+                    ),
+                    strength_metric: abs(strength)
+                    if contract["magnitude"]
+                    else strength,
+                    "source_file": (
+                        f"{workbook_path}:"
+                        f"{replicate or row_index + 1}"
+                    ),
+                    "strength_source": "instrument_report",
+                    "reported_metric_headers": json.dumps(
+                        {strength_metric: str(strength_column)},
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ),
+                }
+            )
+    if not representatives or not summary_rows:
+        raise ValueError(
+            f"No curated {family.removesuffix('_curve')} curves and specimen "
+            f"strengths found under {source}."
+        )
+    return representatives, summary_rows
+
+
+def _write_non_tensile_mechanical_summary_table(
+    series_list: list[CurveSeriesPayload],
+    output: Path,
+    *,
+    family: str,
+) -> Path:
+    contract = _NON_TENSILE_MECHANICAL_CONTRACTS[family]
+    rows: list[dict[str, Any]] = []
+    for series in series_list:
+        finite_stress = [
+            float(stress)
+            for _strain, stress in series.points
+            if math.isfinite(float(stress))
+        ]
+        if not finite_stress:
+            continue
+        strength = (
+            max(abs(value) for value in finite_stress)
+            if contract["magnitude"]
+            else max(finite_stress)
+        )
+        group = _intake_group_name(series.sample) or series.sample
+        replicate = (
+            series.sample.split("__", 1)[1]
+            if "__" in series.sample
+            else series.sample
+        )
+        rows.append(
+            {
+                "sample": group,
+                "replicate": replicate,
+                str(contract["strength_metric"]): strength,
+                "source_file": (series.diagnostics or {}).get("source_table"),
+                "strength_source": (
+                    "curve_maximum_magnitude"
+                    if contract["magnitude"]
+                    else "curve_maximum"
+                ),
+            }
+        )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(output, index=False)
+    return output
+
+
 def _has_intake_grouped_series(series_list: list[CurveSeriesPayload]) -> bool:
     return any(_intake_group_name(series.sample) for series in series_list)
 
@@ -5136,6 +5388,94 @@ def prepare_semantic_source(
                     {"sample": series.sample, **(series.diagnostics or {})} for series in series_list
                 ],
             },
+        )
+
+    if family in _NON_TENSILE_MECHANICAL_CONTRACTS:
+        processed_source = processed_dir / f"{source.stem}_{family}_curves.csv"
+        curated_workbooks = (
+            _read_non_tensile_mechanical_workbook_directory(
+                source,
+                family=family,
+            )
+            if source.is_dir()
+            else None
+        )
+        if curated_workbooks is None:
+            series_list = _read_non_tensile_mechanical_series(
+                source,
+                family=family,
+            )
+            summary_rows = None
+        else:
+            series_list, summary_rows = curated_workbooks
+        input_series_labels = [series.sample for series in series_list]
+        summary_source = processed_source.with_name(
+            f"{processed_source.stem}_summary.csv"
+        )
+        if summary_rows is None:
+            _write_non_tensile_mechanical_summary_table(
+                series_list,
+                summary_source,
+                family=family,
+            )
+        else:
+            pd.DataFrame(summary_rows).to_csv(summary_source, index=False)
+        requested_replicate_mode = _normalized_replicate_mode(replicate_mode)
+        representative_applied = False
+        grouped_input = _has_intake_grouped_series(series_list)
+        additional_outputs = (summary_source,)
+        if grouped_input:
+            all_source = processed_source.with_name(
+                f"{processed_source.stem}_all.csv"
+            )
+            _write_curve_table(series_list, all_source)
+            additional_outputs = (all_source, summary_source)
+            if requested_replicate_mode != "individual":
+                series_list = _representative_tensile_series(series_list)
+                representative_applied = True
+        series_list = _order_curve_series(series_list, series_order)
+        _write_curve_table(series_list, processed_source)
+        strength_metric = str(
+            _NON_TENSILE_MECHANICAL_CONTRACTS[family]["strength_metric"]
+        )
+        return _semantic_preparation_result(
+            source,
+            processed_source=processed_source,
+            operation=f"extract_{family}_curves",
+            parameters={
+                "input_series_labels": input_series_labels,
+                "output_series_labels": [
+                    series.sample for series in series_list
+                ],
+                "requested_replicate_mode": requested_replicate_mode,
+                "applied_curve_replicate_mode": (
+                    "representative" if representative_applied else "individual"
+                ),
+                "representative_selection_applied": representative_applied,
+                "all_series_preserved_in_supporting_output": grouped_input,
+                "summary_metric_source": str(summary_source),
+                "summary_replicate_count": (
+                    len(summary_rows)
+                    if summary_rows is not None
+                    else len(input_series_labels)
+                ),
+                "summary_raw_specimen_count": (
+                    len(summary_rows) if summary_rows is not None else None
+                ),
+                "summary_metric_source_kind": (
+                    "All_Specimens workbook sheets"
+                    if summary_rows is not None
+                    else "retained curve maxima"
+                ),
+                "summary_metric_definitions": {
+                    strength_metric: (
+                        "maximum stress magnitude from each retained curve"
+                        if family == "compression_curve"
+                        else "maximum stress from each retained curve"
+                    ),
+                },
+            },
+            additional_outputs=additional_outputs,
         )
 
     if family == "tensile_curve" and source.is_dir():

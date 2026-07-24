@@ -228,20 +228,121 @@ CATEGORICAL_KEYLINE_COLORS_BY_BASE = {
     "#7C9ED9": "#A7BCE0",
     "#7B61A8": "#A999C2",
 }
-CATEGORICAL_BOX_FILL_FRACTION = 0.38
-CATEGORICAL_BOX_NATIVE_FILL_SCALE = 0.50
+CATEGORICAL_BAR_WIDTH_FRACTION = 0.32
+CATEGORICAL_BOX_TO_BAR_WIDTH_RATIO = 4.0 / 3.0
+CATEGORICAL_BOX_FILL_FRACTION = (
+    CATEGORICAL_BAR_WIDTH_FRACTION * CATEGORICAL_BOX_TO_BAR_WIDTH_RATIO
+)
 CATEGORICAL_BOX_FILL_TRANSPARENCY = 0
+CATEGORICAL_POINT_BAND_BASE_BOX_RATIO = 0.50
+CATEGORICAL_POINT_BAND_LOG2_STEP = 0.12
+CATEGORICAL_POINT_BAND_MAX_BOX_RATIO = 0.90
+CATEGORICAL_BOX_MIN_PHYSICAL_ASPECT_RATIO = 0.72
+CATEGORICAL_BOX_MIN_MARKER_DIAMETERS = 2.0
 CATEGORICAL_KEYLINE_WIDTH_PT = 0.70
 CATEGORICAL_BOX_LINE_WIDTH_PT = CATEGORICAL_KEYLINE_WIDTH_PT
-CATEGORICAL_BAR_WIDTH_FRACTION = 0.32
 CATEGORICAL_BAR_FILL_TRANSPARENCY = 0
 CATEGORICAL_BAR_LINE_WIDTH_PT = CATEGORICAL_KEYLINE_WIDTH_PT
 CATEGORICAL_BAR_TARGET_MEAN_FRACTION = 0.65
 CATEGORICAL_BAR_MAX_ERROR_FRACTION = 0.78
 CATEGORICAL_ERROR_CAP_TO_BAR_RATIO = 0.50
-TENSILE_X_AXIS_LABEL = "Strain (%)"
-TENSILE_Y_AXIS_LABEL = "Stress (MPa)"
+MECHANICAL_STRAIN_AXIS_LABEL = "Strain (%)"
+TENSILE_X_AXIS_LABEL = MECHANICAL_STRAIN_AXIS_LABEL
+TENSILE_Y_AXIS_LABEL = "Tensile stress (MPa)"
+COMPRESSION_X_AXIS_LABEL = MECHANICAL_STRAIN_AXIS_LABEL
+COMPRESSION_Y_AXIS_LABEL = "Compressive stress (MPa)"
+FLEXURAL_X_AXIS_LABEL = MECHANICAL_STRAIN_AXIS_LABEL
+FLEXURAL_Y_AXIS_LABEL = "Flexural stress (MPa)"
+MECHANICAL_AXIS_LABELS = {
+    "tensile_curve": (TENSILE_X_AXIS_LABEL, TENSILE_Y_AXIS_LABEL),
+    "compression_curve": (COMPRESSION_X_AXIS_LABEL, COMPRESSION_Y_AXIS_LABEL),
+    "flexural_curve": (FLEXURAL_X_AXIS_LABEL, FLEXURAL_Y_AXIS_LABEL),
+}
 TENSILE_AXIS_PADDING_FRACTION = 0.06
+
+
+def mechanical_axis_labels(rule_id: object) -> tuple[str, str] | None:
+    """Return the normative strain/stress labels for a mechanical test."""
+
+    return MECHANICAL_AXIS_LABELS.get(str(rule_id or "").strip())
+
+
+def categorical_slot_width_mm(
+    *, category_count: int, figure_width_mm: float
+) -> float:
+    """Return the physical width allocated to one categorical sample."""
+
+    count = max(int(category_count), 1)
+    graph_width_mm = max(
+        float(figure_width_mm) - UNIFIED_LEFT_MARGIN_MM - UNIFIED_RIGHT_MARGIN_MM,
+        1.0,
+    )
+    return graph_width_mm / float(count)
+
+
+def categorical_box_width_mm(
+    *, category_count: int, figure_width_mm: float
+) -> float:
+    """Return a box width one third wider than the shared categorical bar.
+
+    Category count determines the physical slot width. Replicate count is
+    intentionally excluded because ordinary equal-width boxplots do not encode
+    sample size through box width.
+    """
+
+    return (
+        categorical_slot_width_mm(
+            category_count=category_count,
+            figure_width_mm=figure_width_mm,
+        )
+        * CATEGORICAL_BOX_FILL_FRACTION
+    )
+
+
+def categorical_box_native_fill_scale(*, category_count: int) -> float:
+    """Convert a slot-relative target into Veusz boxplot fillfraction units."""
+
+    return 2.0 / float(max(int(category_count), 1))
+
+
+def categorical_raw_point_half_spread(
+    *,
+    box_fill_fraction: float,
+    replicate_count: int,
+    category_slot_width_mm: float | None = None,
+    marker_size_pt: float = UNIFIED_MARKER_SIZE_PT,
+) -> float:
+    """Return half of a replicate-aware point band contained by the box.
+
+    The full marker band grows logarithmically from the box centre as
+    replicates increase and is capped at 90% of the box width. When physical
+    slot width is known, the cap also reserves one full Veusz marker diameter
+    so the complete marker glyphs stay inside the visible box edges.
+    """
+
+    count = max(int(replicate_count), 0)
+    if count <= 1:
+        return 0.0
+    box_ratio = min(
+        CATEGORICAL_POINT_BAND_BASE_BOX_RATIO
+        + CATEGORICAL_POINT_BAND_LOG2_STEP * math.log2(float(count)),
+        CATEGORICAL_POINT_BAND_MAX_BOX_RATIO,
+    )
+    half_spread = min(
+        0.5 * max(float(box_fill_fraction), 0.0) * box_ratio,
+        MAX_RAW_POINT_JITTER_FRACTION,
+    )
+    if category_slot_width_mm is None or float(category_slot_width_mm) <= 0.0:
+        return half_spread
+    slot_width_mm = float(category_slot_width_mm)
+    marker_diameter_mm = (
+        2.0 * max(float(marker_size_pt), 0.0) * 25.4 / 72.0
+    )
+    glyph_safe_band_mm = max(
+        max(float(box_fill_fraction), 0.0) * slot_width_mm - marker_diameter_mm,
+        0.0,
+    )
+    return min(half_spread, glyph_safe_band_mm / (2.0 * slot_width_mm))
 
 
 def categorical_fill_color(value: object) -> str:
@@ -970,6 +1071,13 @@ __all__ = [
     "TENSILE_AXIS_PADDING_FRACTION",
     "TENSILE_X_AXIS_LABEL",
     "TENSILE_Y_AXIS_LABEL",
+    "COMPRESSION_X_AXIS_LABEL",
+    "COMPRESSION_Y_AXIS_LABEL",
+    "FLEXURAL_X_AXIS_LABEL",
+    "FLEXURAL_Y_AXIS_LABEL",
+    "MECHANICAL_AXIS_LABELS",
+    "MECHANICAL_STRAIN_AXIS_LABEL",
+    "mechanical_axis_labels",
     "DEFAULT_FIGURE_SIZE",
     "DEFAULT_LAYOUT_POLICY",
     "DEFAULT_LOG_MINOR_MULTIPLIERS",

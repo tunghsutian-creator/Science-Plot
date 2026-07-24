@@ -14,10 +14,12 @@ from sciplot_core.policy import (
     CATEGORICAL_BAR_MAX_ERROR_FRACTION,
     CATEGORICAL_BAR_TARGET_MEAN_FRACTION,
     CATEGORICAL_BAR_WIDTH_FRACTION,
-    CATEGORICAL_BOX_FILL_TRANSPARENCY,
     CATEGORICAL_BOX_FILL_FRACTION,
+    CATEGORICAL_BOX_FILL_TRANSPARENCY,
     CATEGORICAL_BOX_LINE_WIDTH_PT,
-    CATEGORICAL_BOX_NATIVE_FILL_SCALE,
+    CATEGORICAL_BOX_MIN_MARKER_DIAMETERS,
+    CATEGORICAL_BOX_MIN_PHYSICAL_ASPECT_RATIO,
+    CATEGORICAL_BOX_TO_BAR_WIDTH_RATIO,
     CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
     CONTROL_FIRST_BRIGHT_COLORS,
     CONTROL_FIRST_BRIGHT_PALETTE_ID,
@@ -30,9 +32,14 @@ from sciplot_core.policy import (
     TENSILE_Y_AXIS_LABEL,
     UNIFIED_HARD_OPTION_KEYS,
     UNIFIED_LEFT_MARGIN_MM,
+    UNIFIED_MARKER_SIZE_PT,
     UNIFIED_RIGHT_MARGIN_MM,
+    categorical_box_native_fill_scale,
+    categorical_box_width_mm,
     categorical_fill_color,
     categorical_keyline_color,
+    categorical_raw_point_half_spread,
+    categorical_slot_width_mm,
 )
 
 
@@ -50,10 +57,12 @@ from sciplot_core.studio import (
     StudioSeries,
     _VeuszAxisContract,
     _VeuszStyleContract,
+    _apply_categorical_box_aspect_width,
     _apply_domain_render_defaults,
     _apply_readability_render_defaults,
     _categorical_axis_label_contracts,
     _expand_axis_for_visual_extents,
+    _deterministic_category_positions,
     _marker_thin_factor,
     _request_template,
     _resolved_domain_render_options,
@@ -198,6 +207,163 @@ def test_point_line_marker_density_keeps_every_measured_point() -> None:
 
     assert _marker_thin_factor(series, template_id="point_line") == 1
     assert _marker_thin_factor(series, template_id="curve") == 1
+
+
+def test_categorical_geometry_balances_categories_replicates_and_box_width() -> None:
+    two_category_slot = categorical_slot_width_mm(
+        category_count=2, figure_width_mm=60.0
+    )
+    four_category_slot = categorical_slot_width_mm(
+        category_count=4, figure_width_mm=60.0
+    )
+    two_category_box = categorical_box_width_mm(
+        category_count=2, figure_width_mm=60.0
+    )
+    four_category_box = categorical_box_width_mm(
+        category_count=4, figure_width_mm=60.0
+    )
+
+    assert two_category_slot == pytest.approx(20.75)
+    assert four_category_slot == pytest.approx(10.375)
+    assert two_category_box == pytest.approx(8.853333333)
+    assert four_category_box == pytest.approx(4.426666667)
+    assert two_category_box / two_category_slot == pytest.approx(
+        CATEGORICAL_BOX_FILL_FRACTION
+    )
+    assert four_category_box / four_category_slot == pytest.approx(
+        CATEGORICAL_BOX_FILL_FRACTION
+    )
+    assert CATEGORICAL_BOX_FILL_FRACTION == pytest.approx(
+        CATEGORICAL_BAR_WIDTH_FRACTION * CATEGORICAL_BOX_TO_BAR_WIDTH_RATIO
+    )
+    assert categorical_box_native_fill_scale(category_count=2) == 1.0
+    assert categorical_box_native_fill_scale(category_count=4) == 0.5
+    two_category_ten_replicate_band = (
+        2.0
+        * categorical_raw_point_half_spread(
+            box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION,
+            replicate_count=10,
+            category_slot_width_mm=two_category_slot,
+        )
+        * two_category_slot
+    )
+    four_category_five_replicate_band = (
+        2.0
+        * categorical_raw_point_half_spread(
+            box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION,
+            replicate_count=5,
+            category_slot_width_mm=four_category_slot,
+        )
+        * four_category_slot
+    )
+    assert two_category_ten_replicate_band == pytest.approx(7.442222222)
+    assert four_category_five_replicate_band == pytest.approx(3.015555556)
+    assert two_category_ten_replicate_band < two_category_box
+    assert four_category_five_replicate_band < four_category_box
+    assert categorical_raw_point_half_spread(
+        box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION,
+        replicate_count=1,
+        category_slot_width_mm=two_category_slot,
+    ) == 0.0
+    assert categorical_raw_point_half_spread(
+        box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION, replicate_count=3
+    ) < categorical_raw_point_half_spread(
+        box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION, replicate_count=10
+    )
+    assert categorical_raw_point_half_spread(
+        box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION,
+        replicate_count=10,
+        category_slot_width_mm=two_category_slot,
+    ) < CATEGORICAL_BOX_FILL_FRACTION * 0.5
+    assert categorical_raw_point_half_spread(
+        box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION, replicate_count=100
+    ) == pytest.approx(CATEGORICAL_BOX_FILL_FRACTION * 0.90 * 0.5)
+
+
+def test_categorical_positions_are_symmetric_and_not_row_ordered_linear() -> None:
+    positions = _deterministic_category_positions(
+        2.0, 10, fraction=0.14, seed_key="sample-a"
+    )
+    offsets = [value - 2.0 for value in positions]
+
+    assert sum(offsets) == pytest.approx(0.0)
+    assert max(offsets) == pytest.approx(0.14)
+    assert min(offsets) == pytest.approx(-0.14)
+    assert offsets != sorted(offsets)
+    assert [abs(value) for value in offsets] != sorted(
+        abs(value) for value in offsets
+    )
+    assert positions == _deterministic_category_positions(
+        2.0, 10, fraction=0.14, seed_key="sample-a"
+    )
+    assert positions != _deterministic_category_positions(
+        2.0, 10, fraction=0.14, seed_key="sample-b"
+    )
+
+
+def test_categorical_box_aspect_constraint_narrows_width_not_y_axis() -> None:
+    series = [
+        StudioSeries(
+            label="A",
+            x_name="sample",
+            y_name="impact_strength",
+            x_values=tuple(1.0 for _ in range(10)),
+            y_values=(38.2, 39.0, 39.5, 40.0, 40.5, 40.9, 41.3, 41.8, 42.4, 43.1),
+            color="#222222",
+            marker="circle",
+            presentation_kind="categorical_replicates",
+            category_position=1.0,
+        ),
+        StudioSeries(
+            label="B",
+            x_name="sample",
+            y_name="impact_strength",
+            x_values=tuple(2.0 for _ in range(10)),
+            y_values=(45.3, 46.0, 46.4, 47.0, 47.6, 48.0, 48.5, 49.2, 49.8, 50.4),
+            color="#3568C0",
+            marker="circle",
+            presentation_kind="categorical_replicates",
+            category_position=2.0,
+        ),
+    ]
+    options = _apply_categorical_box_aspect_width(
+        {
+            "size": "60x55",
+            "_categorical_box_fill_fraction": CATEGORICAL_BOX_FILL_FRACTION,
+            "_categorical_box_width_mm": categorical_box_width_mm(
+                category_count=2,
+                figure_width_mm=60.0,
+            ),
+        },
+        series,
+        axis_contract=_VeuszAxisContract(
+            x_min=0.5,
+            x_max=2.5,
+            y_min=34.0,
+            y_max=56.0,
+            x_ticks=(1.0, 2.0),
+            y_ticks=(35.0, 40.0, 45.0, 50.0, 55.0),
+        ),
+        template_id="box_strip",
+    )
+
+    constraint = options["_categorical_box_aspect_constraint"]
+    marker_diameter_mm = 2.0 * UNIFIED_MARKER_SIZE_PT * 25.4 / 72.0
+    assert "y_min" not in options
+    assert "y_max" not in options
+    assert constraint["y_axis_modified"] is False
+    assert constraint["statistics_modified"] is False
+    assert constraint["box_width_narrowed"] is True
+    assert options["_categorical_box_fill_fraction"] < CATEGORICAL_BOX_FILL_FRACTION
+    assert constraint["resolved_height_to_width_ratio"] == pytest.approx(
+        CATEGORICAL_BOX_MIN_PHYSICAL_ASPECT_RATIO
+    )
+    assert constraint["marker_capacity_floor_mm"] == pytest.approx(
+        CATEGORICAL_BOX_MIN_MARKER_DIAMETERS * marker_diameter_mm
+    )
+    assert constraint["resolved_box_width_mm"] >= constraint[
+        "marker_capacity_floor_mm"
+    ]
 
 
 def test_categorical_bar_headroom_targets_mean_and_error_extent() -> None:
@@ -609,12 +775,57 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
         assert spec["axes"]["y"]["max"] > highest_error
     if template in {"box", "box_strip"}:
         text = document.read_text(encoding="utf-8")
+        expected_box_fraction = spec["categorical"]["visual_style"][
+            "box_fill_fraction"
+        ]
+        expected_native_scale = categorical_box_native_fill_scale(
+            category_count=len(spec["categorical"]["groups"])
+        )
         assert f"Set('Fill/transparency', {CATEGORICAL_BOX_FILL_TRANSPARENCY})" in text
         assert (
             f"Set('fillfraction', "
-            f"{CATEGORICAL_BOX_FILL_FRACTION * CATEGORICAL_BOX_NATIVE_FILL_SCALE})"
+            f"{expected_box_fraction * expected_native_scale})"
             in text
         )
+        assert spec["categorical"]["version"] == 2
+        assert (
+            spec["categorical"]["quartile_method"]
+            == "linear_interpolation_at_(n_minus_1)_times_p"
+        )
+        assert (
+            spec["categorical"]["visual_style"]["raw_point_layout"] == "adaptive"
+        )
+        assert (
+            spec["categorical"]["visual_style"]["box_width_policy"]
+            == "min(categorical_bar_width_times_4_over_3,"
+            "data_iqr_physical_aspect_cap)"
+        )
+        assert (
+            spec["categorical"]["visual_style"]["raw_point_position_policy"]
+            == "stable_hash_shuffled_even_slots"
+        )
+        assert spec["categorical"]["visual_style"][
+            "box_width_mm"
+        ] == pytest.approx(
+            spec["categorical"]["box_aspect_constraint"]["resolved_box_width_mm"]
+        )
+        assert spec["categorical"]["box_aspect_constraint"][
+            "y_axis_modified"
+        ] is False
+        assert spec["categorical"]["box_aspect_constraint"][
+            "statistics_modified"
+        ] is False
+        assert all(
+            group["raw_points_within_box_width"]
+            for group in spec["categorical"]["groups"]
+        )
+        assert all(
+            group["raw_marker_glyphs_within_box_width"]
+            for group in spec["categorical"]["groups"]
+        )
+        assert spec["categorical"]["visual_style"][
+            "raw_marker_diameter_mm"
+        ] == pytest.approx(2.0 * UNIFIED_MARKER_SIZE_PT * 25.4 / 72.0)
         box_chunks = [
             chunk.split("To('..')", 1)[0]
             for chunk in text.split(

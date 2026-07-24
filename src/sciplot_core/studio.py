@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -48,12 +49,14 @@ from sciplot_core.policy import (
     CATEGORICAL_BAR_TARGET_MEAN_FRACTION,
     CATEGORICAL_BAR_WIDTH_FRACTION,
     CATEGORICAL_BOX_FILL_FRACTION,
-    CATEGORICAL_BOX_NATIVE_FILL_SCALE,
     CATEGORICAL_BOX_FILL_TRANSPARENCY,
     CATEGORICAL_BOX_LINE_WIDTH_PT,
+    CATEGORICAL_BOX_MIN_MARKER_DIAMETERS,
+    CATEGORICAL_BOX_MIN_PHYSICAL_ASPECT_RATIO,
     CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
     CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
     DEFAULT_CATEGORICAL_SUMMARY,
+    DEFAULT_FIGURE_SIZE,
     DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
     DEFAULT_LEGEND_EDGE_PADDING_MM,
     DEFAULT_CURVE_LINE_STYLE_SEQUENCE,
@@ -96,10 +99,15 @@ from sciplot_core.policy import (
     UNIFIED_TOP_MARGIN_MM,
     anchored_log_decade_ticks,
     canonical_export_format,
+    categorical_box_native_fill_scale,
+    categorical_box_width_mm,
     categorical_fill_color,
     categorical_keyline_color,
+    categorical_raw_point_half_spread,
+    categorical_slot_width_mm,
     compact_linear_axis,
     is_removed_outside_legend_position,
+    mechanical_axis_labels,
     normalize_categorical_summary,
     normalize_export_formats,
     normalize_legend_position,
@@ -5317,7 +5325,7 @@ def derive_terminal_render_data_contract(
     axis_info["y_label"] = _veusz_axis_label(
         render_options.get("y_label_override") or axis_info["y_label"]
     )
-    axis_contract = _veusz_axis_contract(
+    base_axis_contract = _veusz_axis_contract(
         render_options,
         template_id=template_id,
         series=series,
@@ -5325,7 +5333,34 @@ def derive_terminal_render_data_contract(
     )
     width, height = _size_mm(str(render_options.get("size") or "60x55"))
     axis_contract, _visual_extent_diagnostics = _expand_axis_for_visual_extents(
-        axis_contract,
+        base_axis_contract,
+        request=request,
+        render_options=render_options,
+        template_id=template_id,
+        series=series,
+        categorical_contract=categorical,
+        style=style,
+        width_mm=width,
+        height_mm=height,
+    )
+    render_options = _apply_categorical_box_aspect_width(
+        render_options,
+        series,
+        axis_contract=axis_contract,
+        template_id=template_id,
+    )
+    if template_id in {"box", "box_strip"}:
+        series = _reindex_categorical_series(
+            series,
+            render_options=render_options,
+        )
+    categorical = _categorical_plot_contract(
+        series,
+        template_id=template_id,
+        render_options=render_options,
+    )
+    axis_contract, _visual_extent_diagnostics = _expand_axis_for_visual_extents(
+        base_axis_contract,
         request=request,
         render_options=render_options,
         template_id=template_id,
@@ -5611,13 +5646,29 @@ def _categorical_axis_label(metric: str, unit: str) -> str:
 
 
 def _deterministic_category_positions(
-    center: float, count: int, *, fraction: float
+    center: float,
+    count: int,
+    *,
+    fraction: float,
+    seed_key: str = "",
 ) -> tuple[float, ...]:
     if count <= 1:
         return (center,)
     bounded = min(max(float(fraction), 0.0), 0.35)
-    step = (2.0 * bounded) / float(count - 1)
-    return tuple(center - bounded + index * step for index in range(count))
+    even_offsets = [
+        -1.0 + 2.0 * index / float(count - 1) for index in range(count)
+    ]
+    stable_key = f"{seed_key}|{center:.12g}|{count}"
+    row_indices = sorted(
+        range(count),
+        key=lambda index: hashlib.sha256(
+            f"{stable_key}|{index}".encode("utf-8")
+        ).digest(),
+    )
+    assigned_offsets = [0.0] * count
+    for offset, row_index in zip(even_offsets, row_indices, strict=True):
+        assigned_offsets[row_index] = offset
+    return tuple(center + bounded * offset for offset in assigned_offsets)
 
 
 def _categorical_series_from_frames(
@@ -5688,7 +5739,10 @@ def _categorical_series_from_frames(
                 x_name=f"category_x_{index}",
                 y_name=f"category_y_{index}",
                 x_values=_deterministic_category_positions(
-                    float(index), len(values), fraction=jitter
+                    float(index),
+                    len(values),
+                    fraction=jitter,
+                    seed_key=sample,
                 ),
                 y_values=tuple(values),
                 color=DEFAULT_PALETTE[(index - 1) % len(DEFAULT_PALETTE)],
@@ -5712,16 +5766,38 @@ def _reindex_categorical_series(
     *,
     render_options: dict[str, Any],
 ) -> list[StudioSeries]:
-    jitter = normalize_raw_point_jitter_fraction(
+    adaptive = (
+        render_options.get("_categorical_raw_point_layout") == "adaptive"
+    )
+    box_fraction = float(
         render_options.get(
-            "raw_point_jitter_fraction", DEFAULT_RAW_POINT_JITTER_FRACTION
+            "_categorical_box_fill_fraction", CATEGORICAL_BOX_FILL_FRACTION
         )
+    )
+    category_slot_width_mm = float(
+        render_options.get("_categorical_slot_width_mm") or 0.0
     )
     return [
         replace(
             item,
             x_values=_deterministic_category_positions(
-                float(index), len(item.y_values), fraction=jitter
+                float(index),
+                len(item.y_values),
+                fraction=(
+                    categorical_raw_point_half_spread(
+                        box_fill_fraction=box_fraction,
+                        replicate_count=len(item.y_values),
+                        category_slot_width_mm=category_slot_width_mm,
+                    )
+                    if adaptive
+                    else normalize_raw_point_jitter_fraction(
+                        render_options.get(
+                            "raw_point_jitter_fraction",
+                            DEFAULT_RAW_POINT_JITTER_FRACTION,
+                        )
+                    )
+                ),
+                seed_key=item.label,
             ),
             category_position=float(index),
         )
@@ -6648,9 +6724,6 @@ def _apply_domain_render_defaults(
         updated["summary_statistic"] = normalize_categorical_summary(
             updated.get("summary_statistic") or DEFAULT_CATEGORICAL_SUMMARY
         )
-        updated["raw_point_jitter_fraction"] = normalize_raw_point_jitter_fraction(
-            updated.get("raw_point_jitter_fraction", DEFAULT_RAW_POINT_JITTER_FRACTION)
-        )
         updated.setdefault("x_min", float(min(category_positions)) - 0.5)
         updated.setdefault("x_max", float(max(category_positions)) + 0.5)
         updated.setdefault("x_ticks", list(category_positions))
@@ -6668,6 +6741,35 @@ def _apply_domain_render_defaults(
                 updated["size"] = "120x55"
             else:
                 updated["size"] = "180x55"
+        figure_width_mm, _figure_height_mm = _size_mm(
+            str(updated.get("size") or DEFAULT_FIGURE_SIZE)
+        )
+        updated["_categorical_box_fill_fraction"] = CATEGORICAL_BOX_FILL_FRACTION
+        updated["_categorical_box_native_fill_scale"] = (
+            categorical_box_native_fill_scale(
+                category_count=len(category_positions)
+            )
+        )
+        updated["_categorical_slot_width_mm"] = categorical_slot_width_mm(
+            category_count=len(category_positions),
+            figure_width_mm=float(figure_width_mm),
+        )
+        updated["_categorical_box_width_mm"] = categorical_box_width_mm(
+            category_count=len(category_positions),
+            figure_width_mm=float(figure_width_mm),
+        )
+        if "raw_point_jitter_fraction" in explicit_contract:
+            updated["raw_point_jitter_fraction"] = (
+                normalize_raw_point_jitter_fraction(
+                    updated.get(
+                        "raw_point_jitter_fraction",
+                        DEFAULT_RAW_POINT_JITTER_FRACTION,
+                    )
+                )
+            )
+            updated["_categorical_raw_point_layout"] = "fixed"
+        else:
+            updated["_categorical_raw_point_layout"] = "adaptive"
         if template_id == "bar":
             updated.setdefault("y_min", 0.0)
         if str(request.get("rule_id") or "").strip() == "impact_metric":
@@ -6782,12 +6884,32 @@ def _apply_domain_render_defaults(
                 updated.pop("y_tick_format", None)
         else:
             updated.setdefault("y_tick_format", DEFAULT_LOG_TICK_FORMAT)
-    if (
-        template_id not in CATEGORICAL_TEMPLATE_IDS
-        and _looks_like_tensile_axis(axis_info)
+    mechanical_rule_id = rule_id
+    if mechanical_axis_labels(mechanical_rule_id) is None:
+        mechanical_evidence = " ".join(
+            str(value or "").casefold()
+            for value in (
+                request.get("y_metric"),
+                updated.get("y_label_override"),
+                axis_info.get("y_label"),
+            )
+        )
+        if "flexural" in mechanical_evidence or "bending" in mechanical_evidence:
+            mechanical_rule_id = "flexural_curve"
+        elif "compressive" in mechanical_evidence or "compression" in mechanical_evidence:
+            mechanical_rule_id = "compression_curve"
+        elif "tensile" in mechanical_evidence:
+            mechanical_rule_id = "tensile_curve"
+    mechanical_labels = mechanical_axis_labels(mechanical_rule_id)
+    if template_id not in CATEGORICAL_TEMPLATE_IDS and (
+        mechanical_labels is not None or _looks_like_tensile_axis(axis_info)
     ):
-        updated["x_label_override"] = TENSILE_X_AXIS_LABEL
-        updated["y_label_override"] = TENSILE_Y_AXIS_LABEL
+        x_label, y_label = mechanical_labels or (
+            TENSILE_X_AXIS_LABEL,
+            TENSILE_Y_AXIS_LABEL,
+        )
+        updated["x_label_override"] = x_label
+        updated["y_label_override"] = y_label
         updated["axis_mode"] = "auto"
     if str(request.get("rule_id") or "").strip() == "rheology_stress_relaxation":
         updated.setdefault("x_label_override", "Time (s)")
@@ -7394,6 +7516,112 @@ def _categorical_bar_axis_defaults(
     return {"y_min": 0.0, "y_max": float(axis_max), "y_ticks": list(axis_ticks)}
 
 
+def _apply_categorical_box_aspect_width(
+    render_options: dict[str, Any],
+    series: list[StudioSeries],
+    *,
+    axis_contract: _VeuszAxisContract,
+    template_id: str,
+) -> dict[str, Any]:
+    """Narrow box width toward its data-derived physical IQR height.
+
+    The vertical box extent remains exactly Q1..Q3 on the resolved data axis.
+    Only the horizontal width is capped. A marker-capacity floor prevents the
+    new aspect rule from collapsing the strip-plot band into a single column.
+    """
+
+    updated = dict(render_options)
+    if (
+        template_id not in {"box", "box_strip"}
+        or _axis_scale(updated, "y") != "linear"
+        or axis_contract.y_min is None
+        or axis_contract.y_max is None
+    ):
+        return updated
+
+    categorical = [
+        item for item in series if item.presentation_kind == "categorical_replicates"
+    ]
+    axis_span = float(axis_contract.y_max) - float(axis_contract.y_min)
+    if not categorical or axis_span <= 0.0:
+        return updated
+
+    group_iqrs: list[float] = []
+    for item in categorical:
+        values = [
+            float(value) for value in item.y_values if math.isfinite(float(value))
+        ]
+        if len(values) < MIN_BOX_REPLICATES:
+            continue
+        iqr = _quantile(values, 0.75) - _quantile(values, 0.25)
+        if iqr > 0.0:
+            group_iqrs.append(iqr)
+    if not group_iqrs:
+        return updated
+
+    figure_width_mm, figure_height_mm = _size_mm(
+        str(updated.get("size") or DEFAULT_FIGURE_SIZE)
+    )
+    slot_width_mm = categorical_slot_width_mm(
+        category_count=len(categorical),
+        figure_width_mm=float(figure_width_mm),
+    )
+    nominal_width_mm = categorical_box_width_mm(
+        category_count=len(categorical),
+        figure_width_mm=float(figure_width_mm),
+    )
+    representative_iqr = _quantile(group_iqrs, 0.5)
+    graph_height_mm = max(
+        float(figure_height_mm)
+        - UNIFIED_BOTTOM_MARGIN_MM
+        - UNIFIED_TOP_MARGIN_MM,
+        1.0,
+    )
+    representative_height_mm = representative_iqr / axis_span * graph_height_mm
+    target = CATEGORICAL_BOX_MIN_PHYSICAL_ASPECT_RATIO
+    aspect_width_cap_mm = representative_height_mm / target
+    marker_diameter_mm = 2.0 * UNIFIED_MARKER_SIZE_PT * 25.4 / 72.0
+    marker_capacity_floor_mm = (
+        CATEGORICAL_BOX_MIN_MARKER_DIAMETERS * marker_diameter_mm
+    )
+    resolved_width_mm = min(
+        nominal_width_mm,
+        max(aspect_width_cap_mm, marker_capacity_floor_mm),
+    )
+    if resolved_width_mm <= 0.0 or slot_width_mm <= 0.0:
+        return updated
+    resolved_fraction = resolved_width_mm / slot_width_mm
+    resolved_aspect = representative_height_mm / resolved_width_mm
+    updated["_categorical_box_fill_fraction"] = resolved_fraction
+    updated["_categorical_box_width_mm"] = resolved_width_mm
+    updated["_categorical_box_aspect_constraint"] = {
+        "kind": "sciplot_categorical_box_physical_aspect_constraint",
+        "version": 1,
+        "mode": "narrow_width_toward_data_derived_iqr_height",
+        "minimum_height_to_width_ratio": target,
+        "representative_statistic": "median_group_iqr",
+        "representative_iqr_axis_units": representative_iqr,
+        "resolved_y_axis_span": axis_span,
+        "representative_box_height_mm": representative_height_mm,
+        "nominal_box_width_mm": nominal_width_mm,
+        "aspect_width_cap_mm": aspect_width_cap_mm,
+        "marker_capacity_floor_mm": marker_capacity_floor_mm,
+        "resolved_box_width_mm": resolved_width_mm,
+        "resolved_height_to_width_ratio": resolved_aspect,
+        "box_width_narrowed": resolved_width_mm < nominal_width_mm - 1e-12,
+        "statistics_modified": False,
+        "y_axis_modified": False,
+        "status": (
+            "satisfied"
+            if resolved_aspect + 1e-12 >= target
+            else "limited_by_marker_capacity"
+            if math.isclose(resolved_width_mm, marker_capacity_floor_mm)
+            else "limited_by_category_slot"
+        ),
+    }
+    return updated
+
+
 def _apply_readability_render_defaults(
     render_options: dict[str, Any],
     *,
@@ -7989,7 +8217,7 @@ def _write_veusz_document(
         template_id=template_id,
         render_options=render_options,
     )
-    axis_contract = _veusz_axis_contract(
+    base_axis_contract = _veusz_axis_contract(
         render_options,
         template_id=template_id,
         series=series,
@@ -7997,7 +8225,34 @@ def _write_veusz_document(
     )
     width, height = _size_mm(str(render_options.get("size") or "60x55"))
     axis_contract, visual_extent_diagnostics = _expand_axis_for_visual_extents(
-        axis_contract,
+        base_axis_contract,
+        request=request,
+        render_options=render_options,
+        template_id=template_id,
+        series=series,
+        categorical_contract=categorical_contract,
+        style=style,
+        width_mm=width,
+        height_mm=height,
+    )
+    render_options = _apply_categorical_box_aspect_width(
+        render_options,
+        series,
+        axis_contract=axis_contract,
+        template_id=template_id,
+    )
+    if template_id in {"box", "box_strip"}:
+        series = _reindex_categorical_series(
+            series,
+            render_options=render_options,
+        )
+    categorical_contract = _categorical_plot_contract(
+        series,
+        template_id=template_id,
+        render_options=render_options,
+    )
+    axis_contract, visual_extent_diagnostics = _expand_axis_for_visual_extents(
+        base_axis_contract,
         request=request,
         render_options=render_options,
         template_id=template_id,
@@ -8068,6 +8323,24 @@ def _categorical_plot_contract(
     summary_statistic = normalize_categorical_summary(
         render_options.get("summary_statistic") or DEFAULT_CATEGORICAL_SUMMARY
     )
+    box_fill_fraction = float(
+        render_options.get(
+            "_categorical_box_fill_fraction",
+            CATEGORICAL_BOX_FILL_FRACTION,
+        )
+    )
+    category_slot_width_mm = float(
+        render_options.get("_categorical_slot_width_mm") or 0.0
+    )
+    box_width_mm = float(render_options.get("_categorical_box_width_mm") or 0.0)
+    box_native_fill_scale = float(
+        render_options.get("_categorical_box_native_fill_scale")
+        or categorical_box_native_fill_scale(category_count=len(categorical))
+    )
+    box_aspect_constraint = render_options.get(
+        "_categorical_box_aspect_constraint"
+    )
+    marker_diameter_mm = 2.0 * UNIFIED_MARKER_SIZE_PT * 25.4 / 72.0
     groups: list[dict[str, Any]] = []
     for index, item in enumerate(categorical, start=1):
         values = [
@@ -8088,6 +8361,19 @@ def _categorical_plot_contract(
         eligible = (
             summary_statistic == "median_iqr" and len(values) >= MIN_BOX_REPLICATES
         )
+        q1 = _quantile(values, 0.25)
+        median = _quantile(values, 0.5)
+        q3 = _quantile(values, 0.75)
+        raw_point_half_spread = max(
+            (
+                abs(float(value) - position)
+                for value in item.x_values
+                if math.isfinite(float(value))
+            ),
+            default=0.0,
+        )
+        raw_point_band_fraction = 2.0 * raw_point_half_spread
+        inside_iqr_count = sum(q1 <= value <= q3 for value in values)
         groups.append(
             {
                 "label": item.label,
@@ -8098,6 +8384,26 @@ def _categorical_plot_contract(
                 "y_name": item.y_name,
                 "raw_values": values,
                 "replicate_count": len(values),
+                "raw_point_half_spread": raw_point_half_spread,
+                "raw_point_band_fraction": raw_point_band_fraction,
+                "raw_point_band_width_mm": (
+                    raw_point_band_fraction * category_slot_width_mm
+                ),
+                "raw_point_box_width_ratio": (
+                    raw_point_band_fraction / box_fill_fraction
+                    if box_fill_fraction > 0.0
+                    else 0.0
+                ),
+                "raw_points_within_box_width": (
+                    raw_point_half_spread <= box_fill_fraction * 0.5 + 1e-12
+                ),
+                "raw_marker_glyphs_within_box_width": (
+                    raw_point_band_fraction * category_slot_width_mm
+                    + marker_diameter_mm
+                    <= box_width_mm + 1e-12
+                ),
+                "inside_iqr_count": inside_iqr_count,
+                "inside_iqr_fraction": inside_iqr_count / len(values),
                 "boxplot_eligible": eligible,
                 "summary_status": (
                     "bar_error"
@@ -8111,9 +8417,9 @@ def _categorical_plot_contract(
                 ),
                 "descriptive_statistics": {
                     "minimum": min(values),
-                    "q1": _quantile(values, 0.25),
-                    "median": _quantile(values, 0.5),
-                    "q3": _quantile(values, 0.75),
+                    "q1": q1,
+                    "median": median,
+                    "q3": q3,
                     "maximum": max(values),
                 },
                 "bar_mean": mean,
@@ -8128,7 +8434,7 @@ def _categorical_plot_contract(
         )
     return {
         "kind": "sciplot_categorical_replicate_contract",
-        "version": 1,
+        "version": 2,
         "presentation_kind": (
             "bar_error"
             if template_id == "bar"
@@ -8138,7 +8444,14 @@ def _categorical_plot_contract(
         ),
         "summary_statistic": summary_statistic,
         "minimum_box_replicates": MIN_BOX_REPLICATES,
+        "quartile_method": "linear_interpolation_at_(n_minus_1)_times_p",
+        "box_definition": "q1_to_q3_middle_50_percent_interval",
         "box_whisker_mode": "1.5IQR",
+        "box_aspect_constraint": (
+            dict(box_aspect_constraint)
+            if isinstance(box_aspect_constraint, dict)
+            else None
+        ),
         "mean_marker_visible": False,
         "bar_error_statistic": "sd",
         "native_veusz_boxplot": summary_statistic == "median_iqr"
@@ -8153,8 +8466,24 @@ def _categorical_plot_contract(
             ),
             "box_fill_mode": "series_color",
             "box_fill_transparency": CATEGORICAL_BOX_FILL_TRANSPARENCY,
-            "box_fill_fraction": CATEGORICAL_BOX_FILL_FRACTION,
-            "box_native_fill_scale": CATEGORICAL_BOX_NATIVE_FILL_SCALE,
+            "box_fill_fraction": box_fill_fraction,
+            "box_native_fill_scale": box_native_fill_scale,
+            "box_width_policy": (
+                "min(categorical_bar_width_times_4_over_3,"
+                "data_iqr_physical_aspect_cap)"
+            ),
+            "category_count": len(groups),
+            "category_slot_width_mm": category_slot_width_mm,
+            "box_width_mm": box_width_mm,
+            "raw_marker_diameter_mm": marker_diameter_mm,
+            "raw_point_band_policy": (
+                "min(box_ratio_log2_replicates,"
+                "box_width_minus_one_marker_diameter)"
+            ),
+            "raw_point_position_policy": "stable_hash_shuffled_even_slots",
+            "raw_point_layout": str(
+                render_options.get("_categorical_raw_point_layout") or "fixed"
+            ),
             "box_line_mode": str(
                 render_options.get("box_line_mode") or "series_color"
             ),
@@ -10027,7 +10356,10 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
             )
             native_fill_fraction = fill_fraction * float(
                 categorical_style.get(
-                    "box_native_fill_scale", CATEGORICAL_BOX_NATIVE_FILL_SCALE
+                    "box_native_fill_scale",
+                    categorical_box_native_fill_scale(
+                        category_count=len(categorical.get("groups") or [])
+                    ),
                 )
             )
             position = float(group["position"])
@@ -10058,7 +10390,7 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
             )
             # A one-group Veusz boxplot occupies roughly twice the requested
             # categorical fraction. Apply the shared native conversion so the
-            # final visible box width matches the publication-width contract.
+            # final visible box width matches the bar-relative contract.
             interface.Set("fillfraction", native_fill_fraction)
             interface.Set("meanmarker", "none")
             interface.Set("outliersmarker", "none")

@@ -206,7 +206,7 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
         "figure_queue": (
             {
                 "id": "stress_vs_strain",
-                "title": "Stress vs strain",
+                "title": "Tensile stress vs strain",
                 "metric": "stress",
                 "x_metric": "strain",
                 "y_metric": "stress",
@@ -245,6 +245,50 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
                 "metric": "toughness_MJ_m3",
                 "x_metric": "sample",
                 "y_metric": "toughness_MJ_m3",
+                "default_template": "box_strip",
+                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
+            },
+        ),
+    },
+    "compression_curve": {
+        "default_replicate_mode": "representative",
+        "figure_queue": (
+            {
+                "id": "compressive_stress_vs_strain",
+                "title": "Compressive stress vs strain",
+                "metric": "compressive_stress",
+                "x_metric": "strain",
+                "y_metric": "compressive_stress",
+                "default_template": "curve",
+            },
+            {
+                "id": "compressive_strength_by_sample",
+                "title": "Compressive strength by sample",
+                "metric": "compressive_strength_MPa",
+                "x_metric": "sample",
+                "y_metric": "compressive_strength_MPa",
+                "default_template": "box_strip",
+                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
+            },
+        ),
+    },
+    "flexural_curve": {
+        "default_replicate_mode": "representative",
+        "figure_queue": (
+            {
+                "id": "flexural_stress_vs_strain",
+                "title": "Flexural stress vs strain",
+                "metric": "flexural_stress",
+                "x_metric": "strain",
+                "y_metric": "flexural_stress",
+                "default_template": "curve",
+            },
+            {
+                "id": "flexural_strength_by_sample",
+                "title": "Flexural strength by sample",
+                "metric": "flexural_strength_MPa",
+                "x_metric": "sample",
+                "y_metric": "flexural_strength_MPa",
                 "default_template": "box_strip",
                 "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
             },

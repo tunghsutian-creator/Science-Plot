@@ -13,10 +13,14 @@ from sciplot_core._bootstrap import ensure_vendored_core
 from sciplot_core._utils import token as _utils_token
 from sciplot_core.policy import (
     CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
+    COMPRESSION_X_AXIS_LABEL,
+    COMPRESSION_Y_AXIS_LABEL,
     CURVE_RENDER_OPTIONS,
     DEFAULT_RENDER_OPTIONS as _DEFAULT_RENDER_OPTIONS,
     DEFAULT_LOG_TICK_FORMAT,
     FTIR_SPECTRUM_RENDER_OPTIONS,
+    FLEXURAL_X_AXIS_LABEL,
+    FLEXURAL_Y_AXIS_LABEL,
     POINT_LINE_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_X_LABEL,
@@ -300,8 +304,42 @@ RHEOLOGY_X_FREQUENCY = AxisSpec(
 )
 RHEOLOGY_X_TEMPERATURE = AxisSpec("Temperature", "C", "Temperature (°C)", aliases=("temperature", "temp", "温度"))
 TIME_AXIS = AxisSpec("Time", "s", "Time (s)", aliases=("time", "时间"))
-STRAIN_AXIS = AxisSpec("Strain", "%", TENSILE_X_AXIS_LABEL, aliases=("strain", "拉伸应变", "shear strain", "γ"))
-STRESS_AXIS = AxisSpec("Stress", "MPa", TENSILE_Y_AXIS_LABEL, aliases=("stress", "拉伸应力", "σ"))
+TENSILE_STRAIN_AXIS = AxisSpec(
+    "Tensile strain",
+    "%",
+    TENSILE_X_AXIS_LABEL,
+    aliases=("strain", "tensile strain", "拉伸应变"),
+)
+TENSILE_STRESS_AXIS = AxisSpec(
+    "Tensile stress",
+    "MPa",
+    TENSILE_Y_AXIS_LABEL,
+    aliases=("stress", "tensile stress", "拉伸应力", "σ"),
+)
+COMPRESSION_STRAIN_AXIS = AxisSpec(
+    "Compressive strain",
+    "%",
+    COMPRESSION_X_AXIS_LABEL,
+    aliases=("strain", "compressive strain", "compression strain", "压缩应变"),
+)
+COMPRESSION_STRESS_AXIS = AxisSpec(
+    "Compressive stress",
+    "MPa",
+    COMPRESSION_Y_AXIS_LABEL,
+    aliases=("stress", "compressive stress", "compression stress", "压缩应力", "σ"),
+)
+FLEXURAL_STRAIN_AXIS = AxisSpec(
+    "Flexural strain",
+    "%",
+    FLEXURAL_X_AXIS_LABEL,
+    aliases=("strain", "flexural strain", "bending strain", "弯曲应变"),
+)
+FLEXURAL_STRESS_AXIS = AxisSpec(
+    "Flexural stress",
+    "MPa",
+    FLEXURAL_Y_AXIS_LABEL,
+    aliases=("stress", "flexural stress", "bending stress", "弯曲应力", "σ"),
+)
 TORQUE_AXIS = AxisSpec("Screw torque", "N·m", "Screw torque (N·m)", aliases=("screw torque", "torque", "转矩"))
 
 
@@ -529,14 +567,14 @@ RULES: tuple[SemanticRule, ...] = (
         "tensile_curve",
         "tensile",
         "curve",
-        STRAIN_AXIS,
-        STRESS_AXIS,
+        TENSILE_STRAIN_AXIS,
+        TENSILE_STRESS_AXIS,
         keywords=("tensile", "拉伸", "结果表格2"),
         path_keywords=("tensile", ".is_tens_exports"),
         vendor_models=("tensile_curve",),
         analysis=(
             AnalysisSpec("modulus_MPa", "low-strain linear slope", ("strain", "stress"), "MPa"),
-            AnalysisSpec("strength_MPa", "maximum stress", ("stress",), "MPa"),
+            AnalysisSpec("strength_MPa", "maximum tensile stress", ("stress",), "MPa"),
             AnalysisSpec(ELONGATION_AT_BREAK_METRIC, "last strain", ("strain",), "%"),
             AnalysisSpec(
                 "toughness_MJ_m3",
@@ -578,11 +616,18 @@ RULES: tuple[SemanticRule, ...] = (
         "compression_curve",
         "tensile",
         "curve",
-        STRAIN_AXIS,
-        STRESS_AXIS,
+        COMPRESSION_STRAIN_AXIS,
+        COMPRESSION_STRESS_AXIS,
         keywords=("compression", "compressive", "压缩"),
         path_keywords=("compression_curve", "compressive"),
-        analysis=(AnalysisSpec("peak_compressive_stress_MPa", "maximum compressive stress", ("strain", "stress"), "MPa"),),
+        analysis=(
+            AnalysisSpec(
+                "compressive_strength_MPa",
+                "maximum magnitude of compressive stress",
+                ("strain", "stress"),
+                "MPa",
+            ),
+        ),
         fixture_path="tests/fixtures/real_world/compression_curve/conventional_pu_compression.csv",
         fixture_status="ready",
         priority=34,
@@ -592,11 +637,18 @@ RULES: tuple[SemanticRule, ...] = (
         "flexural_curve",
         "tensile",
         "curve",
-        STRAIN_AXIS,
-        STRESS_AXIS,
+        FLEXURAL_STRAIN_AXIS,
+        FLEXURAL_STRESS_AXIS,
         keywords=("flexural", "bending", "弯曲"),
         path_keywords=("flexural_curve", "bending"),
-        analysis=(AnalysisSpec("peak_flexural_stress_MPa", "maximum flexural stress", ("strain", "stress"), "MPa"),),
+        analysis=(
+            AnalysisSpec(
+                "flexural_strength_MPa",
+                "maximum flexural stress",
+                ("strain", "stress"),
+                "MPa",
+            ),
+        ),
         fixture_path="tests/fixtures/real_world/flexural_curve/A_HA56_dry_flexural.csv",
         fixture_status="ready",
         priority=34,
@@ -1951,7 +2003,7 @@ def compute_analysis_metrics(
     elif rule_id == "compression_curve":
         rows = _peak_y_metrics(
             canonical_source,
-            metric_name="peak_compressive_stress_MPa",
+            metric_name="compressive_strength_MPa",
             y_unit=semantic["axis_plan"]["y"]["canonical_unit"],
             magnitude=True,
             y_tokens=("stress",),
@@ -1959,7 +2011,7 @@ def compute_analysis_metrics(
     elif rule_id == "flexural_curve":
         rows = _peak_y_metrics(
             canonical_source,
-            metric_name="peak_flexural_stress_MPa",
+            metric_name="flexural_strength_MPa",
             y_unit=semantic["axis_plan"]["y"]["canonical_unit"],
             y_tokens=("stress",),
         )

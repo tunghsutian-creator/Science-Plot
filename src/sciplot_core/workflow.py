@@ -408,29 +408,58 @@ _RHEOLOGY_METRIC_LABELS = {
     "complex_viscosity": "Complex Viscosity",
 }
 
-_TENSILE_SUMMARY_FIGURES: tuple[dict[str, str], ...] = (
-    {
-        "id": "tensile_strength_by_sample",
-        "metric": "strength_MPa",
-        "label": "Tensile strength (MPa)",
-        "unit": "MPa",
-        "template": "bar",
+_MECHANICAL_FIGURE_CONTRACTS: dict[str, dict[str, Any]] = {
+    "tensile_curve": {
+        "curve_id": "stress_vs_strain",
+        "summaries": (
+            {
+                "id": "tensile_strength_by_sample",
+                "metric": "strength_MPa",
+                "label": "Tensile strength (MPa)",
+                "unit": "MPa",
+                "template": "bar",
+            },
+            {
+                "id": "elongation_at_break_by_sample",
+                "metric": ELONGATION_AT_BREAK_METRIC,
+                "label": ELONGATION_AT_BREAK_LABEL,
+                "unit": "%",
+                "template": "bar",
+            },
+            {
+                "id": "tensile_modulus_by_sample",
+                "metric": "modulus_MPa",
+                "label": "Tensile modulus (MPa)",
+                "unit": "MPa",
+                "template": "bar",
+            },
+        ),
     },
-    {
-        "id": "elongation_at_break_by_sample",
-        "metric": ELONGATION_AT_BREAK_METRIC,
-        "label": ELONGATION_AT_BREAK_LABEL,
-        "unit": "%",
-        "template": "bar",
+    "compression_curve": {
+        "curve_id": "compressive_stress_vs_strain",
+        "summaries": (
+            {
+                "id": "compressive_strength_by_sample",
+                "metric": "compressive_strength_MPa",
+                "label": "Compressive strength (MPa)",
+                "unit": "MPa",
+                "template": "bar",
+            },
+        ),
     },
-    {
-        "id": "tensile_modulus_by_sample",
-        "metric": "modulus_MPa",
-        "label": "Tensile modulus (MPa)",
-        "unit": "MPa",
-        "template": "bar",
+    "flexural_curve": {
+        "curve_id": "flexural_stress_vs_strain",
+        "summaries": (
+            {
+                "id": "flexural_strength_by_sample",
+                "metric": "flexural_strength_MPa",
+                "label": "Flexural strength (MPa)",
+                "unit": "MPa",
+                "template": "bar",
+            },
+        ),
     },
-)
+}
 
 _SHARED_FIGURE_STYLE_KEYS = {
     "size",
@@ -665,14 +694,16 @@ def _impact_condition_sources(
     return condition_sources
 
 
-def _tensile_summary_sources(
+def _mechanical_summary_sources(
     input_path: Path,
     *,
     request: dict[str, Any],
     output_dir: Path,
     options: dict[str, Any],
 ) -> list[tuple[str, Path, dict[str, Any]]]:
-    if str(request.get("rule_id") or "") != "tensile_curve":
+    rule_id = str(request.get("rule_id") or "")
+    figure_contract = _MECHANICAL_FIGURE_CONTRACTS.get(rule_id)
+    if figure_contract is None:
         return []
     summary_source = input_path.with_name(f"{input_path.stem}_summary.csv")
     if not summary_source.exists():
@@ -694,7 +725,7 @@ def _tensile_summary_sources(
     }
     requested = [
         contract
-        for contract in _TENSILE_SUMMARY_FIGURES
+        for contract in figure_contract["summaries"]
         if not figure_queue or contract["id"] in queued_ids or contract["metric"] in queued_metrics
     ]
     sample_order = [str(value) for value in study_model.get("sample_order", []) if str(value).strip()]
@@ -772,7 +803,7 @@ def _tensile_summary_sources(
     return metric_sources
 
 
-def _render_veusz_tensile_bundle(
+def _render_veusz_mechanical_bundle(
     input_path: Path,
     *,
     output_dir: Path,
@@ -780,7 +811,11 @@ def _render_veusz_tensile_bundle(
     export_formats: object,
     request: dict[str, Any],
 ) -> dict[str, Any] | None:
-    metric_sources = _tensile_summary_sources(
+    rule_id = str(request.get("rule_id") or "")
+    figure_contract = _MECHANICAL_FIGURE_CONTRACTS.get(rule_id)
+    if figure_contract is None:
+        return None
+    metric_sources = _mechanical_summary_sources(
         input_path,
         request=request,
         output_dir=output_dir,
@@ -793,7 +828,12 @@ def _render_veusz_tensile_bundle(
     curve_options = dict(options)
     curve_options.setdefault("legend_position", "auto")
     render_jobs: list[tuple[str, Path, str, dict[str, Any]]] = [
-        ("stress_vs_strain", input_path, str(request.get("template") or "curve"), curve_options)
+        (
+            str(figure_contract["curve_id"]),
+            input_path,
+            str(request.get("template") or "curve"),
+            curve_options,
+        )
     ]
     render_jobs.extend(
         (metric_id, metric_source, str(metric_options.pop("template", "bar")), metric_options)
@@ -884,7 +924,8 @@ def _render_veusz_tensile_bundle(
         "veusz_specs": combined_specs,
         "terminal_render_requests": combined_terminal_requests,
         "multi_metric_bundle": {
-            "kind": "tensile_curve_and_summary_bundle",
+            "kind": "mechanical_curve_and_summary_bundle",
+            "rule_id": rule_id,
             "metric_ids": [metric_id for metric_id, _source, _template, _options in render_jobs],
         },
     }
@@ -1307,15 +1348,15 @@ def _render_with_auto_split(
     )
     if impact_bundle is not None:
         return impact_bundle
-    tensile_bundle = _render_veusz_tensile_bundle(
+    mechanical_bundle = _render_veusz_mechanical_bundle(
         input_path,
         output_dir=output_dir,
         options=options,
         export_formats=export_formats,
         request=request,
     )
-    if tensile_bundle is not None:
-        return tensile_bundle
+    if mechanical_bundle is not None:
+        return mechanical_bundle
     dsc_bundle = _render_veusz_dsc_bundle(
         input_path,
         output_dir=output_dir,
