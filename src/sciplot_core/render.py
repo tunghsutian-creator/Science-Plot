@@ -470,12 +470,20 @@ def _veusz_layout_report(
         spec.get("categorical") if isinstance(spec.get("categorical"), dict) else None
     )
     if categorical is not None:
-        summary["categorical_replicates"] = {
+        categorical_kind = str(categorical.get("presentation_kind") or "")
+        summary_key = (
+            "categorical_components"
+            if categorical_kind == "stacked_components"
+            else "categorical_replicates"
+        )
+        summary[summary_key] = {
             "presentation_kind": categorical.get("presentation_kind"),
             "summary_statistic": categorical.get("summary_statistic"),
             "native_veusz_boxplot": categorical.get("native_veusz_boxplot"),
             "raw_values_preserved": categorical.get("raw_values_preserved"),
             "raw_replicate_count": categorical.get("raw_replicate_count"),
+            "component_labels": categorical.get("component_labels") or [],
+            "component_value_count": categorical.get("component_value_count"),
             "group_count": len(categorical.get("groups") or []),
             "insufficient_replicate_groups": categorical.get(
                 "insufficient_replicate_groups"

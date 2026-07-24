@@ -149,6 +149,12 @@ skill/scripts/sciplot autoplot PATH --template box_strip --out /path/to/box_stri
 
 未指定时使用规则记录的默认图形；显式选择不会改变数据类型、统计原始值或单位。
 
+`bar` 还接受明确的长表组成数据：`Sample`、`Component` 和唯一一个数值列。
+这一路径把每个样品绘制为加和堆叠柱，不把组成值误当成重复测量，也不生成误差线。
+不同样品沿用普通柱状图的控制组优先色序（首样品为近黑色），同一样品内的组成段只通过
+不透明的同色相明度阶梯区分。组分图例按可见堆叠顺序从上到下排列，并将每个图例色块
+切分为全部样品颜色，避免用单一样品的深浅色冒充多色柱。
+
 生产绘图最终都由同一 Veusz 路线完成。不同编排入口不表示存在另一个前端、renderer 或
 视觉权威。
 
@@ -229,7 +235,7 @@ skill/scripts/sciplot app PATH --out outputs/intake_projects
 非平凡修改至少运行：
 
 ```bash
-python -m pytest -q
+.venv/bin/python -m pytest -q
 skill/scripts/sciplot doctor --json
 skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json
 git diff --check
@@ -258,6 +264,13 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -e '.[studio,dev]'
 skill/scripts/sciplot doctor --json
 ```
+
+已有 `.venv/bin/python` 时，开发、测试和安装命令统一使用该解释器，不再重复尝试
+系统 `python`。如果虚拟环境不存在，只探测一次 `python3` 并按上面的安装步骤创建；
+一旦发现解释器缺失、版本不兼容或必须切换执行路径，应在工作更新和
+`DEVELOPMENT_LOG.md` 中记录“症状、根因、固定处理方式和验证”，后续任务直接复用，
+避免重复产生相同报错。绘图或开发中同一问题经过两次修改仍未解决时，也应停止继续
+试参数，先查明根因，再把可复用结论写入当前使用规范或开发文档，并补相应测试。
 
 当前维护优先级见 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)，模块所有权见本地
 `docs/ARCHITECTURE.md`；第三方许可见

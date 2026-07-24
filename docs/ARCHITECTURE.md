@@ -132,9 +132,47 @@ development logs are local workspace material, not package source.
 
 The production document builder implements exactly `curve`, `point_line`,
 `stacked_curve`, `bar`, `box`, `box_strip`, and `heatmap`. The `bar` template
-uses mean ± SD error bars for categorical replicate groups. Vendored reference
-templates are not automatically production features; unsupported requests fail
-closed.
+uses mean ± SD error bars for categorical replicate groups and a separate
+long-form `Sample`/`Component`/value contract for additive stacked composition.
+The latter never reclassifies components as replicates: it binds sample roots
+to the control-first ordinary categorical palette and component order to
+opaque same-hue lightness. Its legend is a stack-ordered segmented swatch
+covering every sample colour, not a single-sample native key.
+Vendored reference templates are not automatically production features;
+unsupported requests fail closed.
+
+### Grouped categorical bar fill geometry
+
+An unambiguous long-form `Sample`/`Condition`/value table uses the grouped
+mean ± SD presentation. Sample order owns the control-first categorical colour
+roots. Condition order owns opaque same-hue tones: the first condition is the
+lighter tone and the second is the darker root colour. The condition legend
+uses one segmented swatch per condition so all sample colours remain visible.
+No alpha transparency is used for the bar fill.
+
+Visible grouped-bar fills do not use native Veusz `barfill` or `groupfill`.
+Those settings combine dataset-count-dependent slotting with width semantics
+that differ from the data-coordinate outline contract, so they cannot prove
+that a fill terminates exactly at its keyline. Native bar objects remain in the
+VSZ with `hide=True` to preserve editable dataset bindings. Each visible fill
+is instead a native `rect` with:
+
+- `positioning="axes"`, `clip=True`, `Fill/transparency=0`;
+- `Border/hide=True`, because the keyline is a separate line object;
+- data center `(x, mean/2)` and data geometry
+  `[x-width/2, x+width/2] × [0, mean]`;
+- Veusz rect width `width / (x_max-x_min)` and height
+  `mean / (y_max-y_min)`, because axis-positioned rect centers use data
+  coordinates while rect width and height remain graph fractions.
+
+The grouped-bar contract requires a finite positive linear span and `y_min=0`;
+otherwise preparation fails closed. The three visible keylines use the same
+data geometry: left side, right side, and top. Error bars remain centered on
+the bar and span `mean ± sample SD`. The exact-current VSZ audit verifies the
+closed rect inventory, positioning mode, fill colour, zero transparency,
+hidden rect borders, converted dimensions, clipping, and stored data bounds.
+The style-contract test independently compares every fill's left, right, and
+top bounds against all three keylines, preventing both underfill and overflow.
 
 Scientific semantics and presentation selection are separate contracts.
 `SemanticRule` owns recognition, axes, units, replicate preservation, and

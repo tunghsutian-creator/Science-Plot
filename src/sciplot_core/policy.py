@@ -229,6 +229,11 @@ CATEGORICAL_KEYLINE_COLORS_BY_BASE = {
     "#7B61A8": "#A999C2",
 }
 CATEGORICAL_BAR_WIDTH_FRACTION = 0.32
+CATEGORICAL_GROUPED_BAR_WIDTH_FRACTION = 0.26
+CATEGORICAL_GROUPED_BAR_CENTER_OFFSET = 0.16
+CATEGORICAL_GROUPED_LEGEND_SWATCH_LEFT_FRACTION = 0.05
+CATEGORICAL_GROUPED_LEGEND_SWATCH_WIDTH_FRACTION = 0.16
+CATEGORICAL_GROUPED_LEGEND_LABEL_X_FRACTION = 0.23
 CATEGORICAL_BOX_TO_BAR_WIDTH_RATIO = 4.0 / 3.0
 CATEGORICAL_BOX_FILL_FRACTION = (
     CATEGORICAL_BAR_WIDTH_FRACTION * CATEGORICAL_BOX_TO_BAR_WIDTH_RATIO
@@ -245,6 +250,17 @@ CATEGORICAL_BAR_FILL_TRANSPARENCY = 0
 CATEGORICAL_BAR_LINE_WIDTH_PT = CATEGORICAL_KEYLINE_WIDTH_PT
 CATEGORICAL_BAR_TARGET_MEAN_FRACTION = 0.65
 CATEGORICAL_BAR_MAX_ERROR_FRACTION = 0.78
+CATEGORICAL_STACK_TARGET_TOTAL_FRACTION = 0.88
+CATEGORICAL_STACK_MAX_COMPONENTS = 5
+CATEGORICAL_STACK_MAX_LIGHTEN_FRACTION = 0.35
+# The component legend uses one compact swatch divided into the ordered sample
+# colours. Rows follow the visible stack from top to bottom.
+CATEGORICAL_COMPONENT_LEGEND_SWATCH_LEFT_FRACTION = 0.73
+CATEGORICAL_COMPONENT_LEGEND_SWATCH_WIDTH_FRACTION = 0.12
+CATEGORICAL_COMPONENT_LEGEND_SWATCH_HEIGHT_FRACTION = 0.05
+CATEGORICAL_COMPONENT_LEGEND_TOP_FRACTION = 0.92
+CATEGORICAL_COMPONENT_LEGEND_ROW_GAP_FRACTION = 0.08
+CATEGORICAL_COMPONENT_LEGEND_LABEL_X_FRACTION = 0.875
 CATEGORICAL_ERROR_CAP_TO_BAR_RATIO = 0.50
 MECHANICAL_STRAIN_AXIS_LABEL = "Strain (%)"
 TENSILE_X_AXIS_LABEL = MECHANICAL_STRAIN_AXIS_LABEL
@@ -377,6 +393,42 @@ def categorical_keyline_color(value: object) -> str:
     channels = [int(packed[index : index + 2], 16) for index in (0, 2, 4)]
     softened = [round(channel * 0.65 + 255.0 * 0.35) for channel in channels]
     return "#{:02X}{:02X}{:02X}".format(*softened)
+
+
+def categorical_component_fill_color(
+    value: object,
+    *,
+    component_index: int,
+    component_count: int,
+) -> str:
+    """Return an opaque same-hue tone for one ordered stacked component.
+
+    Samples retain their categorical root colour. Components within each
+    sample progress only in lightness, from the root colour at the bottom to a
+    moderately lighter solid colour at the top. The maximum white blend is
+    deliberately capped so adjacent components remain related rather than
+    reading as unrelated categories.
+    """
+
+    text = str(value or "").strip()
+    normalized = text.upper()
+    match = re.fullmatch(r"#([0-9A-F]{6})", normalized)
+    if match is None:
+        return text
+    count = max(int(component_count), 1)
+    index = min(max(int(component_index), 0), count - 1)
+    fraction = (
+        0.0
+        if count == 1
+        else CATEGORICAL_STACK_MAX_LIGHTEN_FRACTION * index / float(count - 1)
+    )
+    packed = match.group(1)
+    channels = [int(packed[offset : offset + 2], 16) for offset in (0, 2, 4)]
+    lightened = [
+        round(channel * (1.0 - fraction) + 255.0 * fraction)
+        for channel in channels
+    ]
+    return "#{:02X}{:02X}{:02X}".format(*lightened)
 
 # Public request keys accepted by the compatibility intake surface.  Keep this
 # contract explicit and renderer-independent so importing intake never starts
@@ -1046,6 +1098,12 @@ __all__ = [
     "CANONICAL_EXPORT_FORMATS",
     "CONTROL_FIRST_BRIGHT_COLORS",
     "CONTROL_FIRST_BRIGHT_PALETTE_ID",
+    "CATEGORICAL_COMPONENT_LEGEND_LABEL_X_FRACTION",
+    "CATEGORICAL_COMPONENT_LEGEND_ROW_GAP_FRACTION",
+    "CATEGORICAL_COMPONENT_LEGEND_SWATCH_HEIGHT_FRACTION",
+    "CATEGORICAL_COMPONENT_LEGEND_SWATCH_LEFT_FRACTION",
+    "CATEGORICAL_COMPONENT_LEGEND_SWATCH_WIDTH_FRACTION",
+    "CATEGORICAL_COMPONENT_LEGEND_TOP_FRACTION",
     "DEFAULT_EXPORT_FORMATS_POLICY",
     "EXPORT_FORMAT_ALIASES",
     "AUTO_LOG_BOUND_PADDING_FACTOR",

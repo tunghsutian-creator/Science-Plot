@@ -964,6 +964,9 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
 
     from sciplot_core.scalar_visual import opaque_color_to_veusz_rgba
     from sciplot_core.studio import (
+        _categorical_component_legend_label_contracts,
+        _categorical_component_legend_rect_contracts,
+        _categorical_grouped_bar_fill_rect_contracts,
         _ensure_veusz_loader_compat,
         _ensure_veusz_on_path,
         _categorical_line_contracts,
@@ -1007,6 +1010,11 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             tuple[str, tuple[str, ...], tuple[float, ...]]
         ] = []
         categorical = spec.get("categorical")
+        categorical_kind = (
+            str(categorical.get("presentation_kind") or "")
+            if isinstance(categorical, dict)
+            else ""
+        )
         categorical_groups = {
             str(group.get("y_name") or ""): group
             for group in (
@@ -1035,6 +1043,105 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             widget_type="boxplot",
             setting_names=("values", "posn"),
         )
+        bar_records = _visible_data_bindings(
+            loaded_document,
+            widget_type="bar",
+            setting_names=(
+                "mode",
+                "direction",
+                "posn",
+                "lengths",
+                "keys",
+                "barfill",
+                "groupfill",
+                "errorstyle",
+            ),
+        )
+        component_bar_record: dict[str, Any] | None = None
+        component_bar_datasets_by_y: dict[str, list[dict[str, Any]]] = {}
+        allowed_bar_paths: set[str] = set()
+        if categorical_kind == "stacked_components":
+            groups = [
+                group
+                for group in categorical.get("groups", [])
+                if isinstance(group, dict)
+            ]
+            expected_lengths: list[str] = []
+            component_labels = [
+                str(value)
+                for value in categorical.get("component_labels", [])
+            ]
+            for group_index, group in enumerate(groups, start=1):
+                group_datasets: list[dict[str, Any]] = []
+                components = [
+                    component
+                    for component in group.get("components", [])
+                    if isinstance(component, dict)
+                ]
+                for component_index, component in enumerate(
+                    components,
+                    start=1,
+                ):
+                    dataset_name = (
+                        "category_bar_component_"
+                        f"{group_index}_{component_index}"
+                    )
+                    expected_lengths.append(dataset_name)
+                    group_datasets.append(
+                        _dataset_evidence(
+                            loaded_document,
+                            dataset_name=dataset_name,
+                            expected_values=[
+                                float(component["value"])
+                                if item_index == group_index
+                                else math.nan
+                                for item_index in range(1, len(groups) + 1)
+                            ],
+                            dimensions=1,
+                        )
+                    )
+                component_bar_datasets_by_y[str(group.get("y_name") or "")] = (
+                    group_datasets
+                )
+            _dataset_evidence(
+                loaded_document,
+                dataset_name="category_bar_positions",
+                expected_values=[
+                    float(group["position"]) for group in groups
+                ],
+                dimensions=1,
+            )
+            expected_keys = [""] * len(expected_lengths)
+            if len(bar_records) != 1:
+                raise ValueError(
+                    "Exact-current stacked-component specification requires "
+                    "one native Veusz bar plotter."
+                )
+            candidate = bar_records[0]
+            bindings = candidate["bindings"]
+            if (
+                candidate["name"] != "categorical_bar"
+                or str(bindings["mode"]) != "stacked"
+                or str(bindings["direction"]) != "vertical"
+                or str(bindings["posn"]) != "category_bar_positions"
+                or list(bindings["lengths"]) != expected_lengths
+                or list(bindings["keys"]) != expected_keys
+                or not _numeric_setting_equal(
+                    bindings["barfill"],
+                    categorical.get("visual_style", {}).get(
+                        "bar_width_fraction"
+                    ),
+                )
+                or not _numeric_setting_equal(bindings["groupfill"], 0.75)
+                or str(bindings["errorstyle"]) != "none"
+                or set(candidate["dataset_bindings"]) != {"posn", "lengths"}
+            ):
+                raise ValueError(
+                    "Exact-current stacked-component bar geometry, keys, or "
+                    "dataset bindings differ from the rendered specification."
+                )
+            component_bar_record = candidate
+            allowed_bar_paths.add(str(candidate["path"]))
         axes = spec.get("axes")
         if (
             not isinstance(axes, dict)
@@ -1156,7 +1263,12 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                     name,
                     x_name,
                     y_name,
-                    _veusz_literal_text(raw_series.get("label")),
+                    _veusz_literal_text(
+                        raw_series.get(
+                            "legend_key",
+                            raw_series.get("label"),
+                        )
+                    ),
                 )
             )
             datasets = [
@@ -1180,7 +1292,12 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                 and str(record["bindings"]["xData"]) == x_name
                 and str(record["bindings"]["yData"]) == y_name
                 and str(record["bindings"]["key"])
-                == _veusz_literal_text(raw_series.get("label"))
+                == _veusz_literal_text(
+                    raw_series.get(
+                        "legend_key",
+                        raw_series.get("label"),
+                    )
+                )
             ]
             if len(matching_xy) != 1:
                 raise ValueError(
@@ -1195,14 +1312,17 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             raw_points_required = (
                 raw_series.get("raw_points_visible") is not False
             )
-            if presentation_kind != "categorical_replicates":
+            if presentation_kind not in {
+                "categorical_replicates",
+                "categorical_components",
+            }:
                 if not matching_xy[0]["mark_channels"]:
                     raise ValueError(
                         f"Exact-current Veusz series {name!r} has no visible "
                         "line, marker, or fill channel."
                     )
                 consumers.append(str(matching_xy[0]["path"]))
-            else:
+            elif presentation_kind == "categorical_replicates":
                 if not isinstance(group, dict):
                     raise ValueError(
                         f"Categorical series {name!r} has no group contract."
@@ -1253,6 +1373,22 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                             "visible native boxplot."
                         )
                     consumers.append(str(matching_boxes[0]["path"]))
+            else:
+                if not isinstance(group, dict):
+                    raise ValueError(
+                        f"Categorical component series {name!r} has no group contract."
+                    )
+                if component_bar_record is None:
+                    raise ValueError(
+                        f"Categorical component series {name!r} has no native bar consumer."
+                    )
+                component_datasets = component_bar_datasets_by_y.get(y_name)
+                if not component_datasets:
+                    raise ValueError(
+                        f"Categorical component series {name!r} has no stacked datasets."
+                    )
+                datasets.extend(component_datasets)
+                consumers.append(str(component_bar_record["path"]))
             if not consumers:
                 raise ValueError(
                     f"Exact-current Veusz document does not visibly consume "
@@ -1318,7 +1454,16 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             setting_names=("title",),
         )
         expected_legend = legend.get("show") is True
-        if expected_legend:
+        segmented_component_legend = (
+            legend.get("presentation_kind") == "segmented_component"
+        )
+        if expected_legend and segmented_component_legend:
+            if visible_keys:
+                raise ValueError(
+                    "Exact-current segmented component legend must not use a "
+                    "single-colour native Veusz key."
+                )
+        elif expected_legend:
             if (
                 len(visible_keys) != 1
                 or visible_keys[0]["name"] != "key1"
@@ -1383,6 +1528,16 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                 {
                     **raw_label,
                     "path": f"/page1/graph1/{label_name}",
+                    "literal_label": _veusz_literal_text(
+                        raw_label.get("label")
+                    ),
+                }
+            )
+        for raw_label in _categorical_component_legend_label_contracts(spec):
+            expected_direct_labels.append(
+                {
+                    **raw_label,
+                    "path": f"/page1/graph1/{raw_label['name']}",
                     "literal_label": _veusz_literal_text(
                         raw_label.get("label")
                     ),
@@ -1467,10 +1622,15 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             _dataset_evidence(
                 loaded_document,
                 dataset_name="category_axis_y",
-                expected_values=[
-                    float(group["descriptive_statistics"]["median"])
-                    for group in groups
-                ],
+                expected_values=(
+                    [0.0 for _position in category_positions]
+                    if categorical.get("presentation_kind")
+                    == "grouped_bar_error"
+                    else [
+                        float(group["descriptive_statistics"]["median"])
+                        for group in groups
+                    ]
+                ),
                 dimensions=1,
             )
             x_axis_records = [
@@ -1727,6 +1887,20 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             }
             for contract in _reference_guide_rect_contracts(spec)
         )
+        expected_rects.extend(
+            {
+                **contract,
+                "path": f"/page1/graph1/{contract['name']}",
+            }
+            for contract in _categorical_component_legend_rect_contracts(spec)
+        )
+        expected_rects.extend(
+            {
+                **contract,
+                "path": f"/page1/graph1/{contract['name']}",
+            }
+            for contract in _categorical_grouped_bar_fill_rect_contracts(spec)
+        )
         if (
             visual is not None
             and str(visual["colorbar_background_color"]).strip()
@@ -1938,6 +2112,8 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             ):
                 # This zero-width, hidden-style native bar exists only so
                 # Veusz can source categorical tick labels for boxplots.
+                return
+            if widget_type == "bar" and str(path) in allowed_bar_paths:
                 return
             if not _node_is_visible(node):
                 return

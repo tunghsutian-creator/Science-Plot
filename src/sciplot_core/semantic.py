@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from os.path import commonprefix
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 
@@ -4111,6 +4111,47 @@ def _order_curve_series(
     return [series for _index, series in sorted(enumerate(series_list), key=key)]
 
 
+def _recycled_pa_pair_rank(sample: object) -> int | None:
+    label = _clean_text(sample)
+    group_name = _intake_group_name(label) or label
+    compact = re.sub(r"[^a-z0-9]+", "", group_name.casefold())
+    if compact == "rpa":
+        return 0
+    if compact == "mrpa":
+        return 1
+    return None
+
+
+def _order_recycled_pa_pair_control_first(
+    values: list[Any],
+    *,
+    sample_of: Callable[[Any], object],
+) -> list[Any]:
+    """Keep the rPA control black and the modified m-rPA sample blue.
+
+    The shared ordinary palette is positional: the first sample is the
+    near-black control and the second is blue. Apply this semantic ordering
+    only to the exact two-condition recycled-PA comparison so unrelated
+    mechanical sample orders remain source- or user-controlled.
+    """
+
+    ranks = [_recycled_pa_pair_rank(sample_of(value)) for value in values]
+    if {rank for rank in ranks if rank is not None} != {0, 1}:
+        return values
+    if any(rank is None for rank in ranks):
+        return values
+    return [
+        value
+        for _index, value in sorted(
+            enumerate(values),
+            key=lambda item: (
+                int(ranks[item[0]]),
+                item[0],
+            ),
+        )
+    ]
+
+
 def _finite_series_points(series: CurveSeriesPayload) -> list[tuple[float, float]]:
     return sorted(
         ((x_value, y_value) for x_value, y_value in series.points if math.isfinite(x_value) and math.isfinite(y_value)),
@@ -5408,6 +5449,16 @@ def prepare_semantic_source(
             summary_rows = None
         else:
             series_list, summary_rows = curated_workbooks
+        if not _series_order_map(series_order):
+            series_list = _order_recycled_pa_pair_control_first(
+                series_list,
+                sample_of=lambda series: series.sample,
+            )
+            if summary_rows is not None:
+                summary_rows = _order_recycled_pa_pair_control_first(
+                    summary_rows,
+                    sample_of=lambda row: row.get("sample"),
+                )
         input_series_labels = [series.sample for series in series_list]
         summary_source = processed_source.with_name(
             f"{processed_source.stem}_summary.csv"
@@ -5447,6 +5498,7 @@ def prepare_semantic_source(
                 "output_series_labels": [
                     series.sample for series in series_list
                 ],
+                "series_order": [series.sample for series in series_list],
                 "requested_replicate_mode": requested_replicate_mode,
                 "applied_curve_replicate_mode": (
                     "representative" if representative_applied else "individual"
@@ -5488,6 +5540,15 @@ def prepare_semantic_source(
         if not csv_sources and workbook_sources:
             processed_source = processed_dir / f"{source.stem}_tensile_curves.csv"
             series_list, summary_rows = _read_tensile_workbook_directory(source)
+            if not _series_order_map(series_order):
+                series_list = _order_recycled_pa_pair_control_first(
+                    series_list,
+                    sample_of=lambda series: series.sample,
+                )
+                summary_rows = _order_recycled_pa_pair_control_first(
+                    summary_rows,
+                    sample_of=lambda row: row.get("sample"),
+                )
             series_list = _order_curve_series(series_list, series_order)
             _write_curve_table(series_list, processed_source)
             summary_source = processed_source.with_name(f"{processed_source.stem}_summary.csv")
@@ -5499,6 +5560,7 @@ def prepare_semantic_source(
                 parameters={
                     "input_workbooks": [str(path) for path in workbook_sources],
                     "output_series_labels": [series.sample for series in series_list],
+                    "series_order": [series.sample for series in series_list],
                     "representative_definition": "Representative_Curve sheet from each workbook",
                     "summary_metric_source": "All_Specimens sheet from each workbook",
                     "summary_replicate_count": len(summary_rows),

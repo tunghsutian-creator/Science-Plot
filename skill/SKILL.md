@@ -153,12 +153,69 @@ When cleanup is necessary:
 4. add representative fixture/test coverage;
 5. rerun Studio export and inspect the final delivery.
 
+## Repeated friction and operational knowledge
+
+Do not spend multiple turns or repeated tool calls rediscovering the same
+failure or workaround. At the second occurrence of the same symptom, or after
+the second unsuccessful modification for one visible defect, stop changing
+parameters and establish the root cause. Record:
+
+1. the observable symptom and the exact affected scope;
+2. the root cause, including relevant unit, renderer, environment, or data
+   semantics;
+3. the stable command, contract, or implementation that replaces the failed
+   route;
+4. the verification that distinguishes a real fix from another visual guess;
+5. any limitation or condition under which the workaround no longer applies.
+
+Put durable operating rules in this skill or the appropriate current
+development/user document. Put the dated change and verification in
+`DEVELOPMENT_LOG.md`. Add a shared test when the failure is programmatically
+detectable. Do not preserve secrets, credentials, temporary paths, or
+machine-specific noise as reusable guidance.
+
+Operational facts that change command routing must also be recorded when
+discovered. Examples include an unavailable interpreter or executable, a
+required project virtual environment, dependency/version incompatibility,
+sandbox or filesystem restrictions, source encoding/delimiter behavior,
+cloud-synchronization behavior, and renderer-specific unit semantics.
+Probe the capability once, select the valid route, state that selection in the
+working update, and reuse it for the rest of the task. Do not repeatedly invoke
+an executable already known to be unavailable.
+
+For this checkout, an existing project environment takes precedence:
+
+```bash
+.venv/bin/python -m pytest -q
+.venv/bin/python -m pip --version
+```
+
+If `.venv/bin/python` is absent, check `python3` once and follow the README
+installation route. Do not try bare `python` after it has failed, and do not
+silently switch interpreters without recording the selected interpreter and
+why. The repository wrapper `skill/scripts/sciplot` remains the preferred
+route for SciPlot commands because it bootstraps the source checkout
+consistently.
+
 ## Template, style, and delivery contracts
 
 The production builder implements exactly `curve`, `point_line`, `stacked_curve`,
 `bar`, `box`, `box_strip`, and `heatmap`. The `bar` template uses mean ± SD
-error bars for categorical replicate groups. Unknown or reference-only
-templates must fail at request validation.
+error bars for categorical replicate groups. An unambiguous long-form
+`Sample`/`Condition`/value table creates paired or grouped mean ± SD bars:
+sample identity owns the categorical colour root, condition identity owns the
+opaque light/dark tone, and the segmented legend shows every sample colour for
+each condition. Visible grouped-bar fills are explicit axis-positioned
+rectangles whose fractional width and height are converted from the same data
+geometry used by the outlines; hidden native bars retain editable dataset
+bindings without owning visible fill geometry. The template also accepts an
+unambiguous
+long-form `Sample`/`Component`/value table for additive stacked composition;
+that path preserves component values, creates no statistical error bars, and
+uses the ordinary control-first categorical roots with opaque same-hue
+component tones. Its component legend follows the visible stack from top to
+bottom and divides each swatch across every sample colour.
+Unknown or reference-only templates must fail at request validation.
 
 Do not bind a categorical scientific metric to one chart form. The semantic
 rule owns recognition, units, replicate preservation, and analysis; its
@@ -225,7 +282,7 @@ through any of these commands.
 After every non-trivial code change:
 
 ```bash
-python -m pytest -q
+.venv/bin/python -m pytest -q
 skill/scripts/sciplot doctor --json
 skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json
 git diff --check

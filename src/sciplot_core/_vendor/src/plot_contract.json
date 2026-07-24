@@ -1120,7 +1120,7 @@
     },
     "bar": {
       "label": "Bar",
-      "description": "Statistical bar chart with summary bars and error bars only.",
+      "description": "Categorical bar chart with either mean and error summaries or additive long-form Sample/Component stacks using control-first sample roots and a stack-ordered segmented component legend.",
       "category": "single_panel",
       "default_size": "60x55",
       "allowed_sizes": [
@@ -1135,10 +1135,16 @@
         "size",
         "y_min",
         "y_max",
+        "y_ticks",
         "y_tick_density",
         "y_tick_edge_labels",
+        "x_label_override",
+        "y_label_override",
         "series_order",
         "series_include",
+        "legend_position",
+        "series_label_mode",
+        "palette_colors",
         "style_preset",
         "palette_preset"
       ],
@@ -1165,7 +1171,8 @@
         "non_blank_pdf"
       ],
       "soft_rules": [
-        "dense_group_label_warning"
+        "dense_group_label_warning",
+        "stacked_components_use_sample_roots_and_opaque_component_tones"
       ],
       "presentation_kind": "bar"
     },

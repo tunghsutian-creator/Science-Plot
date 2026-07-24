@@ -21,6 +21,7 @@ from sciplot_core.policy import (
     CATEGORICAL_BOX_MIN_PHYSICAL_ASPECT_RATIO,
     CATEGORICAL_BOX_TO_BAR_WIDTH_RATIO,
     CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
+    CATEGORICAL_GROUPED_BAR_WIDTH_FRACTION,
     CONTROL_FIRST_BRIGHT_COLORS,
     CONTROL_FIRST_BRIGHT_PALETTE_ID,
     DEFAULT_CURVE_LINE_STYLE_SEQUENCE,
@@ -36,6 +37,7 @@ from sciplot_core.policy import (
     UNIFIED_RIGHT_MARGIN_MM,
     categorical_box_native_fill_scale,
     categorical_box_width_mm,
+    categorical_component_fill_color,
     categorical_fill_color,
     categorical_keyline_color,
     categorical_raw_point_half_spread,
@@ -45,6 +47,25 @@ from sciplot_core.policy import (
 
 def test_curve_style_contract_uses_solid_lines_for_every_series() -> None:
     assert DEFAULT_CURVE_LINE_STYLE_SEQUENCE == ("solid",)
+
+
+def test_frequency_axis_detection_ignores_runtime_path_substrings() -> None:
+    assert not _looks_like_frequency_axis(
+        {
+            "x_label": "thickness_mm",
+            "y_label": "in_plane_mm",
+            "scalar_field": {
+                "source_artifacts": [
+                    {"path": "/tmp/runtime_smoke__hzeck8o/field_xyz.csv"}
+                ]
+            },
+        }
+    )
+    assert _looks_like_frequency_axis(
+        {"x_label": "Frequency (Hz)", "y_label": "Storage modulus (Pa)"}
+    )
+
+
 from sciplot_core.render import render_to_dir
 from sciplot_recipes.contracts import get_recipe_spec
 from sciplot_core.style_contract import (
@@ -61,9 +82,12 @@ from sciplot_core.studio import (
     _apply_domain_render_defaults,
     _apply_readability_render_defaults,
     _categorical_axis_label_contracts,
+    _categorical_grouped_bar_fill_rect_contracts,
+    _categorical_line_contracts,
     _expand_axis_for_visual_extents,
     _deterministic_category_positions,
     _marker_thin_factor,
+    _looks_like_frequency_axis,
     _request_template,
     _resolved_domain_render_options,
     _veusz_axis_contract,
@@ -98,6 +122,19 @@ def test_default_ordinary_palette_is_control_first_then_one_through_six() -> Non
     assert DEFAULT_PALETTE_COLORS == CONTROL_FIRST_BRIGHT_COLORS
     assert DEFAULT_PALETTE_PRESET == CONTROL_FIRST_BRIGHT_PALETTE_ID
     assert DEFAULT_RENDER_OPTIONS["palette_preset"] == CONTROL_FIRST_BRIGHT_PALETTE_ID
+
+
+def test_categorical_component_tones_are_opaque_same_hue_lightness_steps() -> None:
+    assert categorical_component_fill_color(
+        "#222222",
+        component_index=0,
+        component_count=2,
+    ) == "#222222"
+    assert categorical_component_fill_color(
+        "#222222",
+        component_index=1,
+        component_count=2,
+    ) == "#6F6F6F"
 
 
 def test_non_explicit_legacy_palette_follows_current_shared_default() -> None:
@@ -616,6 +653,241 @@ def test_named_profiles_use_the_global_horizontal_frame() -> None:
     assert payload["hard_style_values"]["global_frame"]["right_margin_mm"] == (
         UNIFIED_RIGHT_MARGIN_MM
     )
+
+
+def test_bar_template_materializes_long_form_stacked_components(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "stacked_components.csv"
+    pd.DataFrame(
+        {
+            "Sample": ["E0", "E0", "E2", "E2", "E3", "E3", "E4", "E4"],
+            "Component": ["PA66", "PA6"] * 4,
+            "Relative crystallinity (%)": [
+                16.037619,
+                7.383810,
+                15.480000,
+                5.327619,
+                13.491429,
+                5.257619,
+                13.005238,
+                4.309571,
+            ],
+        }
+    ).to_csv(source, index=False)
+    sample_colors = list(DEFAULT_PALETTE_COLORS[:4])
+    explicit_options = {
+        "size": "60x55",
+        "y_min": 0.0,
+        "y_max": 25.0,
+        "y_ticks": [0.0, 5.0, 10.0, 15.0, 20.0, 25.0],
+        "x_label_override": "Sample",
+        "y_label_override": "Relative crystallinity (%)",
+    }
+    assert normalize_render_options(
+        explicit_options,
+        template="bar",
+    ) == explicit_options
+
+    result = render_to_dir(
+        source,
+        template="bar",
+        output_dir=tmp_path / "rendered_stack",
+        options=explicit_options,
+        export_formats=("pdf",),
+    )
+    document = Path(result["veusz_documents"][0])
+    spec = json.loads(
+        Path(result["veusz_specs"][0]).read_text(encoding="utf-8")
+    )
+    text = document.read_text(encoding="utf-8")
+    categorical = spec["categorical"]
+
+    assert result["qa_reports"][0]["issues"] == []
+    assert categorical["kind"] == "sciplot_categorical_component_contract"
+    assert categorical["presentation_kind"] == "stacked_components"
+    assert categorical["component_labels"] == ["PA66", "PA6"]
+    assert [group["label"] for group in categorical["groups"]] == [
+        "E0",
+        "E2",
+        "E3",
+        "E4",
+    ]
+    assert [group["stack_total"] for group in categorical["groups"]] == pytest.approx(
+        [23.421429, 20.807619, 18.749048, 17.314809]
+    )
+    for sample_color, group in zip(
+        sample_colors,
+        categorical["groups"],
+        strict=True,
+    ):
+        assert [component["fill_color"] for component in group["components"]] == [
+            sample_color,
+            categorical_component_fill_color(
+                sample_color,
+                component_index=1,
+                component_count=2,
+            ),
+        ]
+        assert all(
+            component["keyline_color"] == sample_color
+            for component in group["components"]
+        )
+    assert spec["direct_labels"] == []
+    assert spec["legend"]["show"] is True
+    assert spec["legend"]["presentation_kind"] == "segmented_component"
+    assert spec["legend"]["native_key"] is False
+    assert spec["legend"]["component_order"] == "visible_stack_top_to_bottom"
+    assert [row["label"] for row in spec["legend"]["rows"]] == [
+        "PA6",
+        "PA66",
+    ]
+    assert spec["legend"]["rows"][0]["colors"] == [
+        categorical_component_fill_color(
+            color,
+            component_index=1,
+            component_count=2,
+        )
+        for color in sample_colors
+    ]
+    assert spec["legend"]["rows"][1]["colors"] == sample_colors
+    assert all(item["legend_key"] == "" for item in spec["series"])
+    assert text.count("Add('bar', name='categorical_bar'") == 1
+    assert "Set('mode', 'stacked')" in text
+    assert "Set('keys', ('', '', '', '', '', '', '', ''))" in text
+    assert "Add('key', name='key1'" not in text
+    assert text.count("Add('label', name='component_legend_label_") == 2
+    assert text.count("Add('rect', name='component_legend_swatch_") == 8
+    assert text.count("Add('line', name='categorical_stack_outline_") == 24
+    assert f", {CATEGORICAL_BAR_FILL_TRANSPARENCY}, '0.5pt'" in text
+
+
+def test_bar_template_materializes_grouped_replicates_with_segmented_legend(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "grouped_specific_toughness.csv"
+    rows: list[dict[str, object]] = []
+    values = {
+        ("E0", "33% weight reduction"): [2.0, 2.5, 2.6],
+        ("E0", "50% weight reduction"): [4.0, 5.0, 6.0],
+        ("E2", "33% weight reduction"): [14.0, 16.0, 18.0],
+        ("E2", "50% weight reduction"): [12.0, 15.0, 18.0],
+        ("E3", "33% weight reduction"): [17.0, 19.0, 21.0],
+        ("E3", "50% weight reduction"): [18.0, 20.0, 22.0],
+        ("E4", "33% weight reduction"): [23.0, 25.0, 27.0],
+        ("E4", "50% weight reduction"): [25.0, 28.0, 31.0],
+    }
+    for (sample, condition), replicates in values.items():
+        rows.extend(
+            {
+                "Sample": sample,
+                "Condition": condition,
+                "Specific tensile toughness (J/g)": value,
+            }
+            for value in replicates
+        )
+    pd.DataFrame(rows).to_csv(source, index=False)
+
+    result = render_to_dir(
+        source,
+        template="bar",
+        output_dir=tmp_path / "rendered_grouped",
+        options={
+            "size": "120x55",
+            "legend_position": "upper_right",
+        },
+        export_formats=("pdf",),
+    )
+    spec = json.loads(
+        Path(result["veusz_specs"][0]).read_text(encoding="utf-8")
+    )
+    text = Path(result["veusz_documents"][0]).read_text(encoding="utf-8")
+    categorical = spec["categorical"]
+
+    assert result["qa_reports"][0]["issues"] == []
+    assert categorical["presentation_kind"] == "grouped_bar_error"
+    assert categorical["condition_labels"] == [
+        "33% weight reduction",
+        "50% weight reduction",
+    ]
+    assert spec["axes"]["x"]["category_labels"] == ["E0", "E2", "E3", "E4"]
+    assert spec["axes"]["x"]["category_positions"] == [1.0, 2.0, 3.0, 4.0]
+    assert [group["position"] for group in categorical["groups"][:2]] == [
+        pytest.approx(0.84),
+        pytest.approx(1.16),
+    ]
+    assert spec["legend"]["show"] is True
+    assert spec["legend"]["presentation_kind"] == "segmented_component"
+    assert spec["legend"]["component_order"] == "visible_group_left_to_right"
+    assert [row["label"] for row in spec["legend"]["rows"]] == [
+        "33% weight reduction",
+        "50% weight reduction",
+    ]
+    assert spec["legend"]["rows"][0]["colors"] == list(
+        categorical_component_fill_color(
+            color,
+            component_index=1,
+            component_count=2,
+        )
+        for color in DEFAULT_PALETTE_COLORS[:4]
+    )
+    assert spec["legend"]["rows"][1]["colors"] == list(
+        DEFAULT_PALETTE_COLORS[:4]
+    )
+    fill_rects = _categorical_grouped_bar_fill_rect_contracts(spec)
+    assert len(fill_rects) == 8
+    x_span = spec["axes"]["x"]["max"] - spec["axes"]["x"]["min"]
+    y_span = spec["axes"]["y"]["max"] - spec["axes"]["y"]["min"]
+    outline_lines = {
+        item["name"]: item
+        for item in _categorical_line_contracts(spec)
+        if item["name"].startswith("categorical_bar_outline_")
+    }
+    for index, (fill_rect, group) in enumerate(
+        zip(fill_rects, categorical["groups"], strict=True),
+        start=1,
+    ):
+        position = group["position"]
+        mean = group["bar_mean"]
+        bar_width = categorical["visual_style"]["bar_width_fraction"]
+        left = position - bar_width / 2.0
+        right = position + bar_width / 2.0
+        assert fill_rect["positioning"] == "axes"
+        assert fill_rect["xPos"] == [pytest.approx(position)]
+        assert fill_rect["yPos"] == [pytest.approx(mean / 2.0)]
+        assert fill_rect["width"] == [pytest.approx(bar_width / x_span)]
+        assert fill_rect["height"] == [pytest.approx(mean / y_span)]
+        assert fill_rect["fill_color"] == group["fill_color"]
+        assert fill_rect["fill_transparency"] == 0
+        assert fill_rect["fill_hide"] is False
+        assert fill_rect["border_hide"] is True
+        assert fill_rect["geometry"] == pytest.approx(
+            {
+                "left": left,
+                "right": right,
+                "bottom": 0.0,
+                "top": mean,
+            }
+        )
+        expected_outline = (
+            (left, 0.0, left, mean),
+            (right, 0.0, right, mean),
+            (left, mean, right, mean),
+        )
+        for outline_index, expected in enumerate(expected_outline, start=1):
+            line = outline_lines[
+                f"categorical_bar_outline_{index}_{outline_index}"
+            ]
+            actual = (
+                line["xPos"][0],
+                line["yPos"][0],
+                line["xPos2"][0],
+                line["yPos2"][0],
+            )
+            assert actual == pytest.approx(expected)
+    assert text.count("Add('bar', name='categorical_bar_") == 8
+    assert text.count("Add('rect', name='categorical_bar_fill_") == 8
+    assert text.count("Set('hide', True)") >= 8
 
 
 @pytest.mark.parametrize(

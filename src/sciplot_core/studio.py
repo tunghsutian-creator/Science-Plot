@@ -53,8 +53,22 @@ from sciplot_core.policy import (
     CATEGORICAL_BOX_LINE_WIDTH_PT,
     CATEGORICAL_BOX_MIN_MARKER_DIAMETERS,
     CATEGORICAL_BOX_MIN_PHYSICAL_ASPECT_RATIO,
+    CATEGORICAL_COMPONENT_LEGEND_LABEL_X_FRACTION,
+    CATEGORICAL_COMPONENT_LEGEND_ROW_GAP_FRACTION,
+    CATEGORICAL_COMPONENT_LEGEND_SWATCH_HEIGHT_FRACTION,
+    CATEGORICAL_COMPONENT_LEGEND_SWATCH_LEFT_FRACTION,
+    CATEGORICAL_COMPONENT_LEGEND_SWATCH_WIDTH_FRACTION,
+    CATEGORICAL_COMPONENT_LEGEND_TOP_FRACTION,
     CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
     CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
+    CATEGORICAL_GROUPED_BAR_CENTER_OFFSET,
+    CATEGORICAL_GROUPED_BAR_WIDTH_FRACTION,
+    CATEGORICAL_GROUPED_LEGEND_LABEL_X_FRACTION,
+    CATEGORICAL_GROUPED_LEGEND_SWATCH_LEFT_FRACTION,
+    CATEGORICAL_GROUPED_LEGEND_SWATCH_WIDTH_FRACTION,
+    CATEGORICAL_STACK_MAX_COMPONENTS,
+    CATEGORICAL_STACK_MAX_LIGHTEN_FRACTION,
+    CATEGORICAL_STACK_TARGET_TOTAL_FRACTION,
     DEFAULT_CATEGORICAL_SUMMARY,
     DEFAULT_FIGURE_SIZE,
     DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
@@ -101,6 +115,7 @@ from sciplot_core.policy import (
     canonical_export_format,
     categorical_box_native_fill_scale,
     categorical_box_width_mm,
+    categorical_component_fill_color,
     categorical_fill_color,
     categorical_keyline_color,
     categorical_raw_point_half_spread,
@@ -143,6 +158,11 @@ from sciplot_core.study_model import (
 DEFAULT_PALETTE = DEFAULT_PALETTE_COLORS
 STACKED_TEMPLATE_IDS = {"stacked_curve"}
 CATEGORICAL_TEMPLATE_IDS = {"bar", "box", "box_strip"}
+CATEGORICAL_SERIES_KINDS = {
+    "categorical_replicates",
+    "categorical_components",
+    "categorical_grouped_replicates",
+}
 SCALAR_FIELD_TEMPLATE_IDS = {"heatmap"}
 POINT_LINE_MARKERS = ("circle", "square", "diamond", "triangle")
 MARKER_MAP = {
@@ -182,6 +202,7 @@ class StudioSeries:
     line_style: str = "solid"
     presentation_kind: str = "curve"
     category_position: float | None = None
+    component_labels: tuple[str, ...] = ()
     source_artifacts: tuple[tuple[str, str], ...] = ()
 
 
@@ -5445,9 +5466,9 @@ def derive_terminal_render_data_contract(
                     "y_values": list(item.y_values),
                     "presentation_kind": item.presentation_kind,
                     "category_position": item.category_position,
-                    "plot_line_hide": (
-                        item.presentation_kind == "categorical_replicates"
-                    ),
+                    "component_labels": list(item.component_labels),
+                    "plot_line_hide": item.presentation_kind
+                    in CATEGORICAL_SERIES_KINDS,
                     "raw_points_visible": (
                         bool(group["raw_points_visible"])
                         if isinstance(group, dict)
@@ -5671,11 +5692,410 @@ def _deterministic_category_positions(
     return tuple(center + bounded * offset for offset in assigned_offsets)
 
 
+def _categorical_component_column(
+    frame: pd.DataFrame,
+    *,
+    aliases: set[str],
+) -> Any | None:
+    matches = [
+        column
+        for column in frame.columns
+        if re.sub(r"[^a-z0-9]+", "", str(column).strip().casefold()) in aliases
+    ]
+    if len(matches) > 1:
+        raise StudioPreparationBlocked(
+            "ambiguous_categorical_component_columns",
+            "Stacked-component bar input repeats a required categorical column: "
+            + ", ".join(str(value) for value in matches),
+        )
+    return matches[0] if matches else None
+
+
+def _categorical_component_series_from_frames(
+    frames: list[StudioSourceFrame],
+) -> tuple[list[StudioSeries], dict[str, Any]] | None:
+    """Read an unambiguous long-form Sample/Component/value table.
+
+    This shape represents additive components, not statistical replicates. It
+    therefore remains separate from the existing three-label-row categorical
+    replicate contract consumed by bar, box, and box+strip summaries.
+    """
+
+    records: list[tuple[str, str, float, tuple[str, str]]] = []
+    value_labels: list[str] = []
+    detected = False
+    for source_frame in frames:
+        frame = source_frame.frame
+        sample_column = _categorical_component_column(
+            frame,
+            aliases={"sample", "samples", "specimen"},
+        )
+        component_column = _categorical_component_column(
+            frame,
+            aliases={"component", "components", "phase"},
+        )
+        if sample_column is None or component_column is None:
+            if detected and not frame.empty:
+                raise StudioPreparationBlocked(
+                    "mixed_categorical_component_shapes",
+                    "Every source in one stacked-component bar must use the same "
+                    "Sample/Component/value long-form shape.",
+                )
+            continue
+        detected = True
+        numeric_candidates: list[Any] = []
+        for column in frame.columns:
+            if column in {sample_column, component_column}:
+                continue
+            nonblank = frame[column].map(_clean_studio_cell).ne("")
+            numeric = pd.to_numeric(frame[column], errors="coerce")
+            if nonblank.any() and numeric[nonblank].notna().all():
+                numeric_candidates.append(column)
+        if len(numeric_candidates) != 1:
+            raise StudioPreparationBlocked(
+                "ambiguous_categorical_component_value",
+                "Stacked-component bar input needs exactly one numeric value "
+                "column in addition to Sample and Component.",
+            )
+        value_column = numeric_candidates[0]
+        value_labels.append(_axis_label_from_column(frame, value_column))
+        for row_index in frame.index:
+            sample = _clean_studio_cell(frame.at[row_index, sample_column])
+            component = _clean_studio_cell(frame.at[row_index, component_column])
+            value_text = _clean_studio_cell(frame.at[row_index, value_column])
+            if not sample and not component and not value_text:
+                continue
+            if not sample or not component or not value_text:
+                raise StudioPreparationBlocked(
+                    "incomplete_categorical_component_row",
+                    "Every stacked-component row needs Sample, Component, and value.",
+                )
+            numeric_value = pd.to_numeric(
+                pd.Series([frame.at[row_index, value_column]]),
+                errors="coerce",
+            ).iloc[0]
+            if pd.isna(numeric_value) or not math.isfinite(float(numeric_value)):
+                raise StudioPreparationBlocked(
+                    "invalid_categorical_component_value",
+                    f"Stacked-component value is not finite at row {row_index + 2}.",
+                )
+            value = float(numeric_value)
+            if value < 0.0:
+                raise StudioPreparationBlocked(
+                    "negative_categorical_component_value",
+                    "Part-to-whole stacked bars require non-negative component values.",
+                )
+            records.append(
+                (
+                    sample,
+                    component,
+                    value,
+                    (str(source_frame.path), source_frame.sha256),
+                )
+            )
+    if not detected:
+        return None
+    if not records:
+        raise StudioPreparationBlocked(
+            "empty_categorical_component_data",
+            "Stacked-component input contains no plottable values.",
+        )
+    distinct_value_labels = list(dict.fromkeys(value_labels))
+    if len(distinct_value_labels) != 1:
+        raise StudioPreparationBlocked(
+            "mixed_categorical_component_metrics",
+            "One stacked-component bar must use one value metric; found: "
+            + ", ".join(distinct_value_labels),
+        )
+
+    sample_order: list[str] = []
+    component_order: list[str] = []
+    values_by_sample: dict[str, dict[str, float]] = {}
+    artifacts_by_sample: dict[str, set[tuple[str, str]]] = {}
+    for sample, component, value, artifact in records:
+        if sample not in values_by_sample:
+            sample_order.append(sample)
+            values_by_sample[sample] = {}
+            artifacts_by_sample[sample] = set()
+        if component not in component_order:
+            component_order.append(component)
+        if component in values_by_sample[sample]:
+            raise StudioPreparationBlocked(
+                "duplicate_categorical_component",
+                f"Sample `{sample}` repeats stacked component `{component}`.",
+            )
+        values_by_sample[sample][component] = value
+        artifacts_by_sample[sample].add(artifact)
+    if len(component_order) < 2:
+        raise StudioPreparationBlocked(
+            "insufficient_categorical_components",
+            "A stacked-component bar requires at least two ordered components.",
+        )
+    if len(component_order) > CATEGORICAL_STACK_MAX_COMPONENTS:
+        raise StudioPreparationBlocked(
+            "too_many_categorical_components",
+            "A single same-hue component stack supports at most "
+            f"{CATEGORICAL_STACK_MAX_COMPONENTS} components.",
+        )
+    expected_components = set(component_order)
+    for sample in sample_order:
+        actual_components = set(values_by_sample[sample])
+        if actual_components != expected_components:
+            missing = [
+                component
+                for component in component_order
+                if component not in actual_components
+            ]
+            extra = sorted(actual_components - expected_components)
+            detail = ", ".join(
+                [
+                    *(f"missing {value}" for value in missing),
+                    *(f"extra {value}" for value in extra),
+                ]
+            )
+            raise StudioPreparationBlocked(
+                "incomplete_categorical_component_stack",
+                f"Sample `{sample}` does not match the shared component order"
+                + (f": {detail}" if detail else "."),
+            )
+
+    series: list[StudioSeries] = []
+    component_labels = tuple(component_order)
+    for index, sample in enumerate(sample_order, start=1):
+        series.append(
+            StudioSeries(
+                label=sample,
+                x_name=f"category_component_x_{index}",
+                y_name=f"category_component_y_{index}",
+                x_values=tuple(float(index) for _ in component_order),
+                y_values=tuple(
+                    values_by_sample[sample][component]
+                    for component in component_order
+                ),
+                color=DEFAULT_PALETTE[(index - 1) % len(DEFAULT_PALETTE)],
+                presentation_kind="categorical_components",
+                category_position=float(index),
+                component_labels=component_labels,
+                source_artifacts=tuple(sorted(artifacts_by_sample[sample])),
+            )
+        )
+    return series, {
+        "x_label": "Sample",
+        "y_label": distinct_value_labels[0],
+        "presentation_kind": "categorical_components",
+        "category_labels": sample_order,
+        "category_positions": [
+            float(index) for index in range(1, len(sample_order) + 1)
+        ],
+        "component_labels": list(component_order),
+        "component_value_count": len(records),
+    }
+
+
+_GROUPED_BAR_LABEL_SEPARATOR = " || "
+
+
+def _grouped_bar_identity(label: str) -> tuple[str, str]:
+    sample, separator, condition = str(label).partition(
+        _GROUPED_BAR_LABEL_SEPARATOR
+    )
+    if not separator or not sample.strip() or not condition.strip():
+        raise StudioPreparationBlocked(
+            "invalid_grouped_bar_identity",
+            "Grouped-bar series must preserve both sample and condition labels.",
+        )
+    return sample.strip(), condition.strip()
+
+
+def _categorical_grouped_series_from_frames(
+    frames: list[StudioSourceFrame],
+) -> tuple[list[StudioSeries], dict[str, Any]] | None:
+    """Read long-form Sample/Condition/value replicates for grouped bars."""
+
+    records: list[tuple[str, str, float, tuple[str, str]]] = []
+    value_labels: list[str] = []
+    detected = False
+    for source_frame in frames:
+        frame = source_frame.frame
+        sample_column = _categorical_component_column(
+            frame,
+            aliases={"sample", "samples", "specimen"},
+        )
+        condition_column = _categorical_component_column(
+            frame,
+            aliases={
+                "condition",
+                "conditions",
+                "series",
+                "weightreduction",
+                "weightreductioncondition",
+            },
+        )
+        if sample_column is None or condition_column is None:
+            if detected and not frame.empty:
+                raise StudioPreparationBlocked(
+                    "mixed_categorical_grouped_shapes",
+                    "Every source in one grouped bar must use the same "
+                    "Sample/Condition/value long-form shape.",
+                )
+            continue
+        detected = True
+        numeric_candidates: list[Any] = []
+        for column in frame.columns:
+            if column in {sample_column, condition_column}:
+                continue
+            nonblank = frame[column].map(_clean_studio_cell).ne("")
+            numeric = pd.to_numeric(frame[column], errors="coerce")
+            if nonblank.any() and numeric[nonblank].notna().all():
+                numeric_candidates.append(column)
+        if len(numeric_candidates) != 1:
+            raise StudioPreparationBlocked(
+                "ambiguous_categorical_grouped_value",
+                "Grouped-bar input needs exactly one numeric replicate column "
+                "in addition to Sample and Condition.",
+            )
+        value_column = numeric_candidates[0]
+        value_labels.append(_axis_label_from_column(frame, value_column))
+        for row_index in frame.index:
+            sample = _clean_studio_cell(frame.at[row_index, sample_column])
+            condition = _clean_studio_cell(frame.at[row_index, condition_column])
+            value_text = _clean_studio_cell(frame.at[row_index, value_column])
+            if not sample and not condition and not value_text:
+                continue
+            if not sample or not condition or not value_text:
+                raise StudioPreparationBlocked(
+                    "incomplete_categorical_grouped_row",
+                    "Every grouped-bar row needs Sample, Condition, and value.",
+                )
+            numeric_value = pd.to_numeric(
+                pd.Series([frame.at[row_index, value_column]]),
+                errors="coerce",
+            ).iloc[0]
+            if pd.isna(numeric_value) or not math.isfinite(float(numeric_value)):
+                raise StudioPreparationBlocked(
+                    "invalid_categorical_grouped_value",
+                    f"Grouped-bar value is not finite at row {row_index + 2}.",
+                )
+            records.append(
+                (
+                    sample,
+                    condition,
+                    float(numeric_value),
+                    (str(source_frame.path), source_frame.sha256),
+                )
+            )
+    if not detected:
+        return None
+    if not records:
+        raise StudioPreparationBlocked(
+            "empty_categorical_grouped_data",
+            "Grouped-bar input contains no plottable replicate values.",
+        )
+    distinct_value_labels = list(dict.fromkeys(value_labels))
+    if len(distinct_value_labels) != 1:
+        raise StudioPreparationBlocked(
+            "mixed_categorical_grouped_metrics",
+            "One grouped bar must use one value metric; found: "
+            + ", ".join(distinct_value_labels),
+        )
+
+    sample_order: list[str] = []
+    condition_order: list[str] = []
+    grouped: dict[tuple[str, str], list[float]] = {}
+    artifacts: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    for sample, condition, value, artifact in records:
+        if sample not in sample_order:
+            sample_order.append(sample)
+        if condition not in condition_order:
+            condition_order.append(condition)
+        key = (sample, condition)
+        grouped.setdefault(key, []).append(value)
+        artifacts.setdefault(key, set()).add(artifact)
+    if len(condition_order) < 2:
+        raise StudioPreparationBlocked(
+            "insufficient_grouped_bar_conditions",
+            "A grouped bar requires at least two conditions.",
+        )
+    if len(condition_order) > 3:
+        raise StudioPreparationBlocked(
+            "too_many_grouped_bar_conditions",
+            "A grouped bar supports at most three adjacent conditions.",
+        )
+    expected_conditions = set(condition_order)
+    for sample in sample_order:
+        actual_conditions = {
+            condition
+            for item_sample, condition in grouped
+            if item_sample == sample
+        }
+        if actual_conditions != expected_conditions:
+            raise StudioPreparationBlocked(
+                "incomplete_grouped_bar_sample",
+                f"Sample `{sample}` does not contain every grouped-bar condition.",
+            )
+
+    condition_count = len(condition_order)
+    if condition_count == 2:
+        offsets = (
+            -CATEGORICAL_GROUPED_BAR_CENTER_OFFSET,
+            CATEGORICAL_GROUPED_BAR_CENTER_OFFSET,
+        )
+    else:
+        offsets = tuple(
+            CATEGORICAL_GROUPED_BAR_CENTER_OFFSET * (index - 1)
+            for index in range(condition_count)
+        )
+    series: list[StudioSeries] = []
+    for sample_index, sample in enumerate(sample_order, start=1):
+        for condition_index, condition in enumerate(condition_order):
+            key = (sample, condition)
+            values = grouped[key]
+            position = float(sample_index) + offsets[condition_index]
+            series.append(
+                StudioSeries(
+                    label=(
+                        f"{sample}{_GROUPED_BAR_LABEL_SEPARATOR}{condition}"
+                    ),
+                    x_name=(
+                        f"category_grouped_x_{sample_index}_{condition_index + 1}"
+                    ),
+                    y_name=(
+                        f"category_grouped_y_{sample_index}_{condition_index + 1}"
+                    ),
+                    x_values=tuple(position for _ in values),
+                    y_values=tuple(values),
+                    color=DEFAULT_PALETTE[
+                        (sample_index - 1) % len(DEFAULT_PALETTE)
+                    ],
+                    presentation_kind="categorical_grouped_replicates",
+                    category_position=position,
+                    source_artifacts=tuple(sorted(artifacts[key])),
+                )
+            )
+    return series, {
+        "x_label": "Sample",
+        "y_label": distinct_value_labels[0],
+        "presentation_kind": "categorical_grouped_replicates",
+        "category_labels": sample_order,
+        "category_positions": [
+            float(index) for index in range(1, len(sample_order) + 1)
+        ],
+        "condition_labels": condition_order,
+        "raw_replicate_count": len(records),
+    }
+
+
 def _categorical_series_from_frames(
     frames: list[StudioSourceFrame],
     *,
     render_options: dict[str, Any],
 ) -> tuple[list[StudioSeries], dict[str, Any]]:
+    grouped_bars = _categorical_grouped_series_from_frames(frames)
+    if grouped_bars is not None:
+        return grouped_bars
+    stacked_components = _categorical_component_series_from_frames(frames)
+    if stacked_components is not None:
+        return stacked_components
     grouped: dict[str, list[float]] = {}
     grouped_artifacts: dict[str, set[tuple[str, str]]] = {}
     metric_labels: list[str] = []
@@ -6461,6 +6881,13 @@ def _apply_series_options(
         if str(request.get("rule_id") or "").strip() == "swelling_curve"
         else {}
     )
+    grouped_bar_samples: list[str] = []
+    for item in ordered:
+        if item.presentation_kind != "categorical_grouped_replicates":
+            continue
+        sample, _condition = _grouped_bar_identity(item.label)
+        if sample not in grouped_bar_samples:
+            grouped_bar_samples.append(sample)
     for index, item in enumerate(ordered):
         style = style_by_label.get(item.label, {})
         if style.get("visible") is False or style.get("enabled") is False:
@@ -6469,6 +6896,9 @@ def _apply_series_options(
             item.label,
             (index, index),
         )
+        if item.presentation_kind == "categorical_grouped_replicates":
+            sample, _condition = _grouped_bar_identity(item.label)
+            condition_index = grouped_bar_samples.index(sample)
         default_marker = (
             marker_sequence[replicate_index % len(marker_sequence)]
             if (
@@ -6509,6 +6939,7 @@ def _apply_series_options(
                 ),
                 presentation_kind=item.presentation_kind,
                 category_position=item.category_position,
+                component_labels=item.component_labels,
                 source_artifacts=item.source_artifacts,
             )
         )
@@ -6718,17 +7149,34 @@ def _apply_domain_render_defaults(
         and isinstance(category_positions, list)
         and category_positions
     ):
+        component_stack = (
+            axis_info.get("presentation_kind") == "categorical_components"
+        )
+        grouped_bar = (
+            axis_info.get("presentation_kind")
+            == "categorical_grouped_replicates"
+        )
         for key, value in CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS.items():
             if key not in explicit_options:
                 updated[key] = list(value) if isinstance(value, list) else value
-        updated["summary_statistic"] = normalize_categorical_summary(
-            updated.get("summary_statistic") or DEFAULT_CATEGORICAL_SUMMARY
-        )
+        if not component_stack:
+            updated["summary_statistic"] = normalize_categorical_summary(
+                updated.get("summary_statistic") or DEFAULT_CATEGORICAL_SUMMARY
+            )
         updated.setdefault("x_min", float(min(category_positions)) - 0.5)
         updated.setdefault("x_max", float(max(category_positions)) + 0.5)
         updated.setdefault("x_ticks", list(category_positions))
         updated.setdefault("x_label_override", "Sample")
-        updated.setdefault("legend_position", "none")
+        if component_stack:
+            updated["_categorical_component_legend"] = True
+            if "legend_position" not in explicit_options:
+                updated["legend_position"] = "upper_right"
+        elif grouped_bar:
+            updated["_categorical_grouped_legend"] = True
+            if "legend_position" not in explicit_options:
+                updated["legend_position"] = "upper_right"
+        else:
+            updated.setdefault("legend_position", "none")
         updated.setdefault("series_label_mode", "none")
         if "size" not in explicit_contract:
             # Choose the narrowest house frame that can carry the observed
@@ -7483,6 +7931,36 @@ def _categorical_bar_axis_defaults(
 ) -> dict[str, Any] | None:
     """Give positive bar charts enough headroom for both means and SD bars."""
 
+    component_stacks = [
+        item for item in series if item.presentation_kind == "categorical_components"
+    ]
+    if component_stacks:
+        totals: list[float] = []
+        for item in component_stacks:
+            values = [
+                float(value)
+                for value in item.y_values
+                if math.isfinite(float(value))
+            ]
+            if len(values) != len(item.y_values) or not values or min(values) < 0.0:
+                return None
+            totals.append(math.fsum(values))
+        compact_axis = compact_linear_axis(
+            (
+                0.0,
+                max(totals) / CATEGORICAL_STACK_TARGET_TOTAL_FRACTION,
+            ),
+            padding_fraction=0.0,
+        )
+        if compact_axis is None:
+            return None
+        _axis_min, axis_max, axis_ticks = compact_axis
+        return {
+            "y_min": 0.0,
+            "y_max": float(axis_max),
+            "y_ticks": list(axis_ticks),
+        }
+
     groups: list[tuple[float, float]] = []
     for item in series:
         if item.presentation_kind != "categorical_replicates":
@@ -8111,7 +8589,21 @@ def _looks_like_torque_axis(axis_info: dict[str, Any]) -> bool:
 
 
 def _looks_like_frequency_axis(axis_info: dict[str, Any]) -> bool:
-    text = " ".join(str(value) for value in axis_info.values()).casefold()
+    # Inspect semantic axis fields only. Runtime paths and hashes are also
+    # carried in axis_info; scanning them made a random directory containing
+    # the substring "hz" incorrectly force an unrelated heatmap onto a log x
+    # axis.
+    text = " ".join(
+        str(axis_info.get(key) or "")
+        for key in (
+            "x_label",
+            "y_label",
+            "x_metric",
+            "y_metric",
+            "semantic_family",
+            "rule_id",
+        )
+    ).casefold()
     return "frequency" in text or "angular" in text or "rad/s" in text or "hz" in text
 
 
@@ -8315,11 +8807,150 @@ def _categorical_plot_contract(
     template_id: str,
     render_options: dict[str, Any],
 ) -> dict[str, Any] | None:
+    component_stacks = [
+        item for item in series if item.presentation_kind == "categorical_components"
+    ]
+    if component_stacks:
+        if template_id != "bar":
+            raise StudioPreparationBlocked(
+                "categorical_components_require_bar",
+                "Additive categorical components are supported only by the bar template.",
+            )
+        component_labels = component_stacks[0].component_labels
+        if len(component_labels) < 2:
+            raise StudioPreparationBlocked(
+                "invalid_categorical_component_contract",
+                "A stacked-component bar needs at least two component labels.",
+            )
+        if any(
+            item.component_labels != component_labels
+            or len(item.y_values) != len(component_labels)
+            for item in component_stacks
+        ):
+            raise StudioPreparationBlocked(
+                "inconsistent_categorical_component_contract",
+                "Every sample must use the same ordered stacked components.",
+            )
+        groups: list[dict[str, Any]] = []
+        for index, item in enumerate(component_stacks, start=1):
+            position = float(
+                item.category_position
+                if item.category_position is not None
+                else index
+            )
+            cumulative = 0.0
+            components: list[dict[str, Any]] = []
+            for component_index, (label, raw_value) in enumerate(
+                zip(component_labels, item.y_values, strict=True)
+            ):
+                value = float(raw_value)
+                if not math.isfinite(value) or value < 0.0:
+                    raise StudioPreparationBlocked(
+                        "invalid_categorical_component_value",
+                        "Stacked-component bars require finite non-negative values.",
+                    )
+                lower = cumulative
+                cumulative += value
+                components.append(
+                    {
+                        "label": label,
+                        "value": value,
+                        "stack_bottom": lower,
+                        "stack_top": cumulative,
+                        "fill_color": categorical_component_fill_color(
+                            item.color,
+                            component_index=component_index,
+                            component_count=len(component_labels),
+                        ),
+                        "keyline_color": item.color,
+                    }
+                )
+            groups.append(
+                {
+                    "label": item.label,
+                    "color": item.color,
+                    "position": position,
+                    "y_name": item.y_name,
+                    "components": components,
+                    "component_values": [
+                        float(value) for value in item.y_values
+                    ],
+                    "component_count": len(components),
+                    "stack_total": cumulative,
+                    "raw_points_visible": False,
+                    "boxplot_eligible": False,
+                    "descriptive_statistics": {
+                        "minimum": 0.0,
+                        "q1": cumulative,
+                        "median": cumulative,
+                        "q3": cumulative,
+                        "maximum": cumulative,
+                    },
+                }
+            )
+        return {
+            "kind": "sciplot_categorical_component_contract",
+            "version": 1,
+            "presentation_kind": "stacked_components",
+            "component_labels": list(component_labels),
+            "component_count": len(component_labels),
+            "component_value_count": sum(
+                len(group["components"]) for group in groups
+            ),
+            "sample_color_binding": "categorical_root_by_sample",
+            "component_tone_binding": "ordered_opaque_lightness_within_sample",
+            "summary_statistic": None,
+            "native_veusz_boxplot": False,
+            "raw_values_preserved": True,
+            "raw_replicate_count": 0,
+            "groups": groups,
+            "visual_style": {
+                "palette_policy": "sample_roots_with_component_tones",
+                "palette_preset": str(
+                    render_options.get("palette_preset")
+                    or DEFAULT_PALETTE_PRESET
+                ),
+                "bar_fill_transparency": CATEGORICAL_BAR_FILL_TRANSPARENCY,
+                "bar_width_fraction": CATEGORICAL_BAR_WIDTH_FRACTION,
+                "bar_line_width_pt": CATEGORICAL_BAR_LINE_WIDTH_PT,
+                "component_tone_mode": "opaque_same_hue_lightness",
+                "component_lighten_fraction_max": (
+                    0.0
+                    if len(component_labels) == 1
+                    else CATEGORICAL_STACK_MAX_LIGHTEN_FRACTION
+                ),
+            },
+        }
+
     categorical = [
-        item for item in series if item.presentation_kind == "categorical_replicates"
+        item
+        for item in series
+        if item.presentation_kind
+        in {"categorical_replicates", "categorical_grouped_replicates"}
     ]
     if not categorical:
         return None
+    grouped_bar = any(
+        item.presentation_kind == "categorical_grouped_replicates"
+        for item in categorical
+    )
+    if grouped_bar and (
+        template_id != "bar"
+        or any(
+            item.presentation_kind != "categorical_grouped_replicates"
+            for item in categorical
+        )
+    ):
+        raise StudioPreparationBlocked(
+            "grouped_replicates_require_bar",
+            "Grouped categorical replicates are supported only by the bar template.",
+        )
+    grouped_condition_labels: list[str] = []
+    if grouped_bar:
+        for item in categorical:
+            _sample, condition = _grouped_bar_identity(item.label)
+            if condition not in grouped_condition_labels:
+                grouped_condition_labels.append(condition)
     summary_statistic = normalize_categorical_summary(
         render_options.get("summary_statistic") or DEFAULT_CATEGORICAL_SUMMARY
     )
@@ -8343,6 +8974,12 @@ def _categorical_plot_contract(
     marker_diameter_mm = 2.0 * UNIFIED_MARKER_SIZE_PT * 25.4 / 72.0
     groups: list[dict[str, Any]] = []
     for index, item in enumerate(categorical, start=1):
+        sample_label = item.label
+        condition_label: str | None = None
+        condition_index = 0
+        if grouped_bar:
+            sample_label, condition_label = _grouped_bar_identity(item.label)
+            condition_index = grouped_condition_labels.index(condition_label)
         values = [
             float(value) for value in item.y_values if math.isfinite(float(value))
         ]
@@ -8377,8 +9014,21 @@ def _categorical_plot_contract(
         groups.append(
             {
                 "label": item.label,
+                "sample_label": sample_label,
+                "condition_label": condition_label,
+                "condition_index": condition_index,
                 "color": item.color,
-                "fill_color": categorical_fill_color(item.color),
+                "fill_color": (
+                    categorical_component_fill_color(
+                        item.color,
+                        component_index=(
+                            len(grouped_condition_labels) - 1 - condition_index
+                        ),
+                        component_count=len(grouped_condition_labels),
+                    )
+                    if grouped_bar
+                    else categorical_fill_color(item.color)
+                ),
                 "keyline_color": categorical_keyline_color(item.color),
                 "position": position,
                 "y_name": item.y_name,
@@ -8436,7 +9086,9 @@ def _categorical_plot_contract(
         "kind": "sciplot_categorical_replicate_contract",
         "version": 2,
         "presentation_kind": (
-            "bar_error"
+            "grouped_bar_error"
+            if grouped_bar
+            else "bar_error"
             if template_id == "bar"
             else "box_strip"
             if template_id == "box_strip"
@@ -8454,13 +9106,25 @@ def _categorical_plot_contract(
         ),
         "mean_marker_visible": False,
         "bar_error_statistic": "sd",
+        "condition_labels": grouped_condition_labels,
+        "condition_count": len(grouped_condition_labels),
+        "sample_color_binding": (
+            "categorical_root_by_sample" if grouped_bar else None
+        ),
+        "condition_tone_binding": (
+            "ordered_opaque_lightness_within_sample" if grouped_bar else None
+        ),
         "native_veusz_boxplot": summary_statistic == "median_iqr"
         and template_id != "bar"
         and any(group["boxplot_eligible"] for group in groups),
         "raw_values_preserved": True,
         "raw_replicate_count": sum(group["replicate_count"] for group in groups),
         "visual_style": {
-            "palette_policy": "relaxed_multi_category",
+            "palette_policy": (
+                "sample_roots_with_condition_tones"
+                if grouped_bar
+                else "relaxed_multi_category"
+            ),
             "palette_preset": str(
                 render_options.get("palette_preset") or DEFAULT_PALETTE_PRESET
             ),
@@ -8492,7 +9156,16 @@ def _categorical_plot_contract(
                 render_options.get("marker_alpha", 0.80)
             ),
             "box_line_width_pt": CATEGORICAL_BOX_LINE_WIDTH_PT,
-            "bar_width_fraction": CATEGORICAL_BAR_WIDTH_FRACTION,
+            "bar_width_fraction": (
+                CATEGORICAL_GROUPED_BAR_WIDTH_FRACTION
+                if grouped_bar
+                else CATEGORICAL_BAR_WIDTH_FRACTION
+            ),
+            "native_barfill": (
+                1.0
+                if grouped_bar
+                else CATEGORICAL_BAR_WIDTH_FRACTION
+            ),
             "bar_fill_transparency": CATEGORICAL_BAR_FILL_TRANSPARENCY,
             "bar_line_width_pt": CATEGORICAL_BAR_LINE_WIDTH_PT,
             "error_cap_to_bar_ratio": CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
@@ -8504,6 +9177,151 @@ def _categorical_plot_contract(
             for group in groups
             if group["summary_status"] == "insufficient_replicates"
         ],
+    }
+
+
+def _categorical_component_legend_spec(
+    categorical: dict[str, Any] | None,
+    *,
+    style: _VeuszStyleContract,
+) -> dict[str, Any] | None:
+    """Return a multicolour legend for stacked components or grouped bars."""
+
+    if not isinstance(categorical, dict):
+        return None
+    groups = [
+        group
+        for group in categorical.get("groups", [])
+        if isinstance(group, dict)
+    ]
+    if categorical.get("presentation_kind") == "grouped_bar_error":
+        condition_labels = [
+            str(value) for value in categorical.get("condition_labels", [])
+        ]
+        sample_labels = list(
+            dict.fromkeys(str(group.get("sample_label") or "") for group in groups)
+        )
+        if not groups or not condition_labels or not all(sample_labels):
+            return None
+        rows: list[dict[str, Any]] = []
+        for condition_index, condition_label in enumerate(condition_labels):
+            colors: list[str] = []
+            for sample_label in sample_labels:
+                match = next(
+                    (
+                        group
+                        for group in groups
+                        if group.get("sample_label") == sample_label
+                        and group.get("condition_label") == condition_label
+                    ),
+                    None,
+                )
+                if match is None:
+                    raise StudioPreparationBlocked(
+                        "inconsistent_grouped_bar_legend",
+                        "The grouped-bar legend cannot resolve every sample tone.",
+                    )
+                colors.append(str(match["fill_color"]))
+            rows.append(
+                {
+                    "name": f"component_legend_row_{condition_index + 1}",
+                    "label": condition_label,
+                    "component_index": condition_index,
+                    "stack_role": "left" if condition_index == 0 else "right",
+                    "y_fraction": (
+                        CATEGORICAL_COMPONENT_LEGEND_TOP_FRACTION
+                        - condition_index
+                        * CATEGORICAL_COMPONENT_LEGEND_ROW_GAP_FRACTION
+                    ),
+                    "colors": colors,
+                    "sample_labels": sample_labels,
+                }
+            )
+        return {
+            "presentation_kind": "segmented_component",
+            "native_key": False,
+            "component_order": "visible_group_left_to_right",
+            "sample_color_binding": "control_first_categorical_roots",
+            "swatch_left_fraction": (
+                CATEGORICAL_GROUPED_LEGEND_SWATCH_LEFT_FRACTION
+            ),
+            "swatch_width_fraction": (
+                CATEGORICAL_GROUPED_LEGEND_SWATCH_WIDTH_FRACTION
+            ),
+            "swatch_height_fraction": (
+                CATEGORICAL_COMPONENT_LEGEND_SWATCH_HEIGHT_FRACTION
+            ),
+            "label_x_fraction": CATEGORICAL_GROUPED_LEGEND_LABEL_X_FRACTION,
+            "label_text_size_pt": style.legend_font_size_pt,
+            "label_text_color": UNIFIED_FOREGROUND_COLOR,
+            "rows": rows,
+        }
+    if categorical.get("presentation_kind") != "stacked_components":
+        return None
+    component_labels = [
+        str(value) for value in categorical.get("component_labels", [])
+    ]
+    if not groups or not component_labels:
+        return None
+    rows: list[dict[str, Any]] = []
+    for display_index, component_index in enumerate(
+        reversed(range(len(component_labels))),
+        start=1,
+    ):
+        colors: list[str] = []
+        for group in groups:
+            components = [
+                component
+                for component in group.get("components", [])
+                if isinstance(component, dict)
+            ]
+            if component_index >= len(components):
+                raise StudioPreparationBlocked(
+                    "inconsistent_categorical_component_legend",
+                    "The stacked-component legend cannot resolve every sample tone.",
+                )
+            colors.append(str(components[component_index]["fill_color"]))
+        rows.append(
+            {
+                "name": f"component_legend_row_{display_index}",
+                "label": component_labels[component_index],
+                "component_index": component_index,
+                "stack_role": (
+                    "top"
+                    if component_index == len(component_labels) - 1
+                    else "bottom"
+                    if component_index == 0
+                    else "middle"
+                ),
+                "y_fraction": (
+                    CATEGORICAL_COMPONENT_LEGEND_TOP_FRACTION
+                    - (display_index - 1)
+                    * CATEGORICAL_COMPONENT_LEGEND_ROW_GAP_FRACTION
+                ),
+                "colors": colors,
+                "sample_labels": [
+                    str(group.get("label") or "") for group in groups
+                ],
+            }
+        )
+    return {
+        "presentation_kind": "segmented_component",
+        "native_key": False,
+        "component_order": "visible_stack_top_to_bottom",
+        "sample_color_binding": "control_first_categorical_roots",
+        "swatch_left_fraction": (
+            CATEGORICAL_COMPONENT_LEGEND_SWATCH_LEFT_FRACTION
+        ),
+        "swatch_width_fraction": (
+            CATEGORICAL_COMPONENT_LEGEND_SWATCH_WIDTH_FRACTION
+        ),
+        "swatch_height_fraction": (
+            CATEGORICAL_COMPONENT_LEGEND_SWATCH_HEIGHT_FRACTION
+        ),
+        "label_x_fraction": CATEGORICAL_COMPONENT_LEGEND_LABEL_X_FRACTION,
+        "label_text_size_pt": style.legend_font_size_pt,
+        "label_text_color": UNIFIED_FOREGROUND_COLOR,
+        "rows": rows,
     }
 
 
@@ -9228,7 +10046,34 @@ def _build_veusz_plot_spec(
             categorical_contract, axis_contract=axis_contract, style=style
         )
     )
-    label_load = _label_load(series)
+    component_legend_labels: list[str] = []
+    if isinstance(categorical_contract, dict):
+        if categorical_contract.get("presentation_kind") == "stacked_components":
+            component_legend_labels = [
+                str(value)
+                for value in categorical_contract.get("component_labels", [])
+            ]
+        elif categorical_contract.get("presentation_kind") == "grouped_bar_error":
+            component_legend_labels = [
+                str(value)
+                for value in categorical_contract.get("condition_labels", [])
+            ]
+    label_load = (
+        {
+            "series_count": len(component_legend_labels),
+            "max_label_length": max(
+                (len(label) for label in component_legend_labels),
+                default=0,
+            ),
+            "total_label_length": sum(
+                len(label) for label in component_legend_labels
+            ),
+            "duplicate_count": len(component_legend_labels)
+            - len(set(component_legend_labels)),
+        }
+        if component_legend_labels
+        else _label_load(series)
+    )
     layout_issues: list[dict[str, Any]] = []
     visual_extent_diagnostics = render_options.get(
         "_visual_extent_axis_diagnostics"
@@ -9265,6 +10110,11 @@ def _build_veusz_plot_spec(
     if (
         show_key
         and template_id not in STACKED_TEMPLATE_IDS
+        and not (
+            isinstance(categorical_contract, dict)
+            and categorical_contract.get("presentation_kind")
+            in {"stacked_components", "grouped_bar_error"}
+        )
         and _legend_is_dense(series)
         and not placement_is_safe
     ):
@@ -9275,10 +10125,14 @@ def _build_veusz_plot_spec(
                 "message": "A crowded curve legend remains inside the plot area.",
             }
         )
+    component_legend = _categorical_component_legend_spec(
+        categorical_contract,
+        style=style,
+    )
     legend_spec = {
         "show": show_key,
         "columns": _legend_columns(
-            series_count=len(series),
+            series_count=label_load["series_count"],
             mode=legend_mode,
             max_label_length=label_load["max_label_length"],
             figure_width_mm=width_mm,
@@ -9293,6 +10147,8 @@ def _build_veusz_plot_spec(
         "horz_manual": _optional_float(render_options.get("legend_horz_manual")),
         "vert_manual": _optional_float(render_options.get("legend_vert_manual")),
     }
+    if component_legend is not None:
+        legend_spec.update(component_legend)
     if isinstance(placement_diagnostics, dict):
         legend_spec["placement_diagnostics"] = json_safe(placement_diagnostics)
         if show_key and placement_diagnostics.get("clearance_status") != "safe":
@@ -9402,6 +10258,11 @@ def _build_veusz_plot_spec(
             {
                 "name": f"series_{index}",
                 "label": item.label,
+                "legend_key": (
+                    ""
+                    if item.presentation_kind == "categorical_components"
+                    else item.label
+                ),
                 "x_name": item.x_name,
                 "y_name": item.y_name,
                 "x_values": list(item.x_values),
@@ -9424,10 +10285,11 @@ def _build_veusz_plot_spec(
                 ),
                 "presentation_kind": item.presentation_kind,
                 "category_position": item.category_position,
-                "plot_line_hide": item.presentation_kind == "categorical_replicates",
-                "marker_line_hide": (
-                    item.presentation_kind == "categorical_replicates"
-                ),
+                "component_labels": list(item.component_labels),
+                "plot_line_hide": item.presentation_kind
+                in CATEGORICAL_SERIES_KINDS,
+                "marker_line_hide": item.presentation_kind
+                in CATEGORICAL_SERIES_KINDS,
                 "raw_points_visible": (
                     next(
                         (
@@ -9459,7 +10321,10 @@ def _add_veusz_xy_series(
     interface.To(item["name"])
     interface.Set("xData", item["x_name"])
     interface.Set("yData", item["y_name"])
-    interface.Set("key", _veusz_literal_text(item["label"]))
+    interface.Set(
+        "key",
+        _veusz_literal_text(item.get("legend_key", item["label"])),
+    )
     interface.Set("PlotLine/color", item["color"])
     interface.Set("PlotLine/style", item.get("line_style") or "solid")
     interface.Set("MarkerFill/color", item.get("marker_fill_color") or item["color"])
@@ -9993,7 +10858,10 @@ def _categorical_line_contracts(
                 width_pt=UNIFIED_LINE_WIDTH_PT,
             )
 
-    if categorical.get("presentation_kind") == "bar_error":
+    if categorical.get("presentation_kind") in {
+        "bar_error",
+        "grouped_bar_error",
+    }:
         bar_width = float(
             style.get("bar_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION)
         )
@@ -10068,6 +10936,49 @@ def _categorical_line_contracts(
                     color=keyline_color,
                     width_pt=bar_line_width,
                 )
+    elif categorical.get("presentation_kind") == "stacked_components":
+        bar_width = float(
+            style.get("bar_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION)
+        )
+        bar_line_width = float(
+            style.get("bar_line_width_pt", CATEGORICAL_BAR_LINE_WIDTH_PT)
+        )
+        for group_index, group in enumerate(groups, start=1):
+            position = float(group["position"])
+            left = position - bar_width / 2.0
+            right = position + bar_width / 2.0
+            for component_index, component in enumerate(
+                group.get("components", []),
+                start=1,
+            ):
+                lower = float(component["stack_bottom"])
+                upper = float(component["stack_top"])
+                color = str(component["keyline_color"])
+                for outline_index, (
+                    x_pos,
+                    y_pos,
+                    x_pos_2,
+                    y_pos_2,
+                ) in enumerate(
+                    (
+                        (left, lower, left, upper),
+                        (right, lower, right, upper),
+                        (left, upper, right, upper),
+                    ),
+                    start=1,
+                ):
+                    append(
+                        name=(
+                            "categorical_stack_outline_"
+                            f"{group_index}_{component_index}_{outline_index}"
+                        ),
+                        x_pos=x_pos,
+                        y_pos=y_pos,
+                        x_pos_2=x_pos_2,
+                        y_pos_2=y_pos_2,
+                        color=color,
+                        width_pt=bar_line_width,
+                    )
     return contracts
 
 
@@ -10176,6 +11087,221 @@ def _add_veusz_reference_guides(interface: Any, spec: dict[str, Any]) -> None:
         interface.To("..")
 
 
+def _categorical_component_legend_label_contracts(
+    spec: dict[str, Any],
+) -> list[dict[str, Any]]:
+    legend = spec.get("legend")
+    if (
+        not isinstance(legend, dict)
+        or legend.get("show") is not True
+        or legend.get("presentation_kind") != "segmented_component"
+    ):
+        return []
+    contracts: list[dict[str, Any]] = []
+    for index, row in enumerate(legend.get("rows", []), start=1):
+        if not isinstance(row, dict):
+            continue
+        contracts.append(
+            {
+                "name": f"component_legend_label_{index}",
+                "label": str(row.get("label") or ""),
+                "positioning": "relative",
+                "x_axis": "x",
+                "y_axis": "y",
+                "x": float(legend["label_x_fraction"]),
+                "y": float(row["y_fraction"]),
+                "align": "left",
+                "valign": "centre",
+                "angle_degrees": 0.0,
+                "margin_pt": 0.0,
+                "clip": True,
+                "text_size_pt": float(legend["label_text_size_pt"]),
+                "text_color": str(legend["label_text_color"]),
+                "text_hide": False,
+                "background_color": "white",
+                "background_transparency": 0,
+                "background_hide": True,
+                "border_color": UNIFIED_FOREGROUND_COLOR,
+                "border_width_pt": float(spec["style"]["axis_linewidth_pt"]),
+                "border_style": "solid",
+                "border_transparency": 0,
+                "border_hide": True,
+            }
+        )
+    return contracts
+
+
+def _categorical_component_legend_rect_contracts(
+    spec: dict[str, Any],
+) -> list[dict[str, Any]]:
+    legend = spec.get("legend")
+    if (
+        not isinstance(legend, dict)
+        or legend.get("show") is not True
+        or legend.get("presentation_kind") != "segmented_component"
+    ):
+        return []
+    total_width = float(legend["swatch_width_fraction"])
+    left = float(legend["swatch_left_fraction"])
+    height = float(legend["swatch_height_fraction"])
+    contracts: list[dict[str, Any]] = []
+    for row_index, row in enumerate(legend.get("rows", []), start=1):
+        if not isinstance(row, dict):
+            continue
+        colors = [str(value) for value in row.get("colors", [])]
+        if not colors:
+            continue
+        segment_width = total_width / float(len(colors))
+        for sample_index, color in enumerate(colors, start=1):
+            contracts.append(
+                {
+                    "name": (
+                        f"component_legend_swatch_{row_index}_{sample_index}"
+                    ),
+                    "positioning": "relative",
+                    "xPos": [
+                        left + (sample_index - 0.5) * segment_width
+                    ],
+                    "yPos": [float(row["y_fraction"])],
+                    "width": [segment_width],
+                    "height": [height],
+                    "clip": True,
+                    "fill_color": color,
+                    "fill_hide": False,
+                    "fill_transparency": 0,
+                    "border_hide": True,
+                }
+            )
+    return contracts
+
+
+def _categorical_grouped_bar_fill_rect_contracts(
+    spec: dict[str, Any],
+) -> list[dict[str, Any]]:
+    categorical = spec.get("categorical")
+    if (
+        not isinstance(categorical, dict)
+        or categorical.get("presentation_kind") != "grouped_bar_error"
+    ):
+        return []
+    visual_style = (
+        categorical.get("visual_style")
+        if isinstance(categorical.get("visual_style"), dict)
+        else {}
+    )
+    bar_width = float(
+        visual_style.get(
+            "bar_width_fraction",
+            CATEGORICAL_GROUPED_BAR_WIDTH_FRACTION,
+        )
+    )
+    axes = spec.get("axes") if isinstance(spec.get("axes"), dict) else {}
+    x_axis = axes.get("x") if isinstance(axes.get("x"), dict) else {}
+    y_axis = axes.get("y") if isinstance(axes.get("y"), dict) else {}
+    x_min = float(x_axis["min"])
+    x_max = float(x_axis["max"])
+    y_min = float(y_axis["min"])
+    y_max = float(y_axis["max"])
+    x_span = abs(x_max - x_min)
+    y_span = abs(y_max - y_min)
+    if x_span <= 0.0 or y_span <= 0.0 or not math.isclose(
+        y_min,
+        0.0,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    ):
+        raise StudioPreparationBlocked(
+            "invalid_grouped_bar_fill_axis",
+            "Grouped-bar fill rectangles require finite positive linear spans "
+            "and a visible y=0 baseline.",
+        )
+    contracts: list[dict[str, Any]] = []
+    for index, group in enumerate(categorical.get("groups", []), start=1):
+        if not isinstance(group, dict):
+            continue
+        position = float(group["position"])
+        mean = float(group["bar_mean"])
+        contracts.append(
+            {
+                "name": f"categorical_bar_fill_{index}",
+                "positioning": "axes",
+                "xPos": [position],
+                "yPos": [mean / 2.0],
+                # Veusz rect xPos/yPos use axis coordinates in axes mode, but
+                # width/height remain fractions of the graph rectangle.
+                "width": [bar_width / x_span],
+                "height": [mean / y_span],
+                "clip": True,
+                "fill_color": str(group["fill_color"]),
+                "fill_hide": False,
+                "fill_transparency": 0,
+                "border_hide": True,
+                "geometry": {
+                    "left": position - bar_width / 2.0,
+                    "right": position + bar_width / 2.0,
+                    "bottom": 0.0,
+                    "top": mean,
+                },
+            }
+        )
+    return contracts
+
+
+def _add_veusz_categorical_component_legend(
+    interface: Any,
+    spec: dict[str, Any],
+) -> None:
+    # Veusz paints graph children in reverse order. Labels are added first so
+    # they paint over, rather than under, the segmented colour swatches.
+    for item in _categorical_component_legend_label_contracts(spec):
+        interface.Add("label", name=item["name"], autoadd=False)
+        interface.To(item["name"])
+        interface.Set("positioning", item["positioning"])
+        interface.Set("xAxis", item["x_axis"])
+        interface.Set("yAxis", item["y_axis"])
+        interface.Set("xPos", [float(item["x"])])
+        interface.Set("yPos", [float(item["y"])])
+        interface.Set("label", _veusz_literal_text(item["label"]))
+        interface.Set("alignHorz", item["align"])
+        interface.Set("alignVert", item["valign"])
+        interface.Set("angle", float(item["angle_degrees"]))
+        interface.Set("margin", _pt(float(item["margin_pt"])))
+        interface.Set("clip", item["clip"])
+        interface.Set("hide", False)
+        interface.Set("Text/size", _pt(float(item["text_size_pt"])))
+        interface.Set("Text/color", item["text_color"])
+        interface.Set("Text/hide", item["text_hide"])
+        interface.Set("Background/color", item["background_color"])
+        interface.Set(
+            "Background/transparency",
+            item["background_transparency"],
+        )
+        interface.Set("Background/hide", item["background_hide"])
+        interface.Set("Border/color", item["border_color"])
+        interface.Set("Border/width", _pt(float(item["border_width_pt"])))
+        interface.Set("Border/style", item["border_style"])
+        interface.Set(
+            "Border/transparency",
+            item["border_transparency"],
+        )
+        interface.Set("Border/hide", item["border_hide"])
+        interface.To("..")
+    for item in _categorical_component_legend_rect_contracts(spec):
+        interface.Add("rect", name=item["name"], autoadd=False)
+        interface.To(item["name"])
+        interface.Set("positioning", item["positioning"])
+        interface.Set("xPos", item["xPos"])
+        interface.Set("yPos", item["yPos"])
+        interface.Set("width", item["width"])
+        interface.Set("height", item["height"])
+        interface.Set("clip", item["clip"])
+        interface.Set("Fill/color", item["fill_color"])
+        interface.Set("Fill/hide", item["fill_hide"])
+        interface.Set("Fill/transparency", item["fill_transparency"])
+        interface.Set("Border/hide", item["border_hide"])
+        interface.To("..")
+
+
 def _add_veusz_direct_labels(interface: Any, spec: dict[str, Any]) -> None:
     for item in spec["direct_labels"]:
         interface.Add("label", name=item["name"], autoadd=False)
@@ -10237,29 +11363,47 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
             if isinstance(x_axis.get("category_labels"), list)
             else []
         )
+        category_positions = (
+            x_axis.get("category_positions")
+            if isinstance(x_axis.get("category_positions"), list)
+            else []
+        )
+        grouped_bar = (
+            categorical.get("presentation_kind") == "grouped_bar_error"
+        )
         interface.SetDataText(
             "category_axis_labels",
             [
-                _veusz_literal_text(
-                    category_labels[index]
-                    if index < len(category_labels)
-                    else group["label"]
-                )
-                for index, group in enumerate(groups)
+                _veusz_literal_text(str(label))
+                for label in category_labels
             ],
         )
         interface.ImportString(
             "category_axis_x(numeric)",
-            "\n".join(f"{float(group['position']):.12g}" for group in groups),
+            "\n".join(
+                f"{float(position):.12g}"
+                for position in (
+                    category_positions
+                    if grouped_bar
+                    else [group["position"] for group in groups]
+                )
+            ),
         )
         interface.ImportString(
             "category_axis_y(numeric)",
-            "\n".join(
-                f"{float(group['descriptive_statistics']['median']):.12g}"
-                for group in groups
+            (
+                "\n".join("0" for _position in category_positions)
+                if grouped_bar
+                else "\n".join(
+                    f"{float(group['descriptive_statistics']['median']):.12g}"
+                    for group in groups
+                )
             ),
         )
-        if categorical.get("presentation_kind") == "bar_error":
+        if categorical.get("presentation_kind") in {
+            "bar_error",
+            "grouped_bar_error",
+        }:
             interface.ImportString(
                 "category_bar_positions(numeric)",
                 "\n".join(f"{float(group['position']):.12g}" for group in groups),
@@ -10274,6 +11418,33 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
                         for item_index in range(1, len(groups) + 1)
                     ),
                 )
+        elif categorical.get("presentation_kind") == "stacked_components":
+            interface.ImportString(
+                "category_bar_positions(numeric)",
+                "\n".join(f"{float(group['position']):.12g}" for group in groups),
+            )
+            for group_index, group in enumerate(groups, start=1):
+                components = [
+                    component
+                    for component in group.get("components", [])
+                    if isinstance(component, dict)
+                ]
+                for component_index, component in enumerate(
+                    components,
+                    start=1,
+                ):
+                    interface.ImportString(
+                        (
+                            "category_bar_component_"
+                            f"{group_index}_{component_index}(numeric)"
+                        ),
+                        "\n".join(
+                            f"{float(component['value']):.12g}"
+                            if item_index == group_index
+                            else "nan"
+                            for item_index in range(1, len(groups) + 1)
+                        ),
+                    )
     interface.Set("StyleSheet/Font/font", style["font_family"])
     interface.Set("StyleSheet/Font/size", _pt(float(style["font_size_pt"])))
     interface.Set("StyleSheet/Line/width", _pt(float(style["line_width_pt"])))
@@ -10299,13 +11470,17 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     # labels before plotters so the labels paint last and curves cannot strike
     # through their text.
     _add_veusz_direct_labels(interface, spec)
+    _add_veusz_categorical_component_legend(interface, spec)
     scalar = (
         spec.get("scalar_field") if isinstance(spec.get("scalar_field"), dict) else None
     )
     if scalar is not None:
         _add_veusz_scalar_field(interface, scalar)
     legend = spec["legend"]
-    if legend["show"]:
+    if (
+        legend["show"]
+        and legend.get("presentation_kind") != "segmented_component"
+    ):
         interface.Add("key", name="key1", autoadd=False)
         interface.To("key1")
         interface.Set("title", "")
@@ -10328,7 +11503,7 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     # replicate markers are therefore added before their filled summaries so
     # they remain the topmost data layer.
     for item in spec["series"]:
-        if item.get("presentation_kind") == "categorical_replicates":
+        if item.get("presentation_kind") in CATEGORICAL_SERIES_KINDS:
             _add_veusz_xy_series(interface, item, style)
     if categorical is not None and categorical.get("native_veusz_boxplot") is True:
         categorical_style = (
@@ -10417,7 +11592,11 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
             interface.Set("MarkersLine/hide", True)
             interface.Set("MarkersFill/hide", True)
             interface.To("..")
-    if categorical is not None and categorical.get("presentation_kind") == "bar_error":
+    if (
+        categorical is not None
+        and categorical.get("presentation_kind")
+        in {"bar_error", "grouped_bar_error"}
+    ):
         bar_style = (
             categorical.get("visual_style")
             if isinstance(categorical.get("visual_style"), dict)
@@ -10534,25 +11713,174 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
                     color=line_color,
                     width_pt=bar_line_width,
                 )
+        grouped_bar = (
+            categorical.get("presentation_kind") == "grouped_bar_error"
+        )
+        bar_inventories = (
+            [
+                (
+                    f"categorical_bar_{bar_index}",
+                    (f"category_bar_mean_{bar_index}",),
+                    [bar_fill_colors[bar_index - 1]],
+                    [bar_line_colors[bar_index - 1]],
+                )
+                for bar_index in range(1, len(bar_groups) + 1)
+            ]
+            if grouped_bar
+            else [
+                (
+                    "categorical_bar",
+                    tuple(
+                        f"category_bar_mean_{bar_index}"
+                        for bar_index in range(1, len(bar_groups) + 1)
+                    ),
+                    bar_fill_colors,
+                    bar_line_colors,
+                )
+            ]
+        )
+        for bar_name, lengths, fill_colors, line_colors in bar_inventories:
+            interface.Add("bar", name=bar_name, autoadd=False)
+            interface.To(bar_name)
+            interface.Set("direction", "vertical")
+            interface.Set("mode", "stacked")
+            interface.Set("posn", "category_bar_positions")
+            interface.Set("lengths", lengths)
+            interface.Set(
+                "barfill",
+                float(bar_style.get("native_barfill", bar_width)),
+            )
+            interface.Set("groupfill", 0.75)
+            interface.Set("errorstyle", "none")
+            interface.Set("hide", grouped_bar)
+            interface.Set(
+                "BarFill/fills",
+                [
+                    (
+                        "solid",
+                        color,
+                        False,
+                        int(
+                            bar_style.get(
+                                "bar_fill_transparency",
+                                CATEGORICAL_BAR_FILL_TRANSPARENCY,
+                            )
+                        ),
+                        "0.5pt",
+                        "solid",
+                        "5pt",
+                        "white",
+                        0,
+                        True,
+                    )
+                    for color in fill_colors
+                ],
+            )
+            interface.Set(
+                "BarLine/lines",
+                [
+                    ("solid", _pt(bar_line_width), color, True)
+                    for color in line_colors
+                ],
+            )
+            interface.To("..")
+        if grouped_bar:
+            for fill in _categorical_grouped_bar_fill_rect_contracts(spec):
+                interface.Add("rect", name=fill["name"], autoadd=False)
+                interface.To(fill["name"])
+                interface.Set("positioning", fill["positioning"])
+                interface.Set("xAxis", "x")
+                interface.Set("yAxis", "y")
+                interface.Set("xPos", fill["xPos"])
+                interface.Set("yPos", fill["yPos"])
+                interface.Set("width", fill["width"])
+                interface.Set("height", fill["height"])
+                interface.Set("clip", fill["clip"])
+                interface.Set("Fill/color", fill["fill_color"])
+                interface.Set("Fill/hide", fill["fill_hide"])
+                interface.Set(
+                    "Fill/transparency",
+                    fill["fill_transparency"],
+                )
+                interface.Set("Border/hide", fill["border_hide"])
+                interface.To("..")
+    elif (
+        categorical is not None
+        and categorical.get("presentation_kind") == "stacked_components"
+    ):
+        bar_style = (
+            categorical.get("visual_style")
+            if isinstance(categorical.get("visual_style"), dict)
+            else {}
+        )
+        bar_width = float(
+            bar_style.get("bar_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION)
+        )
+        bar_line_width = float(
+            bar_style.get("bar_line_width_pt", CATEGORICAL_BAR_LINE_WIDTH_PT)
+        )
+        bar_groups = [
+            group
+            for group in categorical.get("groups", [])
+            if isinstance(group, dict)
+        ]
+        flattened: list[tuple[int, int, dict[str, Any]]] = []
+        for group_index, group in enumerate(bar_groups, start=1):
+            position = float(group["position"])
+            left = position - bar_width / 2.0
+            right = position + bar_width / 2.0
+            components = [
+                component
+                for component in group.get("components", [])
+                if isinstance(component, dict)
+            ]
+            for component_index, component in enumerate(components, start=1):
+                flattened.append((group_index, component_index, component))
+                lower = float(component["stack_bottom"])
+                upper = float(component["stack_top"])
+                for outline_index, (
+                    x_pos,
+                    y_pos,
+                    x_pos_2,
+                    y_pos_2,
+                ) in enumerate(
+                    (
+                        (left, lower, left, upper),
+                        (right, lower, right, upper),
+                        (left, upper, right, upper),
+                    ),
+                    start=1,
+                ):
+                    _add_veusz_axis_line(
+                        interface,
+                        name=(
+                            "categorical_stack_outline_"
+                            f"{group_index}_{component_index}_{outline_index}"
+                        ),
+                        x_pos=x_pos,
+                        y_pos=y_pos,
+                        x_pos_2=x_pos_2,
+                        y_pos_2=y_pos_2,
+                        color=str(component["keyline_color"]),
+                        width_pt=bar_line_width,
+                    )
         interface.Add("bar", name="categorical_bar", autoadd=False)
         interface.To("categorical_bar")
         interface.Set("direction", "vertical")
-        # Each sparse length dataset has a finite value at exactly one category.
-        # Stacked mode therefore keeps every bar centred on its category while
-        # still allowing one fill colour per sample.
         interface.Set("mode", "stacked")
         interface.Set("posn", "category_bar_positions")
         interface.Set(
             "lengths",
             tuple(
-                f"category_bar_mean_{bar_index}"
-                for bar_index in range(1, len(bar_groups) + 1)
+                f"category_bar_component_{group_index}_{component_index}"
+                for group_index, component_index, _component in flattened
             ),
         )
         interface.Set(
-            "barfill",
-            bar_width,
+            "keys",
+            tuple("" for _item in flattened),
         )
+        interface.Set("barfill", bar_width)
         interface.Set("groupfill", 0.75)
         interface.Set("errorstyle", "none")
         interface.Set(
@@ -10560,7 +11888,7 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
             [
                 (
                     "solid",
-                    color,
+                    str(component["fill_color"]),
                     False,
                     int(
                         bar_style.get(
@@ -10575,19 +11903,24 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
                     0,
                     True,
                 )
-                for color in bar_fill_colors
+                for _group_index, _component_index, component in flattened
             ],
         )
         interface.Set(
             "BarLine/lines",
             [
-                ("solid", _pt(bar_line_width), color, True)
-                for color in bar_line_colors
+                (
+                    "solid",
+                    _pt(bar_line_width),
+                    str(component["keyline_color"]),
+                    True,
+                )
+                for _group_index, _component_index, component in flattened
             ],
         )
         interface.To("..")
     for item in spec["series"]:
-        if item.get("presentation_kind") == "categorical_replicates":
+        if item.get("presentation_kind") in CATEGORICAL_SERIES_KINDS:
             continue
         _add_veusz_xy_series(interface, item, style)
     if categorical is not None:
@@ -10606,7 +11939,8 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         # still visually empty, while leaving its styles enabled keeps the
         # provider eligible for native tick-label lookup.
         label_provider_style_hidden = (
-            categorical.get("presentation_kind") != "bar_error"
+            categorical.get("presentation_kind")
+            not in {"bar_error", "stacked_components"}
         )
         interface.Set("MarkerFill/hide", label_provider_style_hidden)
         interface.Set("MarkerLine/hide", label_provider_style_hidden)
@@ -10837,7 +12171,7 @@ def _expand_axis_for_visual_extents(
         x_values.extend(finite_x)
         y_values.extend(finite_y)
         marker = str(item.marker or "none").strip().casefold()
-        if item.presentation_kind != "categorical_replicates" and marker != "none":
+        if item.presentation_kind not in CATEGORICAL_SERIES_KINDS and marker != "none":
             item_marker_size = float(item.marker_size or style.marker_size_pt)
             item_extent_mm = (
                 item_marker_size + style.marker_line_width_pt * 0.5
@@ -10856,7 +12190,7 @@ def _expand_axis_for_visual_extents(
             for group in categorical_contract.get("groups", [])
             if isinstance(group, dict)
         ]
-        if categorical_kind == "bar_error":
+        if categorical_kind in {"bar_error", "grouped_bar_error"}:
             bar_width = float(
                 visual_style.get("bar_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION)
             )
@@ -10881,6 +12215,26 @@ def _expand_axis_for_visual_extents(
                 mean = float(group["bar_mean"])
                 error = float(group["bar_error"])
                 y_values.extend((mean - error, mean + error))
+        elif categorical_kind == "stacked_components":
+            bar_width = float(
+                visual_style.get(
+                    "bar_width_fraction",
+                    CATEGORICAL_BAR_WIDTH_FRACTION,
+                )
+            )
+            for group in groups:
+                position = float(group["position"])
+                x_values.extend(
+                    (
+                        position - bar_width * 0.5,
+                        position + bar_width * 0.5,
+                    )
+                )
+                # The shared categorical baseline is the visible y=0 axis.
+                # As with ordinary summary bars, reserve stroke clearance at
+                # the data-bearing top edge without moving the honest zero
+                # baseline below zero merely to clear the endpoint cap.
+                y_values.append(float(group["stack_total"]))
         elif categorical_kind in {"box", "box_strip"}:
             box_width = float(
                 visual_style.get("box_fill_fraction", CATEGORICAL_BOX_FILL_FRACTION)
@@ -11310,12 +12664,21 @@ def _series_label_anchor(
 def _show_veusz_key(
     *, template_id: str, render_options: dict[str, Any], series_count: int
 ) -> bool:
+    categorical_segmented_legend = (
+        render_options.get("_categorical_component_legend") is True
+        or render_options.get("_categorical_grouped_legend") is True
+    )
     if template_id in SCALAR_FIELD_TEMPLATE_IDS:
         return False
     if series_count <= 1:
-        return False
+        return categorical_segmented_legend
     if template_id in CATEGORICAL_TEMPLATE_IDS:
-        return False
+        if not categorical_segmented_legend:
+            return False
+        legend_position = (
+            str(render_options.get("legend_position") or "auto").strip().casefold()
+        )
+        return legend_position not in {"none", "hide", "hidden", "off"}
     label_mode = (
         str(render_options.get("series_label_mode") or "legend").strip().casefold()
     )

@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 
 from sciplot_core.materials_rules import get_rule, semantic_payload_from_rule
-from sciplot_core.policy import mechanical_axis_labels
+from sciplot_core.policy import DEFAULT_PALETTE_COLORS, mechanical_axis_labels
 from sciplot_core.semantic import prepare_semantic_source
 from sciplot_core.studio import _apply_domain_render_defaults
 from sciplot_core.study_model import experiment_recommendation_payload
@@ -199,3 +199,69 @@ def test_flexural_workbook_directory_uses_all_specimen_strengths(
     assert summary["sample"].tolist() == ["A", "A"]
     assert summary["flexural_strength_MPa"].tolist() == [10.0, 12.0]
     assert set(summary["strength_source"]) == {"instrument_report"}
+
+
+def test_recycled_pa_mechanical_pair_is_control_first(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "flexural"
+    source.mkdir()
+    for sample, strengths in (
+        ("m-rPA", [20.0, 22.0]),
+        ("rPA", [10.0, 12.0]),
+    ):
+        workbook = source / f"{sample}_flexural.xlsx"
+        with pd.ExcelWriter(workbook) as writer:
+            pd.DataFrame(
+                [
+                    ["Strain", "Stress"],
+                    ["%", "MPa"],
+                    ["representative", "representative"],
+                    [0.0, 0.0],
+                    [1.0, max(strengths)],
+                ]
+            ).to_excel(
+                writer,
+                sheet_name="Representative_Curve",
+                header=False,
+                index=False,
+            )
+            pd.DataFrame(
+                [
+                    [f"{sample}_1.csv", strengths[0]],
+                    [f"{sample}_2.csv", strengths[1]],
+                ],
+                columns=["Filename", "Strength (MPa)"],
+            ).to_excel(
+                writer,
+                sheet_name="All_Specimens",
+                index=False,
+            )
+            pd.DataFrame([["label", sample]]).to_excel(
+                writer,
+                sheet_name="DataStudio_Metadata",
+                header=False,
+                index=False,
+            )
+
+    prepared = prepare_semantic_source(
+        source,
+        output_dir=tmp_path / "out",
+        semantic=semantic_payload_from_rule(
+            get_rule("flexural_curve"),
+            confidence=1.0,
+        ),
+    )
+
+    processed = Path(prepared["processed_source"])
+    curve = pd.read_csv(processed, header=None)
+    summary = pd.read_csv(
+        processed.with_name(f"{processed.stem}_summary.csv")
+    )
+    assert curve.iloc[2].tolist() == ["rPA", "rPA", "m-rPA", "m-rPA"]
+    assert summary["sample"].tolist() == ["rPA", "rPA", "m-rPA", "m-rPA"]
+    assert prepared["transform_steps"][0]["parameters"]["series_order"] == [
+        "rPA",
+        "m-rPA",
+    ]
+    assert DEFAULT_PALETTE_COLORS[:2] == ("#222222", "#3568C0")
