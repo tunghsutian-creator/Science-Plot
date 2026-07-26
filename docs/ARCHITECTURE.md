@@ -215,6 +215,14 @@ frame margins. Heatmap scalar, contour, and colorbar colors are the explicit
 semantic color exception. Nonstandard geometry is not a production template
 capability and must not be introduced through a private profile lifecycle.
 
+Scientific unit typography is also global. Source parsing accepts instrument
+solidus forms, but every rendered or delivered display unit uses a
+space-separated product with Unicode negative exponents (`kJ m⁻²`, `W g⁻¹`,
+`Pa⁻¹`). Mathematical variable ratios such as `σ/σ₀` are not units and retain
+their division operator. `materials_rules.py` owns normalization and
+`style_contract.py` plus exact-current VSZ QA fail on visible unit-solidus
+drift.
+
 ## Dependency rules
 
 1. CLI and UI call orchestration/domain APIs; domain code does not depend on

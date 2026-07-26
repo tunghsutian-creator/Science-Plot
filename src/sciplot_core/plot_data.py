@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 
 from sciplot_core._utils import decode_text, existing_file_sha256, slug
+from sciplot_core.materials_rules import format_unit_label
 
 _TABLE_SUFFIXES = {".csv", ".tsv", ".txt", ".tab", ".dat", ".xlsx", ".xls"}
 _UNIT_SUFFIXES = (
@@ -286,8 +287,7 @@ def _unit_from_label(value: object) -> str:
 
 
 def _display_unit(value: object) -> str:
-    text = str(value or "").strip()
-    return {"C": "°C", "um": "μm", "µm": "μm"}.get(text, text)
+    return format_unit_label(str(value or "").strip())
 
 
 def _write_table_csv(table: pd.DataFrame, output: Path) -> None:

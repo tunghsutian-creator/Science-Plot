@@ -735,7 +735,7 @@ def _impact_condition_sources(
                     "legend_position": "none",
                     "series_label_mode": "none",
                     "x_label_override": "Sample",
-                    "y_label_override": "Impact strength (kJ/m²)",
+                    "y_label_override": "Impact strength (kJ m⁻²)",
                     "summary_statistic": "median_iqr",
                     "size": "60x55",
                 },
@@ -1274,7 +1274,7 @@ def _dsc_phase_sources(
                     "baseline": "none",
                     "stack_peak_envelope": True,
                     "x_label_override": "Temperature (°C)",
-                    "y_label_override": "Heat flow (W/g)",
+                    "y_label_override": "Heat flow (W g⁻¹)",
                     "palette_preset": "control_first_bright",
                 },
             )

@@ -218,7 +218,8 @@ def doctor_payload() -> dict[str, Any]:
             detail=(
                 f"{len(style_audit.get('implemented_veusz_templates') or [])} "
                 "production Veusz templates; unified typography, strokes, "
-                "markers, and physical frame; explicit heatmap color contract"
+                "markers, physical frame, and negative-exponent unit "
+                "expressions; explicit heatmap color contract"
             ),
         ),
         _check(
@@ -348,6 +349,10 @@ def doctor_payload() -> dict[str, Any]:
                 "implemented_veusz_templates"
             )
             or [],
+            "unit_expression_contract": style_audit.get(
+                "unit_expression_contract"
+            )
+            or {},
             "issues": style_audit.get("issues") or [],
         },
         "rule_summary": {

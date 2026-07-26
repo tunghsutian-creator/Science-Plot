@@ -991,6 +991,48 @@ def _semantic_label_report(
     }
 
 
+def _scientific_unit_expression_report(
+    audit: dict[str, Any] | None,
+) -> dict[str, Any]:
+    documents = audit.get("documents", []) if isinstance(audit, dict) else []
+    contracts = [
+        document.get("unit_expression_contract")
+        for document in documents
+        if isinstance(document, dict)
+        and isinstance(document.get("unit_expression_contract"), dict)
+    ]
+    violations = [
+        {
+            "document": str(document.get("path") or ""),
+            **violation,
+        }
+        for document in documents
+        if isinstance(document, dict)
+        for violation in (
+            document.get("unit_expression_contract", {}).get("violations", [])
+            if isinstance(document.get("unit_expression_contract"), dict)
+            else []
+        )
+        if isinstance(violation, dict)
+    ]
+    coverage_complete = bool(documents) and len(contracts) == len(documents) and all(
+        contract.get("coverage_complete") is True for contract in contracts
+    )
+    return {
+        "available": bool(contracts),
+        "coverage_complete": coverage_complete,
+        "passed": coverage_complete
+        and not violations
+        and all(contract.get("passed") is True for contract in contracts),
+        "contracts": contracts,
+        "violations": violations,
+        "evidence_model": (
+            "Every visible exact-current VSZ semantic label is checked for "
+            "solidus-based unit division; mathematical variable ratios are excluded."
+        ),
+    }
+
+
 def _panel_typography_report(
     semantic: dict[str, Any],
     pdfs: list[dict[str, Any]],
@@ -1426,6 +1468,7 @@ def _publication_qa(
     checks: list[dict[str, Any]] = []
     fixed_frame = _fixed_frame_report(veusz_audit, publication_intent)
     semantic_labels = _semantic_label_report(veusz_audit, publication_intent, pdfs)
+    scientific_units = _scientific_unit_expression_report(veusz_audit)
     panel_typography = _panel_typography_report(semantic_labels, pdfs, profile)
     accessibility = _series_accessibility_report(veusz_audit, pdfs, profile)
     vsz_strokes = _vsz_stroke_report(veusz_audit, profile)
@@ -1564,6 +1607,22 @@ def _publication_qa(
             expected="All labels required by the exact VSZ and publication intent are present as PDF text.",
             message="Axis, key, direct, exact, and confirmed panel labels must survive into the final PDF.",
             severity="error" if semantic_labels["available"] else "warning",
+        )
+    )
+    checks.append(
+        _check(
+            "scientific_unit_expression",
+            passed=bool(scientific_units["passed"]),
+            actual=scientific_units,
+            expected=(
+                "Visible units use multiplication and negative exponents "
+                "without a solidus; mathematical variable ratios remain unchanged."
+            ),
+            message=(
+                "Axis, colorbar, free, and key unit expressions must follow "
+                "the global negative-exponent product contract."
+            ),
+            severity="error" if scientific_units["available"] else "warning",
         )
     )
     checks.append(
@@ -1742,6 +1801,9 @@ def _publication_qa(
         "rendered_colour_vision_and_grayscale_accessibility": bool(accessibility["coverage_complete"]),
         "semantic_panel_and_required_label_inventory": bool(semantic_labels["coverage_complete"])
         and bool(panel_typography["coverage_complete"]),
+        "scientific_unit_expression_current_vsz": bool(
+            scientific_units["coverage_complete"]
+        ),
         "complete_stroke_coverage_for_filled_veusz_paths": bool(vsz_strokes["coverage_complete"]),
     }
     unchecked_constraints = [constraint for constraint, complete in coverage.items() if not complete]
@@ -1756,6 +1818,11 @@ def _publication_qa(
         )
     if not semantic_labels["coverage_complete"]:
         limitations.append("Semantic label coverage requires current-VSZ label inventory and final PDF text objects.")
+    if not scientific_units["coverage_complete"]:
+        limitations.append(
+            "Scientific unit-expression coverage requires a successfully "
+            "loaded exact-current VSZ semantic-label inventory."
+        )
     if not fixed_frame["coverage_complete"]:
         limitations.append("Fixed-frame coverage requires Veusz-computed bounds from the exact current VSZ document.")
     return {

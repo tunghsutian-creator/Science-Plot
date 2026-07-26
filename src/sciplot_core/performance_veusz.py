@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sciplot_core._utils import json_safe
+from sciplot_core.materials_rules import format_plot_text_units
 from sciplot_core.performance_comparison import (
     PERFORMANCE_RADAR_TEMPLATE_ID,
     PERFORMANCE_SCATTER_TEMPLATE_ID,
@@ -42,7 +43,7 @@ def _cm_from_mm(value: float) -> str:
 
 
 def _literal_text(value: object) -> str:
-    text = str(value or "").replace("\\", "\ue000")
+    text = format_plot_text_units(value).replace("\\", "\ue000")
     text = re.sub(r"([_\^\[\]\{\}])", r"\\\1", text)
     return text.replace("\ue000", "{\\backslash}")
 
@@ -777,7 +778,7 @@ def _add_axis(
 ) -> None:
     interface.Add("axis", name=name, autoadd=False)
     interface.To(name)
-    interface.Set("label", axis["label"])
+    interface.Set("label", format_plot_text_units(axis["label"]))
     if name == "y":
         interface.Set("direction", "vertical")
     interface.Set("autoMirror", False)

@@ -820,6 +820,10 @@ def test_bar_template_materializes_grouped_replicates_with_segmented_legend(
     categorical = spec["categorical"]
 
     assert result["qa_reports"][0]["issues"] == []
+    assert spec["axes"]["y"]["label"] == (
+        "Specific tensile toughness (J g⁻¹)"
+    )
+    assert "J/g" not in text
     assert categorical["presentation_kind"] == "grouped_bar_error"
     assert categorical["condition_labels"] == [
         "33% weight reduction",

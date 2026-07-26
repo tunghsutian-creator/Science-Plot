@@ -17,6 +17,7 @@ from typing import Any
 import pandas as pd
 
 from sciplot_core._utils import decode_text, file_sha256, json_safe
+from sciplot_core.materials_rules import format_unit_label
 from sciplot_core.policy import (
     DEFAULT_PALETTE_COLORS,
     PERFORMANCE_ENVELOPE_FILL_TRANSPARENCY,
@@ -244,28 +245,7 @@ def _year_text(value: str) -> str:
 
 
 def _display_unit(value: str) -> str:
-    superscript_map = str.maketrans(
-        {
-            "0": "⁰",
-            "1": "¹",
-            "2": "²",
-            "3": "³",
-            "4": "⁴",
-            "5": "⁵",
-            "6": "⁶",
-            "7": "⁷",
-            "8": "⁸",
-            "9": "⁹",
-            "+": "⁺",
-            "-": "⁻",
-            "−": "⁻",
-        }
-    )
-    return re.sub(
-        r"\^([+\-−]?\d+)",
-        lambda match: match.group(1).translate(superscript_map),
-        value,
-    )
+    return format_unit_label(value)
 
 
 def _finite_float(value: object, *, field: str, row_number: int) -> float:

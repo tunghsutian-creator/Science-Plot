@@ -4,6 +4,10 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core._utils import file_sha256
+from sciplot_core.materials_rules import (
+    scientific_unit_expression_contract,
+    unit_solidus_violations,
+)
 
 def _rounded(value: object, digits: int = 6) -> float:
     return round(float(value), digits)
@@ -593,6 +597,16 @@ def _audit_document(path: Path) -> dict[str, Any]:
     if performance_document:
         for graph in graphs:
             graph["role"] = "performance_plot"
+    unit_expression_violations = [
+        {
+            "path": str(item.get("path") or ""),
+            "role": str(item.get("role") or ""),
+            "text": str(item.get("text") or ""),
+            **violation,
+        }
+        for item in semantic_labels
+        for violation in unit_solidus_violations(item.get("text"))
+    ]
     return {
         "kind": "sciplot_veusz_document_audit",
         "version": 1,
@@ -606,6 +620,12 @@ def _audit_document(path: Path) -> dict[str, Any]:
         "categorical_graphs": categorical_graphs,
         "auxiliaries": auxiliaries,
         "semantic_labels": semantic_labels,
+        "unit_expression_contract": {
+            **scientific_unit_expression_contract(),
+            "coverage_complete": True,
+            "passed": not unit_expression_violations,
+            "violations": unit_expression_violations,
+        },
         "series": series,
         "performance_comparison": performance_document,
         "color_scales": color_scales,

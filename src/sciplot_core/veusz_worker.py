@@ -124,6 +124,16 @@ def inspect_document_state(document_path: Path) -> dict[str, Any]:
             app.quit()
 
 
+def migrate_unit_labels(document_path: Path) -> dict[str, Any]:
+    """Apply the global unit-expression contract to one exact-current VSZ."""
+
+    from sciplot_core.studio import migrate_studio_document_unit_labels
+
+    return migrate_studio_document_unit_labels(
+        document_path.expanduser().resolve()
+    )
+
+
 def _exact_numeric_token(value: object) -> str:
     number = float(value)
     if math.isnan(number):
@@ -2355,6 +2365,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Reopen a VSZ and materialize its widget settings.",
     )
     inspect_state_parser.add_argument("document", type=Path)
+    migrate_unit_labels_parser = subparsers.add_parser(
+        "migrate-unit-labels",
+        help="Normalize visible unit labels in an existing Veusz document.",
+    )
+    migrate_unit_labels_parser.add_argument("document", type=Path)
     return parser
 
 
@@ -2374,6 +2389,8 @@ def main(argv: list[str] | None = None) -> int:
         payload = audit_spec_data(args.document, args.spec)
     elif args.command == "inspect-document-state":
         payload = inspect_document_state(args.document)
+    elif args.command == "migrate-unit-labels":
+        payload = migrate_unit_labels(args.document)
     else:
         payload = save_spec(args.document, args.spec)
     print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
@@ -2391,5 +2408,6 @@ __all__ = [
     "export_request",
     "inspect_document_state",
     "main",
+    "migrate_unit_labels",
     "save_spec",
 ]

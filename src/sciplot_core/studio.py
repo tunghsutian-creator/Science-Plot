@@ -35,9 +35,12 @@ from sciplot_core.delivery import build_delivery_package
 from sciplot_core.launchers import portable_sciplot_prelude, portable_vsz_finder
 from sciplot_core.materials_rules import (
     compute_analysis_metrics,
+    format_plot_text_units,
+    format_unit_label,
     get_rule,
     resolve_rule_template,
     semantic_payload_from_rule,
+    unit_solidus_violations,
 )
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY
@@ -865,6 +868,117 @@ def atomic_save_veusz_document(document: Any, target: Path) -> dict[str, Any]:
     finally:
         if staged_path.exists():
             staged_path.unlink()
+
+
+def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:
+    """Apply the global unit-expression contract through native Veusz settings.
+
+    This maintenance adapter is deliberately narrower than regeneration: it
+    changes only semantic text settings that contain a recognized unit
+    solidus, preserves data and all other document settings, and saves through
+    the same atomic VSZ lifecycle used by Studio.
+    """
+
+    resolved = document_path.expanduser().resolve()
+    if not resolved.is_file() or resolved.suffix.casefold() != ".vsz":
+        raise FileNotFoundError(f"Veusz document not found: {resolved}")
+
+    from sciplot_core.veusz_runtime import (
+        needs_veusz_worker_process,
+        veusz_worker_environment,
+    )
+
+    if needs_veusz_worker_process():
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "sciplot_core.veusz_worker",
+                "migrate-unit-labels",
+                str(resolved),
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+            env=veusz_worker_environment(),
+        )
+        return json.loads(result.stdout)
+
+    _prefer_offscreen_export_platform()
+    _ensure_veusz_on_path()
+    from PyQt6 import QtWidgets
+    from veusz import dataimport, document, widgets
+    from veusz.document.operations import OperationSettingSet
+
+    _ = dataimport, widgets
+    existing_app = QtWidgets.QApplication.instance()
+    app = existing_app or QtWidgets.QApplication([])
+    try:
+        loaded = document.Document()
+        loaded.load(str(resolved))
+        candidates: list[tuple[str, Any, str, str]] = []
+
+        def collect(widget_path: str, widget: Any) -> None:
+            settings = getattr(getattr(widget, "settings", None), "setdict", {})
+            for setting_name in ("label", "title", "key"):
+                setting = settings.get(setting_name)
+                if setting is None:
+                    continue
+                current = str(setting.get() or "")
+                if not unit_solidus_violations(current):
+                    continue
+                updated = format_plot_text_units(current)
+                if updated != current:
+                    candidates.append(
+                        (
+                            f"{widget_path.rstrip('/')}/{setting_name}",
+                            setting,
+                            current,
+                            updated,
+                        )
+                    )
+
+        loaded.walkNodes(collect, nodetypes=("widget",))
+        before_sha256 = existing_file_sha256(resolved)
+        if not candidates:
+            return {
+                "kind": "sciplot_unit_label_migration",
+                "version": 1,
+                "status": "unchanged",
+                "document": str(resolved),
+                "document_sha256_before": before_sha256,
+                "document_sha256_after": before_sha256,
+                "operation_count": 0,
+                "operations": [],
+                "save": None,
+            }
+
+        operations: list[dict[str, Any]] = []
+        for setting_path, setting, current, updated in candidates:
+            normalized = setting.normalize(updated)
+            loaded.applyOperation(OperationSettingSet(setting_path, normalized))
+            operations.append(
+                {
+                    "setting_path": setting_path,
+                    "before": current,
+                    "after": str(normalized),
+                }
+            )
+        save = atomic_save_veusz_document(loaded, resolved)
+        return {
+            "kind": "sciplot_unit_label_migration",
+            "version": 1,
+            "status": "migrated",
+            "document": str(resolved),
+            "document_sha256_before": before_sha256,
+            "document_sha256_after": existing_file_sha256(resolved),
+            "operation_count": len(operations),
+            "operations": operations,
+            "save": save,
+        }
+    finally:
+        if existing_app is None:
+            app.quit()
 
 
 def qt_smoke_payload(document_path: Path | None = None) -> dict[str, Any]:
@@ -2059,7 +2173,7 @@ def _impact_point_line_series_from_source(
         series,
         {
             "x_label": "Sample",
-            "y_label": "Impact strength (kJ/m²)",
+            "y_label": "Impact strength (kJ m⁻²)",
             "presentation_kind": "impact_point_line_raw_overlay",
             "category_labels": list(sample_order),
             "category_positions": [
@@ -4424,6 +4538,8 @@ def _canonical_terminal_axis_unit(
     registered: str,
 ) -> str:
     unit = str(visible_unit or "").strip()
+    if format_unit_label(unit) == format_unit_label(registered):
+        return registered
     normalized = (
         unit.replace("$", "")
         .replace("{", "")
@@ -6050,7 +6166,7 @@ def _mapping_series_coverage(
 def _veusz_axis_label(value: object) -> str:
     """Translate abstract/Matplotlib labels into unambiguous Veusz text."""
 
-    label = str(value or "").replace("$", "")
+    label = format_plot_text_units(str(value or "").replace("$", ""))
     superscript_map = str.maketrans(
         {
             "0": "⁰",
@@ -6085,7 +6201,7 @@ def _veusz_axis_label(value: object) -> str:
 def _veusz_literal_text(value: object) -> str:
     """Escape sample/category text so Veusz does not treat identifiers as math markup."""
 
-    text = str(value or "").replace("\\", "\ue000")
+    text = format_plot_text_units(value).replace("\\", "\ue000")
     text = re.sub(r"([_\^\[\]\{\}])", r"\\\1", text)
     return text.replace("\ue000", "{\\backslash}")
 
@@ -6118,7 +6234,7 @@ def _categorical_metric_label(value: object) -> str:
 def _categorical_axis_label(metric: str, unit: str) -> str:
     if not metric:
         metric = "Value"
-    normalized_unit = unit.strip()
+    normalized_unit = format_unit_label(unit.strip())
     if normalized_unit.casefold() in {"", "1", "a.u.", "au"}:
         return metric
     return f"{metric} ({normalized_unit})"
@@ -7207,29 +7323,38 @@ def _series_label_from_column(
 
 def _is_unit_label(label: str) -> bool:
     unit = label.strip().strip("[]").strip()
-    return unit in {
+    normalized = format_unit_label(unit).casefold()
+    return normalized in {
         "1",
         "%",
+        "% °c⁻¹",
         "a.u.",
         "au",
         "c",
         "cm^-1",
+        "cm⁻¹",
         "count",
         "degree",
         "degc",
         "hz",
         "kj/m2",
+        "kj m⁻²",
         "min",
         "mins",
         "mv",
         "mn·m",
         "mpa",
+        "mpa min⁻¹",
         "mpa·s",
+        "mj m⁻³",
         "nm",
         "nm^-1",
+        "nm⁻¹",
         "pa",
+        "pa⁻¹",
         "pa·s",
         "rad/s",
+        "rad s⁻¹",
         "s",
         "sec",
         "seconds",
@@ -7238,6 +7363,7 @@ def _is_unit_label(label: str) -> bool:
         "μm",
         "°c",
         "w/g",
+        "w g⁻¹",
     }
 
 
@@ -7647,7 +7773,7 @@ def _apply_domain_render_defaults(
                 updated.setdefault("x_ticks", category_positions)
             overlay_defaults = {
                 "x_label_override": "Sample",
-                "y_label_override": "Impact strength (kJ/m²)",
+                "y_label_override": "Impact strength (kJ m⁻²)",
                 "size": "60x55",
                 "legend_position": "upper_left",
                 "series_label_mode": "legend",
@@ -7746,7 +7872,7 @@ def _apply_domain_render_defaults(
             if thickness_labels:
                 updated["x_label_override"] = "Sample / thickness (mm)"
             if "y_label_override" not in explicit_options:
-                updated["y_label_override"] = "Impact strength (kJ/m²)"
+                updated["y_label_override"] = "Impact strength (kJ m⁻²)"
     if template_id in STACKED_TEMPLATE_IDS and _looks_like_wavenumber_axis(axis_info):
         detected_y_label = str(axis_info.get("y_label") or "").strip()
         series_count = int(axis_info.get("series_count") or 0)
@@ -9114,7 +9240,13 @@ def _looks_like_frequency_axis(axis_info: dict[str, Any]) -> bool:
             "rule_id",
         )
     ).casefold()
-    return "frequency" in text or "angular" in text or "rad/s" in text or "hz" in text
+    return (
+        "frequency" in text
+        or "angular" in text
+        or "rad/s" in text
+        or "rad s⁻¹" in text
+        or "hz" in text
+    )
 
 
 def _looks_like_tensile_axis(axis_info: dict[str, Any]) -> bool:
@@ -11213,7 +11345,10 @@ def _add_veusz_scalar_field(interface: Any, scalar: dict[str, Any]) -> None:
             interface.Set("vertManual", float(scalar["colorbar_vert_manual"]))
         interface.Set("width", _cm_from_mm(float(scalar["colorbar_width_mm"])))
         interface.Set("height", _cm_from_mm(float(scalar["colorbar_height_mm"])))
-        interface.Set("label", str(scalar.get("z_label") or "Z"))
+        interface.Set(
+            "label",
+            _veusz_axis_label(str(scalar.get("z_label") or "Z")),
+        )
         interface.Set("autoMirror", False)
         interface.Set("outerticks", True)
         foreground_color = str(
@@ -12755,7 +12890,7 @@ def _add_veusz_axis(
 ) -> None:
     interface.Add("axis", name=axis, autoadd=False)
     interface.To(axis)
-    interface.Set("label", axis_spec["label"])
+    interface.Set("label", _veusz_axis_label(axis_spec["label"]))
     if axis == "y":
         interface.Set("direction", "vertical")
     if axis_spec.get("mode") == "labels":
@@ -13938,6 +14073,7 @@ __all__ = [
     "ensure_veusz_qsettings_compat",
     "export_studio_document",
     "maybe_reexec_with_qt_runtime",
+    "migrate_studio_document_unit_labels",
     "prepare_studio_document",
     "publish_standalone_export_receipt",
     "publish_studio_export_run",

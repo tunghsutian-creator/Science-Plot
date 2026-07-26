@@ -251,6 +251,12 @@ Journal/Year 放在右侧保留的 60x55 mm 索引区。输出可编辑 VSZ、PD
 `src/sciplot_core/policy.py` 统一定义，并与 vendored `plot_contract.json` 保持一致。
 模板只拥有图形语义和允许编辑的选项；热图标量色带、等高线和色条配色是显式的语义例外。
 
+单位显示也属于全局绘图契约：仪器输入仍兼容 `/`，但坐标轴、色条、图内文字、图例
+单位限定、交付绘图数据和分析指标统一使用“单位因子相乘 + Unicode 负上标”，不显示
+单位除号，例如 `kJ/m2 → kJ m⁻²`、`W/g → W g⁻¹`、`1/Pa → Pa⁻¹`。
+无量纲变量比值不是单位，`σ/σ₀`、`G′/G′ₘ` 等数学表达保留除号。exact-current
+VSZ 的 publication QA 会把违反这一规则的可见单位文字作为阻塞问题。
+
 ## 可选 AI
 
 AI dock 只处理当前选中的受支持对象。模型只能提出经过验证的 `set_setting` 操作；过期

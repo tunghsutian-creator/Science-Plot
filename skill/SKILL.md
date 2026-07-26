@@ -246,6 +246,14 @@ ordinary frame, size, export, and delivery defaults. Templates and recipes may
 not own private hard-style constants. Heatmap scalar, contour, and colorbar
 colors are the explicit semantic color exception.
 
+Visible unit typography is a global plot contract. Accept solidus notation
+from instrument inputs, but render and deliver units as products with Unicode
+negative exponents, for example `kJ m⁻²`, `W g⁻¹`, and `Pa⁻¹`. Apply this to
+axes, colorbars, free plot text, legend/key unit qualifiers, plot-data unit
+rows, and analysis metric units. Do not rewrite dimensionless mathematical
+ratios such as `σ/σ₀` or `G′/G′ₘ`. Exact-current VSZ QA must fail when a visible
+unit still uses a solidus.
+
 For raw input, ``--out`` names the dedicated visible handoff directory.  When
 omitted, create ``SOURCE_SciPlot/`` beside the source.  Put runtime evidence,
 history, raw snapshots, manifests, and QA under the sibling hidden ``.sciplot/``

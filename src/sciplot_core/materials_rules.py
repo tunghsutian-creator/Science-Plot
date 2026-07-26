@@ -25,6 +25,11 @@ from sciplot_core.policy import (
     RHEOLOGY_FREQUENCY_RENDER_OPTIONS,
     RHEOLOGY_FREQUENCY_X_LABEL,
     RHEOLOGY_TEMPERATURE_RENDER_OPTIONS,
+    SCIENTIFIC_UNIT_DIVISION_STYLE,
+    SCIENTIFIC_UNIT_EXPONENT_STYLE,
+    SCIENTIFIC_UNIT_EXPRESSION_CONTRACT_VERSION,
+    SCIENTIFIC_UNIT_FACTOR_SEPARATOR,
+    SCIENTIFIC_UNIT_SOLIDUS_ALLOWED,
     TENSILE_X_AXIS_LABEL,
     TENSILE_Y_AXIS_LABEL,
     TORQUE_CURVE_RENDER_OPTIONS,
@@ -106,7 +111,7 @@ class AnalysisSpec:
             "metric": self.metric,
             "method": self.method,
             "required_inputs": list(self.required_inputs),
-            "unit": self.unit,
+            "unit": format_unit_label(self.unit),
         }
 
 
@@ -201,19 +206,467 @@ _UNIT_RULES = {
     ("nm^-1", "A^-1"): UnitRule("nm^-1", "A^-1", 0.1),
 }
 
-_UNIT_LABELS = {
-    "C": "°C",
-    "um": "µm",
-    "mPa.s": "mPa·s",
-    "N·m": "N·m",
-    "Pa.s": "Pa·s",
-    "cm^-1": "cm$^{-1}$",
-    "nm^-1": "nm$^{-1}$",
-    "A^-1": "Å$^{-1}$",
-    "sigma/sigma0": "$\\sigma/\\sigma_0$",
+_DIMENSIONLESS_EXPRESSION_LABELS = {
     "G/G0": "$G(t)/G_0$",
-    "1/Pa": "Pa$^{-1}$",
+    "sigma/sigma0": "$\\sigma/\\sigma_0$",
+    "$\\sigma/\\sigma_0$": "$\\sigma/\\sigma_0$",
+    "\\sigma/\\sigma_{0}": "\\sigma/\\sigma_{0}",
+    "σ/σ₀": "σ/σ₀",
+    "G′/G′ₘ": "G′/G′ₘ",
+    "\\italic{G}′/\\italic{G}′_{m}": "\\italic{G}′/\\italic{G}′_{m}",
 }
+_UNIT_WHOLE_ALIASES = {
+    "A^-1": "Å⁻¹",
+    "A$^{-1}$": "Å⁻¹",
+    "C": "°C",
+    "Pa.s": "Pa·s",
+    "mPa.s": "mPa·s",
+    "um": "µm",
+    "μm": "µm",
+    "µm": "µm",
+}
+_SUPERSCRIPT_DIGITS = str.maketrans(
+    {
+        "0": "⁰",
+        "1": "¹",
+        "2": "²",
+        "3": "³",
+        "4": "⁴",
+        "5": "⁵",
+        "6": "⁶",
+        "7": "⁷",
+        "8": "⁸",
+        "9": "⁹",
+        "+": "⁺",
+        "-": "⁻",
+        "−": "⁻",
+    }
+)
+_PLAIN_SUPERSCRIPTS = str.maketrans(
+    {
+        "⁰": "0",
+        "¹": "1",
+        "²": "2",
+        "³": "3",
+        "⁴": "4",
+        "⁵": "5",
+        "⁶": "6",
+        "⁷": "7",
+        "⁸": "8",
+        "⁹": "9",
+        "⁺": "+",
+        "⁻": "-",
+    }
+)
+_SUPERSCRIPT_CHARACTERS = "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻"
+_UNIT_BASE_SYMBOLS = frozenset(
+    {
+        "%",
+        "1",
+        "A",
+        "Bq",
+        "C",
+        "Da",
+        "F",
+        "Gy",
+        "H",
+        "Hz",
+        "J",
+        "K",
+        "L",
+        "N",
+        "Pa",
+        "S",
+        "Sv",
+        "T",
+        "V",
+        "W",
+        "Wb",
+        "bar",
+        "cd",
+        "count",
+        "counts",
+        "d",
+        "degree",
+        "eV",
+        "g",
+        "h",
+        "kat",
+        "lm",
+        "lx",
+        "m",
+        "min",
+        "mol",
+        "rad",
+        "rpm",
+        "s",
+        "sr",
+        "Å",
+        "Ω",
+        "°C",
+        "°F",
+    }
+)
+_UNIT_PREFIXES = (
+    "da",
+    "Y",
+    "Z",
+    "E",
+    "P",
+    "T",
+    "G",
+    "M",
+    "k",
+    "h",
+    "d",
+    "c",
+    "m",
+    "µ",
+    "μ",
+    "u",
+    "n",
+    "p",
+    "f",
+    "a",
+    "z",
+    "y",
+)
+_UNIT_EXPONENT_RE = re.compile(
+    rf"^(.*?)(?:"
+    rf"\$\^\{{([+\-−]?\d+)\}}\$"
+    rf"|\^\{{([+\-−]?\d+)\}}"
+    rf"|\^([+\-−]?\d+)"
+    rf"|([{_SUPERSCRIPT_CHARACTERS}]+)"
+    rf")$"
+)
+_UNIT_TEXT_EDGE_PUNCTUATION = frozenset("\"'“”‘’,;:")
+_PLOT_TEXT_TOKEN_RE = re.compile(r"\S+")
+_BRACKET_PAIRS = {"(": ")", "[": "]"}
+_BRACKET_OPEN_BY_CLOSE = {close: open_ for open_, close in _BRACKET_PAIRS.items()}
+
+
+def _unicode_exponent(value: int) -> str:
+    return str(value).translate(_SUPERSCRIPT_DIGITS)
+
+
+def _split_unit_factor_exponent(
+    value: object,
+    *,
+    allow_plain_power: bool,
+) -> tuple[str, int]:
+    factor = str(value or "").strip()
+    match = _UNIT_EXPONENT_RE.fullmatch(factor)
+    if match is not None:
+        exponent_text = next(
+            group for group in match.groups()[1:] if group is not None
+        )
+        if all(character in _SUPERSCRIPT_CHARACTERS for character in exponent_text):
+            exponent_text = exponent_text.translate(_PLAIN_SUPERSCRIPTS)
+        return match.group(1), int(exponent_text.replace("−", "-"))
+    if allow_plain_power:
+        plain = re.fullmatch(r"(.+?)([23])", factor)
+        if plain is not None and _is_known_unit_symbol(plain.group(1)):
+            return plain.group(1), int(plain.group(2))
+    return factor, 1
+
+
+def _normalize_unit_symbol(value: object) -> str:
+    symbol = str(value or "").strip()
+    return _UNIT_WHOLE_ALIASES.get(symbol, symbol)
+
+
+def _format_unit_factor(
+    value: object,
+    *,
+    invert: bool = False,
+    allow_plain_power: bool = False,
+) -> str:
+    symbol, exponent = _split_unit_factor_exponent(
+        value,
+        allow_plain_power=allow_plain_power,
+    )
+    symbol = _normalize_unit_symbol(symbol)
+    resolved_exponent = -exponent if invert else exponent
+    return (
+        symbol
+        if resolved_exponent == 1
+        else f"{symbol}{_unicode_exponent(resolved_exponent)}"
+    )
+
+
+def _format_existing_unit_product(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    parts = re.split(r"(\s+|[·⋅×*])", text)
+    formatted: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        if part.isspace() or part in {"·", "⋅", "×", "*"}:
+            formatted.append(part)
+        else:
+            formatted.append(
+                _format_unit_factor(part, allow_plain_power=True)
+            )
+    return "".join(formatted)
+
+
+def _denominator_unit_factors(value: object) -> list[str]:
+    text = str(value or "").strip().strip("()[]{} ")
+    return [
+        factor
+        for factor in re.split(r"(?:\s+|[·⋅×*])", text)
+        if factor
+    ]
+
+
+def _is_known_unit_symbol(value: object) -> bool:
+    symbol = _normalize_unit_symbol(value)
+    if symbol in _UNIT_BASE_SYMBOLS:
+        return True
+    if symbol.casefold() in {
+        "a.u.",
+        "au",
+        "degc",
+        "fraction",
+        "mins",
+        "sec",
+        "seconds",
+    }:
+        return True
+    return any(
+        symbol.startswith(prefix)
+        and symbol[len(prefix) :] in _UNIT_BASE_SYMBOLS
+        for prefix in _UNIT_PREFIXES
+        if len(symbol) > len(prefix)
+    )
+
+
+def _is_known_unit_factor(value: object) -> bool:
+    factor = str(value or "").strip()
+    symbol, _exponent = _split_unit_factor_exponent(
+        factor,
+        allow_plain_power=True,
+    )
+    return _is_known_unit_symbol(symbol)
+
+
+def _looks_like_unit_solidus_expression(value: object) -> bool:
+    text = str(value or "").strip().strip("()[] ")
+    if "/" not in text or "\\" in text or "_" in text:
+        return False
+    slash_parts = [part.strip() for part in text.split("/")]
+    if len(slash_parts) < 2 or any(not part for part in slash_parts):
+        return False
+    factors: list[str] = []
+    for part in slash_parts:
+        factors.extend(_denominator_unit_factors(part))
+    return bool(factors) and all(
+        factor == "1" or _is_known_unit_factor(factor)
+        for factor in factors
+    )
+
+
+def _balanced_bracket_spans(value: str) -> list[tuple[int, int]]:
+    stack: list[tuple[str, int]] = []
+    spans: list[tuple[int, int]] = []
+    for index, character in enumerate(value):
+        if character in _BRACKET_PAIRS:
+            stack.append((character, index))
+            continue
+        expected_open = _BRACKET_OPEN_BY_CLOSE.get(character)
+        if expected_open is None or not stack:
+            continue
+        open_character, open_index = stack[-1]
+        if open_character != expected_open:
+            continue
+        stack.pop()
+        content_start = open_index + 1
+        if _looks_like_unit_solidus_expression(
+            value[content_start:index]
+        ):
+            spans.append((content_start, index))
+    return spans
+
+
+def _trim_unit_text_candidate(
+    value: str,
+    start: int,
+    end: int,
+) -> tuple[int, int]:
+    while start < end and value[start] in _UNIT_TEXT_EDGE_PUNCTUATION:
+        start += 1
+    while start < end and value[end - 1] in _UNIT_TEXT_EDGE_PUNCTUATION:
+        end -= 1
+    return start, end
+
+
+def _unit_solidus_text_spans(value: object) -> list[tuple[int, int]]:
+    """Locate unit-only solidus expressions anywhere in visible plot text."""
+
+    text = str(value or "")
+    if not text or "/" not in text:
+        return []
+    if _looks_like_unit_solidus_expression(text):
+        return [(0, len(text))]
+
+    bracket_spans = _balanced_bracket_spans(text)
+    # Prefer outer unit-bearing qualifiers.  This lets ``(W/(m K))`` replace
+    # the complete outer content instead of leaving denominator parentheses
+    # behind, while still supporting a nested ``[K/min]`` qualifier in prose.
+    selected: list[tuple[int, int]] = []
+    for span in sorted(
+        bracket_spans,
+        key=lambda item: (item[0], -(item[1] - item[0])),
+    ):
+        if any(
+            left <= span[0] and span[1] <= right
+            for left, right in selected
+        ):
+            continue
+        selected.append(span)
+
+    tokens = list(_PLOT_TEXT_TOKEN_RE.finditer(text))
+    candidates: list[tuple[int, int]] = []
+    maximum_window_tokens = 8
+    for left_index, left_token in enumerate(tokens):
+        for right_index in range(
+            left_index,
+            min(len(tokens), left_index + maximum_window_tokens),
+        ):
+            right_token = tokens[right_index]
+            start, end = _trim_unit_text_candidate(
+                text,
+                left_token.start(),
+                right_token.end(),
+            )
+            candidate = text[start:end]
+            if (
+                "/" not in candidate
+                or "\n" in candidate
+                or "\t" in candidate
+                or not _looks_like_unit_solidus_expression(candidate)
+            ):
+                continue
+            candidates.append((start, end))
+
+    slash_positions = [
+        index for index, character in enumerate(text) if character == "/"
+    ]
+    for slash_position in slash_positions:
+        if any(left <= slash_position < right for left, right in selected):
+            continue
+        covering = [
+            span
+            for span in candidates
+            if span[0] <= slash_position < span[1]
+            and not any(
+                max(span[0], left) < min(span[1], right)
+                for left, right in selected
+            )
+        ]
+        if not covering:
+            continue
+        selected.append(
+            max(
+                covering,
+                key=lambda item: (item[1] - item[0], -item[0]),
+            )
+        )
+    return sorted(selected)
+
+
+def format_unit_label(unit: str) -> str:
+    """Return the global scientific display form for one unit expression.
+
+    Input recognition remains compatible with instrument solidus notation,
+    while every display/output unit uses a product and negative exponents.
+    Dimensionless mathematical ratios are expressions, not units, and retain
+    their division operator.
+    """
+
+    text = str(unit or "").strip()
+    if not text:
+        return ""
+    if text in _DIMENSIONLESS_EXPRESSION_LABELS:
+        return _DIMENSIONLESS_EXPRESSION_LABELS[text]
+    if text in _UNIT_WHOLE_ALIASES:
+        return _UNIT_WHOLE_ALIASES[text]
+    if "/" not in text:
+        return _format_existing_unit_product(text)
+
+    slash_parts = [part.strip() for part in text.split("/")]
+    numerator = _format_existing_unit_product(slash_parts[0])
+    factors = [] if numerator == "1" else [numerator]
+    for denominator in slash_parts[1:]:
+        factors.extend(
+            _format_unit_factor(
+                factor,
+                invert=True,
+                allow_plain_power=True,
+            )
+            for factor in _denominator_unit_factors(denominator)
+        )
+    return SCIENTIFIC_UNIT_FACTOR_SEPARATOR.join(
+        factor for factor in factors if factor
+    )
+
+
+def format_plot_text_units(value: object) -> str:
+    """Normalize unit qualifiers in plot text without rewriting variable ratios."""
+
+    text = str(value or "")
+    for start, end in reversed(_unit_solidus_text_spans(text)):
+        text = f"{text[:start]}{format_unit_label(text[start:end])}{text[end:]}"
+    return text
+
+
+def unit_solidus_violations(value: object) -> list[dict[str, str]]:
+    """Return every unit-only solidus expression still visible in plot text."""
+
+    text = str(value or "")
+    return [
+        {
+            "expression": text[start:end],
+            "replacement": format_unit_label(text[start:end]),
+        }
+        for start, end in _unit_solidus_text_spans(text)
+    ]
+
+
+def scientific_unit_expression_contract() -> dict[str, Any]:
+    """Return the source-controlled unit typography section of the plot contract."""
+
+    return {
+        "kind": "sciplot_scientific_unit_expression_contract",
+        "version": SCIENTIFIC_UNIT_EXPRESSION_CONTRACT_VERSION,
+        "division_style": SCIENTIFIC_UNIT_DIVISION_STYLE,
+        "factor_separator": "space",
+        "exponent_style": SCIENTIFIC_UNIT_EXPONENT_STYLE,
+        "solidus_allowed_in_display_units": SCIENTIFIC_UNIT_SOLIDUS_ALLOWED,
+        "input_solidus_compatibility": True,
+        "dimensionless_variable_ratios_are_units": False,
+        "scope": [
+            "axis_labels",
+            "colorbar_labels",
+            "free_plot_labels",
+            "legend_and_key_unit_qualifiers",
+            "delivered_plot_data_units",
+            "analysis_metric_units",
+        ],
+        "examples": {
+            "kJ/m2": "kJ m⁻²",
+            "W/g": "W g⁻¹",
+            "%/C": "% °C⁻¹",
+            "1/Pa": "Pa⁻¹",
+            "rad/s": "rad s⁻¹",
+        },
+        "excluded_expression_examples": [
+            "σ/σ₀",
+            "G′/G′ₘ",
+        ],
+    }
 
 
 def convert_value(value: float, source_unit: str, target_unit: str) -> float:
@@ -223,14 +676,6 @@ def convert_value(value: float, source_unit: str, target_unit: str) -> float:
     if rule is None:
         raise ValueError(f"No SciPlot material unit conversion from `{source_unit}` to `{target_unit}`.")
     return float(value) * rule.factor + rule.offset
-
-
-def format_unit_label(unit: str) -> str:
-    if not unit:
-        return ""
-    if unit in _UNIT_LABELS:
-        return _UNIT_LABELS[unit]
-    return re.sub(r"\^-?(\d+)", lambda match: f"$^{{-{match.group(1)}}}$", unit)
 
 
 def _rule(
@@ -557,7 +1002,7 @@ RULES: tuple[SemanticRule, ...] = (
         "rheology_dma",
         "curve",
         TIME_AXIS,
-        AxisSpec("Creep compliance", "1/Pa", "Creep compliance, J(t) (Pa$^{-1}$)", aliases=("creep compliance",)),
+        AxisSpec("Creep compliance", "1/Pa", "Creep compliance, J(t) (Pa⁻¹)", aliases=("creep compliance",)),
         keywords=("creep", "creeptest", "creepcompliance"),
         path_keywords=("creep",),
         analysis=(
@@ -706,12 +1151,12 @@ RULES: tuple[SemanticRule, ...] = (
         "metrics_swelling",
         "box_strip",
         AxisSpec("Sample", "", "Sample", aliases=("sample",)),
-        AxisSpec("Impact strength", "kJ/m2", "Impact strength (kJ/m²)", aliases=("impact strength", "冲击")),
+        AxisSpec("Impact strength", "kJ/m2", "Impact strength (kJ m⁻²)", aliases=("impact strength", "冲击")),
         keywords=("impact", "冲击"),
         render_options={
             **CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
             "x_label_override": "Sample",
-            "y_label_override": "Impact strength (kJ/m²)",
+            "y_label_override": "Impact strength (kJ m⁻²)",
             "summary_statistic": "median_iqr",
         },
         analysis=(
@@ -739,7 +1184,7 @@ RULES: tuple[SemanticRule, ...] = (
         "thermal",
         "curve",
         RHEOLOGY_X_TEMPERATURE,
-        AxisSpec("Heat flow", "W/g", "Heat flow (W/g)", aliases=("heat flow", "dsc")),
+        AxisSpec("Heat flow", "W/g", "Heat flow (W g⁻¹)", aliases=("heat flow", "dsc")),
         keywords=("dsc", "heatflow", "heat flow"),
         column_aliases=("heat flow",),
         analysis=(
@@ -774,7 +1219,7 @@ RULES: tuple[SemanticRule, ...] = (
         "thermal",
         "curve",
         RHEOLOGY_X_TEMPERATURE,
-        AxisSpec("Derivative mass", "%/C", "DTG (%/°C)", aliases=("dtg", "derivative")),
+        AxisSpec("Derivative mass", "%/C", "DTG (% °C⁻¹)", aliases=("dtg", "derivative")),
         keywords=("dtg", "derivativeweight"),
         path_keywords=("dtg_curve", "dtg"),
         column_aliases=("temperature", "dtg", "derivative"),
@@ -1157,7 +1602,13 @@ def _write_metrics_csv(rows: list[dict[str, Any]], output_path: Path) -> None:
 
 
 def _metric(metric: str, value: float | str | None, unit: str = "", status: str = "ok", reason: str = "") -> dict[str, Any]:
-    return {"metric": metric, "value": "" if value is None else value, "unit": unit, "status": status, "reason": reason}
+    return {
+        "metric": metric,
+        "value": "" if value is None else value,
+        "unit": format_unit_label(unit),
+        "status": status,
+        "reason": reason,
+    }
 
 
 def _read_labeled_paired_curve_series(
@@ -2168,6 +2619,7 @@ __all__ = [
     "UnitRule",
     "compute_analysis_metrics",
     "convert_value",
+    "format_plot_text_units",
     "format_unit_label",
     "get_rule",
     "iter_public_rules",
@@ -2176,6 +2628,8 @@ __all__ = [
     "match_rule",
     "normalize_token",
     "semantic_payload_from_rule",
+    "scientific_unit_expression_contract",
     "show_rule_payload",
     "tensile_curve_metric_values",
+    "unit_solidus_violations",
 ]

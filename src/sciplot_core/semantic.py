@@ -3499,12 +3499,15 @@ def _read_dsc_workbook_phases(path: Path) -> list[CurveSeriesPayload]:
         header_index, time_column, temperature_column, heat_flow_column = header
         unit_row = raw.iloc[header_index + 1] if header_index + 1 < len(raw) else []
         temperature_unit = _clean_text(unit_row.iloc[temperature_column]).casefold()
-        heat_flow_unit = _clean_text(unit_row.iloc[heat_flow_column]).casefold()
+        heat_flow_unit = _clean_text(unit_row.iloc[heat_flow_column])
         if "c" not in temperature_unit and "°" not in temperature_unit:
             raise ValueError(f"{path.name}/{sheet_name}: missing Celsius unit.")
-        compact_heat_unit = re.sub(r"\s+", "", heat_flow_unit)
-        if "w/g" not in compact_heat_unit:
-            raise ValueError(f"{path.name}/{sheet_name}: heat-flow unit is not W/g.")
+        if format_unit_label(heat_flow_unit).casefold() != format_unit_label(
+            "W/g"
+        ).casefold():
+            raise ValueError(
+                f"{path.name}/{sheet_name}: heat-flow unit is not W g⁻¹."
+            )
         numeric = pd.DataFrame(
             {
                 "time": pd.to_numeric(
@@ -3530,7 +3533,7 @@ def _read_dsc_workbook_phases(path: Path) -> list[CurveSeriesPayload]:
                 x_label="Temperature",
                 x_unit="°C",
                 y_label="Heat flow",
-                y_unit="W/g",
+                y_unit=format_unit_label("W/g"),
                 points=points,
                 diagnostics={
                     **diagnostics,

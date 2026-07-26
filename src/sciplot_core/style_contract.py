@@ -4,7 +4,11 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from sciplot_core.contract import PlotContract, load_plot_contract
-from sciplot_core.materials_rules import iter_public_rules
+from sciplot_core.materials_rules import (
+    iter_public_rules,
+    scientific_unit_expression_contract,
+    unit_solidus_violations,
+)
 from sciplot_core.policy import (
     DEFAULT_RENDER_OPTIONS,
     DEFAULT_SCALAR_FIELD_COLORMAP_ID,
@@ -215,9 +219,38 @@ def audit_style_template_contract(
     resolved_render_defaults = dict(
         DEFAULT_RENDER_OPTIONS if render_defaults is None else render_defaults
     )
+    ready_rules = list(iter_public_rules())
     recipe_specs = iter_recipe_specs()
     vendor_templates = set(resolved_contract.templates)
     issues: list[dict[str, Any]] = []
+    unit_expression_violations: list[dict[str, Any]] = []
+    for rule in ready_rules:
+        candidates = [
+            ("x_axis.display_label", rule.x_axis.display_label),
+            ("y_axis.display_label", rule.y_axis.display_label),
+            *[
+                (f"render_options.{key}", value)
+                for key, value in rule.render_options.items()
+                if isinstance(value, str) and "label" in str(key).casefold()
+            ],
+        ]
+        for field, text in candidates:
+            for violation in unit_solidus_violations(text):
+                unit_expression_violations.append(
+                    {
+                        "rule_id": rule.rule_id,
+                        "field": field,
+                        "text": text,
+                        **violation,
+                    }
+                )
+    if unit_expression_violations:
+        issues.append(
+            {
+                "code": "ready_rule_unit_expression_drift",
+                "violations": unit_expression_violations,
+            }
+        )
 
     missing_implemented_templates = sorted(
         VEUSZ_IMPLEMENTED_TEMPLATE_IDS - vendor_templates
@@ -363,7 +396,7 @@ def audit_style_template_contract(
 
     return {
         "kind": "sciplot_style_template_contract_audit",
-        "version": 3,
+        "version": 4,
         "status": "passed" if not issues else "failed",
         "issues": issues,
         "implemented_veusz_templates": sorted(VEUSZ_IMPLEMENTED_TEMPLATE_IDS),
@@ -382,6 +415,10 @@ def audit_style_template_contract(
             "vendor_styles": expected_vendor,
             "global_frame": expected_frame,
             "ordinary_foreground_color": UNIFIED_FOREGROUND_COLOR,
+        },
+        "unit_expression_contract": {
+            **scientific_unit_expression_contract(),
+            "ready_rule_violations": unit_expression_violations,
         },
         "template_color_defaults": {
             "heatmap": {
