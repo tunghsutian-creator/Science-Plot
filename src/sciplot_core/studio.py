@@ -163,6 +163,14 @@ CATEGORICAL_SERIES_KINDS = {
     "categorical_components",
     "categorical_grouped_replicates",
 }
+IMPACT_POINT_LINE_SUMMARY_KIND = "impact_point_line_summary"
+IMPACT_POINT_LINE_MARKER_KIND = "impact_point_line_summary_marker"
+IMPACT_POINT_LINE_RAW_KIND = "impact_point_line_raw_points"
+IMPACT_POINT_LINE_KINDS = {
+    IMPACT_POINT_LINE_SUMMARY_KIND,
+    IMPACT_POINT_LINE_MARKER_KIND,
+    IMPACT_POINT_LINE_RAW_KIND,
+}
 SCALAR_FIELD_TEMPLATE_IDS = {"heatmap"}
 POINT_LINE_MARKERS = ("circle", "square", "diamond", "triangle")
 MARKER_MAP = {
@@ -196,6 +204,7 @@ class StudioSeries:
     x_values: tuple[float, ...]
     y_values: tuple[float, ...]
     color: str
+    error_values: tuple[float, ...] = ()
     line_width: float | None = None
     marker: str | bool | None = None
     marker_size: float | None = None
@@ -367,6 +376,10 @@ def prepare_studio_document(
         return {
             "kind": "sciplot_studio_prepare",
             "operation_mode": normal_mode_payload(route="studio"),
+            "pending_rule_review": request.get("pending_rule_review") is True,
+            "autonomous_rule_ready": (
+                request.get("pending_rule_review") is not True
+            ),
             "project_dir": str(project_dir),
             "request": str(request_path),
             "document": str(existing_document),
@@ -494,6 +507,8 @@ def prepare_studio_document(
     return {
         "kind": "sciplot_studio_prepare",
         "operation_mode": normal_mode_payload(route="studio"),
+        "pending_rule_review": request.get("pending_rule_review") is True,
+        "autonomous_rule_ready": request.get("pending_rule_review") is not True,
         "project_dir": str(project_dir),
         "request": str(request_path),
         "document": str(document_path),
@@ -1714,6 +1729,10 @@ def _impact_condition_figure_queue(
 
     if str(request.get("rule_id") or "").strip() != "impact_metric":
         return []
+    if _request_template(request) == "point_line":
+        # The point-line alternative compares compatible workbook conditions
+        # in one document instead of materializing one document per sheet.
+        return []
     source = _resolve_request_input(request, base_dir=base_dir)
     if source is None:
         return []
@@ -1770,7 +1789,7 @@ def _impact_condition_figure_queue(
                 "y_metric": "impact_strength",
                 "metric": "impact_strength",
                 "default_template": "box_strip",
-                "supported_templates": ["bar", "box", "box_strip"],
+                "supported_templates": ["bar", "box", "box_strip", "point_line"],
                 "presentation_data_shape": "categorical_replicates",
             }
         )
@@ -1795,11 +1814,290 @@ def _impact_condition_figure_request(
     return figure_request
 
 
+def _impact_point_line_condition_order(
+    request: dict[str, Any],
+) -> list[str]:
+    render_options = (
+        request.get("render_options")
+        if isinstance(request.get("render_options"), dict)
+        else {}
+    )
+    return _string_list(
+        request.get("condition_order")
+        or render_options.get("condition_order")
+    )
+
+
+def _impact_point_line_label_mapping(
+    request: dict[str, Any],
+) -> dict[str, str]:
+    render_options = (
+        request.get("render_options")
+        if isinstance(request.get("render_options"), dict)
+        else {}
+    )
+    value = request.get("condition_label_mapping")
+    if not isinstance(value, dict):
+        value = render_options.get("condition_label_mapping")
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(key).strip(): str(label).strip()
+        for key, label in value.items()
+        if str(key).strip() and str(label).strip()
+    }
+
+
+def _impact_point_line_source(
+    source: Path,
+) -> Path:
+    if source.is_file():
+        return source
+    workbooks = sorted(
+        path
+        for path in source.rglob("*")
+        if path.is_file()
+        and path.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}
+    )
+    if len(workbooks) != 1:
+        raise StudioPreparationBlocked(
+            "impact_point_line_workbook_ambiguous",
+            "Impact point-line comparison needs exactly one workbook source.",
+        )
+    return workbooks[0]
+
+
+def _impact_point_line_series_from_source(
+    source: Path,
+    *,
+    request: dict[str, Any],
+) -> tuple[list[StudioSeries], dict[str, Any], list[dict[str, Any]]]:
+    """Build condition mean lines with sample markers and pale raw points."""
+
+    from sciplot_core.semantic import read_impact_condition_payloads
+
+    workbook = _impact_point_line_source(source)
+    available = read_impact_condition_payloads(workbook)
+    if len(available) < 2:
+        raise StudioPreparationBlocked(
+            "impact_point_line_needs_multiple_conditions",
+            "Impact point-line comparison needs at least two workbook conditions.",
+        )
+    by_condition = {condition: payload for condition, payload in available}
+    requested_order = _impact_point_line_condition_order(request)
+    if requested_order:
+        missing = [
+            condition for condition in requested_order if condition not in by_condition
+        ]
+        if missing:
+            raise StudioPreparationBlocked(
+                "unknown_impact_point_line_condition",
+                "Unknown impact point-line condition(s): " + ", ".join(missing),
+            )
+        selected = [
+            (condition, by_condition[condition]) for condition in requested_order
+        ]
+    else:
+        compatible: dict[tuple[str, ...], list[tuple[str, Any]]] = {}
+        shape_order: list[tuple[str, ...]] = []
+        for condition, payload in available:
+            shape = tuple(payload.samples)
+            if shape not in compatible:
+                shape_order.append(shape)
+                compatible[shape] = []
+            compatible[shape].append((condition, payload))
+        selected_shape = max(
+            shape_order,
+            key=lambda shape: (
+                len(compatible[shape]),
+                len(shape),
+                -shape_order.index(shape),
+            ),
+        )
+        selected = compatible[selected_shape]
+    if len(selected) < 2:
+        raise StudioPreparationBlocked(
+            "impact_point_line_incompatible_conditions",
+            "No compatible group of at least two impact conditions shares one "
+            "sample axis; choose conditions explicitly or repair the source.",
+        )
+    sample_order = tuple(selected[0][1].samples)
+    if any(tuple(payload.samples) != sample_order for _condition, payload in selected):
+        raise StudioPreparationBlocked(
+            "impact_point_line_sample_axis_mismatch",
+            "Every selected impact point-line condition must use the same ordered "
+            "sample axis.",
+        )
+    units = {str(payload.unit) for _condition, payload in selected}
+    if units != {"kJ/m2"}:
+        raise StudioPreparationBlocked(
+            "impact_point_line_unit_mismatch",
+            "Impact point-line conditions must all use canonical kJ/m2 units.",
+        )
+
+    label_mapping = _impact_point_line_label_mapping(request)
+    artifact = (str(workbook), file_sha256(workbook))
+    raw_point_half_spread = categorical_raw_point_half_spread(
+        box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION,
+        replicate_count=max(
+            len(values)
+            for _condition, payload in selected
+            for values in payload.values
+        ),
+        category_slot_width_mm=categorical_slot_width_mm(
+            category_count=len(sample_order),
+            figure_width_mm=60.0,
+        ),
+    )
+    series: list[StudioSeries] = []
+    for condition_index, (condition, payload) in enumerate(selected):
+        display_label = label_mapping.get(condition, condition)
+        color = DEFAULT_PALETTE_COLORS[
+            condition_index % len(DEFAULT_PALETTE_COLORS)
+        ]
+        summaries = tuple(
+            _mean_and_sample_sd(tuple(float(value) for value in values))
+            for values in payload.values
+        )
+        means = tuple(summary[0] for summary in summaries)
+        errors = tuple(summary[1] for summary in summaries)
+        positions = tuple(
+            float(index) for index in range(1, len(sample_order) + 1)
+        )
+        series.append(
+            StudioSeries(
+                label=display_label,
+                x_name=f"impact_summary_x_{condition_index + 1}",
+                y_name=f"impact_summary_y_{condition_index + 1}",
+                x_values=positions,
+                y_values=means,
+                error_values=errors,
+                color=color,
+                marker="none",
+                line_style="solid",
+                presentation_kind=IMPACT_POINT_LINE_SUMMARY_KIND,
+                component_labels=sample_order,
+                source_artifacts=(artifact,),
+            )
+        )
+        raw_color = categorical_fill_color(color)
+        for sample_index, (sample, values, mean) in enumerate(
+            zip(sample_order, payload.values, means, strict=True),
+            start=1,
+        ):
+            marker = POINT_LINE_MARKERS[
+                (sample_index - 1) % len(POINT_LINE_MARKERS)
+            ]
+            series.append(
+                StudioSeries(
+                    label=f"{display_label} · {sample} mean",
+                    x_name=(
+                        f"impact_mean_marker_x_{condition_index + 1}_{sample_index}"
+                    ),
+                    y_name=(
+                        f"impact_mean_marker_y_{condition_index + 1}_{sample_index}"
+                    ),
+                    x_values=(float(sample_index),),
+                    y_values=(float(mean),),
+                    color=color,
+                    marker=marker,
+                    presentation_kind=IMPACT_POINT_LINE_MARKER_KIND,
+                    category_position=float(sample_index),
+                    source_artifacts=(artifact,),
+                )
+            )
+            series.append(
+                StudioSeries(
+                    label=f"{display_label} · {sample} raw",
+                    x_name=f"impact_raw_x_{condition_index + 1}_{sample_index}",
+                    y_name=f"impact_raw_y_{condition_index + 1}_{sample_index}",
+                    x_values=_deterministic_category_positions(
+                        float(sample_index),
+                        len(values),
+                        fraction=raw_point_half_spread,
+                        seed_key=f"{condition}|{sample}",
+                    ),
+                    y_values=tuple(float(value) for value in values),
+                    color=raw_color,
+                    marker=marker,
+                    presentation_kind=IMPACT_POINT_LINE_RAW_KIND,
+                    category_position=float(sample_index),
+                    source_artifacts=(artifact,),
+                )
+            )
+    transform_step = build_transform_step(
+        step_id="impact_condition_point_line_overlay",
+        operation="summarize_condition_means_and_preserve_raw_replicates",
+        input_path=workbook,
+        output_path=None,
+        implementation_ref=(
+            "sciplot_core.studio._impact_point_line_series_from_source"
+        ),
+        parameters={
+            "selected_conditions": [condition for condition, _payload in selected],
+            "condition_labels": [
+                label_mapping.get(condition, condition)
+                for condition, _payload in selected
+            ],
+            "sample_order": list(sample_order),
+            "summary_statistic": "arithmetic_mean",
+            "error_bar_statistic": "sample_sd_n_minus_1",
+            "raw_values_preserved": True,
+            "raw_point_position_policy": "stable_hash_shuffled_even_slots",
+            "raw_point_condition_offset": False,
+            "raw_replicate_count": sum(
+                payload.total_replicates for _condition, payload in selected
+            ),
+            "condition_selection_policy": (
+                "explicit_condition_order"
+                if requested_order
+                else "largest_compatible_ordered_sample_axis_group"
+            ),
+        },
+    )
+    return (
+        series,
+        {
+            "x_label": "Sample",
+            "y_label": "Impact strength (kJ/m²)",
+            "presentation_kind": "impact_point_line_raw_overlay",
+            "category_labels": list(sample_order),
+            "category_positions": [
+                float(index) for index in range(1, len(sample_order) + 1)
+            ],
+            "condition_labels": [
+                label_mapping.get(condition, condition)
+                for condition, _payload in selected
+            ],
+            "raw_replicate_count": sum(
+                payload.total_replicates for _condition, payload in selected
+            ),
+            "summary_statistic": "arithmetic_mean",
+        },
+        [transform_step],
+    )
+
+
 def _studio_figure_set_path(project_dir: Path) -> Path:
     return project_dir / "studio" / "figure_set.json"
 
 
 def _read_studio_figure_set(project_dir: Path) -> dict[str, Any] | None:
+    request_path = project_dir / "plot_request.json"
+    if request_path.is_file():
+        try:
+            request = _read_json(request_path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            request = {}
+        if (
+            str(request.get("rule_id") or "").strip() == "impact_metric"
+            and _request_template(request) == "point_line"
+        ):
+            # Intake may have materialized the default per-condition box
+            # registry before the explicit point-line override was applied.
+            # It is stale for the one-document comparison and must not leak
+            # into exact-current export or delivery.
+            return None
     path = _studio_figure_set_path(project_dir)
     if not path.is_file():
         return None
@@ -3266,12 +3564,13 @@ def publish_studio_export_run(
         exports=exports,
     )
     request = _read_json(request_path)
+    pending_rule_review = request.get("pending_rule_review") is True
     figure_set_export_scope = _studio_figure_set_export_scope(
         project_dir,
         request=request,
     )
     figure_set_scope_expected = bool(
-        _studio_figure_set_path(project_dir).exists()
+        _read_studio_figure_set(project_dir) is not None
         or _rheology_frequency_figure_queue(request)
     )
     if figure_set_scope_expected and not _is_full_figure_set_export_scope(
@@ -3620,6 +3919,8 @@ def publish_studio_export_run(
         or request.get("recipe")
         or "veusz_document",
         "operation_mode": normal_mode_payload(route="studio"),
+        "pending_rule_review": pending_rule_review,
+        "autonomous_rule_ready": not pending_rule_review,
         "data_mapping_application": json_safe(data_mapping_application),
         "data_mapping_coverage": json_safe(request.get("data_mapping_coverage")),
         "scope": (
@@ -3678,6 +3979,8 @@ def publish_studio_export_run(
         },
         "layout_quality": layout_quality,
         "operation_mode": normal_mode_payload(route="studio"),
+        "pending_rule_review": pending_rule_review,
+        "autonomous_rule_ready": not pending_rule_review,
         "data_mapping_application": json_safe(data_mapping_application),
         "data_mapping_coverage": json_safe(request.get("data_mapping_coverage")),
         "scope": result["scope"],
@@ -3803,6 +4106,8 @@ def publish_studio_export_run(
         "delivery_verification": manifest["delivery_verification"],
         "state": manifest["state"],
         "ready_to_use": ready_to_use,
+        "pending_rule_review": pending_rule_review,
+        "autonomous_rule_ready": not pending_rule_review,
         "scope": manifest["scope"],
     }
     if figure_set_export_scope is not None:
@@ -4212,7 +4517,13 @@ def _qt_first_project_from_source(
 
     project_root = output_root or Path("outputs") / "intake_projects"
     session = prepare_intake_session(
-        path, output_root=project_root, requested_rule_id=rule_id
+        path,
+        output_root=project_root,
+        requested_rule_id=rule_id,
+        allow_pending_rule_review=bool(
+            _normalize_optional_string(rule_id)
+            and _normalize_optional_string(template)
+        ),
     )
     normalized_name = _normalize_optional_string(project_name)
     if normalized_name:
@@ -4261,20 +4572,32 @@ def _apply_studio_request_overrides(
 ) -> None:
     selected_rule_id = _normalize_optional_string(rule_id)
     selected_rule = get_rule(selected_rule_id) if selected_rule_id else None
-    if selected_rule is not None and selected_rule.fixture_status != "ready":
+    requested_template = _normalize_optional_string(template)
+    pending_rule_review = bool(
+        selected_rule is not None
+        and selected_rule.fixture_status != "ready"
+    )
+    if pending_rule_review and not requested_template:
         raise ValueError(
-            f"Material rule `{selected_rule.rule_id}` is not ready for production use."
+            f"Material rule `{selected_rule.rule_id}` is not ready for "
+            "production use; an explicit supported template is required for "
+            "a non-ready Studio review."
         )
     selected_rule_payload = (
         semantic_payload_from_rule(
             selected_rule,
-            confidence=100.0,
-            reason=f"Explicit material rule `{selected_rule.rule_id}` selected by the user or an assistant.",
+            confidence=0.0 if pending_rule_review else 100.0,
+            reason=(
+                f"Explicit pending material rule `{selected_rule.rule_id}` "
+                "selected for a non-ready Studio review."
+                if pending_rule_review
+                else f"Explicit material rule `{selected_rule.rule_id}` selected "
+                "by the user or an assistant."
+            ),
         )
         if selected_rule is not None
         else None
     )
-    requested_template = _normalize_optional_string(template)
     selected_template = (
         resolve_rule_template(selected_rule, requested_template)
         if selected_rule is not None
@@ -4288,6 +4611,8 @@ def _apply_studio_request_overrides(
         if selected_rule is not None:
             request["rule_id"] = selected_rule.rule_id
             request.setdefault("recipe", "auto")
+            if pending_rule_review:
+                request["pending_rule_review"] = True
             current_options = (
                 dict(request.get("render_options"))
                 if isinstance(request.get("render_options"), dict)
@@ -4355,6 +4680,7 @@ def _apply_studio_request_overrides(
                 except Exception:
                     pass
             request["template"] = selected_template
+            request["explicit_template_selection"] = True
         request_path.write_text(
             json.dumps(json_safe(request), indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -4386,14 +4712,32 @@ def _apply_studio_request_overrides(
             payload["plot_options"] = plot_options
         if selected_rule is not None:
             recognition = dict(selected_rule_payload or {})
-            recognition.update(
-                {
-                    "confidence": 100.0,
-                    "reason": f"Explicit material rule `{selected_rule.rule_id}` selected by the user or an assistant.",
-                    "needs_ai_intervention": False,
-                    "production_status": "ready",
-                }
-            )
+            if pending_rule_review:
+                recognition.update(
+                    {
+                        "confidence": 0.0,
+                        "reason": (
+                            f"Explicit pending material rule "
+                            f"`{selected_rule.rule_id}` selected for a non-ready "
+                            "Studio review."
+                        ),
+                        "needs_ai_intervention": True,
+                        "production_status": "needs_rule_repair",
+                        "pending_rule_review": True,
+                    }
+                )
+            else:
+                recognition.update(
+                    {
+                        "confidence": 100.0,
+                        "reason": (
+                            f"Explicit material rule `{selected_rule.rule_id}` "
+                            "selected by the user or an assistant."
+                        ),
+                        "needs_ai_intervention": False,
+                        "production_status": "ready",
+                    }
+                )
             payload["recognition"] = recognition
             experiment = (
                 payload.get("experiment")
@@ -5541,6 +5885,120 @@ def _series_from_request(
         )
         if isinstance(step, dict)
     ]
+    if (
+        str(request.get("rule_id") or "").strip() == "performance_comparison"
+        and _request_template(request) in {"scatter", "polar_curve"}
+    ):
+        from sciplot_core.performance_comparison import (
+            PerformanceComparisonError,
+            performance_transform_parameters,
+            prepare_performance_comparison,
+        )
+        from sciplot_core.performance_veusz import performance_series_records
+
+        template_id = _request_template(request)
+        try:
+            payload = prepare_performance_comparison(
+                source,
+                template_id=template_id,
+            )
+        except PerformanceComparisonError as exc:
+            raise StudioPreparationBlocked(exc.reason_code, str(exc)) from exc
+        records = performance_series_records(payload)
+        artifact = (str(payload["source"]), str(payload["source_sha256"]))
+        styled = [
+            StudioSeries(
+                label=str(item["label"]),
+                x_name=str(item["x_name"]),
+                y_name=str(item["y_name"]),
+                x_values=tuple(float(value) for value in item["x_values"]),
+                y_values=tuple(float(value) for value in item["y_values"]),
+                color=str(item["color"]),
+                line_width=float(item["line_width_pt"]),
+                marker=str(item["marker"]),
+                marker_size=float(item["marker_size_pt"]),
+                line_style=str(item["line_style"]),
+                presentation_kind=str(item["presentation_kind"]),
+                source_artifacts=(artifact,),
+            )
+            for item in records
+        ]
+        transform_steps.append(
+            build_transform_step(
+                step_id="performance_comparison_preparation",
+                operation=(
+                    "validate_material_metric_contract_and_derive_"
+                    "presentation_geometry"
+                ),
+                input_path=Path(str(payload["source"])),
+                output_path=None,
+                implementation_ref=(
+                    "sciplot_core.performance_comparison."
+                    "prepare_performance_comparison"
+                ),
+                parameters=performance_transform_parameters(payload),
+            )
+        )
+        layout = payload["layout"]
+        render_options = (
+            dict(request.get("render_options"))
+            if isinstance(request.get("render_options"), dict)
+            else {}
+        )
+        render_options["size"] = "x".join(
+            f"{float(value):g}" for value in layout["page_size_mm"]
+        )
+        request["render_options"] = render_options
+        axis_info = {
+            "x_label": str(payload.get("x_label") or ""),
+            "y_label": str(payload.get("y_label") or ""),
+            "presentation_kind": "performance_comparison",
+            "performance_comparison": payload,
+            "series_count": len(styled),
+            "semantic_terminal_series_order": [
+                str(item["label"]) for item in records
+            ],
+        }
+        return styled, axis_info, transform_steps, source_root
+    if (
+        str(request.get("rule_id") or "").strip() == "impact_metric"
+        and _request_template(request) == "point_line"
+    ):
+        raw_series, axis_info, impact_steps = (
+            _impact_point_line_series_from_source(source, request=request)
+        )
+        transform_steps.extend(impact_steps)
+        # The overlay builder owns its layered internal series order. Public
+        # ordering is expressed by condition_order and the categorical sample
+        # axis, not by the generated summary/marker/raw helper labels.
+        request.pop("series_order", None)
+        if isinstance(request.get("render_options"), dict):
+            request["render_options"] = {
+                key: value
+                for key, value in request["render_options"].items()
+                if key != "series_order"
+            }
+        render_options = _resolved_domain_render_options(
+            request,
+            axis_info=axis_info,
+            series=raw_series,
+        )
+        styled = _apply_series_options(
+            raw_series,
+            render_options=render_options,
+            request=request,
+        )
+        styled = _apply_template_series_transforms(
+            styled,
+            request=request,
+            render_options=render_options,
+        )
+        _validate_log_domain_series(styled, render_options=render_options)
+        axis_info["series_count"] = len(styled)
+        axis_info["semantic_terminal_series_order"] = [
+            item.label for item in styled
+        ]
+        return styled, axis_info, transform_steps, source_root
     source, semantic_steps = _studio_source_for_request(
         source,
         request=request,
@@ -5690,6 +6148,21 @@ def _deterministic_category_positions(
     for offset, row_index in zip(even_offsets, row_indices, strict=True):
         assigned_offsets[row_index] = offset
     return tuple(center + bounded * offset for offset in assigned_offsets)
+
+
+def _mean_and_sample_sd(values: tuple[float, ...] | list[float]) -> tuple[float, float]:
+    """Return arithmetic mean and the categorical bar contract's sample SD."""
+
+    mean = math.fsum(float(value) for value in values) / len(values)
+    error = (
+        math.sqrt(
+            math.fsum((float(value) - mean) ** 2 for value in values)
+            / (len(values) - 1)
+        )
+        if len(values) >= 2
+        else 0.0
+    )
+    return mean, error
 
 
 def _categorical_component_column(
@@ -6318,6 +6791,7 @@ def _read_source_frame_records(
     else:
         raise FileNotFoundError(f"Studio source not found: {source}")
     frames: list[StudioSourceFrame] = []
+    read_failures: list[tuple[Path, str]] = []
     for path in files:
         try:
             resolved = path.expanduser().resolve()
@@ -6339,8 +6813,18 @@ def _read_source_frame_records(
             )
         except StudioPreparationBlocked:
             raise
-        except Exception:
-            continue
+        except Exception as exc:
+            read_failures.append((path, type(exc).__name__))
+    if read_failures:
+        detail = ", ".join(
+            f"{path.name} ({error_type})"
+            for path, error_type in read_failures
+        )
+        raise StudioPreparationBlocked(
+            "source_table_read_failed",
+            "Studio refused to omit selected source tables that could not be "
+            f"parsed: {detail}. Repair or remove those files explicitly.",
+        )
     if not frames:
         raise ValueError(f"Studio could not read any numeric table from {source}.")
     return frames
@@ -6892,6 +7376,7 @@ def _apply_series_options(
         style = style_by_label.get(item.label, {})
         if style.get("visible") is False or style.get("enabled") is False:
             continue
+        impact_point_line_item = item.presentation_kind in IMPACT_POINT_LINE_KINDS
         condition_index, replicate_index = grouped_replicate_styles.get(
             item.label,
             (index, index),
@@ -6926,8 +7411,14 @@ def _apply_series_options(
                 y_name=item.y_name,
                 x_values=item.x_values,
                 y_values=item.y_values,
+                error_values=item.error_values,
                 color=str(
-                    style.get("color") or palette[condition_index % len(palette)]
+                    style.get("color")
+                    or (
+                        item.color
+                        if impact_point_line_item
+                        else palette[condition_index % len(palette)]
+                    )
                 ),
                 line_width=UNIFIED_LINE_WIDTH_PT,
                 marker=style.get("marker", item.marker or default_marker),
@@ -6935,6 +7426,7 @@ def _apply_series_options(
                 line_style=str(
                     style.get("line_style")
                     or style.get("linestyle")
+                    or (item.line_style if impact_point_line_item else None)
                     or default_line_style
                 ),
                 presentation_kind=item.presentation_kind,
@@ -7144,6 +7636,26 @@ def _apply_domain_render_defaults(
         for key, value in POINT_LINE_RENDER_OPTIONS.items():
             if key not in explicit_options:
                 updated[key] = list(value) if isinstance(value, list) else value
+        if axis_info.get("presentation_kind") == "impact_point_line_raw_overlay":
+            category_positions = [
+                float(value)
+                for value in axis_info.get("category_positions") or []
+            ]
+            if category_positions:
+                updated.setdefault("x_min", min(category_positions) - 0.5)
+                updated.setdefault("x_max", max(category_positions) + 0.5)
+                updated.setdefault("x_ticks", category_positions)
+            overlay_defaults = {
+                "x_label_override": "Sample",
+                "y_label_override": "Impact strength (kJ/m²)",
+                "size": "60x55",
+                "legend_position": "upper_left",
+                "series_label_mode": "legend",
+                "summary_statistic": "arithmetic_mean",
+            }
+            for key, value in overlay_defaults.items():
+                if key not in explicit_contract:
+                    updated[key] = value
     if (
         template_id in CATEGORICAL_TEMPLATE_IDS
         and isinstance(category_positions, list)
@@ -7389,7 +7901,13 @@ def _explicit_render_options(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def _label_load(series: list[StudioSeries]) -> dict[str, int]:
-    labels = [str(item.label) for item in series]
+    impact_summary = [
+        item
+        for item in series
+        if item.presentation_kind == IMPACT_POINT_LINE_SUMMARY_KIND
+    ]
+    legend_series = impact_summary or series
+    labels = [str(item.label) for item in legend_series]
     return {
         "series_count": len(labels),
         "max_label_length": max((len(label) for label in labels), default=0),
@@ -7970,15 +8488,7 @@ def _categorical_bar_axis_defaults(
         ]
         if not values or min(values) < 0.0:
             return None
-        mean = math.fsum(values) / len(values)
-        error = (
-            math.sqrt(
-                math.fsum((value - mean) ** 2 for value in values)
-                / (len(values) - 1)
-            )
-            if len(values) >= 2
-            else 0.0
-        )
+        mean, error = _mean_and_sample_sd(values)
         groups.append((mean, error))
     if not groups:
         return None
@@ -8672,6 +9182,39 @@ def _write_veusz_document(
     series: list[StudioSeries],
     axis_info: dict[str, Any],
 ) -> Path:
+    performance_payload = axis_info.get("performance_comparison")
+    if isinstance(performance_payload, dict):
+        from sciplot_core.performance_veusz import build_performance_veusz_spec
+
+        ledger = (
+            request.get("transform_ledger")
+            if isinstance(request.get("transform_ledger"), dict)
+            else {}
+        )
+        spec = build_performance_veusz_spec(
+            payload=performance_payload,
+            request=request,
+            transform_steps=[
+                dict(item)
+                for item in ledger.get("steps", [])
+                if isinstance(item, dict)
+            ],
+        )
+        spec_path = _veusz_spec_path(path)
+        spec_path.parent.mkdir(parents=True, exist_ok=True)
+        spec_path.write_text(
+            json.dumps(json_safe(spec), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        _save_veusz_document_from_spec(path, spec, spec_path=spec_path)
+        generate_log = path.parent / "logs" / "veusz_generate_stderr.log"
+        if generate_log.exists():
+            spec["stderr_logs"] = {"generate": str(generate_log)}
+        spec_path.write_text(
+            json.dumps(json_safe(spec), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return spec_path
     render_options = _resolved_domain_render_options(
         request,
         axis_info=axis_info,
@@ -8807,6 +9350,100 @@ def _categorical_plot_contract(
     template_id: str,
     render_options: dict[str, Any],
 ) -> dict[str, Any] | None:
+    impact_summary = [
+        item
+        for item in series
+        if item.presentation_kind == IMPACT_POINT_LINE_SUMMARY_KIND
+    ]
+    if impact_summary:
+        if template_id != "point_line":
+            raise StudioPreparationBlocked(
+                "impact_point_line_template_mismatch",
+                "Impact condition summary lines require the point_line template.",
+            )
+        sample_labels = impact_summary[0].component_labels
+        positions = impact_summary[0].x_values
+        if (
+            not sample_labels
+            or len(sample_labels) != len(positions)
+            or any(
+                item.component_labels != sample_labels
+                or item.x_values != positions
+                or len(item.y_values) != len(sample_labels)
+                or len(item.error_values) != len(sample_labels)
+                for item in impact_summary
+            )
+        ):
+            raise StudioPreparationBlocked(
+                "invalid_impact_point_line_contract",
+                "Impact condition lines must share one ordered categorical sample axis.",
+            )
+        raw_series = [
+            item
+            for item in series
+            if item.presentation_kind == IMPACT_POINT_LINE_RAW_KIND
+        ]
+        error_bars = [
+            {
+                "condition_label": item.label,
+                "sample_label": sample_labels[index],
+                "position": float(position),
+                "mean": float(item.y_values[index]),
+                "error": float(item.error_values[index]),
+                "low": float(item.y_values[index] - item.error_values[index]),
+                "high": float(item.y_values[index] + item.error_values[index]),
+                "color": item.color,
+            }
+            for item in impact_summary
+            for index, position in enumerate(positions)
+        ]
+        groups = [
+            {
+                "label": label,
+                "position": float(position),
+                "y_name": impact_summary[0].y_name,
+                "raw_points_visible": True,
+                "boxplot_eligible": False,
+                "descriptive_statistics": {
+                    "minimum": min(
+                        float(item.y_values[index]) for item in impact_summary
+                    ),
+                    "q1": float(impact_summary[0].y_values[index]),
+                    "median": float(impact_summary[0].y_values[index]),
+                    "q3": float(impact_summary[0].y_values[index]),
+                    "maximum": max(
+                        float(item.y_values[index]) for item in impact_summary
+                    ),
+                },
+            }
+            for index, (label, position) in enumerate(
+                zip(sample_labels, positions, strict=True)
+            )
+        ]
+        return {
+            "kind": "sciplot_impact_point_line_overlay_contract",
+            "version": 2,
+            "presentation_kind": "point_line_raw_overlay",
+            "summary_statistic": "arithmetic_mean",
+            "error_bar_statistic": "sample_sd",
+            "native_veusz_boxplot": False,
+            "raw_values_preserved": True,
+            "raw_replicate_count": sum(len(item.y_values) for item in raw_series),
+            "condition_labels": [item.label for item in impact_summary],
+            "sample_labels": list(sample_labels),
+            "error_bars": error_bars,
+            "groups": groups,
+            "visual_style": {
+                "palette_policy": "condition_roots_control_black_then_blue",
+                "raw_point_color_mode": "opaque_lightened_condition_root",
+                "raw_point_position_policy": "stable_hash_shuffled_even_slots",
+                "raw_point_condition_offset": False,
+                "sample_marker_binding": "stable_by_sample_axis_position",
+                "error_cap_to_bar_ratio": CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
+                "error_cap_reference_width_fraction": CATEGORICAL_BAR_WIDTH_FRACTION,
+                "error_line_width_pt": UNIFIED_LINE_WIDTH_PT,
+            },
+        }
     component_stacks = [
         item for item in series if item.presentation_kind == "categorical_components"
     ]
@@ -8983,15 +9620,7 @@ def _categorical_plot_contract(
         values = [
             float(value) for value in item.y_values if math.isfinite(float(value))
         ]
-        mean = math.fsum(values) / len(values)
-        error = (
-            math.sqrt(
-                math.fsum((value - mean) ** 2 for value in values)
-                / (len(values) - 1)
-            )
-            if len(values) >= 2
-            else 0.0
-        )
+        mean, error = _mean_and_sample_sd(values)
         position = float(
             item.category_position if item.category_position is not None else index
         )
@@ -10260,13 +10889,19 @@ def _build_veusz_plot_spec(
                 "label": item.label,
                 "legend_key": (
                     ""
-                    if item.presentation_kind == "categorical_components"
+                    if item.presentation_kind
+                    in {
+                        "categorical_components",
+                        IMPACT_POINT_LINE_MARKER_KIND,
+                        IMPACT_POINT_LINE_RAW_KIND,
+                    }
                     else item.label
                 ),
                 "x_name": item.x_name,
                 "y_name": item.y_name,
                 "x_values": list(item.x_values),
                 "y_values": list(item.y_values),
+                "error_values": list(item.error_values),
                 "color": item.color,
                 "line_width_pt": item.line_width,
                 "line_style": item.line_style,
@@ -10287,9 +10922,18 @@ def _build_veusz_plot_spec(
                 "category_position": item.category_position,
                 "component_labels": list(item.component_labels),
                 "plot_line_hide": item.presentation_kind
-                in CATEGORICAL_SERIES_KINDS,
+                in (
+                    CATEGORICAL_SERIES_KINDS
+                    | {
+                        IMPACT_POINT_LINE_MARKER_KIND,
+                        IMPACT_POINT_LINE_RAW_KIND,
+                    }
+                ),
                 "marker_line_hide": item.presentation_kind
-                in CATEGORICAL_SERIES_KINDS,
+                in (
+                    CATEGORICAL_SERIES_KINDS
+                    | {IMPACT_POINT_LINE_RAW_KIND}
+                ),
                 "raw_points_visible": (
                     next(
                         (
@@ -11341,7 +11985,96 @@ def _add_veusz_direct_labels(interface: Any, spec: dict[str, Any]) -> None:
         interface.To("..")
 
 
+def _add_veusz_impact_point_line_error_bars(
+    interface: Any,
+    categorical: dict[str, Any] | None,
+) -> None:
+    if (
+        not isinstance(categorical, dict)
+        or categorical.get("presentation_kind") != "point_line_raw_overlay"
+    ):
+        return
+    visual_style = (
+        categorical.get("visual_style")
+        if isinstance(categorical.get("visual_style"), dict)
+        else {}
+    )
+    cap_half_width = (
+        float(
+            visual_style.get(
+                "error_cap_reference_width_fraction",
+                CATEGORICAL_BAR_WIDTH_FRACTION,
+            )
+        )
+        * float(
+            visual_style.get(
+                "error_cap_to_bar_ratio",
+                CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
+            )
+        )
+        / 2.0
+    )
+    error_width = float(
+        visual_style.get("error_line_width_pt", UNIFIED_LINE_WIDTH_PT)
+    )
+    for error_index, error_bar in enumerate(
+        categorical.get("error_bars", []),
+        start=1,
+    ):
+        if not isinstance(error_bar, dict):
+            continue
+        position = float(error_bar["position"])
+        low = float(error_bar["low"])
+        high = float(error_bar["high"])
+        color = str(error_bar["color"])
+        for line_index, (x_pos, y_pos, x_pos_2, y_pos_2) in enumerate(
+            (
+                (position, low, position, high),
+                (
+                    position - cap_half_width,
+                    high,
+                    position + cap_half_width,
+                    high,
+                ),
+                (
+                    position - cap_half_width,
+                    low,
+                    position + cap_half_width,
+                    low,
+                ),
+            ),
+            start=1,
+        ):
+            line_name = f"impact_point_line_error_{error_index}_{line_index}"
+            interface.Add("line", name=line_name, autoadd=False)
+            interface.To(line_name)
+            interface.Set("positioning", "axes")
+            interface.Set("xAxis", "x")
+            interface.Set("yAxis", "y")
+            interface.Set("mode", "point-to-point")
+            interface.Set("xPos", [x_pos])
+            interface.Set("yPos", [y_pos])
+            interface.Set("xPos2", [x_pos_2])
+            interface.Set("yPos2", [y_pos_2])
+            interface.Set("clip", True)
+            interface.Set("hide", False)
+            interface.Set("Line/color", color)
+            interface.Set("Line/width", _pt(error_width))
+            interface.Set("Line/style", "solid")
+            interface.Set("Line/transparency", 0)
+            interface.Set("Line/hide", False)
+            interface.Set("arrowleft", "none")
+            interface.Set("arrowright", "none")
+            interface.Set("Fill/hide", True)
+            interface.To("..")
+
+
 def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
+    if isinstance(spec.get("performance_comparison"), dict):
+        from sciplot_core.performance_veusz import apply_performance_veusz_spec
+
+        apply_performance_veusz_spec(interface, spec)
+        return
     style = spec["style"]
     axes = spec["axes"]
     size_mm = spec["size_mm"]
@@ -11499,6 +12232,10 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         interface.Set("Background/hide", not bool(style["legend_frameon"]))
         interface.Set("Border/hide", not bool(style["legend_frameon"]))
         interface.To("..")
+    # Error bars use the same mean ± sample-SD definition, cap ratio, and
+    # physical stroke as categorical bars. Add them before data plotters so
+    # reverse Veusz child painting keeps them visible above the point layers.
+    _add_veusz_impact_point_line_error_bars(interface, categorical)
     # Veusz paints graph children in reverse object-tree order.  Categorical
     # replicate markers are therefore added before their filled summaries so
     # they remain the topmost data layer.
@@ -12190,7 +12927,40 @@ def _expand_axis_for_visual_extents(
             for group in categorical_contract.get("groups", [])
             if isinstance(group, dict)
         ]
-        if categorical_kind in {"bar_error", "grouped_bar_error"}:
+        if categorical_kind == "point_line_raw_overlay":
+            reference_width = float(
+                visual_style.get(
+                    "error_cap_reference_width_fraction",
+                    CATEGORICAL_BAR_WIDTH_FRACTION,
+                )
+            )
+            cap_ratio = float(
+                visual_style.get(
+                    "error_cap_to_bar_ratio",
+                    CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
+                )
+            )
+            error_width_pt = float(
+                visual_style.get("error_line_width_pt", style.line_width_pt)
+            )
+            error_extent_mm = (
+                error_width_pt * 0.5 * point_to_mm
+                + MIN_VISUAL_EXTENT_CLEARANCE_MM
+            )
+            x_extent_mm = max(x_extent_mm, error_extent_mm)
+            y_extent_mm = max(y_extent_mm, error_extent_mm)
+            cap_half_width = reference_width * cap_ratio * 0.5
+            for error_bar in categorical_contract.get("error_bars", []):
+                if not isinstance(error_bar, dict):
+                    continue
+                position = float(error_bar["position"])
+                x_values.extend(
+                    (position - cap_half_width, position + cap_half_width)
+                )
+                y_values.extend(
+                    (float(error_bar["low"]), float(error_bar["high"]))
+                )
+        elif categorical_kind in {"bar_error", "grouped_bar_error"}:
             bar_width = float(
                 visual_style.get("bar_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION)
             )
@@ -12275,7 +13045,9 @@ def _expand_axis_for_visual_extents(
             if low <= 0.0 or not finite_values:
                 return minimum, maximum
             transform = math.log10
-            inverse = lambda value: 10.0**value
+
+            def inverse(value: float) -> float:
+                return 10.0**value
         else:
             if not finite_values:
                 return minimum, maximum

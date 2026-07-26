@@ -41,6 +41,8 @@ VEUSZ_IMPLEMENTED_TEMPLATE_IDS = frozenset(
         "box",
         "box_strip",
         "heatmap",
+        "scatter",
+        "polar_curve",
     }
 )
 

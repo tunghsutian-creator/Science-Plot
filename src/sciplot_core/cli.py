@@ -497,11 +497,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     studio_parser.add_argument(
         "--rule",
-        help="Explicit ready material rule selected by the user or an assistant; bypass automatic recognition.",
+        help=(
+            "Explicit material rule selected by the user or an assistant. "
+            "Pending rules remain non-ready and are never silently promoted."
+        ),
     )
     studio_parser.add_argument(
         "--template",
-        help="Preselect the SciPlot plot template, e.g. curve or stacked_curve.",
+        help=(
+            "Preselect an implemented SciPlot template, e.g. curve, scatter, "
+            "or polar_curve."
+        ),
     )
     studio_parser.add_argument(
         "--name", help="Preselect the SciPlot project/figure name."

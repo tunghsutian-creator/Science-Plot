@@ -9,9 +9,12 @@ TERMINAL_RENDER_REQUEST_FIELDS = frozenset(
         "template",
         "render_options",
         "explicit_render_option_keys",
+        "rule_id",
         "x_metric",
         "y_metric",
         "series_order",
+        "condition_order",
+        "condition_label_mapping",
     }
 )
 
@@ -20,6 +23,27 @@ def _clean_metric(value: object) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return None
     return value.strip()
+
+
+def _clean_string_list(value: object) -> list[str]:
+    if not isinstance(value, list | tuple):
+        return []
+    result: list[str] = []
+    for item in value:
+        label = str(item).strip()
+        if label and label not in result:
+            result.append(label)
+    return result
+
+
+def _clean_string_mapping(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(key).strip(): str(label).strip()
+        for key, label in value.items()
+        if str(key).strip() and str(label).strip()
+    }
 
 
 def _terminal_metric_pair(
@@ -71,6 +95,13 @@ def project_terminal_render_request(
         raise ValueError("A terminal render request needs a template.")
     if not isinstance(request_context, dict):
         return request
+    rule_id = _clean_metric(request_context.get("rule_id"))
+    if rule_id is not None:
+        # Some production Studio builders need the selected semantic rule even
+        # after ordinary semantic preparation has completed.  In particular,
+        # a multi-condition workbook cannot be reconstructed from a generic
+        # x/y table when the terminal renderer silently loses this identity.
+        request["rule_id"] = rule_id
     explicit_keys = request_context.get("explicit_render_option_keys")
     if isinstance(explicit_keys, list | tuple | set):
         request["explicit_render_option_keys"] = sorted(
@@ -85,12 +116,17 @@ def project_terminal_render_request(
         request["x_metric"] = x_metric
     if y_metric is not None:
         request["y_metric"] = y_metric
-    series_order = request_context.get("series_order")
-    if (
-        isinstance(series_order, list)
-        and all(isinstance(item, str) for item in series_order)
-    ):
-        request["series_order"] = list(series_order)
+    series_order = _clean_string_list(request_context.get("series_order"))
+    if series_order:
+        request["series_order"] = series_order
+    condition_order = _clean_string_list(request_context.get("condition_order"))
+    if condition_order:
+        request["condition_order"] = condition_order
+    condition_label_mapping = _clean_string_mapping(
+        request_context.get("condition_label_mapping")
+    )
+    if condition_label_mapping:
+        request["condition_label_mapping"] = condition_label_mapping
     return request
 
 

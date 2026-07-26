@@ -47,6 +47,71 @@ def test_output_must_be_a_dedicated_directory(
         resolve_user_output_layout(source, requested_delivery_root=output)
 
 
+def test_output_cannot_be_nested_below_source_directory(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+
+    with pytest.raises(ValueError, match="does not overlap the source path"):
+        resolve_user_output_layout(
+            source,
+            requested_delivery_root=source / "generated" / "figure",
+        )
+
+
+def test_output_cannot_be_an_ancestor_of_source(tmp_path: Path) -> None:
+    source = tmp_path / "project" / "raw" / "source.csv"
+    source.parent.mkdir(parents=True)
+    source.write_text("x,y\n1,2\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="does not overlap the source path"):
+        resolve_user_output_layout(
+            source,
+            requested_delivery_root=tmp_path / "project",
+        )
+
+
+def test_output_overlap_check_resolves_symlinks(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    nested_output = source / "generated"
+    nested_output.mkdir(parents=True)
+    output_alias = tmp_path / "output_alias"
+    try:
+        output_alias.symlink_to(nested_output, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"symlinks are unavailable: {exc}")
+
+    with pytest.raises(ValueError, match="does not overlap the source path"):
+        resolve_user_output_layout(
+            source,
+            requested_delivery_root=output_alias,
+        )
+
+
+def test_runtime_workspace_cannot_be_nested_below_source(tmp_path: Path) -> None:
+    source = tmp_path / ".sciplot"
+    source.mkdir()
+
+    with pytest.raises(ValueError, match="runtime workspace"):
+        resolve_user_output_layout(
+            source,
+            requested_delivery_root=tmp_path / "Visible",
+        )
+
+
+def test_sibling_source_and_output_paths_remain_valid(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    requested = tmp_path / "Visible"
+
+    layout = resolve_user_output_layout(
+        source,
+        requested_delivery_root=requested,
+    )
+
+    assert layout.delivery_root == requested
+    assert layout.workspace_root == tmp_path / ".sciplot" / "visible"
+
+
 def test_manifest_request_controls_visible_delivery_root(tmp_path: Path) -> None:
     visible = tmp_path / "Visible"
     run_output = tmp_path / ".sciplot" / "project" / "run_001"

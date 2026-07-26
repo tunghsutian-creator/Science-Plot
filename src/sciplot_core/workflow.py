@@ -180,6 +180,49 @@ def _bind_result_data_snapshots(
     return result
 
 
+def _extend_runtime_transform_steps(
+    target: list[dict[str, Any]],
+    steps: object,
+) -> None:
+    """Merge terminal runtime lineage without duplicating step identities."""
+
+    if not isinstance(steps, list):
+        return
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        candidate = deepcopy(step)
+        if candidate in target:
+            continue
+        step_id = str(candidate.get("id") or "").strip()
+        same_id = next(
+            (
+                (index, existing)
+                for index, existing in enumerate(target)
+                if step_id and str(existing.get("id") or "").strip() == step_id
+            ),
+            None,
+        )
+        if same_id is None:
+            target.append(candidate)
+            continue
+        index, existing = same_id
+        candidate_operation = str(candidate.get("operation") or "").strip()
+        existing_operation = str(existing.get("operation") or "").strip()
+        if candidate_operation == "identity":
+            # Terminal compilation commonly confirms that an already prepared
+            # table is plot-ready. The upstream non-identity preparation
+            # remains the authoritative step for that shared id.
+            continue
+        if existing_operation == "identity":
+            target[index] = candidate
+            continue
+        raise ValueError(
+            "Conflicting runtime transform steps share the id "
+            f"`{step_id}`; terminal lineage cannot be merged silently."
+        )
+
+
 def _managed_output_transaction(output_dir: Path):
     return managed_output_transaction(
         output_dir,
@@ -646,6 +689,13 @@ def _impact_condition_sources(
 
     if str(request.get("rule_id") or "").strip() != "impact_metric":
         return []
+    if resolve_rule_template(
+        "impact_metric",
+        request.get("template")
+        if isinstance(request.get("template"), str)
+        else None,
+    ) == "point_line":
+        return []
     source = source_input
     if source.is_dir():
         workbooks = sorted(
@@ -939,6 +989,27 @@ def _render_veusz_impact_bundle(
     export_formats: object,
     request: dict[str, Any],
 ) -> dict[str, Any] | None:
+    impact_template = resolve_rule_template(
+        "impact_metric",
+        request.get("template")
+        if isinstance(request.get("template"), str)
+        else None,
+    )
+    if impact_template == "point_line":
+        return render_to_dir(
+            source_input,
+            template=impact_template,
+            output_dir=output_dir / "figures",
+            options=options,
+            export_formats=export_formats,
+            request_context={
+                **request,
+                "template": impact_template,
+                "explicit_render_option_keys": request.get(
+                    "explicit_render_option_keys", []
+                ),
+            },
+        )
     condition_sources = _impact_condition_sources(
         source_input,
         request=request,
@@ -946,12 +1017,6 @@ def _render_veusz_impact_bundle(
     )
     if not condition_sources:
         return None
-    impact_template = resolve_rule_template(
-        "impact_metric",
-        request.get("template")
-        if isinstance(request.get("template"), str)
-        else None,
-    )
     figures_dir = output_dir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
     combined_outputs: list[str] = []
@@ -1328,6 +1393,70 @@ def _render_veusz_dsc_bundle(
     }
 
 
+def _render_veusz_performance_bundle(
+    source_input: Path,
+    *,
+    output_dir: Path,
+    options: dict[str, Any],
+    export_formats: object,
+    request: dict[str, Any],
+) -> dict[str, Any] | None:
+    if str(request.get("rule_id") or "").strip() != "performance_comparison":
+        return None
+    requested_template = request.get("template")
+    templates = (
+        [
+            resolve_rule_template(
+                "performance_comparison",
+                requested_template if isinstance(requested_template, str) else None,
+            )
+        ]
+        if request.get("explicit_template_selection") is True
+        else ["scatter", "polar_curve"]
+    )
+    combined: dict[str, list[Any]] = {
+        "outputs": [],
+        "exports": [],
+        "qa_reports": [],
+        "veusz_documents": [],
+        "veusz_specs": [],
+        "terminal_render_requests": [],
+        "transform_steps": [],
+    }
+    figures_dir = output_dir / "figures"
+    for template_id in templates:
+        result = render_to_dir(
+            source_input,
+            template=template_id,
+            output_dir=figures_dir / template_id,
+            options=options,
+            export_formats=export_formats,
+            request_context={
+                **request,
+                "template": template_id,
+                "explicit_render_option_keys": request.get(
+                    "explicit_render_option_keys", []
+                ),
+            },
+        )
+        for key in combined:
+            values = result.get(key)
+            if isinstance(values, list):
+                combined[key].extend(values)
+    return {
+        "kind": "sciplot_veusz_render",
+        "render_engine": "veusz",
+        "template": "performance_comparison_figure_set",
+        "export_formats": list(export_formats or DEFAULT_EXPORT_FORMATS_POLICY),
+        **combined,
+        "multi_metric_bundle": {
+            "kind": "performance_comparison_figure_set",
+            "templates": templates,
+            "document_policy": "independent_single_page_vsz",
+        },
+    }
+
+
 def _render_with_auto_split(
     input_path: Path,
     *,
@@ -1339,6 +1468,15 @@ def _render_with_auto_split(
     request: dict[str, Any],
 ) -> dict[str, Any]:
     figures_dir = output_dir / "figures"
+    performance_bundle = _render_veusz_performance_bundle(
+        source_input or input_path,
+        output_dir=output_dir,
+        options=options,
+        export_formats=export_formats,
+        request=request,
+    )
+    if performance_bundle is not None:
+        return performance_bundle
     impact_bundle = _render_veusz_impact_bundle(
         source_input or input_path,
         output_dir=output_dir,
@@ -1831,6 +1969,10 @@ def _run_request_in_managed_output(
         mapping_application=mapping_application,
         request=request,
     )
+    _extend_runtime_transform_steps(
+        transform_steps,
+        result.get("transform_steps"),
+    )
     transform_ledger = build_transform_ledger(
         study_model,
         request=request,
@@ -1958,6 +2100,7 @@ def run_one_step(
     }
     if template is not None and str(template).strip():
         request["template"] = str(template).strip()
+        request["explicit_template_selection"] = True
     if delivery_root is not None:
         request["delivery_output"] = str(delivery_root.expanduser().resolve())
     request_path.write_text(json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8")

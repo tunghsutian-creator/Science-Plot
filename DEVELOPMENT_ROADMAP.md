@@ -49,11 +49,13 @@ readiness/manifest 合同。
 - 把 Web `app` 收缩到首次确认和只读结果审查，删除 post-render style/axis/legend/series
   编辑能力；
 - 用真实项目记录操作摩擦，只修复实际出现的完整性问题和高频阻塞。
+- 用第一份用户授权的材料性能长表完成 `performance_comparison` 的真实数据
+  acceptance；在此之前保留显式 Studio 可用、自动识别不晋升的证据边界。
 
 ## P1 — 契约单一来源
 
 - 生产语义模板固定为 `curve`、`point_line`、`stacked_curve`、`box`、
-  `bar`、`box_strip` 和 `heatmap`；未实现模板在请求验证阶段失败；
+  `bar`、`box_strip`、`heatmap`、`scatter` 和 `polar_curve`；未实现模板在请求验证阶段失败；
 - `policy.py` 是全局硬样式权威；模板不能私有覆盖字体、线宽、刻度、标记或普通图框；
 - 热图颜色是显式例外，只管理标量色带、等高线和色条配色；
 - vendored `plot_contract.json`、ready 规则和文档构建器持续通过
@@ -74,6 +76,8 @@ readiness/manifest 合同。
 - 缩小 `_vendor` 桥接面，禁止新增直接依赖；
 - 删除未被正常 Studio、兼容合同或测试引用的模块、命令、probe 和文档；
 - 优先删除重复和死代码，不用新抽象层掩盖相同逻辑；
+- 把隐藏 workspace/project 分配和 ZIP 刷新收敛到原子写入 owner，消除并发
+  `unique_path` 竞争与同名 source slug 碰撞；先增加失败注入和并发回归测试；
 - 每次提取保持公开 CLI、项目、VSZ、manifest 和 delivery 合同不变。
 
 ## P3 — 人工日用证据
@@ -85,6 +89,8 @@ readiness/manifest 合同。
 - 热分析；
 - 力学或分类指标；
 - 标量场或另一种高级图。
+- 材料性能散点/雷达各一张授权真实数据图，检查右侧索引、包络含义、声明归一化和
+  reference 缺失值不插补。
 
 每个项目检查：
 

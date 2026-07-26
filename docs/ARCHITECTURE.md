@@ -71,6 +71,10 @@ artifacts fail with a migration instruction instead of changing meaning.
 contact-sheet preview decision; it does not render or edit a figure and does
 not prove final-physical-size readability. PDF size and TIFF DPI remain
 machine checks; calibrated-display or print evidence is separate.
+Ready-rule lifecycle acceptance exercises every template declared by a rule's
+presentation contract, not only its default. The rule row passes only when all
+declared alternatives complete native Studio prepare/reopen, exact-current
+export, QA, delivery, and provenance checks.
 
 ## Repository map
 
@@ -85,6 +89,8 @@ research-plots/
     sciplot_core/
       materials_rules.py       experiment families, axes, aliases, units
       semantic.py              recognition and deterministic preparation
+      performance_comparison.py material-performance table/normalization contract
+      performance_veusz.py     native scatter/radar Veusz object contract
       policy.py                global plotting and delivery defaults
       style_contract.py        template/style consistency audit
       request_contract.py      renderer-independent request validation
@@ -117,6 +123,8 @@ development logs are local workspace material, not package source.
 | Concern | Owner | Boundary |
 | --- | --- | --- |
 | Scientific recognition, units, metrics | `materials_rules.py`, `semantic.py` | Deterministic and fixture-backed. |
+| Material-performance values and derived geometry | `performance_comparison.py` | Validate the tidy table, declared radar bounds, and sample envelope; never infer or average missing scientific values. |
+| Native performance document objects | `performance_veusz.py` | Own editable scatter/radar polygons, lines, markers, labels, and the reserved reference panel; reuse global style policy. |
 | Global visual contract | `policy.py`, vendored `plot_contract.json`, `style_contract.py` | One source for hard style; fail on drift. |
 | Request/template validation | `request_contract.py` | Reject unsupported template or option before rendering. |
 | VSZ lifecycle | `studio.py`, Veusz runtime adapters | Preserve, reopen, audit, and export the current document. |
@@ -131,7 +139,8 @@ development logs are local workspace material, not package source.
 ## Template and style boundary
 
 The production document builder implements exactly `curve`, `point_line`,
-`stacked_curve`, `bar`, `box`, `box_strip`, and `heatmap`. The `bar` template
+`stacked_curve`, `bar`, `box`, `box_strip`, `heatmap`, `scatter`, and
+`polar_curve`. The `bar` template
 uses mean ± SD error bars for categorical replicate groups and a separate
 long-form `Sample`/`Component`/value contract for additive stacked composition.
 The latter never reclassifies components as replicates: it binds sample roots
@@ -140,6 +149,18 @@ opaque same-hue lightness. Its legend is a stack-ordered segmented swatch
 covering every sample colour, not a single-sample native key.
 Vendored reference templates are not automatically production features;
 unsupported requests fail closed.
+
+`scatter` and `polar_curve` share the explicit
+`performance_comparison` material-metric table contract. The former creates
+data-bound material markers plus a native editable observed-sample envelope;
+the latter uses declared bounded directional normalization, filled polygons
+only for complete own-sample records, and marker-only literature references.
+Both reserve a 60 x 55 mm plot module and may use a separate 60 x 55 mm
+reference/index module within one 120 x 55 mm page. This is template-owned
+geometry, not an outside legend and not a second renderer. The rule remains
+pending automatic promotion while its only source-controlled evidence is an
+`instrument_shaped_fixture`; an explicit Studio request is still the supported
+development/user-review route.
 
 ### Grouped categorical bar fill geometry
 
@@ -180,7 +201,13 @@ analysis. Its versioned `presentation_contract` owns the default template and
 the explicit supported alternatives. The automated and Studio routes must
 resolve that contract instead of rewriting a recognized metric back to a
 single hard-coded chart. `impact_metric`, for example, supports `bar`, `box`,
-and `box_strip` over the same categorical-replicate source.
+`box_strip`, and `point_line` over the same categorical-replicate source. Its
+point-line alternative compares compatible workbook conditions through
+arithmetic-mean lines with the categorical-bar sample-SD error definition,
+retains every raw replicate as a light condition-toned point, lays those
+points out through the box-strip stable shuffled-slot policy without
+condition-side offsets, and binds marker shape to sample position rather than
+condition. Four-sample impact overlays use the ordinary 60 x 55 mm frame.
 
 Templates may define semantic behavior and editable options. They may not
 privately override global typography, strokes, ticks, markers, or ordinary

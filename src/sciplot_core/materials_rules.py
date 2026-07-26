@@ -345,6 +345,53 @@ TORQUE_AXIS = AxisSpec("Screw torque", "N·m", "Screw torque (N·m)", aliases=("
 
 RULES: tuple[SemanticRule, ...] = (
     _rule(
+        "performance_comparison",
+        "performance_comparison",
+        None,
+        "scatter",
+        AxisSpec(
+            "Selected performance X metric",
+            "",
+            "Selected performance X metric",
+            aliases=("scatter x", "density", "横轴指标"),
+        ),
+        AxisSpec(
+            "Selected performance Y metric",
+            "",
+            "Selected performance Y metric",
+            aliases=("scatter y", "specific impact strength", "纵轴指标"),
+        ),
+        presentation_data_shape="material_metric_long",
+        supported_templates=("scatter", "polar_curve"),
+        keywords=("scatteraxis", "radarorder", "materialperformance"),
+        path_keywords=("performance_comparison", "material_performance"),
+        column_aliases=(
+            "material",
+            "role",
+            "metric",
+            "value",
+            "unit",
+            "scatteraxis",
+            "radarorder",
+        ),
+        render_options={
+            "size": "120x55",
+            "legend_position": "auto",
+            "series_label_mode": "legend",
+        },
+        fixture_path=(
+            "tests/fixtures/performance_comparison/"
+            "material_performance_long.csv"
+        ),
+        fixture_status="pending",
+        priority=1,
+        reason=(
+            "Explicit tidy material-performance comparison with sample/reference "
+            "roles, scatter-axis selection, declared radar bounds, and literature "
+            "metadata."
+        ),
+    ),
+    _rule(
         "rheology_frequency_sweep",
         "rheology_frequency",
         "rheology_dma",
@@ -684,7 +731,7 @@ RULES: tuple[SemanticRule, ...] = (
             "Impact-strength groups preserve every raw observation; groups with at least two replicates use a native Veusz median/IQR box summary, while smaller groups remain raw-point only."
         ),
         presentation_data_shape="categorical_replicates",
-        supported_templates=("bar", "box", "box_strip"),
+        supported_templates=("bar", "box", "box_strip", "point_line"),
     ),
     _rule(
         "dsc_curve",

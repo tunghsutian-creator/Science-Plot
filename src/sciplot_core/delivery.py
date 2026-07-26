@@ -13,7 +13,6 @@ from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.plot_data import build_plot_data_exports
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
-    DELIVERY_DIR,
     DELIVERY_LAUNCHER,
     DELIVERY_PDF_DIR,
     DELIVERY_PROJECT_DIR,

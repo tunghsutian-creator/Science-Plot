@@ -72,6 +72,7 @@ REQUIRED_ACCEPTANCE_CHECKS = frozenset(
     {
         "semantic_rule_selected",
         "validated_rule_contract_current",
+        "supported_templates_exercised",
         "vsz_reopen_export",
         "manual_edit_preserved",
         "canonical_pdf_tiff_pair",

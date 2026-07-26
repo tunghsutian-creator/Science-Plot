@@ -29,6 +29,7 @@ from sciplot_core.materials_rules import (
     tensile_curve_metric_values,
 )
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload
+from sciplot_core.performance_comparison import is_performance_comparison_source
 from sciplot_core.policy import (
     COMPRESSION_X_AXIS_LABEL,
     COMPRESSION_Y_AXIS_LABEL,
@@ -226,6 +227,20 @@ def classify_source(
     requested_rule_id: str | None = None,
 ) -> dict[str, Any]:
     path = Path(input_path).expanduser()
+    performance_rule = get_rule("performance_comparison")
+    if (
+        requested_rule_id is None
+        and performance_rule.fixture_status == "ready"
+        and is_performance_comparison_source(path)
+    ):
+        return semantic_payload_from_rule(
+            performance_rule,
+            confidence=99.0,
+            reason=(
+                "Detected the explicit material/role/metric/value/unit tidy "
+                "performance-comparison contract."
+            ),
+        )
     if vendor_inspection is None:
         vendor_inspection, vendor_error = _vendor_inspection(path, sheet)
     else:
@@ -3405,7 +3420,6 @@ def _dsc_active_ramp_points(
         raise ValueError("DSC ramp contains fewer than 50 numeric rows.")
     time_values = frame["time"].astype(float)
     temperature = frame["temperature"].astype(float)
-    heat_flow = frame["heat_flow"].astype(float)
     overall_delta = float(temperature.iloc[-1] - temperature.iloc[0])
     if abs(overall_delta) < 100.0:
         raise ValueError("DSC ramp temperature span is below 100 °C.")

@@ -21,7 +21,6 @@ from sciplot_core.policy import (
     CATEGORICAL_BOX_MIN_PHYSICAL_ASPECT_RATIO,
     CATEGORICAL_BOX_TO_BAR_WIDTH_RATIO,
     CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
-    CATEGORICAL_GROUPED_BAR_WIDTH_FRACTION,
     CONTROL_FIRST_BRIGHT_COLORS,
     CONTROL_FIRST_BRIGHT_PALETTE_ID,
     DEFAULT_CURVE_LINE_STYLE_SEQUENCE,
@@ -43,6 +42,37 @@ from sciplot_core.policy import (
     categorical_raw_point_half_spread,
     categorical_slot_width_mm,
 )
+from sciplot_core.render import render_to_dir
+from sciplot_core.request_contract import (
+    apply_request_patch,
+    normalize_render_options,
+)
+from sciplot_core.studio import (
+    StudioSeries,
+    _VeuszAxisContract,
+    _VeuszStyleContract,
+    _apply_categorical_box_aspect_width,
+    _apply_domain_render_defaults,
+    _apply_readability_render_defaults,
+    _categorical_axis_label_contracts,
+    _categorical_grouped_bar_fill_rect_contracts,
+    _categorical_line_contracts,
+    _deterministic_category_positions,
+    _expand_axis_for_visual_extents,
+    _looks_like_frequency_axis,
+    _marker_thin_factor,
+    _request_template,
+    _resolved_domain_render_options,
+    _veusz_axis_contract,
+)
+from sciplot_core.style_contract import (
+    VEUSZ_IMPLEMENTED_TEMPLATE_IDS,
+    VEUSZ_TEMPLATE_COLOR_OPTIONS,
+    audit_style_template_contract,
+    validate_veusz_template_id,
+)
+from sciplot_core.terminal_request import project_terminal_render_request
+from sciplot_recipes.contracts import get_recipe_spec
 
 
 def test_curve_style_contract_uses_solid_lines_for_every_series() -> None:
@@ -65,40 +95,6 @@ def test_frequency_axis_detection_ignores_runtime_path_substrings() -> None:
         {"x_label": "Frequency (Hz)", "y_label": "Storage modulus (Pa)"}
     )
 
-
-from sciplot_core.render import render_to_dir
-from sciplot_recipes.contracts import get_recipe_spec
-from sciplot_core.style_contract import (
-    VEUSZ_IMPLEMENTED_TEMPLATE_IDS,
-    VEUSZ_TEMPLATE_COLOR_OPTIONS,
-    audit_style_template_contract,
-    validate_veusz_template_id,
-)
-from sciplot_core.studio import (
-    StudioSeries,
-    _VeuszAxisContract,
-    _VeuszStyleContract,
-    _apply_categorical_box_aspect_width,
-    _apply_domain_render_defaults,
-    _apply_readability_render_defaults,
-    _categorical_axis_label_contracts,
-    _categorical_grouped_bar_fill_rect_contracts,
-    _categorical_line_contracts,
-    _expand_axis_for_visual_extents,
-    _deterministic_category_positions,
-    _marker_thin_factor,
-    _looks_like_frequency_axis,
-    _request_template,
-    _resolved_domain_render_options,
-    _veusz_axis_contract,
-)
-from sciplot_core.request_contract import (
-    apply_request_patch,
-    normalize_render_options,
-)
-from sciplot_core.terminal_request import project_terminal_render_request
-
-
 def test_terminal_request_preserves_only_declared_explicit_render_keys() -> None:
     terminal = project_terminal_render_request(
         template="bar",
@@ -107,6 +103,25 @@ def test_terminal_request_preserves_only_declared_explicit_render_keys() -> None
     )
 
     assert terminal["explicit_render_option_keys"] == ["size"]
+
+
+def test_terminal_request_preserves_semantic_builder_context() -> None:
+    terminal = project_terminal_render_request(
+        template="point_line",
+        render_options={"size": "60x55"},
+        request_context={
+            "rule_id": "impact_metric",
+            "condition_order": ["4 mm", "2 mm", "4 mm"],
+            "condition_label_mapping": {
+                "4 mm": "4 mm specimen",
+                "": "ignored",
+            },
+        },
+    )
+
+    assert terminal["rule_id"] == "impact_metric"
+    assert terminal["condition_order"] == ["4 mm", "2 mm"]
+    assert terminal["condition_label_mapping"] == {"4 mm": "4 mm specimen"}
 
 
 def test_default_ordinary_palette_is_control_first_then_one_through_six() -> None:
@@ -621,7 +636,7 @@ def test_heatmap_request_contract_accepts_the_runtime_scalar_contract() -> None:
 
 def test_request_template_is_validated_even_without_an_explicit_template_argument() -> None:
     with pytest.raises(ValueError, match="not implemented by SciPlot"):
-        apply_request_patch({"template": "scatter"})
+        apply_request_patch({"template": "violin"})
 
 
 def test_direct_render_and_studio_generation_share_the_fail_closed_allowlist(

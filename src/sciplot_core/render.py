@@ -192,6 +192,43 @@ def _semantic_only_inspection_payload(
     *,
     vendor_error: Exception,
 ) -> dict[str, Any]:
+    rule_id = str(semantics.get("rule_id") or "")
+    if rule_id == "performance_comparison":
+        recommendation = _material_rule_recommendation(semantics)
+        warning = (
+            "The generic table reader does not implement the explicit "
+            "performance-comparison long-table shape; the validated SciPlot "
+            "source contract is authoritative."
+        )
+        return {
+            "source": str(source),
+            "model": "performance_comparison",
+            "model_label": "performance_comparison (performance_comparison)",
+            "recommendations": [recommendation],
+            "canonical_templates": ["scatter", "polar_curve"],
+            "advanced_templates": [],
+            "recommendation_confidence": float(
+                semantics.get("confidence") or 0.0
+            ),
+            "recommendation_summary": str(semantics.get("reason") or ""),
+            "warnings": [],
+            "inspection_resolution": {
+                "status": "ready_rule_authoritative",
+                "authoritative_source": "sciplot_material_rule",
+                "rule_id": rule_id,
+                "generic_inspection_status": "unsupported_explicit_shape",
+            },
+            "inspection_warning_provenance": [
+                {
+                    "message": warning,
+                    "source": "generic_table_inspection",
+                    "disposition": "superseded_by_ready_rule",
+                    "resolved_by": f"sciplot_material_rule:{rule_id}",
+                }
+            ],
+            "vendor_inspection_error": str(vendor_error),
+            "sciplot_semantics": semantics,
+        }
     candidate = _material_rule_recommendation(semantics)
     candidate.update(
         {
@@ -260,12 +297,12 @@ def inspect_payload(input_path: Path, *, sheet: str | int = 0) -> dict[str, Any]
             # closed.  Classifying it after the failure lets path keywords such
             # as ``dma`` or ``ftir`` turn arbitrary bytes into an apparently
             # authoritative ready-rule result.
-            if source.is_file():
-                raise
             semantics = json_safe(classify_source(source, sheet=sheet))
             if semantics.get("production_status") != "ready" or not semantics.get(
                 "rule_id"
             ):
+                raise
+            if source.is_file() and semantics.get("rule_id") != "performance_comparison":
                 raise
             return _semantic_only_inspection_payload(
                 source, semantics, vendor_error=exc
@@ -400,6 +437,44 @@ def _read_json_if_exists(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _terminal_transform_steps(request_path: Path) -> list[dict[str, Any]]:
+    """Read the runtime lineage persisted by the terminal Studio compiler."""
+
+    request = _read_json_if_exists(request_path)
+    ledger = (
+        request.get("transform_ledger")
+        if isinstance(request.get("transform_ledger"), dict)
+        else {}
+    )
+    steps = ledger.get("steps") if isinstance(ledger.get("steps"), list) else []
+    return [json_safe(step) for step in steps if isinstance(step, dict)]
+
+
+def _extend_unique_transform_steps(
+    target: list[dict[str, Any]],
+    steps: object,
+) -> None:
+    if not isinstance(steps, list):
+        return
+    fingerprints = {
+        json.dumps(json_safe(step), sort_keys=True, ensure_ascii=False)
+        for step in target
+    }
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        normalized = json_safe(step)
+        fingerprint = json.dumps(
+            normalized,
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+        if fingerprint in fingerprints:
+            continue
+        target.append(normalized)
+        fingerprints.add(fingerprint)
+
+
 def _veusz_target_base(
     source: Path, template: str, *, panel_index: int | None = None
 ) -> str:
@@ -501,12 +576,35 @@ def _veusz_layout_report(
         contract = load_plot_contract()
         alignment_profile = qa_profile("alignment")
         tolerance_mm = float(alignment_profile.get("frame_tolerance_mm", 0.05))
-        expected_margins = {
-            "left": float(contract.global_frame.left_margin_mm),
-            "right": float(contract.global_frame.right_margin_mm),
-            "bottom": float(contract.global_frame.bottom_margin_mm),
-            "top": float(contract.global_frame.top_margin_mm),
-        }
+        performance = (
+            spec.get("performance_comparison")
+            if isinstance(spec.get("performance_comparison"), dict)
+            else None
+        )
+        performance_frame = (
+            spec.get("frame_alignment")
+            if performance is not None
+            and isinstance(spec.get("frame_alignment"), dict)
+            else {}
+        )
+        performance_margins = (
+            performance_frame.get("margins_mm")
+            if isinstance(performance_frame.get("margins_mm"), dict)
+            else {}
+        )
+        expected_margins = (
+            {
+                side: float(performance_margins[side])
+                for side in ("left", "right", "bottom", "top")
+            }
+            if all(side in performance_margins for side in ("left", "right", "bottom", "top"))
+            else {
+                "left": float(contract.global_frame.left_margin_mm),
+                "right": float(contract.global_frame.right_margin_mm),
+                "bottom": float(contract.global_frame.bottom_margin_mm),
+                "top": float(contract.global_frame.top_margin_mm),
+            }
+        )
         style = spec.get("style") if isinstance(spec.get("style"), dict) else {}
         actual_margins = (
             style.get("margins_mm") if isinstance(style.get("margins_mm"), dict) else {}
@@ -529,6 +627,13 @@ def _veusz_layout_report(
             "outside_legend_allowed": False,
         }
         summary["frame_alignment"] = frame_alignment
+        if performance is not None:
+            summary["performance_comparison"] = {
+                "layout": performance.get("layout"),
+                "normalization": performance.get("normalization"),
+                "sample_count": performance.get("sample_count"),
+                "reference_count": performance.get("reference_count"),
+            }
         if frame_alignment["status"] != "aligned":
             issues.append(
                 {
@@ -691,6 +796,7 @@ def _render_veusz_panel(
     Path,
     Path,
     dict[str, Any],
+    list[dict[str, Any]],
 ]:
     panel_dir.mkdir(parents=True, exist_ok=True)
     terminal_request = project_terminal_render_request(
@@ -718,6 +824,7 @@ def _render_veusz_panel(
         str(payload.get("studio", {}).get("spec") or document.with_suffix(".spec.json"))
     )
     spec_payload = _read_json_if_exists(spec)
+    transform_steps = _terminal_transform_steps(request_path)
     report = _veusz_layout_report(
         template=template,
         spec=spec_payload,
@@ -726,7 +833,15 @@ def _render_veusz_panel(
         split_panel=split_panel,
     )
     _cleanup_worker_exports(panel_dir)
-    return outputs, export_records, report, document, spec, terminal_request
+    return (
+        outputs,
+        export_records,
+        report,
+        document,
+        spec,
+        terminal_request,
+        transform_steps,
+    )
 
 
 def _render_to_dir_veusz(
@@ -755,6 +870,7 @@ def _render_to_dir_veusz(
     documents: list[str] = []
     specs: list[str] = []
     terminal_requests: list[dict[str, Any]] = []
+    transform_steps: list[dict[str, Any]] = []
     with normalized_source(input_path) as source:
         split_plan: dict[str, Any] | None = None
         panels: list[tuple[int | None, list[str] | None]]
@@ -786,6 +902,7 @@ def _render_to_dir_veusz(
                 document,
                 spec,
                 terminal_request,
+                panel_transform_steps,
             ) = _render_veusz_panel(
                 source,
                 template=template,
@@ -804,6 +921,10 @@ def _render_to_dir_veusz(
             documents.append(str(document))
             specs.append(str(spec))
             terminal_requests.append(terminal_request)
+            _extend_unique_transform_steps(
+                transform_steps,
+                panel_transform_steps,
+            )
 
         _remove_stale_render_exports(
             output_dir,
@@ -826,6 +947,7 @@ def _render_to_dir_veusz(
         "veusz_documents": documents,
         "veusz_specs": specs,
         "terminal_render_requests": terminal_requests,
+        "transform_steps": transform_steps,
     }
     if split_plan is not None:
         payload["split_plan"] = json_safe(split_plan)

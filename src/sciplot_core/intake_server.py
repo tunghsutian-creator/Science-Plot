@@ -4,6 +4,8 @@ import base64
 import ipaddress
 import json
 import mimetypes
+import os
+import stat
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -16,6 +18,7 @@ from sciplot_core.intake import (
     _decode_group_payload,
     _project_dir_fromslug,
     _resolve_project_artifact,
+    _resolve_path_within_root,
     create_and_run_intake_project,
     create_intake_project,
     intake_catalog_payload,
@@ -110,18 +113,41 @@ class _IntakeHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_file(self, path: Path) -> None:
-        if not path.exists() or not path.is_file():
+    def _send_file(self, path: Path, *, authorized_root: Path) -> None:
+        try:
+            safe_path = _resolve_path_within_root(
+                path,
+                root=authorized_root,
+                require_regular_file=True,
+            )
+            open_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            file_descriptor = os.open(safe_path, open_flags)
+            handle = os.fdopen(file_descriptor, "rb")
+            file_stat = os.fstat(handle.fileno())
+            if not stat.S_ISREG(file_stat.st_mode):
+                handle.close()
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+        except PermissionError as exc:
+            self.send_error(HTTPStatus.FORBIDDEN, str(exc))
+            return
+        except (FileNotFoundError, OSError):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        body = path.read_bytes()
-        content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+
+        content_type = (
+            mimetypes.guess_type(safe_path.name)[0] or "application/octet-stream"
+        )
+        try:
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(file_stat.st_size))
+            self.end_headers()
+            while chunk := handle.read(64 * 1024):
+                self.wfile.write(chunk)
+        finally:
+            handle.close()
 
     def _project_dir_from_request(self, project_slug: str) -> Path:
         return _project_dir_fromslug(self.server.output_root, unquote(project_slug))
@@ -229,7 +255,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
             return
         parsed = urlparse(self.path)
         if parsed.path in {"/", "/index.html"}:
-            self._send_file(_STATIC_DIR / "index.html")
+            self._send_file(_STATIC_DIR / "index.html", authorized_root=_STATIC_DIR)
             return
         if parsed.path == "/api/catalog":
             query = parse_qs(parsed.query)
@@ -238,12 +264,20 @@ class _IntakeHandler(BaseHTTPRequestHandler):
             return
         if parsed.path.startswith("/api/session/"):
             session_id = safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
-            self._send_file(self.server.output_root / "sessions" / f"{session_id}.json")
+            session_root = self.server.output_root / "sessions"
+            self._send_file(
+                session_root / f"{session_id}.json",
+                authorized_root=session_root,
+            )
             return
         if parsed.path == "/api/session":
             query = parse_qs(parsed.query)
             session_id = safe_filename(query.get("id", [""])[0])
-            self._send_file(self.server.output_root / "sessions" / f"{session_id}.json")
+            session_root = self.server.output_root / "sessions"
+            self._send_file(
+                session_root / f"{session_id}.json",
+                authorized_root=session_root,
+            )
             return
         if parsed.path == "/api/projects":
             query = parse_qs(parsed.query)
@@ -262,7 +296,10 @@ class _IntakeHandler(BaseHTTPRequestHandler):
             return
         if parsed.path.startswith("/api/download/"):
             filename = safe_filename(unquote(parsed.path.rsplit("/", 1)[-1]))
-            self._send_file(self.server.output_root / filename)
+            self._send_file(
+                self.server.output_root / filename,
+                authorized_root=self.server.output_root,
+            )
             return
         if parsed.path.startswith("/api/projects/"):
             parts = parsed.path.strip("/").split("/")
@@ -276,7 +313,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                         query = parse_qs(parsed.query)
                         artifact_path = query.get("path", [""])[0]
                         artifact = _resolve_project_artifact(project_dir, artifact_path)
-                        self._send_file(artifact)
+                        self._send_file(artifact, authorized_root=project_dir)
                         return
                 except PermissionError as exc:
                     self.send_error(HTTPStatus.FORBIDDEN, str(exc))

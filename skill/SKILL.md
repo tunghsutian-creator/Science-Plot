@@ -74,8 +74,11 @@ promotion workflows. Do not automate Veusz with mouse clicks or patch VSZ text.
      --out /path/to/Visible_Figure_Project
    ```
 
-   `--rule` must name a ready rule. `--template` must be implemented by the
-   production Veusz builder.
+   `--rule` normally names a ready rule. The sole current evidence-gated
+   exception is an explicitly requested `performance_comparison` Studio review:
+   its scatter/radar builder is implemented, but the rule remains pending until
+   authorized real-data acceptance. Never present that run as autonomous-ready.
+   `--template` must be implemented by the production Veusz builder.
 
 4. For headless preparation and export, use the same command family:
 
@@ -200,7 +203,8 @@ consistently.
 ## Template, style, and delivery contracts
 
 The production builder implements exactly `curve`, `point_line`, `stacked_curve`,
-`bar`, `box`, `box_strip`, and `heatmap`. The `bar` template uses mean ± SD
+`bar`, `box`, `box_strip`, `heatmap`, `scatter`, and `polar_curve`. The `bar`
+template uses mean ± SD
 error bars for categorical replicate groups. An unambiguous long-form
 `Sample`/`Condition`/value table creates paired or grouped mean ± SD bars:
 sample identity owns the categorical colour root, condition identity owns the
@@ -220,10 +224,22 @@ Unknown or reference-only templates must fail at request validation.
 Do not bind a categorical scientific metric to one chart form. The semantic
 rule owns recognition, units, replicate preservation, and analysis; its
 versioned presentation contract separately declares a default template and
-the supported explicit alternatives. For `impact_metric`, `bar`, `box`, and
-`box_strip` must all consume the same prepared replicate data. An explicit
+the supported explicit alternatives. For `impact_metric`, `bar`, `box`,
+`box_strip`, and `point_line` must all consume the same prepared replicate data. An explicit
 supported choice is a normal validated request, while an unsupported choice
 fails closed.
+
+For `performance_comparison`, require one tidy `Material`/`Role`/`Metric`/
+`Value`/`Unit` table. `scatter` requires exactly one `ScatterAxis=x` and one
+`ScatterAxis=y`; sample `Group` owns a pale same-hue observed-range envelope.
+`polar_curve` requires at least three unique `RadarOrder` values plus declared
+`Direction`, `ScaleMin`, and `ScaleMax`; complete own samples are filled and
+references remain marker-only on axes with actual values. Both use native
+editable Veusz objects, a 60 x 55 mm plot module, a 41.5 x 38.5 mm plot region,
+and a reserved right 60 x 55 mm reference panel when required. Do not call the
+envelope a confidence interval, infer radar bounds, interpolate missing
+reference values, or promote the instrument-shaped fixture to real-data
+evidence.
 
 `src/sciplot_core/policy.py` owns global typography, stroke, tick, marker,
 ordinary frame, size, export, and delivery defaults. Templates and recipes may

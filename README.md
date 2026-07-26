@@ -145,9 +145,16 @@ presentation contract 负责允许的图形。以抗冲击强度为例，同一�
 skill/scripts/sciplot autoplot PATH --template bar --out /path/to/bar_project
 skill/scripts/sciplot autoplot PATH --template box --out /path/to/box_project
 skill/scripts/sciplot autoplot PATH --template box_strip --out /path/to/box_strip_project
+skill/scripts/sciplot autoplot PATH --template point_line --out /path/to/point_line_project
 ```
 
 未指定时使用规则记录的默认图形；显式选择不会改变数据类型、统计原始值或单位。
+抗冲击强度工作簿选择 `point_line` 时，同一样品轴的多个条件会形成均值点–线比较，
+误差棒采用与柱状图相同的均值 ± 样本标准差（分母 `n-1`）定义。全部原始重复值
+以条件同色系的浅色点叠加，并按箱线图的稳定伪随机槽位在样品中心两侧混排，不按条件
+分居左右；样品位置使用稳定的不同 marker。四个样品默认采用 `60x55` mm 图幅。默认选取
+条件数最多、样品轴最完整的一组兼容工作表；已确认的请求也可用
+`condition_order` 和 `condition_label_mapping` 固定条件顺序与图例文字。
 
 `bar` 还接受明确的长表组成数据：`Sample`、`Component` 和唯一一个数值列。
 这一路径把每个样品绘制为加和堆叠柱，不把组成值误当成重复测量，也不生成误差线。
@@ -155,12 +162,80 @@ skill/scripts/sciplot autoplot PATH --template box_strip --out /path/to/box_stri
 不透明的同色相明度阶梯区分。组分图例按可见堆叠顺序从上到下排列，并将每个图例色块
 切分为全部样品颜色，避免用单一样品的深浅色冒充多色柱。
 
+## 材料性能散点图和雷达图
+
+材料性能对比共用一个长表合同；示例见
+[`tests/fixtures/performance_comparison/material_performance_long.csv`](tests/fixtures/performance_comparison/material_performance_long.csv)。
+每行只能表示一个“材料–指标”数值，不能把重复行静默平均。必需列和常用可选列为：
+
+| 列 | 含义 |
+| --- | --- |
+| `Material` | 材料或样品名。 |
+| `Role` | `sample` 表示本工作样品，`reference` 表示文献/参照材料。 |
+| `Metric`, `Value`, `Unit` | 指标 ID、有限数值和单位；同一指标的元数据与单位必须一致。 |
+| `Group` | 本工作样品的包络组；同组样品共享色系和浅色包络。 |
+| `DisplayLabel` | 轴上显示的指标名。 |
+| `ScatterAxis` | 散点图中恰好一个指标写 `x`、一个指标写 `y`。 |
+| `RadarOrder` | 雷达轴顺序；至少三个指标，正整数不得重复。 |
+| `Direction` | `higher` 或 `lower`，统一为“越外越优”。 |
+| `ScaleMin`, `ScaleMax` | 雷达归一化的声明边界；数据越界时拒绝绘图。 |
+| `Journal`, `Year`, `DOI` | 参考材料的文献元数据；期刊和年份显示在右侧索引。 |
+| `MaterialOrder`, `Marker` | 可选的索引顺序和显式 marker。 |
+
+散点图左侧是 `60x55` mm 图模块，实际坐标绘图区为 `41.5x38.5` mm；右侧保留另一个
+`60x55` mm 材料索引模块，总图幅为 `120x55` mm。本工作样品按 `Group` 生成同色系浅色
+凸包；一个或两个点使用确定性的圆/胶囊退化几何。这个区域只表示已观察样品范围，
+不是置信区间。参考材料保持中性、空心且可由 marker 区分。
+
+雷达图使用同样的左 `60x55` mm 绘图模块。本工作样品是闭合、半透明填充的 marker
+多边形；参考材料只在确有数据的指标轴上标 marker，不补齐或连成虚构多边形。只要存在
+参考材料、文献信息或较多本工作样品，就使用右侧保留索引模块，避免图内图例挤压约
+`40x38` mm 的有效雷达区域。
+
+当前 source-controlled 示例是 `instrument_shaped_fixture`，不是用户真实测量数据，因此
+`performance_comparison` 规则在第一份授权真实数据完成 acceptance 前保持 `pending`。
+功能可通过显式 Studio 请求使用，但不会被 `autoplot` 静默自动选择：
+
+```bash
+skill/scripts/sciplot studio PATH \
+  --rule performance_comparison \
+  --template scatter \
+  --out /path/to/material_scatter
+
+skill/scripts/sciplot studio PATH \
+  --rule performance_comparison \
+  --template polar_curve \
+  --out /path/to/material_radar
+```
+
+需要 Codex 代为绘图时，可直接使用下面这种指令；把路径和材料名换成自己的即可：
+
+```text
+请用 SciPlot 读取 /绝对路径/material_performance_long.csv。
+显式使用 rule=performance_comparison。
+先生成 template=scatter：ScatterAxis=x 是 density，ScatterAxis=y 是
+specific_impact_strength；Role=sample 的同一 Group 用与 marker 同色系的浅色包络，
+Role=reference 只画真实数据点。图幅必须是左侧 60x55 mm 绘图模块加右侧
+60x55 mm 材料索引，总计 120x55 mm；索引显示材料、marker、Journal 和 Year。
+不要平均重复的 Material-Metric 行；若单位、轴定义或数值不完整就停止并报告。
+用原生 Veusz 对象生成可编辑 VSZ，并导出 PDF 和 300 dpi TIFF。
+```
+
+```text
+请用同一数据生成 template=polar_curve。只使用有 RadarOrder 的指标，并严格按
+Direction、ScaleMin、ScaleMax 归一化到 0-1（越外越优）。每个 Role=sample 必须
+包含全部雷达指标，画闭合填充多边形并保留 marker；Role=reference 缺少的指标不要
+插值，只在实际存在的指标轴上标 marker。左侧绘图模块 60x55 mm，参考材料及
+Journal/Year 放在右侧保留的 60x55 mm 索引区。输出可编辑 VSZ、PDF 和 300 dpi TIFF，
+并检查 exact-current QA 与 transform ledger。
+```
+
 生产绘图最终都由同一 Veusz 路线完成。不同编排入口不表示存在另一个前端、renderer 或
 视觉权威。
 
 ## 模板与全局绘图契约
 
-生产 Veusz 文档构建器只接受七种已完成语义验证的模板：
+生产 Veusz 文档构建器只接受九种已完成语义验证的模板：
 
 - `curve`
 - `point_line`
@@ -169,6 +244,8 @@ skill/scripts/sciplot autoplot PATH --template box_strip --out /path/to/box_stri
 - `box`
 - `box_strip`
 - `heatmap`
+- `scatter`
+- `polar_curve`
 
 其它模板必须在请求边界明确失败，不能悄悄退化成曲线图。全局硬样式由
 `src/sciplot_core/policy.py` 统一定义，并与 vendored `plot_contract.json` 保持一致。

@@ -8,6 +8,7 @@ import json
 import mimetypes
 import os
 import re
+import stat
 import subprocess
 import sys
 import webbrowser
@@ -229,6 +230,14 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
         "icon": "metrics",
         "experiments": (
             {"id": "swelling_curve", "label": "溶胀", "rule_id": "swelling_curve"},
+            {
+                "id": "performance_comparison",
+                "label": "材料性能对比",
+                "rule_id": "performance_comparison",
+                "chart": "scatter",
+                "template": "scatter",
+                "render_options": {"size": "120x55"},
+            },
             {"id": "unknown_metrics", "label": "未知指标", "rule_id": None},
         ),
     },
@@ -304,13 +313,73 @@ def _catalog_item_for_rule(rule_id: str | None) -> tuple[dict[str, Any], dict[st
     return None
 
 
+def _resolve_path_within_root(
+    path: str | Path,
+    *,
+    root: str | Path,
+    require_regular_file: bool,
+) -> Path:
+    """Resolve one path beneath a trusted root without following symlinks."""
+
+    trusted_root = Path(root).expanduser().resolve(strict=True)
+    requested = Path(path).expanduser()
+    if not requested.is_absolute():
+        requested = trusted_root / requested
+    lexical_path = Path(os.path.abspath(requested))
+    try:
+        relative = lexical_path.relative_to(trusted_root)
+    except ValueError as exc:
+        raise PermissionError("Path is outside the authorized SciPlot root.") from exc
+
+    current = trusted_root
+    for part in relative.parts:
+        current = current / part
+        try:
+            current_stat = current.lstat()
+        except FileNotFoundError:
+            break
+        if stat.S_ISLNK(current_stat.st_mode):
+            raise PermissionError("Symlink-backed SciPlot artifacts are not authorized.")
+
+    resolved = lexical_path.resolve(strict=False)
+    if not resolved_path_is_within(resolved, trusted_root):
+        raise PermissionError("Path is outside the authorized SciPlot root.")
+    if require_regular_file:
+        try:
+            resolved_stat = resolved.stat()
+        except FileNotFoundError:
+            raise FileNotFoundError(resolved) from None
+        if not stat.S_ISREG(resolved_stat.st_mode):
+            raise FileNotFoundError(resolved)
+    return resolved
+
+
 def _write_zip(project_dir: Path, zip_path: Path) -> None:
+    project_root = Path(project_dir).expanduser().resolve(strict=True)
+    zip_path = Path(zip_path).expanduser()
+    if zip_path.is_symlink():
+        raise PermissionError("Refusing to replace a symlink-backed SciPlot ZIP.")
+
+    archive_files: list[Path] = []
+    for path in sorted(project_root.rglob("*")):
+        if path.is_symlink():
+            raise PermissionError(
+                f"Refusing to archive symlink-backed project entry: {path}"
+            )
+        if path.is_file():
+            archive_files.append(
+                _resolve_path_within_root(
+                    path,
+                    root=project_root,
+                    require_regular_file=True,
+                )
+            )
+
     if zip_path.exists():
         zip_path.unlink()
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(project_dir.rglob("*")):
-            if path.is_file():
-                archive.write(path, path.relative_to(project_dir.parent))
+        for path in archive_files:
+            archive.write(path, path.relative_to(project_root.parent))
 
 
 def _remove_legacy_project_launcher(project_dir: Path) -> bool:
@@ -425,29 +494,69 @@ def _project_dir_fromslug(output_root: Path, project_slug: str) -> Path:
     return project_dir
 
 
-def _artifact_info(path: Path, *, project_slug: str) -> dict[str, Any]:
-    exists = path.exists() and path.is_file()
-    stat = path.stat() if exists else None
+def _artifact_info(
+    path: Path,
+    *,
+    project_slug: str,
+    authorized_root: Path | None = None,
+) -> dict[str, Any]:
+    display_path = path
+    authorized = True
+    if authorized_root is not None:
+        try:
+            display_path = _resolve_path_within_root(
+                path,
+                root=authorized_root,
+                require_regular_file=False,
+            )
+        except (FileNotFoundError, OSError, PermissionError, RuntimeError, ValueError):
+            authorized = False
+    artifact_stat = None
+    if authorized:
+        try:
+            display_path = _resolve_path_within_root(
+                display_path,
+                root=authorized_root or display_path.parent,
+                require_regular_file=True,
+            )
+            artifact_stat = display_path.stat()
+        except (FileNotFoundError, OSError, PermissionError, RuntimeError, ValueError):
+            artifact_stat = None
+    exists = artifact_stat is not None
     return {
         "exists": exists,
-        "path": str(path),
+        "path": str(display_path) if authorized else "",
         "name": path.name,
-        "size_bytes": stat.st_size if stat is not None else 0,
-        "mtime_ns": stat.st_mtime_ns if stat is not None else 0,
+        "size_bytes": artifact_stat.st_size if artifact_stat is not None else 0,
+        "mtime_ns": artifact_stat.st_mtime_ns if artifact_stat is not None else 0,
         "content_type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
-        "url": f"/api/projects/{quote(project_slug)}/artifact?path={quote(str(path), safe='')}" if exists else None,
+        "url": (
+            f"/api/projects/{quote(project_slug)}/artifact?"
+            f"path={quote(str(display_path), safe='')}"
+            if exists
+            else None
+        ),
     }
 
 
-def _download_info(path: Path) -> dict[str, Any]:
-    exists = path.exists() and path.is_file()
-    stat = path.stat() if exists else None
+def _download_info(path: Path, *, authorized_root: Path) -> dict[str, Any]:
+    try:
+        safe_path = _resolve_path_within_root(
+            path,
+            root=authorized_root,
+            require_regular_file=True,
+        )
+        download_stat = safe_path.stat()
+    except (FileNotFoundError, OSError, PermissionError, RuntimeError, ValueError):
+        safe_path = path
+        download_stat = None
+    exists = download_stat is not None
     return {
         "exists": exists,
-        "path": str(path),
+        "path": str(safe_path) if exists else "",
         "name": path.name,
-        "size_bytes": stat.st_size if stat is not None else 0,
-        "mtime_ns": stat.st_mtime_ns if stat is not None else 0,
+        "size_bytes": download_stat.st_size if download_stat is not None else 0,
+        "mtime_ns": download_stat.st_mtime_ns if download_stat is not None else 0,
         "content_type": mimetypes.guess_type(path.name)[0] or "application/octet-stream",
         "url": f"/api/download/{quote(path.name)}" if exists else None,
     }
@@ -456,32 +565,50 @@ def _download_info(path: Path) -> dict[str, Any]:
 def _project_package_info(project_dir: Path, *, project_slug: str) -> dict[str, Any]:
     launcher_contract = inspect_project_launcher_contract(project_dir)
     studio_launcher = project_dir / PROJECT_PRIMARY_LAUNCHER
-    studio_launcher_info = _artifact_info(studio_launcher, project_slug=project_slug)
+    studio_launcher_info = _artifact_info(
+        studio_launcher,
+        project_slug=project_slug,
+        authorized_root=project_dir,
+    )
     studio_launcher_info["executable"] = bool(
         studio_launcher_info["exists"] and (studio_launcher.stat().st_mode & 0o111)
     )
     veusz_launcher = project_dir / PROJECT_VEUSZ_LAUNCHER
-    veusz_launcher_info = _artifact_info(veusz_launcher, project_slug=project_slug)
+    veusz_launcher_info = _artifact_info(
+        veusz_launcher,
+        project_slug=project_slug,
+        authorized_root=project_dir,
+    )
     veusz_launcher_info["executable"] = bool(
         veusz_launcher_info["exists"] and (veusz_launcher.stat().st_mode & 0o111)
     )
     export_edited_launcher = project_dir / PROJECT_EXPORT_LAUNCHER
     export_edited_launcher_info = _artifact_info(
-        export_edited_launcher, project_slug=project_slug
+        export_edited_launcher,
+        project_slug=project_slug,
+        authorized_root=project_dir,
     )
     export_edited_launcher_info["executable"] = bool(
         export_edited_launcher_info["exists"] and (export_edited_launcher.stat().st_mode & 0o111)
     )
     studio_documents = [
-        _artifact_info(path, project_slug=project_slug)
+        _artifact_info(
+            path,
+            project_slug=project_slug,
+            authorized_root=project_dir,
+        )
         for path in sorted((project_dir / "studio").glob("*.vsz"))
     ]
     sciplot_manifests = [
-        _artifact_info(path, project_slug=project_slug)
+        _artifact_info(
+            path,
+            project_slug=project_slug,
+            authorized_root=project_dir,
+        )
         for path in sorted(project_dir.glob("*.sciplot.json"))
     ]
     zip_path = project_dir.parent / safe_filename(f"{project_slug}.zip")
-    zip_info = _download_info(zip_path)
+    zip_info = _download_info(zip_path, authorized_root=project_dir.parent)
     studio_complete = bool(
         studio_launcher_info["exists"]
         and studio_launcher_info["executable"]
@@ -692,33 +819,42 @@ def list_intake_projects(output_root: Path) -> list[dict[str, Any]]:
     return projects
 
 
-def _allowed_artifact_roots(project_dir: Path) -> list[Path]:
-    roots = [project_dir.resolve()]
-    manifest = _read_json_if_exists(project_dir / "intake_manifest.json") or {}
-    for value in (
-        manifest.get("outputs_dir"),
-        (manifest.get("last_run") or {}).get("output") if isinstance(manifest.get("last_run"), dict) else None,
-    ):
-        if isinstance(value, str) and value.strip():
-            roots.append(Path(value).expanduser().resolve())
-    return roots
-
-
 def _resolve_project_artifact(project_dir: Path, artifact_path: str) -> Path:
     if not artifact_path.strip():
         raise ValueError("Artifact path is required.")
-    requested = Path(artifact_path).expanduser()
-    roots = _allowed_artifact_roots(project_dir)
-    if requested.is_absolute():
-        candidate = requested.resolve()
-        if any(resolved_path_is_within(candidate, root) for root in roots):
-            return candidate
-        raise PermissionError("Artifact path is outside this SciPlot project.")
-    for root in roots:
-        candidate = (root / requested).resolve()
-        if resolved_path_is_within(candidate, root):
-            return candidate
-    raise PermissionError("Artifact path is outside this SciPlot project.")
+    try:
+        return _resolve_path_within_root(
+            artifact_path,
+            root=project_dir,
+            require_regular_file=True,
+        )
+    except PermissionError as exc:
+        raise PermissionError("Artifact path is outside this SciPlot project.") from exc
+
+
+def _project_scoped_manifest_path(
+    project_dir: Path,
+    value: object,
+    *,
+    fallback: Path | None = None,
+) -> Path | None:
+    text = str(value or "").strip()
+    if text:
+        try:
+            return _resolve_path_within_root(
+                text,
+                root=project_dir,
+                require_regular_file=False,
+            )
+        except (FileNotFoundError, OSError, PermissionError, RuntimeError, ValueError):
+            pass
+    if fallback is None:
+        return None
+    return _resolve_path_within_root(
+        fallback,
+        root=project_dir,
+        require_regular_file=False,
+    )
 
 
 def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
@@ -729,34 +865,91 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         raise FileNotFoundError(f"No intake project manifest found at {manifest_path}.")
     project_slug = str(manifest.get("project_slug") or project_path.name)
     last_run = manifest.get("last_run") if isinstance(manifest.get("last_run"), dict) else {}
-    run_output = Path(str(last_run.get("output") or manifest.get("outputs_dir") or project_path / "runs" / "run_001"))
+    run_output = _project_scoped_manifest_path(
+        project_path,
+        last_run.get("output") or manifest.get("outputs_dir"),
+        fallback=project_path / "runs" / "run_001",
+    )
+    assert run_output is not None
     intervention_path = run_output / "intervention_request.json"
     cleanup_request_path = run_output / CLEANUP_REQUEST_FILENAME
     cleanup_result_path = run_output / CLEANUP_RESULT_FILENAME
     artifacts = {
-        "manifest": _artifact_info(run_output / "manifest.json", project_slug=project_slug),
-        "analysis_report": _artifact_info(run_output / "analysis_report.md", project_slug=project_slug),
-        "analysis_metrics": _artifact_info(run_output / "tables" / "analysis_metrics.csv", project_slug=project_slug),
-        "revision_brief": _artifact_info(run_output / "revision_brief.md", project_slug=project_slug),
-        "review_html": _artifact_info(run_output / "review.html", project_slug=project_slug),
-        "intervention_request": _artifact_info(intervention_path, project_slug=project_slug),
-        "assisted_cleanup_request": _artifact_info(cleanup_request_path, project_slug=project_slug),
-        "cleanup_result": _artifact_info(cleanup_result_path, project_slug=project_slug),
+        "manifest": _artifact_info(
+            run_output / "manifest.json",
+            project_slug=project_slug,
+            authorized_root=project_path,
+        ),
+        "analysis_report": _artifact_info(
+            run_output / "analysis_report.md",
+            project_slug=project_slug,
+            authorized_root=project_path,
+        ),
+        "analysis_metrics": _artifact_info(
+            run_output / "tables" / "analysis_metrics.csv",
+            project_slug=project_slug,
+            authorized_root=project_path,
+        ),
+        "revision_brief": _artifact_info(
+            run_output / "revision_brief.md",
+            project_slug=project_slug,
+            authorized_root=project_path,
+        ),
+        "review_html": _artifact_info(
+            run_output / "review.html",
+            project_slug=project_slug,
+            authorized_root=project_path,
+        ),
+        "intervention_request": _artifact_info(
+            intervention_path,
+            project_slug=project_slug,
+            authorized_root=project_path,
+        ),
+        "assisted_cleanup_request": _artifact_info(
+            cleanup_request_path,
+            project_slug=project_slug,
+            authorized_root=project_path,
+        ),
+        "cleanup_result": _artifact_info(
+            cleanup_result_path,
+            project_slug=project_slug,
+            authorized_root=project_path,
+        ),
     }
     delivery = last_run.get("delivery_package") if isinstance(last_run.get("delivery_package"), dict) else {}
     project_file = delivery.get("project_file")
     data_csvs = delivery.get("data_csvs") if isinstance(delivery.get("data_csvs"), list) else []
     if isinstance(project_file, str) and project_file.strip():
-        artifacts["delivery_project"] = _artifact_info(Path(project_file), project_slug=project_slug)
+        artifacts["delivery_project"] = _artifact_info(
+            Path(project_file),
+            project_slug=project_slug,
+            authorized_root=project_path,
+        )
     artifacts["delivery_data"] = [
-        _artifact_info(Path(str(item.get("path"))), project_slug=project_slug)
+        _artifact_info(
+            Path(str(item.get("path"))),
+            project_slug=project_slug,
+            authorized_root=project_path,
+        )
         for item in data_csvs
         if isinstance(item, dict) and isinstance(item.get("path"), str) and item.get("path")
     ]
-    figure_paths = [Path(str(path)) for path in last_run.get("figures", []) if isinstance(path, str)]
+    figure_paths = [
+        safe_path
+        for path in last_run.get("figures", [])
+        if isinstance(path, str)
+        for safe_path in [
+            _project_scoped_manifest_path(project_path, path)
+        ]
+        if safe_path is not None
+    ]
     figures = [
         {
-            **_artifact_info(path, project_slug=project_slug),
+            **_artifact_info(
+                path,
+                project_slug=project_slug,
+                authorized_root=project_path,
+            ),
             "canonical_figure_stem": canonical_figure_stem(path),
         }
         for path in figure_paths
@@ -1078,6 +1271,7 @@ def prepare_intake_session(
     *,
     output_root: Path = _DEFAULT_OUTPUT_ROOT,
     requested_rule_id: str | None = None,
+    allow_pending_rule_review: bool = False,
 ) -> dict[str, Any]:
     source = Path(input_path).expanduser().resolve()
     if not source.exists():
@@ -1098,8 +1292,13 @@ def prepare_intake_session(
 
     if selected_rule_id:
         selected_rule = get_rule(selected_rule_id)
-        if selected_rule.fixture_status != "ready":
-            raise ValueError(f"Material rule `{selected_rule.rule_id}` is not ready for production use.")
+        pending_rule_review = selected_rule.fixture_status != "ready"
+        if pending_rule_review and not allow_pending_rule_review:
+            raise ValueError(
+                f"Material rule `{selected_rule.rule_id}` is not ready for "
+                "production use; an explicit rule plus template is required "
+                "for a non-ready Studio review."
+            )
         matched = _catalog_item_for_rule(selected_rule.rule_id)
         if matched is None:
             raise ValueError(f"Material rule `{selected_rule.rule_id}` is not available in the intake catalog.")
@@ -1108,8 +1307,14 @@ def prepare_intake_session(
         data_type_id = str(data_type["id"])
         experiment_type_id = str(experiment["id"])
         rule_id = selected_rule.rule_id
-        reason = f"Explicit material rule `{selected_rule.rule_id}` selected by the user or an assistant."
-        confidence = 100.0
+        reason = (
+            f"Explicit pending material rule `{selected_rule.rule_id}` selected "
+            "for a non-ready Studio review."
+            if pending_rule_review
+            else f"Explicit material rule `{selected_rule.rule_id}` selected by "
+            "the user or an assistant."
+        )
+        confidence = 0.0 if pending_rule_review else 100.0
         if selected_rule.rule_id == "tensile_curve" and tensile_dirs:
             groups = [
                 _group_payload(
@@ -1205,6 +1410,10 @@ def prepare_intake_session(
         "groups": groups,
         "warnings": warnings,
         "semantic": semantic,
+        "pending_rule_review": bool(
+            selected_rule_id
+            and get_rule(selected_rule_id).fixture_status != "ready"
+        ),
     }
     path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
     return payload
@@ -1216,13 +1425,57 @@ def create_intake_project_from_session(session: str | Path | dict[str, Any]) -> 
     else:
         payload = dict(session)
     groups: list[IntakeGroupInput] = []
-    for group in payload.get("groups", []):
+    for group_index, group in enumerate(payload.get("groups", [])):
+        if not isinstance(group, dict):
+            raise ValueError(
+                f"Intake session group {group_index + 1} must be an object."
+            )
         files: list[IncomingFile] = []
-        for item in group.get("files", []):
-            source_path = Path(str(item.get("source_path") or "")).expanduser()
-            if not source_path.exists():
-                continue
-            files.append(IncomingFile(name=str(item.get("name") or source_path.name), content=source_path.read_bytes()))
+        for file_index, item in enumerate(group.get("files", [])):
+            if not isinstance(item, dict):
+                raise ValueError(
+                    "Intake session file "
+                    f"{group_index + 1}.{file_index + 1} must be an object."
+                )
+            source_text = str(item.get("source_path") or "").strip()
+            if not source_text:
+                raise ValueError(
+                    "Intake session file "
+                    f"{group_index + 1}.{file_index + 1} has no source_path."
+                )
+            source_path = Path(source_text).expanduser().resolve()
+            if not source_path.is_file():
+                raise FileNotFoundError(
+                    "Intake session source is missing or not a file: "
+                    f"{source_path}"
+                )
+            expected_size = item.get("size_bytes")
+            if (
+                isinstance(expected_size, bool)
+                or not isinstance(expected_size, int)
+                or expected_size < 0
+            ):
+                raise ValueError(
+                    f"Intake session source has no valid size record: {source_path}"
+                )
+            expected_sha256 = str(item.get("sha256") or "").strip().casefold()
+            if not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
+                raise ValueError(
+                    f"Intake session source has no valid SHA-256 record: {source_path}"
+                )
+            content = source_path.read_bytes()
+            actual_sha256 = hashlib.sha256(content).hexdigest()
+            if len(content) != expected_size or actual_sha256 != expected_sha256:
+                raise ValueError(
+                    "Intake session source changed after the session was "
+                    f"prepared: {source_path}"
+                )
+            files.append(
+                IncomingFile(
+                    name=str(item.get("name") or source_path.name),
+                    content=content,
+                )
+            )
         groups.append(IntakeGroupInput(sample=str(group.get("sample") or ""), files=tuple(files)))
     return create_intake_project(
         project_name=str(payload.get("project_name") or ""),

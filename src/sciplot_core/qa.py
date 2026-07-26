@@ -689,6 +689,23 @@ def _fixed_frame_report(audit: dict[str, Any] | None, intent: dict[str, Any]) ->
         all_graphs.extend(graphs)
         pages = {int(item["page"]): item for item in document.get("pages", []) if isinstance(item, dict)}
         for graph in graphs:
+            graph_expected_margins = dict(expected_margins)
+            if graph.get("role") == "performance_plot":
+                from sciplot_core.policy import PERFORMANCE_PANEL_WIDTH_MM
+
+                page = pages.get(int(graph.get("page") or 0))
+                page_size = (
+                    page.get("size_mm")
+                    if isinstance(page, dict)
+                    and isinstance(page.get("size_mm"), list)
+                    else []
+                )
+                if len(page_size) == 2:
+                    graph_expected_margins["right"] = (
+                        float(page_size[0])
+                        - PERFORMANCE_PANEL_WIDTH_MM
+                        + expected_margins["right"]
+                    )
             margins = graph.get("margins_mm") if isinstance(graph.get("margins_mm"), dict) else {}
             margin_errors = {
                 side: (
@@ -696,13 +713,14 @@ def _fixed_frame_report(audit: dict[str, Any] | None, intent: dict[str, Any]) ->
                     if margins.get(side) is not None
                     else float("inf")
                 )
-                for side, expected in expected_margins.items()
+                for side, expected in graph_expected_margins.items()
             }
             if any(error > tolerance for error in margin_errors.values()):
                 issues.append(
                     {
                         "id": "fixed_publication_frame_misaligned",
                         "path": graph.get("path"),
+                        "expected_margins_mm": graph_expected_margins,
                         "margin_error_mm": margin_errors,
                     }
                 )

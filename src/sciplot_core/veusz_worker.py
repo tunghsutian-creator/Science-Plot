@@ -514,6 +514,7 @@ def _axis_record_matches_spec(
     axis_name: str,
 ) -> bool:
     bindings = record["bindings"]
+    hidden = axis_spec.get("hidden") is True
     expected_ticks = (
         axis_spec.get("ticks")
         if isinstance(axis_spec.get("ticks"), list)
@@ -523,7 +524,7 @@ def _axis_record_matches_spec(
     expected_mode = str(axis_spec.get("mode") or "numeric")
     expected_log = axis_spec.get("scale") == "log"
     expected_direction = "vertical" if axis_name == "y" else "horizontal"
-    ticks_visible = axis_spec.get("show_ticks") is not False
+    ticks_visible = axis_spec.get("show_ticks") is not False and not hidden
     visibility_matches = all(
         bool(bindings[path]) is (not ticks_visible)
         for path in (
@@ -534,7 +535,9 @@ def _axis_record_matches_spec(
     )
     label = str(axis_spec.get("label") or "")
     label_visibility_matches = (
-        not label or not bool(bindings["Label/hide"])
+        bool(bindings["Label/hide"])
+        if hidden or not label
+        else not bool(bindings["Label/hide"])
     )
     foreground = str(axis_spec["foreground_color"])
     return (
@@ -587,7 +590,7 @@ def _axis_record_matches_spec(
             bindings["MinorTicks/length"],
             axis_spec["minor_tick_length_pt"],
         )
-        and not bool(bindings["Line/hide"])
+        and bool(bindings["Line/hide"]) is hidden
         and all(
             _numeric_setting_equal(bindings[path], 0)
             for path in (
@@ -817,6 +820,41 @@ def _line_record_matches_contract(
     )
 
 
+def _polygon_record_matches_contract(
+    record: dict[str, Any],
+    *,
+    expected: dict[str, Any],
+) -> bool:
+    bindings = record["bindings"]
+    return (
+        record["path"] == expected["path"]
+        and record["name"] == expected["name"]
+        and str(bindings["positioning"]) == expected["positioning"]
+        and str(bindings["xAxis"]) == expected["x_axis"]
+        and str(bindings["yAxis"]) == expected["y_axis"]
+        and _numeric_sequence_equal(bindings["xPos"], expected["xPos"])
+        and _numeric_sequence_equal(bindings["yPos"], expected["yPos"])
+        and not bool(bindings["hide"])
+        and str(bindings["Line/color"]) == expected["line_color"]
+        and _distance_matches_pt(
+            bindings["Line/width"],
+            expected["line_width_pt"],
+        )
+        and str(bindings["Line/style"]) == expected["line_style"]
+        and _numeric_setting_equal(
+            bindings["Line/transparency"],
+            expected["line_transparency"],
+        )
+        and bool(bindings["Line/hide"]) is bool(expected["line_hide"])
+        and str(bindings["Fill/color"]) == expected["fill_color"]
+        and _numeric_setting_equal(
+            bindings["Fill/transparency"],
+            expected["fill_transparency"],
+        )
+        and bool(bindings["Fill/hide"]) is bool(expected["fill_hide"])
+    )
+
+
 def _direct_label_record_matches_contract(
     record: dict[str, Any],
     *,
@@ -963,6 +1001,11 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
     from PyQt6 import QtWidgets
 
     from sciplot_core.scalar_visual import opaque_color_to_veusz_rgba
+    from sciplot_core.performance_veusz import (
+        performance_label_contracts,
+        performance_line_contracts,
+        performance_polygon_contracts,
+    )
     from sciplot_core.studio import (
         _categorical_component_legend_label_contracts,
         _categorical_component_legend_rect_contracts,
@@ -1067,10 +1110,6 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                 if isinstance(group, dict)
             ]
             expected_lengths: list[str] = []
-            component_labels = [
-                str(value)
-                for value in categorical.get("component_labels", [])
-            ]
             for group_index, group in enumerate(groups, start=1):
                 group_datasets: list[dict[str, Any]] = []
                 components = [
@@ -1303,6 +1342,16 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                 raise ValueError(
                     f"Exact-current Veusz document does not contain exactly "
                     f"one bound xy widget for series {name!r}."
+                )
+            expected_channels = raw_series.get("expected_mark_channels")
+            if (
+                isinstance(expected_channels, list)
+                and matching_xy[0]["mark_channels"]
+                != [str(value) for value in expected_channels]
+            ):
+                raise ValueError(
+                    f"Exact-current Veusz series {name!r} mark channels differ "
+                    "from the rendered performance contract."
                 )
             consumers: list[str] = []
             presentation_kind = str(
@@ -1538,6 +1587,21 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                 {
                     **raw_label,
                     "path": f"/page1/graph1/{raw_label['name']}",
+                    "literal_label": _veusz_literal_text(
+                        raw_label.get("label")
+                    ),
+                }
+            )
+        for raw_label in performance_label_contracts(spec):
+            parent = str(raw_label.get("parent") or "graph")
+            expected_direct_labels.append(
+                {
+                    **raw_label,
+                    "path": (
+                        f"/page1/{raw_label['name']}"
+                        if parent == "page"
+                        else f"/page1/graph1/{raw_label['name']}"
+                    ),
                     "literal_label": _veusz_literal_text(
                         raw_label.get("label")
                     ),
@@ -1944,6 +2008,59 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                 "Exact-current Veusz shape inventory differs from the closed "
                 "page, reference-guide, and scalar colorbar-background contract."
             )
+        polygon_records = _visible_data_bindings(
+            loaded_document,
+            widget_type="polygon",
+            setting_names=(
+                "positioning",
+                "xAxis",
+                "yAxis",
+                "xPos",
+                "yPos",
+                "hide",
+                "Line/color",
+                "Line/width",
+                "Line/style",
+                "Line/transparency",
+                "Line/hide",
+                "Fill/color",
+                "Fill/transparency",
+                "Fill/hide",
+            ),
+        )
+        expected_polygons = [
+            {
+                **contract,
+                "path": (
+                    f"/page1/{contract['name']}"
+                    if contract.get("parent") == "page"
+                    else f"/page1/graph1/{contract['name']}"
+                ),
+            }
+            for contract in performance_polygon_contracts(spec)
+        ]
+        actual_polygons_by_path = {
+            str(record["path"]): record for record in polygon_records
+        }
+        expected_polygons_by_path = {
+            str(record["path"]): record for record in expected_polygons
+        }
+        if (
+            len(actual_polygons_by_path) != len(polygon_records)
+            or set(actual_polygons_by_path) != set(expected_polygons_by_path)
+            or any(
+                not _polygon_record_matches_contract(
+                    actual_polygons_by_path[path],
+                    expected=expected,
+                )
+                for path, expected in expected_polygons_by_path.items()
+            )
+        ):
+            raise ValueError(
+                "Exact-current Veusz polygon inventory differs from the "
+                "closed performance-comparison geometry contract."
+            )
+        allowed_polygon_paths = set(expected_polygons_by_path)
         line_records = _visible_data_bindings(
             loaded_document,
             widget_type="line",
@@ -1976,6 +2093,7 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             for contract in (
                 _categorical_line_contracts(spec)
                 + _reference_guide_line_contracts(spec)
+                + performance_line_contracts(spec)
             )
         ]
         actual_lines_by_path = {
@@ -2122,9 +2240,13 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             if widget_type in {
                 "ellipse",
                 "imagefile",
-                "polygon",
                 "svgfile",
             }:
+                unapproved_overlay_widgets.append(f"{path}:{widget_type}")
+            if (
+                widget_type == "polygon"
+                and str(path) not in allowed_polygon_paths
+            ):
                 unapproved_overlay_widgets.append(f"{path}:{widget_type}")
             if bool(getattr(node, "isplotter", False)):
                 unapproved_plotters.append(f"{path}:{widget_type}")

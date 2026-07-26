@@ -29,6 +29,12 @@ def _source_stem(source: Path) -> str:
     return slug(value) or "sciplot"
 
 
+def _resolved_paths_overlap(first: Path, second: Path) -> bool:
+    """Return whether either resolved path contains the other."""
+
+    return first == second or first in second.parents or second in first.parents
+
+
 def resolve_user_output_layout(
     source: str | Path,
     *,
@@ -54,16 +60,20 @@ def resolve_user_output_layout(
     else:
         delivery_root = Path(requested_delivery_root).expanduser().resolve()
     delivery_root = delivery_root.resolve()
-    if delivery_root == resolved_source or delivery_root == resolved_source.parent:
+    if _resolved_paths_overlap(delivery_root, resolved_source):
         raise ValueError(
-            "The visible SciPlot output must be a dedicated directory, not the "
-            "source itself or its parent directory."
+            "The visible SciPlot output must be a dedicated directory that does "
+            "not overlap the source path."
         )
     workspace_root = (
         delivery_root.parent
         / HIDDEN_WORKSPACE_DIR
         / (slug(delivery_root.name).casefold() or "sciplot")
     ).resolve()
+    if _resolved_paths_overlap(workspace_root, resolved_source):
+        raise ValueError(
+            "The SciPlot runtime workspace must not overlap the source path."
+        )
     return UserOutputLayout(
         delivery_root=delivery_root,
         workspace_root=workspace_root,

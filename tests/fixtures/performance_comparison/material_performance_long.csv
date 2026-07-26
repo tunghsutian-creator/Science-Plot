@@ -1,0 +1,25 @@
+Material,Role,Group,Metric,Value,Unit,DisplayLabel,ScatterAxis,RadarOrder,Direction,ScaleMin,ScaleMax,Journal,Year,DOI,MaterialOrder
+Own A,sample,This work,density,1.05,g cm^-3,Density,x,1,lower,0.8,1.6,,,,1
+Own A,sample,This work,specific_impact_strength,62,kJ m^-2,Specific impact strength,y,2,higher,0,120,,,,1
+Own A,sample,This work,tensile_strength,70,MPa,Tensile strength,,3,higher,0,180,,,,1
+Own A,sample,This work,elongation_at_break,80,%,Elongation at break,,4,higher,0,120,,,,1
+Own B,sample,This work,density,1.10,g cm^-3,Density,x,1,lower,0.8,1.6,,,,2
+Own B,sample,This work,specific_impact_strength,78,kJ m^-2,Specific impact strength,y,2,higher,0,120,,,,2
+Own B,sample,This work,tensile_strength,82,MPa,Tensile strength,,3,higher,0,180,,,,2
+Own B,sample,This work,elongation_at_break,65,%,Elongation at break,,4,higher,0,120,,,,2
+Own C,sample,This work,density,1.18,g cm^-3,Density,x,1,lower,0.8,1.6,,,,3
+Own C,sample,This work,specific_impact_strength,70,kJ m^-2,Specific impact strength,y,2,higher,0,120,,,,3
+Own C,sample,This work,tensile_strength,95,MPa,Tensile strength,,3,higher,0,180,,,,3
+Own C,sample,This work,elongation_at_break,50,%,Elongation at break,,4,higher,0,120,,,,3
+PA6,reference,Literature,density,1.13,g cm^-3,Density,x,1,lower,0.8,1.6,Polymer,2024,10.0000/example.pa6,4
+PA6,reference,Literature,specific_impact_strength,25,kJ m^-2,Specific impact strength,y,2,higher,0,120,Polymer,2024,10.0000/example.pa6,4
+PA6,reference,Literature,tensile_strength,75,MPa,Tensile strength,,3,higher,0,180,Polymer,2024,10.0000/example.pa6,4
+PA6,reference,Literature,elongation_at_break,60,%,Elongation at break,,4,higher,0,120,Polymer,2024,10.0000/example.pa6,4
+ABS,reference,Literature,density,1.04,g cm^-3,Density,x,1,lower,0.8,1.6,Materials Today,2023,10.0000/example.abs,5
+ABS,reference,Literature,specific_impact_strength,35,kJ m^-2,Specific impact strength,y,2,higher,0,120,Materials Today,2023,10.0000/example.abs,5
+ABS,reference,Literature,tensile_strength,45,MPa,Tensile strength,,3,higher,0,180,Materials Today,2023,10.0000/example.abs,5
+ABS,reference,Literature,elongation_at_break,30,%,Elongation at break,,4,higher,0,120,Materials Today,2023,10.0000/example.abs,5
+CFRP,reference,Literature,density,1.55,g cm^-3,Density,x,1,lower,0.8,1.6,Composites Part A,2022,10.0000/example.cfrp,6
+CFRP,reference,Literature,specific_impact_strength,90,kJ m^-2,Specific impact strength,y,2,higher,0,120,Composites Part A,2022,10.0000/example.cfrp,6
+CFRP,reference,Literature,tensile_strength,160,MPa,Tensile strength,,3,higher,0,180,Composites Part A,2022,10.0000/example.cfrp,6
+CFRP,reference,Literature,elongation_at_break,2.5,%,Elongation at break,,4,higher,0,120,Composites Part A,2022,10.0000/example.cfrp,6

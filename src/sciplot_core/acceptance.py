@@ -46,6 +46,7 @@ RULE_ACCEPTANCE_VERSION = 3
 RULE_ACCEPTANCE_CHECK_IDS = (
     "semantic_rule_selected",
     "validated_rule_contract_current",
+    "supported_templates_exercised",
     "vsz_reopen_export",
     "manual_edit_preserved",
     "canonical_pdf_tiff_pair",
@@ -168,6 +169,8 @@ def _rule_matrix_row(rule: SemanticRule, *, repo_root: Path) -> dict[str, Any]:
         "semantic_family": rule.semantic_family,
         "recipe": rule.recipe,
         "template": rule.template,
+        "supported_templates": list(rule.presentation_templates),
+        "template_acceptance": [],
         "rule_readiness": rule.fixture_status,
         "rule_contract_sha256": rule_contract_sha256(rule),
         "accepted_rule_contract_sha256": None,
@@ -211,25 +214,28 @@ def _manual_edit_probe(document_path: Path, *, rule_id: str) -> str:
     return marker
 
 
-def _run_rule_lifecycle_acceptance(
+def _run_rule_template_acceptance(
     rule: SemanticRule,
     *,
+    template: str,
+    fixture: Path,
     projects_root: Path,
-    repo_root: Path,
 ) -> dict[str, Any]:
-    row = _rule_matrix_row(rule, repo_root=repo_root)
-    fixture = Path(row["fixture_path"])
     try:
         prepared = prepare_studio_document(
             fixture,
             output_root=projects_root,
-            project_name=f"{rule.rule_id} acceptance",
+            project_name=f"{rule.rule_id} {template} acceptance",
             rule_id=rule.rule_id,
+            template=template,
         )
         project_dir = Path(str(prepared["project_dir"]))
         request_path = Path(str(prepared["request"]))
         document_path = Path(str(prepared["document"]))
-        marker = _manual_edit_probe(document_path, rule_id=rule.rule_id)
+        marker = _manual_edit_probe(
+            document_path,
+            rule_id=f"{rule.rule_id}:{template}",
+        )
         export_payload = export_studio_document(
             document_path,
             formats=["pdf", "tiff_300"],
@@ -292,7 +298,7 @@ def _run_rule_lifecycle_acceptance(
             "semantic_rule_selected": semantic.get("rule_id") == rule.rule_id,
             "validated_rule_contract_current": (
                 accepted_semantic_contract_sha256 == current_semantic_contract_sha256
-                and row.get("rule_contract_sha256") == current_rule_contract_sha256
+                and rule_contract_sha256(rule) == current_rule_contract_sha256
             ),
             "vsz_reopen_export": document_path.exists()
             and prepared.get("series_count", 0) > 0
@@ -310,31 +316,112 @@ def _run_rule_lifecycle_acceptance(
                 and manifest.get("raw_archive", {}).get("path")
             ),
         }
-        row.update(
-            {
-                "lifecycle_status": "passed" if all(checks.values()) else "failed",
-                "checks": checks,
-                "rule_contract_sha256": current_rule_contract_sha256,
-                "accepted_rule_contract_sha256": current_rule_contract_sha256,
-                "semantic_contract_sha256": current_semantic_contract_sha256,
-                "accepted_semantic_contract_sha256": (
-                    accepted_semantic_contract_sha256
-                ),
-                "project_dir": str(project_dir),
-                "manifest": str(manifest_path),
-                "limitations": [
-                    "The manual-edit probe appends a harmless VSZ comment and proves exact-document preservation; "
-                    "full visual-object inspection is exercised by the separate exact-current publication-QA suite."
-                ],
-            }
+        return {
+            "template": template,
+            "lifecycle_status": "passed" if all(checks.values()) else "failed",
+            "checks": checks,
+            "rule_contract_sha256": current_rule_contract_sha256,
+            "accepted_rule_contract_sha256": current_rule_contract_sha256,
+            "semantic_contract_sha256": current_semantic_contract_sha256,
+            "accepted_semantic_contract_sha256": accepted_semantic_contract_sha256,
+            "project_dir": str(project_dir),
+            "manifest": str(manifest_path),
+            "error": None,
+        }
+    except Exception as exc:
+        return {
+            "template": template,
+            "lifecycle_status": "failed",
+            "checks": {
+                check_id: False
+                for check_id in RULE_ACCEPTANCE_CHECK_IDS
+                if check_id != "supported_templates_exercised"
+            },
+            "rule_contract_sha256": rule_contract_sha256(rule),
+            "accepted_rule_contract_sha256": None,
+            "semantic_contract_sha256": rule_semantic_contract_sha256(rule),
+            "accepted_semantic_contract_sha256": None,
+            "project_dir": None,
+            "manifest": None,
+            "error": {"type": type(exc).__name__, "message": str(exc)},
+        }
+
+
+def _run_rule_lifecycle_acceptance(
+    rule: SemanticRule,
+    *,
+    projects_root: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    row = _rule_matrix_row(rule, repo_root=repo_root)
+    fixture = Path(row["fixture_path"])
+    template_results = [
+        _run_rule_template_acceptance(
+            rule,
+            template=template,
+            fixture=fixture,
+            projects_root=projects_root,
         )
-    except Exception as exc:  # keep the matrix complete when one family blocks
-        row.update(
-            {
-                "lifecycle_status": "failed",
-                "error": {"type": type(exc).__name__, "message": str(exc)},
-            }
+        for template in rule.presentation_templates
+    ]
+    result_by_template = {
+        str(result["template"]): result for result in template_results
+    }
+    default_result = result_by_template[rule.template]
+    supported_templates_exercised = (
+        set(result_by_template) == set(rule.presentation_templates)
+        and all(
+            result.get("lifecycle_status") == "passed"
+            for result in template_results
         )
+    )
+    checks = {
+        check_id: (
+            supported_templates_exercised
+            if check_id == "supported_templates_exercised"
+            else all(
+                result.get("checks", {}).get(check_id) is True
+                for result in template_results
+            )
+        )
+        for check_id in RULE_ACCEPTANCE_CHECK_IDS
+    }
+    errors = [
+        {
+            "template": result["template"],
+            **dict(result["error"]),
+        }
+        for result in template_results
+        if isinstance(result.get("error"), dict)
+    ]
+    row.update(
+        {
+            "lifecycle_status": "passed" if all(checks.values()) else "failed",
+            "checks": checks,
+            "template_acceptance": template_results,
+            "rule_contract_sha256": default_result["rule_contract_sha256"],
+            "accepted_rule_contract_sha256": (
+                default_result["accepted_rule_contract_sha256"]
+            ),
+            "semantic_contract_sha256": default_result[
+                "semantic_contract_sha256"
+            ],
+            "accepted_semantic_contract_sha256": default_result[
+                "accepted_semantic_contract_sha256"
+            ],
+            "project_dir": default_result["project_dir"],
+            "manifest": default_result["manifest"],
+            "limitations": [
+                "Every registered presentation template is exercised through "
+                "native Studio prepare, reopen, PDF/TIFF export, QA, delivery, "
+                "and provenance checks.",
+                "The manual-edit probe appends a harmless VSZ comment and proves "
+                "exact-document preservation; full visual-object inspection is "
+                "exercised by the separate exact-current publication-QA suite.",
+            ],
+            "error": {"template_errors": errors} if errors else None,
+        }
+    )
     return row
 
 

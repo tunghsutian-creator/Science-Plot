@@ -16,15 +16,15 @@ def _bounds_mm(bounds: object, *, dpi: float = 72.0) -> list[float] | None:
 
 
 def _owner_widget(path: str, widgets_by_path: dict[str, Any]) -> tuple[str, Any] | None:
-    matches = [
-        widget_path
-        for widget_path in widgets_by_path
-        if path == widget_path or path.startswith(widget_path + "/")
-    ]
-    if not matches:
-        return None
-    owner_path = max(matches, key=len)
-    return owner_path, widgets_by_path[owner_path]
+    candidate = path.rstrip("/") or "/"
+    while True:
+        widget = widgets_by_path.get(candidate)
+        if widget is not None:
+            return candidate, widget
+        if candidate == "/":
+            return None
+        parent = candidate.rsplit("/", maxsplit=1)[0]
+        candidate = parent or "/"
 
 
 def _setting_hidden(settings: Any) -> bool:
@@ -586,6 +586,13 @@ def _audit_document(path: Path) -> dict[str, Any]:
 
     doc.walkNodes(collect_multi_stroke, nodetypes=("setting",))
     active_strokes = [item for item in stroke_items if item["active"]]
+    performance_document = any(
+        str(getattr(widget, "name", "")).startswith("performance_")
+        for _widget_path, widget in ordered_widgets
+    )
+    if performance_document:
+        for graph in graphs:
+            graph["role"] = "performance_plot"
     return {
         "kind": "sciplot_veusz_document_audit",
         "version": 1,
@@ -600,6 +607,7 @@ def _audit_document(path: Path) -> dict[str, Any]:
         "auxiliaries": auxiliaries,
         "semantic_labels": semantic_labels,
         "series": series,
+        "performance_comparison": performance_document,
         "color_scales": color_scales,
         "stroke_inventory": {
             "coverage_complete": not unsupported_strokes,
