@@ -86,7 +86,23 @@ from sciplot_core.policy import (
     DEFAULT_RAW_POINT_JITTER_FRACTION,
     DEFAULT_SCALAR_FIELD_COLORMAP_ID,
     DEFAULT_SCALAR_FIELD_COLORS,
+    FACTOR_CURVE_LEGEND_CONDITION_LABEL_ALIGNS,
+    FACTOR_CURVE_LEGEND_CONDITION_LABEL_X_FRACTIONS,
+    FACTOR_CURVE_LEGEND_CONDITION_SWATCH_X,
+    FACTOR_CURVE_LEGEND_CONDITION_SWATCH_HEIGHT_FRACTION,
+    FACTOR_CURVE_LEGEND_ENTRY_Y_FRACTIONS,
+    FACTOR_CURVE_LEGEND_FORMULA_COLUMN_X_FRACTIONS,
+    FACTOR_CURVE_LEGEND_FORMULA_ENTRY_Y_FRACTION,
+    FACTOR_CURVE_LEGEND_FORMULA_LABEL_GAP_FRACTION,
+    FACTOR_CURVE_LEGEND_FORMULA_SWATCH_LENGTH_FRACTION,
+    FACTOR_CURVE_LEGEND_TITLE_X_FRACTION,
+    FACTOR_CURVE_LEGEND_TITLE_Y_FRACTION,
     FIXED_PUBLICATION_FRAME_POLICY,
+    IMPACT_POINT_LINE_CONDITION_OFFSET_FRACTION,
+    IMPACT_POINT_LINE_MEAN_MARKER_EDGE_COLOR,
+    IMPACT_POINT_LINE_MEAN_MARKER_EDGE_WIDTH_PT,
+    IMPACT_POINT_LINE_RAW_MARKER_ALPHA,
+    IMPACT_POINT_LINE_RAW_MARKER_SCALE,
     MAX_AUTO_LOG_EMPTY_RANGE_FACTOR,
     MAX_LEGEND_RESERVE_ITERATIONS,
     MAX_LINEAR_LEGEND_RESERVE_FRACTION,
@@ -103,6 +119,7 @@ from sciplot_core.policy import (
     UNIFIED_FONT_SIZE_PT,
     UNIFIED_FOREGROUND_COLOR,
     UNIFIED_LEGEND_FONT_SIZE_PT,
+    UNIFIED_LEGEND_KEY_LENGTH_MM,
     UNIFIED_LEFT_MARGIN_MM,
     UNIFIED_LINE_WIDTH_PT,
     UNIFIED_MARKER_LINE_WIDTH_PT,
@@ -211,6 +228,9 @@ class StudioSeries:
     line_width: float | None = None
     marker: str | bool | None = None
     marker_size: float | None = None
+    marker_alpha: float | None = None
+    marker_line_color: str | None = None
+    marker_line_width: float | None = None
     line_style: str = "solid"
     presentation_kind: str = "curve"
     category_position: float | None = None
@@ -2063,8 +2083,23 @@ def _impact_point_line_series_from_source(
             figure_width_mm=60.0,
         ),
     )
+    condition_count = len(selected)
+    condition_offsets = tuple(
+        (
+            -IMPACT_POINT_LINE_CONDITION_OFFSET_FRACTION
+            + 2.0
+            * IMPACT_POINT_LINE_CONDITION_OFFSET_FRACTION
+            * condition_index
+            / float(condition_count - 1)
+        )
+        if condition_count > 1
+        else 0.0
+        for condition_index in range(condition_count)
+    )
     series: list[StudioSeries] = []
-    for condition_index, (condition, payload) in enumerate(selected):
+    for condition_index, ((condition, payload), condition_offset) in enumerate(
+        zip(selected, condition_offsets, strict=True)
+    ):
         display_label = label_mapping.get(condition, condition)
         color = DEFAULT_PALETTE_COLORS[
             condition_index % len(DEFAULT_PALETTE_COLORS)
@@ -2076,7 +2111,8 @@ def _impact_point_line_series_from_source(
         means = tuple(summary[0] for summary in summaries)
         errors = tuple(summary[1] for summary in summaries)
         positions = tuple(
-            float(index) for index in range(1, len(sample_order) + 1)
+            float(index) + condition_offset
+            for index in range(1, len(sample_order) + 1)
         )
         series.append(
             StudioSeries(
@@ -2111,12 +2147,14 @@ def _impact_point_line_series_from_source(
                     y_name=(
                         f"impact_mean_marker_y_{condition_index + 1}_{sample_index}"
                     ),
-                    x_values=(float(sample_index),),
+                    x_values=(float(sample_index) + condition_offset,),
                     y_values=(float(mean),),
                     color=color,
                     marker=marker,
+                    marker_line_color=IMPACT_POINT_LINE_MEAN_MARKER_EDGE_COLOR,
+                    marker_line_width=IMPACT_POINT_LINE_MEAN_MARKER_EDGE_WIDTH_PT,
                     presentation_kind=IMPACT_POINT_LINE_MARKER_KIND,
-                    category_position=float(sample_index),
+                    category_position=float(sample_index) + condition_offset,
                     source_artifacts=(artifact,),
                 )
             )
@@ -2126,7 +2164,7 @@ def _impact_point_line_series_from_source(
                     x_name=f"impact_raw_x_{condition_index + 1}_{sample_index}",
                     y_name=f"impact_raw_y_{condition_index + 1}_{sample_index}",
                     x_values=_deterministic_category_positions(
-                        float(sample_index),
+                        float(sample_index) + condition_offset,
                         len(values),
                         fraction=raw_point_half_spread,
                         seed_key=f"{condition}|{sample}",
@@ -2134,8 +2172,12 @@ def _impact_point_line_series_from_source(
                     y_values=tuple(float(value) for value in values),
                     color=raw_color,
                     marker=marker,
+                    marker_size=(
+                        UNIFIED_MARKER_SIZE_PT * IMPACT_POINT_LINE_RAW_MARKER_SCALE
+                    ),
+                    marker_alpha=IMPACT_POINT_LINE_RAW_MARKER_ALPHA,
                     presentation_kind=IMPACT_POINT_LINE_RAW_KIND,
-                    category_position=float(sample_index),
+                    category_position=float(sample_index) + condition_offset,
                     source_artifacts=(artifact,),
                 )
             )
@@ -2158,7 +2200,14 @@ def _impact_point_line_series_from_source(
             "error_bar_statistic": "sample_sd_n_minus_1",
             "raw_values_preserved": True,
             "raw_point_position_policy": "stable_hash_shuffled_even_slots",
-            "raw_point_condition_offset": False,
+            "condition_offsets": list(condition_offsets),
+            "raw_point_condition_offset": True,
+            "raw_marker_scale": IMPACT_POINT_LINE_RAW_MARKER_SCALE,
+            "raw_marker_alpha": IMPACT_POINT_LINE_RAW_MARKER_ALPHA,
+            "mean_marker_edge_color": IMPACT_POINT_LINE_MEAN_MARKER_EDGE_COLOR,
+            "mean_marker_edge_width_pt": (
+                IMPACT_POINT_LINE_MEAN_MARKER_EDGE_WIDTH_PT
+            ),
             "raw_replicate_count": sum(
                 payload.total_replicates for _condition, payload in selected
             ),
@@ -6484,16 +6533,94 @@ def _categorical_component_series_from_frames(
 _GROUPED_BAR_LABEL_SEPARATOR = " || "
 
 
-def _grouped_bar_identity(label: str) -> tuple[str, str]:
+def _factor_pair_identity(label: str) -> tuple[str, str]:
     sample, separator, condition = str(label).partition(
         _GROUPED_BAR_LABEL_SEPARATOR
     )
     if not separator or not sample.strip() or not condition.strip():
         raise StudioPreparationBlocked(
-            "invalid_grouped_bar_identity",
-            "Grouped-bar series must preserve both sample and condition labels.",
+            "invalid_factor_pair_identity",
+            "Factor-paired series must preserve both sample and condition labels.",
         )
     return sample.strip(), condition.strip()
+
+
+def _grouped_bar_identity(label: str) -> tuple[str, str]:
+    try:
+        return _factor_pair_identity(label)
+    except StudioPreparationBlocked as exc:
+        raise StudioPreparationBlocked(
+            "invalid_grouped_bar_identity",
+            "Grouped-bar series must preserve both sample and condition labels.",
+        ) from exc
+
+
+def _factorized_curve_grid(
+    series: list[StudioSeries],
+    *,
+    template_id: str,
+) -> dict[str, Any] | None:
+    """Resolve a complete sample-by-condition curve grid from paired labels."""
+
+    if template_id not in {"curve", "point_line"} or not series:
+        return None
+    paired = [
+        _GROUPED_BAR_LABEL_SEPARATOR in str(item.label)
+        for item in series
+    ]
+    if not any(paired):
+        return None
+    if not all(paired):
+        raise StudioPreparationBlocked(
+            "mixed_factorized_curve_labels",
+            "A factorized curve figure cannot mix paired and ordinary labels.",
+        )
+    formula_order: list[str] = []
+    condition_order: list[str] = []
+    combinations: dict[tuple[str, str], StudioSeries] = {}
+    for item in series:
+        formula, condition = _factor_pair_identity(item.label)
+        if formula not in formula_order:
+            formula_order.append(formula)
+        if condition not in condition_order:
+            condition_order.append(condition)
+        key = (formula, condition)
+        if key in combinations:
+            raise StudioPreparationBlocked(
+                "duplicate_factorized_curve_combination",
+                f"Factorized curve pair `{formula}` / `{condition}` is duplicated.",
+            )
+        combinations[key] = item
+    if len(condition_order) != 2:
+        raise StudioPreparationBlocked(
+            "unsupported_factorized_curve_condition_count",
+            "A factorized curve legend requires exactly two ordered conditions.",
+        )
+    if not 2 <= len(formula_order) <= 4:
+        raise StudioPreparationBlocked(
+            "unsupported_factorized_curve_formula_count",
+            "A factorized curve legend requires two to four formula groups.",
+        )
+    expected = {
+        (formula, condition)
+        for formula in formula_order
+        for condition in condition_order
+    }
+    if set(combinations) != expected:
+        missing = sorted(
+            f"{formula} / {condition}"
+            for formula, condition in expected - set(combinations)
+        )
+        raise StudioPreparationBlocked(
+            "incomplete_factorized_curve_grid",
+            "Every formula must contain both curve conditions; missing: "
+            + ", ".join(missing),
+        )
+    return {
+        "formula_order": formula_order,
+        "condition_order": condition_order,
+        "combinations": combinations,
+    }
 
 
 def _categorical_grouped_series_from_frames(
@@ -7486,6 +7613,10 @@ def _apply_series_options(
                 style_by_label[label] = style
     styled: list[StudioSeries] = []
     template_id = _request_template(request)
+    factorized_curve = _factorized_curve_grid(
+        ordered,
+        template_id=template_id,
+    )
     grouped_replicate_styles = (
         _replicate_group_style_indexes([item.label for item in ordered])
         if str(request.get("rule_id") or "").strip() == "swelling_curve"
@@ -7507,6 +7638,30 @@ def _apply_series_options(
             item.label,
             (index, index),
         )
+        factor_color: str | None = None
+        factor_line_style: str | None = None
+        if factorized_curve is not None:
+            formula, condition = _factor_pair_identity(item.label)
+            formula_index = factorized_curve["formula_order"].index(formula)
+            factor_condition_index = factorized_curve["condition_order"].index(
+                condition
+            )
+            condition_index = formula_index
+            replicate_index = formula_index
+            root_color = palette[formula_index % len(palette)]
+            factor_color = categorical_component_fill_color(
+                root_color,
+                component_index=(
+                    len(factorized_curve["condition_order"])
+                    - 1
+                    - factor_condition_index
+                ),
+                component_count=len(factorized_curve["condition_order"]),
+            )
+            # Factorized curves are continuous line charts: formula owns the
+            # categorical colour root, condition owns the opaque light/dark
+            # tone, and every measured trace remains solid with no markers.
+            factor_line_style = "solid"
         if item.presentation_kind == "categorical_grouped_replicates":
             sample, _condition = _grouped_bar_identity(item.label)
             condition_index = grouped_bar_samples.index(sample)
@@ -7518,7 +7673,9 @@ def _apply_series_options(
             )
             else "none"
         )
-        if item.label in grouped_replicate_styles:
+        if factor_line_style is not None:
+            default_line_style = factor_line_style
+        elif item.label in grouped_replicate_styles:
             default_line_style = line_style_sequence[
                 replicate_index % len(line_style_sequence)
             ]
@@ -7541,14 +7698,23 @@ def _apply_series_options(
                 color=str(
                     style.get("color")
                     or (
-                        item.color
+                        factor_color
+                        or item.color
                         if impact_point_line_item
-                        else palette[condition_index % len(palette)]
+                        else factor_color
+                        or palette[condition_index % len(palette)]
                     )
                 ),
                 line_width=UNIFIED_LINE_WIDTH_PT,
                 marker=style.get("marker", item.marker or default_marker),
-                marker_size=UNIFIED_MARKER_SIZE_PT,
+                marker_size=(
+                    item.marker_size
+                    if impact_point_line_item and item.marker_size is not None
+                    else UNIFIED_MARKER_SIZE_PT
+                ),
+                marker_alpha=item.marker_alpha,
+                marker_line_color=item.marker_line_color,
+                marker_line_width=item.marker_line_width,
                 line_style=str(
                     style.get("line_style")
                     or style.get("linestyle")
@@ -8243,7 +8409,7 @@ def _legend_footprint(
     max_text_width_mm = max(
         load["max_label_length"] * style.legend_font_size_pt * 0.56 * point_to_mm, 0.2
     )
-    key_length_mm = 4.0
+    key_length_mm = UNIFIED_LEGEND_KEY_LENGTH_MM
     box_width_mm = (
         max_text_width_mm + font_height_mm + key_length_mm
     ) * columns + font_height_mm * (columns - 1)
@@ -9494,16 +9660,32 @@ def _categorical_plot_contract(
                 "Impact condition summary lines require the point_line template.",
             )
         sample_labels = impact_summary[0].component_labels
-        positions = impact_summary[0].x_values
+        positions = tuple(
+            float(index) for index in range(1, len(sample_labels) + 1)
+        )
+        condition_offsets = tuple(
+            float(item.x_values[0]) - positions[0]
+            if item.x_values
+            else math.nan
+            for item in impact_summary
+        )
         if (
             not sample_labels
-            or len(sample_labels) != len(positions)
             or any(
                 item.component_labels != sample_labels
-                or item.x_values != positions
+                or len(item.x_values) != len(sample_labels)
                 or len(item.y_values) != len(sample_labels)
                 or len(item.error_values) != len(sample_labels)
-                for item in impact_summary
+                or any(
+                    not math.isclose(
+                        float(x_value),
+                        positions[index] + condition_offsets[condition_index],
+                        rel_tol=0.0,
+                        abs_tol=1e-12,
+                    )
+                    for index, x_value in enumerate(item.x_values)
+                )
+                for condition_index, item in enumerate(impact_summary)
             )
         ):
             raise StudioPreparationBlocked(
@@ -9527,7 +9709,7 @@ def _categorical_plot_contract(
                 "color": item.color,
             }
             for item in impact_summary
-            for index, position in enumerate(positions)
+            for index, position in enumerate(item.x_values)
         ]
         groups = [
             {
@@ -9554,7 +9736,7 @@ def _categorical_plot_contract(
         ]
         return {
             "kind": "sciplot_impact_point_line_overlay_contract",
-            "version": 2,
+            "version": 3,
             "presentation_kind": "point_line_raw_overlay",
             "summary_statistic": "arithmetic_mean",
             "error_bar_statistic": "sample_sd",
@@ -9562,15 +9744,29 @@ def _categorical_plot_contract(
             "raw_values_preserved": True,
             "raw_replicate_count": sum(len(item.y_values) for item in raw_series),
             "condition_labels": [item.label for item in impact_summary],
+            "condition_offsets": list(condition_offsets),
             "sample_labels": list(sample_labels),
             "error_bars": error_bars,
             "groups": groups,
             "visual_style": {
                 "palette_policy": "condition_roots_control_black_then_blue",
-                "raw_point_color_mode": "opaque_lightened_condition_root",
+                "raw_point_color_mode": (
+                    "lightened_condition_root_with_transparency"
+                ),
                 "raw_point_position_policy": "stable_hash_shuffled_even_slots",
-                "raw_point_condition_offset": False,
+                "raw_point_condition_offset": True,
+                "condition_offset_fraction": (
+                    IMPACT_POINT_LINE_CONDITION_OFFSET_FRACTION
+                ),
+                "raw_point_alpha": IMPACT_POINT_LINE_RAW_MARKER_ALPHA,
+                "raw_marker_scale": IMPACT_POINT_LINE_RAW_MARKER_SCALE,
                 "sample_marker_binding": "stable_by_sample_axis_position",
+                "mean_marker_edge_color": (
+                    IMPACT_POINT_LINE_MEAN_MARKER_EDGE_COLOR
+                ),
+                "mean_marker_edge_width_pt": (
+                    IMPACT_POINT_LINE_MEAN_MARKER_EDGE_WIDTH_PT
+                ),
                 "error_cap_to_bar_ratio": CATEGORICAL_ERROR_CAP_TO_BAR_RATIO,
                 "error_cap_reference_width_fraction": CATEGORICAL_BAR_WIDTH_FRACTION,
                 "error_line_width_pt": UNIFIED_LINE_WIDTH_PT,
@@ -10083,6 +10279,129 @@ def _categorical_component_legend_spec(
         "label_text_size_pt": style.legend_font_size_pt,
         "label_text_color": UNIFIED_FOREGROUND_COLOR,
         "rows": rows,
+    }
+
+
+def _factor_condition_display_label(value: str) -> str:
+    text = str(value).strip()
+    match = re.search(r"(?<!\w)(\d+(?:\.\d+)?\s*%)", text)
+    return match.group(1).replace(" ", "") if match is not None else text
+
+
+def _curve_factor_legend_spec(
+    series: list[StudioSeries],
+    *,
+    template_id: str,
+    style: _VeuszStyleContract,
+    mode: str,
+) -> dict[str, Any] | None:
+    """Build two independent legend groups for a complete curve factor grid."""
+
+    grid = _factorized_curve_grid(series, template_id=template_id)
+    if grid is None:
+        return None
+    formulas = [str(value) for value in grid["formula_order"]]
+    conditions = [str(value) for value in grid["condition_order"]]
+    combinations = grid["combinations"]
+    condition_entries: list[dict[str, Any]] = []
+    for condition_index, condition in enumerate(conditions):
+        references = [
+            combinations[(formula, condition)] for formula in formulas
+        ]
+        swatch_x = FACTOR_CURVE_LEGEND_CONDITION_SWATCH_X[
+            condition_index
+        ]
+        condition_entries.append(
+            {
+                "name": f"curve_factor_condition_{condition_index + 1}",
+                "label": _factor_condition_display_label(condition),
+                "source_label": condition,
+                "colors": [str(reference.color) for reference in references],
+                "swatch_left_fraction": (
+                    swatch_x[0]
+                ),
+                "swatch_width_fraction": (
+                    swatch_x[1] - swatch_x[0]
+                ),
+                "swatch_height_fraction": (
+                    FACTOR_CURVE_LEGEND_CONDITION_SWATCH_HEIGHT_FRACTION
+                ),
+                "label_x_fraction": (
+                    FACTOR_CURVE_LEGEND_CONDITION_LABEL_X_FRACTIONS[
+                        condition_index
+                    ]
+                ),
+                "label_align": (
+                    FACTOR_CURVE_LEGEND_CONDITION_LABEL_ALIGNS[
+                        condition_index
+                    ]
+                ),
+                "y_fraction": FACTOR_CURVE_LEGEND_ENTRY_Y_FRACTIONS[
+                    condition_index
+                ],
+            }
+        )
+    formula_entries: list[dict[str, Any]] = []
+    dark_condition = conditions[-1]
+    for formula_index, formula in enumerate(formulas):
+        reference = combinations[(formula, dark_condition)]
+        x_start = FACTOR_CURVE_LEGEND_FORMULA_COLUMN_X_FRACTIONS[
+            formula_index
+        ]
+        formula_entries.append(
+            {
+                "name": f"curve_factor_formula_{formula_index + 1}",
+                "label": formula,
+                "source_label": formula,
+                "color": reference.color,
+                "line_style": "solid",
+                "line_width_pt": style.line_width_pt,
+                "x_start_fraction": x_start,
+                "x_end_fraction": (
+                    x_start
+                    + FACTOR_CURVE_LEGEND_FORMULA_SWATCH_LENGTH_FRACTION
+                ),
+                "label_x_fraction": (
+                    x_start
+                    + FACTOR_CURVE_LEGEND_FORMULA_SWATCH_LENGTH_FRACTION
+                    + FACTOR_CURVE_LEGEND_FORMULA_LABEL_GAP_FRACTION
+                ),
+                "y_fraction": FACTOR_CURVE_LEGEND_FORMULA_ENTRY_Y_FRACTION,
+            }
+        )
+    return {
+        "presentation_kind": "factorized_curve",
+        "native_key": False,
+        "mode": mode,
+        "factor_order": ["condition", "formula"],
+        "formula_color_binding": "control_first_categorical_root",
+        "formula_line_style_binding": "solid",
+        "condition_tone_binding": "ordered_opaque_light_dark",
+        "condition_swatch_kind": "segmented_formula_colors",
+        "row_alignment": "edge_aligned_to_formula_row",
+        "block_left_x_fraction": (
+            FACTOR_CURVE_LEGEND_FORMULA_COLUMN_X_FRACTIONS[0]
+        ),
+        "block_right_x_fraction": (
+            FACTOR_CURVE_LEGEND_CONDITION_LABEL_X_FRACTIONS[-1]
+        ),
+        "label_text_size_pt": style.legend_font_size_pt,
+        "label_text_color": UNIFIED_FOREGROUND_COLOR,
+        "groups": [
+            {
+                "id": "condition",
+                "title": "Weight reduction",
+                "title_x_fraction": FACTOR_CURVE_LEGEND_TITLE_X_FRACTION,
+                "title_y_fraction": FACTOR_CURVE_LEGEND_TITLE_Y_FRACTION,
+                "title_align": "left",
+                "entries": condition_entries,
+            },
+            {
+                "id": "formula",
+                "title": "",
+                "entries": formula_entries,
+            },
+        ],
     }
 
 
@@ -10819,6 +11138,23 @@ def _build_veusz_plot_spec(
                 str(value)
                 for value in categorical_contract.get("condition_labels", [])
             ]
+    factor_legend = _curve_factor_legend_spec(
+        series,
+        template_id=template_id,
+        style=style,
+        mode=legend_mode,
+    )
+    factor_legend_labels = (
+        [
+            str(entry.get("label") or "")
+            for group in factor_legend.get("groups", [])
+            if isinstance(group, dict)
+            for entry in group.get("entries", [])
+            if isinstance(entry, dict)
+        ]
+        if isinstance(factor_legend, dict)
+        else []
+    )
     label_load = (
         {
             "series_count": len(component_legend_labels),
@@ -10833,6 +11169,19 @@ def _build_veusz_plot_spec(
             - len(set(component_legend_labels)),
         }
         if component_legend_labels
+        else {
+            "series_count": len(factor_legend_labels),
+            "max_label_length": max(
+                (len(label) for label in factor_legend_labels),
+                default=0,
+            ),
+            "total_label_length": sum(
+                len(label) for label in factor_legend_labels
+            ),
+            "duplicate_count": len(factor_legend_labels)
+            - len(set(factor_legend_labels)),
+        }
+        if factor_legend_labels
         else _label_load(series)
     )
     layout_issues: list[dict[str, Any]] = []
@@ -10876,6 +11225,7 @@ def _build_veusz_plot_spec(
             and categorical_contract.get("presentation_kind")
             in {"stacked_components", "grouped_bar_error"}
         )
+        and factor_legend is None
         and _legend_is_dense(series)
         and not placement_is_safe
     ):
@@ -10910,6 +11260,8 @@ def _build_veusz_plot_spec(
     }
     if component_legend is not None:
         legend_spec.update(component_legend)
+    if factor_legend is not None:
+        legend_spec.update(factor_legend)
     if isinstance(placement_diagnostics, dict):
         legend_spec["placement_diagnostics"] = json_safe(placement_diagnostics)
         if show_key and placement_diagnostics.get("clearance_status") != "safe":
@@ -10988,9 +11340,7 @@ def _build_veusz_plot_spec(
             "minor_tick_length_pt": style.minor_tick_length_pt,
             "line_width_pt": style.line_width_pt,
             "line_alpha": style.line_alpha,
-            "marker_alpha": float(
-                categorical_visual_style.get("raw_point_alpha", style.marker_alpha)
-            ),
+            "marker_alpha": style.marker_alpha,
             "marker_size_pt": style.marker_size_pt,
             "marker_line_width_pt": style.marker_line_width_pt,
             "axes_labelpad_pt": style.axes_labelpad_pt,
@@ -11050,6 +11400,24 @@ def _build_veusz_plot_spec(
                     == "open"
                     else item.color
                 ),
+                "marker_line_color": item.marker_line_color or item.color,
+                "marker_line_width_pt": (
+                    item.marker_line_width
+                    if item.marker_line_width is not None
+                    else style.marker_line_width_pt
+                ),
+                "marker_alpha": (
+                    item.marker_alpha
+                    if item.marker_alpha is not None
+                    else float(
+                        categorical_visual_style.get(
+                            "raw_point_alpha",
+                            style.marker_alpha,
+                        )
+                    )
+                    if item.presentation_kind == "categorical_replicates"
+                    else style.marker_alpha
+                ),
                 "presentation_kind": item.presentation_kind,
                 "category_position": item.category_position,
                 "component_labels": list(item.component_labels),
@@ -11104,8 +11472,16 @@ def _add_veusz_xy_series(
     interface.Set("PlotLine/color", item["color"])
     interface.Set("PlotLine/style", item.get("line_style") or "solid")
     interface.Set("MarkerFill/color", item.get("marker_fill_color") or item["color"])
-    interface.Set("MarkerLine/color", item["color"])
-    interface.Set("MarkerLine/width", _pt(float(style["marker_line_width_pt"])))
+    interface.Set("MarkerLine/color", item.get("marker_line_color") or item["color"])
+    interface.Set(
+        "MarkerLine/width",
+        _pt(
+            float(
+                item.get("marker_line_width_pt")
+                or style["marker_line_width_pt"]
+            )
+        ),
+    )
     interface.Set("marker", item["marker"])
     # Veusz's XY legend renderer always asks the error-bar painter to draw a
     # key sample.  With the default ``bar`` error style, datasets without
@@ -11130,11 +11506,15 @@ def _add_veusz_xy_series(
     )
     interface.Set(
         "MarkerFill/transparency",
-        _alpha_to_transparency(float(style["marker_alpha"])),
+        _alpha_to_transparency(
+            float(item.get("marker_alpha", style["marker_alpha"]))
+        ),
     )
     interface.Set(
         "MarkerLine/transparency",
-        _alpha_to_transparency(float(style["marker_alpha"])),
+        _alpha_to_transparency(
+            float(item.get("marker_alpha", style["marker_alpha"]))
+        ),
     )
     if item.get("line_width_pt") is not None:
         interface.Set("PlotLine/width", _pt(float(item["line_width_pt"])))
@@ -11954,6 +12334,183 @@ def _categorical_component_legend_rect_contracts(
     return contracts
 
 
+def _curve_factor_legend_label_contracts(
+    spec: dict[str, Any],
+) -> list[dict[str, Any]]:
+    legend = spec.get("legend")
+    if (
+        not isinstance(legend, dict)
+        or legend.get("show") is not True
+        or legend.get("presentation_kind") != "factorized_curve"
+    ):
+        return []
+    contracts: list[dict[str, Any]] = []
+
+    def append_label(
+        *,
+        name: str,
+        label: str,
+        x: float,
+        y: float,
+        align: str = "left",
+    ) -> None:
+        contracts.append(
+            {
+                "name": name,
+                "label": label,
+                "positioning": "relative",
+                "x_axis": "x",
+                "y_axis": "y",
+                "x": x,
+                "y": y,
+                "align": align,
+                "valign": "centre",
+                "angle_degrees": 0.0,
+                "margin_pt": 0.0,
+                "clip": True,
+                "text_size_pt": float(legend["label_text_size_pt"]),
+                "text_color": str(legend["label_text_color"]),
+                "text_hide": False,
+                "background_color": "white",
+                "background_transparency": 0,
+                "background_hide": True,
+                "border_color": UNIFIED_FOREGROUND_COLOR,
+                "border_width_pt": float(spec["style"]["axis_linewidth_pt"]),
+                "border_style": "solid",
+                "border_transparency": 0,
+                "border_hide": True,
+            }
+        )
+
+    for group in legend.get("groups", []):
+        if not isinstance(group, dict):
+            continue
+        group_id = str(group.get("id") or "").strip()
+        title = str(group.get("title") or "").strip()
+        if title:
+            append_label(
+                name=f"curve_factor_legend_{group_id}_title",
+                label=title,
+                x=float(group["title_x_fraction"]),
+                y=float(group["title_y_fraction"]),
+                align=str(group.get("title_align") or "left"),
+            )
+        for entry_index, entry in enumerate(group.get("entries", []), start=1):
+            if not isinstance(entry, dict):
+                continue
+            append_label(
+                name=(
+                    f"curve_factor_legend_{group_id}_label_{entry_index}"
+                ),
+                label=str(entry.get("label") or ""),
+                x=float(entry["label_x_fraction"]),
+                y=float(entry["y_fraction"]),
+                align=str(entry.get("label_align") or "left"),
+            )
+    return contracts
+
+
+def _curve_factor_legend_condition_rect_contracts(
+    spec: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Return the closed segmented tone swatches for condition rows."""
+
+    legend = spec.get("legend")
+    if (
+        not isinstance(legend, dict)
+        or legend.get("show") is not True
+        or legend.get("presentation_kind") != "factorized_curve"
+    ):
+        return []
+    contracts: list[dict[str, Any]] = []
+    for group in legend.get("groups", []):
+        if not isinstance(group, dict) or group.get("id") != "condition":
+            continue
+        for row_index, entry in enumerate(group.get("entries", []), start=1):
+            if not isinstance(entry, dict):
+                continue
+            colors = [str(value) for value in entry.get("colors", [])]
+            if not colors:
+                continue
+            swatch_width = float(entry["swatch_width_fraction"])
+            segment_width = swatch_width / float(len(colors))
+            left = float(entry["swatch_left_fraction"])
+            for color_index, color in enumerate(colors, start=1):
+                contracts.append(
+                    {
+                        "name": (
+                            "curve_factor_legend_condition_segment_"
+                            f"{row_index}_{color_index}"
+                        ),
+                        "positioning": "relative",
+                        "xPos": [
+                            left + (color_index - 0.5) * segment_width
+                        ],
+                        "yPos": [float(entry["y_fraction"])],
+                        "width": [segment_width],
+                        "height": [
+                            float(entry["swatch_height_fraction"])
+                        ],
+                        "clip": True,
+                        "fill_color": color,
+                        "fill_hide": False,
+                        "fill_transparency": 0,
+                        "border_hide": True,
+                    }
+                )
+    return contracts
+
+
+def _curve_factor_legend_line_contracts(
+    spec: dict[str, Any],
+) -> list[dict[str, Any]]:
+    legend = spec.get("legend")
+    if (
+        not isinstance(legend, dict)
+        or legend.get("show") is not True
+        or legend.get("presentation_kind") != "factorized_curve"
+    ):
+        return []
+    contracts: list[dict[str, Any]] = []
+    for group in legend.get("groups", []):
+        if not isinstance(group, dict):
+            continue
+        group_id = str(group.get("id") or "").strip()
+        for entry_index, entry in enumerate(group.get("entries", []), start=1):
+            if (
+                not isinstance(entry, dict)
+                or entry.get("x_start_fraction") is None
+                or entry.get("x_end_fraction") is None
+            ):
+                continue
+            contracts.append(
+                {
+                    "name": (
+                        f"curve_factor_legend_{group_id}_swatch_{entry_index}"
+                    ),
+                    "positioning": "relative",
+                    "x_axis": "x",
+                    "y_axis": "y",
+                    "mode": "point-to-point",
+                    "xPos": [float(entry["x_start_fraction"])],
+                    "yPos": [float(entry["y_fraction"])],
+                    "xPos2": [float(entry["x_end_fraction"])],
+                    "yPos2": [float(entry["y_fraction"])],
+                    "clip": True,
+                    "hide": False,
+                    "line_color": str(entry["color"]),
+                    "line_width_pt": float(entry["line_width_pt"]),
+                    "line_style": str(entry["line_style"]),
+                    "line_transparency": 0,
+                    "line_hide": False,
+                    "arrow_left": "none",
+                    "arrow_right": "none",
+                    "fill_hide": True,
+                }
+            )
+    return contracts
+
+
 def _categorical_grouped_bar_fill_rect_contracts(
     spec: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -12078,6 +12635,83 @@ def _add_veusz_categorical_component_legend(
         interface.Set("Fill/hide", item["fill_hide"])
         interface.Set("Fill/transparency", item["fill_transparency"])
         interface.Set("Border/hide", item["border_hide"])
+        interface.To("..")
+
+
+def _add_veusz_curve_factor_legend(
+    interface: Any,
+    spec: dict[str, Any],
+) -> None:
+    # Labels are inserted before swatches and data plotters because Veusz
+    # paints graph children in reverse tree order.
+    for item in _curve_factor_legend_label_contracts(spec):
+        interface.Add("label", name=item["name"], autoadd=False)
+        interface.To(item["name"])
+        interface.Set("positioning", item["positioning"])
+        interface.Set("xAxis", item["x_axis"])
+        interface.Set("yAxis", item["y_axis"])
+        interface.Set("xPos", [float(item["x"])])
+        interface.Set("yPos", [float(item["y"])])
+        interface.Set("label", _veusz_literal_text(item["label"]))
+        interface.Set("alignHorz", item["align"])
+        interface.Set("alignVert", item["valign"])
+        interface.Set("angle", float(item["angle_degrees"]))
+        interface.Set("margin", _pt(float(item["margin_pt"])))
+        interface.Set("clip", item["clip"])
+        interface.Set("hide", False)
+        interface.Set("Text/size", _pt(float(item["text_size_pt"])))
+        interface.Set("Text/color", item["text_color"])
+        interface.Set("Text/hide", item["text_hide"])
+        interface.Set("Background/color", item["background_color"])
+        interface.Set(
+            "Background/transparency",
+            item["background_transparency"],
+        )
+        interface.Set("Background/hide", item["background_hide"])
+        interface.Set("Border/color", item["border_color"])
+        interface.Set("Border/width", _pt(float(item["border_width_pt"])))
+        interface.Set("Border/style", item["border_style"])
+        interface.Set(
+            "Border/transparency",
+            item["border_transparency"],
+        )
+        interface.Set("Border/hide", item["border_hide"])
+        interface.To("..")
+    for item in _curve_factor_legend_condition_rect_contracts(spec):
+        interface.Add("rect", name=item["name"], autoadd=False)
+        interface.To(item["name"])
+        interface.Set("positioning", item["positioning"])
+        interface.Set("xPos", item["xPos"])
+        interface.Set("yPos", item["yPos"])
+        interface.Set("width", item["width"])
+        interface.Set("height", item["height"])
+        interface.Set("clip", item["clip"])
+        interface.Set("Fill/color", item["fill_color"])
+        interface.Set("Fill/hide", item["fill_hide"])
+        interface.Set("Fill/transparency", item["fill_transparency"])
+        interface.Set("Border/hide", item["border_hide"])
+        interface.To("..")
+    for item in _curve_factor_legend_line_contracts(spec):
+        interface.Add("line", name=item["name"], autoadd=False)
+        interface.To(item["name"])
+        interface.Set("positioning", item["positioning"])
+        interface.Set("xAxis", item["x_axis"])
+        interface.Set("yAxis", item["y_axis"])
+        interface.Set("mode", item["mode"])
+        interface.Set("xPos", item["xPos"])
+        interface.Set("yPos", item["yPos"])
+        interface.Set("xPos2", item["xPos2"])
+        interface.Set("yPos2", item["yPos2"])
+        interface.Set("clip", item["clip"])
+        interface.Set("hide", item["hide"])
+        interface.Set("Line/color", item["line_color"])
+        interface.Set("Line/width", _pt(float(item["line_width_pt"])))
+        interface.Set("Line/style", item["line_style"])
+        interface.Set("Line/transparency", item["line_transparency"])
+        interface.Set("Line/hide", item["line_hide"])
+        interface.Set("arrowleft", item["arrow_left"])
+        interface.Set("arrowright", item["arrow_right"])
+        interface.Set("Fill/hide", item["fill_hide"])
         interface.To("..")
 
 
@@ -12339,6 +12973,7 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     # through their text.
     _add_veusz_direct_labels(interface, spec)
     _add_veusz_categorical_component_legend(interface, spec)
+    _add_veusz_curve_factor_legend(interface, spec)
     scalar = (
         spec.get("scalar_field") if isinstance(spec.get("scalar_field"), dict) else None
     )
@@ -12347,13 +12982,17 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     legend = spec["legend"]
     if (
         legend["show"]
-        and legend.get("presentation_kind") != "segmented_component"
+        and legend.get("presentation_kind")
+        not in {"segmented_component", "factorized_curve"}
     ):
         interface.Add("key", name="key1", autoadd=False)
         interface.To("key1")
         interface.Set("title", "")
         interface.Set("Text/size", _pt(float(style["legend_font_size_pt"])))
-        interface.Set("keyLength", "0.40cm")
+        interface.Set(
+            "keyLength",
+            f"{UNIFIED_LEGEND_KEY_LENGTH_MM / 10.0:.2f}cm",
+        )
         interface.Set("marginSize", 0.15)
         interface.Set("columns", int(legend["columns"]))
         _apply_key_position(

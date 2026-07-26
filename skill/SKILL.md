@@ -221,6 +221,22 @@ component tones. Its component legend follows the visible stack from top to
 bottom and divides each swatch across every sample colour.
 Unknown or reference-only templates must fail at request validation.
 
+A complete `Formula || Condition` curve grid with exactly two ordered
+conditions and two to four formulas uses the shared factorized-curve contract.
+Keep all measured curves as equal-width continuous solid lines with no point
+markers. Formula order owns the colour root and condition order owns the opaque
+light/dark tone. The compact legend uses one `Weight reduction` heading, places
+the abbreviated `33%` and `50%` conditions side by side with short, moderately
+thick multi-formula segmented swatches before their text, and puts the
+formula-colour curve keys in one lower row without a `Formula` heading. Align
+the heading and `33%` entry to the formula row's left edge, align the `50%`
+entry to its right edge, and preserve every measured line point. When
+the confirmed design excludes dash and marker redundancy, retain any
+publication accessibility warning for human review rather than changing the
+chart.
+Canonical three-row structured curve CSVs must replay directly through the
+tensile semantic path instead of assuming a curated workbook sheet.
+
 Do not bind a categorical scientific metric to one chart form. The semantic
 rule owns recognition, units, replicate preservation, and analysis; its
 versioned presentation contract separately declares a default template and
@@ -231,15 +247,25 @@ fails closed.
 
 For `performance_comparison`, require one tidy `Material`/`Role`/`Metric`/
 `Value`/`Unit` table. `scatter` requires exactly one `ScatterAxis=x` and one
-`ScatterAxis=y`; sample `Group` owns a pale same-hue observed-range envelope.
+`ScatterAxis=y`; sample `Group` owns a pale, borderless, deterministically
+irregular observed-range envelope. Optional `ScatterMin` and `ScatterMax`
+declare visible axis bounds but must not clip plotted data. Optional
+`EnvelopeInclude` selects which sample observations participate in that
+envelope without hiding their plotted points or legend identities. Repeated sample x values may use a
+source-hash-bound symmetric horizontal display offset while retaining their
+source values and explicit transform lineage. `LegendLabel`, `LegendGroup`,
+`LegendIdentity`, `LegendColumn`, and `LegendItemsPerRow` may define grouped
+one- or two-column reader-facing indexes with one or two entries per group
+row. One legend identity may own multiple observations and one shared
+marker/XY series.
 `polar_curve` requires at least three unique `RadarOrder` values plus declared
 `Direction`, `ScaleMin`, and `ScaleMax`; complete own samples are filled and
 references remain marker-only on axes with actual values. Both use native
 editable Veusz objects, a 60 x 55 mm plot module, a 41.5 x 38.5 mm plot region,
-and a reserved right 60 x 55 mm reference panel when required. Do not call the
-envelope a confidence interval, infer radar bounds, interpolate missing
-reference values, or promote the instrument-shaped fixture to real-data
-evidence.
+and one or two reserved right 60 x 55 mm reference columns when required. Do
+not call the envelope a confidence interval, infer radar bounds, interpolate
+missing reference values, or promote the instrument-shaped fixture to
+real-data evidence.
 
 `src/sciplot_core/policy.py` owns global typography, stroke, tick, marker,
 ordinary frame, size, export, and delivery defaults. Templates and recipes may

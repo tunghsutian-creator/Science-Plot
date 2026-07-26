@@ -155,10 +155,26 @@ unsupported requests fail closed.
 data-bound material markers plus a native editable observed-sample envelope;
 the latter uses declared bounded directional normalization, filled polygons
 only for complete own-sample records, and marker-only literature references.
-Both reserve a 60 x 55 mm plot module and may use a separate 60 x 55 mm
-reference/index module within one 120 x 55 mm page. This is template-owned
-geometry, not an outside legend and not a second renderer. The rule remains
-pending automatic promotion while its only source-controlled evidence is an
+Both reserve a 60 x 55 mm plot module and may use one or two 60 x 55 mm
+reference/index columns, producing a 120 x 55 or 180 x 55 mm page. This is
+template-owned geometry, not an outside legend and not a second renderer.
+The index has grouped headings but no redundant overall title; each column
+computes its own deterministic row step. Optional `LegendLabel`,
+`LegendGroup`, `LegendIdentity`, `LegendColumn`, and `LegendItemsPerRow` fields
+separate internal observation identity from reader-facing material identity
+and allow one or two entries in each group row. Repeated
+observations with one `LegendIdentity` share a marker and one XY series, while
+different identities remain globally unique through the sixteen-symbol native
+Veusz marker inventory. Scatter observations sharing one source density use a
+source-hash-bound symmetric horizontal offset. Optional `ScatterMin` and
+`ScatterMax` declare one-sided or two-sided visible bounds without permitting
+data clipping. Optional `EnvelopeInclude` selects which sample observations
+participate in each `Group` envelope without removing those observations from
+the scatter or legend. Sample envelopes use a deterministic irregular smoothed
+enclosure with no visible stroke; the source coordinates remain unchanged in
+the delivered table. The rule remains pending
+automatic promotion while its
+only source-controlled evidence is an
 `instrument_shaped_fixture`; an explicit Studio request is still the supported
 development/user-review route.
 
@@ -195,6 +211,35 @@ hidden rect borders, converted dimensions, clipping, and stored data bounds.
 The style-contract test independently compares every fill's left, right, and
 top bounds against all three keylines, preventing both underfill and overflow.
 
+### Factorized curve legend geometry
+
+A complete curve grid with labels in the form `Formula || Condition` uses a
+closed two-factor presentation when it contains exactly two ordered conditions
+and two to four formulas. Formula order owns the control-first categorical
+colour root. Condition order owns the opaque light/dark tone. Every measured
+trace remains a continuous, equal-width solid line with no point markers,
+resampling, or thinning.
+
+The compact legend has one `Weight reduction` heading. Its next row places the
+abbreviated `33%` and `50%` conditions side by side. Each entry places a short,
+moderately thick segmented native-rectangle swatch before its text and contains
+every formula colour at that condition's lightness. A lower row contains the
+formula-colour curve keys without a `Formula` heading. No native Veusz key is
+created. The heading shares the formula row's left edge, while the condition
+row spans the formula row's full outer width: the `33%` entry aligns left and
+the `50%` entry aligns right. The exact-current audit closes the custom label,
+line, and rectangle inventories.
+Because this confirmed presentation intentionally uses colour and tone without
+dash or marker redundancy, publication QA must retain any non-colour or
+grayscale accessibility limitation for human review rather than silently
+changing the line chart.
+
+The tensile semantic adapter must also replay SciPlot's canonical structured
+wide curve CSV directly. This keeps the three metadata rows, paired source
+labels, every finite measured point, and the exact series order reusable
+through `studio` without routing the file through a curated-workbook sheet
+assumption.
+
 Scientific semantics and presentation selection are separate contracts.
 `SemanticRule` owns recognition, axes, units, replicate preservation, and
 analysis. Its versioned `presentation_contract` owns the default template and
@@ -205,9 +250,12 @@ single hard-coded chart. `impact_metric`, for example, supports `bar`, `box`,
 point-line alternative compares compatible workbook conditions through
 arithmetic-mean lines with the categorical-bar sample-SD error definition,
 retains every raw replicate as a light condition-toned point, lays those
-points out through the box-strip stable shuffled-slot policy without
-condition-side offsets, and binds marker shape to sample position rather than
-condition. Four-sample impact overlays use the ordinary 60 x 55 mm frame.
+points out through the box-strip stable shuffled-slot policy around a small
+condition-specific centre offset, and binds marker shape to sample position
+rather than condition. For two conditions, the means, errors, and their raw
+points use symmetric -0.05/+0.05 category offsets. Raw markers are 0.875 times
+the mean-marker size at alpha 0.50; mean markers use a 0.70 pt white edge.
+Four-sample impact overlays use the ordinary 60 x 55 mm frame.
 
 Templates may define semantic behavior and editable options. They may not
 privately override global typography, strokes, ticks, markers, or ordinary

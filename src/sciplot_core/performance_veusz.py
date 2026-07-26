@@ -15,6 +15,8 @@ from sciplot_core.performance_comparison import (
 )
 from sciplot_core.policy import (
     FIXED_PUBLICATION_FRAME_POLICY,
+    PERFORMANCE_PANEL_WIDTH_MM,
+    PERFORMANCE_REFERENCE_PANEL_WIDTH_MM,
     UNIFIED_AXIS_LINEWIDTH_PT,
     UNIFIED_FONT_FAMILY,
     UNIFIED_FONT_SIZE_PT,
@@ -188,11 +190,14 @@ def _performance_polygons(payload: dict[str, Any]) -> list[dict[str, Any]]:
         if payload["layout"]["legend_uses_reserved_panel"]
         else []
     )
-    for index, item, y_position in legend_rows:
+    for row in legend_rows:
+        index = int(row["index"])
+        item = row["item"]
+        y_position = float(row["y"])
         page_width, page_height = (
             float(value) for value in payload["layout"]["page_size_mm"]
         )
-        center_x = (60.0 + 5.3) / page_width
+        center_x = float(row["marker_x"])
         radius_x = 0.8 / page_width
         radius_y = 0.8 / page_height
         normalized = _marker_polygon(str(item["marker"]))
@@ -243,7 +248,7 @@ def _performance_polygons(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     "line_width_pt": UNIFIED_LINE_WIDTH_PT,
                     "line_style": "solid",
                     "line_transparency": int(envelope["line_transparency"]),
-                    "line_hide": False,
+                    "line_hide": bool(envelope.get("line_hide", False)),
                     "fill_color": str(envelope["fill_color"]),
                     "fill_transparency": int(envelope["fill_transparency"]),
                     "fill_hide": False,
@@ -333,6 +338,16 @@ def _marker_polygon(marker: str) -> list[tuple[float, float]]:
             )
             for index in range(24)
         ]
+    if marker in {"ellipsehorz", "ellipsevert"}:
+        x_scale = 1.25 if marker == "ellipsehorz" else 0.72
+        y_scale = 0.72 if marker == "ellipsehorz" else 1.25
+        return [
+            (
+                x_scale * math.cos(2.0 * math.pi * index / 24.0),
+                y_scale * math.sin(2.0 * math.pi * index / 24.0),
+            )
+            for index in range(24)
+        ]
     if marker == "square":
         return [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
     if marker == "diamond":
@@ -344,14 +359,31 @@ def _marker_polygon(marker: str) -> list[tuple[float, float]]:
             (-1.05, -0.75 * sign),
             (1.05, -0.75 * sign),
         ]
-    if marker in {"pentagon", "hexagon"}:
-        count = 5 if marker == "pentagon" else 6
+    if marker in {"triangleleft", "triangleright"}:
+        sign = -1.0 if marker == "triangleleft" else 1.0
+        return [
+            (1.2 * sign, 0.0),
+            (-0.75 * sign, -1.05),
+            (-0.75 * sign, 1.05),
+        ]
+    if marker in {"pentagon", "hexagon", "octogon"}:
+        count = {"pentagon": 5, "hexagon": 6, "octogon": 8}[marker]
         return [
             (
                 math.cos(math.pi / 2.0 + 2.0 * math.pi * index / count),
                 math.sin(math.pi / 2.0 + 2.0 * math.pi * index / count),
             )
             for index in range(count)
+        ]
+    if marker == "star4":
+        return [
+            (
+                (1.0 if index % 2 == 0 else 0.43)
+                * math.cos(math.pi / 2.0 + math.pi * index / 4.0),
+                (1.0 if index % 2 == 0 else 0.43)
+                * math.sin(math.pi / 2.0 + math.pi * index / 4.0),
+            )
+            for index in range(8)
         ]
     if marker == "star":
         return [
@@ -470,62 +502,151 @@ def _label_contract(
 def _legend_layout(
     payload: dict[str, Any],
 ) -> tuple[
-    list[tuple[str, float]],
-    list[tuple[int, dict[str, Any], float]],
-    float,
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[int, float],
 ]:
-    headings: list[tuple[str, float]] = []
-    rows: list[tuple[int, dict[str, Any], float]] = []
-    current_y = 0.84
-    previous_role: str | None = None
-    for index, item in enumerate(payload["legend_items"], start=1):
-        if not isinstance(item, dict):
+    headings: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
+    legend_items = [
+        item for item in payload["legend_items"] if isinstance(item, dict)
+    ]
+    indexed_items = list(enumerate(legend_items, start=1))
+    page_width = float(payload["layout"]["page_size_mm"][0])
+    column_count = max(
+        int(payload["layout"].get("legend_column_count") or 1),
+        1,
+    )
+    bottoms: dict[int, float] = {}
+    for column in range(1, column_count + 1):
+        column_items = [
+            (index, item)
+            for index, item in indexed_items
+            if int(item.get("legend_column") or 1) == column
+        ]
+        if not column_items:
             continue
-        role = str(item["role"])
-        if role != previous_role:
-            headings.append((role, current_y))
-            current_y -= 0.055
-            previous_role = role
-        rows.append((index, item, current_y))
-        current_y -= 0.063
-    return headings, rows, current_y
+        grouped_items: list[
+            tuple[str, list[tuple[int, dict[str, Any]]]]
+        ] = []
+        for index, item in column_items:
+            group = str(item.get("legend_group") or "").strip()
+            if not grouped_items or grouped_items[-1][0] != group:
+                grouped_items.append((group, []))
+            grouped_items[-1][1].append((index, item))
+        group_count = len(grouped_items)
+        group_gap = 0.018
+        group_layouts: list[
+            tuple[str, list[tuple[int, dict[str, Any]]], int]
+        ] = []
+        for group, group_items in grouped_items:
+            capacities = {
+                max(
+                    1,
+                    min(
+                        int(item.get("legend_items_per_row") or 1),
+                        2,
+                    ),
+                )
+                for _, item in group_items
+            }
+            if len(capacities) != 1:
+                raise ValueError(
+                    f"Legend group {group!r} has conflicting "
+                    "LegendItemsPerRow values."
+                )
+            items_per_row = capacities.pop()
+            group_layouts.append((group, group_items, items_per_row))
+        item_row_count = sum(
+            math.ceil(len(group_items) / items_per_row)
+            for _, group_items, items_per_row in group_layouts
+        )
+        slot_count = max(item_row_count + group_count, 1)
+        available = 0.88 - 0.10 - group_gap * max(group_count - 1, 0)
+        row_step = min(0.078, available / float(slot_count))
+        column_offset_mm = (
+            PERFORMANCE_PANEL_WIDTH_MM
+            * float(column - 1)
+        )
+        heading_x = (
+            PERFORMANCE_PANEL_WIDTH_MM + 4.5 + column_offset_mm
+        ) / page_width
+        marker_x = (
+            PERFORMANCE_PANEL_WIDTH_MM + 5.3 + column_offset_mm
+        ) / page_width
+        text_x = (
+            PERFORMANCE_PANEL_WIDTH_MM + 8.5 + column_offset_mm
+        ) / page_width
+        current_y = 0.88
+        paired_slot_offset = (
+            PERFORMANCE_REFERENCE_PANEL_WIDTH_MM * 0.30 / page_width
+        )
+        for group_index, (
+            group,
+            group_items,
+            items_per_row,
+        ) in enumerate(group_layouts):
+            if group_index:
+                current_y -= group_gap
+            headings.append(
+                {
+                    "column": column,
+                    "group": group,
+                    "x": heading_x,
+                    "y": current_y,
+                }
+            )
+            current_y -= row_step
+            for row_start in range(0, len(group_items), items_per_row):
+                row_items = group_items[
+                    row_start : row_start + items_per_row
+                ]
+                for subcolumn, (index, item) in enumerate(row_items):
+                    offset = paired_slot_offset * float(subcolumn)
+                    rows.append(
+                        {
+                            "index": index,
+                            "column": column,
+                            "subcolumn": subcolumn + 1,
+                            "item": item,
+                            "marker_x": marker_x + offset,
+                            "text_x": text_x + offset,
+                            "y": current_y,
+                            "row_step": row_step,
+                        }
+                    )
+                current_y -= row_step
+        bottoms[column] = current_y
+    return headings, rows, bottoms
 
 
 def _performance_labels(payload: dict[str, Any]) -> list[dict[str, Any]]:
     labels: list[dict[str, Any]] = []
     if payload["layout"]["legend_uses_reserved_panel"]:
-        page_width = float(payload["layout"]["page_size_mm"][0])
-        start_x = (60.0 + 4.5) / page_width
-        text_x = (60.0 + 8.5) / page_width
-        labels.append(
-            _label_contract(
-                name="performance_legend_title",
-                label="Material index",
-                parent="page",
-                positioning="relative",
-                x=start_x,
-                y=0.91,
-                text_size_pt=UNIFIED_FONT_SIZE_PT,
-            )
-        )
-        headings, rows, current_y = _legend_layout(payload)
-        for role, y_position in headings:
-            heading = "This work" if role == "sample" else "Reference materials"
+        headings, rows, _ = _legend_layout(payload)
+        for heading_item in headings:
+            group = str(heading_item["group"])
             labels.append(
                 _label_contract(
-                    name=f"performance_legend_heading_{role}",
-                    label=heading,
+                    name=(
+                        "performance_legend_heading_"
+                        f"{int(heading_item['column'])}_"
+                        f"{len(labels) + 1}"
+                    ),
+                    label=group,
                     parent="page",
                     positioning="relative",
-                    x=start_x,
-                    y=y_position,
+                    x=float(heading_item["x"]),
+                    y=float(heading_item["y"]),
                     text_size_pt=UNIFIED_LEGEND_FONT_SIZE_PT,
                 )
             )
-        for index, item, y_position in rows:
+        for row in rows:
+            index = int(row["index"])
+            item = row["item"]
             citation = str(item.get("citation") or "").strip()
-            display = str(item["material"])
-            if citation:
+            display = str(item.get("label") or item["material"])
+            if citation and bool(item.get("append_citation", True)):
                 display = f"{display} - {citation}"
             labels.append(
                 _label_contract(
@@ -533,25 +654,10 @@ def _performance_labels(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     label=display,
                     parent="page",
                     positioning="relative",
-                    x=text_x,
-                    y=y_position,
+                    x=float(row["text_x"]),
+                    y=float(row["y"]),
                 )
             )
-        note = (
-            "Envelope: observed sample extent (not CI)"
-            if payload["template"] == PERFORMANCE_SCATTER_TEMPLATE_ID
-            else "Radar score: 0-1; outer is better"
-        )
-        labels.append(
-            _label_contract(
-                name="performance_legend_note",
-                label=note,
-                parent="page",
-                positioning="relative",
-                x=start_x,
-                y=max(current_y - 0.02, 0.08),
-            )
-        )
     if payload["template"] == PERFORMANCE_RADAR_TEMPLATE_ID:
         plot_width, plot_height = (
             float(value) for value in payload["layout"]["plot_region_mm"]
@@ -684,7 +790,9 @@ def build_performance_veusz_spec(
         "autofixes_applied": [],
         "visual_extent_axis_clearance": {},
         "layout_issues": [],
-        "visual_data_transforms": [],
+        "visual_data_transforms": json_safe(
+            payload.get("visual_data_transforms", [])
+        ),
         "terminal_transform_steps": json_safe(transform_steps or []),
         "provenance": {"veusz": "vendored_native_document"},
         "style": style,

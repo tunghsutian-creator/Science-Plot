@@ -898,7 +898,7 @@ def _plain_veusz_label(value: object) -> str:
     # Veusz escapes literal markup characters in saved labels. PDF text
     # extraction returns the rendered character, so compare against that
     # rendered form instead of treating the escape slash as label content.
-    text = re.sub(r"\\([_{}^\\])", r"\1", text)
+    text = re.sub(r"\\([\[\]_{}^\\])", r"\1", text)
     text = re.sub(r"\^\{([^{}]*)\}", r"\1", text)
     text = re.sub(r"_\{([^{}]*)\}", r"\1", text)
     text = text.replace("{", "").replace("}", "")

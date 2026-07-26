@@ -257,6 +257,8 @@ def test_impact_point_line_compares_compatible_conditions_and_preserves_raw_poin
     assert summaries[0].error_values == pytest.approx(
         (10.0**0.5 / 2.0,) * 4
     )
+    assert summaries[0].x_values == pytest.approx((0.95, 1.95, 2.95, 3.95))
+    assert summaries[1].x_values == pytest.approx((1.05, 2.05, 3.05, 4.05))
     assert axis_info["category_labels"] == ["E0", "E2", "E3", "E4"]
     assert axis_info["condition_labels"] == [
         "33% weight reduction",
@@ -269,7 +271,15 @@ def test_impact_point_line_compares_compatible_conditions_and_preserves_raw_poin
         "diamond",
         "triangle",
     ]
+    assert markers[0].x_values == pytest.approx((0.95,))
+    assert markers[4].x_values == pytest.approx((1.05,))
+    assert all(item.marker_line_color == "#FFFFFF" for item in markers)
+    assert all(item.marker_line_width == pytest.approx(0.70) for item in markers)
     assert sum(len(item.y_values) for item in raw) == 40
+    assert raw[0].category_position == pytest.approx(0.95)
+    assert raw[4].category_position == pytest.approx(1.05)
+    assert all(item.marker_size == pytest.approx(1.75) for item in raw)
+    assert all(item.marker_alpha == pytest.approx(0.50) for item in raw)
     assert all(
         min(item.x_values) < float(item.category_position) < max(item.x_values)
         for item in raw
@@ -290,7 +300,10 @@ def test_impact_point_line_compares_compatible_conditions_and_preserves_raw_poin
     assert categorical is not None
     assert categorical["error_bar_statistic"] == "sample_sd"
     assert len(categorical["error_bars"]) == 8
-    assert categorical["visual_style"]["raw_point_condition_offset"] is False
+    assert categorical["condition_offsets"] == pytest.approx([-0.05, 0.05])
+    assert categorical["visual_style"]["raw_point_condition_offset"] is True
+    assert categorical["visual_style"]["raw_point_alpha"] == pytest.approx(0.50)
+    assert categorical["visual_style"]["raw_marker_scale"] == pytest.approx(0.875)
     render_options = _apply_domain_render_defaults(
         {},
         request=request,
@@ -300,6 +313,9 @@ def test_impact_point_line_compares_compatible_conditions_and_preserves_raw_poin
     assert steps[0]["parameters"]["selected_conditions"] == ["2mm", "4mm"]
     assert steps[0]["parameters"]["raw_values_preserved"] is True
     assert steps[0]["parameters"]["error_bar_statistic"] == "sample_sd_n_minus_1"
+    assert steps[0]["parameters"]["condition_offsets"] == pytest.approx(
+        [-0.05, 0.05]
+    )
 
 
 def test_impact_point_line_uses_one_combined_document(tmp_path: Path) -> None:
@@ -380,6 +396,24 @@ def test_impact_point_line_terminal_render_keeps_semantic_overlay_context(
     ]
     assert categorical["raw_replicate_count"] == 40
     assert len(categorical["error_bars"]) == 8
+    assert categorical["condition_offsets"] == pytest.approx([-0.05, 0.05])
+    raw_specs = [
+        item
+        for item in spec["series"]
+        if item["presentation_kind"] == IMPACT_POINT_LINE_RAW_KIND
+    ]
+    mean_specs = [
+        item
+        for item in spec["series"]
+        if item["presentation_kind"] == IMPACT_POINT_LINE_MARKER_KIND
+    ]
+    assert all(item["marker_size_pt"] == pytest.approx(1.75) for item in raw_specs)
+    assert all(item["marker_alpha"] == pytest.approx(0.50) for item in raw_specs)
+    assert all(item["marker_line_color"] == "#FFFFFF" for item in mean_specs)
+    assert all(
+        item["marker_line_width_pt"] == pytest.approx(0.70)
+        for item in mean_specs
+    )
     assert spec["layout_issues"] == []
     assert [
         step["id"] for step in result["transform_steps"]

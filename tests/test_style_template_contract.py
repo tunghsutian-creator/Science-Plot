@@ -32,6 +32,7 @@ from sciplot_core.policy import (
     TENSILE_Y_AXIS_LABEL,
     UNIFIED_HARD_OPTION_KEYS,
     UNIFIED_LEFT_MARGIN_MM,
+    UNIFIED_LEGEND_KEY_LENGTH_MM,
     UNIFIED_MARKER_SIZE_PT,
     UNIFIED_RIGHT_MARGIN_MM,
     categorical_box_native_fill_scale,
@@ -57,6 +58,9 @@ from sciplot_core.studio import (
     _categorical_axis_label_contracts,
     _categorical_grouped_bar_fill_rect_contracts,
     _categorical_line_contracts,
+    _curve_factor_legend_condition_rect_contracts,
+    _curve_factor_legend_label_contracts,
+    _curve_factor_legend_line_contracts,
     _deterministic_category_positions,
     _expand_axis_for_visual_extents,
     _looks_like_frequency_axis,
@@ -77,6 +81,143 @@ from sciplot_recipes.contracts import get_recipe_spec
 
 def test_curve_style_contract_uses_solid_lines_for_every_series() -> None:
     assert DEFAULT_CURVE_LINE_STYLE_SEQUENCE == ("solid",)
+
+
+def test_curve_template_materializes_independent_condition_and_formula_legends(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "factorized_foam_curves.csv"
+    formulas = ("E0", "E2", "E3", "E4")
+    conditions = ("33% weight reduction", "50% weight reduction")
+    rows: list[list[object]] = [[], [], []]
+    for formula_index, formula in enumerate(formulas):
+        for condition_index, condition in enumerate(conditions):
+            label = f"{formula} || {condition}"
+            rows[0].extend(["Tensile strain", "Tensile stress"])
+            rows[1].extend(["%", "MPa"])
+            rows[2].extend([label, label])
+    for point_index in range(4):
+        row: list[object] = []
+        for formula_index, _formula in enumerate(formulas):
+            for condition_index, _condition in enumerate(conditions):
+                row.extend(
+                    [
+                        float(point_index),
+                        float(
+                            2
+                            + formula_index * 4
+                            + condition_index * 2
+                            + point_index * 3
+                        ),
+                    ]
+                )
+        rows.append(row)
+    pd.DataFrame(rows).to_csv(source, header=False, index=False)
+
+    result = render_to_dir(
+        source,
+        template="curve",
+        output_dir=tmp_path / "rendered_factorized_curves",
+        options={
+            "size": "60x55",
+            "legend_position": "upper_left",
+            "y_min": 0.0,
+            "y_max": 50.0,
+            "y_ticks": [0.0, 10.0, 20.0, 30.0, 40.0, 50.0],
+        },
+        export_formats=("pdf",),
+    )
+    spec = json.loads(
+        Path(result["veusz_specs"][0]).read_text(encoding="utf-8")
+    )
+    text = Path(result["veusz_documents"][0]).read_text(encoding="utf-8")
+    legend = spec["legend"]
+
+    assert result["qa_reports"][0]["issues"] == []
+    assert legend["show"] is True
+    assert legend["presentation_kind"] == "factorized_curve"
+    assert legend["native_key"] is False
+    assert legend["factor_order"] == ["condition", "formula"]
+    assert legend["row_alignment"] == "edge_aligned_to_formula_row"
+    assert legend["block_left_x_fraction"] == pytest.approx(0.28)
+    assert legend["block_right_x_fraction"] == pytest.approx(0.991)
+    assert [group["title"] for group in legend["groups"]] == [
+        "Weight reduction",
+        "",
+    ]
+    assert [
+        entry["label"] for entry in legend["groups"][0]["entries"]
+    ] == ["33%", "50%"]
+    assert [
+        entry["label"] for entry in legend["groups"][1]["entries"]
+    ] == list(formulas)
+    expected_colors = [
+        color
+        for root in DEFAULT_PALETTE_COLORS[:4]
+        for color in (
+            categorical_component_fill_color(
+                root,
+                component_index=1,
+                component_count=2,
+            ),
+            root,
+        )
+    ]
+    assert [item["color"] for item in spec["series"]] == expected_colors
+    assert [item["line_style"] for item in spec["series"]] == [
+        "solid"
+        for _formula in formulas
+        for _condition in conditions
+    ]
+    assert [item["marker"] for item in spec["series"]] == ["none"] * 8
+    assert [
+        entry["colors"] for entry in legend["groups"][0]["entries"]
+    ] == [
+        expected_colors[0::2],
+        expected_colors[1::2],
+    ]
+    assert [
+        entry["color"] for entry in legend["groups"][1]["entries"]
+    ] == list(DEFAULT_PALETTE_COLORS[:4])
+    assert [
+        entry["line_style"] for entry in legend["groups"][1]["entries"]
+    ] == ["solid"] * 4
+    for entry in legend["groups"][0]["entries"]:
+        assert (
+            entry["swatch_left_fraction"] + entry["swatch_width_fraction"]
+            < entry["label_x_fraction"]
+        )
+        assert entry["swatch_height_fraction"] == pytest.approx(0.035)
+    graph_width_mm = 60.0 - UNIFIED_LEFT_MARGIN_MM - UNIFIED_RIGHT_MARGIN_MM
+    for entry in legend["groups"][1]["entries"]:
+        assert (
+            (entry["x_end_fraction"] - entry["x_start_fraction"])
+            * graph_width_mm
+        ) == pytest.approx(UNIFIED_LEGEND_KEY_LENGTH_MM)
+    factor_labels = _curve_factor_legend_label_contracts(spec)
+    assert len(factor_labels) == 7
+    assert factor_labels[0]["name"] == "curve_factor_legend_condition_title"
+    assert factor_labels[0]["align"] == "left"
+    assert factor_labels[0]["x"] == pytest.approx(
+        legend["block_left_x_fraction"]
+    )
+    assert factor_labels[1]["align"] == "left"
+    assert factor_labels[2]["align"] == "right"
+    assert factor_labels[2]["x"] == pytest.approx(
+        legend["block_right_x_fraction"]
+    )
+    assert len(_curve_factor_legend_line_contracts(spec)) == 4
+    assert len(_curve_factor_legend_condition_rect_contracts(spec)) == 8
+    assert "Add('key', name='key1'" not in text
+    assert "Formula" not in text
+    assert text.count("Add('label', name='curve_factor_legend_") == 7
+    assert text.count("Add('line', name='curve_factor_legend_") == 4
+    assert (
+        text.count(
+            "Add('rect', name='curve_factor_legend_condition_segment_"
+        )
+        == 8
+    )
 
 
 def test_frequency_axis_detection_ignores_runtime_path_substrings() -> None:

@@ -11,6 +11,7 @@ from sciplot_core.performance_comparison import (
     load_performance_comparison,
 )
 from sciplot_core.performance_veusz import build_performance_veusz_spec
+from sciplot_core.qa import _normalized_label
 from sciplot_core.render import render_to_dir
 from sciplot_core.studio import (
     export_studio_document,
@@ -25,6 +26,18 @@ FIXTURE = (
     / "performance_comparison"
     / "material_performance_long.csv"
 )
+DENSE_FIXTURE = (
+    Path(__file__).parent
+    / "fixtures"
+    / "performance_comparison"
+    / "material_performance_dense_16.csv"
+)
+
+
+def test_publication_label_normalization_unescapes_literal_square_brackets() -> None:
+    assert _normalized_label(r"PA66 composites \[ref x\]") == (
+        _normalized_label("PA66 composites [ref x]")
+    )
 
 
 @pytest.mark.parametrize(
@@ -112,7 +125,36 @@ def test_performance_direct_render_passes_exact_native_qa(
     }
     assert f"Add('polygon', name='{native_widget}'" in text
     assert "Add('xy', name='series_1'" in text
-    assert "Add('label', name='performance_legend_heading_sample'" in text
+    assert "Add('label', name='performance_legend_heading_1_" in text
+    assert "performance_legend_title" not in text
+
+
+def test_dense_performance_direct_render_supports_sixteen_native_markers(
+    tmp_path: Path,
+) -> None:
+    result = render_to_dir(
+        DENSE_FIXTURE,
+        template="scatter",
+        output_dir=tmp_path / "dense_scatter",
+        export_formats=("pdf",),
+        request_context={"rule_id": "performance_comparison"},
+    )
+    spec = json.loads(
+        Path(result["veusz_specs"][0]).read_text(encoding="utf-8")
+    )
+    markers = [item["marker"] for item in spec["series"]]
+
+    assert result["qa_reports"][0]["issues"] == []
+    assert Path(result["outputs"][0]).is_file()
+    assert len(markers) == 16
+    assert len(set(markers)) == 16
+    assert len(
+        [
+            item
+            for item in spec["performance_comparison"]["labels"]
+            if str(item["name"]).startswith("performance_legend_text_")
+        ]
+    ) == 16
 
 
 def test_explicit_pending_performance_studio_review_preserves_lineage(

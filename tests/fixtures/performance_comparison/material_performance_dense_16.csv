@@ -1,0 +1,33 @@
+Material,Role,Group,Metric,Value,Unit,DisplayLabel,ScatterAxis,Journal,Year,MaterialOrder,Marker
+E0 - 2 mm,sample,2 mm,density,0.764,g cm^-3,Density,x,,,1,circle
+E0 - 2 mm,sample,2 mm,specific_impact_strength,38,kJ m^-2 cm^3 g^-1,Specific impact strength,y,,,1,circle
+E2 - 2 mm,sample,2 mm,density,0.764,g cm^-3,Density,x,,,2,square
+E2 - 2 mm,sample,2 mm,specific_impact_strength,97,kJ m^-2 cm^3 g^-1,Specific impact strength,y,,,2,square
+E3 - 2 mm,sample,2 mm,density,0.764,g cm^-3,Density,x,,,3,triangle
+E3 - 2 mm,sample,2 mm,specific_impact_strength,135,kJ m^-2 cm^3 g^-1,Specific impact strength,y,,,3,triangle
+E4 - 2 mm,sample,2 mm,density,0.764,g cm^-3,Density,x,,,4,diamond
+E4 - 2 mm,sample,2 mm,specific_impact_strength,197,kJ m^-2 cm^3 g^-1,Specific impact strength,y,,,4,diamond
+E0 - 4 mm,sample,4 mm,density,0.570,g cm^-3,Density,x,,,5,triangledown
+E0 - 4 mm,sample,4 mm,specific_impact_strength,42,kJ m^-2 cm^3 g^-1,Specific impact strength,y,,,5,triangledown
+E2 - 4 mm,sample,4 mm,density,0.570,g cm^-3,Density,x,,,6,pentagon
+E2 - 4 mm,sample,4 mm,specific_impact_strength,111,kJ m^-2 cm^3 g^-1,Specific impact strength,y,,,6,pentagon
+E3 - 4 mm,sample,4 mm,density,0.570,g cm^-3,Density,x,,,7,hexagon
+E3 - 4 mm,sample,4 mm,specific_impact_strength,168,kJ m^-2 cm^3 g^-1,Specific impact strength,y,,,7,hexagon
+E4 - 4 mm,sample,4 mm,density,0.570,g cm^-3,Density,x,,,8,star
+E4 - 4 mm,sample,4 mm,specific_impact_strength,213,kJ m^-2 cm^3 g^-1,Specific impact strength,y,,,8,star
+Reference 1,reference,Literature,density,1.64,g cm^-3,Density,x,Journal A,2026,9,plus
+Reference 1,reference,Literature,specific_impact_strength,228,kJ m^-2 cm^3 g^-1,Specific impact strength,y,Journal A,2026,9,plus
+Reference 2,reference,Literature,density,1.49,g cm^-3,Density,x,Journal B,2025,10,cross
+Reference 2,reference,Literature,specific_impact_strength,109,kJ m^-2 cm^3 g^-1,Specific impact strength,y,Journal B,2025,10,cross
+Reference 3,reference,Literature,density,1.19,g cm^-3,Density,x,Journal C,2025,11,triangleleft
+Reference 3,reference,Literature,specific_impact_strength,102,kJ m^-2 cm^3 g^-1,Specific impact strength,y,Journal C,2025,11,triangleleft
+Reference 4,reference,Literature,density,1.29,g cm^-3,Density,x,Journal D,2024,12,triangleright
+Reference 4,reference,Literature,specific_impact_strength,82,kJ m^-2 cm^3 g^-1,Specific impact strength,y,Journal D,2024,12,triangleright
+Reference 5,reference,Literature,density,0.86,g cm^-3,Density,x,Journal E,2024,13,octogon
+Reference 5,reference,Literature,specific_impact_strength,62,kJ m^-2 cm^3 g^-1,Specific impact strength,y,Journal E,2024,13,octogon
+Reference 6,reference,Literature,density,0.78,g cm^-3,Density,x,Journal F,2024,14,ellipsehorz
+Reference 6,reference,Literature,specific_impact_strength,61,kJ m^-2 cm^3 g^-1,Specific impact strength,y,Journal F,2024,14,ellipsehorz
+Reference 7,reference,Literature,density,1.45,g cm^-3,Density,x,Journal G,2023,15,ellipsevert
+Reference 7,reference,Literature,specific_impact_strength,55,kJ m^-2 cm^3 g^-1,Specific impact strength,y,Journal G,2023,15,ellipsevert
+Reference 8,reference,Literature,density,1.38,g cm^-3,Density,x,Journal H,2023,16,star4
+Reference 8,reference,Literature,specific_impact_strength,51,kJ m^-2 cm^3 g^-1,Specific impact strength,y,Journal H,2023,16,star4

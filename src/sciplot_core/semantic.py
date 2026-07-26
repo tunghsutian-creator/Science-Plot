@@ -4577,6 +4577,19 @@ def _tensile_export_files(input_path: Path) -> list[Path]:
 
 
 def _read_tensile_export_series_list(source: Path) -> list[CurveSeriesPayload]:
+    if source.is_file():
+        structured = _scan_curve_series_source(
+            source,
+            x_aliases=("strain", "拉伸应变"),
+            y_aliases=("stress", "σ", "sigma", "拉伸应力", "应力"),
+            x_label="Tensile strain",
+            y_label="Tensile stress",
+            default_x_unit="%",
+            default_y_unit="MPa",
+            sample_prefix=source.stem,
+        )
+        if structured:
+            return structured
     series_list: list[CurveSeriesPayload] = []
     errors: list[str] = []
     direct_export_group = tensile_export_sample_name(source) if is_tensile_export_dir(source) else ""

@@ -8,6 +8,7 @@ Veusz document builder.
 
 from __future__ import annotations
 
+import hashlib
 import math
 import re
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ from sciplot_core.materials_rules import format_unit_label
 from sciplot_core.policy import (
     DEFAULT_PALETTE_COLORS,
     PERFORMANCE_ENVELOPE_FILL_TRANSPARENCY,
+    PERFORMANCE_ENVELOPE_IRREGULARITY_FRACTION,
     PERFORMANCE_ENVELOPE_LINE_TRANSPARENCY,
     PERFORMANCE_ENVELOPE_PADDING_FRACTION,
     PERFORMANCE_MARKERS,
@@ -28,6 +30,7 @@ from sciplot_core.policy import (
     PERFORMANCE_PANEL_WIDTH_MM,
     PERFORMANCE_REFERENCE_COLOR,
     PERFORMANCE_REFERENCE_PANEL_WIDTH_MM,
+    PERFORMANCE_SCATTER_JITTER_HALFSPAN_FRACTION,
     PERFORMANCE_SAMPLE_FILL_TRANSPARENCY,
     UNIFIED_BOTTOM_MARGIN_MM,
     UNIFIED_LEFT_MARGIN_MM,
@@ -56,6 +59,8 @@ class PerformanceMetric:
     unit: str
     source_order: int
     scatter_axis: str | None = None
+    scatter_min: float | None = None
+    scatter_max: float | None = None
     radar_order: int | None = None
     direction: str | None = None
     scale_min: float | None = None
@@ -80,6 +85,13 @@ class PerformanceMaterial:
     material_id: str
     role: str
     group: str
+    envelope_include: bool
+    legend_label: str
+    legend_label_explicit: bool
+    legend_group: str
+    legend_identity: str
+    legend_column: int
+    legend_items_per_row: int
     source_order: int
     material_order: float | None
     journal: str
@@ -161,6 +173,14 @@ _HEADER_ALIASES: dict[str, frozenset[str]] = {
     "group": frozenset(
         {"group", "samplegroup", "envelopegroup", "组", "样品组", "包络组"}
     ),
+    "envelope_include": frozenset(
+        {
+            "envelopeinclude",
+            "includeinenvelope",
+            "包络纳入",
+            "纳入包络",
+        }
+    ),
     "metric": frozenset(
         {"metric", "metricid", "property", "propertyid", "指标", "性能", "性能指标"}
     ),
@@ -171,6 +191,12 @@ _HEADER_ALIASES: dict[str, frozenset[str]] = {
     ),
     "scatter_axis": frozenset(
         {"scatteraxis", "axis", "xyaxis", "散点轴", "坐标轴"}
+    ),
+    "scatter_min": frozenset(
+        {"scattermin", "scatteraxismin", "散点轴下限", "坐标轴下限"}
+    ),
+    "scatter_max": frozenset(
+        {"scattermax", "scatteraxismax", "散点轴上限", "坐标轴上限"}
     ),
     "radar_order": frozenset(
         {"radarorder", "radaraxisorder", "雷达顺序", "雷达轴顺序"}
@@ -191,6 +217,26 @@ _HEADER_ALIASES: dict[str, frozenset[str]] = {
         {"materialorder", "sampleorder", "legendorder", "材料顺序", "图例顺序"}
     ),
     "marker": frozenset({"marker", "symbol", "标记", "符号"}),
+    "legend_label": frozenset(
+        {"legendlabel", "indexlabel", "图例文字", "索引文字"}
+    ),
+    "legend_group": frozenset(
+        {"legendgroup", "indexgroup", "图例分组", "索引分组"}
+    ),
+    "legend_identity": frozenset(
+        {"legendidentity", "markeridentity", "图例身份", "标记身份"}
+    ),
+    "legend_column": frozenset(
+        {"legendcolumn", "indexcolumn", "图例列", "索引列"}
+    ),
+    "legend_items_per_row": frozenset(
+        {
+            "legenditemsperrow",
+            "indexitemsperrow",
+            "图例每行条目数",
+            "索引每行条目数",
+        }
+    ),
 }
 _REQUIRED_COLUMNS = frozenset({"material", "role", "metric", "value", "unit"})
 _ROLE_ALIASES = {
@@ -432,6 +478,72 @@ def _unique_float(
     return values[0] if values else None
 
 
+def _unique_bool(
+    frame: pd.DataFrame,
+    column: object | None,
+    *,
+    field: str,
+    owner: str,
+    default: bool,
+) -> bool:
+    if column is None:
+        return default
+    values: list[bool] = []
+    true_tokens = {
+        "true",
+        "yes",
+        "y",
+        "include",
+        "included",
+        "是",
+        "包含",
+        "纳入",
+    }
+    false_tokens = {
+        "false",
+        "no",
+        "n",
+        "exclude",
+        "excluded",
+        "否",
+        "不包含",
+        "不纳入",
+    }
+    for index, value in frame[column].items():
+        text = _text(value)
+        if not text:
+            continue
+        parsed: bool | None = None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            number = math.nan
+        if math.isfinite(number) and math.isclose(number, 1.0):
+            parsed = True
+        elif math.isfinite(number) and math.isclose(number, 0.0):
+            parsed = False
+        else:
+            token = _token(value)
+            if token in true_tokens:
+                parsed = True
+            elif token in false_tokens:
+                parsed = False
+        if parsed is None:
+            raise PerformanceComparisonError(
+                "performance_envelope_include_invalid",
+                f"Row {int(index) + 2}: {field} must be true/false, "
+                "yes/no, include/exclude, or 1/0.",
+            )
+        if parsed not in values:
+            values.append(parsed)
+    if len(values) > 1:
+        raise PerformanceComparisonError(
+            "performance_metadata_conflict",
+            f"{owner} has conflicting {field} values: {values}.",
+        )
+    return values[0] if values else default
+
+
 def _normalized_role(value: object, *, row_number: int) -> str:
     role = _ROLE_ALIASES.get(_token(value))
     if role is None:
@@ -485,6 +597,15 @@ def _normalized_marker(value: str, *, material_id: str) -> str | None:
         "star": "star",
         "cross": "cross",
         "plus": "plus",
+        "triangleleft": "triangleleft",
+        "triangleright": "triangleright",
+        "octogon": "octogon",
+        "octagon": "octogon",
+        "ellipsehorz": "ellipsehorz",
+        "ellipsehorizontal": "ellipsehorz",
+        "ellipsevert": "ellipsevert",
+        "ellipsevertical": "ellipsevert",
+        "star4": "star4",
     }
     normalized = aliases.get(marker)
     if normalized is None:
@@ -547,7 +668,14 @@ def load_performance_comparison(source: str | Path) -> PerformanceComparison:
                     field: (
                         _text(row[column])
                         if field
-                        not in {"scale_min", "scale_max", "material_order", "radar_order"}
+                        not in {
+                            "scatter_min",
+                            "scatter_max",
+                            "scale_min",
+                            "scale_max",
+                            "material_order",
+                            "radar_order",
+                        }
                         else row[column]
                     )
                     for field, column in columns.items()
@@ -582,6 +710,27 @@ def load_performance_comparison(source: str | Path) -> PerformanceComparison:
             ),
             metric_id=str(metric_id),
         )
+        scatter_min = _unique_float(
+            metric_rows,
+            "scatter_min" if "scatter_min" in metric_rows else None,
+            field="ScatterMin",
+            owner=owner,
+        )
+        scatter_max = _unique_float(
+            metric_rows,
+            "scatter_max" if "scatter_max" in metric_rows else None,
+            field="ScatterMax",
+            owner=owner,
+        )
+        if (
+            scatter_min is not None
+            and scatter_max is not None
+            and not scatter_min < scatter_max
+        ):
+            raise PerformanceComparisonError(
+                "performance_scatter_scale_invalid",
+                f"{owner}: ScatterMin must be smaller than ScatterMax.",
+            )
         radar_order_value = _unique_float(
             metric_rows,
             "radar_order" if "radar_order" in metric_rows else None,
@@ -639,6 +788,8 @@ def load_performance_comparison(source: str | Path) -> PerformanceComparison:
                 unit=unit,
                 source_order=metric_first_order[str(metric_id)],
                 scatter_axis=scatter_axis,
+                scatter_min=scatter_min,
+                scatter_max=scatter_max,
                 radar_order=radar_order,
                 direction=direction,
                 scale_min=scale_min,
@@ -661,8 +812,97 @@ def load_performance_comparison(source: str | Path) -> PerformanceComparison:
             "group" if "group" in material_rows else None,
             field="Group",
             owner=owner,
-            default="This work",
+            default="This work" if role == "sample" else "Literature",
         )
+        envelope_include = _unique_bool(
+            material_rows,
+            (
+                "envelope_include"
+                if "envelope_include" in material_rows
+                else None
+            ),
+            field="EnvelopeInclude",
+            owner=owner,
+            default=role == "sample",
+        )
+        legend_label = _unique_text(
+            material_rows,
+            "legend_label" if "legend_label" in material_rows else None,
+            field="LegendLabel",
+            owner=owner,
+            default=str(material_id),
+        )
+        legend_label_explicit = bool(
+            "legend_label" in material_rows
+            and any(
+                _text(value)
+                for value in material_rows["legend_label"].tolist()
+            )
+        )
+        legend_group = _unique_text(
+            material_rows,
+            "legend_group" if "legend_group" in material_rows else None,
+            field="LegendGroup",
+            owner=owner,
+            default="This work" if role == "sample" else "Reference materials",
+        )
+        legend_identity = _unique_text(
+            material_rows,
+            (
+                "legend_identity"
+                if "legend_identity" in material_rows
+                else None
+            ),
+            field="LegendIdentity",
+            owner=owner,
+            default=legend_label,
+        )
+        legend_column_value = _unique_float(
+            material_rows,
+            "legend_column" if "legend_column" in material_rows else None,
+            field="LegendColumn",
+            owner=owner,
+        )
+        legend_column = 1
+        if legend_column_value is not None:
+            if (
+                legend_column_value not in {1.0, 2.0}
+                or not math.isclose(
+                    legend_column_value,
+                    round(legend_column_value),
+                )
+            ):
+                raise PerformanceComparisonError(
+                    "performance_legend_column_invalid",
+                    f"{owner}: LegendColumn must be 1 or 2.",
+                )
+            legend_column = int(round(legend_column_value))
+        legend_items_per_row_value = _unique_float(
+            material_rows,
+            (
+                "legend_items_per_row"
+                if "legend_items_per_row" in material_rows
+                else None
+            ),
+            field="LegendItemsPerRow",
+            owner=owner,
+        )
+        legend_items_per_row = 1
+        if legend_items_per_row_value is not None:
+            if (
+                legend_items_per_row_value not in {1.0, 2.0}
+                or not math.isclose(
+                    legend_items_per_row_value,
+                    round(legend_items_per_row_value),
+                )
+            ):
+                raise PerformanceComparisonError(
+                    "performance_legend_items_per_row_invalid",
+                    f"{owner}: LegendItemsPerRow must be 1 or 2.",
+                )
+            legend_items_per_row = int(
+                round(legend_items_per_row_value)
+            )
         journal = _unique_text(
             material_rows,
             "journal" if "journal" in material_rows else None,
@@ -711,7 +951,14 @@ def load_performance_comparison(source: str | Path) -> PerformanceComparison:
             PerformanceMaterial(
                 material_id=str(material_id),
                 role=role,
-                group=group if role == "sample" else "Literature references",
+                group=group,
+                envelope_include=envelope_include,
+                legend_label=legend_label,
+                legend_label_explicit=legend_label_explicit,
+                legend_group=legend_group,
+                legend_identity=legend_identity,
+                legend_column=legend_column,
+                legend_items_per_row=legend_items_per_row,
                 source_order=material_first_order[str(material_id)],
                 material_order=material_order,
                 journal=journal,
@@ -743,14 +990,45 @@ def load_performance_comparison(source: str | Path) -> PerformanceComparison:
     return comparison
 
 
-def _axis_bounds(values: list[float]) -> tuple[float, float]:
+def _axis_bounds(
+    values: list[float],
+    *,
+    metric: PerformanceMetric,
+) -> tuple[float, float]:
     minimum = min(values)
     maximum = max(values)
     span = maximum - minimum
     if math.isclose(span, 0.0):
         span = max(abs(minimum), 1.0) * 0.16
     padding = span * 0.08
-    return minimum - padding, maximum + padding
+    lower = (
+        metric.scatter_min
+        if metric.scatter_min is not None
+        else minimum - padding
+    )
+    upper = (
+        metric.scatter_max
+        if metric.scatter_max is not None
+        else maximum + padding
+    )
+    if lower > minimum and not math.isclose(lower, minimum):
+        raise PerformanceComparisonError(
+            "performance_scatter_bound_excludes_data",
+            f"Metric {metric.metric_id!r}: ScatterMin {lower:g} excludes "
+            f"the plotted minimum {minimum:g}.",
+        )
+    if upper < maximum and not math.isclose(upper, maximum):
+        raise PerformanceComparisonError(
+            "performance_scatter_bound_excludes_data",
+            f"Metric {metric.metric_id!r}: ScatterMax {upper:g} excludes "
+            f"the plotted maximum {maximum:g}.",
+        )
+    if not lower < upper:
+        raise PerformanceComparisonError(
+            "performance_scatter_scale_invalid",
+            f"Metric {metric.metric_id!r}: scatter bounds must increase.",
+        )
+    return lower, upper
 
 
 def _convex_hull(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -820,11 +1098,81 @@ def _capsule_polygon(
     return points
 
 
+def _chaikin_closed_polygon(
+    points: list[tuple[float, float]],
+    *,
+    iterations: int,
+) -> list[tuple[float, float]]:
+    smoothed = list(points)
+    for _ in range(max(int(iterations), 0)):
+        refined: list[tuple[float, float]] = []
+        for start, end in zip(
+            smoothed,
+            [*smoothed[1:], smoothed[0]],
+            strict=True,
+        ):
+            refined.extend(
+                (
+                    (
+                        0.75 * start[0] + 0.25 * end[0],
+                        0.75 * start[1] + 0.25 * end[1],
+                    ),
+                    (
+                        0.25 * start[0] + 0.75 * end[0],
+                        0.25 * start[1] + 0.75 * end[1],
+                    ),
+                )
+            )
+        smoothed = refined
+    return smoothed
+
+
+def _irregularize_polygon(
+    points: list[tuple[float, float]],
+    *,
+    seed_key: str,
+) -> list[tuple[float, float]]:
+    if len(points) < 3:
+        return points
+    smoothed = _chaikin_closed_polygon(
+        points,
+        iterations=2 if len(points) <= 8 else 1,
+    )
+    centroid = (
+        sum(point[0] for point in smoothed) / len(smoothed),
+        sum(point[1] for point in smoothed) / len(smoothed),
+    )
+    digest = hashlib.sha256(seed_key.encode("utf-8")).digest()
+    phase_3 = 2.0 * math.pi * int.from_bytes(digest[:4], "big") / (2**32)
+    phase_5 = 2.0 * math.pi * int.from_bytes(digest[4:8], "big") / (2**32)
+    result: list[tuple[float, float]] = []
+    for point in smoothed:
+        dx = point[0] - centroid[0]
+        dy = point[1] - centroid[1]
+        angle = math.atan2(dy, dx)
+        modulation = (
+            1.08
+            + PERFORMANCE_ENVELOPE_IRREGULARITY_FRACTION
+            * math.sin(3.0 * angle + phase_3)
+            + 0.6
+            * PERFORMANCE_ENVELOPE_IRREGULARITY_FRACTION
+            * math.sin(5.0 * angle + phase_5)
+        )
+        result.append(
+            (
+                centroid[0] + modulation * dx,
+                centroid[1] + modulation * dy,
+            )
+        )
+    return result
+
+
 def _expanded_envelope(
     points: list[tuple[float, float]],
     *,
     x_bounds: tuple[float, float],
     y_bounds: tuple[float, float],
+    seed_key: str,
 ) -> list[tuple[float, float]]:
     x_span = x_bounds[1] - x_bounds[0]
     y_span = y_bounds[1] - y_bounds[0]
@@ -842,24 +1190,39 @@ def _expanded_envelope(
     elif len(hull) == 2:
         expanded = _capsule_polygon(hull[0], hull[1], radius)
     else:
-        centroid = (
-            sum(point[0] for point in hull) / len(hull),
-            sum(point[1] for point in hull) / len(hull),
+        x_min = min(point[0] for point in normalized)
+        x_max = max(point[0] for point in normalized)
+        y_min = min(point[1] for point in normalized)
+        y_max = max(point[1] for point in normalized)
+        center = (
+            0.5 * (x_min + x_max),
+            0.5 * (y_min + y_max),
         )
+        x_radius = max(0.5 * (x_max - x_min) + radius, radius) * 1.12
+        y_radius = max(0.5 * (y_max - y_min) + radius, radius) * 1.05
+        superellipse_power = 3.6
         expanded = []
-        for point in hull:
-            dx = point[0] - centroid[0]
-            dy = point[1] - centroid[1]
-            length = math.hypot(dx, dy)
-            if math.isclose(length, 0.0):
-                expanded.append(point)
-            else:
-                expanded.append(
-                    (
-                        point[0] + radius * dx / length,
-                        point[1] + radius * dy / length,
-                    )
+        for index in range(32):
+            angle = 2.0 * math.pi * index / 32.0
+            cosine = math.cos(angle)
+            sine = math.sin(angle)
+            expanded.append(
+                (
+                    center[0]
+                    + x_radius
+                    * math.copysign(
+                        abs(cosine) ** (2.0 / superellipse_power),
+                        cosine,
+                    ),
+                    center[1]
+                    + y_radius
+                    * math.copysign(
+                        abs(sine) ** (2.0 / superellipse_power),
+                        sine,
+                    ),
                 )
+            )
+    expanded = _irregularize_polygon(expanded, seed_key=seed_key)
     return [
         (
             x_bounds[0] + point[0] * x_span,
@@ -874,12 +1237,7 @@ def _sample_group_colors(
 ) -> dict[str, str]:
     groups = list(dict.fromkeys(item.group for item in materials if item.role == "sample"))
     palette = DEFAULT_PALETTE_COLORS[1:] or DEFAULT_PALETTE_COLORS
-    if len(groups) > len(palette):
-        raise PerformanceComparisonError(
-            "performance_sample_group_capacity_exceeded",
-            f"At most {len(palette)} sample envelope groups are supported in one figure.",
-        )
-    return {group: palette[index] for index, group in enumerate(groups)}
+    return {group: palette[0] for group in groups}
 
 
 def _material_styles(
@@ -887,23 +1245,70 @@ def _material_styles(
     *,
     radar: bool,
 ) -> dict[str, dict[str, Any]]:
-    if len(comparison.materials) > len(PERFORMANCE_MARKERS):
+    identity_order = list(
+        dict.fromkeys(
+            material.legend_identity for material in comparison.materials
+        )
+    )
+    if len(identity_order) > len(PERFORMANCE_MARKERS):
         raise PerformanceComparisonError(
             "performance_marker_capacity_exceeded",
             f"One comparison figure supports at most {len(PERFORMANCE_MARKERS)} "
-            "materials with unique marker identities.",
+            "unique legend/marker identities.",
         )
-    group_colors = _sample_group_colors(comparison.materials)
+    identity_markers: dict[str, str] = {}
+    marker_owners: dict[str, str] = {}
+    for identity_index, identity in enumerate(identity_order):
+        members = [
+            material
+            for material in comparison.materials
+            if material.legend_identity == identity
+        ]
+        explicit_markers = list(
+            dict.fromkeys(
+                material.marker
+                for material in members
+                if material.marker is not None
+            )
+        )
+        if len(explicit_markers) > 1:
+            raise PerformanceComparisonError(
+                "performance_legend_identity_marker_conflict",
+                f"Legend identity {identity!r} declares conflicting markers: "
+                + ", ".join(explicit_markers),
+            )
+        marker = (
+            explicit_markers[0]
+            if explicit_markers
+            else PERFORMANCE_MARKERS[identity_index]
+        )
+        previous_identity = marker_owners.get(marker)
+        if previous_identity is not None and previous_identity != identity:
+            raise PerformanceComparisonError(
+                "performance_marker_identity_duplicate",
+                f"Legend identities {previous_identity!r} and {identity!r} "
+                f"reuse marker {marker!r} in one comparison figure.",
+            )
+        marker_owners[marker] = identity
+        identity_markers[identity] = marker
+
+    sample_color = (DEFAULT_PALETTE_COLORS[1:] or DEFAULT_PALETTE_COLORS)[0]
+    identity_indexes = {
+        identity: index for index, identity in enumerate(identity_order)
+    }
     styles: dict[str, dict[str, Any]] = {}
-    for index, material in enumerate(comparison.materials):
-        marker = material.marker or PERFORMANCE_MARKERS[index]
+    for material in comparison.materials:
+        identity_index = identity_indexes[material.legend_identity]
+        marker = identity_markers[material.legend_identity]
         color = (
             (
                 DEFAULT_PALETTE_COLORS[
-                    1 + index % max(len(DEFAULT_PALETTE_COLORS) - 1, 1)
+                    1
+                    + identity_index
+                    % max(len(DEFAULT_PALETTE_COLORS) - 1, 1)
                 ]
                 if radar
-                else group_colors[material.group]
+                else sample_color
             )
             if material.role == "sample"
             else PERFORMANCE_REFERENCE_COLOR
@@ -924,18 +1329,53 @@ def _legend_items(
     styles: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
+    seen_identities: set[str] = set()
     for material in comparison.materials:
+        if material.legend_identity in seen_identities:
+            continue
+        members = [
+            item
+            for item in comparison.materials
+            if item.legend_identity == material.legend_identity
+        ]
+        for field in (
+            "role",
+            "legend_label",
+            "legend_label_explicit",
+            "legend_group",
+            "legend_column",
+            "legend_items_per_row",
+        ):
+            values = list(
+                dict.fromkeys(getattr(item, field) for item in members)
+            )
+            if len(values) > 1:
+                raise PerformanceComparisonError(
+                    "performance_legend_identity_conflict",
+                    f"Legend identity {material.legend_identity!r} has "
+                    f"conflicting {field} values: {values}.",
+                )
+        seen_identities.add(material.legend_identity)
+        citations = list(
+            dict.fromkeys(item.citation for item in members if item.citation)
+        )
         items.append(
             {
-                "material": material.material_id,
+                "material": material.legend_identity,
+                "source_materials": [item.material_id for item in members],
                 "role": material.role,
                 "group": material.group,
+                "legend_group": material.legend_group,
+                "legend_column": material.legend_column,
+                "legend_items_per_row": material.legend_items_per_row,
+                "label": material.legend_label,
+                "append_citation": not material.legend_label_explicit,
                 "marker": styles[material.material_id]["marker"],
                 "color": styles[material.material_id]["color"],
                 "marker_fill_color": styles[material.material_id][
                     "marker_fill_color"
                 ],
-                "citation": material.citation,
+                "citation": "; ".join(citations),
                 "journal": material.journal,
                 "year": material.year,
                 "doi": material.doi,
@@ -944,9 +1384,19 @@ def _legend_items(
     return items
 
 
-def _layout_payload(*, use_legend_panel: bool) -> dict[str, Any]:
+def _layout_payload(
+    *,
+    use_legend_panel: bool,
+    legend_column_count: int = 1,
+) -> dict[str, Any]:
+    legend_column_count = max(1, min(int(legend_column_count), 2))
+    legend_width_mm = (
+        PERFORMANCE_REFERENCE_PANEL_WIDTH_MM * legend_column_count
+        if use_legend_panel
+        else 0.0
+    )
     width_mm = (
-        PERFORMANCE_PANEL_WIDTH_MM + PERFORMANCE_REFERENCE_PANEL_WIDTH_MM
+        PERFORMANCE_PANEL_WIDTH_MM + legend_width_mm
         if use_legend_panel
         else PERFORMANCE_PANEL_WIDTH_MM
     )
@@ -961,9 +1411,12 @@ def _layout_payload(*, use_legend_panel: bool) -> dict[str, Any]:
             PERFORMANCE_PANEL_HEIGHT_MM,
         ],
         "legend_panel_size_mm": (
-            [PERFORMANCE_REFERENCE_PANEL_WIDTH_MM, PERFORMANCE_PANEL_HEIGHT_MM]
+            [legend_width_mm, PERFORMANCE_PANEL_HEIGHT_MM]
             if use_legend_panel
             else None
+        ),
+        "legend_column_count": (
+            legend_column_count if use_legend_panel else 0
         ),
         "graph_margins_mm": {
             "left": UNIFIED_LEFT_MARGIN_MM,
@@ -984,6 +1437,81 @@ def _layout_payload(*, use_legend_panel: bool) -> dict[str, Any]:
     }
 
 
+def _deterministic_scatter_x_values(
+    comparison: PerformanceComparison,
+    *,
+    x_metric: PerformanceMetric,
+) -> tuple[dict[str, float], list[dict[str, Any]]]:
+    raw_values = {
+        material.material_id: material.values[x_metric.metric_id]
+        for material in comparison.materials
+    }
+    raw_span = max(raw_values.values()) - min(raw_values.values())
+    if math.isclose(raw_span, 0.0):
+        raw_span = max(abs(next(iter(raw_values.values()))), 1.0) * 0.16
+    jitter_half_span = (
+        raw_span * PERFORMANCE_SCATTER_JITTER_HALFSPAN_FRACTION
+    )
+    result = dict(raw_values)
+    jitter_records: list[dict[str, Any]] = []
+    buckets: dict[str, list[PerformanceMaterial]] = {}
+    for material in comparison.samples:
+        raw_value = raw_values[material.material_id]
+        buckets.setdefault(f"{raw_value:.12g}", []).append(material)
+    for raw_key, members in buckets.items():
+        if len(members) <= 1:
+            continue
+        slots = [
+            -jitter_half_span
+            + 2.0 * jitter_half_span * index / float(len(members) - 1)
+            for index in range(len(members))
+        ]
+        shuffled_members = sorted(
+            members,
+            key=lambda material: hashlib.sha256(
+                (
+                    f"{comparison.source_sha256}|{raw_key}|"
+                    f"{material.material_id}"
+                ).encode("utf-8")
+            ).digest(),
+        )
+        for member, offset in zip(shuffled_members, slots, strict=True):
+            source_value = raw_values[member.material_id]
+            plotted_value = source_value + offset
+            result[member.material_id] = plotted_value
+            jitter_records.append(
+                {
+                    "material": member.material_id,
+                    "source_x": source_value,
+                    "offset": offset,
+                    "plotted_x": plotted_value,
+                }
+            )
+    transforms: list[dict[str, Any]] = []
+    if jitter_records:
+        transforms.append(
+            {
+                "id": "performance_scatter_repeated_x_jitter",
+                "operation": "deterministic_horizontal_jitter",
+                "implementation_ref": (
+                    "sciplot_core.performance_comparison."
+                    "_deterministic_scatter_x_values"
+                ),
+                "parameters": {
+                    "policy": "stable_hash_shuffled_even_slots",
+                    "scope": "Role=sample rows sharing the same source x value",
+                    "half_span_fraction": (
+                        PERFORMANCE_SCATTER_JITTER_HALFSPAN_FRACTION
+                    ),
+                    "source_metric": x_metric.metric_id,
+                    "scientific_source_values_modified": False,
+                },
+                "records": jitter_records,
+            }
+        )
+    return result, transforms
+
+
 def build_performance_scatter_payload(
     comparison: PerformanceComparison,
 ) -> dict[str, Any]:
@@ -1000,41 +1528,89 @@ def build_performance_scatter_payload(
             "Every plotted material needs both scatter metrics; missing: "
             + ", ".join(missing),
         )
+    plotted_x_values, visual_data_transforms = (
+        _deterministic_scatter_x_values(
+            comparison,
+            x_metric=x_metric,
+        )
+    )
     x_values = [
-        material.values[x_metric.metric_id] for material in comparison.materials
+        plotted_x_values[material.material_id]
+        for material in comparison.materials
     ]
     y_values = [
         material.values[y_metric.metric_id] for material in comparison.materials
     ]
-    x_bounds = _axis_bounds(x_values)
-    y_bounds = _axis_bounds(y_values)
+    x_bounds = _axis_bounds(x_values, metric=x_metric)
+    y_bounds = _axis_bounds(y_values, metric=y_metric)
     styles = _material_styles(comparison, radar=False)
-    series = [
-        {
-            "label": material.material_id,
-            "x_values": [material.values[x_metric.metric_id]],
-            "y_values": [material.values[y_metric.metric_id]],
-            **styles[material.material_id],
+    identity_members: dict[str, list[PerformanceMaterial]] = {}
+    for material in comparison.materials:
+        identity_members.setdefault(material.legend_identity, []).append(
+            material
+        )
+    series: list[dict[str, Any]] = []
+    for legend_identity, members in identity_members.items():
+        representative = members[0]
+        roles = {material.role for material in members}
+        colors = {
+            styles[material.material_id]["color"] for material in members
         }
-        for material in comparison.materials
-    ]
+        markers = {
+            styles[material.material_id]["marker"] for material in members
+        }
+        if len(roles) != 1 or len(colors) != 1 or len(markers) != 1:
+            raise PerformanceComparisonError(
+                "performance_scatter_identity_style_conflict",
+                f"Legend identity {legend_identity!r} cannot share one scatter "
+                "series because its observations have conflicting roles or "
+                "styles.",
+            )
+        series.append(
+            {
+                "label": representative.legend_label,
+                "legend_identity": legend_identity,
+                "source_materials": [
+                    material.material_id for material in members
+                ],
+                "source_x_values": [
+                    material.values[x_metric.metric_id]
+                    for material in members
+                ],
+                "x_values": [
+                    plotted_x_values[material.material_id]
+                    for material in members
+                ],
+                "y_values": [
+                    material.values[y_metric.metric_id]
+                    for material in members
+                ],
+                **styles[representative.material_id],
+            }
+        )
     envelopes: list[dict[str, Any]] = []
-    for group, color in _sample_group_colors(comparison.materials).items():
+    envelope_samples = tuple(
+        material
+        for material in comparison.samples
+        if material.envelope_include
+    )
+    for group, color in _sample_group_colors(envelope_samples).items():
         members = [
             material
-            for material in comparison.samples
+            for material in envelope_samples
             if material.group == group
         ]
         polygon = _expanded_envelope(
             [
                 (
-                    material.values[x_metric.metric_id],
+                    plotted_x_values[material.material_id],
                     material.values[y_metric.metric_id],
                 )
                 for material in members
             ],
             x_bounds=x_bounds,
             y_bounds=y_bounds,
+            seed_key=f"{comparison.source_sha256}|{group}",
         )
         envelopes.append(
             {
@@ -1046,11 +1622,17 @@ def build_performance_scatter_payload(
                 "fill_color": categorical_fill_color(color),
                 "line_transparency": PERFORMANCE_ENVELOPE_LINE_TRANSPARENCY,
                 "fill_transparency": PERFORMANCE_ENVELOPE_FILL_TRANSPARENCY,
+                "line_hide": True,
             }
         )
+    legend_items = _legend_items(comparison, styles)
+    legend_column_count = max(
+        (int(item["legend_column"]) for item in legend_items),
+        default=1,
+    )
     return {
         "kind": "sciplot_performance_comparison",
-        "version": 1,
+        "version": 2,
         "template": PERFORMANCE_SCATTER_TEMPLATE_ID,
         "source": str(comparison.source),
         "source_sha256": comparison.source_sha256,
@@ -1063,9 +1645,15 @@ def build_performance_scatter_payload(
         "y_bounds": list(y_bounds),
         "series": series,
         "envelopes": envelopes,
-        "legend_items": _legend_items(comparison, styles),
-        "layout": _layout_payload(use_legend_panel=True),
+        "legend_items": legend_items,
+        "layout": _layout_payload(
+            use_legend_panel=True,
+            legend_column_count=legend_column_count,
+        ),
+        "visual_data_transforms": visual_data_transforms,
         "material_count": len(comparison.materials),
+        "series_count": len(series),
+        "legend_item_count": len(legend_items),
         "sample_count": len(comparison.samples),
         "reference_count": len(comparison.references),
     }
@@ -1138,7 +1726,7 @@ def build_performance_radar_payload(
             metric_ids.append(metric_ids[0])
         series.append(
             {
-                "label": material.material_id,
+                "label": material.legend_label,
                 "angles_degrees": material_angles,
                 "radii": radii,
                 "raw_values": raw_values,
@@ -1153,9 +1741,14 @@ def build_performance_radar_payload(
         or len(comparison.samples) > 3
         or any(item.citation for item in comparison.materials)
     )
+    legend_items = _legend_items(comparison, styles)
+    legend_column_count = max(
+        (int(item["legend_column"]) for item in legend_items),
+        default=1,
+    )
     return {
         "kind": "sciplot_performance_comparison",
-        "version": 1,
+        "version": 2,
         "template": PERFORMANCE_RADAR_TEMPLATE_ID,
         "source": str(comparison.source),
         "source_sha256": comparison.source_sha256,
@@ -1172,8 +1765,11 @@ def build_performance_radar_payload(
             "values_outside_declared_bounds": "fail_closed",
         },
         "series": series,
-        "legend_items": _legend_items(comparison, styles),
-        "layout": _layout_payload(use_legend_panel=use_legend_panel),
+        "legend_items": legend_items,
+        "layout": _layout_payload(
+            use_legend_panel=use_legend_panel,
+            legend_column_count=legend_column_count,
+        ),
         "material_count": len(comparison.materials),
         "sample_count": len(comparison.samples),
         "reference_count": len(comparison.references),
@@ -1209,6 +1805,14 @@ def performance_transform_parameters(payload: dict[str, Any]) -> dict[str, Any]:
         "material_count": payload["material_count"],
         "sample_count": payload["sample_count"],
         "reference_count": payload["reference_count"],
+        "series_count": payload.get(
+            "series_count",
+            len(payload.get("series", [])),
+        ),
+        "legend_item_count": payload.get(
+            "legend_item_count",
+            len(payload.get("legend_items", [])),
+        ),
         "legend_panel_reserved": bool(
             payload.get("layout", {}).get("legend_uses_reserved_panel")
         ),
@@ -1221,8 +1825,13 @@ def performance_transform_parameters(payload: dict[str, Any]) -> dict[str, Any]:
                 "x_metric": payload["x_metric"]["metric_id"],
                 "y_metric": payload["y_metric"]["metric_id"],
                 "sample_envelope_method": (
-                    "convex hull with deterministic normalized-axis padding; "
-                    "circle/capsule fallback for one or two collinear points"
+                    "deterministic irregular smoothed enclosure with "
+                    "normalized-axis padding; circle/capsule fallback"
+                ),
+                "sample_envelope_border": "hidden",
+                "repeated_x_visual_jitter": payload.get(
+                    "visual_data_transforms",
+                    [],
                 ),
                 "sample_envelope_groups": [
                     {

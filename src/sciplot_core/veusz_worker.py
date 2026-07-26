@@ -1020,6 +1020,9 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
         _categorical_component_legend_label_contracts,
         _categorical_component_legend_rect_contracts,
         _categorical_grouped_bar_fill_rect_contracts,
+        _curve_factor_legend_condition_rect_contracts,
+        _curve_factor_legend_label_contracts,
+        _curve_factor_legend_line_contracts,
         _ensure_veusz_loader_compat,
         _ensure_veusz_on_path,
         _categorical_line_contracts,
@@ -1516,10 +1519,15 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
         segmented_component_legend = (
             legend.get("presentation_kind") == "segmented_component"
         )
-        if expected_legend and segmented_component_legend:
+        factorized_curve_legend = (
+            legend.get("presentation_kind") == "factorized_curve"
+        )
+        if expected_legend and (
+            segmented_component_legend or factorized_curve_legend
+        ):
             if visible_keys:
                 raise ValueError(
-                    "Exact-current segmented component legend must not use a "
+                    "Exact-current custom factor/component legend must not use a "
                     "single-colour native Veusz key."
                 )
         elif expected_legend:
@@ -1593,6 +1601,16 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
                 }
             )
         for raw_label in _categorical_component_legend_label_contracts(spec):
+            expected_direct_labels.append(
+                {
+                    **raw_label,
+                    "path": f"/page1/graph1/{raw_label['name']}",
+                    "literal_label": _veusz_literal_text(
+                        raw_label.get("label")
+                    ),
+                }
+            )
+        for raw_label in _curve_factor_legend_label_contracts(spec):
             expected_direct_labels.append(
                 {
                     **raw_label,
@@ -1975,6 +1993,15 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             }
             for contract in _categorical_grouped_bar_fill_rect_contracts(spec)
         )
+        expected_rects.extend(
+            {
+                **contract,
+                "path": f"/page1/graph1/{contract['name']}",
+            }
+            for contract in _curve_factor_legend_condition_rect_contracts(
+                spec
+            )
+        )
         if (
             visual is not None
             and str(visual["colorbar_background_color"]).strip()
@@ -2102,6 +2129,7 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             }
             for contract in (
                 _categorical_line_contracts(spec)
+                + _curve_factor_legend_line_contracts(spec)
                 + _reference_guide_line_contracts(spec)
                 + performance_line_contracts(spec)
             )

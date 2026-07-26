@@ -69,6 +69,48 @@ def test_mechanical_recommendations_distinguish_stress_and_strength() -> None:
         )
 
 
+def test_tensile_semantic_preparation_replays_structured_multi_curve_csv(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "factorized_tensile_curves.csv"
+    labels = (
+        "E0 || 33% weight reduction",
+        "E0 || 50% weight reduction",
+        "E2 || 33% weight reduction",
+        "E2 || 50% weight reduction",
+    )
+    rows: list[list[object]] = [[], [], []]
+    for label in labels:
+        rows[0].extend(["Tensile strain", "Tensile stress"])
+        rows[1].extend(["%", "MPa"])
+        rows[2].extend([label, label])
+    for point_index in range(4):
+        row: list[object] = []
+        for series_index, _label in enumerate(labels):
+            row.extend([point_index, series_index + point_index * 2])
+        rows.append(row)
+    pd.DataFrame(rows).to_csv(source, header=False, index=False)
+
+    prepared = prepare_semantic_source(
+        source,
+        output_dir=tmp_path / "out",
+        semantic=semantic_payload_from_rule(
+            get_rule("tensile_curve"),
+            confidence=1.0,
+        ),
+        replicate_mode="individual",
+    )
+
+    processed = pd.read_csv(Path(prepared["processed_source"]), header=None)
+    assert processed.iloc[2].tolist() == [
+        value for label in labels for value in (label, label)
+    ]
+    assert processed.shape == (7, 8)
+    assert prepared["transform_steps"][0]["parameters"]["output_series_labels"] == list(
+        labels
+    )
+
+
 def test_flexural_child_render_request_keeps_flexural_stress_label() -> None:
     options = _apply_domain_render_defaults(
         {},
