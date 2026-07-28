@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from sciplot_core._utils import slug
+from sciplot_core.foundation.path_names import slug
 from sciplot_core.policy import DELIVERY_DIR
 
 
@@ -56,7 +56,9 @@ def resolve_user_output_layout(
             if isinstance(project_name, str) and project_name.strip()
             else _source_stem(resolved_source)
         )
-        delivery_root = resolved_source.parent / f"{requested_name}{VISIBLE_PROJECT_SUFFIX}"
+        delivery_root = (
+            resolved_source.parent / f"{requested_name}{VISIBLE_PROJECT_SUFFIX}"
+        )
     else:
         delivery_root = Path(requested_delivery_root).expanduser().resolve()
     delivery_root = delivery_root.resolve()
@@ -87,7 +89,9 @@ def requested_delivery_root(
 ) -> Path:
     """Resolve the authoritative visible root recorded on a plot request."""
 
-    request = manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
+    request = (
+        manifest.get("request") if isinstance(manifest.get("request"), dict) else {}
+    )
     value = request.get(REQUEST_DELIVERY_ROOT_KEY)
     if not isinstance(value, str) or not value.strip():
         source_request = (

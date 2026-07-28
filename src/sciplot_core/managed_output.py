@@ -15,8 +15,7 @@ def _managed_names(values: Sequence[str]) -> tuple[str, ...]:
         path = Path(name)
         if not name or path.is_absolute() or path.name != name or name in {".", ".."}:
             raise ValueError(
-                "Managed output entries must be unique top-level names: "
-                f"{raw_value!r}."
+                f"Managed output entries must be unique top-level names: {raw_value!r}."
             )
         if name in seen:
             raise ValueError(f"Duplicate managed output entry: {name}")

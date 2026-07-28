@@ -10,7 +10,7 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
-from sciplot_core._bootstrap import ensure_vendored_core
+from sciplot_core.contract import load_plot_contract
 from sciplot_core.policy import (
     DEFAULT_EXPORT_FORMATS_POLICY,
     RENDER_OPTION_KEYS,
@@ -26,10 +26,6 @@ from sciplot_core.style_contract import (
 )
 from sciplot_core.study_model import sync_study_model_samples
 
-ensure_vendored_core()
-
-from src.plot_contract import load_plot_contract  # noqa: E402
-
 _RENDER_PARAMETER_NAMES = RENDER_OPTION_KEYS
 
 
@@ -41,9 +37,7 @@ def _validate_legacy_hard_style_options(options: Mapping[str, Any]) -> None:
         try:
             numeric = float(value)
         except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"`{key}` must be a finite positive number."
-            ) from exc
+            raise ValueError(f"`{key}` must be a finite positive number.") from exc
         if not math.isfinite(numeric) or numeric <= 0.0:
             raise ValueError(f"`{key}` must be a finite positive number.")
 
@@ -132,7 +126,9 @@ def normalize_render_options(
     # project-wide style now.
     _validate_legacy_hard_style_options(selected)
     selected = {
-        key: value for key, value in selected.items() if key not in UNIFIED_HARD_OPTION_KEYS
+        key: value
+        for key, value in selected.items()
+        if key not in UNIFIED_HARD_OPTION_KEYS
     }
 
     unknown = sorted(key for key in selected if key not in _RENDER_PARAMETER_NAMES)

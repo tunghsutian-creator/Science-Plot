@@ -95,10 +95,13 @@ def test_browser_source_paths_are_bound_to_output_or_active_session(
     outside = tmp_path / "outside.csv"
     outside.write_text("x,y\n0,2\n", encoding="utf-8")
 
-    assert intake_server._authorized_source_path(
-        inside,
-        output_root=output_root,
-    ) == inside.resolve()
+    assert (
+        intake_server._authorized_source_path(
+            inside,
+            output_root=output_root,
+        )
+        == inside.resolve()
+    )
     with pytest.raises(PermissionError, match="active CLI-created session"):
         intake_server._authorized_source_path(
             outside,
@@ -123,11 +126,14 @@ def test_browser_source_paths_are_bound_to_output_or_active_session(
         encoding="utf-8",
     )
 
-    assert intake_server._authorized_source_path(
-        outside,
-        output_root=output_root,
-        session_id="session-1",
-    ) == outside.resolve()
+    assert (
+        intake_server._authorized_source_path(
+            outside,
+            output_root=output_root,
+            session_id="session-1",
+        )
+        == outside.resolve()
+    )
 
 
 def test_project_artifacts_ignore_manifest_supplied_external_roots(
@@ -154,17 +160,18 @@ def test_project_artifacts_ignore_manifest_supplied_external_roots(
         encoding="utf-8",
     )
 
-    assert intake._resolve_project_artifact(
-        project_dir,
-        str(internal),
-    ) == internal.resolve()
+    assert (
+        intake._resolve_project_artifact(
+            project_dir,
+            str(internal),
+        )
+        == internal.resolve()
+    )
     with pytest.raises(PermissionError, match="outside this SciPlot project"):
         intake._resolve_project_artifact(project_dir, str(external))
 
     status = intake.intake_project_status(project_dir)
-    assert status["outputs_dir"] == str(
-        (project_dir / "runs" / "run_001").resolve()
-    )
+    assert status["outputs_dir"] == str((project_dir / "runs" / "run_001").resolve())
     assert status["figures"] == []
     assert status["preview_figure"]["exists"] is False
 
@@ -184,9 +191,7 @@ def test_project_artifact_and_download_paths_reject_symlinks(
 
     handler = object.__new__(intake_server._IntakeHandler)
     statuses: list[int] = []
-    handler.send_error = lambda status, *_args, **_kwargs: statuses.append(
-        int(status)
-    )
+    handler.send_error = lambda status, *_args, **_kwargs: statuses.append(int(status))
     handler._send_file(symlink, authorized_root=project_dir)
     assert statuses == [HTTPStatus.FORBIDDEN]
 

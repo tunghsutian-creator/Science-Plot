@@ -221,9 +221,7 @@ def test_performance_rule_waits_for_authorized_real_data_promotion() -> None:
 
 
 def test_scatter_payload_reserves_a_second_60mm_reference_panel() -> None:
-    payload = build_performance_scatter_payload(
-        load_performance_comparison(FIXTURE)
-    )
+    payload = build_performance_scatter_payload(load_performance_comparison(FIXTURE))
     assert payload["template"] == PERFORMANCE_SCATTER_TEMPLATE_ID
     assert payload["x_metric"]["metric_id"] == "density"
     assert payload["y_metric"]["metric_id"] == "specific_impact_strength"
@@ -238,9 +236,7 @@ def test_scatter_payload_reserves_a_second_60mm_reference_panel() -> None:
         item for item in payload["legend_items"] if item["role"] == "reference"
     ]
     assert references[0]["citation"] == "Polymer (2024)"
-    ref_series = [
-        item for item in payload["series"] if item["role"] == "reference"
-    ]
+    ref_series = [item for item in payload["series"] if item["role"] == "reference"]
     assert all(item["marker_fill_color"] == "white" for item in ref_series)
 
 
@@ -248,9 +244,7 @@ def test_dense_scatter_uses_sixteen_marker_identities_and_fits_index(
     tmp_path: Path,
 ) -> None:
     source = _write_frame(tmp_path, _dense_scatter_frame())
-    payload = build_performance_scatter_payload(
-        load_performance_comparison(source)
-    )
+    payload = build_performance_scatter_payload(load_performance_comparison(source))
     assert payload["material_count"] == 16
     assert payload["sample_count"] == 8
     assert payload["reference_count"] == 8
@@ -280,10 +274,10 @@ def test_dense_scatter_uses_sixteen_marker_identities_and_fits_index(
         if item["role"] == "material_index_marker"
     ]
     assert len(marker_polygons) == 16
-    assert min(
-        min(float(value) for value in item["yPos"])
-        for item in marker_polygons
-    ) > 0.12
+    assert (
+        min(min(float(value) for value in item["yPos"]) for item in marker_polygons)
+        > 0.12
+    )
 
 
 def test_scatter_groups_shared_marker_identities_in_compact_120mm_index(
@@ -385,9 +379,9 @@ def test_scatter_groups_shared_marker_identities_in_compact_120mm_index(
             )
             frame.loc[mask, "Marker"] = sample_markers[identity]
             continue
-        identity, label, group, column, marker, marker_fill_color = (
-            reference_contract[str(material)]
-        )
+        identity, label, group, column, marker, marker_fill_color = reference_contract[
+            str(material)
+        ]
         mask = frame["Material"] == material
         frame.loc[mask, "LegendIdentity"] = identity
         frame.loc[mask, "LegendLabel"] = label
@@ -424,16 +418,13 @@ def test_scatter_groups_shared_marker_identities_in_compact_120mm_index(
         assert math.isclose(sum(offsets), 0.0, abs_tol=1e-12)
         assert all(not math.isclose(offset, 0.0) for offset in offsets)
     assert len(payload["envelopes"]) == 4
-    envelopes_by_group = {
-        str(item["group"]): item for item in payload["envelopes"]
-    }
+    envelopes_by_group = {str(item["group"]): item for item in payload["envelopes"]}
     sample_envelope = envelopes_by_group["Modified samples"]
     assert sample_envelope["role"] == "observed_sample_extent"
     assert sample_envelope["line_hide"] is True
     assert len(sample_envelope["members"]) == 6
     assert all(
-        not str(member).startswith("E0")
-        for member in sample_envelope["members"]
+        not str(member).startswith("E0") for member in sample_envelope["members"]
     )
     assert len(sample_envelope["x_values"]) >= 16
     expected_reference_envelopes = {
@@ -441,9 +432,7 @@ def test_scatter_groups_shared_marker_identities_in_compact_120mm_index(
         "Bulk polymer": (bulk_fill, 1),
         "Laminate": (laminate_fill, 2),
     }
-    for group, (fill_color, member_count) in (
-        expected_reference_envelopes.items()
-    ):
+    for group, (fill_color, member_count) in expected_reference_envelopes.items():
         envelope = envelopes_by_group[group]
         assert envelope["role"] == "observed_reference_group_extent"
         assert envelope["fill_color"] == fill_color
@@ -468,10 +457,7 @@ def test_scatter_groups_shared_marker_identities_in_compact_120mm_index(
             "PP/GnP/GF composite",
         }
     } == {sandwich_fill}
-    assert (
-        series_by_identity["PET copolymer"]["marker_fill_color"]
-        == bulk_fill
-    )
+    assert series_by_identity["PET copolymer"]["marker_fill_color"] == bulk_fill
     assert {
         series_by_identity[identity]["marker_fill_color"]
         for identity in {
@@ -544,8 +530,7 @@ def test_scatter_groups_shared_marker_identities_in_compact_120mm_index(
         }
     } == {laminate_fill}
     assert {
-        legend_markers[identity]["fill_color"]
-        for identity in {"E4", "E3", "E2", "E0"}
+        legend_markers[identity]["fill_color"] for identity in {"E4", "E3", "E2", "E0"}
     } == {"#3568C0"}
     extent_polygons = [
         item
@@ -568,9 +553,7 @@ def test_scatter_group_summary_uses_60mm_inside_legend_contract(
     tmp_path: Path,
 ) -> None:
     source = _write_frame(tmp_path, _summary_scatter_frame())
-    payload = build_performance_scatter_payload(
-        load_performance_comparison(source)
-    )
+    payload = build_performance_scatter_payload(load_performance_comparison(source))
 
     assert payload["series_count"] == 4
     assert payload["legend_item_count"] == 4
@@ -616,9 +599,7 @@ def test_scatter_group_summary_uses_60mm_inside_legend_contract(
     assert spec["frame_alignment"]["reference_panel_size_mm"] is None
     assert spec["legend"]["show"] is True
     assert spec["legend"]["mode"] == "lower_right"
-    assert spec["legend"]["presentation_kind"] == (
-        "performance_group_summary"
-    )
+    assert spec["legend"]["presentation_kind"] == ("performance_group_summary")
     assert spec["performance_comparison"]["labels"] == []
     assert not [
         item
@@ -638,12 +619,8 @@ def test_scatter_group_summary_materializes_auto_inside_native_key(
         export_formats=("pdf",),
         request_context={"rule_id": "performance_comparison"},
     )
-    spec = json.loads(
-        Path(result["veusz_specs"][0]).read_text(encoding="utf-8")
-    )
-    document_text = Path(result["veusz_documents"][0]).read_text(
-        encoding="utf-8"
-    )
+    spec = json.loads(Path(result["veusz_specs"][0]).read_text(encoding="utf-8"))
+    document_text = Path(result["veusz_documents"][0]).read_text(encoding="utf-8")
 
     assert result["qa_reports"][0]["issues"] == []
     assert spec["size_mm"] == [60.0, 55.0]
@@ -684,10 +661,7 @@ def test_performance_rejects_more_than_two_legend_items_per_row(
     source = _write_frame(tmp_path, frame)
     with pytest.raises(PerformanceComparisonError) as exc_info:
         load_performance_comparison(source)
-    assert (
-        exc_info.value.reason_code
-        == "performance_legend_items_per_row_invalid"
-    )
+    assert exc_info.value.reason_code == "performance_legend_items_per_row_invalid"
 
 
 def test_performance_rejects_invalid_envelope_include_value(
@@ -698,10 +672,7 @@ def test_performance_rejects_invalid_envelope_include_value(
     source = _write_frame(tmp_path, frame)
     with pytest.raises(PerformanceComparisonError) as exc_info:
         load_performance_comparison(source)
-    assert (
-        exc_info.value.reason_code
-        == "performance_envelope_include_invalid"
-    )
+    assert exc_info.value.reason_code == "performance_envelope_include_invalid"
 
 
 def test_performance_rejects_invalid_marker_fill_color(
@@ -713,10 +684,7 @@ def test_performance_rejects_invalid_marker_fill_color(
     source = _write_frame(tmp_path, frame)
     with pytest.raises(PerformanceComparisonError) as exc_info:
         load_performance_comparison(source)
-    assert (
-        exc_info.value.reason_code
-        == "performance_marker_fill_color_invalid"
-    )
+    assert exc_info.value.reason_code == "performance_marker_fill_color_invalid"
 
 
 def test_reference_envelope_requires_one_shared_explicit_fill(
@@ -731,14 +699,9 @@ def test_reference_envelope_requires_one_shared_explicit_fill(
     source = _write_frame(tmp_path, frame)
 
     with pytest.raises(PerformanceComparisonError) as exc_info:
-        build_performance_scatter_payload(
-            load_performance_comparison(source)
-        )
+        build_performance_scatter_payload(load_performance_comparison(source))
 
-    assert (
-        exc_info.value.reason_code
-        == "performance_reference_envelope_fill_conflict"
-    )
+    assert exc_info.value.reason_code == "performance_reference_envelope_fill_conflict"
 
 
 def test_performance_rejects_reversed_scatter_bounds(
@@ -751,10 +714,7 @@ def test_performance_rejects_reversed_scatter_bounds(
     source = _write_frame(tmp_path, frame)
     with pytest.raises(PerformanceComparisonError) as exc_info:
         load_performance_comparison(source)
-    assert (
-        exc_info.value.reason_code
-        == "performance_scatter_scale_invalid"
-    )
+    assert exc_info.value.reason_code == "performance_scatter_scale_invalid"
 
 
 def test_performance_rejects_scatter_bound_that_excludes_data(
@@ -764,19 +724,12 @@ def test_performance_rejects_scatter_bound_that_excludes_data(
     frame.loc[frame["Metric"] == "density", "ScatterMin"] = 1.2
     source = _write_frame(tmp_path, frame)
     with pytest.raises(PerformanceComparisonError) as exc_info:
-        build_performance_scatter_payload(
-            load_performance_comparison(source)
-        )
-    assert (
-        exc_info.value.reason_code
-        == "performance_scatter_bound_excludes_data"
-    )
+        build_performance_scatter_payload(load_performance_comparison(source))
+    assert exc_info.value.reason_code == "performance_scatter_bound_excludes_data"
 
 
 def test_radar_payload_uses_declared_directional_bounds() -> None:
-    payload = build_performance_radar_payload(
-        load_performance_comparison(FIXTURE)
-    )
+    payload = build_performance_radar_payload(load_performance_comparison(FIXTURE))
     assert payload["template"] == PERFORMANCE_RADAR_TEMPLATE_ID
     assert payload["layout"]["page_size_mm"] == [120.0, 55.0]
     assert payload["normalization"]["outer_is_better"] is True
@@ -793,11 +746,7 @@ def test_radar_payload_uses_declared_directional_bounds() -> None:
     assert own_a["filled_polygon"] is True
     assert own_a["color"] == "#3568C0"
     assert own_a["polygon_fill_color"] == "#AFC6ED"
-    assert (
-        own_a["fill_transparency"]
-        == PERFORMANCE_SAMPLE_FILL_TRANSPARENCY
-        == 35
-    )
+    assert own_a["fill_transparency"] == PERFORMANCE_SAMPLE_FILL_TRANSPARENCY == 35
     assert own_a["radii"][0] == pytest.approx((1.6 - 1.05) / 0.8)
     assert own_a["radii"][-1] == own_a["radii"][0]
     assert pa6["filled_polygon"] is False
@@ -837,9 +786,7 @@ def test_radar_multiline_axis_label_uses_separate_6pt_native_labels(
         "DisplayLabel",
     ] = "Specific impact strength\n(kJ m⁻² kg⁻¹)"
     source = _write_frame(tmp_path, frame)
-    payload = build_performance_radar_payload(
-        load_performance_comparison(source)
-    )
+    payload = build_performance_radar_payload(load_performance_comparison(source))
     spec = build_performance_veusz_spec(
         payload=payload,
         request={
@@ -852,9 +799,7 @@ def test_radar_multiline_axis_label_uses_separate_6pt_native_labels(
     labels = [
         item
         for item in spec["performance_comparison"]["labels"]
-        if str(item["name"]).startswith(
-            "performance_radar_axis_label_2_line_"
-        )
+        if str(item["name"]).startswith("performance_radar_axis_label_2_line_")
     ]
     assert [item["label"] for item in labels] == [
         "Specific impact strength",
@@ -917,15 +862,10 @@ def test_radar_reference_uses_explicit_category_outline_and_stays_hollow(
         transform_steps=[],
     )
     reference_series = [
-        item
-        for item in spec["series"]
-        if item["label"] in {"PA6", "ABS", "CFRP"}
+        item for item in spec["series"] if item["label"] in {"PA6", "ABS", "CFRP"}
     ]
     assert all(item["color"] == "#D99A24" for item in reference_series)
-    assert all(
-        item["marker_fill_color"] == "white"
-        for item in reference_series
-    )
+    assert all(item["marker_fill_color"] == "white" for item in reference_series)
 
 
 def test_performance_rejects_invalid_marker_line_color(
@@ -937,10 +877,7 @@ def test_performance_rejects_invalid_marker_line_color(
     source = _write_frame(tmp_path, frame)
     with pytest.raises(PerformanceComparisonError) as exc_info:
         load_performance_comparison(source)
-    assert (
-        exc_info.value.reason_code
-        == "performance_marker_line_color_invalid"
-    )
+    assert exc_info.value.reason_code == "performance_marker_line_color_invalid"
 
 
 @pytest.mark.parametrize(
@@ -967,10 +904,7 @@ def test_performance_contract_fails_closed(
         ] = "kg m^-3"
     elif mutation == "missing_sample_metric":
         frame = frame.loc[
-            ~(
-                (frame["Material"] == "Own C")
-                & (frame["Metric"] == "tensile_strength")
-            )
+            ~((frame["Material"] == "Own C") & (frame["Metric"] == "tensile_strength"))
         ]
     elif mutation == "outside_scale":
         frame.loc[

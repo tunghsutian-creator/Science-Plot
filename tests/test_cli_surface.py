@@ -47,9 +47,12 @@ def test_help_exposes_one_studio_family_and_hides_internal_probes() -> None:
     assert "workbench" not in help_text
     assert "readiness-probe" not in help_text
     assert "--advanced-editor" not in help_text
-    studio_help = cli._build_parser()._subparsers._group_actions[0].choices[
-        "studio"
-    ].format_help()
+    studio_help = (
+        cli._build_parser()
+        ._subparsers._group_actions[0]
+        .choices["studio"]
+        .format_help()
+    )
     assert "--prepare-only" not in studio_help
     assert "--qt-smoke" not in studio_help
 
@@ -69,9 +72,7 @@ def test_retired_advanced_editor_flag_is_not_parseable(tmp_path: Path) -> None:
     document.write_text("# Veusz saved document\n", encoding="utf-8")
 
     with pytest.raises(SystemExit):
-        cli._build_parser().parse_args(
-            ["studio", str(document), "--advanced-editor"]
-        )
+        cli._build_parser().parse_args(["studio", str(document), "--advanced-editor"])
 
 
 @pytest.mark.parametrize(

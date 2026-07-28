@@ -54,9 +54,7 @@ def test_existing_managed_output_is_restored_after_run_failure(
     (output_dir / "autoplot_summary.json").write_text(
         '{"ready_to_use":true}', encoding="utf-8"
     )
-    (output_dir / "unrelated-notes.txt").write_text(
-        "keep me", encoding="utf-8"
-    )
+    (output_dir / "unrelated-notes.txt").write_text("keep me", encoding="utf-8")
     before = _file_snapshot(output_dir)
     request_path = _write_request(
         tmp_path / "plot_request.json",

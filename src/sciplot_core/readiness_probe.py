@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.autoplot import build_autoplot_summary
-from sciplot_core._utils import atomic_write_json, existing_file_sha256
+from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.delivery import DELIVERY_PACKAGE_CONTRACT_VERSION
 from sciplot_core.launchers import (
     inspect_delivery_launcher_contract,
@@ -80,9 +81,7 @@ def _write_probe_delivery(root: Path) -> dict[str, Any]:
         "kind": "sciplot_user_delivery_package",
         "version": DELIVERY_PACKAGE_CONTRACT_VERSION,
         "path": str(root),
-        "data_csvs": [
-            {"path": str(data), "sha256": existing_file_sha256(data)}
-        ],
+        "data_csvs": [{"path": str(data), "sha256": existing_file_sha256(data)}],
         "figures": [
             {"path": str(pdf), "delivery_sha256": existing_file_sha256(pdf)},
             {"path": str(tiff), "delivery_sha256": existing_file_sha256(tiff)},
@@ -570,9 +569,7 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
     valid_autoplot_run = run_root / "valid_autoplot"
     valid_autoplot_run.mkdir(parents=True, exist_ok=True)
     valid_autoplot_delivery = valid_autoplot_run / "delivery"
-    valid_autoplot_delivery_record = _write_probe_delivery(
-        valid_autoplot_delivery
-    )
+    valid_autoplot_delivery_record = _write_probe_delivery(valid_autoplot_delivery)
     valid_autoplot_one_step = {
         "state": "ready",
         "delivery_package": valid_autoplot_delivery_record,
@@ -583,12 +580,8 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
     valid_autoplot_qa = {"status": "passed"}
     atomic_write_json(valid_autoplot_run / "request_snapshot.json", {})
     atomic_write_json(valid_autoplot_run / "manifest.json", {})
-    (valid_autoplot_run / "review.html").write_text(
-        "<html></html>\n", encoding="utf-8"
-    )
-    (valid_autoplot_run / "revision_brief.md").write_text(
-        "# Ready\n", encoding="utf-8"
-    )
+    (valid_autoplot_run / "review.html").write_text("<html></html>\n", encoding="utf-8")
+    (valid_autoplot_run / "revision_brief.md").write_text("# Ready\n", encoding="utf-8")
     valid_autoplot_manifest_seed = {
         "figures": [
             str(item["path"])
@@ -947,8 +940,7 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
         _check(
             "supported_presentation_template_is_certificate_bound",
             "A rule-declared alternate presentation stays inside the automatic envelope",
-            supported_presentation_evaluation["state"]
-            == INSIDE_VALIDATED_ENVELOPE
+            supported_presentation_evaluation["state"] == INSIDE_VALIDATED_ENVELOPE
             and supported_presentation_evaluation["ready_without_ai"] is True
             and supported_presentation_evaluation["repair_reasons"] == []
             and supported_presentation_evaluation["confirmation_reasons"] == [],

@@ -81,60 +81,113 @@ export, QA, delivery, and provenance checks.
 ```text
 research-plots/
   README.md                    product and user workflow
+  agent.md                     repository code-architecture rules
   DEVELOPMENT_ROADMAP.md       active product/maintenance priorities
   skill/
     SKILL.md                   agent operating contract
     scripts/sciplot            source-checkout CLI wrapper
   src/
     sciplot_core/
-      materials_rules.py       experiment families, axes, aliases, units
-      semantic.py              recognition and deterministic preparation
-      performance_comparison.py material-performance table/normalization contract
-      performance_veusz.py     native scatter/radar Veusz object contract
-      policy.py                global plotting and delivery defaults
-      style_contract.py        template/style consistency audit
-      request_contract.py      renderer-independent request validation
-      studio.py                VSZ lifecycle and exact-current export
-      workflow.py              confirmed-request orchestration and repair loop
-      autoplot.py              automated project/QA/delivery summary adapter
-      one_step.py              internal readiness/manifest model
-      publish_state.py         shared fail-closed final publication gates
-      managed_output.py        shared generator-owned output rollback
-      intake.py                headless project preparation/domain logic
-      intake_server.py         thin browser HTTP adapter
-      qa.py                    artifact/publication QA
-      output_contract.py       visible handoff and hidden workspace paths
-      delivery.py              minimal handoff package
-      smoke.py                 synthetic runtime change gate
-      _vendor/                 migrated compatibility black box
+      cli/                     parser registration and command dispatch
+      foundation/              named hashing, JSON, text, and path primitives
+      materials_rules/         experiment families, aliases, units, metrics
+      semantic.py              stable recognition/preparation facade
+      semantic_sources/        experiment-specific pure preparation
+      mapping_contract/        mapping models, proposals, and validation
+      data_mapping/            mapping execution and state
+      study_model/             study and experiment plans
+      plot_data/               source/spec table conversion and CSV export
+      source_tables/           raw table decoding and typed curve/stat/heatmap parsing
+      source_inspection/       source-shape recognition and supported-template proposals
+      policy/                  global visual, layout, axis, export, and plot contract
+      render/                  renderer-independent render orchestration
+      studio.py                stable Studio compatibility facade
+      studio_render/           pure series, axis, layout, and spec transforms
+      studio_core/             VSZ lifecycle, save, export, publish, Qt ports
+      workflow/                confirmed-request orchestration and bundles
+      autoplot/ one_step/      public automation adapter and internal lifecycle
+      qa/ readiness/           artifact checks and rule evidence
+      delivery/ evidence/      minimal handoff and evidence contracts
+      source_coverage/         source and provenance coverage
+      visual_review/           explicit human visual-decision records
+      acceptance/ smoke/       ready-rule and synthetic runtime gates
+      veusz_worker/            worker protocol, operations, and spec audit
+      veusz_audit/             exact-current VSZ read-only audit
+      intake/                  headless intake domain and packaged static UI
+      intake_server/           loopback browser HTTP adapter
+      assistant_provider/      provider-neutral assistant request contract
+      openai_provider/         OpenAI transport adapter
+      *_probe.py               linear black-box integration evidence
     sciplot_gui/
-      studio_project.py        Veusz Project dock bridge
-      studio_project_status.py pure result/audit state logic
-      studio_assistant.py      selected-object AI dock bridge
-    sciplot_recipes/           stable experiment-family recipe facade
+      main_window_menu.py      Veusz MainWindow menu and dock composition
+      window_context.py        live document-path resolution
+      studio_project/          Veusz Project dock bridge
+      studio_project_status/   pure result/audit state logic
+      studio_assistant/        selected-object AI dock bridge
+      studio_assistant_history/ typed assistant history and persistence
+    sciplot_recipes/
+      material_recipe.py       material-family recipe execution
+      registry.py              stable recipe discovery
   third_party/veusz/           pinned upstream renderer/editor
 ```
 
 Generated projects, acceptance runs, caches, authorized local data, and
 development logs are local workspace material, not package source.
 
+Compatibility facades keep established imports stable while implementation
+ownership lives in the named packages. A facade may re-export public symbols
+or preserve a documented monkeypatch seam; it must not acquire new business
+logic.
+
+## Dependency direction
+
+```text
+CLI composition root
+  -> GUI presentation installer
+  -> Core public facades
+
+GUI presentation
+  -> Core service contracts and pure status/evidence data
+
+autoplot / workflow / one_step
+  -> semantic + mapping + render + studio
+
+semantic + mapping
+  -> materials rules + study model + foundation
+
+studio_core
+  -> studio_render + policy + Veusz boundary
+
+QA / readiness / delivery
+  -> saved artifacts + public evidence contracts
+```
+
+The CLI is the application composition root and may assemble GUI presentation.
+Core business, data, rendering, QA, and delivery modules must not import
+`sciplot_gui`. `sciplot_gui` may call Core service contracts but may not own a
+second document model or duplicate scientific calculations. One-way
+dependencies, the 400-line ordinary-source boundary, and prohibited catch-all
+module names are enforced by `tests/test_architecture_boundaries.py`.
+
 ## Ownership rules
 
 | Concern | Owner | Boundary |
 | --- | --- | --- |
-| Scientific recognition, units, metrics | `materials_rules.py`, `semantic.py` | Deterministic and fixture-backed. |
-| Material-performance values and derived geometry | `performance_comparison.py` | Validate the tidy table, declared radar bounds, and sample envelope; never infer or average missing scientific values. |
-| Native performance document objects | `performance_veusz.py` | Own editable scatter/radar polygons, lines, markers, labels, and the reserved reference panel; reuse global style policy. |
-| Global visual contract | `policy.py`, vendored `plot_contract.json`, `style_contract.py` | One source for hard style; fail on drift. |
+| Scientific recognition, units, metrics | `materials_rules/`, `semantic.py`, `semantic_sources/` | Deterministic and fixture-backed; the facade owns no preparation implementation. |
+| Material-performance values and derived geometry | `performance_comparison/` | Validate the tidy table, declared radar bounds, and sample envelope; never infer or average missing scientific values. |
+| Native performance document objects | `performance_veusz/` | Own editable scatter/radar polygons, lines, markers, labels, and the reserved reference panel; reuse global style policy. |
+| Raw source tables | `source_tables/` | Decode supported files and produce typed curve, replicate, or heatmap tables without renderer or UI state. |
+| Source inspection | `source_inspection/` | Recognize source shape and propose only templates implemented by the production Veusz builder. |
+| Global visual contract | `policy/plot_contract.json`, `policy/`, `style_contract/` | One source for hard style; fail on drift. |
 | Request/template validation | `request_contract.py` | Reject unsupported template or option before rendering. |
-| VSZ lifecycle | `studio.py`, Veusz runtime adapters | Preserve, reopen, audit, and export the current document. |
-| Project state | `studio_project_status.py` | Pure evidence-to-state logic; UI only renders it. |
+| Pure Studio plot construction | `studio_render/` | Transform confirmed data and policy into series, axes, layout, and render specs without GUI state. |
+| VSZ lifecycle | `studio_core/`, `studio.py` facade | Preserve, reopen, audit, and export the current document. |
+| Project state | `sciplot_gui/studio_project_status/` | Pure evidence-to-state logic; UI only renders it. |
 | Optional selected-object AI | setting catalogue, assistant operations/provider, GUI bridge | Current object and typed settings only. |
 | Blocked data/rule repair | assisted-cleanup and Codex handoff modules | Out-of-band maintenance; no user-visible frontend mode. |
-| QA and delivery | `qa.py`, `delivery.py`, evidence modules | Inspect artifacts without changing scientific content. |
-| Runtime change gate | `smoke.py` | Synthetic lifecycle coverage, never real-data evidence. |
+| QA and delivery | `qa/`, `readiness/`, `delivery/`, evidence modules | Inspect artifacts without changing scientific content. |
+| Runtime change gate | `smoke/` | Synthetic lifecycle coverage, never real-data evidence. |
 | Upstream Veusz | `third_party/veusz/` | Preserve upstream identity; integration remains outside. |
-| Migrated core | `_vendor/` | Black box unless a public adapter cannot express the fix. |
 
 ## Template and style boundary
 
@@ -147,8 +200,8 @@ The latter never reclassifies components as replicates: it binds sample roots
 to the control-first ordinary categorical palette and component order to
 opaque same-hue lightness. Its legend is a stack-ordered segmented swatch
 covering every sample colour, not a single-sample native key.
-Vendored reference templates are not automatically production features;
-unsupported requests fail closed.
+Historical reference-only templates are not production features; unsupported
+requests fail closed and source inspection does not recommend them.
 
 `scatter` and `polar_curve` share the explicit
 `performance_comparison` material-metric table contract. The former creates
@@ -309,7 +362,8 @@ drift.
    server and static UI so Studio does not depend on a second frontend.
 3. SciPlot-owned modules do not import `third_party/veusz` directly; runtime
    adapters own that boundary.
-4. New code must not deepen direct `src.*` or `_vendor` imports.
+4. SciPlot source must not import the removed legacy `src.*` namespace or
+   recreate an `_vendor` compatibility tree.
 5. Importing `sciplot_core` must not initialize Qt, Veusz, browser, or network
    clients.
 6. Paths, atomic writes, hashes, JSON parsing, style constants, and export

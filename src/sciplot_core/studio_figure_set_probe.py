@@ -9,7 +9,8 @@ from typing import Any
 from unittest.mock import patch
 
 from sciplot_core import studio as studio_module
-from sciplot_core._utils import existing_file_sha256, json_safe
+from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.qa import _span_text_role
 from sciplot_core.studio import prepare_studio_document
 from sciplot_core.studio_project_probe import _copy_project_fixture
@@ -261,9 +262,7 @@ def run_studio_figure_set_probe(
                 {"rule_id": "rheology_temperature_sweep"},
             ),
         ):
-            tampered_registry = json.loads(
-                synthetic_registry_bytes.decode("utf-8")
-            )
+            tampered_registry = json.loads(synthetic_registry_bytes.decode("utf-8"))
             tampered_registry.update(updates)
             synthetic_registry_path.write_text(
                 json.dumps(tampered_registry, indent=2, ensure_ascii=False),
@@ -275,9 +274,7 @@ def run_studio_figure_set_probe(
             )
             tampered_registry_results[attack_id] = {
                 "scope": scope,
-                "accepted": studio_module._is_primary_figure_set_export_scope(
-                    scope
-                ),
+                "accepted": studio_module._is_primary_figure_set_export_scope(scope),
             }
     finally:
         synthetic_registry_path.write_bytes(synthetic_registry_bytes)
@@ -305,9 +302,7 @@ def run_studio_figure_set_probe(
         for item in synthetic.get("registry", {}).get("figures", [])
         if isinstance(item, dict) and item.get("figure_id")
     ]
-    primary_id = str(
-        synthetic.get("registry", {}).get("primary_figure_id") or ""
-    )
+    primary_id = str(synthetic.get("registry", {}).get("primary_figure_id") or "")
     complete_scope = {
         "kind": "sciplot_figure_set_export_scope",
         "version": 2,
@@ -335,9 +330,7 @@ def run_studio_figure_set_probe(
         orphan_planned["planned_figure_ids"].append("orphan_metric")
         overlap = json.loads(json.dumps(complete_scope))
         if overlap["available_figure_ids"]:
-            overlap["unavailable_figure_ids"].append(
-                overlap["available_figure_ids"][0]
-            )
+            overlap["unavailable_figure_ids"].append(overlap["available_figure_ids"][0])
         for attack_id, scope in (
             ("primary_marked_unavailable", primary_unavailable),
             ("secondary_missing_from_supported", missing_supported),
@@ -421,17 +414,14 @@ def run_studio_figure_set_probe(
     }
     transaction_residue = sorted(
         str(path.relative_to(synthetic_project))
-        for path in synthetic_project.rglob(
-            ".sciplot-figure-set-transaction-*"
-        )
+        for path in synthetic_project.rglob(".sciplot-figure-set-transaction-*")
     )
     checks.append(
         _check(
             "second_replace_failure_rolls_back_secondary_transaction",
             "A failure replacing the staged secondary spec restores the prior VSZ, spec, and registry bytes without archiving or leaving transaction files",
             transaction_error is not None
-            and "injected second figure-set replace failure"
-            in str(transaction_error)
+            and "injected second figure-set replace failure" in str(transaction_error)
             and canonical_after == canonical_before
             and history_after == history_before
             and not transaction_residue

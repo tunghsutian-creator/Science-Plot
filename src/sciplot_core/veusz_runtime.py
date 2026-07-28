@@ -14,7 +14,10 @@ def veusz_worker_environment() -> dict[str, str]:
     env = os.environ.copy()
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     env.setdefault("MPLCONFIGDIR", str(Path(tempfile.gettempdir()) / "sciplot-mpl"))
-    framework_paths = [Path("/opt/homebrew/opt/qtbase/lib"), Path("/opt/homebrew/opt/qt/lib")]
+    framework_paths = [
+        Path("/opt/homebrew/opt/qtbase/lib"),
+        Path("/opt/homebrew/opt/qt/lib"),
+    ]
     existing = [str(path) for path in framework_paths if path.exists()]
     if existing:
         joined = ":".join(existing)
@@ -31,7 +34,9 @@ def veusz_worker_environment() -> dict[str, str]:
 def needs_veusz_worker_process() -> bool:
     """Return true when macOS must load the Homebrew Qt runtime at process start."""
 
-    return sys.platform == "darwin" and os.environ.get("SCIPLOT_STUDIO_QT_RUNTIME") != "1"
+    return (
+        sys.platform == "darwin" and os.environ.get("SCIPLOT_STUDIO_QT_RUNTIME") != "1"
+    )
 
 
 __all__ = ["needs_veusz_worker_process", "veusz_worker_environment"]

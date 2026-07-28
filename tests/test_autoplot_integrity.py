@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from sciplot_core import autoplot
-from sciplot_core._utils import existing_file_sha256
+from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.delivery import DELIVERY_PACKAGE_CONTRACT_VERSION
 from sciplot_core.launchers import (
     inspect_delivery_launcher_contract,
@@ -216,9 +216,10 @@ def test_autoplot_rejects_deleted_delivery_artifact(
     assert summary["ready_to_use"] is False
     assert summary["delivery_complete"] is False
     assert "delivery_package_verification_failed" in summary["integrity"]["reasons"]
-    assert "pdf_files_current" in summary["integrity"]["delivery_verification"][
-        "failed_checks"
-    ]
+    assert (
+        "pdf_files_current"
+        in summary["integrity"]["delivery_verification"]["failed_checks"]
+    )
 
 
 @pytest.mark.parametrize("stale_launcher", ["exit_zero", "retired_advanced_editor"])
@@ -278,9 +279,10 @@ def test_autoplot_rejects_deleted_output_package_artifact(
 
     assert summary["ready_to_use"] is False
     assert "package_contract_verification_failed" in summary["integrity"]["reasons"]
-    assert "live_complete" in summary["integrity"][
-        "package_contract_verification"
-    ]["failed_checks"]
+    assert (
+        "live_complete"
+        in summary["integrity"]["package_contract_verification"]["failed_checks"]
+    )
 
 
 def test_autoplot_records_incomplete_delivery_reason(
@@ -302,9 +304,7 @@ def test_autoplot_records_incomplete_delivery_reason(
     (run_output / "one_step_status.json").write_text(
         json.dumps(one_step), encoding="utf-8"
     )
-    manifest = json.loads(
-        (run_output / "manifest.json").read_text(encoding="utf-8")
-    )
+    manifest = json.loads((run_output / "manifest.json").read_text(encoding="utf-8"))
     manifest["one_step"] = one_step
     manifest["delivery_package"] = delivery
     manifest.update(
@@ -315,9 +315,7 @@ def test_autoplot_records_incomplete_delivery_reason(
             prerequisite_state=one_step["state"],
         )
     )
-    (run_output / "manifest.json").write_text(
-        json.dumps(manifest), encoding="utf-8"
-    )
+    (run_output / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     result["status"] = manifest["state"]
 
     summary = autoplot.build_autoplot_summary(result)
@@ -348,9 +346,7 @@ def test_autoplot_rejects_incomplete_package_contract(
             prerequisite_state=manifest["one_step"]["state"],
         )
     )
-    (run_output / "manifest.json").write_text(
-        json.dumps(manifest), encoding="utf-8"
-    )
+    (run_output / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
     result["status"] = manifest["state"]
 
     summary = autoplot.build_autoplot_summary(result)
@@ -374,9 +370,7 @@ def test_autoplot_rejects_forged_publish_state(
     run_output = Path(str(result["run_output"]))
     manifest = json.loads((run_output / "manifest.json").read_text(encoding="utf-8"))
     manifest["package_contract"]["complete"] = False
-    (run_output / "manifest.json").write_text(
-        json.dumps(manifest), encoding="utf-8"
-    )
+    (run_output / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     summary = autoplot.build_autoplot_summary(result)
 
@@ -417,9 +411,7 @@ def test_autoplot_rejects_noncanonical_delivery_path(
     (run_output / "one_step_status.json").write_text(
         json.dumps(one_step), encoding="utf-8"
     )
-    (run_output / "manifest.json").write_text(
-        json.dumps(manifest), encoding="utf-8"
-    )
+    (run_output / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     summary = autoplot.build_autoplot_summary(result)
 

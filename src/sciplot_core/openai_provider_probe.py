@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from sciplot_core._utils import json_safe
+from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.assistant_selection import VeuszSelection
 from sciplot_core.assistant_operations import VeuszSettingOperationBatch
 from sciplot_core.assistant_provider import (
@@ -96,9 +96,7 @@ def _completed_response(
     if refusal is not None:
         content.append({"type": "refusal", "refusal": refusal})
     elif text:
-        content.append(
-            {"type": "output_text", "text": text, "annotations": []}
-        )
+        content.append({"type": "output_text", "text": text, "annotations": []})
     return {
         "id": "resp_sciplot_probe",
         "object": "response",
@@ -136,9 +134,7 @@ def _user_payload(request_body: dict[str, Any]) -> dict[str, Any]:
 
 
 def _model_draft(user_payload: dict[str, Any], scenario: str) -> str:
-    capabilities = user_payload["context"]["editing_capabilities"][
-        "allowed_operations"
-    ]
+    capabilities = user_payload["context"]["editing_capabilities"]["allowed_operations"]
     capability = next(
         (item for item in capabilities if item.get("editor") == "text"),
         capabilities[0],
@@ -221,7 +217,7 @@ def _wire_events(user_payload: dict[str, Any], scenario: str) -> bytes:
         )
         return bytes(events)
     text = (
-        "{\"status\":"
+        '{"status":'
         if scenario == "malformed"
         else _model_draft(user_payload, scenario)
     )
@@ -287,9 +283,13 @@ class _WireResponse:
             if scenario == "http_error"
             else b""
         )
-        wire = b"" if scenario in {"http_error", "cancel"} else _wire_events(
-            user_payload,
-            scenario,
+        wire = (
+            b""
+            if scenario in {"http_error", "cancel"}
+            else _wire_events(
+                user_payload,
+                scenario,
+            )
         )
         if scenario == "cancel":
             wire = _sse_payload(
@@ -360,9 +360,7 @@ class _WireConnection:
         intent = str(self._user_payload.get("intent") or "")
         scenario_suffix = intent.partition("SCENARIO:")[2]
         self._scenario = (
-            scenario_suffix.split(maxsplit=1)[0]
-            if scenario_suffix
-            else "success"
+            scenario_suffix.split(maxsplit=1)[0] if scenario_suffix else "success"
         )
         self.fixture.records.append(
             {
@@ -647,8 +645,7 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
                 set(legacy_payload) == legacy_keys
                 and "visual_preview" not in legacy_payload
                 and legacy_roundtrip.to_dict() == legacy_payload
-                and legacy_roundtrip.payload_sha256
-                == success_request.payload_sha256,
+                and legacy_roundtrip.payload_sha256 == success_request.payload_sha256,
                 {
                     "keys": sorted(legacy_payload),
                     "hash": success_request.payload_sha256,
@@ -667,9 +664,7 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
         preview_user_payload = json.loads(preview_text)
         preview_image = preview_content[1]
         decoded_preview = base64.b64decode(
-            preview_image["image_url"].removeprefix(
-                "data:image/png;base64,"
-            ),
+            preview_image["image_url"].removeprefix("data:image/png;base64,"),
             validate=True,
         )
         checks.append(
@@ -677,14 +672,10 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
                 "visual_preview_roundtrip",
                 "The exact-current PNG survives request roundtrip and remains bound to the request hash",
                 preview_roundtrip.to_dict() == preview_payload
-                and preview_roundtrip.payload_sha256
-                == preview_request.payload_sha256
-                and preview_roundtrip.payload_sha256
-                != success_request.payload_sha256
-                and preview_response.request_sha256
-                == preview_request.payload_sha256
-                and hashlib.sha256(decoded_preview).hexdigest()
-                == preview["sha256"],
+                and preview_roundtrip.payload_sha256 == preview_request.payload_sha256
+                and preview_roundtrip.payload_sha256 != success_request.payload_sha256
+                and preview_response.request_sha256 == preview_request.payload_sha256
+                and hashlib.sha256(decoded_preview).hexdigest() == preview["sha256"],
                 {
                     "sha256": preview["sha256"],
                     "width": preview["width"],
@@ -708,21 +699,15 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
                 and preview_image
                 == {
                     "type": "input_image",
-                    "image_url": (
-                        f"data:image/png;base64,{preview['base64']}"
-                    ),
+                    "image_url": (f"data:image/png;base64,{preview['base64']}"),
                     "detail": "high",
                 }
-                and preview_user_payload.get("visual_preview")
-                == preview_metadata
-                and "base64"
-                not in preview_user_payload.get("visual_preview", {})
+                and preview_user_payload.get("visual_preview") == preview_metadata
+                and "base64" not in preview_user_payload.get("visual_preview", {})
                 and preview["base64"] not in preview_text
                 and "data:image/png;base64," not in preview_text,
                 {
-                    "content_types": [
-                        item.get("type") for item in preview_content
-                    ],
+                    "content_types": [item.get("type") for item in preview_content],
                     "metadata": preview_user_payload.get("visual_preview"),
                 },
             )
@@ -829,10 +814,8 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
                 success.status == "proposal"
                 and batch.provider == OPENAI_PROVIDER_ID
                 and batch.base_revision == success_request.base_revision
-                and operation.target_id
-                == "11111111-1111-4111-8111-111111111111"
-                and operation.arguments["setting_path"]
-                == "/page1/graph1/x/label"
+                and operation.target_id == "11111111-1111-4111-8111-111111111111"
+                and operation.arguments["setting_path"] == "/page1/graph1/x/label"
                 and operation.arguments["expected_value"] == "Frequency"
                 and operation.arguments["value"] == "Frequency · AI"
                 and bool(batch.batch_id)
@@ -881,9 +864,7 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
                 noop.status == "needs_human_confirmation"
                 and refusal.status == "needs_human_confirmation"
                 and incomplete.status == "needs_rule_repair"
-                and all(
-                    item.proposal is None for item in (noop, refusal, incomplete)
-                ),
+                and all(item.proposal is None for item in (noop, refusal, incomplete)),
                 {
                     "noop": noop.status,
                     "refusal": refusal.status,
@@ -1002,9 +983,7 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
         "summary": {
             "check_count": len(checks),
             "passed_count": sum(item["status"] == "passed" for item in checks),
-            "failed_ids": [
-                item["id"] for item in checks if item["status"] != "passed"
-            ],
+            "failed_ids": [item["id"] for item in checks if item["status"] != "passed"],
         },
         "artifacts": {
             "run_root": str(run_root),

@@ -29,9 +29,7 @@ def _dsc_sheet(*, cooling: bool, shift: float) -> pd.DataFrame:
     )
     times = [index * 0.2 for index in range(len(temperatures))]
     heat_flow = [
-        shift
-        + 0.002 * temperature
-        + (0.8 if index < hold_count else 0.0)
+        shift + 0.002 * temperature + (0.8 if index < hold_count else 0.0)
         for index, temperature in enumerate(temperatures)
     ]
     rows: list[list[object]] = [
@@ -40,9 +38,7 @@ def _dsc_sheet(*, cooling: bool, shift: float) -> pd.DataFrame:
     ]
     rows.extend(
         [time, temperature, heat]
-        for time, temperature, heat in zip(
-            times, temperatures, heat_flow, strict=True
-        )
+        for time, temperature, heat in zip(times, temperatures, heat_flow, strict=True)
     )
     return pd.DataFrame(rows)
 
@@ -84,8 +80,12 @@ def test_dsc_workbooks_split_into_cooling_and_second_heating_stacks(
         "Second heating E4",
     ]
     selections = prepared["transform_steps"][0]["parameters"]["source_selections"]
-    assert all(item["selected_point_count"] < item["source_point_count"] for item in selections)
-    assert all(item["temperature_boundary_guard_fraction"] == 0.015 for item in selections)
+    assert all(
+        item["selected_point_count"] < item["source_point_count"] for item in selections
+    )
+    assert all(
+        item["temperature_boundary_guard_fraction"] == 0.015 for item in selections
+    )
 
     phase_sources = _dsc_phase_sources(
         processed,

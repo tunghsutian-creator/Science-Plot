@@ -8,7 +8,9 @@ import pytest
 from sciplot_recipes import common
 
 
-def test_recipe_directory_with_multiple_tables_fails_before_writing(tmp_path: Path) -> None:
+def test_recipe_directory_with_multiple_tables_fails_before_writing(
+    tmp_path: Path,
+) -> None:
     source_dir = tmp_path / "sources"
     source_dir.mkdir()
     (source_dir / "a.csv").write_text("x,y\n1,2\n", encoding="utf-8")

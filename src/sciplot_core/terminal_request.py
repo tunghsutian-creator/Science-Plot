@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sciplot_core._utils import json_safe
+from sciplot_core.foundation.json_values import json_safe
 
 TERMINAL_RENDER_REQUEST_FIELDS = frozenset(
     {
@@ -105,11 +105,7 @@ def project_terminal_render_request(
     explicit_keys = request_context.get("explicit_render_option_keys")
     if isinstance(explicit_keys, list | tuple | set):
         request["explicit_render_option_keys"] = sorted(
-            {
-                str(key)
-                for key in explicit_keys
-                if str(key) in request["render_options"]
-            }
+            {str(key) for key in explicit_keys if str(key) in request["render_options"]}
         )
     x_metric, y_metric = _terminal_metric_pair(request_context)
     if x_metric is not None:
@@ -168,9 +164,7 @@ def normalize_terminal_render_request(
         raise ValueError(f"{label} is not an object.")
     unknown = set(value) - TERMINAL_RENDER_REQUEST_FIELDS
     if unknown:
-        raise ValueError(
-            f"{label} contains reserved fields: {sorted(unknown)}"
-        )
+        raise ValueError(f"{label} contains reserved fields: {sorted(unknown)}")
     template = value.get("template")
     render_options = value.get("render_options")
     if (
@@ -178,9 +172,7 @@ def normalize_terminal_render_request(
         or not template.strip()
         or not isinstance(render_options, dict)
     ):
-        raise ValueError(
-            f"{label} needs a template and render_options object."
-        )
+        raise ValueError(f"{label} needs a template and render_options object.")
     normalized = project_terminal_render_request(
         template=template,
         render_options=render_options,

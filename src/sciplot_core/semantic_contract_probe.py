@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from sciplot_core._utils import json_safe
+from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.semantic import (
     _read_dma_temperature_series,
     _read_ftir_series,
@@ -18,10 +18,8 @@ from sciplot_core.semantic import (
     _read_stress_relaxation_source_series,
     prepare_semantic_source,
 )
-from sciplot_core.intake import (
-    SAXS_SCALING_REVIEW_NOTE,
-    converge_material_review_notes,
-)
+from sciplot_core.intake.catalog import converge_material_review_notes
+from sciplot_core.intake.config import SAXS_SCALING_REVIEW_NOTE
 
 SEMANTIC_CONTRACT_PROBE_KIND = "sciplot_semantic_contract_probe"
 SEMANTIC_CONTRACT_PROBE_VERSION = 2
@@ -139,7 +137,19 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         stress_source,
         _stress_interval_rows(
             strain=[0.0, 2.0, 4.0, 7.0, 9.7, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0],
-            response=[1000.0, 800.0, 600.0, 400.0, 250.0, 100.0, 90.0, 80.0, 70.0, 60.0, 50.0],
+            response=[
+                1000.0,
+                800.0,
+                600.0,
+                400.0,
+                250.0,
+                100.0,
+                90.0,
+                80.0,
+                70.0,
+                60.0,
+                50.0,
+            ],
         ),
     )
     stress_series = _read_stress_relaxation_source_series(stress_source)[0]
@@ -545,7 +555,19 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         partial_stress_dir / "valid.csv",
         _stress_interval_rows(
             strain=[0.0, 2.0, 4.0, 7.0, 9.7, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0],
-            response=[1000.0, 800.0, 600.0, 400.0, 250.0, 100.0, 90.0, 80.0, 70.0, 60.0, 50.0],
+            response=[
+                1000.0,
+                800.0,
+                600.0,
+                400.0,
+                250.0,
+                100.0,
+                90.0,
+                80.0,
+                70.0,
+                60.0,
+                50.0,
+            ],
         ),
     )
     (partial_stress_dir / "malformed.csv").write_text(
@@ -805,12 +827,9 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                 and stress_diagnostics.get("hold_onset_source_time") == 5.0
                 and stress_diagnostics.get("normalization_baseline_value") == 100.0
                 and stress_diagnostics.get("excluded_loading_points") == 5
-                and "elapsed_time = source_time" in str(
-                    stress_diagnostics.get("time_reset_definition")
-                )
-                and stress_source_normalizations[0].get(
-                    "normalization_baseline_value"
-                )
+                and "elapsed_time = source_time"
+                in str(stress_diagnostics.get("time_reset_definition"))
+                and stress_source_normalizations[0].get("normalization_baseline_value")
                 == 100.0
             ),
             {
@@ -831,18 +850,11 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             (
                 multi_interval_series.points[0] == (1.0, 0.9)
                 and multi_interval_diagnostics.get("hold_interval_index") == 2
-                and multi_interval_diagnostics.get(
-                    "hold_interval_selection_policy"
-                )
+                and multi_interval_diagnostics.get("hold_interval_selection_policy")
                 == "last_common_selected_interval"
-                and multi_interval_diagnostics.get(
-                    "excluded_prior_interval_points"
-                )
+                and multi_interval_diagnostics.get("excluded_prior_interval_points")
                 == 6
-                and multi_interval_diagnostics.get(
-                    "hold_onset_source_time"
-                )
-                == 5.0
+                and multi_interval_diagnostics.get("hold_onset_source_time") == 5.0
             ),
             {
                 "points": multi_interval_series.points,
@@ -854,9 +866,7 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             "Wide stress curves use the first finite non-zero response and retain only positive log-domain time",
             (
                 wide_stress.points == ((1.0, 1.0), (2.0, 0.5))
-                and (wide_stress.diagnostics or {}).get(
-                    "normalization_baseline_time"
-                )
+                and (wide_stress.diagnostics or {}).get("normalization_baseline_time")
                 == 1.0
                 and (wide_stress.diagnostics or {}).get("normalization_fallback")
                 == "no_control_signal_first_finite_nonzero_response"
@@ -864,11 +874,8 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                     "excluded_nonpositive_time_count"
                 )
                 == 1
-                and already_normalized.points
-                == ((1.0, 0.8), (2.0, 0.6))
-                and (already_normalized.diagnostics or {}).get(
-                    "normalization_applied"
-                )
+                and already_normalized.points == ((1.0, 0.8), (2.0, 0.6))
+                and (already_normalized.diagnostics or {}).get("normalization_applied")
                 is False
             ),
             {
@@ -881,8 +888,7 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         _check(
             "stress_modulus_not_relabelled_as_stress",
             "Relaxation modulus is blocked until a distinct G/G0 contract exists",
-            modulus_blocked
-            and "separate G/G0 axis" in modulus_error,
+            modulus_blocked and "separate G/G0 axis" in modulus_error,
             {"error": modulus_error},
         ),
         _check(
@@ -1052,8 +1058,7 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                 and "Unsupported DMA temperature unit" in dma_temperature_rate_error
                 and "K/min" in dma_temperature_rate_error
                 and dma_modulus_rate_blocked
-                and "Unsupported DMA storage-modulus unit"
-                in dma_modulus_rate_error
+                and "Unsupported DMA storage-modulus unit" in dma_modulus_rate_error
                 and "MPa/min" in dma_modulus_rate_error
                 and dma_fail_closed_hashes_before == dma_fail_closed_hashes_after
             ),
@@ -1086,8 +1091,14 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             (
                 saxs_before == saxs_after
                 and len(saxs_diagnostics) == 2
-                and all(item.get("selected_point_count", 0) >= 2 for item in saxs_diagnostics)
-                and any(item.get("excluded_nonpositive_q_count", 0) > 0 for item in saxs_diagnostics)
+                and all(
+                    item.get("selected_point_count", 0) >= 2
+                    for item in saxs_diagnostics
+                )
+                and any(
+                    item.get("excluded_nonpositive_q_count", 0) > 0
+                    for item in saxs_diagnostics
+                )
                 and all(
                     item.get("excluded_nonpositive_intensity_count", 0) > 0
                     for item in saxs_diagnostics
@@ -1144,8 +1155,7 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         _check(
             "ftir_mixed_measurement_modes_blocked",
             "Transmittance and absorbance are not combined on one response axis",
-            mixed_ftir_blocked
-            and "separate figures" in mixed_ftir_error,
+            mixed_ftir_blocked and "separate figures" in mixed_ftir_error,
             {"error": mixed_ftir_error},
         ),
         _check(
@@ -1155,12 +1165,9 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                 partial_ftir_blocked
                 and partial_stress_blocked
                 and partial_sweep_blocked
-                and "silent partial datasets are not allowed"
-                in partial_ftir_error
-                and "silent partial datasets are not allowed"
-                in partial_stress_error
-                and "silent partial datasets are not allowed"
-                in partial_sweep_error
+                and "silent partial datasets are not allowed" in partial_ftir_error
+                and "silent partial datasets are not allowed" in partial_stress_error
+                and "silent partial datasets are not allowed" in partial_sweep_error
             ),
             {
                 "ftir_error": partial_ftir_error,
@@ -1174,8 +1181,7 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             (
                 viscosity_before == viscosity_after
                 and viscosity_sample.metric_units.get("complex_viscosity") == "mPa·s"
-                and viscosity_canonical_values
-                == viscosity_source_values
+                and viscosity_canonical_values == viscosity_source_values
                 and viscosity_processed.iat[2, 4] == "mPa·s"
                 and [
                     float(viscosity_processed.iat[row_index, 4]) for row_index in (3, 4)
@@ -1224,8 +1230,7 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                 and confirmed_viscosity_provenance.get("source_unit") == "mPa·s"
                 and confirmed_viscosity_provenance.get("output_unit") == "mPa·s"
                 and confirmed_viscosity_provenance.get("factor") == 1.0
-                and confirmed_viscosity_provenance.get("method")
-                == "identity"
+                and confirmed_viscosity_provenance.get("method") == "identity"
             ),
             {
                 "source_sha256_before": confirmed_viscosity_before,
@@ -1243,14 +1248,12 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             "A confirmed rheology sample with invalid units or unparseable values blocks the whole confirmed scope",
             (
                 confirmed_partial_blocked
-                and "silent partial datasets are not allowed"
-                in confirmed_partial_error
+                and "silent partial datasets are not allowed" in confirmed_partial_error
                 and "bad_unit.csv" in confirmed_partial_error
                 and "Unsupported confirmed rheology unit" in confirmed_partial_error
                 and "bad_parse.csv" in confirmed_partial_error
                 and "No numeric rheology sweep points" in confirmed_partial_error
-                and confirmed_partial_hashes_before
-                == confirmed_partial_hashes_after
+                and confirmed_partial_hashes_before == confirmed_partial_hashes_after
             ),
             {
                 "error": confirmed_partial_error,

@@ -66,7 +66,9 @@ def test_temperature_export_uses_declared_independent_variable_and_all_tests(
 
     assert semantic["rule_id"] == "rheology_temperature_sweep"
     assert [sample.sample for sample in samples] == ["E0", "E2"]
-    assert all([row["x"] for row in sample.rows] == [200.0, 190.0, 180.0] for sample in samples)
+    assert all(
+        [row["x"] for row in sample.rows] == [200.0, 190.0, 180.0] for sample in samples
+    )
 
 
 def test_stress_relaxation_uses_internal_test_labels_and_deduplicates_exports(
@@ -87,8 +89,7 @@ def test_stress_relaxation_uses_internal_test_labels_and_deduplicates_exports(
 
     assert [item.sample for item in series] == ["E2", "E3"]
     assert all(
-        (item.diagnostics or {})["equivalent_source_file_count"] == 2
-        for item in series
+        (item.diagnostics or {})["equivalent_source_file_count"] == 2 for item in series
     )
     assert all(len(item.points) >= 2 for item in series)
 

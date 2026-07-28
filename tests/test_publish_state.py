@@ -101,9 +101,7 @@ def test_publish_state_preserves_a_scientific_confirmation_blocker() -> None:
 
     assert result["state"] == "needs_human_confirmation"
     assert result["ready_to_use"] is False
-    assert result["publish_gates"]["failed_gates"] == [
-        "prerequisite_state_ready"
-    ]
+    assert result["publish_gates"]["failed_gates"] == ["prerequisite_state_ready"]
 
 
 def test_publish_state_is_pure() -> None:

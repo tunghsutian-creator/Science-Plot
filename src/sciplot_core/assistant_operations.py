@@ -139,8 +139,7 @@ class VeuszSettingOperation:
         version = require_json_int(payload.get("version", 0), label="version")
         if version != VEUSZ_SETTING_OPERATION_VERSION:
             raise ValueError(
-                "Unsupported VeuszSettingOperation version: "
-                f"{payload.get('version')!r}"
+                f"Unsupported VeuszSettingOperation version: {payload.get('version')!r}"
             )
         arguments = require_json_object(
             payload.get("arguments"), label="VeuszSettingOperation arguments"
@@ -196,9 +195,7 @@ class VeuszSettingOperationBatch:
         if len({operation.operation_id for operation in self.operations}) != len(
             self.operations
         ):
-            raise ValueError(
-                "VeuszSettingOperationBatch operation IDs must be unique."
-            )
+            raise ValueError("VeuszSettingOperationBatch operation IDs must be unique.")
 
     def to_dict(self) -> dict[str, Any]:
         return {

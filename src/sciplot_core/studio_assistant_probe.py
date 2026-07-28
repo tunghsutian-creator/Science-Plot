@@ -16,7 +16,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Iterator
 
-from sciplot_core._utils import file_sha256, json_safe
+from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.setting_catalog import SUPPORTED_INSPECTOR_TYPES
 from sciplot_core.assistant_operations import (
     VeuszSettingOperation,
@@ -290,7 +291,11 @@ def _create_window(
     provider: DeterministicStudioAssistantProvider | None,
 ) -> tuple[Any, Any]:
     from sciplot_core.studio import _create_veusz_window
+    from sciplot_gui.main_window_menu import (
+        install_studio_window_presentation,
+    )
 
+    install_studio_window_presentation()
     with _injected_provider_resolution(provider):
         window = _create_veusz_window(document)
     bridge = getattr(window, "_sciplot_assistant_bridge", None)

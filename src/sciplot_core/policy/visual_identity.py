@@ -1,0 +1,173 @@
+"""Declare figure sizes, performance geometry, palettes, and colormaps."""
+
+from __future__ import annotations
+
+
+DEFAULT_FIGURE_SIZE = "60x55"
+
+
+WIDE_FIGURE_SIZE = "120x55"
+
+
+STACKED_SPECTRUM_FIGURE_SIZE = "120x110"
+
+
+PERFORMANCE_PANEL_WIDTH_MM = 60.0
+
+
+PERFORMANCE_PANEL_HEIGHT_MM = 55.0
+
+
+PERFORMANCE_RADAR_AXIS_LABEL_SIZE_PT = 6.0
+
+
+PERFORMANCE_RADAR_LEFT_MARGIN_MM = 8.0
+
+
+PERFORMANCE_RADAR_RIGHT_MARGIN_MM = 10.5
+
+
+PERFORMANCE_RADAR_BOTTOM_MARGIN_MM = 9.5
+
+
+PERFORMANCE_RADAR_TOP_MARGIN_MM = 7.0
+
+
+PERFORMANCE_RADAR_GUIDE_COLOR = "#A6A6A6"
+
+
+PERFORMANCE_RADAR_GUIDE_LINE_WIDTH_PT = 0.45
+
+
+PERFORMANCE_RADAR_RING_TRANSPARENCY = 68
+
+
+PERFORMANCE_RADAR_SPOKE_TRANSPARENCY = 75
+
+
+PERFORMANCE_REFERENCE_PANEL_WIDTH_MM = 60.0
+
+
+PERFORMANCE_ENVELOPE_PADDING_FRACTION = 0.035
+
+
+PERFORMANCE_ENVELOPE_IRREGULARITY_FRACTION = 0.04
+
+
+PERFORMANCE_ENVELOPE_FILL_TRANSPARENCY = 35
+
+
+PERFORMANCE_ENVELOPE_LINE_TRANSPARENCY = 25
+
+
+PERFORMANCE_REFERENCE_ENVELOPE_FILL_TRANSPARENCY = 70
+
+
+PERFORMANCE_SCATTER_JITTER_HALFSPAN_FRACTION = 0.025
+
+
+PERFORMANCE_SAMPLE_FILL_TRANSPARENCY = 35
+
+
+PERFORMANCE_REFERENCE_COLOR = "#666666"
+
+
+PERFORMANCE_MARKERS = (
+    "circle",
+    "square",
+    "triangle",
+    "triangledown",
+    "plus",
+    "cross",
+    "diamond",
+    "pentagon",
+    "hexagon",
+    "star",
+    "triangleleft",
+    "triangleright",
+    "octogon",
+    "ellipsehorz",
+    "ellipsevert",
+    "star4",
+)
+
+
+JAMA_EDITORIAL_PALETTE_ID = "jama_editorial"
+
+
+NPG_MODERN_PALETTE_ID = "npg_modern"
+
+
+TOL_BRIGHT_PALETTE_ID = "tol_bright"
+
+
+CONTROL_FIRST_BRIGHT_PALETTE_ID = "control_first_bright"
+
+
+DEFAULT_PALETTE_PRESET = CONTROL_FIRST_BRIGHT_PALETTE_ID
+
+
+JAMA_EDITORIAL_COLORS = (
+    "#374E55",
+    "#DF8F44",
+    "#00A1D5",
+    "#B24745",
+    "#79AF97",
+    "#6A6599",
+    "#80796B",
+)
+
+
+NPG_MODERN_COLORS = (
+    "#3C5488",
+    "#4DBBD5",
+    "#00A087",
+    "#E64B35",
+    "#7E6148",
+    "#8491B4",
+    "#91D1C2",
+    "#B09C85",
+    "#F39B7F",
+    "#DC0000",
+)
+
+
+TOL_BRIGHT_COLORS = (
+    "#4477AA",
+    "#EE6677",
+    "#228833",
+    "#AA3377",
+    "#CCBB44",
+    "#66CCEE",
+    "#BBBBBB",
+)
+
+
+CONTROL_FIRST_BRIGHT_COLORS = (
+    "#222222",
+    "#3568C0",
+    "#C83E4D",
+    "#2A9D8F",
+    "#D99A24",
+    "#7C9ED9",
+    "#7B61A8",
+)
+
+
+DEFAULT_PALETTE_COLORS = CONTROL_FIRST_BRIGHT_COLORS
+
+
+DEFAULT_SCALAR_FIELD_COLORMAP_ID = "sciplot_cividis"
+
+
+DEFAULT_SCALAR_FIELD_COLORS = (
+    "#00204C",
+    "#173F5F",
+    "#365C6D",
+    "#587273",
+    "#7C8973",
+    "#A59C74",
+    "#CFB36F",
+    "#F6D35B",
+    "#FFEA46",
+)

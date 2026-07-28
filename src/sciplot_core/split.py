@@ -30,17 +30,28 @@ def normalize_split_policy(policy: object) -> dict[str, Any] | None:
     mode = str(raw_mode).strip()
     if mode not in SUPPORTED_SPLIT_MODES:
         known = ", ".join(sorted(SUPPORTED_SPLIT_MODES))
-        raise ValueError(f"Unsupported split_policy.mode `{mode}`. Supported modes: {known}.")
+        raise ValueError(
+            f"Unsupported split_policy.mode `{mode}`. Supported modes: {known}."
+        )
 
     try:
-        max_series = int(policy.get("max_series_per_panel") or DEFAULT_SPLIT_MAX_SERIES_PER_PANEL)
+        max_series = int(
+            policy.get("max_series_per_panel") or DEFAULT_SPLIT_MAX_SERIES_PER_PANEL
+        )
     except (TypeError, ValueError) as exc:
-        raise ValueError("`split_policy.max_series_per_panel` must be an integer.") from exc
+        raise ValueError(
+            "`split_policy.max_series_per_panel` must be an integer."
+        ) from exc
     if max_series < 1:
         raise ValueError("`split_policy.max_series_per_panel` must be at least 1.")
 
-    delivery = str(policy.get("delivery") or DEFAULT_SPLIT_DELIVERY).strip() or DEFAULT_SPLIT_DELIVERY
-    trigger = str(policy.get("trigger") or "explicit_request").strip() or "explicit_request"
+    delivery = (
+        str(policy.get("delivery") or DEFAULT_SPLIT_DELIVERY).strip()
+        or DEFAULT_SPLIT_DELIVERY
+    )
+    trigger = (
+        str(policy.get("trigger") or "explicit_request").strip() or "explicit_request"
+    )
     return {
         "trigger": trigger,
         "mode": mode,
@@ -50,20 +61,19 @@ def normalize_split_policy(policy: object) -> dict[str, Any] | None:
     }
 
 
-def series_chunks(labels: Sequence[str], *, max_series_per_panel: int) -> list[list[str]]:
+def series_chunks(
+    labels: Sequence[str], *, max_series_per_panel: int
+) -> list[list[str]]:
     cleaned = [str(label).strip() for label in labels if str(label).strip()]
     if not cleaned:
         return []
     duplicate_labels = sorted(
-        label
-        for label, count in Counter(cleaned).items()
-        if count > 1
+        label for label, count in Counter(cleaned).items() if count > 1
     )
     if duplicate_labels:
         raise ValueError(
             "Split series labels must be unique before label-based panel "
-            "selection: "
-            + ", ".join(duplicate_labels)
+            "selection: " + ", ".join(duplicate_labels)
         )
     return [
         cleaned[index : index + max_series_per_panel]
@@ -81,7 +91,9 @@ def build_split_plan(
     applied = len(chunks) > 1
     return {
         "applied": applied,
-        "reason": "series_count_exceeds_policy" if applied else "series_count_within_policy",
+        "reason": "series_count_exceeds_policy"
+        if applied
+        else "series_count_within_policy",
         "policy": dict(policy),
         "series_count": sum(len(chunk) for chunk in chunks),
         "chunk_count": len(chunks),

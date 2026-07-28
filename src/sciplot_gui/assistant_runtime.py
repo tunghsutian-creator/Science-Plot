@@ -58,9 +58,7 @@ class _AssistantProviderWorker(QtCore.QObject):
     ) -> None:
         super().__init__()
         self._provider = provider
-        self._descriptor = AssistantProviderDescriptor.from_dict(
-            descriptor.to_dict()
-        )
+        self._descriptor = AssistantProviderDescriptor.from_dict(descriptor.to_dict())
         self._request = request
         self._cancellation = cancellation
         self._last_sequence = 0
@@ -88,13 +86,15 @@ class _AssistantProviderWorker(QtCore.QObject):
                 self._provider.descriptor.to_dict()
             )
             if descriptor.to_dict() != self._descriptor.to_dict():
-                raise ValueError("Provider descriptor changed after request submission.")
+                raise ValueError(
+                    "Provider descriptor changed after request submission."
+                )
             if self._descriptor.provider_id != self._request.provider_id:
-                raise ValueError("Provider descriptor does not match Assistant request.")
+                raise ValueError(
+                    "Provider descriptor does not match Assistant request."
+                )
             self._cancellation.raise_if_cancelled()
-            provider_request = AssistantRequest.from_dict(
-                self._request.to_dict()
-            )
+            provider_request = AssistantRequest.from_dict(self._request.to_dict())
             response = self._provider.generate(
                 provider_request,
                 emit_progress=self._emit_progress,
@@ -189,7 +189,9 @@ class AssistantRequestRunner(QtCore.QObject):
             raise RuntimeError("An Assistant provider request is already active.")
         restored = AssistantRequest.from_dict(request.to_dict())
         if restored.provider_id != self._descriptor.provider_id:
-            raise ValueError("Assistant request does not target the connected provider.")
+            raise ValueError(
+                "Assistant request does not target the connected provider."
+            )
         unsupported = set(restored.allowed_proposal_kinds) - set(
             self._descriptor.proposal_kinds
         )

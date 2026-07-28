@@ -283,7 +283,7 @@ Journal/Year 放在右侧标准 60x55 mm 索引区，使一列索引的总图幅
 - `polar_curve`
 
 其它模板必须在请求边界明确失败，不能悄悄退化成曲线图。全局硬样式由
-`src/sciplot_core/policy.py` 统一定义，并与 vendored `plot_contract.json` 保持一致。
+`src/sciplot_core/policy/` 统一定义，并与包内的 `plot_contract.json` 保持一致。
 模板只拥有图形语义和允许编辑的选项；热图标量色带、等高线和色条配色是显式的语义例外。
 
 单位显示也属于全局绘图契约：仪器输入仍兼容 `/`，但坐标轴、色条、图内文字、图例

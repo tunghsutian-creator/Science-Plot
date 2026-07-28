@@ -29,9 +29,7 @@ def test_assistant_operation_contract_is_set_setting_only() -> None:
 
 
 def test_assistant_provider_rejects_retired_data_mapping_proposals() -> None:
-    assert ASSISTANT_PROPOSAL_KINDS == frozenset(
-        {"veusz_setting_operation_batch"}
-    )
+    assert ASSISTANT_PROPOSAL_KINDS == frozenset({"veusz_setting_operation_batch"})
     with pytest.raises(
         ValueError,
         match="provider capabilities contains unsupported values",

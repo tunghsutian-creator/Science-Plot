@@ -27,4 +27,18 @@ def run_recipe(
     )
 
 
-__all__ = ["get_recipe_module", "iter_recipe_specs", "list_recipe_names", "run_recipe"]
+def __getattr__(name: str) -> Any:
+    if name == "common":
+        from sciplot_recipes import material_recipe
+
+        return material_recipe
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = [
+    "common",
+    "get_recipe_module",
+    "iter_recipe_specs",
+    "list_recipe_names",
+    "run_recipe",
+]

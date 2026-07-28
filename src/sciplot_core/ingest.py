@@ -1,6 +1,6 @@
-"""Encoding-robust ingestion seam for the public SciPlot wrapper.
+"""Encoding-robust ingestion seam for source inspection.
 
-The vendored renderer tries a fixed list of text encodings in order, with the
+The historical table reader tried a fixed list of text encodings in order, with the
 greedy ``gb18030`` codec ahead of ``latin-1``. Because ``gb18030`` decodes
 almost any byte sequence without error, Western instrument exports that contain
 symbols like ``°C``, ``µm``, ``±`` or ``Å`` are silently mis-decoded into CJK
@@ -24,7 +24,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-# Delimited text formats the vendored loader reads as plain text. Binary
+# Delimited text formats the source reader handles as plain text. Binary
 # spreadsheet formats (.xls/.xlsx) carry their own encoding and are left alone.
 TEXT_TABLE_SUFFIXES = frozenset({".csv", ".tsv", ".txt", ".dat", ".tab"})
 
@@ -107,7 +107,7 @@ def _is_clean_utf8(payload: bytes) -> bool:
 
 @contextmanager
 def normalized_source(input_path: str | Path) -> Iterator[Path]:
-    """Yield a path safe to hand to the vendored loader.
+    """Yield a path safe to hand to source inspection.
 
     For a delimited text table whose bytes are not already clean UTF-8, the
     content is transcoded to UTF-8 in a temporary directory (preserving the
@@ -130,4 +130,9 @@ def normalized_source(input_path: str | Path) -> Iterator[Path]:
         yield target
 
 
-__all__ = ["TEXT_TABLE_SUFFIXES", "decode_text_file", "normalized_source", "smart_decode"]
+__all__ = [
+    "TEXT_TABLE_SUFFIXES",
+    "decode_text_file",
+    "normalized_source",
+    "smart_decode",
+]

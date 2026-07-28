@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from sciplot_core._utils import json_safe
+from sciplot_core.foundation.json_values import json_safe
 
 SCALAR_VISUAL_CONTRACT_FIELDS = (
     "z_min",
@@ -109,21 +109,10 @@ def scalar_visual_contract(
 
     if not isinstance(value, dict):
         raise ValueError(f"{label} is not an object.")
-    missing = [
-        field
-        for field in SCALAR_VISUAL_CONTRACT_FIELDS
-        if field not in value
-    ]
+    missing = [field for field in SCALAR_VISUAL_CONTRACT_FIELDS if field not in value]
     if missing:
-        raise ValueError(
-            f"{label} is missing scalar visual fields: {missing}"
-        )
-    return json_safe(
-        {
-            field: value[field]
-            for field in SCALAR_VISUAL_CONTRACT_FIELDS
-        }
-    )
+        raise ValueError(f"{label} is missing scalar visual fields: {missing}")
+    return json_safe({field: value[field] for field in SCALAR_VISUAL_CONTRACT_FIELDS})
 
 
 __all__ = [

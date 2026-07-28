@@ -127,9 +127,7 @@ def test_curve_template_materializes_independent_condition_and_formula_legends(
         },
         export_formats=("pdf",),
     )
-    spec = json.loads(
-        Path(result["veusz_specs"][0]).read_text(encoding="utf-8")
-    )
+    spec = json.loads(Path(result["veusz_specs"][0]).read_text(encoding="utf-8"))
     text = Path(result["veusz_documents"][0]).read_text(encoding="utf-8")
     legend = spec["legend"]
 
@@ -145,12 +143,13 @@ def test_curve_template_materializes_independent_condition_and_formula_legends(
         "Weight reduction",
         "",
     ]
-    assert [
-        entry["label"] for entry in legend["groups"][0]["entries"]
-    ] == ["33%", "50%"]
-    assert [
-        entry["label"] for entry in legend["groups"][1]["entries"]
-    ] == list(formulas)
+    assert [entry["label"] for entry in legend["groups"][0]["entries"]] == [
+        "33%",
+        "50%",
+    ]
+    assert [entry["label"] for entry in legend["groups"][1]["entries"]] == list(
+        formulas
+    )
     expected_colors = [
         color
         for root in DEFAULT_PALETTE_COLORS[:4]
@@ -165,23 +164,19 @@ def test_curve_template_materializes_independent_condition_and_formula_legends(
     ]
     assert [item["color"] for item in spec["series"]] == expected_colors
     assert [item["line_style"] for item in spec["series"]] == [
-        "solid"
-        for _formula in formulas
-        for _condition in conditions
+        "solid" for _formula in formulas for _condition in conditions
     ]
     assert [item["marker"] for item in spec["series"]] == ["none"] * 8
-    assert [
-        entry["colors"] for entry in legend["groups"][0]["entries"]
-    ] == [
+    assert [entry["colors"] for entry in legend["groups"][0]["entries"]] == [
         expected_colors[0::2],
         expected_colors[1::2],
     ]
-    assert [
-        entry["color"] for entry in legend["groups"][1]["entries"]
-    ] == list(DEFAULT_PALETTE_COLORS[:4])
-    assert [
-        entry["line_style"] for entry in legend["groups"][1]["entries"]
-    ] == ["solid"] * 4
+    assert [entry["color"] for entry in legend["groups"][1]["entries"]] == list(
+        DEFAULT_PALETTE_COLORS[:4]
+    )
+    assert [entry["line_style"] for entry in legend["groups"][1]["entries"]] == [
+        "solid"
+    ] * 4
     for entry in legend["groups"][0]["entries"]:
         assert (
             entry["swatch_left_fraction"] + entry["swatch_width_fraction"]
@@ -191,33 +186,23 @@ def test_curve_template_materializes_independent_condition_and_formula_legends(
     graph_width_mm = 60.0 - UNIFIED_LEFT_MARGIN_MM - UNIFIED_RIGHT_MARGIN_MM
     for entry in legend["groups"][1]["entries"]:
         assert (
-            (entry["x_end_fraction"] - entry["x_start_fraction"])
-            * graph_width_mm
+            (entry["x_end_fraction"] - entry["x_start_fraction"]) * graph_width_mm
         ) == pytest.approx(UNIFIED_LEGEND_KEY_LENGTH_MM)
     factor_labels = _curve_factor_legend_label_contracts(spec)
     assert len(factor_labels) == 7
     assert factor_labels[0]["name"] == "curve_factor_legend_condition_title"
     assert factor_labels[0]["align"] == "left"
-    assert factor_labels[0]["x"] == pytest.approx(
-        legend["block_left_x_fraction"]
-    )
+    assert factor_labels[0]["x"] == pytest.approx(legend["block_left_x_fraction"])
     assert factor_labels[1]["align"] == "left"
     assert factor_labels[2]["align"] == "right"
-    assert factor_labels[2]["x"] == pytest.approx(
-        legend["block_right_x_fraction"]
-    )
+    assert factor_labels[2]["x"] == pytest.approx(legend["block_right_x_fraction"])
     assert len(_curve_factor_legend_line_contracts(spec)) == 4
     assert len(_curve_factor_legend_condition_rect_contracts(spec)) == 8
     assert "Add('key', name='key1'" not in text
     assert "Formula" not in text
     assert text.count("Add('label', name='curve_factor_legend_") == 7
     assert text.count("Add('line', name='curve_factor_legend_") == 4
-    assert (
-        text.count(
-            "Add('rect', name='curve_factor_legend_condition_segment_"
-        )
-        == 8
-    )
+    assert text.count("Add('rect', name='curve_factor_legend_condition_segment_") == 8
 
 
 def test_frequency_axis_detection_ignores_runtime_path_substrings() -> None:
@@ -235,6 +220,7 @@ def test_frequency_axis_detection_ignores_runtime_path_substrings() -> None:
     assert _looks_like_frequency_axis(
         {"x_label": "Frequency (Hz)", "y_label": "Storage modulus (Pa)"}
     )
+
 
 def test_terminal_request_preserves_only_declared_explicit_render_keys() -> None:
     terminal = project_terminal_render_request(
@@ -281,16 +267,22 @@ def test_default_ordinary_palette_is_control_first_then_one_through_six() -> Non
 
 
 def test_categorical_component_tones_are_opaque_same_hue_lightness_steps() -> None:
-    assert categorical_component_fill_color(
-        "#222222",
-        component_index=0,
-        component_count=2,
-    ) == "#222222"
-    assert categorical_component_fill_color(
-        "#222222",
-        component_index=1,
-        component_count=2,
-    ) == "#6F6F6F"
+    assert (
+        categorical_component_fill_color(
+            "#222222",
+            component_index=0,
+            component_count=2,
+        )
+        == "#222222"
+    )
+    assert (
+        categorical_component_fill_color(
+            "#222222",
+            component_index=1,
+            component_count=2,
+        )
+        == "#6F6F6F"
+    )
 
 
 def test_non_explicit_legacy_palette_follows_current_shared_default() -> None:
@@ -350,9 +342,7 @@ def test_tensile_contract_uses_short_labels_two_sided_padding_and_auto_legend() 
         ),
     ]
 
-    options = _apply_domain_render_defaults(
-        {}, request=request, axis_info=axis_info
-    )
+    options = _apply_domain_render_defaults({}, request=request, axis_info=axis_info)
     options = _apply_readability_render_defaults(
         options,
         request=request,
@@ -378,9 +368,7 @@ def test_tensile_summary_bar_keeps_metric_axis_labels() -> None:
         "category_labels": ["A", "B"],
     }
 
-    options = _apply_domain_render_defaults(
-        {}, request=request, axis_info=axis_info
-    )
+    options = _apply_domain_render_defaults({}, request=request, axis_info=axis_info)
 
     assert options["x_label_override"] == "Sample"
     assert "y_label_override" not in options
@@ -409,12 +397,8 @@ def test_categorical_geometry_balances_categories_replicates_and_box_width() -> 
     four_category_slot = categorical_slot_width_mm(
         category_count=4, figure_width_mm=60.0
     )
-    two_category_box = categorical_box_width_mm(
-        category_count=2, figure_width_mm=60.0
-    )
-    four_category_box = categorical_box_width_mm(
-        category_count=4, figure_width_mm=60.0
-    )
+    two_category_box = categorical_box_width_mm(category_count=2, figure_width_mm=60.0)
+    four_category_box = categorical_box_width_mm(category_count=4, figure_width_mm=60.0)
 
     assert two_category_slot == pytest.approx(20.75)
     assert four_category_slot == pytest.approx(10.375)
@@ -453,21 +437,27 @@ def test_categorical_geometry_balances_categories_replicates_and_box_width() -> 
     assert four_category_five_replicate_band == pytest.approx(3.015555556)
     assert two_category_ten_replicate_band < two_category_box
     assert four_category_five_replicate_band < four_category_box
-    assert categorical_raw_point_half_spread(
-        box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION,
-        replicate_count=1,
-        category_slot_width_mm=two_category_slot,
-    ) == 0.0
+    assert (
+        categorical_raw_point_half_spread(
+            box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION,
+            replicate_count=1,
+            category_slot_width_mm=two_category_slot,
+        )
+        == 0.0
+    )
     assert categorical_raw_point_half_spread(
         box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION, replicate_count=3
     ) < categorical_raw_point_half_spread(
         box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION, replicate_count=10
     )
-    assert categorical_raw_point_half_spread(
-        box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION,
-        replicate_count=10,
-        category_slot_width_mm=two_category_slot,
-    ) < CATEGORICAL_BOX_FILL_FRACTION * 0.5
+    assert (
+        categorical_raw_point_half_spread(
+            box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION,
+            replicate_count=10,
+            category_slot_width_mm=two_category_slot,
+        )
+        < CATEGORICAL_BOX_FILL_FRACTION * 0.5
+    )
     assert categorical_raw_point_half_spread(
         box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION, replicate_count=100
     ) == pytest.approx(CATEGORICAL_BOX_FILL_FRACTION * 0.90 * 0.5)
@@ -483,9 +473,7 @@ def test_categorical_positions_are_symmetric_and_not_row_ordered_linear() -> Non
     assert max(offsets) == pytest.approx(0.14)
     assert min(offsets) == pytest.approx(-0.14)
     assert offsets != sorted(offsets)
-    assert [abs(value) for value in offsets] != sorted(
-        abs(value) for value in offsets
-    )
+    assert [abs(value) for value in offsets] != sorted(abs(value) for value in offsets)
     assert positions == _deterministic_category_positions(
         2.0, 10, fraction=0.14, seed_key="sample-a"
     )
@@ -554,9 +542,7 @@ def test_categorical_box_aspect_constraint_narrows_width_not_y_axis() -> None:
     assert constraint["marker_capacity_floor_mm"] == pytest.approx(
         CATEGORICAL_BOX_MIN_MARKER_DIAMETERS * marker_diameter_mm
     )
-    assert constraint["resolved_box_width_mm"] >= constraint[
-        "marker_capacity_floor_mm"
-    ]
+    assert constraint["resolved_box_width_mm"] >= constraint["marker_capacity_floor_mm"]
 
 
 def test_categorical_bar_headroom_targets_mean_and_error_extent() -> None:
@@ -654,9 +640,7 @@ def test_ftir_stacked_defaults_keep_scientific_labels_without_offset_suffix() ->
         for label in ("E0", "E2", "E3", "E4")
     ]
 
-    options = _apply_domain_render_defaults(
-        {}, request=request, axis_info=axis_info
-    )
+    options = _apply_domain_render_defaults({}, request=request, axis_info=axis_info)
     options = _apply_readability_render_defaults(
         options,
         request=request,
@@ -725,8 +709,9 @@ def test_style_and_template_contract_audit_passes_current_registry() -> None:
     assert set(payload["implemented_veusz_templates"]) == (
         VEUSZ_IMPLEMENTED_TEMPLATE_IDS
     )
-    assert set(payload["template_color_options"]["heatmap"]) == (
-        VEUSZ_TEMPLATE_COLOR_OPTIONS["heatmap"]
+    assert (
+        set(payload["template_color_options"]["heatmap"])
+        == (VEUSZ_TEMPLATE_COLOR_OPTIONS["heatmap"])
     )
     assert (
         VEUSZ_TEMPLATE_COLOR_OPTIONS["heatmap"] & UNIFIED_HARD_OPTION_KEYS
@@ -753,7 +738,7 @@ def test_request_contract_accepts_only_implemented_veusz_templates(
     assert normalize_render_options({}, template=template) == {}
 
 
-def test_request_contract_rejects_reference_only_vendor_template() -> None:
+def test_request_contract_rejects_reference_only_template() -> None:
     with pytest.raises(ValueError, match="not implemented by SciPlot"):
         normalize_render_options({}, template="violin")
 
@@ -775,7 +760,9 @@ def test_heatmap_request_contract_accepts_the_runtime_scalar_contract() -> None:
     assert normalize_render_options(options, template="heatmap") == options
 
 
-def test_request_template_is_validated_even_without_an_explicit_template_argument() -> None:
+def test_request_template_is_validated_even_without_an_explicit_template_argument() -> (
+    None
+):
     with pytest.raises(ValueError, match="not implemented by SciPlot"):
         apply_request_patch({"template": "violin"})
 
@@ -840,10 +827,13 @@ def test_bar_template_materializes_long_form_stacked_components(
         "x_label_override": "Sample",
         "y_label_override": "Relative crystallinity (%)",
     }
-    assert normalize_render_options(
-        explicit_options,
-        template="bar",
-    ) == explicit_options
+    assert (
+        normalize_render_options(
+            explicit_options,
+            template="bar",
+        )
+        == explicit_options
+    )
 
     result = render_to_dir(
         source,
@@ -853,9 +843,7 @@ def test_bar_template_materializes_long_form_stacked_components(
         export_formats=("pdf",),
     )
     document = Path(result["veusz_documents"][0])
-    spec = json.loads(
-        Path(result["veusz_specs"][0]).read_text(encoding="utf-8")
-    )
+    spec = json.loads(Path(result["veusz_specs"][0]).read_text(encoding="utf-8"))
     text = document.read_text(encoding="utf-8")
     categorical = spec["categorical"]
 
@@ -954,16 +942,12 @@ def test_bar_template_materializes_grouped_replicates_with_segmented_legend(
         },
         export_formats=("pdf",),
     )
-    spec = json.loads(
-        Path(result["veusz_specs"][0]).read_text(encoding="utf-8")
-    )
+    spec = json.loads(Path(result["veusz_specs"][0]).read_text(encoding="utf-8"))
     text = Path(result["veusz_documents"][0]).read_text(encoding="utf-8")
     categorical = spec["categorical"]
 
     assert result["qa_reports"][0]["issues"] == []
-    assert spec["axes"]["y"]["label"] == (
-        "Specific tensile toughness (J g⁻¹)"
-    )
+    assert spec["axes"]["y"]["label"] == ("Specific tensile toughness (J g⁻¹)")
     assert "J/g" not in text
     assert categorical["presentation_kind"] == "grouped_bar_error"
     assert categorical["condition_labels"] == [
@@ -991,9 +975,7 @@ def test_bar_template_materializes_grouped_replicates_with_segmented_legend(
         )
         for color in DEFAULT_PALETTE_COLORS[:4]
     )
-    assert spec["legend"]["rows"][1]["colors"] == list(
-        DEFAULT_PALETTE_COLORS[:4]
-    )
+    assert spec["legend"]["rows"][1]["colors"] == list(DEFAULT_PALETTE_COLORS[:4])
     fill_rects = _categorical_grouped_bar_fill_rect_contracts(spec)
     assert len(fill_rects) == 8
     x_span = spec["axes"]["x"]["max"] - spec["axes"]["x"]["min"]
@@ -1035,9 +1017,7 @@ def test_bar_template_materializes_grouped_replicates_with_segmented_legend(
             (left, mean, right, mean),
         )
         for outline_index, expected in enumerate(expected_outline, start=1):
-            line = outline_lines[
-                f"categorical_bar_outline_{index}_{outline_index}"
-            ]
+            line = outline_lines[f"categorical_bar_outline_{index}_{outline_index}"]
             actual = (
                 line["xPos"][0],
                 line["yPos"][0],
@@ -1112,9 +1092,7 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
         export_formats=("pdf",),
     )
     document = Path(result["veusz_documents"][0])
-    spec = json.loads(
-        Path(result["veusz_specs"][0]).read_text(encoding="utf-8")
-    )
+    spec = json.loads(Path(result["veusz_specs"][0]).read_text(encoding="utf-8"))
 
     assert spec["template"] == template
     assert expected_widget in document.read_text(encoding="utf-8")
@@ -1151,9 +1129,7 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
             "'5pt', 'white', 0, True)"
         ) in text
         cap_half_width = (
-            CATEGORICAL_BAR_WIDTH_FRACTION
-            * CATEGORICAL_ERROR_CAP_TO_BAR_RATIO
-            / 2.0
+            CATEGORICAL_BAR_WIDTH_FRACTION * CATEGORICAL_ERROR_CAP_TO_BAR_RATIO / 2.0
         )
         assert f"Set('xPos', [{1.0 - cap_half_width}])" in text
         assert f"Set('xPos2', [{1.0 + cap_half_width}])" in text
@@ -1169,9 +1145,7 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
         for group, chunks in zip(
             bar_groups,
             [
-                text.split(
-                    f"Add('line', name='categorical_bar_outline_{index}_"
-                )[1:]
+                text.split(f"Add('line', name='categorical_bar_outline_{index}_")[1:]
                 for index in range(1, len(bar_groups) + 1)
             ],
             strict=True,
@@ -1179,10 +1153,7 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
             assert len(chunks) == 3
             for chunk in chunks:
                 outline_chunk = chunk.split("To('..')", 1)[0]
-                assert (
-                    f"Set('Line/color', '{group['keyline_color']}')"
-                    in outline_chunk
-                )
+                assert f"Set('Line/color', '{group['keyline_color']}')" in outline_chunk
                 assert (
                     f"Set('Line/width', '{CATEGORICAL_BAR_LINE_WIDTH_PT}pt')"
                     in outline_chunk
@@ -1207,26 +1178,21 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
         assert spec["axes"]["y"]["max"] > highest_error
     if template in {"box", "box_strip"}:
         text = document.read_text(encoding="utf-8")
-        expected_box_fraction = spec["categorical"]["visual_style"][
-            "box_fill_fraction"
-        ]
+        expected_box_fraction = spec["categorical"]["visual_style"]["box_fill_fraction"]
         expected_native_scale = categorical_box_native_fill_scale(
             category_count=len(spec["categorical"]["groups"])
         )
         assert f"Set('Fill/transparency', {CATEGORICAL_BOX_FILL_TRANSPARENCY})" in text
         assert (
             f"Set('fillfraction', "
-            f"{expected_box_fraction * expected_native_scale})"
-            in text
+            f"{expected_box_fraction * expected_native_scale})" in text
         )
         assert spec["categorical"]["version"] == 2
         assert (
             spec["categorical"]["quartile_method"]
             == "linear_interpolation_at_(n_minus_1)_times_p"
         )
-        assert (
-            spec["categorical"]["visual_style"]["raw_point_layout"] == "adaptive"
-        )
+        assert spec["categorical"]["visual_style"]["raw_point_layout"] == "adaptive"
         assert (
             spec["categorical"]["visual_style"]["box_width_policy"]
             == "min(categorical_bar_width_times_4_over_3,"
@@ -1236,17 +1202,13 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
             spec["categorical"]["visual_style"]["raw_point_position_policy"]
             == "stable_hash_shuffled_even_slots"
         )
-        assert spec["categorical"]["visual_style"][
-            "box_width_mm"
-        ] == pytest.approx(
+        assert spec["categorical"]["visual_style"]["box_width_mm"] == pytest.approx(
             spec["categorical"]["box_aspect_constraint"]["resolved_box_width_mm"]
         )
-        assert spec["categorical"]["box_aspect_constraint"][
-            "y_axis_modified"
-        ] is False
-        assert spec["categorical"]["box_aspect_constraint"][
-            "statistics_modified"
-        ] is False
+        assert spec["categorical"]["box_aspect_constraint"]["y_axis_modified"] is False
+        assert (
+            spec["categorical"]["box_aspect_constraint"]["statistics_modified"] is False
+        )
         assert all(
             group["raw_points_within_box_width"]
             for group in spec["categorical"]["groups"]
@@ -1260,9 +1222,7 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
         ] == pytest.approx(2.0 * UNIFIED_MARKER_SIZE_PT * 25.4 / 72.0)
         box_chunks = [
             chunk.split("To('..')", 1)[0]
-            for chunk in text.split(
-                "Add('boxplot', name='categorical_boxplot_"
-            )[1:]
+            for chunk in text.split("Add('boxplot', name='categorical_boxplot_")[1:]
         ]
         assert len(box_chunks) == len(
             [
@@ -1283,8 +1243,7 @@ def test_each_production_template_materializes_its_declared_veusz_semantics(
             assert f"Set('Fill/color', '{group['fill_color']}')" in box_chunk
             assert f"Set('Border/color', '{group['keyline_color']}')" in box_chunk
             assert (
-                f"Set('Border/width', '{CATEGORICAL_BOX_LINE_WIDTH_PT}pt')"
-                in box_chunk
+                f"Set('Border/width', '{CATEGORICAL_BOX_LINE_WIDTH_PT}pt')" in box_chunk
             )
             assert "Set('Border/hide', False)" in box_chunk
             assert "Set('Whisker/color', '#111111')" in box_chunk
@@ -1404,9 +1363,7 @@ def test_auto_log_axis_preserves_internal_legend_clearance_reserve() -> None:
             "yscale": "log",
             "y_min": 1.885997683632129e-05,
             "y_max": 2.054239e14,
-            "_legend_placement_diagnostics": {
-                "axis_reserve": {"side": "bottom"}
-            },
+            "_legend_placement_diagnostics": {"axis_reserve": {"side": "bottom"}},
         },
         template_id="curve",
         series=series,

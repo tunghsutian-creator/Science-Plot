@@ -12,7 +12,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sciplot_core._utils import file_sha256, json_safe
+from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.json_values import json_safe
 from sciplot_core._paths import resolved_path_is_within
 
 
@@ -330,7 +331,7 @@ def run_studio_project_probe(
     context_window: Any | None = None
 
     try:
-        from sciplot_core.intake import _project_package_info
+        from sciplot_core.intake.packaging import _project_package_info
         from sciplot_core.launchers import inspect_project_launcher_contract
         from sciplot_core.studio import (
             _standalone_export_artifact_root,
@@ -477,9 +478,7 @@ def run_studio_project_probe(
             )
         )
         primary_launcher_path = copied_project / "Open_in_SciPlot_Studio.command"
-        canonical_primary_launcher = primary_launcher_path.read_text(
-            encoding="utf-8"
-        )
+        canonical_primary_launcher = primary_launcher_path.read_text(encoding="utf-8")
         primary_launcher_path.write_text(
             "\n".join(
                 [
@@ -528,7 +527,7 @@ def run_studio_project_probe(
         )
         primary_launcher_path.write_text(
             canonical_primary_launcher
-            + '# comment cannot authorize an appended command\n'
+            + "# comment cannot authorize an appended command\n"
             + 'print -u2 -- "unexpected launcher side effect"\n',
             encoding="utf-8",
         )
@@ -594,8 +593,12 @@ def run_studio_project_probe(
             _wait_until,
         )
         from sciplot_gui import studio_project as studio_project_module
+        from sciplot_gui.main_window_menu import (
+            install_studio_window_presentation,
+        )
         from sciplot_gui.studio_project import export_result_message
 
+        install_studio_window_presentation()
         _ensure_veusz_on_path()
         application = QtWidgets.QApplication.instance()
         if application is None:
@@ -801,9 +804,7 @@ def run_studio_project_probe(
                 isinstance(frequency_scope_before, dict)
                 and frequency_scope_before.get("scope")
                 == "full_figure_set_project_delivery"
-                and frequency_scope_before.get(
-                    "full_figure_set_delivery_complete"
-                )
+                and frequency_scope_before.get("full_figure_set_delivery_complete")
                 is True
                 and frequency_scope_before.get("blocked_figure_ids") == []
                 and frequency_scope_after == frequency_scope_before
@@ -832,9 +833,7 @@ def run_studio_project_probe(
                 {
                     "ordinary_plans": ordinary_multifigure_results,
                     "explicit_registry_blocker": explicit_registry_blocker,
-                    "explicit_registry_scope_status": (
-                        explicit_registry_scope_status
-                    ),
+                    "explicit_registry_scope_status": (explicit_registry_scope_status),
                     "frequency_scope_before": frequency_scope_before,
                     "frequency_scope_after": frequency_scope_after,
                     "frequency_blocker_before": frequency_blocker_before,
@@ -862,8 +861,7 @@ def run_studio_project_probe(
                         for item in tampered_registry.get("figures", [])
                         if isinstance(item, dict)
                         and item.get("status") == "ready"
-                        and str(item.get("figure_id") or "")
-                        != original_primary_id
+                        and str(item.get("figure_id") or "") != original_primary_id
                     ),
                     None,
                 )
@@ -871,21 +869,16 @@ def run_studio_project_probe(
                     tampered_registry["primary_figure_id"] = swapped_primary_id
                     export_contract = (
                         dict(tampered_registry.get("export_contract"))
-                        if isinstance(
-                            tampered_registry.get("export_contract"), dict
-                        )
+                        if isinstance(tampered_registry.get("export_contract"), dict)
                         else {}
                     )
                     ready_ids = [
                         str(item.get("figure_id"))
                         for item in tampered_registry.get("figures", [])
-                        if isinstance(item, dict)
-                        and item.get("status") == "ready"
+                        if isinstance(item, dict) and item.get("status") == "ready"
                     ]
                     export_contract["primary_figure_id"] = swapped_primary_id
-                    export_contract["supported_figure_ids"] = [
-                        swapped_primary_id
-                    ]
+                    export_contract["supported_figure_ids"] = [swapped_primary_id]
                     export_contract["blocked_figure_ids"] = [
                         figure_id
                         for figure_id in ready_ids
@@ -915,9 +908,7 @@ def run_studio_project_probe(
                     swapped_primary_blocker = (
                         project_bridge._figure_set_export_blocker()
                     )
-                    project_bridge._update_controls(
-                        project_bridge.status_snapshot
-                    )
+                    project_bridge._update_controls(project_bridge.status_snapshot)
                     swapped_primary_export_enabled = (
                         project_bridge.export_button.isEnabled()
                     )
@@ -1399,9 +1390,7 @@ def run_studio_project_probe(
                         project_bridge.show_delivery_button.isEnabled()
                     ),
                     "vsz_enabled": (project_bridge.reveal_vsz_button.isEnabled()),
-                    "figure_list_enabled": (
-                        project_bridge.figure_list.isEnabled()
-                    ),
+                    "figure_list_enabled": (project_bridge.figure_list.isEnabled()),
                     "open_figure_enabled": (
                         project_bridge.open_figure_button.isEnabled()
                     ),
@@ -1543,29 +1532,20 @@ def run_studio_project_probe(
                 baseline_status["provenance"]["status"]
                 == "current_full_project_evidence"
                 and baseline_status["provenance"]["complete"] is True
-                and baseline_status["provenance"][
-                    "primary_figure_evidence_current"
-                ]
+                and baseline_status["provenance"]["primary_figure_evidence_current"]
                 is True
-                and baseline_status["provenance"][
-                    "full_project_evidence_current"
-                ]
+                and baseline_status["provenance"]["full_project_evidence_current"]
                 is True
-                and baseline_status["workflow"]["audit_state"]
-                == "current"
+                and baseline_status["workflow"]["audit_state"] == "current"
             )
         else:
             baseline_scope_current = bool(
                 baseline_status["provenance"]["status"]
                 == "current_full_project_evidence"
                 and baseline_status["provenance"]["complete"] is True
-                and baseline_status["provenance"][
-                    "primary_figure_evidence_current"
-                ]
+                and baseline_status["provenance"]["primary_figure_evidence_current"]
                 is False
-                and baseline_status["provenance"][
-                    "full_project_evidence_current"
-                ]
+                and baseline_status["provenance"]["full_project_evidence_current"]
                 is True
                 and baseline_status["workflow"]["audit_state"] == "current"
             )
@@ -1878,8 +1858,7 @@ def run_studio_project_probe(
                     persisted_scope.get("status") == "full_figure_set_exact_current"
                     and updated_export.get("scope")
                     == "full_figure_set_project_delivery"
-                    and updated_run.get("scope")
-                    == "full_figure_set_project_delivery"
+                    and updated_run.get("scope") == "full_figure_set_project_delivery"
                     and updated_manifest.get("scope")
                     == "full_figure_set_project_delivery"
                     and persisted_scope.get("scope")
@@ -1892,8 +1871,7 @@ def run_studio_project_probe(
                     and persisted_scope.get("blocker") is None
                     and persisted_scope.get("secondary_receipt_scope")
                     == "same_project_delivery"
-                    and persisted_scope.get("full_figure_set_delivery_complete")
-                    is True
+                    and persisted_scope.get("full_figure_set_delivery_complete") is True
                     and missing_registry_scope == {}
                     and request_snapshot == canonical_request_payload
                     and "figure_set_export_scope" not in request_snapshot
@@ -1925,10 +1903,7 @@ def run_studio_project_probe(
                     == {
                         copied_document,
                         *{
-                            copied_project
-                            / "studio"
-                            / "figures"
-                            / f"{figure_id}.vsz"
+                            copied_project / "studio" / "figures" / f"{figure_id}.vsz"
                             for figure_id in expected_blocked_figure_ids
                         },
                     }
@@ -2355,8 +2330,7 @@ def run_studio_project_probe(
             or (
                 context_figure_entries
                 and any(
-                    value
-                    and not resolved_path_is_within(Path(value), context_project)
+                    value and not resolved_path_is_within(Path(value), context_project)
                     for value in context_registry_documents
                 )
                 and all(
@@ -2510,33 +2484,23 @@ def run_studio_project_probe(
                 self.changeset += 1
 
         unvalidated_document = _UnvalidatedSaveDocument(unvalidated_target)
-        original_staged_validator = (
-            studio_module._validate_staged_veusz_document
-        )
-        studio_module._validate_staged_veusz_document = (
-            lambda *_args, **_kwargs: False
-        )
+        original_staged_validator = studio_module._validate_staged_veusz_document
+        studio_module._validate_staged_veusz_document = lambda *_args, **_kwargs: False
         try:
             unvalidated_receipt = studio_module.atomic_save_veusz_document(
                 unvalidated_document,
                 unvalidated_target,
             )
         finally:
-            studio_module._validate_staged_veusz_document = (
-                original_staged_validator
-            )
+            studio_module._validate_staged_veusz_document = original_staged_validator
 
         unvalidated_runs_before = {
             path.resolve()
             for path in (context_project / "runs").glob("studio_*")
             if path.is_dir()
         }
-        original_bridge_atomic_save = (
-            studio_project_module.atomic_save_veusz_document
-        )
-        original_unvalidated_project_export = (
-            context_project_bridge._project_export
-        )
+        original_bridge_atomic_save = studio_project_module.atomic_save_veusz_document
+        original_unvalidated_project_export = context_project_bridge._project_export
         unvalidated_project_export_called = False
 
         def forbidden_unvalidated_project_export() -> dict[str, Any]:
@@ -2546,25 +2510,19 @@ def run_studio_project_probe(
                 "An unvalidated atomic save reached project publication."
             )
 
-        studio_project_module.atomic_save_veusz_document = (
-            lambda *_args, **_kwargs: dict(unvalidated_receipt)
+        studio_project_module.atomic_save_veusz_document = lambda *_args, **_kwargs: (
+            dict(unvalidated_receipt)
         )
-        context_project_bridge._project_export = (
-            forbidden_unvalidated_project_export
-        )
+        context_project_bridge._project_export = forbidden_unvalidated_project_export
         try:
-            unvalidated_export = (
-                context_project_bridge.export_current_document(
-                    show_dialog=False,
-                )
+            unvalidated_export = context_project_bridge.export_current_document(
+                show_dialog=False,
             )
         finally:
             studio_project_module.atomic_save_veusz_document = (
                 original_bridge_atomic_save
             )
-            context_project_bridge._project_export = (
-                original_unvalidated_project_export
-            )
+            context_project_bridge._project_export = original_unvalidated_project_export
         unvalidated_runs_after = {
             path.resolve()
             for path in (context_project / "runs").glob("studio_*")
@@ -2584,9 +2542,7 @@ def run_studio_project_probe(
                 and unvalidated_export.get("state") == "export_exception"
                 and unvalidated_export.get("ready_to_use") is False
                 and "secure-mode structural reopen"
-                in str(
-                    unvalidated_export.get("error", {}).get("message") or ""
-                )
+                in str(unvalidated_export.get("error", {}).get("message") or "")
                 and not unvalidated_project_export_called
                 and unvalidated_runs_after == unvalidated_runs_before,
                 {
@@ -2738,16 +2694,11 @@ def run_studio_project_probe(
                 and context_changed_qa.get("artifact_qa_current") is False
                 and context_changed_qa.get("exports_current") is False
                 and context_changed_provenance.get("complete") is False
-                and context_changed_provenance.get(
-                    "full_project_evidence_current"
-                )
+                and context_changed_provenance.get("full_project_evidence_current")
                 is False
-                and context_changed_provenance.get(
-                    "primary_figure_evidence_current"
-                )
+                and context_changed_provenance.get("primary_figure_evidence_current")
                 is False
-                and context_changed_provenance.get("project_delivery_current")
-                is False
+                and context_changed_provenance.get("project_delivery_current") is False
                 and all(
                     value is not True
                     for key, value in context_changed_provenance.items()

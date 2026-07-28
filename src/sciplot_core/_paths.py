@@ -4,20 +4,32 @@ import os
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
-REPO_ROOT = Path(os.environ.get("SCIPLOT_REPO") or PACKAGE_ROOT.parents[1]).expanduser().resolve()
-VENDORED_CORE_ROOT = PACKAGE_ROOT / "_vendor"
-RUNTIME_REPO_ROOT = Path(
-    os.environ.get("SCIPLOT_RUNTIME_REPO") or REPO_ROOT
-).expanduser().resolve()
-VEUSZ_ROOT = Path(
-    os.environ.get("SCIPLOT_VEUSZ_ROOT") or RUNTIME_REPO_ROOT / "third_party" / "veusz"
-).expanduser().resolve()
+REPO_ROOT = (
+    Path(os.environ.get("SCIPLOT_REPO") or PACKAGE_ROOT.parents[1])
+    .expanduser()
+    .resolve()
+)
+RUNTIME_REPO_ROOT = (
+    Path(os.environ.get("SCIPLOT_RUNTIME_REPO") or REPO_ROOT).expanduser().resolve()
+)
+VEUSZ_ROOT = (
+    Path(
+        os.environ.get("SCIPLOT_VEUSZ_ROOT")
+        or RUNTIME_REPO_ROOT / "third_party" / "veusz"
+    )
+    .expanduser()
+    .resolve()
+)
 VEUSZ_UPSTREAM_COMMIT = "264084b06eb306d860c7757c637f37b78bb2333f"
 
 
 def local_reference_root(*, repo_root: Path = REPO_ROOT) -> Path:
     configured = os.environ.get("SCIPLOT_REFERENCE_DATA")
-    return Path(configured).expanduser().resolve() if configured else repo_root / ".local" / "reference_data"
+    return (
+        Path(configured).expanduser().resolve()
+        if configured
+        else repo_root / ".local" / "reference_data"
+    )
 
 
 def real_world_fixture_root(*, repo_root: Path = REPO_ROOT) -> Path:
@@ -48,7 +60,9 @@ def resolve_fixture_path(value: str | Path, *, repo_root: Path = REPO_ROOT) -> P
             relative = path.relative_to(source_prefix)
         except ValueError:
             continue
-        local = (local_reference_root(repo_root=repo_root) / local_prefix / relative).resolve()
+        local = (
+            local_reference_root(repo_root=repo_root) / local_prefix / relative
+        ).resolve()
         if local.exists():
             return local
     return tracked
@@ -68,7 +82,6 @@ __all__ = [
     "PACKAGE_ROOT",
     "REPO_ROOT",
     "RUNTIME_REPO_ROOT",
-    "VENDORED_CORE_ROOT",
     "VEUSZ_ROOT",
     "VEUSZ_UPSTREAM_COMMIT",
     "local_reference_root",

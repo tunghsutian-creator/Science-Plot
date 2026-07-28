@@ -43,8 +43,7 @@ def test_unit_display_uses_products_and_negative_exponents(
 
 def test_plot_text_rewrites_unit_qualifiers_but_not_variable_ratios() -> None:
     assert (
-        format_plot_text_units("Impact strength (kJ/m²)")
-        == "Impact strength (kJ m⁻²)"
+        format_plot_text_units("Impact strength (kJ/m²)") == "Impact strength (kJ m⁻²)"
     )
     assert (
         format_plot_text_units("Specific tensile toughness (J/g)")
@@ -70,8 +69,7 @@ def test_plot_text_rewrites_free_and_nested_unit_expressions() -> None:
         == "Thermal conductivity (W m⁻¹ K⁻¹)"
     )
     assert (
-        format_plot_text_units("At 25 °C, heat flow W/g")
-        == "At 25 °C, heat flow W g⁻¹"
+        format_plot_text_units("At 25 °C, heat flow W/g") == "At 25 °C, heat flow W g⁻¹"
     )
 
 
@@ -100,9 +98,7 @@ def test_unit_solidus_validator_reports_only_unit_division() -> None:
 
 def test_veusz_axis_boundary_applies_unit_contract() -> None:
     assert _veusz_axis_label("Heat flow (W/g)") == "Heat flow (W g⁻¹)"
-    assert _veusz_axis_label("Impact strength (kJ/m²)") == (
-        "Impact strength (kJ m⁻²)"
-    )
+    assert _veusz_axis_label("Impact strength (kJ/m²)") == ("Impact strength (kJ m⁻²)")
 
 
 def test_style_audit_exposes_source_controlled_unit_contract() -> None:

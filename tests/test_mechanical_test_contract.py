@@ -54,7 +54,10 @@ def test_mechanical_recommendations_distinguish_stress_and_strength() -> None:
 
     for rule_id, titles in expected.items():
         recommendation = experiment_recommendation_payload(rule_id=rule_id)
-        assert tuple(item["title"] for item in recommendation["figure_queue"][:2]) == titles
+        assert (
+            tuple(item["title"] for item in recommendation["figure_queue"][:2])
+            == titles
+        )
 
     tensile = experiment_recommendation_payload(rule_id="tensile_curve")
     assert any(
@@ -234,9 +237,7 @@ def test_flexural_workbook_directory_uses_all_specimen_strengths(
 
     processed = Path(prepared["processed_source"])
     curve = pd.read_csv(processed, header=None)
-    summary = pd.read_csv(
-        processed.with_name(f"{processed.stem}_summary.csv")
-    )
+    summary = pd.read_csv(processed.with_name(f"{processed.stem}_summary.csv"))
     assert curve.iat[2, 0] == "A"
     assert summary["sample"].tolist() == ["A", "A"]
     assert summary["flexural_strength_MPa"].tolist() == [10.0, 12.0]
@@ -297,9 +298,7 @@ def test_recycled_pa_mechanical_pair_is_control_first(
 
     processed = Path(prepared["processed_source"])
     curve = pd.read_csv(processed, header=None)
-    summary = pd.read_csv(
-        processed.with_name(f"{processed.stem}_summary.csv")
-    )
+    summary = pd.read_csv(processed.with_name(f"{processed.stem}_summary.csv"))
     assert curve.iloc[2].tolist() == ["rPA", "rPA", "m-rPA", "m-rPA"]
     assert summary["sample"].tolist() == ["rPA", "rPA", "m-rPA", "m-rPA"]
     assert prepared["transform_steps"][0]["parameters"]["series_order"] == [

@@ -52,9 +52,7 @@ def test_intake_session_restore_requires_original_file_bytes(
 
     monkeypatch.setattr(intake, "create_intake_project", fake_create_intake_project)
 
-    assert intake.create_intake_project_from_session(payload) == {
-        "kind": "captured"
-    }
+    assert intake.create_intake_project_from_session(payload) == {"kind": "captured"}
     groups = captured["groups"]
     assert len(groups) == 1
     assert groups[0].files[0].content == b"x,y\n1,2\n"

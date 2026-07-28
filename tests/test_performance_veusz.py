@@ -82,14 +82,11 @@ def test_performance_spec_uses_native_editable_veusz_contract(
     assert any(item["name"] == native_widget for item in performance["polygons"])
     assert all(item["parent"] in {"page", "graph"} for item in performance["polygons"])
     assert all(
-        item["presentation_kind"].startswith("performance_")
-        for item in spec["series"]
+        item["presentation_kind"].startswith("performance_") for item in spec["series"]
     )
 
     references = [
-        item
-        for item in spec["series"]
-        if item["label"] in {"PA6", "ABS", "CFRP"}
+        item for item in spec["series"] if item["label"] in {"PA6", "ABS", "CFRP"}
     ]
     if template == "scatter":
         assert all(item["plot_line_hide"] is True for item in references)
@@ -113,15 +110,13 @@ def test_performance_spec_uses_native_editable_veusz_contract(
         assert all(
             item["line_color"] == PERFORMANCE_RADAR_GUIDE_COLOR
             and item["line_width_pt"] == PERFORMANCE_RADAR_GUIDE_LINE_WIDTH_PT
-            and item["line_transparency"]
-            == PERFORMANCE_RADAR_RING_TRANSPARENCY
+            and item["line_transparency"] == PERFORMANCE_RADAR_RING_TRANSPARENCY
             for item in rings
         )
         assert all(
             item["line_color"] == PERFORMANCE_RADAR_GUIDE_COLOR
             and item["line_width_pt"] == PERFORMANCE_RADAR_GUIDE_LINE_WIDTH_PT
-            and item["line_transparency"]
-            == PERFORMANCE_RADAR_SPOKE_TRANSPARENCY
+            and item["line_transparency"] == PERFORMANCE_RADAR_SPOKE_TRANSPARENCY
             for item in performance["lines"]
         )
         labels = {
@@ -132,51 +127,35 @@ def test_performance_spec_uses_native_editable_veusz_contract(
         endpoint_labels = {
             int(str(item["name"]).rsplit("_", 1)[1]): item
             for item in performance["labels"]
-            if str(item["name"]).startswith(
-                "performance_radar_axis_endpoint_label_"
-            )
+            if str(item["name"]).startswith("performance_radar_axis_endpoint_label_")
         }
         assert all(
             item["text_size_pt"] == PERFORMANCE_RADAR_AXIS_LABEL_SIZE_PT
             for item in labels.values()
         )
         assert [
-            endpoint_labels[index]["label"]
-            for index in sorted(endpoint_labels)
+            endpoint_labels[index]["label"] for index in sorted(endpoint_labels)
         ] == payload["axis_endpoint_labels"]
-        x_scale = (
-            float(payload["layout"]["plot_region_mm"][1])
-            / float(payload["layout"]["plot_region_mm"][0])
+        x_scale = float(payload["layout"]["plot_region_mm"][1]) / float(
+            payload["layout"]["plot_region_mm"][0]
         )
         for index, angle in enumerate(payload["angles_degrees"], start=1):
             radians = math.radians(float(angle))
             cosine = math.cos(radians)
             sine = math.sin(radians)
             horizontal_radius = (
-                1.06
-                if cosine > 0.25
-                else 0.78
-                if cosine < -0.25
-                else 1.0
+                1.06 if cosine > 0.25 else 0.78 if cosine < -0.25 else 1.0
             )
             assert labels[index]["x"] == pytest.approx(
                 cosine * x_scale * horizontal_radius
             )
-            assert labels[index]["y"] == pytest.approx(
-                sine * 1.15
-            )
-            assert endpoint_labels[index]["x"] == pytest.approx(
-                cosine * x_scale * 1.06
-            )
-            assert endpoint_labels[index]["y"] == pytest.approx(
-                sine * 1.06
-            )
+            assert labels[index]["y"] == pytest.approx(sine * 1.15)
+            assert endpoint_labels[index]["x"] == pytest.approx(cosine * x_scale * 1.06)
+            assert endpoint_labels[index]["y"] == pytest.approx(sine * 1.06)
 
 
 def test_five_axis_radar_uses_aligned_physical_label_slots() -> None:
-    payload = build_performance_radar_payload(
-        load_performance_comparison(FIXTURE)
-    )
+    payload = build_performance_radar_payload(load_performance_comparison(FIXTURE))
     payload["angles_degrees"] = [90.0, 162.0, 234.0, 306.0, 18.0]
     payload["axis_labels"] = [
         "Density\n(g cm⁻³)",
@@ -228,20 +207,16 @@ def test_five_axis_radar_uses_aligned_physical_label_slots() -> None:
         assert all(item["parent"] == "page" for item in axis_lines)
         assert all(item["align"] == "centre" for item in axis_lines)
         assert all(
-            float(item["x"]) * page_width == pytest.approx(x_mm)
-            for item in axis_lines
+            float(item["x"]) * page_width == pytest.approx(x_mm) for item in axis_lines
         )
         assert [
-            (1.0 - float(item["y"])) * page_height
-            for item in axis_lines
+            (1.0 - float(item["y"])) * page_height for item in axis_lines
         ] == pytest.approx(y_centres_mm)
 
     endpoint_labels = [
         item
         for item in labels
-        if str(item["name"]).startswith(
-            "performance_radar_axis_endpoint_label_"
-        )
+        if str(item["name"]).startswith("performance_radar_axis_endpoint_label_")
     ]
     assert [item["label"] for item in endpoint_labels] == [
         "0.5",
@@ -253,19 +228,9 @@ def test_five_axis_radar_uses_aligned_physical_label_slots() -> None:
     assert all(item["parent"] == "page" for item in endpoint_labels)
     assert all(item["align"] == "centre" for item in endpoint_labels)
 
-    own_a = next(
-        item
-        for item in labels
-        if item["name"] == "performance_legend_text_1"
-    )
-    own_b = next(
-        item
-        for item in labels
-        if item["name"] == "performance_legend_text_2"
-    )
-    assert (float(own_b["x"]) - float(own_a["x"])) * page_width == (
-        pytest.approx(22.0)
-    )
+    own_a = next(item for item in labels if item["name"] == "performance_legend_text_1")
+    own_b = next(item for item in labels if item["name"] == "performance_legend_text_2")
+    assert (float(own_b["x"]) - float(own_a["x"])) * page_width == (pytest.approx(22.0))
 
 
 @pytest.mark.parametrize(
@@ -287,9 +252,7 @@ def test_performance_direct_render_passes_exact_native_qa(
         export_formats=("pdf",),
         request_context={"rule_id": "performance_comparison"},
     )
-    spec = json.loads(
-        Path(result["veusz_specs"][0]).read_text(encoding="utf-8")
-    )
+    spec = json.loads(Path(result["veusz_specs"][0]).read_text(encoding="utf-8"))
     document = Path(result["veusz_documents"][0])
     text = document.read_text(encoding="utf-8")
 
@@ -317,22 +280,23 @@ def test_dense_performance_direct_render_supports_sixteen_native_markers(
         export_formats=("pdf",),
         request_context={"rule_id": "performance_comparison"},
     )
-    spec = json.loads(
-        Path(result["veusz_specs"][0]).read_text(encoding="utf-8")
-    )
+    spec = json.loads(Path(result["veusz_specs"][0]).read_text(encoding="utf-8"))
     markers = [item["marker"] for item in spec["series"]]
 
     assert result["qa_reports"][0]["issues"] == []
     assert Path(result["outputs"][0]).is_file()
     assert len(markers) == 16
     assert len(set(markers)) == 16
-    assert len(
-        [
-            item
-            for item in spec["performance_comparison"]["labels"]
-            if str(item["name"]).startswith("performance_legend_text_")
-        ]
-    ) == 16
+    assert (
+        len(
+            [
+                item
+                for item in spec["performance_comparison"]["labels"]
+                if str(item["name"]).startswith("performance_legend_text_")
+            ]
+        )
+        == 16
+    )
 
 
 def test_explicit_pending_performance_studio_review_preserves_lineage(
@@ -383,11 +347,12 @@ def test_explicit_pending_performance_studio_review_preserves_lineage(
     assert preparation["parameters"]["legend_panel_reserved"] is True
     assert preparation["parameters"]["plot_region_mm"] == [41.5, 38.5]
     assert preparation["parameters"]["scientific_values_modified"] is False
-    assert json.loads(
-        (manifest_path.parent / "transform_ledger.json").read_text(
-            encoding="utf-8"
+    assert (
+        json.loads(
+            (manifest_path.parent / "transform_ledger.json").read_text(encoding="utf-8")
         )
-    ) == ledger
+        == ledger
+    )
 
 
 def test_pending_performance_studio_review_requires_explicit_template(

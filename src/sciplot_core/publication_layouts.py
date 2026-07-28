@@ -123,9 +123,7 @@ def build_composite_layout(
                 "width_mm": _rounded(width),
                 "height_mm": _rounded(height),
                 "x_fraction": _rounded(cursor / COMPOSITE_CANVAS_WIDTH_MM),
-                "width_fraction": _rounded(
-                    width / COMPOSITE_CANVAS_WIDTH_MM
-                ),
+                "width_fraction": _rounded(width / COMPOSITE_CANVAS_WIDTH_MM),
             }
         )
         cursor += width
@@ -142,8 +140,7 @@ def build_composite_layout(
         "canvas_height_mm": _rounded(height),
         "nominal_content_width_mm": COMPOSITE_NOMINAL_CONTENT_WIDTH_MM,
         "spare_width_mm": _rounded(
-            COMPOSITE_CANVAS_WIDTH_MM
-            - COMPOSITE_NOMINAL_CONTENT_WIDTH_MM
+            COMPOSITE_CANVAS_WIDTH_MM - COMPOSITE_NOMINAL_CONTENT_WIDTH_MM
         ),
         "panel_widths_mm": list(widths),
         "gaps_mm": list(gaps),
@@ -162,6 +159,8 @@ def build_composite_layout(
 
 def list_composite_layouts() -> list[dict[str, Any]]:
     return [build_composite_layout(layout_id) for layout_id in _LAYOUTS]
+
+
 __all__ = [
     "COMPOSITE_CANVAS_WIDTH_MM",
     "COMPOSITE_LAYOUT_KIND",

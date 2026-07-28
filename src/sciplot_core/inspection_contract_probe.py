@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core import render
-from sciplot_core._utils import json_safe
+from sciplot_core.foundation.json_values import json_safe
 
 INSPECTION_CONTRACT_PROBE_KIND = "sciplot_inspection_contract_probe"
 INSPECTION_CONTRACT_PROBE_VERSION = 2
@@ -206,9 +206,7 @@ def run_inspection_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             and semantic_candidate_payload.get("recommendation_confidence") == 0.0
             and semantic_candidate_payload.get("recommendations") == []
             and semantic_candidate_payload.get("canonical_templates") == []
-            and semantic_candidate_payload.get("unverified_candidate", {}).get(
-                "score"
-            )
+            and semantic_candidate_payload.get("unverified_candidate", {}).get("score")
             == 0.0
             and semantic_candidate_payload.get("unverified_candidate", {}).get(
                 "lifecycle_policy"
@@ -244,9 +242,7 @@ def run_inspection_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                 ),
                 "recommendations": semantic_candidate_payload.get("recommendations"),
                 "candidate": semantic_candidate_payload.get("unverified_candidate"),
-                "resolution": semantic_candidate_payload.get(
-                    "inspection_resolution"
-                ),
+                "resolution": semantic_candidate_payload.get("inspection_resolution"),
                 "warning_provenance": semantic_candidate_payload.get(
                     "inspection_warning_provenance"
                 ),

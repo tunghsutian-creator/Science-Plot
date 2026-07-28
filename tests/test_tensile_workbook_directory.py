@@ -7,7 +7,9 @@ from sciplot_core.semantic import _read_tensile_workbook_directory
 from sciplot_core.study_model import experiment_recommendation_payload
 
 
-def test_tensile_workbook_directory_uses_representative_and_specimen_sheets(tmp_path) -> None:
+def test_tensile_workbook_directory_uses_representative_and_specimen_sheets(
+    tmp_path,
+) -> None:
     workbook = tmp_path / "E0.xlsx"
     with pd.ExcelWriter(workbook) as writer:
         pd.DataFrame(

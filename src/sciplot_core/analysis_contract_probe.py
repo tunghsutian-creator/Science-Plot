@@ -9,7 +9,7 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core._utils import json_safe
+from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.materials_rules import (
     _ftir_peak_position_metrics,
     _interior_local_peak_position_metrics,
@@ -201,9 +201,7 @@ def run_analysis_contract_probe(
             [4.0, -0.1],
         ],
     )
-    noisy_stress_rows = _row_map(
-        _stress_relaxation_metrics(noisy_stress_path)
-    )
+    noisy_stress_rows = _row_map(_stress_relaxation_metrics(noisy_stress_path))
     noisy_t50 = noisy_stress_rows.get("t50_s") or {}
     checks.append(
         _check(
@@ -215,8 +213,7 @@ def run_analysis_contract_probe(
                     -0.1,
                 )
                 and noisy_t50.get("status") == "skipped"
-                and "more than once"
-                in str(noisy_t50.get("reason") or "")
+                and "more than once" in str(noisy_t50.get("reason") or "")
             ),
             {"metrics": noisy_stress_rows},
         )

@@ -9,7 +9,8 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from sciplot_core._utils import file_sha256, json_safe
+from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.mapping_contract import (
     DataColumnMapping,
     DataMappingConfirmation,
@@ -930,7 +931,7 @@ def run_data_mapping_probe(
         frame.to_csv(path, index=False)
 
     with patch(
-        "sciplot_core.data_mapping._write_mapped_csv",
+        "sciplot_core.data_mapping.execution._write_mapped_csv",
         side_effect=_faulting_write,
     ):
         atomic_failure_rejected = _raises_value_error(
@@ -1043,14 +1044,10 @@ def run_data_mapping_probe(
             document_path=case_document,
         )
         invalid_terminal_axis_results[case_name] = {
-            "registered_axes_preserved": set(
-                case_semantic.get("axis_plan") or {}
-            )
+            "registered_axes_preserved": set(case_semantic.get("axis_plan") or {})
             == {"x", "y"},
             "axis_authority_absent": "axis_authority" not in case_semantic,
-            "effective_axis_plan_absent": (
-                "effective_axis_plan" not in case_semantic
-            ),
+            "effective_axis_plan_absent": ("effective_axis_plan" not in case_semantic),
         }
     complete_terminal_document = root / "complete_terminal_axes.vsz"
     complete_terminal_document.write_text("Add('page')\n", encoding="utf-8")
@@ -1138,9 +1135,7 @@ def run_data_mapping_probe(
     all_series_hidden_rejected = _raises_value_error(
         lambda: _apply_series_options(
             [selection_probe_series],
-            render_options={
-                "series_styles": [{"label": "A", "visible": False}]
-            },
+            render_options={"series_styles": [{"label": "A", "visible": False}]},
             request={"template": "line"},
         )
     )
@@ -1241,15 +1236,9 @@ def run_data_mapping_probe(
             x_name=f"x_{index}",
             y_name=f"y_{index}",
             x_values=(0.0, 1.0),
-            y_values=(
-                (1.0, 2.0)
-                if path == coverage_source_a
-                else (3.0, 4.0)
-            ),
+            y_values=((1.0, 2.0) if path == coverage_source_a else (3.0, 4.0)),
             color="#000000",
-            source_artifacts=(
-                (str(path.resolve()), file_sha256(path)),
-            ),
+            source_artifacts=((str(path.resolve()), file_sha256(path)),),
         )
         for index, path in enumerate(
             (coverage_source_a, coverage_source_b),
@@ -1301,11 +1290,9 @@ def run_data_mapping_probe(
         coverage_render_frames.extend(
             _read_source_frame_records(path, request=coverage_request)
         )
-    coverage_render_series, coverage_render_axis_info = (
-        _series_from_frame_records(
-            coverage_request,
-            frames=coverage_render_frames,
-        )
+    coverage_render_series, coverage_render_axis_info = _series_from_frame_records(
+        coverage_request,
+        frames=coverage_render_frames,
     )
     coverage_document_path = coverage_root / "document.vsz"
     coverage_spec_path = _write_veusz_document(
@@ -1333,11 +1320,9 @@ def run_data_mapping_probe(
         **coverage_request,
         "y_metric": "y_alt",
     }
-    forged_terminal_series, forged_terminal_axis_info = (
-        _series_from_frame_records(
-            forged_terminal_request,
-            frames=coverage_render_frames,
-        )
+    forged_terminal_series, forged_terminal_axis_info = _series_from_frame_records(
+        forged_terminal_request,
+        frames=coverage_render_frames,
     )
     forged_terminal_document = forged_request_root / "document.vsz"
     forged_terminal_spec = _write_veusz_document(
@@ -1350,8 +1335,7 @@ def run_data_mapping_probe(
         forged_terminal_spec.read_text(encoding="utf-8")
     )
     coordinated_terminal_request_forgery_materialized = (
-        forged_terminal_spec_payload["series"][0]["y_values"]
-        == [11.0, 12.0]
+        forged_terminal_spec_payload["series"][0]["y_values"] == [11.0, 12.0]
         and forged_terminal_document.is_file()
     )
     coordinated_terminal_request_forgery_rejected = _raises_value_error(
@@ -1406,9 +1390,7 @@ def run_data_mapping_probe(
         "9.000000e+00",
         1,
     )
-    document_mutation_materialized = (
-        mutated_document_text != original_document_text
-    )
+    document_mutation_materialized = mutated_document_text != original_document_text
     coverage_document_path.write_text(
         mutated_document_text,
         encoding="utf-8",
@@ -1429,9 +1411,7 @@ def run_data_mapping_probe(
         "Set('Background/color', '#FDFDFD')",
         1,
     )
-    style_edit_materialized = (
-        style_edited_document_text != original_document_text
-    )
+    style_edit_materialized = style_edited_document_text != original_document_text
     coverage_document_path.write_text(
         style_edited_document_text,
         encoding="utf-8",
@@ -1479,9 +1459,7 @@ def run_data_mapping_probe(
         "direction": "Set('direction', 'vertical')",
         "tick_format": "Set('TickLabels/format', '%.2f')",
         "minor_tick_count": "Set('MinorTicks/number', 9)",
-        "minor_manual_ticks": (
-            "Set('MinorTicks/manualTicks', [0.25, 0.75])"
-        ),
+        "minor_manual_ticks": ("Set('MinorTicks/manualTicks', [0.25, 0.75])"),
         "x_tick_visibility": "Set('TickLabels/hide', True)",
         "axis_label_visibility": "Set('Label/hide', True)",
     }
@@ -1669,9 +1647,7 @@ def run_data_mapping_probe(
             + forged_block
             + original_document_text[dataset_end:]
         )
-    coordinated_forgery_materialized = (
-        forged_document_text != original_document_text
-    )
+    coordinated_forgery_materialized = forged_document_text != original_document_text
     coverage_spec_path.write_text(
         json.dumps(forged_spec, indent=2),
         encoding="utf-8",
@@ -1773,11 +1749,9 @@ def run_data_mapping_probe(
             encoding="utf-8",
         )
 
-    import sciplot_core.studio as studio_module
+    import sciplot_core.studio_render as studio_render_module
 
-    real_terminal_derivation = (
-        studio_module.derive_terminal_render_data_contract
-    )
+    real_terminal_derivation = studio_render_module.derive_terminal_render_data_contract
     original_terminal_text = coverage_source_a.read_text(encoding="utf-8")
     swapped_terminal_text = original_terminal_text.replace(
         "1.0",
@@ -1820,19 +1794,17 @@ def run_data_mapping_probe(
     terminal_swap_status: str | None = None
     try:
         with patch(
-            "sciplot_core.studio.derive_terminal_render_data_contract",
+            "sciplot_core.studio_render.derive_terminal_render_data_contract",
             side_effect=swap_original_during_terminal_derivation,
         ):
             terminal_swap_coverage = verify_rendered_mapping_source_coverage(
                 coverage_result,
-            mapping_application=coverage_application,
-            request=coverage_request,
-        )
+                mapping_application=coverage_application,
+                request=coverage_request,
+            )
     except (OSError, RuntimeError, ValueError) as exc:
         terminal_swap_error = f"{type(exc).__name__}: {exc}"
-        terminal_swap_race_rejected = (
-            "changed during exact-current audit" in str(exc)
-        )
+        terminal_swap_race_rejected = "changed during exact-current audit" in str(exc)
     else:
         terminal_swap_status = str(terminal_swap_coverage.get("status"))
         terminal_swap_race_rejected = False
@@ -1842,8 +1814,7 @@ def run_data_mapping_probe(
             encoding="utf-8",
         )
     terminal_swap_restored = (
-        coverage_source_a.read_text(encoding="utf-8")
-        == original_terminal_text
+        coverage_source_a.read_text(encoding="utf-8") == original_terminal_text
     )
 
     categorical_root = coverage_root / "categorical"
@@ -1895,9 +1866,7 @@ def run_data_mapping_probe(
         mapping_application=categorical_application,
         request=categorical_request,
     )
-    categorical_document_text = categorical_document.read_text(
-        encoding="utf-8"
-    )
+    categorical_document_text = categorical_document.read_text(encoding="utf-8")
     categorical_spec_text = categorical_spec.read_text(encoding="utf-8")
     hidden_boxplot_commands = "\n".join(
         [
@@ -1909,10 +1878,7 @@ def run_data_mapping_probe(
         ]
     )
     categorical_document.write_text(
-        categorical_document_text
-        + "\n"
-        + hidden_boxplot_commands
-        + "\nTo('/')\n",
+        categorical_document_text + "\n" + hidden_boxplot_commands + "\nTo('/')\n",
         encoding="utf-8",
     )
     hidden_categorical_boxplots_rejected = _raises_value_error(
@@ -2362,13 +2328,11 @@ def run_data_mapping_probe(
             "A current document with complete x and y terminal axes binds effective semantics to its exact hash",
             set(complete_terminal_semantic.get("effective_axis_plan") or {})
             == {"x", "y"}
-            and (
-                complete_terminal_semantic.get("axis_authority") or {}
-            ).get("status")
+            and (complete_terminal_semantic.get("axis_authority") or {}).get("status")
             == "generated_terminal_contract"
-            and (
-                complete_terminal_semantic.get("axis_authority") or {}
-            ).get("document_sha256")
+            and (complete_terminal_semantic.get("axis_authority") or {}).get(
+                "document_sha256"
+            )
             == file_sha256(complete_terminal_document),
         ),
         _check(
@@ -2419,12 +2383,9 @@ def run_data_mapping_probe(
         _check(
             "duplicate_label_routing_fails_closed",
             "Duplicate display labels cannot overwrite label-based series selection or split-panel routing",
-            duplicate_series_label_rejected
-            and duplicate_split_label_rejected,
+            duplicate_series_label_rejected and duplicate_split_label_rejected,
             {
-                "series_selection_rejected": (
-                    duplicate_series_label_rejected
-                ),
+                "series_selection_rejected": (duplicate_series_label_rejected),
                 "split_plan_rejected": duplicate_split_label_rejected,
             },
         ),
@@ -2479,8 +2440,7 @@ def run_data_mapping_probe(
             and explicit_split_coverage.get("document_count") == 3
             and split_plan_tamper_rejected,
             {
-                "complete_coverage": complete_coverage.get("status")
-                == "passed",
+                "complete_coverage": complete_coverage.get("status") == "passed",
                 "exact_per_output": complete_coverage.get("coverage_mode")
                 == "exact_per_output",
                 "plural_snapshot_sources": plural_snapshot_sources
@@ -2488,20 +2448,14 @@ def run_data_mapping_probe(
                     coverage_source_a.resolve(),
                     coverage_source_b.resolve(),
                 ],
-                "incomplete_coverage_rejected": (
-                    incomplete_coverage_rejected
-                ),
-                "unexpected_coverage_rejected": (
-                    unexpected_coverage_rejected
-                ),
+                "incomplete_coverage_rejected": (incomplete_coverage_rejected),
+                "unexpected_coverage_rejected": (unexpected_coverage_rejected),
                 "rendered_coverage": rendered_coverage.get("coverage_mode")
                 == "exact_per_output",
                 "terminal_output_count": (
                     rendered_coverage.get("terminal_output_count") == 2
                 ),
-                "document_count": (
-                    rendered_coverage.get("document_count") == 1
-                ),
+                "document_count": (rendered_coverage.get("document_count") == 1),
                 "coordinated_terminal_request_forgery_materialized": (
                     coordinated_terminal_request_forgery_materialized
                 ),
@@ -2509,33 +2463,19 @@ def run_data_mapping_probe(
                     coordinated_terminal_request_forgery_rejected
                 ),
                 "rendered_omission_rejected": rendered_omission_rejected,
-                "terminal_substitution_rejected": (
-                    terminal_substitution_rejected
-                ),
-                "document_mutation_materialized": (
-                    document_mutation_materialized
-                ),
+                "terminal_substitution_rejected": (terminal_substitution_rejected),
+                "document_mutation_materialized": (document_mutation_materialized),
                 "vsz_data_mismatch_rejected": vsz_data_mismatch_rejected,
                 "style_edit_materialized": style_edit_materialized,
                 "style_only_edit_accepted": style_only_edit_accepted,
-                "axis_label_mutation_materialized": (
-                    axis_label_mutation_materialized
-                ),
-                "axis_label_mutation_rejected": (
-                    axis_label_mutation_rejected
-                ),
-                "axis_contract_mutation_results": (
-                    axis_contract_mutation_results
-                ),
+                "axis_label_mutation_materialized": (axis_label_mutation_materialized),
+                "axis_label_mutation_rejected": (axis_label_mutation_rejected),
+                "axis_contract_mutation_results": (axis_contract_mutation_results),
                 "coordinated_axis_forgery_rejected": (
                     coordinated_axis_forgery_rejected
                 ),
-                "arbitrary_label_materialized": (
-                    arbitrary_label_materialized
-                ),
-                "arbitrary_visible_label_rejected": (
-                    arbitrary_visible_label_rejected
-                ),
+                "arbitrary_label_materialized": (arbitrary_label_materialized),
+                "arbitrary_visible_label_rejected": (arbitrary_visible_label_rejected),
                 "series_order_forgery_materialized": (
                     series_order_forgery_materialized
                 ),
@@ -2543,13 +2483,9 @@ def run_data_mapping_probe(
                     coordinated_series_order_forgery_rejected
                 ),
                 "extra_curve_rejected": extra_curve_rejected,
-                "extra_precision_materialized": (
-                    extra_precision_materialized
-                ),
+                "extra_precision_materialized": (extra_precision_materialized),
                 "extra_precision_rejected": extra_precision_rejected,
-                "coordinated_forgery_materialized": (
-                    coordinated_forgery_materialized
-                ),
+                "coordinated_forgery_materialized": (coordinated_forgery_materialized),
                 "coordinated_spec_vsz_forgery_rejected": (
                     coordinated_spec_vsz_forgery_rejected
                 ),
@@ -2563,9 +2499,7 @@ def run_data_mapping_probe(
                 "terminal_swap_restored": terminal_swap_restored,
                 "terminal_swap_status": terminal_swap_status,
                 "terminal_swap_error": terminal_swap_error,
-                "reserved_terminal_flag_rejected": (
-                    reserved_terminal_flag_rejected
-                ),
+                "reserved_terminal_flag_rejected": (reserved_terminal_flag_rejected),
                 "categorical_baseline": (
                     categorical_baseline.get("status") == "passed"
                 ),

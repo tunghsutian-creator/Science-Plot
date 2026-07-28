@@ -58,7 +58,7 @@ readiness/manifest 合同。
   `bar`、`box_strip`、`heatmap`、`scatter` 和 `polar_curve`；未实现模板在请求验证阶段失败；
 - `policy.py` 是全局硬样式权威；模板不能私有覆盖字体、线宽、刻度、标记或普通图框；
 - 热图颜色是显式例外，只管理标量色带、等高线和色条配色；
-- vendored `plot_contract.json`、ready 规则和文档构建器持续通过
+- `policy/plot_contract.json`、ready 规则和文档构建器持续通过
   `style_contract.py` 同源审计；
 - README、project skill、CLI help、Doctor 输出和 launcher 文案不得各自复制不同入口；
 - 为 public/hidden command 集合、Studio interactive/headless 语义和兼容 alias 增加
@@ -67,15 +67,24 @@ readiness/manifest 合同。
 
 ## P2 — 结构维护与遗留拆分
 
-- 按单一职责继续拆分 `studio.py` 和 `semantic.py`，每次只迁移一个明确 owner；
-- 将 `intake.py` 的 headless 项目准备与 browser server/static UI 分离，Studio 不依赖
-  第二前端实现；
+- 维持 `studio.py`、`semantic.py` 和同名包 `__init__.py` 为兼容门面，不再把业务逻辑
+  放回门面；新实现进入 `studio_core/`、`studio_render/`、
+  `semantic_sources/` 等明确 owner；
+- 保持 headless `intake/` domain 与 `intake_server/` browser adapter 分离，
+  Studio 不依赖第二前端实现；
 - 保持 renderer-independent `request_contract.py` 为请求验证的单一 owner，不再引入
   Web/workbench 命名依赖；
 - 将 Studio/open/export 共用结果结构抽到单一 owner，再决定 autoplot adapter 的退役窗口；
-- 缩小 `_vendor` 桥接面，禁止新增直接依赖；
+- 保持已删除的 `_vendor` 兼容树和 `src.*` 导入不回流；需要的兼容行为只能进入有明确
+  owner 的现有业务包并由迁移回归测试覆盖；
 - 删除未被正常 Studio、兼容合同或测试引用的模块、命令、probe 和文档；
 - 优先删除重复和死代码，不用新抽象层掩盖相同逻辑；
+- 持续执行架构门禁：普通源文件不超过 400 行、无一方导入环、Core 业务/数据层不依赖
+  GUI、不得新增 `utils`/`helpers`/`common` 万能模块；
+- 超过 400 行的 probe/smoke 只允许精确白名单内的线性黑盒证据场景；只有能形成独立
+  可复用职责时才拆分，禁止为了行数制造碎片化 wrapper；
+- 逐步把跨业务包的私有实现调用收敛到公开契约；同一 bounded context 内部的私有模块
+  调用可保留，不以表面统一为目的增加抽象层；
 - 把隐藏 workspace/project 分配和 ZIP 刷新收敛到原子写入 owner，消除并发
   `unique_path` 竞争与同名 source slug 碰撞；先增加失败注入和并发回归测试；
 - 每次提取保持公开 CLI、项目、VSZ、manifest 和 delivery 合同不变。

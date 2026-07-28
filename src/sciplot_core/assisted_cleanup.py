@@ -6,7 +6,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sciplot_core._utils import json_safe, safe_filename, unique_path
+from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.path_names import (
+    safe_filename,
+    unique_path,
+)
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload
 
 CLEANUP_REQUEST_FILENAME = "assisted_cleanup_request.json"
@@ -72,7 +76,9 @@ def build_cleanup_request(
         "kind": "sciplot_assisted_cleanup_request",
         "version": 1,
         "created_at": _timestamp(),
-        "operation_mode": assisted_cleanup_mode_payload(reason=category, provider=provider),
+        "operation_mode": assisted_cleanup_mode_payload(
+            reason=category, provider=provider
+        ),
         "reason": category,
         "provider": provider,
         "raw_input": _path_payload(input_path),
@@ -126,7 +132,9 @@ def write_cleanup_request(
     )
     request_path = output_path / CLEANUP_REQUEST_FILENAME
     payload["cleanup_request"] = str(request_path)
-    request_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+    request_path.write_text(
+        json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     return payload
 
 
@@ -152,7 +160,9 @@ def build_cleanup_result(
         "kind": "sciplot_assisted_cleanup_result",
         "version": 1,
         "created_at": _timestamp(),
-        "operation_mode": assisted_cleanup_mode_payload(reason="cleanup_result", provider=provider),
+        "operation_mode": assisted_cleanup_mode_payload(
+            reason="cleanup_result", provider=provider
+        ),
         "provider": provider,
         "cleaned_data": cleaned_payload,
         "mapping_proposal": json_safe(mapping_proposal or {}),
@@ -201,7 +211,9 @@ def write_cleanup_result(
         provider=provider,
     )
     payload["cleanup_result"] = str(result_path)
-    result_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+    result_path.write_text(
+        json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     return payload
 
 
@@ -217,8 +229,14 @@ def load_cleanup_result(path_or_dir: str | Path) -> dict[str, Any]:
     return payload
 
 
-def _preserve_cleaned_data(cleaned_data: Path, *, output_dir: Path, payload: dict[str, Any]) -> Path:
-    previous = payload.get("consumption") if isinstance(payload.get("consumption"), dict) else {}
+def _preserve_cleaned_data(
+    cleaned_data: Path, *, output_dir: Path, payload: dict[str, Any]
+) -> Path:
+    previous = (
+        payload.get("consumption")
+        if isinstance(payload.get("consumption"), dict)
+        else {}
+    )
     previous_input = previous.get("effective_input")
     if isinstance(previous_input, str) and previous_input.strip():
         previous_path = Path(previous_input).expanduser()
@@ -226,14 +244,18 @@ def _preserve_cleaned_data(cleaned_data: Path, *, output_dir: Path, payload: dic
             return previous_path.resolve()
 
     if not cleaned_data.exists():
-        raise FileNotFoundError(f"Confirmed cleaned data no longer exists: {cleaned_data}")
+        raise FileNotFoundError(
+            f"Confirmed cleaned data no longer exists: {cleaned_data}"
+        )
 
     preserved_root = output_dir / "cleanup" / "cleaned_data"
     preserved_root.mkdir(parents=True, exist_ok=True)
     if cleaned_data.is_relative_to(preserved_root):
         return cleaned_data.resolve()
 
-    destination = unique_path(preserved_root, safe_filename(cleaned_data.name or "cleaned_data"))
+    destination = unique_path(
+        preserved_root, safe_filename(cleaned_data.name or "cleaned_data")
+    )
     if cleaned_data.is_dir():
         shutil.copytree(cleaned_data, destination)
     else:
@@ -247,7 +269,11 @@ def _cleanup_request_patch(mapping_proposal: dict[str, Any]) -> dict[str, Any]:
     for key in _CLEANUP_REQUEST_PATCH_KEYS:
         if key in mapping_proposal and key not in candidates:
             candidates[key] = mapping_proposal[key]
-    return {key: json_safe(value) for key, value in candidates.items() if key in _CLEANUP_REQUEST_PATCH_KEYS}
+    return {
+        key: json_safe(value)
+        for key, value in candidates.items()
+        if key in _CLEANUP_REQUEST_PATCH_KEYS
+    }
 
 
 def consume_ready_cleanup_result(
@@ -272,14 +298,24 @@ def consume_ready_cleanup_result(
     if payload.get("ready_for_normal_mode") is not True:
         return dict(request), None
 
-    cleaned = payload.get("cleaned_data") if isinstance(payload.get("cleaned_data"), dict) else {}
+    cleaned = (
+        payload.get("cleaned_data")
+        if isinstance(payload.get("cleaned_data"), dict)
+        else {}
+    )
     cleaned_value = cleaned.get("path")
     if not isinstance(cleaned_value, str) or not cleaned_value.strip():
         raise ValueError("A ready cleanup result must define cleaned_data.path.")
     cleaned_path = Path(cleaned_value).expanduser().resolve()
 
-    preserved_input = _preserve_cleaned_data(cleaned_path, output_dir=output_path, payload=payload)
-    mapping = payload.get("mapping_proposal") if isinstance(payload.get("mapping_proposal"), dict) else {}
+    preserved_input = _preserve_cleaned_data(
+        cleaned_path, output_dir=output_path, payload=payload
+    )
+    mapping = (
+        payload.get("mapping_proposal")
+        if isinstance(payload.get("mapping_proposal"), dict)
+        else {}
+    )
     request_patch = _cleanup_request_patch(mapping)
     effective_request = dict(request)
     for key, value in request_patch.items():
@@ -302,7 +338,9 @@ def consume_ready_cleanup_result(
         "status": "applied_to_request",
         "applied_at": _timestamp(),
         "cleanup_result": str(result_path),
-        "request_path": str(Path(request_path).expanduser().resolve()) if request_path is not None else None,
+        "request_path": str(Path(request_path).expanduser().resolve())
+        if request_path is not None
+        else None,
         "original_input": str(original_input or ""),
         "cleaned_data_source": str(cleaned_path),
         "effective_input": str(preserved_input),
@@ -311,7 +349,9 @@ def consume_ready_cleanup_result(
         "raw_inputs_preserved": True,
     }
     payload["consumption"] = application
-    result_path.write_text(json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8")
+    result_path.write_text(
+        json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     return effective_request, application
 
 

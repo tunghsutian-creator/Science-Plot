@@ -85,7 +85,9 @@ def test_impact_semantics_expose_an_independent_presentation_contract() -> None:
     assert rule.presentation_data_shape == "categorical_replicates"
     assert rule.template == "box_strip"
     assert rule.presentation_templates == ("bar", "box", "box_strip", "point_line")
-    assert [resolve_rule_template(rule, item) for item in rule.presentation_templates] == [
+    assert [
+        resolve_rule_template(rule, item) for item in rule.presentation_templates
+    ] == [
         "bar",
         "box",
         "box_strip",
@@ -244,9 +246,7 @@ def test_impact_point_line_compares_compatible_conditions_and_preserves_raw_poin
         if item.presentation_kind == IMPACT_POINT_LINE_MARKER_KIND
     ]
     raw = [
-        item
-        for item in series
-        if item.presentation_kind == IMPACT_POINT_LINE_RAW_KIND
+        item for item in series if item.presentation_kind == IMPACT_POINT_LINE_RAW_KIND
     ]
 
     assert [item.label for item in summaries] == [
@@ -254,9 +254,7 @@ def test_impact_point_line_compares_compatible_conditions_and_preserves_raw_poin
         "50% weight reduction",
     ]
     assert [item.color for item in summaries] == ["#222222", "#3568C0"]
-    assert summaries[0].error_values == pytest.approx(
-        (10.0**0.5 / 2.0,) * 4
-    )
+    assert summaries[0].error_values == pytest.approx((10.0**0.5 / 2.0,) * 4)
     assert summaries[0].x_values == pytest.approx((0.95, 1.95, 2.95, 3.95))
     assert summaries[1].x_values == pytest.approx((1.05, 2.05, 3.05, 4.05))
     assert axis_info["category_labels"] == ["E0", "E2", "E3", "E4"]
@@ -285,11 +283,7 @@ def test_impact_point_line_compares_compatible_conditions_and_preserves_raw_poin
         for item in raw
     )
     assert all(
-        sum(
-            x_value < float(item.category_position)
-            for x_value in item.x_values
-        )
-        == 2
+        sum(x_value < float(item.category_position) for x_value in item.x_values) == 2
         for item in raw
     )
     categorical = _categorical_plot_contract(
@@ -313,9 +307,7 @@ def test_impact_point_line_compares_compatible_conditions_and_preserves_raw_poin
     assert steps[0]["parameters"]["selected_conditions"] == ["2mm", "4mm"]
     assert steps[0]["parameters"]["raw_values_preserved"] is True
     assert steps[0]["parameters"]["error_bar_statistic"] == "sample_sd_n_minus_1"
-    assert steps[0]["parameters"]["condition_offsets"] == pytest.approx(
-        [-0.05, 0.05]
-    )
+    assert steps[0]["parameters"]["condition_offsets"] == pytest.approx([-0.05, 0.05])
 
 
 def test_impact_point_line_uses_one_combined_document(tmp_path: Path) -> None:
@@ -345,10 +337,7 @@ def test_impact_point_line_terminal_render_keeps_semantic_overlay_context(
                 ["E0", "E2", "E3", "E4"],
             ]
             rows.extend(
-                [
-                    [offset + row + column for column in range(4)]
-                    for row in range(5)
-                ]
+                [[offset + row + column for column in range(4)] for row in range(5)]
             )
             pd.DataFrame(rows).to_excel(
                 writer,
@@ -411,13 +400,12 @@ def test_impact_point_line_terminal_render_keeps_semantic_overlay_context(
     assert all(item["marker_alpha"] == pytest.approx(0.50) for item in raw_specs)
     assert all(item["marker_line_color"] == "#FFFFFF" for item in mean_specs)
     assert all(
-        item["marker_line_width_pt"] == pytest.approx(0.70)
-        for item in mean_specs
+        item["marker_line_width_pt"] == pytest.approx(0.70) for item in mean_specs
     )
     assert spec["layout_issues"] == []
-    assert [
-        step["id"] for step in result["transform_steps"]
-    ] == ["impact_condition_point_line_overlay"]
+    assert [step["id"] for step in result["transform_steps"]] == [
+        "impact_condition_point_line_overlay"
+    ]
     assert result["transform_steps"][0]["parameters"]["selected_conditions"] == [
         "4mm",
         "2mm",
@@ -441,10 +429,7 @@ def test_impact_point_line_autoplot_ledger_includes_terminal_selection(
             ]
             rows.extend(
                 [
-                    [
-                        offset + row + column
-                        for column in range(len(samples))
-                    ]
+                    [offset + row + column for column in range(len(samples))]
                     for row in range(5)
                 ]
             )
@@ -489,9 +474,10 @@ def test_impact_point_line_autoplot_ledger_includes_terminal_selection(
     assert terminal["parameters"]["condition_selection_policy"] == (
         "explicit_condition_order"
     )
-    assert json.loads(
-        (output_dir / "transform_ledger.json").read_text(encoding="utf-8")
-    ) == ledger
+    assert (
+        json.loads((output_dir / "transform_ledger.json").read_text(encoding="utf-8"))
+        == ledger
+    )
 
 
 def test_impact_point_line_ignores_stale_default_figure_set(
@@ -513,4 +499,6 @@ def test_impact_point_line_ignores_stale_default_figure_set(
 
 def test_veusz_axis_label_closes_unit_superscript_before_parenthesis() -> None:
     assert _veusz_axis_label("Wavenumber (cm$^{-1}$)") == "Wavenumber (cm⁻¹)"
-    assert _veusz_axis_label("Scattering vector (nm$^{-1}$)") == "Scattering vector (nm⁻¹)"
+    assert (
+        _veusz_axis_label("Scattering vector (nm$^{-1}$)") == "Scattering vector (nm⁻¹)"
+    )

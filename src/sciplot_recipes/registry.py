@@ -5,7 +5,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-from sciplot_recipes.common import run_material_recipe
+from sciplot_recipes.material_recipe import run_material_recipe
 from sciplot_recipes.contracts import (
     RecipeSpec,
     get_recipe_spec,

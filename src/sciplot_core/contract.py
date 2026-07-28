@@ -1,7 +1,92 @@
+"""Public facade for the canonical SciPlot plot contract."""
+
 from __future__ import annotations
 
-from sciplot_core._bootstrap import ensure_vendored_core
+from sciplot_core.policy.contract_loader import (
+    CONTRACT_PATH,
+    load_plot_contract,
+)
+from sciplot_core.policy.contract_models import (
+    AnnotationContract,
+    AxisFrameContract,
+    AxisPolicySpec,
+    DefaultsSpec,
+    ExportContract,
+    GlobalFrameSpec,
+    PaletteContract,
+    PlotContract,
+    SizePresetSpec,
+    SpacingContract,
+    StrokeContract,
+    StyleContract,
+    TemplateContract,
+    TypographyContract,
+    ValidationRuleContract,
+)
+from sciplot_core.policy.contract_queries import (
+    default_options_for_template,
+    default_size_for_template,
+    lint_public_template_contract,
+    normalize_style_alias,
+    palette_names,
+    plot_contract_dict,
+    public_palette_names,
+    public_style_names,
+    qa_profile,
+    size_names,
+    size_preset_contract,
+    style_contract,
+    style_names,
+    template_contract,
+    template_names,
+    validation_rule,
+)
+from sciplot_core.policy.contract_reporting import (
+    DOC_PATH,
+    capability_catalog_payload,
+    meta_payload,
+    render_contract_markdown,
+    write_contract_markdown,
+)
 
-ensure_vendored_core()
 
-from src.plot_contract import *  # noqa: F403,E402
+__all__ = [
+    "AnnotationContract",
+    "AxisFrameContract",
+    "AxisPolicySpec",
+    "CONTRACT_PATH",
+    "DOC_PATH",
+    "DefaultsSpec",
+    "ExportContract",
+    "GlobalFrameSpec",
+    "PaletteContract",
+    "PlotContract",
+    "SizePresetSpec",
+    "SpacingContract",
+    "StrokeContract",
+    "StyleContract",
+    "TemplateContract",
+    "TypographyContract",
+    "ValidationRuleContract",
+    "capability_catalog_payload",
+    "default_options_for_template",
+    "default_size_for_template",
+    "lint_public_template_contract",
+    "load_plot_contract",
+    "meta_payload",
+    "normalize_style_alias",
+    "palette_names",
+    "plot_contract_dict",
+    "public_palette_names",
+    "public_style_names",
+    "qa_profile",
+    "render_contract_markdown",
+    "size_names",
+    "size_preset_contract",
+    "style_contract",
+    "style_names",
+    "template_contract",
+    "template_names",
+    "validation_rule",
+    "write_contract_markdown",
+]

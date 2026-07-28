@@ -17,9 +17,7 @@ def _imported_modules(path: Path) -> set[str]:
         for alias in node.names
     }
     modules.update(
-        node.module or ""
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom)
+        node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
     )
     return modules
 
@@ -27,14 +25,24 @@ def _imported_modules(path: Path) -> set[str]:
 def test_qt_package_contains_only_native_veusz_integration_modules() -> None:
     package_dir = Path(sciplot_gui.__file__).resolve().parent
     modules = {path.name for path in package_dir.glob("*.py")}
+    packages = {
+        path.name
+        for path in package_dir.iterdir()
+        if path.is_dir() and (path / "__init__.py").is_file()
+    }
 
     assert modules == {
         "__init__.py",
         "assistant_runtime.py",
-        "studio_assistant.py",
-        "studio_assistant_history.py",
-        "studio_project.py",
-        "studio_project_status.py",
+        "main_window_menu.py",
+        "studio_project_services.py",
+        "window_context.py",
+    }
+    assert packages == {
+        "studio_assistant",
+        "studio_assistant_history",
+        "studio_project",
+        "studio_project_status",
     }
 
 

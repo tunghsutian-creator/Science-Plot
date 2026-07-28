@@ -15,7 +15,11 @@ from sciplot_core.policy import (
     UNIFIED_PANEL_LABEL_SIZE_PT,
     UNIFIED_TICK_WIDTH_PT,
 )
-from sciplot_core.studio import StudioSeries, _apply_series_options, _veusz_style_contract
+from sciplot_core.studio import (
+    StudioSeries,
+    _apply_series_options,
+    _veusz_style_contract,
+)
 from sciplot_core.request_contract import normalize_render_options
 
 
@@ -84,7 +88,9 @@ def test_series_specific_line_and_marker_sizes_are_hard_standardized() -> None:
     styled = _apply_series_options(
         series,
         render_options={
-            "series_styles": [{"label": "sample", "line_width": 4.0, "marker_size": 8.0}],
+            "series_styles": [
+                {"label": "sample", "line_width": 4.0, "marker_size": 8.0}
+            ],
             "marker_sequence": ["circle"],
         },
         request={"template": "point_line"},

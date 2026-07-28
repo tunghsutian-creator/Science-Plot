@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 
 from sciplot_core import cli
-from sciplot_core._utils import file_sha256
+from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core import visual_review
 from sciplot_core.visual_review import (
     FINAL_SIZE_VISUAL_DECISION_VERSION,
@@ -186,9 +186,9 @@ def test_acceptance_visual_review_records_bound_preview_decision(
     assert acceptance["artifacts"]["visual_review_json_sha256"] == file_sha256(
         review_path
     )
-    assert acceptance["artifacts"]["manual_visual_review_decision_sha256"] == file_sha256(
-        decision_path
-    )
+    assert acceptance["artifacts"][
+        "manual_visual_review_decision_sha256"
+    ] == file_sha256(decision_path)
     evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
     assert evidence["summary"]["manual_visual_status"] == decision
     assert evidence["summary"]["review_surface"] == REVIEW_SURFACE
