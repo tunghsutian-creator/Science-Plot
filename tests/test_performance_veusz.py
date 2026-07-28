@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,13 @@ from sciplot_core.performance_comparison import (
     load_performance_comparison,
 )
 from sciplot_core.performance_veusz import build_performance_veusz_spec
+from sciplot_core.policy import (
+    PERFORMANCE_RADAR_AXIS_LABEL_SIZE_PT,
+    PERFORMANCE_RADAR_GUIDE_COLOR,
+    PERFORMANCE_RADAR_GUIDE_LINE_WIDTH_PT,
+    PERFORMANCE_RADAR_RING_TRANSPARENCY,
+    PERFORMANCE_RADAR_SPOKE_TRANSPARENCY,
+)
 from sciplot_core.qa import _normalized_label
 from sciplot_core.render import render_to_dir
 from sciplot_core.studio import (
@@ -88,6 +96,176 @@ def test_performance_spec_uses_native_editable_veusz_contract(
     else:
         assert all(item["expected_mark_channels"] == ["marker"] for item in references)
         assert all(item["plot_line_hide"] is True for item in references)
+        rings = [
+            item
+            for item in performance["polygons"]
+            if item["role"] == "radar_grid_ring"
+        ]
+        assert len(rings) == 4
+        assert all(item["line_style"] == "dashed" for item in rings)
+        assert all(
+            len(item["xPos"]) == len(payload["angles_degrees"]) + 1
+            and len(item["yPos"]) == len(payload["angles_degrees"]) + 1
+            and item["xPos"][0] == pytest.approx(item["xPos"][-1])
+            and item["yPos"][0] == pytest.approx(item["yPos"][-1])
+            for item in rings
+        )
+        assert all(
+            item["line_color"] == PERFORMANCE_RADAR_GUIDE_COLOR
+            and item["line_width_pt"] == PERFORMANCE_RADAR_GUIDE_LINE_WIDTH_PT
+            and item["line_transparency"]
+            == PERFORMANCE_RADAR_RING_TRANSPARENCY
+            for item in rings
+        )
+        assert all(
+            item["line_color"] == PERFORMANCE_RADAR_GUIDE_COLOR
+            and item["line_width_pt"] == PERFORMANCE_RADAR_GUIDE_LINE_WIDTH_PT
+            and item["line_transparency"]
+            == PERFORMANCE_RADAR_SPOKE_TRANSPARENCY
+            for item in performance["lines"]
+        )
+        labels = {
+            int(str(item["name"]).rsplit("_", 1)[1]): item
+            for item in performance["labels"]
+            if str(item["name"]).startswith("performance_radar_axis_label_")
+        }
+        endpoint_labels = {
+            int(str(item["name"]).rsplit("_", 1)[1]): item
+            for item in performance["labels"]
+            if str(item["name"]).startswith(
+                "performance_radar_axis_endpoint_label_"
+            )
+        }
+        assert all(
+            item["text_size_pt"] == PERFORMANCE_RADAR_AXIS_LABEL_SIZE_PT
+            for item in labels.values()
+        )
+        assert [
+            endpoint_labels[index]["label"]
+            for index in sorted(endpoint_labels)
+        ] == payload["axis_endpoint_labels"]
+        x_scale = (
+            float(payload["layout"]["plot_region_mm"][1])
+            / float(payload["layout"]["plot_region_mm"][0])
+        )
+        for index, angle in enumerate(payload["angles_degrees"], start=1):
+            radians = math.radians(float(angle))
+            cosine = math.cos(radians)
+            sine = math.sin(radians)
+            horizontal_radius = (
+                1.06
+                if cosine > 0.25
+                else 0.78
+                if cosine < -0.25
+                else 1.0
+            )
+            assert labels[index]["x"] == pytest.approx(
+                cosine * x_scale * horizontal_radius
+            )
+            assert labels[index]["y"] == pytest.approx(
+                sine * 1.15
+            )
+            assert endpoint_labels[index]["x"] == pytest.approx(
+                cosine * x_scale * 1.06
+            )
+            assert endpoint_labels[index]["y"] == pytest.approx(
+                sine * 1.06
+            )
+
+
+def test_five_axis_radar_uses_aligned_physical_label_slots() -> None:
+    payload = build_performance_radar_payload(
+        load_performance_comparison(FIXTURE)
+    )
+    payload["angles_degrees"] = [90.0, 162.0, 234.0, 306.0, 18.0]
+    payload["axis_labels"] = [
+        "Density\n(g cm⁻³)",
+        "Specific tensile\ntoughness\n(kJ kg⁻¹)",
+        "Specific tensile\nstrength\n(MPa cm³ g⁻¹)",
+        "Specific flexural\nstrength\n(MPa cm³ g⁻¹)",
+        "Specific impact\nstrength\n(kJ m⁻² cm³ g⁻¹)",
+    ]
+    payload["axis_endpoint_labels"] = ["0.5", "12", "60", "140", "120"]
+    for item in payload["legend_items"]:
+        if item["legend_group"] == "This work":
+            item["legend_items_per_row"] = 2
+
+    spec = build_performance_veusz_spec(
+        payload=payload,
+        request={
+            "input": str(FIXTURE),
+            "rule_id": "performance_comparison",
+            "template": "polar_curve",
+        },
+        transform_steps=[],
+    )
+    labels = spec["performance_comparison"]["labels"]
+    page_width, page_height = spec["size_mm"]
+    expected_x_mm = [28.75, 9.0, 13.8, 46.2, 51.9]
+    expected_line_centres_y_mm = [
+        [1.6, 4.2],
+        [10.8, 13.4, 16.0],
+        [45.8, 48.4, 51.0],
+        [45.8, 48.4, 51.0],
+        [10.8, 13.4, 16.0],
+    ]
+    for axis_index, (x_mm, y_centres_mm) in enumerate(
+        zip(
+            expected_x_mm,
+            expected_line_centres_y_mm,
+            strict=True,
+        ),
+        start=1,
+    ):
+        axis_lines = [
+            item
+            for item in labels
+            if str(item["name"]).startswith(
+                f"performance_radar_axis_label_{axis_index}_line_"
+            )
+        ]
+        assert len(axis_lines) == len(y_centres_mm)
+        assert all(item["parent"] == "page" for item in axis_lines)
+        assert all(item["align"] == "centre" for item in axis_lines)
+        assert all(
+            float(item["x"]) * page_width == pytest.approx(x_mm)
+            for item in axis_lines
+        )
+        assert [
+            (1.0 - float(item["y"])) * page_height
+            for item in axis_lines
+        ] == pytest.approx(y_centres_mm)
+
+    endpoint_labels = [
+        item
+        for item in labels
+        if str(item["name"]).startswith(
+            "performance_radar_axis_endpoint_label_"
+        )
+    ]
+    assert [item["label"] for item in endpoint_labels] == [
+        "0.5",
+        "12",
+        "60",
+        "140",
+        "120",
+    ]
+    assert all(item["parent"] == "page" for item in endpoint_labels)
+    assert all(item["align"] == "centre" for item in endpoint_labels)
+
+    own_a = next(
+        item
+        for item in labels
+        if item["name"] == "performance_legend_text_1"
+    )
+    own_b = next(
+        item
+        for item in labels
+        if item["name"] == "performance_legend_text_2"
+    )
+    assert (float(own_b["x"]) - float(own_a["x"])) * page_width == (
+        pytest.approx(22.0)
+    )
 
 
 @pytest.mark.parametrize(

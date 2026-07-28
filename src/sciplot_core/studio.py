@@ -6104,16 +6104,6 @@ def _series_from_request(
                 parameters=performance_transform_parameters(payload),
             )
         )
-        layout = payload["layout"]
-        render_options = (
-            dict(request.get("render_options"))
-            if isinstance(request.get("render_options"), dict)
-            else {}
-        )
-        render_options["size"] = "x".join(
-            f"{float(value):g}" for value in layout["page_size_mm"]
-        )
-        request["render_options"] = render_options
         axis_info = {
             "x_label": str(payload.get("x_label") or ""),
             "y_label": str(payload.get("y_label") or ""),
@@ -6124,6 +6114,35 @@ def _series_from_request(
                 str(item["label"]) for item in records
             ],
         }
+        layout = payload["layout"]
+        render_options = (
+            dict(request.get("render_options"))
+            if isinstance(request.get("render_options"), dict)
+            else {}
+        )
+        render_options["size"] = "x".join(
+            f"{float(value):g}" for value in layout["page_size_mm"]
+        )
+        if not bool(layout.get("legend_uses_reserved_panel")):
+            render_options.setdefault("legend_position", "auto")
+            render_options.setdefault("series_label_mode", "legend")
+            for axis, bounds in (
+                ("x", payload["x_bounds"]),
+                ("y", payload["y_bounds"]),
+            ):
+                render_options.setdefault(f"{axis}_min", float(bounds[0]))
+                render_options.setdefault(f"{axis}_max", float(bounds[1]))
+            render_options = _apply_readability_render_defaults(
+                render_options,
+                request=request,
+                axis_info=axis_info,
+                series=styled,
+                template_id=template_id,
+            )
+            payload["inside_legend_render_options"] = json_safe(
+                render_options
+            )
+        request["render_options"] = render_options
         return styled, axis_info, transform_steps, source_root
     if (
         str(request.get("rule_id") or "").strip() == "impact_metric"

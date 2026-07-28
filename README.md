@@ -177,7 +177,7 @@ skill/scripts/sciplot autoplot PATH --template point_line --out /path/to/point_l
 | `Role` | `sample` 表示本工作样品，`reference` 表示文献/参照材料。 |
 | `Metric`, `Value`, `Unit` | 指标 ID、有限数值和单位；同一指标的元数据与单位必须一致。 |
 | `Group` | 本工作样品的包络组；同组样品共享色系和浅色包络。 |
-| `EnvelopeInclude` | 可选的 `true/false`；控制该样品是否参与 `Group` 的浅色包络，默认样品纳入、参考材料不纳入。 |
+| `EnvelopeInclude` | 可选的 `true/false`；控制材料是否参与浅色包络，默认样品纳入、参考材料不纳入。样品按 `Group` 分组；参考材料按 `LegendGroup` 分组。 |
 | `DisplayLabel` | 轴上显示的指标名。 |
 | `ScatterAxis` | 散点图中恰好一个指标写 `x`、一个指标写 `y`。 |
 | `ScatterMin`, `ScatterMax` | 可选的散点轴显示边界；允许只声明一侧，但不得裁掉任何绘制数据。 |
@@ -186,6 +186,8 @@ skill/scripts/sciplot autoplot PATH --template point_line --out /path/to/point_l
 | `ScaleMin`, `ScaleMax` | 雷达归一化的声明边界；数据越界时拒绝绘图。 |
 | `Journal`, `Year`, `DOI` | 参考材料的文献元数据；未给显式 `LegendLabel` 时，期刊和年份显示在右侧索引。 |
 | `MaterialOrder`, `Marker` | 可选的索引顺序和显式 marker。 |
+| `MarkerLineColor` | 可选的 marker/多边形轮廓色，必须是 `#RRGGBB`；可让同一文献大类共享轮廓色，同时保留不同 marker。 |
+| `MarkerFillColor` | 可选的散点及右侧图例 marker 内部色，必须是 `#RRGGBB`；参考材料默认白色，本工作样品默认使用样品蓝色。雷达图不采用这个覆盖。 |
 | `LegendLabel`, `LegendGroup` | 可选的右侧显示文字和分组标题；显式文字不会自动追加期刊/年份。 |
 | `LegendIdentity` | 多个观测点可共享一个材料身份、marker 和索引条目。 |
 | `LegendColumn` | `1` 或 `2`；两列索引使用两个并排的 `60x55` mm 模块。 |
@@ -197,15 +199,30 @@ skill/scripts/sciplot autoplot PATH --template point_line --out /path/to/point_l
 源密度仍保存在交付数据中。`ScatterMin`/`ScatterMax` 只控制显示范围，不改变或裁剪
 数据。`EnvelopeInclude=true` 的样品按 `Group` 生成无边框、确定性平滑的不规则浅色
 包络；未纳入的样品仍正常绘制，并保留其原始数据和图例身份。
-这个区域只表示已观察样品范围，不是置信区间。参考材料保持中性、空心且可由 marker
-区分。模板提供十六个 Veusz 原生 marker；全局唯一约束作用于 `LegendIdentity`，同一
+这个区域只表示已观察样品范围，不是置信区间。参考材料默认保持中性、空心且可由
+marker 区分；也可用显式 `MarkerLineColor` 给同一大类设置共同轮廓色。需要强调读者
+分组时，可用同一个显式 `MarkerFillColor` 填充一组 marker，
+并将该组设为 `EnvelopeInclude=true`。模板会按 `LegendGroup` 生成无边框、透明度更高
+的同色参考包络；单点和双点分组分别形成小色斑和细长包络，同时保留中性轮廓与 marker
+形状冗余。模板提供十六个 Veusz 原生 marker；全局唯一约束作用于
+`LegendIdentity`，同一
 材料身份的多个观测点可以共用 marker 并合并为一个索引条目。每列行距按条目数在固定
 高度内确定性计算；需要压缩本工作样品图例时，可在同一分组内显式设置每行两个条目。
+当散点源已经归并为不超过四个大类，并且每个条目的
+`LegendIdentity`、`LegendLabel`、`LegendGroup` 三者同名且不需要自动追加文献时，
+模板改用全局图内图例自动避让契约，整图保持 `60x55` mm；其余详细索引仍保留右侧
+`60x55` mm 模块。
 
-雷达图使用同样的左 `60x55` mm 绘图模块。本工作样品是闭合、半透明填充的 marker
-多边形；参考材料只在确有数据的指标轴上标 marker，不补齐或连成虚构多边形。只要存在
-参考材料、文献信息或较多本工作样品，就使用右侧保留索引模块，避免图内图例挤压约
-`40x38` mm 的有效雷达区域。
+雷达图把 `RadarOrder=1` 的轴置顶，后续轴按逆时针顺序排列。本工作样品是闭合的
+marker 多边形：轮廓使用样品主色，填充使用对应浅色并保持 35% 透明度。参考材料只在
+确有数据的指标轴上标 marker，不补齐或连成虚构多边形；`MarkerLineColor` 可按大类
+着色轮廓，但内部仍保持白色空心。单行轴名使用左 `60x55` mm 绘图模块；只要任一轴名
+包含显式换行，就以 6 pt 的逐行原生 Veusz label 绘制。存在参考材料、文献信息或较多
+本工作样品时，右侧保留另一个标准 `60x55` mm 索引模块，因此一列索引的雷达图总图幅
+为 `120x55` mm，并可与其它 60 mm 图模块对齐。径向分度使用与雷达轴数一致的浅灰
+虚线多边形；不使用圆形网格。每个外顶点旁单独显示纯数字端点：`higher` 指标取
+`ScaleMax`，`lower` 指标取 `ScaleMin`；轴标题和单位排在数字外侧，不添加
+`Max`、`Range` 或方向箭头。
 
 当前 source-controlled 示例是 `instrument_shaped_fixture`，不是用户真实测量数据，因此
 `performance_comparison` 规则在第一份授权真实数据完成 acceptance 前保持 `pending`。
@@ -238,10 +255,13 @@ Role=reference 只画真实数据点。图幅必须是左侧 60x55 mm 绘图模�
 
 ```text
 请用同一数据生成 template=polar_curve。只使用有 RadarOrder 的指标，并严格按
-Direction、ScaleMin、ScaleMax 归一化到 0-1（越外越优）。每个 Role=sample 必须
-包含全部雷达指标，画闭合填充多边形并保留 marker；Role=reference 缺少的指标不要
-插值，只在实际存在的指标轴上标 marker。左侧绘图模块 60x55 mm，参考材料及
-Journal/Year 放在右侧保留的 60x55 mm 索引区。输出可编辑 VSZ、PDF 和 300 dpi TIFF，
+Direction、ScaleMin、ScaleMax 归一化到 0-1（越外越优）；第一轴置顶，后续轴逆时针
+排列。每个 Role=sample 必须包含全部雷达指标，画闭合填充多边形并保留 marker；
+Role=reference 缺少的指标不要插值，只在实际存在的指标轴上标 marker。单行轴名使用
+左侧 60x55 mm 绘图模块；有显式换行时使用逐行 6 pt 原生 label。参考材料及
+Journal/Year 放在右侧标准 60x55 mm 索引区，使一列索引的总图幅保持 120x55 mm。
+分度背景使用与轴数一致的浅灰虚线多边形，不使用圆环。每个外顶点只显示与声明边界
+一致的纯数字端点，指标名和单位置于其外侧。输出可编辑 VSZ、PDF 和 300 dpi TIFF，
 并检查 exact-current QA 与 transform ledger。
 ```
 

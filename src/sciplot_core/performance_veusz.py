@@ -15,13 +15,18 @@ from sciplot_core.performance_comparison import (
 )
 from sciplot_core.policy import (
     FIXED_PUBLICATION_FRAME_POLICY,
-    PERFORMANCE_PANEL_WIDTH_MM,
+    PERFORMANCE_RADAR_AXIS_LABEL_SIZE_PT,
+    PERFORMANCE_RADAR_GUIDE_COLOR,
+    PERFORMANCE_RADAR_GUIDE_LINE_WIDTH_PT,
+    PERFORMANCE_RADAR_RING_TRANSPARENCY,
+    PERFORMANCE_RADAR_SPOKE_TRANSPARENCY,
     PERFORMANCE_REFERENCE_PANEL_WIDTH_MM,
     UNIFIED_AXIS_LINEWIDTH_PT,
     UNIFIED_FONT_FAMILY,
     UNIFIED_FONT_SIZE_PT,
     UNIFIED_FOREGROUND_COLOR,
     UNIFIED_LEGEND_FONT_SIZE_PT,
+    UNIFIED_LEGEND_KEY_LENGTH_MM,
     UNIFIED_LINE_WIDTH_PT,
     UNIFIED_MARKER_LINE_WIDTH_PT,
     UNIFIED_MARKER_SIZE_PT,
@@ -32,8 +37,17 @@ from sciplot_core.policy import (
 )
 
 _RADAR_AXIS_LIMIT = 1.12
-_RADAR_LABEL_RADIUS = 1.07
+_RADAR_LABEL_HORIZONTAL_RADIUS_LEFT = 0.78
+_RADAR_LABEL_HORIZONTAL_RADIUS_RIGHT = 1.06
+_RADAR_LABEL_VERTICAL_RADIUS = 1.15
+_RADAR_ENDPOINT_LABEL_RADIUS = 1.06
 _RADAR_RING_LEVELS = (0.25, 0.50, 0.75, 1.00)
+_RADAR_FIVE_AXIS_ANGLES = (90.0, 162.0, 234.0, 306.0, 18.0)
+_RADAR_FIVE_AXIS_TITLE_X_MM = (28.75, 9.0, 13.8, 46.2, 51.9)
+_RADAR_FIVE_AXIS_TITLE_CENTRE_Y_MM = (2.9, 13.4, 48.4, 48.4, 13.4)
+_RADAR_FIVE_AXIS_TITLE_LINE_STEP_MM = 2.6
+_RADAR_FIVE_AXIS_ENDPOINT_OFFSETS_MM = (1.7, 2.0, 2.7, 2.7, 2.7)
+_LEGEND_PAIRED_SLOT_OFFSET_MM = 22.0
 
 
 def _pt(value: float) -> str:
@@ -104,6 +118,78 @@ def _axis_payload(
         "mode": "numeric",
         "show_ticks": not hidden,
         "hidden": hidden,
+    }
+
+
+def _expanded_axis_bounds(
+    payload: dict[str, Any],
+    request: dict[str, Any],
+    *,
+    axis: str,
+) -> tuple[float, float]:
+    bounds = payload[f"{axis}_bounds"]
+    minimum = float(bounds[0])
+    maximum = float(bounds[1])
+    if payload["layout"]["legend_uses_reserved_panel"]:
+        return minimum, maximum
+    options = _performance_render_options(payload, request)
+    requested_minimum = options.get(f"{axis}_min")
+    requested_maximum = options.get(f"{axis}_max")
+    if isinstance(requested_minimum, int | float) and math.isfinite(
+        float(requested_minimum)
+    ):
+        minimum = min(minimum, float(requested_minimum))
+    if isinstance(requested_maximum, int | float) and math.isfinite(
+        float(requested_maximum)
+    ):
+        maximum = max(maximum, float(requested_maximum))
+    return minimum, maximum
+
+
+def _performance_render_options(
+    payload: dict[str, Any],
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    options = (
+        dict(request.get("render_options"))
+        if isinstance(request.get("render_options"), dict)
+        else {}
+    )
+    resolved = payload.get("inside_legend_render_options")
+    if isinstance(resolved, dict):
+        options.update(resolved)
+    return options
+
+
+def _inside_legend_contract(
+    payload: dict[str, Any],
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    use_reserved_panel = bool(
+        payload["layout"]["legend_uses_reserved_panel"]
+    )
+    if use_reserved_panel:
+        return {
+            "show": False,
+            "mode": "reserved_reference_panel",
+            "outside_legend": False,
+            "reference_panel_used": True,
+        }
+    options = _performance_render_options(payload, request)
+    return {
+        "show": True,
+        "mode": str(options.get("legend_position") or "inside_best"),
+        "columns": 1,
+        "presentation_kind": "performance_group_summary",
+        "outside_legend": False,
+        "reference_panel_used": False,
+        "horz_position": options.get("legend_horz_position"),
+        "vert_position": options.get("legend_vert_position"),
+        "horz_manual": options.get("legend_horz_manual"),
+        "vert_manual": options.get("legend_vert_manual"),
+        "placement_diagnostics": options.get(
+            "_legend_placement_diagnostics"
+        ),
     }
 
 
@@ -222,11 +308,7 @@ def _performance_polygons(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "line_style": "solid",
                 "line_transparency": 0,
                 "line_hide": False,
-                "fill_color": (
-                    str(item["color"])
-                    if item["role"] == "sample"
-                    else "white"
-                ),
+                "fill_color": str(item["marker_fill_color"]),
                 "fill_transparency": 0,
                 "fill_hide": False,
                 "material": str(item["material"]),
@@ -237,7 +319,9 @@ def _performance_polygons(payload: dict[str, Any]) -> list[dict[str, Any]]:
             polygons.append(
                 {
                     "name": f"performance_envelope_{index}",
-                    "role": "observed_sample_extent",
+                    "role": str(
+                        envelope.get("role", "observed_sample_extent")
+                    ),
                     "parent": "graph",
                     "positioning": "axes",
                     "x_axis": "x",
@@ -253,9 +337,13 @@ def _performance_polygons(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     "fill_transparency": int(envelope["fill_transparency"]),
                     "fill_hide": False,
                     "members": list(envelope["members"]),
-                    "interpretation": (
-                        "Observed sample extent with deterministic visual "
-                        "padding; not a confidence region."
+                    "group": str(envelope["group"]),
+                    "interpretation": str(
+                        envelope.get(
+                            "interpretation",
+                            "Observed extent with deterministic visual "
+                            "padding; not a confidence region.",
+                        )
                     ),
                 }
             )
@@ -267,7 +355,8 @@ def _performance_polygons(payload: dict[str, Any]) -> list[dict[str, Any]]:
     x_scale = plot_height / plot_width
     for ring_index, radius in enumerate(_RADAR_RING_LEVELS, start=1):
         angles = [
-            360.0 * index / 72.0 for index in range(73)
+            *[float(value) for value in payload["angles_degrees"]],
+            float(payload["angles_degrees"][0]),
         ]
         radii = [radius] * len(angles)
         x_values, y_values = _radar_cartesian(
@@ -285,10 +374,10 @@ def _performance_polygons(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "y_axis": "y",
                 "xPos": x_values,
                 "yPos": y_values,
-                "line_color": "#9A9A9A",
-                "line_width_pt": UNIFIED_AXIS_LINEWIDTH_PT,
-                "line_style": "solid",
-                "line_transparency": 55,
+                "line_color": PERFORMANCE_RADAR_GUIDE_COLOR,
+                "line_width_pt": PERFORMANCE_RADAR_GUIDE_LINE_WIDTH_PT,
+                "line_style": "dashed",
+                "line_transparency": PERFORMANCE_RADAR_RING_TRANSPARENCY,
                 "line_hide": False,
                 "fill_color": "white",
                 "fill_transparency": 100,
@@ -319,7 +408,9 @@ def _performance_polygons(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "line_style": "solid",
                 "line_transparency": 0,
                 "line_hide": False,
-                "fill_color": str(item["color"]),
+                "fill_color": str(
+                    item.get("polygon_fill_color", item["color"])
+                ),
                 "fill_transparency": int(item["fill_transparency"]),
                 "fill_hide": False,
                 "material": str(item["label"]),
@@ -444,10 +535,10 @@ def _performance_lines(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "yPos2": [math.sin(radians)],
                 "clip": True,
                 "hide": False,
-                "line_color": "#8A8A8A",
-                "line_width_pt": UNIFIED_AXIS_LINEWIDTH_PT,
+                "line_color": PERFORMANCE_RADAR_GUIDE_COLOR,
+                "line_width_pt": PERFORMANCE_RADAR_GUIDE_LINE_WIDTH_PT,
                 "line_style": "solid",
-                "line_transparency": 45,
+                "line_transparency": PERFORMANCE_RADAR_SPOKE_TRANSPARENCY,
                 "line_hide": False,
                 "arrow_left": "none",
                 "arrow_right": "none",
@@ -513,6 +604,10 @@ def _legend_layout(
     ]
     indexed_items = list(enumerate(legend_items, start=1))
     page_width = float(payload["layout"]["page_size_mm"][0])
+    plot_panel_width = float(
+        payload["layout"]["plot_panel_size_mm"][0]
+    )
+    heading_inset_mm = 4.5
     column_count = max(
         int(payload["layout"].get("legend_column_count") or 1),
         1,
@@ -565,22 +660,20 @@ def _legend_layout(
         available = 0.88 - 0.10 - group_gap * max(group_count - 1, 0)
         row_step = min(0.078, available / float(slot_count))
         column_offset_mm = (
-            PERFORMANCE_PANEL_WIDTH_MM
+            PERFORMANCE_REFERENCE_PANEL_WIDTH_MM
             * float(column - 1)
         )
         heading_x = (
-            PERFORMANCE_PANEL_WIDTH_MM + 4.5 + column_offset_mm
+            plot_panel_width + heading_inset_mm + column_offset_mm
         ) / page_width
         marker_x = (
-            PERFORMANCE_PANEL_WIDTH_MM + 5.3 + column_offset_mm
+            plot_panel_width + heading_inset_mm + 0.8 + column_offset_mm
         ) / page_width
         text_x = (
-            PERFORMANCE_PANEL_WIDTH_MM + 8.5 + column_offset_mm
+            plot_panel_width + heading_inset_mm + 4.0 + column_offset_mm
         ) / page_width
         current_y = 0.88
-        paired_slot_offset = (
-            PERFORMANCE_REFERENCE_PANEL_WIDTH_MM * 0.30 / page_width
-        )
+        paired_slot_offset = _LEGEND_PAIRED_SLOT_OFFSET_MM / page_width
         for group_index, (
             group,
             group_items,
@@ -659,10 +752,20 @@ def _performance_labels(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 )
             )
     if payload["template"] == PERFORMANCE_RADAR_TEMPLATE_ID:
+        five_axis_labels = _five_axis_radar_labels(payload)
+        if five_axis_labels is not None:
+            labels.extend(five_axis_labels)
+            return labels
         plot_width, plot_height = (
             float(value) for value in payload["layout"]["plot_region_mm"]
         )
         x_scale = plot_height / plot_width
+        label_line_spacing = (
+            PERFORMANCE_RADAR_AXIS_LABEL_SIZE_PT
+            * 1.15
+            * (25.4 / 72.0)
+            * (2.0 * _RADAR_AXIS_LIMIT / plot_height)
+        )
         for index, (angle, label) in enumerate(
             zip(payload["angles_degrees"], payload["axis_labels"], strict=True),
             start=1,
@@ -672,27 +775,212 @@ def _performance_labels(payload: dict[str, Any]) -> list[dict[str, Any]]:
             sine = math.sin(radians)
             align = "left" if cosine > 0.25 else "right" if cosine < -0.25 else "centre"
             valign = "bottom" if sine > 0.25 else "top" if sine < -0.25 else "centre"
-            label_radius = (
-                1.0
-                if cosine < -0.25
-                else 0.88
+            horizontal_radius = (
+                _RADAR_LABEL_HORIZONTAL_RADIUS_RIGHT
                 if cosine > 0.25
-                else _RADAR_LABEL_RADIUS
+                else _RADAR_LABEL_HORIZONTAL_RADIUS_LEFT
+                if cosine < -0.25
+                else 1.0
             )
+            label_lines = str(label).splitlines() or [""]
+            for line_index, label_line in enumerate(label_lines):
+                if len(label_lines) == 1:
+                    y_offset = 0.0
+                elif sine > 0.25:
+                    y_offset = (
+                        len(label_lines) - 1 - line_index
+                    ) * label_line_spacing
+                elif sine < -0.25:
+                    y_offset = -line_index * label_line_spacing
+                else:
+                    y_offset = (
+                        (len(label_lines) - 1) / 2.0 - line_index
+                    ) * label_line_spacing
+                labels.append(
+                    _label_contract(
+                        name=(
+                            f"performance_radar_axis_label_{index}"
+                            if len(label_lines) == 1
+                            else (
+                                f"performance_radar_axis_label_{index}"
+                                f"_line_{line_index + 1}"
+                            )
+                        ),
+                        label=label_line,
+                        parent="graph",
+                        positioning="axes",
+                        x=(
+                            cosine
+                            * x_scale
+                            * horizontal_radius
+                        ),
+                        y=(
+                            sine * _RADAR_LABEL_VERTICAL_RADIUS
+                            + y_offset
+                        ),
+                        align=align,
+                        valign=valign,
+                        text_size_pt=PERFORMANCE_RADAR_AXIS_LABEL_SIZE_PT,
+                        clip=False,
+                    )
+                )
+        endpoint_labels = payload.get("axis_endpoint_labels") or []
+        for index, (angle, endpoint_label) in enumerate(
+            zip(
+                payload["angles_degrees"],
+                endpoint_labels,
+                strict=True,
+            ),
+            start=1,
+        ):
+            radians = math.radians(float(angle))
+            cosine = math.cos(radians)
+            sine = math.sin(radians)
             labels.append(
                 _label_contract(
-                    name=f"performance_radar_axis_label_{index}",
-                    label=str(label),
+                    name=f"performance_radar_axis_endpoint_label_{index}",
+                    label=str(endpoint_label),
                     parent="graph",
                     positioning="axes",
-                    x=cosine * x_scale * label_radius,
-                    y=sine * label_radius,
-                    align=align,
-                    valign=valign,
-                    text_size_pt=UNIFIED_LEGEND_FONT_SIZE_PT,
+                    x=(
+                        cosine
+                        * x_scale
+                        * _RADAR_ENDPOINT_LABEL_RADIUS
+                    ),
+                    y=sine * _RADAR_ENDPOINT_LABEL_RADIUS,
+                    align=(
+                        "right"
+                        if cosine > 0.25
+                        else "left"
+                        if cosine < -0.25
+                        else "centre"
+                    ),
+                    valign=(
+                        "top"
+                        if sine > 0.25
+                        else "bottom"
+                        if sine < -0.25
+                        else "centre"
+                    ),
+                    text_size_pt=PERFORMANCE_RADAR_AXIS_LABEL_SIZE_PT,
                     clip=False,
                 )
             )
+    return labels
+
+
+def _five_axis_radar_labels(
+    payload: dict[str, Any],
+) -> list[dict[str, Any]] | None:
+    angles = [float(value) for value in payload["angles_degrees"]]
+    axis_labels = [str(value) for value in payload["axis_labels"]]
+    endpoint_labels = [
+        str(value) for value in payload.get("axis_endpoint_labels") or []
+    ]
+    layout = payload["layout"]
+    page_width, page_height = (
+        float(value) for value in layout["page_size_mm"]
+    )
+    plot_panel_width, plot_panel_height = (
+        float(value) for value in layout["plot_panel_size_mm"]
+    )
+    if (
+        len(angles) != 5
+        or len(axis_labels) != 5
+        or len(endpoint_labels) != 5
+        or not all(
+            math.isclose(actual, expected)
+            for actual, expected in zip(
+                angles,
+                _RADAR_FIVE_AXIS_ANGLES,
+                strict=True,
+            )
+        )
+        or not math.isclose(plot_panel_width, 60.0)
+        or not math.isclose(plot_panel_height, 55.0)
+    ):
+        return None
+    split_labels = [label.splitlines() or [""] for label in axis_labels]
+    if len(split_labels[0]) > 2 or any(
+        len(lines) > 3 for lines in split_labels[1:]
+    ):
+        return None
+
+    labels: list[dict[str, Any]] = []
+    for axis_index, (lines, x_mm, centre_y_mm) in enumerate(
+        zip(
+            split_labels,
+            _RADAR_FIVE_AXIS_TITLE_X_MM,
+            _RADAR_FIVE_AXIS_TITLE_CENTRE_Y_MM,
+            strict=True,
+        ),
+        start=1,
+    ):
+        first_y_mm = centre_y_mm - (
+            (len(lines) - 1) * _RADAR_FIVE_AXIS_TITLE_LINE_STEP_MM / 2.0
+        )
+        for line_index, line in enumerate(lines, start=1):
+            y_mm = first_y_mm + (
+                (line_index - 1) * _RADAR_FIVE_AXIS_TITLE_LINE_STEP_MM
+            )
+            labels.append(
+                _label_contract(
+                    name=(
+                        f"performance_radar_axis_label_{axis_index}"
+                        if len(lines) == 1
+                        else (
+                            f"performance_radar_axis_label_{axis_index}"
+                            f"_line_{line_index}"
+                        )
+                    ),
+                    label=line,
+                    parent="page",
+                    positioning="relative",
+                    x=x_mm / page_width,
+                    y=1.0 - y_mm / page_height,
+                    align="centre",
+                    valign="centre",
+                    text_size_pt=PERFORMANCE_RADAR_AXIS_LABEL_SIZE_PT,
+                    clip=False,
+                )
+            )
+
+    margins = layout["graph_margins_mm"]
+    plot_width, plot_height = (
+        float(value) for value in layout["plot_region_mm"]
+    )
+    graph_left_mm = float(margins["left"])
+    graph_top_mm = float(margins["top"])
+    centre_x_mm = graph_left_mm + plot_width / 2.0
+    centre_y_mm = graph_top_mm + plot_height / 2.0
+    radar_radius_mm = plot_height / (2.0 * _RADAR_AXIS_LIMIT)
+    for axis_index, (angle, endpoint_label, endpoint_offset_mm) in enumerate(
+        zip(
+            angles,
+            endpoint_labels,
+            _RADAR_FIVE_AXIS_ENDPOINT_OFFSETS_MM,
+            strict=True,
+        ),
+        start=1,
+    ):
+        radians = math.radians(angle)
+        endpoint_radius_mm = radar_radius_mm + endpoint_offset_mm
+        x_mm = centre_x_mm + math.cos(radians) * endpoint_radius_mm
+        y_mm = centre_y_mm - math.sin(radians) * endpoint_radius_mm
+        labels.append(
+            _label_contract(
+                name=f"performance_radar_axis_endpoint_label_{axis_index}",
+                label=endpoint_label,
+                parent="page",
+                positioning="relative",
+                x=x_mm / page_width,
+                y=1.0 - y_mm / page_height,
+                align="centre",
+                valign="centre",
+                text_size_pt=PERFORMANCE_RADAR_AXIS_LABEL_SIZE_PT,
+                clip=False,
+            )
+        )
     return labels
 
 
@@ -709,17 +997,27 @@ def build_performance_veusz_spec(
     margins = layout["graph_margins_mm"]
     style = _style_payload(margins)
     if template == PERFORMANCE_SCATTER_TEMPLATE_ID:
+        x_minimum, x_maximum = _expanded_axis_bounds(
+            payload,
+            request,
+            axis="x",
+        )
+        y_minimum, y_maximum = _expanded_axis_bounds(
+            payload,
+            request,
+            axis="y",
+        )
         axes = {
             "x": _axis_payload(
                 label=str(payload["x_label"]),
-                minimum=float(payload["x_bounds"][0]),
-                maximum=float(payload["x_bounds"][1]),
+                minimum=x_minimum,
+                maximum=x_maximum,
                 hidden=False,
             ),
             "y": _axis_payload(
                 label=str(payload["y_label"]),
-                minimum=float(payload["y_bounds"][0]),
-                maximum=float(payload["y_bounds"][1]),
+                minimum=y_minimum,
+                maximum=y_maximum,
                 hidden=False,
             ),
         }
@@ -741,12 +1039,10 @@ def build_performance_veusz_spec(
     else:
         raise ValueError(f"Unsupported performance template: {template}")
     render_options = {
-        **(
-            request.get("render_options")
-            if isinstance(request.get("render_options"), dict)
-            else {}
+        **_performance_render_options(payload, request),
+        "size": "x".join(
+            f"{float(value):g}" for value in layout["page_size_mm"]
         ),
-        "size": "x".join(f"{float(value):g}" for value in layout["page_size_mm"]),
     }
     performance = {
         **json_safe(payload),
@@ -797,12 +1093,7 @@ def build_performance_veusz_spec(
         "provenance": {"veusz": "vendored_native_document"},
         "style": style,
         "axes": axes,
-        "legend": {
-            "show": False,
-            "mode": "reserved_reference_panel",
-            "outside_legend": False,
-            "reference_panel_used": bool(layout["legend_uses_reserved_panel"]),
-        },
+        "legend": _inside_legend_contract(payload, request),
         "categorical": None,
         "scalar_field": None,
         "reference_guides": [],
@@ -931,6 +1222,73 @@ def _add_axis(
     interface.To("..")
 
 
+def _apply_inside_key_position(interface: Any, legend: dict[str, Any]) -> None:
+    mode = str(legend.get("mode") or "inside_best").strip().casefold()
+    horz_position = legend.get("horz_position")
+    vert_position = legend.get("vert_position")
+    if mode == "manual" or horz_position is not None or vert_position is not None:
+        horz = str(horz_position or "manual")
+        vert = str(vert_position or "manual")
+        interface.Set("horzPosn", horz)
+        interface.Set("vertPosn", vert)
+        if horz == "manual":
+            interface.Set(
+                "horzManual",
+                float(
+                    legend["horz_manual"]
+                    if legend.get("horz_manual") is not None
+                    else 0.5
+                ),
+            )
+        if vert == "manual":
+            interface.Set(
+                "vertManual",
+                float(
+                    legend["vert_manual"]
+                    if legend.get("vert_manual") is not None
+                    else 0.5
+                ),
+            )
+        return
+    if mode in {"upper_right", "top_right"}:
+        interface.Set("horzPosn", "right")
+        interface.Set("vertPosn", "top")
+        return
+    if mode in {"upper_left", "top_left"}:
+        interface.Set("horzPosn", "left")
+        interface.Set("vertPosn", "top")
+        return
+    if mode in {"lower_left", "bottom_left"}:
+        interface.Set("horzPosn", "left")
+        interface.Set("vertPosn", "bottom")
+        return
+    interface.Set("horzPosn", "right")
+    interface.Set("vertPosn", "bottom")
+
+
+def _add_inside_key(
+    interface: Any,
+    legend: dict[str, Any],
+    style: dict[str, Any],
+) -> None:
+    if not bool(legend.get("show")):
+        return
+    interface.Add("key", name="key1", autoadd=False)
+    interface.To("key1")
+    interface.Set("title", "")
+    interface.Set("Text/size", _pt(float(style["legend_font_size_pt"])))
+    interface.Set(
+        "keyLength",
+        f"{UNIFIED_LEGEND_KEY_LENGTH_MM / 10.0:.2f}cm",
+    )
+    interface.Set("marginSize", 0.15)
+    interface.Set("columns", int(legend.get("columns") or 1))
+    _apply_inside_key_position(interface, legend)
+    interface.Set("Background/hide", not bool(style["legend_frameon"]))
+    interface.Set("Border/hide", not bool(style["legend_frameon"]))
+    interface.To("..")
+
+
 def _add_xy_series(
     interface: Any,
     item: dict[str, Any],
@@ -1049,6 +1407,7 @@ def apply_performance_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     interface.Set("bottomMargin", _cm_from_mm(float(margins["bottom"])))
     _add_axis(interface, name="x", axis=spec["axes"]["x"], style=style)
     _add_axis(interface, name="y", axis=spec["axes"]["y"], style=style)
+    _add_inside_key(interface, spec["legend"], style)
     for label in labels:
         if label["parent"] == "graph":
             _add_label(interface, label)

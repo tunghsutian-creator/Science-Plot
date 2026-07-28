@@ -20,6 +20,7 @@ import pandas as pd
 from sciplot_core._utils import decode_text, file_sha256, json_safe
 from sciplot_core.materials_rules import format_unit_label
 from sciplot_core.policy import (
+    DEFAULT_LAYOUT_POLICY,
     DEFAULT_PALETTE_COLORS,
     PERFORMANCE_ENVELOPE_FILL_TRANSPARENCY,
     PERFORMANCE_ENVELOPE_IRREGULARITY_FRACTION,
@@ -28,7 +29,12 @@ from sciplot_core.policy import (
     PERFORMANCE_MARKERS,
     PERFORMANCE_PANEL_HEIGHT_MM,
     PERFORMANCE_PANEL_WIDTH_MM,
+    PERFORMANCE_RADAR_BOTTOM_MARGIN_MM,
+    PERFORMANCE_RADAR_LEFT_MARGIN_MM,
+    PERFORMANCE_RADAR_RIGHT_MARGIN_MM,
+    PERFORMANCE_RADAR_TOP_MARGIN_MM,
     PERFORMANCE_REFERENCE_COLOR,
+    PERFORMANCE_REFERENCE_ENVELOPE_FILL_TRANSPARENCY,
     PERFORMANCE_REFERENCE_PANEL_WIDTH_MM,
     PERFORMANCE_SCATTER_JITTER_HALFSPAN_FRACTION,
     PERFORMANCE_SAMPLE_FILL_TRANSPARENCY,
@@ -76,8 +82,7 @@ class PerformanceMetric:
 
     @property
     def radar_label(self) -> str:
-        arrow = "↑" if self.direction == "higher" else "↓"
-        return f"{self.display_label} {arrow}"
+        return self.display_label
 
 
 @dataclass(frozen=True)
@@ -98,6 +103,8 @@ class PerformanceMaterial:
     year: str
     doi: str
     marker: str | None
+    marker_line_color: str | None
+    marker_fill_color: str | None
     values: dict[str, float]
 
     @property
@@ -217,6 +224,24 @@ _HEADER_ALIASES: dict[str, frozenset[str]] = {
         {"materialorder", "sampleorder", "legendorder", "材料顺序", "图例顺序"}
     ),
     "marker": frozenset({"marker", "symbol", "标记", "符号"}),
+    "marker_line_color": frozenset(
+        {
+            "markerlinecolor",
+            "markerlinecolour",
+            "symbollinecolor",
+            "标记轮廓色",
+            "符号轮廓色",
+        }
+    ),
+    "marker_fill_color": frozenset(
+        {
+            "markerfillcolor",
+            "markerfillcolour",
+            "symbolfillcolor",
+            "标记填充色",
+            "符号填充色",
+        }
+    ),
     "legend_label": frozenset(
         {"legendlabel", "indexlabel", "图例文字", "索引文字"}
     ),
@@ -616,6 +641,40 @@ def _normalized_marker(value: str, *, material_id: str) -> str | None:
     return normalized
 
 
+def _normalized_marker_fill_color(
+    value: str,
+    *,
+    material_id: str,
+) -> str | None:
+    if not value:
+        return None
+    color = value.strip().upper()
+    if re.fullmatch(r"#[0-9A-F]{6}", color) is None:
+        raise PerformanceComparisonError(
+            "performance_marker_fill_color_invalid",
+            f"Material {material_id!r}: MarkerFillColor must be a "
+            "#RRGGBB hexadecimal color.",
+        )
+    return color
+
+
+def _normalized_marker_line_color(
+    value: str,
+    *,
+    material_id: str,
+) -> str | None:
+    if not value:
+        return None
+    color = value.strip().upper()
+    if re.fullmatch(r"#[0-9A-F]{6}", color) is None:
+        raise PerformanceComparisonError(
+            "performance_marker_line_color_invalid",
+            f"Material {material_id!r}: MarkerLineColor must be a "
+            "#RRGGBB hexadecimal color.",
+        )
+    return color
+
+
 def load_performance_comparison(source: str | Path) -> PerformanceComparison:
     """Load and validate the tidy performance-comparison table."""
 
@@ -938,6 +997,32 @@ def load_performance_comparison(source: str | Path) -> PerformanceComparison:
             ),
             material_id=str(material_id),
         )
+        marker_line_color = _normalized_marker_line_color(
+            _unique_text(
+                material_rows,
+                (
+                    "marker_line_color"
+                    if "marker_line_color" in material_rows
+                    else None
+                ),
+                field="MarkerLineColor",
+                owner=owner,
+            ),
+            material_id=str(material_id),
+        )
+        marker_fill_color = _normalized_marker_fill_color(
+            _unique_text(
+                material_rows,
+                (
+                    "marker_fill_color"
+                    if "marker_fill_color" in material_rows
+                    else None
+                ),
+                field="MarkerFillColor",
+                owner=owner,
+            ),
+            material_id=str(material_id),
+        )
         values: dict[str, float] = {}
         for metric_id, value_rows in material_rows.groupby("metric", sort=False):
             if len(value_rows) != 1:
@@ -965,6 +1050,8 @@ def load_performance_comparison(source: str | Path) -> PerformanceComparison:
                 year=year,
                 doi=doi,
                 marker=marker,
+                marker_line_color=marker_line_color,
+                marker_fill_color=marker_fill_color,
                 values=values,
             )
         )
@@ -1240,6 +1327,30 @@ def _sample_group_colors(
     return {group: palette[0] for group in groups}
 
 
+def _reference_group_colors(
+    materials: tuple[PerformanceMaterial, ...],
+) -> dict[str, str]:
+    colors: dict[str, str] = {}
+    groups = list(dict.fromkeys(item.legend_group for item in materials))
+    for group in groups:
+        members = [item for item in materials if item.legend_group == group]
+        group_colors = {
+            item.marker_fill_color
+            for item in members
+            if item.marker_fill_color is not None
+        }
+        if len(group_colors) != 1 or any(
+            item.marker_fill_color is None for item in members
+        ):
+            raise PerformanceComparisonError(
+                "performance_reference_envelope_fill_conflict",
+                f"Reference envelope group {group!r} requires one shared "
+                "explicit MarkerFillColor for every included observation.",
+            )
+        colors[group] = next(iter(group_colors))
+    return colors
+
+
 def _material_styles(
     comparison: PerformanceComparison,
     *,
@@ -1311,12 +1422,26 @@ def _material_styles(
                 else sample_color
             )
             if material.role == "sample"
-            else PERFORMANCE_REFERENCE_COLOR
+            else (
+                material.marker_line_color
+                if material.marker_line_color is not None
+                else PERFORMANCE_REFERENCE_COLOR
+            )
         )
+        marker_fill_color = (
+            color if material.role == "sample" else "white"
+        )
+        if not radar and material.marker_fill_color is not None:
+            marker_fill_color = material.marker_fill_color
         styles[material.material_id] = {
             "color": color,
             "marker": marker,
-            "marker_fill_color": color if material.role == "sample" else "white",
+            "marker_fill_color": marker_fill_color,
+            "polygon_fill_color": (
+                categorical_fill_color(color)
+                if material.role == "sample"
+                else "white"
+            ),
             "marker_fill_hide": False,
             "role": material.role,
             "group": material.group,
@@ -1345,6 +1470,8 @@ def _legend_items(
             "legend_group",
             "legend_column",
             "legend_items_per_row",
+            "marker_line_color",
+            "marker_fill_color",
         ):
             values = list(
                 dict.fromkeys(getattr(item, field) for item in members)
@@ -1388,7 +1515,17 @@ def _layout_payload(
     *,
     use_legend_panel: bool,
     legend_column_count: int = 1,
+    plot_panel_width_mm: float = PERFORMANCE_PANEL_WIDTH_MM,
+    left_margin_mm: float = UNIFIED_LEFT_MARGIN_MM,
+    right_margin_mm: float = UNIFIED_RIGHT_MARGIN_MM,
+    bottom_margin_mm: float = UNIFIED_BOTTOM_MARGIN_MM,
+    top_margin_mm: float = UNIFIED_TOP_MARGIN_MM,
 ) -> dict[str, Any]:
+    plot_panel_width_mm = float(plot_panel_width_mm)
+    left_margin_mm = float(left_margin_mm)
+    right_margin_mm = float(right_margin_mm)
+    bottom_margin_mm = float(bottom_margin_mm)
+    top_margin_mm = float(top_margin_mm)
     legend_column_count = max(1, min(int(legend_column_count), 2))
     legend_width_mm = (
         PERFORMANCE_REFERENCE_PANEL_WIDTH_MM * legend_column_count
@@ -1396,18 +1533,22 @@ def _layout_payload(
         else 0.0
     )
     width_mm = (
-        PERFORMANCE_PANEL_WIDTH_MM + legend_width_mm
+        plot_panel_width_mm + legend_width_mm
         if use_legend_panel
-        else PERFORMANCE_PANEL_WIDTH_MM
+        else plot_panel_width_mm
     )
     graph_right_margin = (
-        width_mm - PERFORMANCE_PANEL_WIDTH_MM + UNIFIED_RIGHT_MARGIN_MM
+        width_mm - plot_panel_width_mm + right_margin_mm
     )
     return {
-        "kind": "paired_60mm_performance_panels",
+        "kind": (
+            f"performance_{plot_panel_width_mm:g}mm_plot_with_reserved_legend"
+            if use_legend_panel
+            else f"performance_{plot_panel_width_mm:g}mm_inside_legend"
+        ),
         "page_size_mm": [width_mm, PERFORMANCE_PANEL_HEIGHT_MM],
         "plot_panel_size_mm": [
-            PERFORMANCE_PANEL_WIDTH_MM,
+            plot_panel_width_mm,
             PERFORMANCE_PANEL_HEIGHT_MM,
         ],
         "legend_panel_size_mm": (
@@ -1419,22 +1560,43 @@ def _layout_payload(
             legend_column_count if use_legend_panel else 0
         ),
         "graph_margins_mm": {
-            "left": UNIFIED_LEFT_MARGIN_MM,
+            "left": left_margin_mm,
             "right": graph_right_margin,
-            "bottom": UNIFIED_BOTTOM_MARGIN_MM,
-            "top": UNIFIED_TOP_MARGIN_MM,
+            "bottom": bottom_margin_mm,
+            "top": top_margin_mm,
         },
         "plot_region_mm": [
-            PERFORMANCE_PANEL_WIDTH_MM
-            - UNIFIED_LEFT_MARGIN_MM
-            - UNIFIED_RIGHT_MARGIN_MM,
+            plot_panel_width_mm
+            - left_margin_mm
+            - right_margin_mm,
             PERFORMANCE_PANEL_HEIGHT_MM
-            - UNIFIED_BOTTOM_MARGIN_MM
-            - UNIFIED_TOP_MARGIN_MM,
+            - bottom_margin_mm
+            - top_margin_mm,
         ],
         "outside_legend": False,
         "legend_uses_reserved_panel": use_legend_panel,
     }
+
+
+def _uses_compact_inside_legend(
+    legend_items: list[dict[str, Any]],
+) -> bool:
+    """Use the shared inside-legend frame only for true group summaries."""
+
+    if not legend_items:
+        return False
+    if len(legend_items) > DEFAULT_LAYOUT_POLICY.inside_legend_max_series:
+        return False
+    return all(
+        str(item.get("label") or "").strip()
+        == str(item.get("legend_group") or "").strip()
+        == str(item.get("material") or "").strip()
+        and not (
+            bool(item.get("append_citation", True))
+            and bool(str(item.get("citation") or "").strip())
+        )
+        for item in legend_items
+    )
 
 
 def _deterministic_scatter_x_values(
@@ -1559,7 +1721,16 @@ def build_performance_scatter_payload(
         markers = {
             styles[material.material_id]["marker"] for material in members
         }
-        if len(roles) != 1 or len(colors) != 1 or len(markers) != 1:
+        marker_fill_colors = {
+            styles[material.material_id]["marker_fill_color"]
+            for material in members
+        }
+        if (
+            len(roles) != 1
+            or len(colors) != 1
+            or len(markers) != 1
+            or len(marker_fill_colors) != 1
+        ):
             raise PerformanceComparisonError(
                 "performance_scatter_identity_style_conflict",
                 f"Legend identity {legend_identity!r} cannot share one scatter "
@@ -1615,6 +1786,7 @@ def build_performance_scatter_payload(
         envelopes.append(
             {
                 "group": group,
+                "role": "observed_sample_extent",
                 "members": [material.material_id for material in members],
                 "x_values": [point[0] for point in polygon],
                 "y_values": [point[1] for point in polygon],
@@ -1623,6 +1795,55 @@ def build_performance_scatter_payload(
                 "line_transparency": PERFORMANCE_ENVELOPE_LINE_TRANSPARENCY,
                 "fill_transparency": PERFORMANCE_ENVELOPE_FILL_TRANSPARENCY,
                 "line_hide": True,
+                "interpretation": (
+                    "Observed sample extent with deterministic visual "
+                    "padding; not a confidence region."
+                ),
+            }
+        )
+    envelope_references = tuple(
+        material
+        for material in comparison.references
+        if material.envelope_include
+    )
+    for group, color in _reference_group_colors(envelope_references).items():
+        members = [
+            material
+            for material in envelope_references
+            if material.legend_group == group
+        ]
+        polygon = _expanded_envelope(
+            [
+                (
+                    plotted_x_values[material.material_id],
+                    material.values[y_metric.metric_id],
+                )
+                for material in members
+            ],
+            x_bounds=x_bounds,
+            y_bounds=y_bounds,
+            seed_key=f"{comparison.source_sha256}|reference|{group}",
+        )
+        envelopes.append(
+            {
+                "group": group,
+                "role": "observed_reference_group_extent",
+                "members": [material.material_id for material in members],
+                "x_values": [point[0] for point in polygon],
+                "y_values": [point[1] for point in polygon],
+                "line_color": color,
+                "fill_color": color,
+                "line_transparency": (
+                    PERFORMANCE_ENVELOPE_LINE_TRANSPARENCY
+                ),
+                "fill_transparency": (
+                    PERFORMANCE_REFERENCE_ENVELOPE_FILL_TRANSPARENCY
+                ),
+                "line_hide": True,
+                "interpretation": (
+                    "Observed reader-facing reference-category extent with "
+                    "deterministic visual padding; not a confidence region."
+                ),
             }
         )
     legend_items = _legend_items(comparison, styles)
@@ -1630,6 +1851,7 @@ def build_performance_scatter_payload(
         (int(item["legend_column"]) for item in legend_items),
         default=1,
     )
+    use_legend_panel = not _uses_compact_inside_legend(legend_items)
     return {
         "kind": "sciplot_performance_comparison",
         "version": 2,
@@ -1647,7 +1869,7 @@ def build_performance_scatter_payload(
         "envelopes": envelopes,
         "legend_items": legend_items,
         "layout": _layout_payload(
-            use_legend_panel=True,
+            use_legend_panel=use_legend_panel,
             legend_column_count=legend_column_count,
         ),
         "visual_data_transforms": visual_data_transforms,
@@ -1683,6 +1905,7 @@ def build_performance_radar_payload(
     comparison: PerformanceComparison,
 ) -> dict[str, Any]:
     metrics = comparison.radar_metrics
+    axis_labels = [item.radar_label for item in metrics]
     incomplete_samples = [
         material.material_id
         for material in comparison.samples
@@ -1696,7 +1919,7 @@ def build_performance_radar_payload(
         )
     styles = _material_styles(comparison, radar=True)
     angles = [
-        360.0 * index / len(metrics)
+        (90.0 + 360.0 * index / len(metrics)) % 360.0
         for index in range(len(metrics))
     ]
     series: list[dict[str, Any]] = []
@@ -1754,7 +1977,11 @@ def build_performance_radar_payload(
         "source_sha256": comparison.source_sha256,
         "source_row_count": comparison.source_row_count,
         "metrics": [json_safe(item.__dict__) for item in metrics],
-        "axis_labels": [item.radar_label for item in metrics],
+        "axis_labels": axis_labels,
+        "axis_endpoint_labels": [
+            f"{float(metric.scale_max if metric.direction == 'higher' else metric.scale_min):g}"
+            for metric in metrics
+        ],
         "angles_degrees": angles,
         "normalization": {
             "kind": "declared_bounded_directional_score",
@@ -1769,6 +1996,10 @@ def build_performance_radar_payload(
         "layout": _layout_payload(
             use_legend_panel=use_legend_panel,
             legend_column_count=legend_column_count,
+            left_margin_mm=PERFORMANCE_RADAR_LEFT_MARGIN_MM,
+            right_margin_mm=PERFORMANCE_RADAR_RIGHT_MARGIN_MM,
+            bottom_margin_mm=PERFORMANCE_RADAR_BOTTOM_MARGIN_MM,
+            top_margin_mm=PERFORMANCE_RADAR_TOP_MARGIN_MM,
         ),
         "material_count": len(comparison.materials),
         "sample_count": len(comparison.samples),

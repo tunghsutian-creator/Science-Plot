@@ -165,14 +165,44 @@ separate internal observation identity from reader-facing material identity
 and allow one or two entries in each group row. Repeated
 observations with one `LegendIdentity` share a marker and one XY series, while
 different identities remain globally unique through the sixteen-symbol native
-Veusz marker inventory. Scatter observations sharing one source density use a
+Veusz marker inventory. Optional `MarkerLineColor=#RRGGBB` is the data-bound
+marker and radar-polygon outline; references may therefore share a
+reader-facing category colour while retaining marker-shape redundancy.
+Scatter observations sharing one source density use a
 source-hash-bound symmetric horizontal offset. Optional `ScatterMin` and
 `ScatterMax` declare one-sided or two-sided visible bounds without permitting
-data clipping. Optional `EnvelopeInclude` selects which sample observations
-participate in each `Group` envelope without removing those observations from
-the scatter or legend. Sample envelopes use a deterministic irregular smoothed
-enclosure with no visible stroke; the source coordinates remain unchanged in
-the delivered table. The rule remains pending
+data clipping. Optional `EnvelopeInclude` selects which observations
+participate in an envelope without removing those observations from the
+scatter or legend. Sample envelopes group by `Group`. Opted-in reference
+envelopes group by the reader-facing `LegendGroup`, require one shared explicit
+`MarkerFillColor`, and use a higher-transparency borderless fill. Optional
+`MarkerFillColor=#RRGGBB` adds a data-bound
+scatter marker interior and the same fill to its reserved-panel index marker
+while preserving the role-owned outline and marker-shape identity; the default
+remains blue-filled own samples and hollow neutral references, and radar
+reference markers remain hollow. Radar sample polygons use the categorical
+pale counterpart of their line colour at 35% fill transparency; radar
+references use only their real-axis markers and never create an envelope.
+Radar axis order is anchored at 90 degrees so the first declared
+`RadarOrder` axis is upright; later axes proceed counter-clockwise. A
+radar always retains the standard `60x55` mm plot module. Explicit multiline
+axis labels materialize as separate editable 6 pt native Veusz labels. With
+the standard reserved `60x55` mm reference index, one legend column yields a
+`120x55` mm page whose module boundary aligns with other 60 mm figures.
+Concentric radar guides use the declared axis angles to form low-contrast
+0.45 pt dashed polygons rather than circles; spokes remain quiet solid guides
+and sample polygons retain the visual hierarchy. Each outer vertex carries a
+separate pure-number endpoint label: `ScaleMax` for a `higher` metric and
+`ScaleMin` for a `lower` metric. Axis titles and units sit outside those
+numbers without `Max`, `Range`, or direction-arrow prefixes.
+All scatter envelopes use a deterministic irregular smoothed enclosure with
+no visible stroke; one- and two-observation reference groups use blob and
+capsule geometry. The source coordinates remain unchanged in the delivered
+table. A true group summary with at most four entries, where
+`LegendIdentity`, `LegendLabel`, and `LegendGroup` are the same reader-facing
+class name and no citation suffix is required, uses the shared final-size
+inside-legend placement contract in one `60x55` mm panel. Detailed identities
+retain the reserved right `60x55` mm index module. The rule remains pending
 automatic promotion while its
 only source-controlled evidence is an
 `instrument_shaped_fixture`; an explicit Studio request is still the supported

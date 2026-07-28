@@ -250,22 +250,43 @@ For `performance_comparison`, require one tidy `Material`/`Role`/`Metric`/
 `ScatterAxis=y`; sample `Group` owns a pale, borderless, deterministically
 irregular observed-range envelope. Optional `ScatterMin` and `ScatterMax`
 declare visible axis bounds but must not clip plotted data. Optional
-`EnvelopeInclude` selects which sample observations participate in that
-envelope without hiding their plotted points or legend identities. Repeated sample x values may use a
+`EnvelopeInclude` selects which observations participate without hiding their
+plotted points or legend identities. Samples group by `Group`; opted-in
+references group by `LegendGroup`, require one shared explicit
+`MarkerFillColor`, and use a paler borderless envelope. Repeated sample x values may use a
 source-hash-bound symmetric horizontal display offset while retaining their
 source values and explicit transform lineage. `LegendLabel`, `LegendGroup`,
 `LegendIdentity`, `LegendColumn`, and `LegendItemsPerRow` may define grouped
 one- or two-column reader-facing indexes with one or two entries per group
 row. One legend identity may own multiple observations and one shared
-marker/XY series.
+marker/XY series. Optional `MarkerLineColor=#RRGGBB` gives a marker and
+radar-polygon outline a data-bound category colour while retaining
+marker-shape redundancy. Optional `MarkerFillColor=#RRGGBB` gives a scatter marker and
+its reserved-panel index marker the same data-bound interior colour while
+retaining role-owned outlines and marker-shape redundancy; references default
+to hollow neutral markers, own samples default to the sample palette, and
+radar reference markers remain hollow. When at most four summary identities
+use the same class name in `LegendIdentity`, `LegendLabel`, and `LegendGroup`
+and need no appended citation, use the shared inside-legend placement contract
+in one 60 x 55 mm panel; detailed indexes retain the reserved right module.
 `polar_curve` requires at least three unique `RadarOrder` values plus declared
 `Direction`, `ScaleMin`, and `ScaleMax`; complete own samples are filled and
-references remain marker-only on axes with actual values. Both use native
-editable Veusz objects, a 60 x 55 mm plot module, a 41.5 x 38.5 mm plot region,
-and one or two reserved right 60 x 55 mm reference columns when required. Do
-not call the envelope a confidence interval, infer radar bounds, interpolate
-missing reference values, or promote the instrument-shaped fixture to
-real-data evidence.
+references remain marker-only on axes with actual values. Own-sample radar
+polygons use the categorical pale counterpart of the outline at 35% fill
+transparency; an explicit reference `MarkerLineColor` may colour the hollow
+real-axis markers but must not create an envelope. Put the first declared
+radar axis upright at 90 degrees and place later axes counter-clockwise.
+Retain the native 60 x 55 mm plot module and 41.5 x 38.5 mm plot region.
+Materialize every explicit axis-label line as a separate editable 6 pt native
+Veusz label. Use a standard 60 x 55 mm right reference column so one-column
+radar figures retain the aligned 120 x 55 mm publication frame. Form every
+concentric guide from the declared radar angles as a low-contrast 0.45 pt
+dashed polygon rather than a circle; keep spokes quiet and solid. Put one
+pure-number bound label next to each outer vertex: `ScaleMax` for `higher` and
+`ScaleMin` for `lower`. Keep axis titles and units outside those labels and do
+not add `Max`, `Range`, or direction arrows. Do not call the envelope a
+confidence interval, infer radar bounds, interpolate missing reference values,
+or promote the instrument-shaped fixture to real-data evidence.
 
 `src/sciplot_core/policy.py` owns global typography, stroke, tick, marker,
 ordinary frame, size, export, and delivery defaults. Templates and recipes may
