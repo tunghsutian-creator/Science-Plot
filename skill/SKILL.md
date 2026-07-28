@@ -9,39 +9,36 @@ Use the repository CLI and shared contracts. Do not create one-off plotting
 scripts, copy style constants, or introduce another renderer, document model,
 or editor.
 
-## Authority and documentation
+## Authority
 
-- `README.md` owns the product boundary and user workflow.
-- This skill owns agent command routing and required checks.
+- `README.md` owns product behavior and the user workflow.
+- This skill owns agent routing and verification.
 - `docs/ARCHITECTURE.md` owns module and dependency boundaries.
-- `DEVELOPMENT_ROADMAP.md` contains active work only.
+- `DEVELOPMENT_ROADMAP.md` contains unfinished priorities only.
 - `AGENTS.md` is a thin local overlay; it must not redefine this workflow.
+- `agent.md` owns general code-architecture constraints.
 - `DEVELOPMENT_LOG.md` and Git are history/evidence, not current instructions.
 
 When prose conflicts, verify the live CLI and source-controlled contracts, then
-repair the stale document. Never revive an older frontend or route from history.
+repair the stale document. Never revive an older route from historical notes.
 
 ## Product boundary
 
 Veusz `MainWindow` is the only daily plotting frontend and
 `studio/document.vsz` is the visual authority. SciPlot-owned Qt modules attach
-Project and optional selected-object AI docks to that same live `Document`;
-they are not another frontend. Keep object selection, alignment, arbitrary
-properties, Datasets, Save, and Undo/Redo in Veusz.
+Project and optional selected-object AI docks to the same live `Document`;
+they are not another frontend.
 
-The browser `app` is limited to first-time source, grouping, naming, order,
-size, and export-format confirmation plus read-only result review. Do not use
-or extend it for post-render style, axis, legend, or series editing. All visual
-refinement belongs in Veusz.
+The browser `app` is limited to initial source, grouping, naming, order, size,
+and export confirmation plus read-only result review. All post-render editing
+belongs in native Veusz. Do not automate Veusz with mouse clicks or patch VSZ
+text.
 
-AI is optional and may only propose validated `set_setting` operations for the
-currently selected supported object. Provider absence must not disable
-deterministic plotting, manual editing, QA, export, or delivery.
+AI is optional. Provider absence must not disable deterministic recognition,
+plotting, manual editing, QA, export, or delivery. AI may propose only validated
+operations for the currently selected supported object.
 
-Do not recreate or reference removed Canvas, Composition, session-evidence, or
-promotion workflows. Do not automate Veusz with mouse clicks or patch VSZ text.
-
-## Primary Studio workflow
+## Primary workflow
 
 1. Check readiness:
 
@@ -51,7 +48,7 @@ promotion workflows. Do not automate Veusz with mouse clicks or patch VSZ text.
 
    Require `status=ready`.
 
-2. Inspect new input and local rules when needed:
+2. Inspect unfamiliar input or rules when needed:
 
    ```bash
    skill/scripts/sciplot inspect INPUT --json
@@ -59,257 +56,56 @@ promotion workflows. Do not automate Veusz with mouse clicks or patch VSZ text.
    skill/scripts/sciplot rules show RULE_ID --json
    ```
 
-3. For interactive daily work, prepare the project and open native Veusz:
+3. Prepare raw input and open native Veusz:
 
    ```bash
-   skill/scripts/sciplot studio INPUT --out /path/to/Visible_Figure_Project
+   skill/scripts/sciplot studio INPUT
    ```
 
-   When scientific or presentation intent is already known:
+   When intent is already known:
 
    ```bash
    skill/scripts/sciplot studio INPUT \
      --rule RULE_ID \
-     --template TEMPLATE_ID \
-     --out /path/to/Visible_Figure_Project
+     --template TEMPLATE_ID
    ```
 
-   `--rule` normally names a ready rule. The sole current evidence-gated
-   exception is an explicitly requested `performance_comparison` Studio review:
-   its scatter/radar builder is implemented, but the rule remains pending until
-   authorized real-data acceptance. Never present that run as autonomous-ready.
-   `--template` must be implemented by the production Veusz builder.
-
-4. For headless preparation and export, use the same command family:
+4. Use the same lifecycle for headless export:
 
    ```bash
    skill/scripts/sciplot studio INPUT \
-     --out /path/to/Visible_Figure_Project \
      --export pdf,tiff_300 \
      --json
    ```
 
-   `--json` does not open Veusz. Interactive and headless Studio are two modes
-   of one lifecycle, not separate plotting entrypoints.
+   `--json` does not open Veusz.
 
-5. Open an existing master directly and export its exact current state:
+5. Open or export the exact current document without regeneration:
 
    ```bash
    skill/scripts/sciplot studio FIGURE.vsz
    skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
    ```
 
-   For a standalone exact-current export:
+6. Before handoff, inspect current VSZ identity, manifest, QA, figures, plotting
+   data, and delivery completeness. Require ready state, passed QA, and matching
+   current/exported/delivered VSZ hashes.
 
-   ```bash
-   skill/scripts/sciplot studio FIGURE.vsz \
-     --out outputs/standalone_export \
-     --export pdf,tiff_300 \
-     --json
-   ```
+## Output placement
 
-   A standalone receipt proves exact-current export and artifact QA only. It
-   does not establish source provenance or complete project delivery.
+For raw-input plotting, omit `--out` by default. SciPlot must create the visible
+`SOURCE_SciPlot/` package beside the source and place internal evidence in the
+sibling hidden `.sciplot/` workspace.
 
-6. Before handoff, inspect state, current VSZ hash, `manifest.json`,
-   `review.html`, figures, `tables/analysis_metrics.csv`, QA, and `delivery/`.
-   Require ready state, passed QA, and complete delivery.
+Do not put user plotting deliveries inside the SciPlot repository or its
+`outputs/` directory. When a custom name is required, point `--out` to a
+dedicated directory beside the original data. `.tmp_verify/` is reserved for
+development gates.
 
-## Command routing
-
-- `studio`: the primary interactive and exact-current project command family.
-- `app`: opt-in first-time confirmation and read-only result review only. Keep
-  it loopback-only and never bypass its session/output-root source-path boundary.
-- `autoplot`: the only public fully automated raw-path project route. It wraps the
-  internal one-step/`run_request` lifecycle and owns the stable summary, QA,
-  and delivery result. It is orchestration over the same renderer, not another
-  plotting implementation.
-- `run`: replay an already-confirmed `plot_request.json`.
-- `render` and `recipe`: low-level development/testing primitives.
-- `one-step`: internal manifest/readiness contract; never recommend it as a
-  user command.
-
-Do not recommend the retired `quick`, `prepare`, `intake`, or `workbench`
-names. They are no longer CLI commands; only explicit migration checks for old
-generated launchers may remain.
-
-## States and repair
-
-Project result state (`editing`, `exporting`, `ready`, `needs_fix`) is distinct
-from preparation/automation state (`ready`, `needs_human_confirmation`,
-`needs_rule_repair`) and from source-audit state. Do not collapse them.
-
-- `ready`: inspect and hand off the reviewed delivery.
-- `needs_human_confirmation`: ask only for unresolved scientific meaning.
-- `needs_rule_repair`: repair the shared semantic rule, recipe, policy, or QA;
-  add a representative fixture/test and rerun the same request.
-
-Never turn empty or unreadable data into a placeholder series. Never let
-pending rules, skipped QA, or incomplete delivery appear ready. Preserve raw
-inputs and scientific meaning.
-
-When cleanup is necessary:
-
-1. preserve raw inputs;
-2. write and inspect `cleanup_result.json` when data is reshaped;
-3. patch the central owner rather than create a one-off plot;
-4. add representative fixture/test coverage;
-5. rerun Studio export and inspect the final delivery.
-
-## Repeated friction and operational knowledge
-
-Do not spend multiple turns or repeated tool calls rediscovering the same
-failure or workaround. At the second occurrence of the same symptom, or after
-the second unsuccessful modification for one visible defect, stop changing
-parameters and establish the root cause. Record:
-
-1. the observable symptom and the exact affected scope;
-2. the root cause, including relevant unit, renderer, environment, or data
-   semantics;
-3. the stable command, contract, or implementation that replaces the failed
-   route;
-4. the verification that distinguishes a real fix from another visual guess;
-5. any limitation or condition under which the workaround no longer applies.
-
-Put durable operating rules in this skill or the appropriate current
-development/user document. Put the dated change and verification in
-`DEVELOPMENT_LOG.md`. Add a shared test when the failure is programmatically
-detectable. Do not preserve secrets, credentials, temporary paths, or
-machine-specific noise as reusable guidance.
-
-Operational facts that change command routing must also be recorded when
-discovered. Examples include an unavailable interpreter or executable, a
-required project virtual environment, dependency/version incompatibility,
-sandbox or filesystem restrictions, source encoding/delimiter behavior,
-cloud-synchronization behavior, and renderer-specific unit semantics.
-Probe the capability once, select the valid route, state that selection in the
-working update, and reuse it for the rest of the task. Do not repeatedly invoke
-an executable already known to be unavailable.
-
-For this checkout, an existing project environment takes precedence:
-
-```bash
-.venv/bin/python -m pytest -q
-.venv/bin/python -m pip --version
-```
-
-If `.venv/bin/python` is absent, check `python3` once and follow the README
-installation route. Do not try bare `python` after it has failed, and do not
-silently switch interpreters without recording the selected interpreter and
-why. The repository wrapper `skill/scripts/sciplot` remains the preferred
-route for SciPlot commands because it bootstraps the source checkout
-consistently.
-
-## Template, style, and delivery contracts
-
-The production builder implements exactly `curve`, `point_line`, `stacked_curve`,
-`bar`, `box`, `box_strip`, `heatmap`, `scatter`, and `polar_curve`. The `bar`
-template uses mean ± SD
-error bars for categorical replicate groups. An unambiguous long-form
-`Sample`/`Condition`/value table creates paired or grouped mean ± SD bars:
-sample identity owns the categorical colour root, condition identity owns the
-opaque light/dark tone, and the segmented legend shows every sample colour for
-each condition. Visible grouped-bar fills are explicit axis-positioned
-rectangles whose fractional width and height are converted from the same data
-geometry used by the outlines; hidden native bars retain editable dataset
-bindings without owning visible fill geometry. The template also accepts an
-unambiguous
-long-form `Sample`/`Component`/value table for additive stacked composition;
-that path preserves component values, creates no statistical error bars, and
-uses the ordinary control-first categorical roots with opaque same-hue
-component tones. Its component legend follows the visible stack from top to
-bottom and divides each swatch across every sample colour.
-Unknown or reference-only templates must fail at request validation.
-
-A complete `Formula || Condition` curve grid with exactly two ordered
-conditions and two to four formulas uses the shared factorized-curve contract.
-Keep all measured curves as equal-width continuous solid lines with no point
-markers. Formula order owns the colour root and condition order owns the opaque
-light/dark tone. The compact legend uses one `Weight reduction` heading, places
-the abbreviated `33%` and `50%` conditions side by side with short, moderately
-thick multi-formula segmented swatches before their text, and puts the
-formula-colour curve keys in one lower row without a `Formula` heading. Align
-the heading and `33%` entry to the formula row's left edge, align the `50%`
-entry to its right edge, and preserve every measured line point. When
-the confirmed design excludes dash and marker redundancy, retain any
-publication accessibility warning for human review rather than changing the
-chart.
-Canonical three-row structured curve CSVs must replay directly through the
-tensile semantic path instead of assuming a curated workbook sheet.
-
-Do not bind a categorical scientific metric to one chart form. The semantic
-rule owns recognition, units, replicate preservation, and analysis; its
-versioned presentation contract separately declares a default template and
-the supported explicit alternatives. For `impact_metric`, `bar`, `box`,
-`box_strip`, and `point_line` must all consume the same prepared replicate data. An explicit
-supported choice is a normal validated request, while an unsupported choice
-fails closed.
-
-For `performance_comparison`, require one tidy `Material`/`Role`/`Metric`/
-`Value`/`Unit` table. `scatter` requires exactly one `ScatterAxis=x` and one
-`ScatterAxis=y`; sample `Group` owns a pale, borderless, deterministically
-irregular observed-range envelope. Optional `ScatterMin` and `ScatterMax`
-declare visible axis bounds but must not clip plotted data. Optional
-`EnvelopeInclude` selects which observations participate without hiding their
-plotted points or legend identities. Samples group by `Group`; opted-in
-references group by `LegendGroup`, require one shared explicit
-`MarkerFillColor`, and use a paler borderless envelope. Repeated sample x values may use a
-source-hash-bound symmetric horizontal display offset while retaining their
-source values and explicit transform lineage. `LegendLabel`, `LegendGroup`,
-`LegendIdentity`, `LegendColumn`, and `LegendItemsPerRow` may define grouped
-one- or two-column reader-facing indexes with one or two entries per group
-row. One legend identity may own multiple observations and one shared
-marker/XY series. Optional `MarkerLineColor=#RRGGBB` gives a marker and
-radar-polygon outline a data-bound category colour while retaining
-marker-shape redundancy. Optional `MarkerFillColor=#RRGGBB` gives a scatter marker and
-its reserved-panel index marker the same data-bound interior colour while
-retaining role-owned outlines and marker-shape redundancy; references default
-to hollow neutral markers, own samples default to the sample palette, and
-radar reference markers remain hollow. When at most four summary identities
-use the same class name in `LegendIdentity`, `LegendLabel`, and `LegendGroup`
-and need no appended citation, use the shared inside-legend placement contract
-in one 60 x 55 mm panel; detailed indexes retain the reserved right module.
-`polar_curve` requires at least three unique `RadarOrder` values plus declared
-`Direction`, `ScaleMin`, and `ScaleMax`; complete own samples are filled and
-references remain marker-only on axes with actual values. Own-sample radar
-polygons use the categorical pale counterpart of the outline at 35% fill
-transparency; an explicit reference `MarkerLineColor` may colour the hollow
-real-axis markers but must not create an envelope. Put the first declared
-radar axis upright at 90 degrees and place later axes counter-clockwise.
-Retain the native 60 x 55 mm plot module and 41.5 x 38.5 mm plot region.
-Materialize every explicit axis-label line as a separate editable 6 pt native
-Veusz label. Use a standard 60 x 55 mm right reference column so one-column
-radar figures retain the aligned 120 x 55 mm publication frame. Form every
-concentric guide from the declared radar angles as a low-contrast 0.45 pt
-dashed polygon rather than a circle; keep spokes quiet and solid. Put one
-pure-number bound label next to each outer vertex: `ScaleMax` for `higher` and
-`ScaleMin` for `lower`. Keep axis titles and units outside those labels and do
-not add `Max`, `Range`, or direction arrows. Do not call the envelope a
-confidence interval, infer radar bounds, interpolate missing reference values,
-or promote the instrument-shaped fixture to real-data evidence.
-
-`src/sciplot_core/policy.py` owns global typography, stroke, tick, marker,
-ordinary frame, size, export, and delivery defaults. Templates and recipes may
-not own private hard-style constants. Heatmap scalar, contour, and colorbar
-colors are the explicit semantic color exception.
-
-Visible unit typography is a global plot contract. Accept solidus notation
-from instrument inputs, but render and deliver units as products with Unicode
-negative exponents, for example `kJ m⁻²`, `W g⁻¹`, and `Pa⁻¹`. Apply this to
-axes, colorbars, free plot text, legend/key unit qualifiers, plot-data unit
-rows, and analysis metric units. Do not rewrite dimensionless mathematical
-ratios such as `σ/σ₀` or `G′/G′ₘ`. Exact-current VSZ QA must fail when a visible
-unit still uses a solidus.
-
-For raw input, ``--out`` names the dedicated visible handoff directory.  When
-omitted, create ``SOURCE_SciPlot/`` beside the source.  Put runtime evidence,
-history, raw snapshots, manifests, and QA under the sibling hidden ``.sciplot/``
-workspace; never make a normal user traverse ``outputs/.../runs/.../delivery``.
-
-The user-facing package is limited to:
+The visible package is limited to:
 
 ```text
-SOURCE_SciPlot/  # or the explicit --out directory
+SOURCE_SciPlot/  # or a source-adjacent explicit --out
   data/*.csv
   figures/*.pdf
   figures/*_300dpi.tiff
@@ -317,43 +113,160 @@ SOURCE_SciPlot/  # or the explicit --out directory
   Open_in_Veusz.command
 ```
 
-The VSZ files embed all plotted data and Veusz objects and remain the portable
-editable authority. Raw archives, manifests, analysis tables, QA, publication
-evidence, and transform lineage remain in the hidden runtime workspace.
+Raw snapshots, manifests, analysis tables, QA, provenance, and transform
+lineage remain in the hidden runtime workspace.
 
-## Specialized preparation and verification
+## Command routing
 
-```bash
-# Scientific curation prepares a Studio project; Studio still owns final work
-skill/scripts/sciplot curate torque INPUT --name PROJECT_NAME \
-  --out outputs/curation_projects --json
+- `studio`: primary interactive and exact-current command family.
+- `autoplot`: only public fully automated raw-path project/QA/delivery route;
+  it orchestrates the same renderer and is not another plotting system.
+- `run`: replay a confirmed `plot_request.json`.
+- `app`: optional first-time confirmation and read-only result review.
+- `render` and `recipe`: low-level development/testing primitives.
+- `curate torque`: scientific selection and Studio preparation, not final
+  rendering or delivery.
+- `readiness`, `cleanup`, `mapping`, and `publication`: maintenance or metadata
+  commands, not plotting entrypoints.
+- `batch`, `smoke`, and `acceptance`: development evidence routes.
+- `one-step`: internal manifest/readiness model, never a user recommendation.
 
-# Optional browser confirmation surface, only when explicitly needed
-skill/scripts/sciplot app INPUT --out outputs/intake_projects
+Do not recommend retired command names. Legacy-launcher detection may remain
+only so old generated artifacts fail with an explicit migration message.
 
-# Independent artifact QA
-skill/scripts/sciplot qa OUTDIR --strict-publication
+## Scientific and presentation contracts
 
-# Development/acceptance only; batch is hidden from normal CLI help
-skill/scripts/sciplot batch INPUT_DIR --out OUTDIR --mode smoke
-skill/scripts/sciplot acceptance rules --out outputs/acceptance --json
+Preserve raw values and scientific meaning. Never turn empty or unreadable data
+into a placeholder series, average repeated scientific rows silently, invent
+missing measurements, interpolate absent reference values, or let a pending
+rule appear ready.
+
+The production Veusz builder implements:
+
+```text
+curve
+point_line
+stacked_curve
+bar
+box
+box_strip
+heatmap
+scatter
+polar_curve
 ```
 
-`curate torque` does not own final rendering or delivery. `batch`, `smoke`, and
-`acceptance` are regression/evidence routes, never alternatives to `autoplot`
-for user automation.
+Requests for other templates fail closed. A semantic rule owns recognition,
+units, replicate preservation, and analysis; its presentation contract owns
+the allowed chart alternatives. Use the current public contract and tests
+rather than copying template behavior into a recipe or script.
 
-`readiness`, `cleanup`, and `mapping` are maintenance/evidence commands.
-`publication` exposes profile and deterministic layout metadata only; it does
-not provide a Composition editor, assembler, or renderer. Never route plotting
-through any of these commands.
+`performance_comparison` requires its explicit tidy long-table contract and
+remains explicit-Studio-only until its ready-rule acceptance is promoted.
+Report that evidence boundary honestly.
 
-## Verification and evidence
+Global typography, strokes, ticks, markers, ordinary frames, exports, and the
+plot contract belong to `src/sciplot_core/policy/`. Heatmap scalar colors are
+the explicit semantic exception. Display units use Unicode negative-exponent
+products (`kJ m⁻²`, `W g⁻¹`, `Pa⁻¹`); mathematical ratios such as `σ/σ₀`
+remain ratios.
 
-After every non-trivial code change:
+Detailed reader-facing behavior belongs in `README.md`; implementation
+ownership belongs in `docs/ARCHITECTURE.md`; executable truth belongs in the
+request contract, policy data, and focused tests. Do not duplicate those
+details here.
+
+## States and repair
+
+Project state (`editing`, `exporting`, `ready`, `needs_fix`) is distinct from
+automation state (`ready`, `needs_human_confirmation`, `needs_rule_repair`) and
+source-audit state.
+
+- `ready`: inspect and hand off the reviewed delivery.
+- `needs_human_confirmation`: ask only for unresolved scientific meaning.
+- `needs_rule_repair`: repair the central semantic rule, recipe, policy, or QA;
+  add representative coverage and rerun the same request.
+
+When cleanup is required:
+
+1. preserve raw inputs;
+2. record any data reshaping and inspect `cleanup_result.json`;
+3. patch the central owner, not a one-off plot;
+4. add focused fixtures/tests;
+5. rerun Studio export and inspect the final delivery.
+
+## Repeated friction and environment
+
+After the second occurrence of one symptom, or the second unsuccessful change
+for one defect, stop guessing and record:
+
+1. symptom and scope;
+2. root cause;
+3. stable replacement command or contract;
+4. discriminating verification;
+5. limitations.
+
+Use the existing project environment:
 
 ```bash
 .venv/bin/python -m pytest -q
+.venv/bin/python -m pip --version
+```
+
+If `.venv/bin/python` is absent, probe `python3` once and follow the README
+installation route. Do not repeatedly invoke a known unavailable executable.
+
+## Specialized development routes
+
+```bash
+skill/scripts/sciplot curate torque INPUT \
+  --name PROJECT_NAME \
+  --out /原始数据所在目录/Torque_SciPlot \
+  --json
+
+skill/scripts/sciplot app INPUT \
+  --out /原始数据所在目录/SOURCE_SciPlot
+
+skill/scripts/sciplot qa OUTDIR --strict-publication
+skill/scripts/sciplot batch INPUT_DIR --out .tmp_verify/batch --mode smoke
+```
+
+These routes do not replace Studio as final editor and visual authority.
+
+## Test tiers and verification
+
+Use the smallest discriminating test while iterating:
+
+```bash
+.venv/bin/python -m pytest -q tests/test_module.py::test_changed_behavior
+```
+
+Pytest assigns every test to exactly one logical tier:
+
+- `focused`: single-owner, in-process behavior. All tests without an explicit
+  `comprehensive` marker enter this tier automatically.
+- `comprehensive`: real Veusz worker/export, cross-process wrapper, or complete
+  Studio lifecycle behavior.
+
+Run the tier that matches the changed boundary:
+
+```bash
+.venv/bin/python -m pytest -q -m focused
+.venv/bin/python -m pytest -q -m comprehensive
+.venv/bin/python -m pytest -q
+```
+
+Do not run the full suite after every intermediate edit. Run it before handoff
+when production code, a public interface, shared contract, test
+classification/configuration, broad refactor, release/merge state, or an
+uncertain impact radius changed. A documentation-only or isolated fixture
+change may close with its directly related tests when no executable contract
+changed.
+
+Run `doctor` for command/runtime contract changes. Run runtime smoke when the
+change crosses Studio, renderer, worker, export, QA, delivery, launcher, or
+runtime-environment boundaries:
+
+```bash
 skill/scripts/sciplot doctor --json
 skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json
 git diff --check
@@ -362,29 +275,15 @@ git diff --check
 For shared style, renderer, rule, QA, or delivery changes, also run:
 
 ```bash
-skill/scripts/sciplot acceptance rules --out outputs/acceptance --json
+skill/scripts/sciplot acceptance rules \
+  --out .tmp_verify/acceptance \
+  --json
 ```
 
-`acceptance rules` machine-checks PDF physical dimensions, TIFF DPI, and
-delivery-copy identity. Its contact sheets are uncalibrated overview previews
-for clipping, occlusion, marker/line distinction, and blank or corrupt output;
-they do not prove readability at final physical size. After inspecting every
-preview, record the explicit result with:
-
-```bash
-skill/scripts/sciplot acceptance visual-review \
-  OUTPUT/final_size_visual_review/final_size_visual_review.json \
-  --decision passed --reviewer NAME --json
-```
-
-Until this record exists, report automated physical-size QA separately from
-the still-pending preview review. Final-size readability requires separately
-recorded inspection on a calibrated display or print; this command does not
-provide that evidence.
-
-Inspect each evidence tier. Synthetic smoke is a runtime change gate, not
-real-data evidence. Passing automation does not prove sustained human daily
-use or blanket journal compliance.
+Synthetic smoke is a runtime gate, not real-data evidence. Acceptance contact
+sheets are uncalibrated previews and do not prove final-size readability;
+machine lifecycle, provenance, human review, and journal compliance remain
+separate claims.
 
 For every non-trivial development turn, update `DEVELOPMENT_LOG.md` with the
-change, current project state, and verification before reporting.
+change, current state, and verification before reporting.

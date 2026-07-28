@@ -608,6 +608,7 @@ def test_scatter_group_summary_uses_60mm_inside_legend_contract(
     ]
 
 
+@pytest.mark.comprehensive
 def test_scatter_group_summary_materializes_auto_inside_native_key(
     tmp_path: Path,
 ) -> None:

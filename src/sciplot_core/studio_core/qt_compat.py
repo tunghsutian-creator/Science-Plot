@@ -138,3 +138,6 @@ def _ensure_veusz_loader_compat() -> None:
     veusz_document.isClipboardDataMime = _safe_is_clipboard_data_mime
     veusz_document.getClipboardWidgetMime = _safe_get_clipboard_widget_mime
     mime._sciplot_safe_clipboard = True
+
+
+ensure_veusz_loader_compat = _ensure_veusz_loader_compat

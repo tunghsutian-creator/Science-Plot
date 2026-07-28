@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
+from sciplot_core.foundation.iso_timestamps import (
+    require_zoned_iso_timestamp,
+    utc_now_iso,
+)
 from sciplot_core.json_contract import (
     require_json_int,
     require_json_list,
@@ -17,9 +20,8 @@ from sciplot_core.mapping_contract.constants import (
     _FORBIDDEN_EXECUTABLE_KEYS,
 )
 
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+_timestamp = require_zoned_iso_timestamp
+_now = utc_now_iso
 
 
 def _absolute_path(value: object, label: str) -> str:
@@ -28,17 +30,6 @@ def _absolute_path(value: object, label: str) -> str:
     if not path.is_absolute():
         raise ValueError(f"{label} must be an absolute path.")
     return str(path.resolve())
-
-
-def _timestamp(value: object, label: str) -> str:
-    text = _required_text(value, label)
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise ValueError(f"{label} must be an ISO-8601 timestamp.") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ValueError(f"{label} must include a timezone offset.")
-    return text
 
 
 def _required_text(value: object, label: str) -> str:

@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 from typing import Any
+from sciplot_core.automation_states import RULE_REPAIR_STATE
 from sciplot_core.foundation.json_values import json_safe
-
-from sciplot_core.one_step.quality_catalog import (
-    RULE_REPAIR_STATE,
-)
 
 
 def build_intervention_package(

@@ -16,7 +16,7 @@ def audit_categorical_axis(
     inventory: SpecAuditInventory,
     spec: dict[str, Any],
 ) -> None:
-    from sciplot_core.studio import _veusz_literal_text
+    from sciplot_core.studio_core.series_request import veusz_literal_text
 
     loaded_document = inventory.loaded_document
     categorical = inventory.categorical
@@ -29,7 +29,7 @@ def audit_categorical_axis(
             float(value) for value in x_axis.get("category_positions", [])
         ]
         expected_category_labels = [
-            _veusz_literal_text(value) for value in x_axis.get("category_labels", [])
+            veusz_literal_text(value) for value in x_axis.get("category_labels", [])
         ]
         if (
             _text_dataset_values(loaded_document, dataset_name="category_axis_labels")

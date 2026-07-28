@@ -388,3 +388,8 @@ def _reference_guide_line_contracts(
             }
         )
     return contracts
+
+
+reference_guide_rect_contracts = _reference_guide_rect_contracts
+categorical_line_contracts = _categorical_line_contracts
+reference_guide_line_contracts = _reference_guide_line_contracts

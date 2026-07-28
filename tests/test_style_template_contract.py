@@ -83,6 +83,7 @@ def test_curve_style_contract_uses_solid_lines_for_every_series() -> None:
     assert DEFAULT_CURVE_LINE_STYLE_SEQUENCE == ("solid",)
 
 
+@pytest.mark.comprehensive
 def test_curve_template_materializes_independent_condition_and_formula_legends(
     tmp_path: Path,
 ) -> None:
@@ -798,6 +799,7 @@ def test_named_profiles_use_the_global_horizontal_frame() -> None:
     )
 
 
+@pytest.mark.comprehensive
 def test_bar_template_materializes_long_form_stacked_components(
     tmp_path: Path,
 ) -> None:
@@ -906,6 +908,7 @@ def test_bar_template_materializes_long_form_stacked_components(
     assert f", {CATEGORICAL_BAR_FILL_TRANSPARENCY}, '0.5pt'" in text
 
 
+@pytest.mark.comprehensive
 def test_bar_template_materializes_grouped_replicates_with_segmented_legend(
     tmp_path: Path,
 ) -> None:
@@ -1030,6 +1033,7 @@ def test_bar_template_materializes_grouped_replicates_with_segmented_legend(
     assert text.count("Set('hide', True)") >= 8
 
 
+@pytest.mark.comprehensive
 @pytest.mark.parametrize(
     ("template", "expected_widget"),
     [

@@ -186,6 +186,63 @@ def test_core_business_and_data_layers_do_not_depend_on_the_gui_layer() -> None:
     assert offenders == []
 
 
+def test_low_level_packages_do_not_depend_on_higher_core_layers() -> None:
+    known_modules = {_module_name(path) for path in _source_files()}
+    offenders: list[str] = []
+    for package in ("foundation", "policy", "source_tables"):
+        package_module = f"sciplot_core.{package}"
+        for path in (SOURCE_ROOT / "sciplot_core" / package).rglob("*.py"):
+            module = _module_name(path)
+            targets = _import_targets(module, path, known_modules)
+            if any(not target.startswith(package_module) for target in targets):
+                offenders.append(str(path.relative_to(REPO_ROOT)))
+
+    assert offenders == []
+
+
+def test_gui_uses_the_public_studio_api_not_studio_core_implementation() -> None:
+    known_modules = {_module_name(path) for path in _source_files()}
+    offenders: list[str] = []
+    for path in (SOURCE_ROOT / "sciplot_gui").rglob("*.py"):
+        module = _module_name(path)
+        targets = _import_targets(module, path, known_modules)
+        if any(
+            target == "sciplot_core.studio_core"
+            or target.startswith("sciplot_core.studio_core.")
+            for target in targets
+        ):
+            offenders.append(str(path.relative_to(REPO_ROOT)))
+
+    assert offenders == []
+
+
+def test_veusz_worker_does_not_depend_on_the_studio_compatibility_facade() -> None:
+    known_modules = {_module_name(path) for path in _source_files()}
+    offenders: list[str] = []
+    for path in (SOURCE_ROOT / "sciplot_core" / "veusz_worker").rglob("*.py"):
+        module = _module_name(path)
+        targets = _import_targets(module, path, known_modules)
+        if "sciplot_core.studio" in targets:
+            offenders.append(str(path.relative_to(REPO_ROOT)))
+
+    assert offenders == []
+
+
+def test_veusz_worker_uses_named_studio_core_ports() -> None:
+    offenders: list[str] = []
+    for path in (SOURCE_ROOT / "sciplot_core" / "veusz_worker").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or not (
+                node.module or ""
+            ).startswith("sciplot_core.studio_core"):
+                continue
+            if any(alias.name.startswith("_") for alias in node.names):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+
+    assert offenders == []
+
+
 def test_generic_catchall_module_names_stay_absent() -> None:
     forbidden_names = {"common.py", "helpers.py", "utils.py"}
     offenders = [
@@ -195,6 +252,33 @@ def test_generic_catchall_module_names_stay_absent() -> None:
     ]
 
     assert offenders == []
+
+
+def test_non_probe_source_has_no_exact_duplicate_function_implementations() -> None:
+    implementations: dict[str, list[str]] = {}
+    for path in _source_files():
+        if path.name.endswith("_probe.py"):
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            end_line = node.end_lineno or node.lineno
+            if end_line - node.lineno + 1 < 8:
+                continue
+            signature = ast.dump(node.args, include_attributes=False)
+            body = ast.dump(
+                ast.Module(body=node.body, type_ignores=[]),
+                include_attributes=False,
+            )
+            implementations.setdefault(f"{signature}\n{body}", []).append(
+                f"{path.relative_to(REPO_ROOT)}:{node.lineno}"
+            )
+
+    duplicates = sorted(
+        locations for locations in implementations.values() if len(locations) > 1
+    )
+    assert duplicates == []
 
 
 def test_removed_compatibility_runtime_stays_absent() -> None:

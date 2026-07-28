@@ -233,6 +233,7 @@ def test_five_axis_radar_uses_aligned_physical_label_slots() -> None:
     assert (float(own_b["x"]) - float(own_a["x"])) * page_width == (pytest.approx(22.0))
 
 
+@pytest.mark.comprehensive
 @pytest.mark.parametrize(
     ("template", "native_widget"),
     [
@@ -270,6 +271,7 @@ def test_performance_direct_render_passes_exact_native_qa(
     assert "performance_legend_title" not in text
 
 
+@pytest.mark.comprehensive
 def test_dense_performance_direct_render_supports_sixteen_native_markers(
     tmp_path: Path,
 ) -> None:
@@ -299,6 +301,7 @@ def test_dense_performance_direct_render_supports_sixteen_native_markers(
     )
 
 
+@pytest.mark.comprehensive
 def test_explicit_pending_performance_studio_review_preserves_lineage(
     tmp_path: Path,
 ) -> None:

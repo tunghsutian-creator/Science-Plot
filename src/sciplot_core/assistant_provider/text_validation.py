@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.foundation.iso_timestamps import (
+    require_zoned_iso_timestamp,
+    utc_now_iso,
+)
 from sciplot_core.assistant_provider.contracts import (
     _SAFE_PROVIDER_ID,
     _SHA256,
 )
 
-
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+_timestamp = require_zoned_iso_timestamp
+_now = utc_now_iso
 
 
 def _required_text(
@@ -75,17 +77,6 @@ def _provider_id(value: object, label: str = "provider_id") -> str:
         raise ValueError(
             f"{label} must use 1-96 ASCII letters, digits, dot, underscore, or dash."
         )
-    return text
-
-
-def _timestamp(value: object, label: str) -> str:
-    text = _required_text(value, label)
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise ValueError(f"{label} must be an ISO-8601 timestamp.") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
-        raise ValueError(f"{label} must include a timezone offset.")
     return text
 
 

@@ -271,6 +271,9 @@ def _veusz_literal_text(value: object) -> str:
     return text.replace("\ue000", "{\\backslash}")
 
 
+veusz_literal_text = _veusz_literal_text
+
+
 def _studio_source_for_request(
     source: Path,
     *,

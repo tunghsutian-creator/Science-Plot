@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from sciplot_core.automation_states import (
+    HUMAN_CONFIRMATION_STATE,
+    READY_STATE,
+    RULE_REPAIR_STATE,
+)
+
 
 PUBLISH_GATE_REPORT_KIND = "sciplot_publish_gate_report"
 PUBLISH_GATE_REPORT_VERSION = 1
 
-READY_STATE = "ready"
-RULE_REPAIR_STATE = "needs_rule_repair"
-HUMAN_CONFIRMATION_STATE = "needs_human_confirmation"
 _PRESERVED_BLOCKING_STATES = {RULE_REPAIR_STATE, HUMAN_CONFIRMATION_STATE}
 
 

@@ -57,6 +57,9 @@ def _ensure_veusz_on_path() -> None:
         sys.path.insert(0, str(VEUSZ_ROOT))
 
 
+ensure_veusz_runtime_path = _ensure_veusz_on_path
+
+
 @contextmanager
 def _capture_process_stderr(log_path: Path):
     if os.environ.get("SCIPLOT_STUDIO_SHOW_QT_WARNINGS") == "1":

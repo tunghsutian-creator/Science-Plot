@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from sciplot_core.render import render_to_dir
 from sciplot_core.studio import (
@@ -61,6 +62,7 @@ def test_scalar_field_contract_preserves_xy_orientation_and_zero_transparency() 
     assert guides[0]["transparency"] == 0
 
 
+@pytest.mark.comprehensive
 def test_public_render_writes_editable_scalar_field_with_visible_overlay_order(
     tmp_path: Path,
 ) -> None:

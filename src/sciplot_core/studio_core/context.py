@@ -26,6 +26,9 @@ def _project_context_for_document(document_path: Path) -> dict[str, Any] | None:
     return None
 
 
+resolve_studio_project_context = _project_context_for_document
+
+
 def _normalize_optional_string(value: str | None) -> str | None:
     if not isinstance(value, str):
         return None

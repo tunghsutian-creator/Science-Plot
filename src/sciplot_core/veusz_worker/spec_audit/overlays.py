@@ -21,14 +21,16 @@ def audit_overlay_inventory(
         performance_line_contracts,
         performance_polygon_contracts,
     )
-    from sciplot_core.studio import (
-        _categorical_component_legend_rect_contracts,
-        _categorical_grouped_bar_fill_rect_contracts,
-        _categorical_line_contracts,
-        _curve_factor_legend_condition_rect_contracts,
-        _curve_factor_legend_line_contracts,
-        _reference_guide_line_contracts,
-        _reference_guide_rect_contracts,
+    from sciplot_core.studio_core.guide_contracts import (
+        categorical_line_contracts,
+        reference_guide_line_contracts,
+        reference_guide_rect_contracts,
+    )
+    from sciplot_core.studio_core.legend_contracts import (
+        categorical_component_legend_rect_contracts,
+        categorical_grouped_bar_fill_rect_contracts,
+        curve_factor_legend_condition_rect_contracts,
+        curve_factor_legend_line_contracts,
     )
 
     rect_records = _visible_data_bindings(
@@ -68,28 +70,28 @@ def audit_overlay_inventory(
     expected_rects.extend(
         (
             {**contract, "path": f"/page1/graph1/{contract['name']}"}
-            for contract in _reference_guide_rect_contracts(spec)
+            for contract in reference_guide_rect_contracts(spec)
         )
     )
 
     expected_rects.extend(
         (
             {**contract, "path": f"/page1/graph1/{contract['name']}"}
-            for contract in _categorical_component_legend_rect_contracts(spec)
+            for contract in categorical_component_legend_rect_contracts(spec)
         )
     )
 
     expected_rects.extend(
         (
             {**contract, "path": f"/page1/graph1/{contract['name']}"}
-            for contract in _categorical_grouped_bar_fill_rect_contracts(spec)
+            for contract in categorical_grouped_bar_fill_rect_contracts(spec)
         )
     )
 
     expected_rects.extend(
         (
             {**contract, "path": f"/page1/graph1/{contract['name']}"}
-            for contract in _curve_factor_legend_condition_rect_contracts(spec)
+            for contract in curve_factor_legend_condition_rect_contracts(spec)
         )
     )
 
@@ -215,9 +217,9 @@ def audit_overlay_inventory(
 
     expected_lines = [
         {**contract, "path": f"/page1/graph1/{contract['name']}"}
-        for contract in _categorical_line_contracts(spec)
-        + _curve_factor_legend_line_contracts(spec)
-        + _reference_guide_line_contracts(spec)
+        for contract in categorical_line_contracts(spec)
+        + curve_factor_legend_line_contracts(spec)
+        + reference_guide_line_contracts(spec)
         + performance_line_contracts(spec)
     ]
 

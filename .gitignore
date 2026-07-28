@@ -37,7 +37,6 @@ ftir_output/
 # Historical design notes are local-only. Retain current architecture and legal notice.
 /docs/*
 !/docs/ARCHITECTURE.md
-!/docs/ARCHITECTURE_REFACTOR_AUDIT_2026-07-28.md
 !/docs/THIRD_PARTY_NOTICES.md
 
 # Vendored Veusz runtime only; upstream development material is local-only.

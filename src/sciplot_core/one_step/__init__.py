@@ -6,13 +6,15 @@ from sciplot_core.readiness import (
     HIGH_CONFIDENCE_THRESHOLD,
     MEDIUM_CONFIDENCE_THRESHOLD,
 )
+from sciplot_core.automation_states import (  # noqa: F401
+    HUMAN_CONFIRMATION_STATE,
+    READY_STATE,
+    RULE_REPAIR_STATE,
+)
 
 from sciplot_core.one_step.quality_catalog import (  # noqa: F401
     ONE_STEP_MODEL_KIND,
     ONE_STEP_MODEL_VERSION,
-    READY_STATE,
-    HUMAN_CONFIRMATION_STATE,
-    RULE_REPAIR_STATE,
     _LEGEND_INLINE_STRATEGY,
     _LEGEND_AUTO_STRATEGY,
     _STACK_SPLIT_POLICY,

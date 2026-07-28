@@ -15,15 +15,6 @@ ONE_STEP_MODEL_KIND = "sciplot_one_step_project"
 ONE_STEP_MODEL_VERSION = 2
 
 
-READY_STATE = "ready"
-
-
-HUMAN_CONFIRMATION_STATE = "needs_human_confirmation"
-
-
-RULE_REPAIR_STATE = "needs_rule_repair"
-
-
 _LEGEND_INLINE_STRATEGY = {
     "object": "legend",
     "fallback_order": ["inside_auto_legend", "inline_labels"],

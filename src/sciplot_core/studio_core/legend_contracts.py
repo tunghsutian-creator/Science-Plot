@@ -340,3 +340,19 @@ def _categorical_grouped_bar_fill_rect_contracts(
             }
         )
     return contracts
+
+
+categorical_component_legend_label_contracts = (
+    _categorical_component_legend_label_contracts
+)
+categorical_component_legend_rect_contracts = (
+    _categorical_component_legend_rect_contracts
+)
+curve_factor_legend_label_contracts = _curve_factor_legend_label_contracts
+curve_factor_legend_condition_rect_contracts = (
+    _curve_factor_legend_condition_rect_contracts
+)
+curve_factor_legend_line_contracts = _curve_factor_legend_line_contracts
+categorical_grouped_bar_fill_rect_contracts = (
+    _categorical_grouped_bar_fill_rect_contracts
+)

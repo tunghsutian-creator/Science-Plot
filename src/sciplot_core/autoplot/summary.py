@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
+from sciplot_core.automation_states import (
+    READY_STATE,
+    RULE_REPAIR_STATE,
+    fail_closed_automation_state,
+)
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.delivery import verify_delivery_package
 from sciplot_core.output_contract import requested_delivery_root
@@ -13,25 +17,11 @@ from sciplot_core.study_model import verify_output_package_contract
 from sciplot_core.autoplot.contracts import (
     AUTOPLOT_MODEL_KIND,
     AUTOPLOT_MODEL_VERSION,
-    _VALID_STATES,
-    _read_json_if_exists,
+)
+
+from sciplot_core.autoplot.evidence import (
+    AutoplotRunEvidence,
     _truthy_path,
-    _manifest_path,
-    _one_step_status_path,
-    _delivery_package,
-)
-
-from sciplot_core.autoplot.figure_qa import (
-    _figure_qa,
-)
-
-from sciplot_core.autoplot.intervention import (
-    _intervention_package,
-    _validated_envelope,
-)
-
-from sciplot_core.autoplot.route import (
-    _route_package,
 )
 
 from sciplot_core.autoplot.publish_integrity import (
@@ -44,73 +34,36 @@ def build_autoplot_summary(
     *,
     _validated_envelope_ready=validated_envelope_evaluation_ready,
 ) -> dict[str, Any]:
-    run_output = _truthy_path(one_step_result.get("run_output")) or Path(".")
-    project_dir = _truthy_path(one_step_result.get("project_dir")) or run_output.parent
-    status_path = _one_step_status_path(run_output)
-    manifest_path = _manifest_path(run_output)
-    reported_one_step = (
-        one_step_result.get("one_step")
-        if isinstance(one_step_result.get("one_step"), dict)
-        else {}
-    )
-    persisted_status = _read_json_if_exists(status_path)
-    manifest = _read_json_if_exists(manifest_path)
-    manifest_one_step = (
-        manifest.get("one_step") if isinstance(manifest.get("one_step"), dict) else {}
-    )
-
-    persisted_state = str(persisted_status.get("state") or "").strip()
-    manifest_one_step_state = str(manifest_one_step.get("state") or "").strip()
+    evidence = AutoplotRunEvidence.load(one_step_result)
+    run_output = evidence.run_output
+    project_dir = evidence.project_dir
+    status_path = evidence.status_path
+    manifest_path = evidence.manifest_path
+    manifest = evidence.manifest
     manifest_publish = _manifest_publish_integrity(manifest)
     package_verification = verify_output_package_contract(
         manifest.get("package_contract"),
         output_dir=run_output,
         manifest=manifest,
     )
-    manifest_state = str(manifest_publish["recorded_state"] or "").strip()
-    status_valid = persisted_state in _VALID_STATES
-    manifest_valid = bool(
-        manifest.get("kind") == "sciplot_run"
-        and manifest_one_step_state in _VALID_STATES
-        and manifest_state in _VALID_STATES
-    )
-    one_step = (
-        persisted_status if status_valid else reported_one_step or manifest_one_step
-    )
-
-    reported_state = str(one_step_result.get("status") or "").strip()
-    reported_payload_state = str(reported_one_step.get("state") or "").strip()
-    preparation_state_claims = [
-        state
-        for state in (
-            reported_payload_state,
-            persisted_state,
-            manifest_one_step_state,
-        )
-        if state
-    ]
-    publish_state_claims = [
-        state for state in (reported_state, manifest_state) if state
-    ]
-    preparation_state_consistent = len(set(preparation_state_claims)) <= 1
-    publish_state_consistent = len(set(publish_state_claims)) <= 1
+    status_valid = evidence.status_valid
+    manifest_valid = evidence.manifest_valid
+    preparation_state_consistent = len(set(evidence.preparation_state_claims)) <= 1
+    publish_state_consistent = len(set(evidence.publish_state_claims)) <= 1
     state_consistent = preparation_state_consistent and publish_state_consistent
-    state = (
-        manifest_state or reported_state or persisted_state or reported_payload_state
+    state = fail_closed_automation_state(
+        evidence.manifest_state
+        or evidence.reported_state
+        or evidence.persisted_state
+        or evidence.reported_payload_state
     )
-    if state not in _VALID_STATES:
-        state = "needs_rule_repair"
     if not state_consistent or manifest_publish["valid"] is not True:
-        state = "needs_rule_repair"
-    delivery = _delivery_package(one_step, manifest)
-    figure_qa = _figure_qa(one_step, manifest)
-    intervention = _intervention_package(one_step, manifest)
-    validated_envelope = _validated_envelope(one_step, manifest)
-    render_request = (
-        one_step.get("render_request")
-        if isinstance(one_step.get("render_request"), dict)
-        else {}
-    )
+        state = RULE_REPAIR_STATE
+    delivery = evidence.delivery_package
+    figure_qa = evidence.figure_qa
+    intervention = evidence.intervention
+    validated_envelope = evidence.validated_envelope
+    render_request = evidence.render_request
     delivery_path = _truthy_path(delivery.get("path"))
     manifest_exists = manifest_path.is_file()
     status_exists = status_path.is_file()
@@ -134,14 +87,12 @@ def build_autoplot_summary(
         and delivery_path_exists
         and delivery_verification["passed"] is True
     )
-    manifest_delivery = (
-        manifest.get("delivery_package")
-        if isinstance(manifest.get("delivery_package"), dict)
-        else {}
-    )
+    manifest_delivery = evidence.manifest_delivery_package
     delivery_record_consistent = bool(delivery and delivery == manifest_delivery)
     one_step_payload_consistent = bool(
-        status_valid and manifest_valid and persisted_status == manifest_one_step
+        status_valid
+        and manifest_valid
+        and evidence.persisted_status == evidence.manifest_one_step
     )
     image_review_required = bool(figure_qa.get("image_review_required"))
     envelope_ready = _validated_envelope_ready(
@@ -199,7 +150,7 @@ def build_autoplot_summary(
         and package_verification["passed"] is True
     )
     codex_required = bool(intervention.get("required")) or (
-        state == "needs_rule_repair"
+        state == RULE_REPAIR_STATE
         or not envelope_ready
         or not qa_ready
         or not artifact_integrity_ready
@@ -210,7 +161,7 @@ def build_autoplot_summary(
         "version": AUTOPLOT_MODEL_VERSION,
         "state": state,
         "ready_to_use": (
-            state == "ready"
+            state == READY_STATE
             and delivery_complete
             and envelope_ready
             and qa_ready
@@ -220,7 +171,7 @@ def build_autoplot_summary(
         ),
         "project_dir": str(project_dir),
         "run_output": str(run_output),
-        "request_path": one_step_result.get("request_path"),
+        "request_path": evidence.reported_result.get("request_path"),
         "manifest": str(manifest_path) if manifest_exists else None,
         "one_step_status": str(status_path) if status_exists else None,
         "delivery": str(delivery_path) if delivery_path is not None else None,
@@ -232,7 +183,7 @@ def build_autoplot_summary(
         "revision_brief": str(run_output / "revision_brief.md")
         if (run_output / "revision_brief.md").exists()
         else None,
-        "route": _route_package(one_step, manifest),
+        "route": evidence.route_package(),
         "quality": {
             "status": figure_qa.get("status"),
             "qa_status": figure_qa.get("qa_status"),

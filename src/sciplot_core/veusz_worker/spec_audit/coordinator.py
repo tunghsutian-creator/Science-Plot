@@ -26,10 +26,8 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
     """Prove that an exact-current VSZ still consumes its rendered data spec."""
 
     from PyQt6 import QtWidgets
-    from sciplot_core.studio import (
-        _ensure_veusz_loader_compat,
-        _ensure_veusz_on_path,
-    )
+    from sciplot_core.studio_core.qt_compat import ensure_veusz_loader_compat
+    from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path
 
     resolved_document = document_path.expanduser().resolve()
     resolved_spec = spec_path.expanduser().resolve()
@@ -41,11 +39,11 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
     if not isinstance(spec, dict):
         raise ValueError(f"Expected JSON object: {resolved_spec}")
 
-    _ensure_veusz_on_path()
+    ensure_veusz_runtime_path()
     existing_app = QtWidgets.QApplication.instance()
     app = existing_app or QtWidgets.QApplication([])
     try:
-        _ensure_veusz_loader_compat()
+        ensure_veusz_loader_compat()
         from veusz import dataimport, document, widgets
 
         _ = dataimport, widgets

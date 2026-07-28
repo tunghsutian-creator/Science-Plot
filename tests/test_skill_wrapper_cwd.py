@@ -4,6 +4,11 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
+
+pytestmark = pytest.mark.comprehensive
+
 
 def test_skill_wrapper_preserves_callers_working_directory(tmp_path: Path) -> None:
     source = tmp_path / "relative_input.csv"

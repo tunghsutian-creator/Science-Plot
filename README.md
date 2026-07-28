@@ -46,10 +46,14 @@ skill/scripts/sciplot doctor --json
 
 要求 `status=ready`。
 
+绘图交付不要写进 SciPlot 软件或代码仓库内部的 `outputs/`。处理原始数据时优先省略
+`--out`，让 SciPlot 在原数据旁创建 `SOURCE_SciPlot/`；确需自定义目录时，也应把
+`--out` 指向原数据所在位置附近的专用交付目录。仓库内的 `.tmp_verify/` 只用于开发验证。
+
 交互式日常入口会准备项目并打开原生 Veusz：
 
 ```bash
-skill/scripts/sciplot studio PATH --out /path/to/Visible_Figure_Project
+skill/scripts/sciplot studio PATH
 ```
 
 已知实验规则或展示类型时，可以在同一命令族中直接表达意图：
@@ -57,15 +61,13 @@ skill/scripts/sciplot studio PATH --out /path/to/Visible_Figure_Project
 ```bash
 skill/scripts/sciplot studio PATH \
   --rule RULE_ID \
-  --template TEMPLATE_ID \
-  --out /path/to/Visible_Figure_Project
+  --template TEMPLATE_ID
 ```
 
 无需打开 GUI 的自动准备、导出和机器可读结果仍使用 `studio`：
 
 ```bash
 skill/scripts/sciplot studio PATH \
-  --out /path/to/Visible_Figure_Project \
   --export pdf,tiff_300 \
   --json
 ```
@@ -104,7 +106,7 @@ skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
 
 ```bash
 skill/scripts/sciplot studio FIGURE.vsz \
-  --out outputs/standalone_export \
+  --out /原始文件所在目录/Standalone_Export \
   --export pdf,tiff_300 \
   --json
 ```
@@ -134,7 +136,6 @@ transform lineage 或完整 SciPlot 项目交付。显式重新生成前必须�
 
 ```bash
 skill/scripts/sciplot autoplot PATH \
-  --out /path/to/Visible_Figure_Project \
   --json
 ```
 
@@ -142,10 +143,10 @@ skill/scripts/sciplot autoplot PATH \
 presentation contract 负责允许的图形。以抗冲击强度为例，同一数据可显式选择：
 
 ```bash
-skill/scripts/sciplot autoplot PATH --template bar --out /path/to/bar_project
-skill/scripts/sciplot autoplot PATH --template box --out /path/to/box_project
-skill/scripts/sciplot autoplot PATH --template box_strip --out /path/to/box_strip_project
-skill/scripts/sciplot autoplot PATH --template point_line --out /path/to/point_line_project
+skill/scripts/sciplot autoplot PATH --template bar --out /原始数据所在目录/bar_SciPlot
+skill/scripts/sciplot autoplot PATH --template box --out /原始数据所在目录/box_SciPlot
+skill/scripts/sciplot autoplot PATH --template box_strip --out /原始数据所在目录/box_strip_SciPlot
+skill/scripts/sciplot autoplot PATH --template point_line --out /原始数据所在目录/point_line_SciPlot
 ```
 
 未指定时使用规则记录的默认图形；显式选择不会改变数据类型、统计原始值或单位。
@@ -167,8 +168,7 @@ skill/scripts/sciplot autoplot PATH --template point_line --out /path/to/point_l
 
 ## 材料性能散点图和雷达图
 
-材料性能对比共用一个长表合同；示例见
-[`tests/fixtures/performance_comparison/material_performance_long.csv`](tests/fixtures/performance_comparison/material_performance_long.csv)。
+材料性能对比共用一个由 `performance_comparison/` 和对应测试共同约束的长表合同。
 每行只能表示一个“材料–指标”数值，不能把重复行静默平均。必需列和常用可选列为：
 
 | 列 | 含义 |
@@ -232,12 +232,12 @@ marker 多边形：轮廓使用样品主色，填充使用对应浅色并保持 
 skill/scripts/sciplot studio PATH \
   --rule performance_comparison \
   --template scatter \
-  --out /path/to/material_scatter
+  --out /原始数据所在目录/material_scatter_SciPlot
 
 skill/scripts/sciplot studio PATH \
   --rule performance_comparison \
   --template polar_curve \
-  --out /path/to/material_radar
+  --out /原始数据所在目录/material_radar_SciPlot
 ```
 
 需要 Codex 代为绘图时，可直接使用下面这种指令；把路径和材料名换成自己的即可：
@@ -308,9 +308,9 @@ revision、越权目标、未知 setting、错误类型或超范围值必须整�
 `ready`、`needs_human_confirmation` 或 `needs_rule_repair`。两组状态属于不同层级，不能
 互相替代；来源审计 `pending` 也不能被误写成当前制品失效。
 
-`--out` 表示最终用户可见的专用交付目录；省略时，SciPlot 在数据源旁创建
-`SOURCE_SciPlot/`。manifest、raw archive、分析表、QA、publication intent、transform
-ledger 和运行历史进入同级隐藏 `.sciplot/`，不再堆在显眼的 `outputs/` 下。
+`--out` 表示最终用户可见的专用交付目录，而不是软件内部工作目录；省略时，SciPlot 在
+数据源旁创建 `SOURCE_SciPlot/`。manifest、raw archive、分析表、QA、publication intent、
+transform ledger 和运行历史进入同级隐藏 `.sciplot/`，不再堆在显眼的 `outputs/` 下。
 
 用户可见的最小交付只有：
 
@@ -343,17 +343,29 @@ skill/scripts/sciplot rules show RULE_ID --json
 只有明确需要浏览器首次确认时才使用：
 
 ```bash
-skill/scripts/sciplot app PATH --out outputs/intake_projects
+skill/scripts/sciplot app PATH --out /原始数据所在目录/SOURCE_SciPlot
 ```
 
 确认完成后回到 Studio/Veusz；浏览器结果页保持只读。
 
 ## 工程验证与证据边界
 
-非平凡修改至少运行：
+测试分为单模块、进程内的 `focused` 层和跨 Veusz/导出/Studio 生命周期的
+`comprehensive` 层。迭代从最小相关测试开始，按影响范围逐级扩大：
 
 ```bash
+.venv/bin/python -m pytest -q tests/test_x.py::test_y
+.venv/bin/python -m pytest -q -m focused
+.venv/bin/python -m pytest -q -m comprehensive
 .venv/bin/python -m pytest -q
+```
+
+完整测试留给生产/公共合同交付、测试基础设施、发布、广泛重构或影响不确定的变化；
+具体升级规则由 `skill/SKILL.md` 统一定义。
+
+运行时或生命周期边界变化还应运行：
+
+```bash
 skill/scripts/sciplot doctor --json
 skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json
 git diff --check
@@ -362,18 +374,16 @@ git diff --check
 共享样式、渲染、规则、QA 或 delivery 合同变化还必须运行：
 
 ```bash
-skill/scripts/sciplot acceptance rules --out outputs/acceptance --json
+skill/scripts/sciplot acceptance rules --out .tmp_verify/acceptance --json
 ```
 
-`acceptance rules` 会机器校验 PDF 物理尺寸、TIFF DPI 和交付副本一致性；生成的
-contact sheets 只是未校准的缩略预览，用于检查裁切、遮挡、线型/标记区分和空白或损坏，
-不能据此声称“按最终物理尺寸可读”。逐张检查这些预览后用
+`acceptance rules` 会机器校验 PDF 尺寸、TIFF DPI 和交付副本一致性；contact sheet
+只是用于检查裁切、遮挡和损坏的未校准预览，不能证明最终尺寸可读性。检查后用
 `skill/scripts/sciplot acceptance visual-review PATH/final_size_visual_review/final_size_visual_review.json --decision passed|failed --reviewer NAME --json`
-记录可审计结论。未记录时只能声明自动尺寸检查通过；最终尺寸可读性仍需另行在校准显示器
-或打印件上检查并保留证据，本命令不提供该证明。
+记录结论；最终尺寸可读性仍需校准显示器或打印件证据。
 
-runtime smoke 是明确标记的 synthetic 变化门，不是真实数据证据。生命周期通过、
-exact-current artifact QA、provenance、人工日用验证和期刊合规是不同声明。
+runtime smoke 是 synthetic 变化门，不是真实数据证据；生命周期、artifact QA、
+provenance、人工日用验证和期刊合规仍是不同声明。
 
 ## 安装与代码入口
 
@@ -383,13 +393,8 @@ python3 -m venv .venv
 skill/scripts/sciplot doctor --json
 ```
 
-已有 `.venv/bin/python` 时，开发、测试和安装命令统一使用该解释器，不再重复尝试
-系统 `python`。如果虚拟环境不存在，只探测一次 `python3` 并按上面的安装步骤创建；
-一旦发现解释器缺失、版本不兼容或必须切换执行路径，应在工作更新和
-`DEVELOPMENT_LOG.md` 中记录“症状、根因、固定处理方式和验证”，后续任务直接复用，
-避免重复产生相同报错。绘图或开发中同一问题经过两次修改仍未解决时，也应停止继续
-试参数，先查明根因，再把可复用结论写入当前使用规范或开发文档，并补相应测试。
+已有 `.venv/bin/python` 时统一使用它；缺失时只探测一次 `python3` 并按上面创建。
+环境故障和重复问题的记录规则见 `skill/SKILL.md`。
 
-当前维护优先级见 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)，模块所有权见本地
-`docs/ARCHITECTURE.md`；第三方许可见
-[THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。
+当前维护优先级见 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)，模块所有权见
+`docs/ARCHITECTURE.md`，第三方许可见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。

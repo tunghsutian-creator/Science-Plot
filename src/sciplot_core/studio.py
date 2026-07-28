@@ -61,6 +61,7 @@ from sciplot_core.studio_render.table_io import (
 )
 from sciplot_core.studio_core.qt_window import (
     _create_veusz_window as _create_veusz_window,
+    configure_studio_window_presentation as configure_studio_window_presentation,
 )
 from sciplot_core.studio_render.categorical_values import (
     _deterministic_category_positions as _deterministic_category_positions,
@@ -101,6 +102,7 @@ from sciplot_core.studio_core.figure_set_state import (
     _read_studio_figure_set as _read_studio_figure_set,
     _replace_studio_figure_set_path as _replace_studio_figure_set_path,
     _studio_figure_set_export_scope as _studio_figure_set_export_scope,
+    build_studio_figure_set_export_scope as build_studio_figure_set_export_scope,
 )
 from sciplot_core.studio_core.veusz_save import (
     _save_veusz_document_from_spec as _save_veusz_document_from_spec,
@@ -174,6 +176,9 @@ from sciplot_core.studio_core.publish_run import (
 from sciplot_core.studio_core.qt_launch import (
     qt_smoke_payload as qt_smoke_payload,
 )
+from sciplot_core.studio_core.context import (
+    resolve_studio_project_context as resolve_studio_project_context,
+)
 from sciplot_core.studio_core.studio_command import (
     run_studio_command as run_studio_command,
 )
@@ -215,6 +220,8 @@ def prepare_studio_document(
 
 __all__ = [
     "atomic_save_veusz_document",
+    "build_studio_figure_set_export_scope",
+    "configure_studio_window_presentation",
     "ensure_veusz_qsettings_compat",
     "export_studio_document",
     "maybe_reexec_with_qt_runtime",
@@ -223,6 +230,7 @@ __all__ = [
     "publish_standalone_export_receipt",
     "publish_studio_export_run",
     "qt_smoke_payload",
+    "resolve_studio_project_context",
     "run_studio_command",
     "upstream_status",
 ]

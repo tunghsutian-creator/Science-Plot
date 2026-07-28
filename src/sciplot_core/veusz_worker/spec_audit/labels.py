@@ -18,11 +18,11 @@ def audit_legends_and_labels(
     series: list[dict[str, Any]],
 ) -> None:
     from sciplot_core.performance_veusz import performance_label_contracts
-    from sciplot_core.studio import (
-        _categorical_component_legend_label_contracts,
-        _curve_factor_legend_label_contracts,
-        _veusz_literal_text,
+    from sciplot_core.studio_core.legend_contracts import (
+        categorical_component_legend_label_contracts,
+        curve_factor_legend_label_contracts,
     )
+    from sciplot_core.studio_core.series_request import veusz_literal_text
 
     loaded_document = inventory.loaded_document
     categorical = inventory.categorical
@@ -110,25 +110,25 @@ def audit_legends_and_labels(
             {
                 **raw_label,
                 "path": f"/page1/graph1/{label_name}",
-                "literal_label": _veusz_literal_text(raw_label.get("label")),
+                "literal_label": veusz_literal_text(raw_label.get("label")),
             }
         )
 
-    for raw_label in _categorical_component_legend_label_contracts(spec):
+    for raw_label in categorical_component_legend_label_contracts(spec):
         expected_direct_labels.append(
             {
                 **raw_label,
                 "path": f"/page1/graph1/{raw_label['name']}",
-                "literal_label": _veusz_literal_text(raw_label.get("label")),
+                "literal_label": veusz_literal_text(raw_label.get("label")),
             }
         )
 
-    for raw_label in _curve_factor_legend_label_contracts(spec):
+    for raw_label in curve_factor_legend_label_contracts(spec):
         expected_direct_labels.append(
             {
                 **raw_label,
                 "path": f"/page1/graph1/{raw_label['name']}",
-                "literal_label": _veusz_literal_text(raw_label.get("label")),
+                "literal_label": veusz_literal_text(raw_label.get("label")),
             }
         )
 
@@ -140,7 +140,7 @@ def audit_legends_and_labels(
                 "path": f"/page1/{raw_label['name']}"
                 if parent == "page"
                 else f"/page1/graph1/{raw_label['name']}",
-                "literal_label": _veusz_literal_text(raw_label.get("label")),
+                "literal_label": veusz_literal_text(raw_label.get("label")),
             }
         )
 

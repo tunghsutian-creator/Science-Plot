@@ -85,3 +85,6 @@ def _save_veusz_document_from_spec(
         finally:
             if created_app:
                 app.quit()
+
+
+save_veusz_document_from_spec = _save_veusz_document_from_spec

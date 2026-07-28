@@ -14,7 +14,7 @@ def audit_axes_and_series(
     inventory: SpecAuditInventory,
     spec: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    from sciplot_core.studio import _veusz_literal_text
+    from sciplot_core.studio_core.series_request import veusz_literal_text
 
     loaded_document = inventory.loaded_document
     units = inventory.units
@@ -140,7 +140,7 @@ def audit_axes_and_series(
                 name,
                 x_name,
                 y_name,
-                _veusz_literal_text(
+                veusz_literal_text(
                     raw_series.get("legend_key", raw_series.get("label"))
                 ),
             )
@@ -167,7 +167,7 @@ def audit_axes_and_series(
             and (str(record["bindings"]["yData"]) == y_name)
             and (
                 str(record["bindings"]["key"])
-                == _veusz_literal_text(
+                == veusz_literal_text(
                     raw_series.get("legend_key", raw_series.get("label"))
                 )
             )

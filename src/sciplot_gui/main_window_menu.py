@@ -5,31 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 from sciplot_core.studio_figure_set_contract import (
-    is_primary_figure_set_export_scope as _is_primary_figure_set_export_scope,
+    is_primary_figure_set_export_scope,
 )
 
-from sciplot_core.studio_core.persistence import (
+from sciplot_core.studio import (
     atomic_save_veusz_document,
-)
-
-from sciplot_core.studio_core.context import (
-    _project_context_for_document,
-)
-
-from sciplot_core.studio_core.figure_set_state import (
-    _studio_figure_set_export_scope,
-)
-
-from sciplot_core.studio_core.export_execution import (
+    build_studio_figure_set_export_scope,
+    configure_studio_window_presentation,
     export_studio_document,
-)
-
-from sciplot_core.studio_core.standalone_receipt import (
     publish_standalone_export_receipt,
-)
-
-from sciplot_core.studio_core.publish_run import (
     publish_studio_export_run,
+    resolve_studio_project_context,
 )
 
 
@@ -44,7 +30,7 @@ def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
     except Exception:
         return
 
-    context = _project_context_for_document(document_path)
+    context = resolve_studio_project_context(document_path)
     menu = window.menuBar().addMenu("SciPlot")
     actions: list[Any] = []
     try:
@@ -60,8 +46,8 @@ def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
                 export_document=export_studio_document,
                 publish_standalone_export=publish_standalone_export_receipt,
                 publish_project_export=publish_studio_export_run,
-                build_figure_set_scope=_studio_figure_set_export_scope,
-                is_complete_figure_set_scope=_is_primary_figure_set_export_scope,
+                build_figure_set_scope=build_studio_figure_set_export_scope,
+                is_complete_figure_set_scope=is_primary_figure_set_export_scope,
             )
         )
 
@@ -123,9 +109,5 @@ def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
 
 def install_studio_window_presentation() -> None:
     """Register the native Veusz menu and docks with the Core window factory."""
-
-    from sciplot_core.studio_core.qt_window import (
-        configure_studio_window_presentation,
-    )
 
     configure_studio_window_presentation(_attach_sciplot_menu)

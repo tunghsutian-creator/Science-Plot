@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 from typing import Any
+from sciplot_core.automation_states import (
+    AutomationState,
+    HUMAN_CONFIRMATION_STATE,
+    READY_STATE,
+    RULE_REPAIR_STATE,
+)
 from sciplot_core.readiness import (
     INSIDE_VALIDATED_ENVELOPE,
     validated_envelope_evaluation_ready,
-)
-
-from sciplot_core.one_step.quality_catalog import (
-    READY_STATE,
-    HUMAN_CONFIRMATION_STATE,
-    RULE_REPAIR_STATE,
 )
 
 
@@ -22,7 +22,7 @@ def _readiness(
     render_request: dict[str, Any],
     figure_qa_report: dict[str, Any],
     validated_envelope: dict[str, Any],
-) -> tuple[str, list[str]]:
+) -> tuple[AutomationState, list[str]]:
     reasons: list[str] = []
     if (
         figure_qa_report.get("needs_ai_intervention")

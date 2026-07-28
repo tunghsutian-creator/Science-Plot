@@ -325,6 +325,7 @@ def test_impact_point_line_uses_one_combined_document(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.comprehensive
 def test_impact_point_line_terminal_render_keeps_semantic_overlay_context(
     tmp_path: Path,
 ) -> None:
@@ -412,6 +413,7 @@ def test_impact_point_line_terminal_render_keeps_semantic_overlay_context(
     ]
 
 
+@pytest.mark.comprehensive
 def test_impact_point_line_autoplot_ledger_includes_terminal_selection(
     tmp_path: Path,
 ) -> None:

@@ -13,7 +13,8 @@ from sciplot_core.veusz_worker.widget_bindings import (
 def export_request(request_path: Path, *, formats: list[str]) -> dict[str, Any]:
     """Compile one request to VSZ, then export through the production renderer."""
 
-    from sciplot_core.studio import export_studio_document, prepare_studio_document
+    from sciplot_core.studio_core.export_execution import export_studio_document
+    from sciplot_core.studio_core.studio_prepare import prepare_studio_document
 
     payload = prepare_studio_document(request_path.expanduser().resolve())
     document_path = Path(str(payload["document"]))
@@ -30,7 +31,7 @@ def export_document(
 ) -> dict[str, Any]:
     """Export the exact current VSZ without regenerating it."""
 
-    from sciplot_core.studio import export_studio_document
+    from sciplot_core.studio_core.export_execution import export_studio_document
 
     return export_studio_document(
         document_path.expanduser().resolve(),
@@ -46,13 +47,14 @@ def audit_documents(document_paths: list[Path]) -> dict[str, Any]:
 
     from PyQt6 import QtWidgets
 
-    from sciplot_core.studio import _ensure_veusz_loader_compat, _ensure_veusz_on_path
+    from sciplot_core.studio_core.qt_compat import ensure_veusz_loader_compat
+    from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path
 
-    _ensure_veusz_on_path()
+    ensure_veusz_runtime_path()
     from veusz import dataimport, document, widgets
 
     _ = dataimport, document, widgets
-    _ensure_veusz_loader_compat()
+    ensure_veusz_loader_compat()
     existing_app = QtWidgets.QApplication.instance()
     app = existing_app or QtWidgets.QApplication([])
     try:
@@ -71,19 +73,17 @@ def inspect_document_state(document_path: Path) -> dict[str, Any]:
 
     from PyQt6 import QtWidgets
 
-    from sciplot_core.studio import (
-        _ensure_veusz_loader_compat,
-        _ensure_veusz_on_path,
-    )
+    from sciplot_core.studio_core.qt_compat import ensure_veusz_loader_compat
+    from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path
 
     resolved_document = document_path.expanduser().resolve()
     if not resolved_document.is_file():
         raise FileNotFoundError(f"Veusz document not found: {resolved_document}")
-    _ensure_veusz_on_path()
+    ensure_veusz_runtime_path()
     existing_app = QtWidgets.QApplication.instance()
     app = existing_app or QtWidgets.QApplication([])
     try:
-        _ensure_veusz_loader_compat()
+        ensure_veusz_loader_compat()
         from veusz import dataimport, document, widgets
 
         _ = dataimport, widgets
@@ -118,6 +118,8 @@ def inspect_document_state(document_path: Path) -> dict[str, Any]:
 def migrate_unit_labels(document_path: Path) -> dict[str, Any]:
     """Apply the global unit-expression contract to one exact-current VSZ."""
 
-    from sciplot_core.studio import migrate_studio_document_unit_labels
+    from sciplot_core.studio_core.persistence import (
+        migrate_studio_document_unit_labels,
+    )
 
     return migrate_studio_document_unit_labels(document_path.expanduser().resolve())

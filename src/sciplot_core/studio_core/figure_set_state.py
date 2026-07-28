@@ -265,3 +265,6 @@ def _replace_studio_figure_set_path(source: Path, target: Path) -> None:
     """Replace one canonical figure-set member through an injectable boundary."""
 
     os.replace(source, target)
+
+
+build_studio_figure_set_export_scope = _studio_figure_set_export_scope

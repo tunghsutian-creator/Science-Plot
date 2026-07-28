@@ -35,6 +35,16 @@ studio = [
 [project.scripts]
 sciplot = "sciplot_core.cli:main"
 
+[tool.ruff]
+extend-exclude = ["third_party"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+markers = [
+  "focused: single-owner, in-process tests used during local iteration",
+  "comprehensive: cross-process Veusz, real export, or complete Studio lifecycle tests",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

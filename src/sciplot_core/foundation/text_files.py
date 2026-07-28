@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sciplot_core.ingest import decode_text_file
+from sciplot_core.foundation.text_decoding import decode_text_file
 
 
 def decode_text(path: Path) -> str:
