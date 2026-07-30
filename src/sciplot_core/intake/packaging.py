@@ -11,6 +11,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
+from uuid import uuid4
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import safe_filename
 from sciplot_core._paths import resolved_path_is_within
@@ -50,11 +51,30 @@ def _write_zip(project_dir: Path, zip_path: Path) -> None:
                 )
             )
 
-    if zip_path.exists():
-        zip_path.unlink()
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in archive_files:
-            archive.write(path, path.relative_to(project_root.parent))
+    staged_zip = zip_path.parent / (f".{zip_path.name}.sciplot-tmp-{uuid4().hex}")
+    try:
+        with staged_zip.open("xb") as stream:
+            with zipfile.ZipFile(
+                stream,
+                "w",
+                compression=zipfile.ZIP_DEFLATED,
+            ) as archive:
+                for path in archive_files:
+                    archive.write(path, path.relative_to(project_root.parent))
+            stream.flush()
+            os.fsync(stream.fileno())
+        with zipfile.ZipFile(staged_zip, "r") as archive:
+            corrupt_member = archive.testzip()
+            if corrupt_member is not None:
+                raise OSError(
+                    f"SciPlot ZIP verification failed for member {corrupt_member!r}."
+                )
+        if zip_path.is_symlink():
+            raise PermissionError("Refusing to replace a symlink-backed SciPlot ZIP.")
+        os.replace(staged_zip, zip_path)
+    except BaseException:
+        staged_zip.unlink(missing_ok=True)
+        raise
 
 
 def _remove_legacy_project_launcher(project_dir: Path) -> bool:

@@ -4,8 +4,10 @@ import json
 import math
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
+from sciplot_core.materials_rules import get_rule, resolve_rule_template
 from sciplot_core.performance_comparison import (
     build_performance_radar_payload,
     build_performance_scatter_payload,
@@ -302,7 +304,36 @@ def test_dense_performance_direct_render_supports_sixteen_native_markers(
 
 
 @pytest.mark.comprehensive
-def test_explicit_pending_performance_studio_review_preserves_lineage(
+def test_ready_radar_without_reserved_legend_panel_prepares_in_studio(
+    tmp_path: Path,
+) -> None:
+    frame = pd.read_csv(FIXTURE)
+    source = tmp_path / "sample_only_performance.csv"
+    frame.loc[frame["Role"] == "sample"].to_csv(source, index=False)
+
+    prepared = prepare_studio_document(
+        source,
+        output_root=tmp_path / "projects",
+        rule_id="performance_comparison",
+        template="polar_curve",
+    )
+    document = Path(prepared["document"])
+    spec = json.loads(document.with_name("spec.json").read_text(encoding="utf-8"))
+
+    assert prepared["pending_rule_review"] is False
+    assert prepared["autonomous_rule_ready"] is True
+    assert spec["size_mm"] == [60.0, 55.0]
+    assert (
+        spec["performance_comparison"]["layout"]["legend_uses_reserved_panel"] is False
+    )
+    assert spec["axes"]["x"]["min"] == pytest.approx(-1.12)
+    assert spec["axes"]["x"]["max"] == pytest.approx(1.12)
+    assert spec["axes"]["y"]["min"] == pytest.approx(-1.12)
+    assert spec["axes"]["y"]["max"] == pytest.approx(1.12)
+
+
+@pytest.mark.comprehensive
+def test_ready_performance_studio_review_preserves_lineage(
     tmp_path: Path,
 ) -> None:
     prepared = prepare_studio_document(
@@ -329,19 +360,19 @@ def test_explicit_pending_performance_studio_review_preserves_lineage(
     manifest_path = Path(studio_run["manifest"])
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    assert prepared["pending_rule_review"] is True
-    assert prepared["autonomous_rule_ready"] is False
-    assert request["pending_rule_review"] is True
+    assert prepared["pending_rule_review"] is False
+    assert prepared["autonomous_rule_ready"] is True
+    assert request.get("pending_rule_review", False) is False
     assert studio_run["ready_to_use"] is True
-    assert studio_run["pending_rule_review"] is True
-    assert studio_run["autonomous_rule_ready"] is False
+    assert studio_run["pending_rule_review"] is False
+    assert studio_run["autonomous_rule_ready"] is True
     assert manifest["semantic"]["rule_id"] == "performance_comparison"
-    assert manifest["semantic"]["rule_readiness"] == "pending"
+    assert manifest["semantic"]["rule_readiness"] == "ready"
     assert manifest["result"]["template"] == "scatter"
     assert manifest["publication_qa"]["status"] == "passed"
     assert manifest["qa"]["status"] == "passed"
-    assert manifest["pending_rule_review"] is True
-    assert manifest["autonomous_rule_ready"] is False
+    assert manifest["pending_rule_review"] is False
+    assert manifest["autonomous_rule_ready"] is True
     ledger = manifest["transform_ledger"]
     by_id = {step["id"]: step for step in ledger["steps"]}
     assert "performance_comparison_preparation" in by_id
@@ -358,12 +389,8 @@ def test_explicit_pending_performance_studio_review_preserves_lineage(
     )
 
 
-def test_pending_performance_studio_review_requires_explicit_template(
-    tmp_path: Path,
-) -> None:
-    with pytest.raises(ValueError, match="explicit rule plus template"):
-        prepare_studio_document(
-            FIXTURE,
-            output_root=tmp_path / "projects",
-            rule_id="performance_comparison",
-        )
+def test_ready_performance_rule_resolves_its_default_template() -> None:
+    rule = get_rule("performance_comparison")
+
+    assert rule.fixture_status == "ready"
+    assert resolve_rule_template(rule) == "scatter"

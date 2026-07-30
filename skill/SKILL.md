@@ -13,10 +13,9 @@ or editor.
 
 - `README.md` owns product behavior and the user workflow.
 - This skill owns agent routing and verification.
-- `docs/ARCHITECTURE.md` owns module and dependency boundaries.
+- `docs/ARCHITECTURE.md` owns code, module, and dependency boundaries.
 - `DEVELOPMENT_ROADMAP.md` contains unfinished priorities only.
 - `AGENTS.md` is a thin local overlay; it must not redefine this workflow.
-- `agent.md` owns general code-architecture constraints.
 - `DEVELOPMENT_LOG.md` and Git are history/evidence, not current instructions.
 
 When prose conflicts, verify the live CLI and source-controlled contracts, then
@@ -160,9 +159,10 @@ units, replicate preservation, and analysis; its presentation contract owns
 the allowed chart alternatives. Use the current public contract and tests
 rather than copying template behavior into a recipe or script.
 
-`performance_comparison` requires its explicit tidy long-table contract and
-remains explicit-Studio-only until its ready-rule acceptance is promoted.
-Report that evidence boundary honestly.
+`performance_comparison` requires its exact tidy long-table contract. Its ready
+rule may be selected automatically only when that contract is recognized;
+explicit Studio requests remain available for choosing `scatter` or
+`polar_curve`.
 
 Global typography, strokes, ticks, markers, ordinary frames, exports, and the
 plot contract belong to `src/sciplot_core/policy/`. Heatmap scalar colors are
@@ -261,6 +261,10 @@ classification/configuration, broad refactor, release/merge state, or an
 uncertain impact radius changed. A documentation-only or isolated fixture
 change may close with its directly related tests when no executable contract
 changed.
+
+A gate is invalid if it passes only because coverage was deleted, types or
+assertions were weakened, checks were disabled, errors were ignored, or broad
+suppressions were added.
 
 Run `doctor` for command/runtime contract changes. Run runtime smoke when the
 change crosses Studio, renderer, worker, export, QA, delivery, launcher, or

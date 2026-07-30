@@ -8,7 +8,7 @@ SciPlot 是面向材料科研日常出图的本地工作流：读取原始数据
 
 - 本文是用户工作流和产品边界的唯一说明；
 - `skill/SKILL.md` 是自动化代理的操作合同，不另定义产品；
-- `docs/ARCHITECTURE.md` 只定义模块所有权和依赖边界；
+- `docs/ARCHITECTURE.md` 只定义代码结构、模块所有权和依赖边界；
 - `DEVELOPMENT_ROADMAP.md` 只记录尚未完成的维护优先级；
 - `AGENTS.md` 是本机开发约束的薄覆盖；
 - `DEVELOPMENT_LOG.md` 和 Git 只保存历史与验证记录，不覆盖当前产品真相。
@@ -224,9 +224,10 @@ marker 多边形：轮廓使用样品主色，填充使用对应浅色并保持 
 `ScaleMax`，`lower` 指标取 `ScaleMin`；轴标题和单位排在数字外侧，不添加
 `Max`、`Range` 或方向箭头。
 
-当前 source-controlled 示例是 `instrument_shaped_fixture`，不是用户真实测量数据，因此
-`performance_comparison` 规则在第一份授权真实数据完成 acceptance 前保持 `pending`。
-功能可通过显式 Studio 请求使用，但不会被 `autoplot` 静默自动选择：
+source-controlled 示例仍只承担确定性合同回归；本机验收使用经用户授权并完成日常使用
+确认的 m-rPA/rPA 真实数据摘要。`performance_comparison` 已通过 scatter 与
+`polar_curve` 的完整 acceptance 并进入 `ready`。只有严格满足上述长表合同的数据才会
+被自动识别；需要明确选择图形时仍可使用显式 Studio 请求：
 
 ```bash
 skill/scripts/sciplot studio PATH \
@@ -396,5 +397,5 @@ skill/scripts/sciplot doctor --json
 已有 `.venv/bin/python` 时统一使用它；缺失时只探测一次 `python3` 并按上面创建。
 环境故障和重复问题的记录规则见 `skill/SKILL.md`。
 
-当前维护优先级见 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)，模块所有权见
+当前维护优先级见 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)，代码和模块边界见
 `docs/ARCHITECTURE.md`，第三方许可见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。

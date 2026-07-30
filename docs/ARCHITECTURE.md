@@ -3,9 +3,8 @@
 Status: current module-ownership and dependency reference.
 
 `README.md` owns product behavior, `skill/SKILL.md` owns agent routing,
-`DEVELOPMENT_ROADMAP.md` owns unfinished priorities, and `agent.md` owns
-general code-architecture rules. Historical implementation narratives belong
-to `DEVELOPMENT_LOG.md` and Git, not here.
+and `DEVELOPMENT_ROADMAP.md` owns unfinished priorities. Historical
+implementation narratives belong to `DEVELOPMENT_LOG.md` and Git, not here.
 
 ## Authority chain
 
@@ -46,7 +45,7 @@ post-render visual editing.
 ```text
 research-plots/
   README.md                    product and user workflow
-  agent.md                     code-architecture rules
+  AGENTS.md                    thin local agent entrypoint
   DEVELOPMENT_ROADMAP.md       unfinished priorities
   skill/
     SKILL.md                   agent routing and verification
@@ -186,6 +185,10 @@ sibling hidden `.sciplot/`; development gates use ignored `.tmp_verify/`.
 The visible package contains only plotting data, PDF/TIFF figures, editable
 VSZ projects, and the Veusz launcher. It is not a runtime workspace.
 
+Intake session and project names are reserved by exclusive filesystem
+creation. ZIP refreshes are staged, verified, and atomically replaced so a
+failed or concurrent refresh cannot destroy the last complete package.
+
 ## Dependency rules
 
 1. Entry and presentation layers call domain/orchestration APIs; lower layers
@@ -213,5 +216,13 @@ VSZ projects, and the Veusz launcher. It is not a runtime workspace.
 12. Non-probe production functions do not repeat an exact implementation;
     first-party dependencies remain acyclic and Core remains independent of GUI
     presentation.
+13. Files and modules keep one clear owner. Presentation, domain logic, source
+    I/O and transformation, and state management remain separated by the
+    repository map.
+14. Extract abstractions only for genuinely shared semantics. Catch-all
+    manager, service, utils, helpers, or common modules and one-hop wrappers are
+    not architecture boundaries.
+15. Structural refactors preserve supported interfaces, data formats, and
+    user-visible behavior unless the task explicitly changes their contract.
 
 Verification requirements are defined once in `skill/SKILL.md`.

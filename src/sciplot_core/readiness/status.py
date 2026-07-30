@@ -27,6 +27,10 @@ from sciplot_core.readiness.registry_io import (
     load_validated_envelope_registry,
 )
 
+from sciplot_core.readiness.human_validation import (
+    load_human_daily_use_validation,
+)
+
 
 def validated_envelope_status(
     registry: ValidatedEnvelopeRegistry | None = None,
@@ -34,6 +38,7 @@ def validated_envelope_status(
     registry_path: Path | None = None,
 ) -> dict[str, Any]:
     resolved = registry or load_validated_envelope_registry(registry_path)
+    human_validation = load_human_daily_use_validation()
     current_rules = tuple(iter_public_rules())
     current_ids = {rule.rule_id for rule in current_rules}
     registered_ids = {entry.rule_id for entry in resolved.entries}
@@ -94,6 +99,7 @@ def validated_envelope_status(
         "stale_rule_ids": stale_ids,
         "extra_rule_ids": extra_ids,
         "source_acceptance": deepcopy(resolved.source_acceptance),
+        "human_daily_use_validation": deepcopy(human_validation),
         "evidence_strength_counts": {
             strength: sum(record["evidence_strength"] == strength for record in records)
             for strength in sorted(EVIDENCE_STRENGTHS)
@@ -105,8 +111,12 @@ def validated_envelope_status(
             and len(resolved.entries) == len(current_rules)
             and all(entry.real_data_evidence for entry in resolved.entries),
             "journal_compliance_established": False,
-            "human_daily_use_cutover_established": False,
-            "human_daily_use_validation_established": False,
+            "human_daily_use_cutover_established": (
+                human_validation["status"] == "passed"
+            ),
+            "human_daily_use_validation_established": (
+                human_validation["status"] == "passed"
+            ),
         },
         "limitations": list(resolved.limitations),
     }

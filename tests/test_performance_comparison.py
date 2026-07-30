@@ -204,20 +204,22 @@ def test_performance_source_contract_and_identity() -> None:
     ]
 
 
-def test_performance_rule_waits_for_authorized_real_data_promotion() -> None:
+def test_performance_rule_is_ready_after_authorized_real_data_promotion() -> None:
     rule = get_rule("performance_comparison")
-    assert rule.fixture_status == "pending"
+    assert rule.fixture_status == "ready"
 
     automatic = classify_source(FIXTURE)
-    assert automatic.get("rule_id") != "performance_comparison"
+    assert automatic["rule_id"] == "performance_comparison"
+    assert automatic["rule_readiness"] == "ready"
+    assert automatic["confidence"] == 99.0
+    assert automatic["needs_ai_intervention"] is False
 
     explicit = classify_source(
         FIXTURE,
         requested_rule_id="performance_comparison",
     )
     assert explicit["rule_id"] == "performance_comparison"
-    assert explicit["rule_readiness"] == "pending"
-    assert explicit["confidence"] == 0.0
+    assert explicit["rule_readiness"] == "ready"
 
 
 def test_scatter_payload_reserves_a_second_60mm_reference_panel() -> None:

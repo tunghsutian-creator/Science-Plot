@@ -10,6 +10,7 @@ ACTIVE_GUIDANCE = (
     REPO_ROOT / "docs" / "ARCHITECTURE.md",
     REPO_ROOT / "DEVELOPMENT_ROADMAP.md",
 )
+RETIRED_AGENT_GUIDE = REPO_ROOT / "agent.md"
 REMOVED_ARCHITECTURE_SNAPSHOT = (
     REPO_ROOT / "docs" / "ARCHITECTURE_REFACTOR_AUDIT_2026-07-28.md"
 )
@@ -41,6 +42,24 @@ def test_current_documents_do_not_restore_the_dated_architecture_snapshot() -> N
 
     assert not REMOVED_ARCHITECTURE_SNAPSHOT.exists()
     assert "!/docs/ARCHITECTURE_REFACTOR_AUDIT_2026-07-28.md" not in gitignore
+
+
+def test_tracked_guidance_does_not_keep_a_duplicate_agent_file() -> None:
+    assert not RETIRED_AGENT_GUIDE.exists()
+
+    for path in ACTIVE_GUIDANCE:
+        assert "`agent.md`" not in _read(path)
+
+
+def test_roadmap_contains_closable_work_not_standing_invariants() -> None:
+    roadmap = _read(REPO_ROOT / "DEVELOPMENT_ROADMAP.md")
+    architecture = _read(REPO_ROOT / "docs" / "ARCHITECTURE.md")
+
+    assert "## P2 — Ongoing maintainability" not in roadmap
+    assert "Keep ordinary source files below 400 lines" not in roadmap
+    assert "Keep the removed `_vendor`" not in roadmap
+    assert "Ordinary source files stay under 400 lines" in architecture
+    assert "first-party dependencies remain acyclic" in architecture
 
 
 def test_active_documents_declare_distinct_responsibilities() -> None:

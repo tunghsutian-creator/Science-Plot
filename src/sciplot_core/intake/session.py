@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.foundation.path_names import slug, unique_path
+from sciplot_core.foundation.path_names import reserve_unique_file, slug
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.semantic import (
     classify_source,
@@ -36,8 +36,7 @@ def _group_payload(sample: str, files: list[Path]) -> dict[str, Any]:
 
 def _session_path(output_root: Path, project_name: str) -> Path:
     sessions_dir = output_root / "sessions"
-    sessions_dir.mkdir(parents=True, exist_ok=True)
-    return unique_path(sessions_dir, f"{slug(project_name)}.json")
+    return reserve_unique_file(sessions_dir, f"{slug(project_name)}.json")
 
 
 def _session_project_name(source: Path, experiment_label: str) -> str:
@@ -204,9 +203,14 @@ def prepare_intake_session(
             selected_rule_id and get_rule(selected_rule_id).fixture_status != "ready"
         ),
     }
-    path.write_text(
-        json.dumps(json_safe(payload), indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    try:
+        path.write_text(
+            json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
     return payload
 
 

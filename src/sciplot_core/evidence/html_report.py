@@ -31,6 +31,7 @@ def _pill(value: object) -> str:
 
 def _write_html(path: Path, payload: dict[str, Any]) -> None:
     summary = payload["summary"]
+    rule_count = html.escape(str(summary["rule_count"]))
     cards = [
         ("Rules", summary["rule_count"]),
         ("Real evidence", summary["real_data_evidence_count"]),
@@ -95,7 +96,7 @@ def _write_html(path: Path, payload: dict[str, Any]) -> None:
     )
     document = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SciPlot 23-rule evidence status</title>
+<title>SciPlot {rule_count}-rule evidence status</title>
 <style>
 :root{{--ink:#17211d;--muted:#607068;--line:#dbe3de;--paper:#f5f7f5;--card:#fff;--green:#176b46;--amber:#8a5a00;--red:#9f2d2d}}
 *{{box-sizing:border-box}} body{{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif}}
@@ -108,7 +109,7 @@ main{{max-width:1500px;margin:auto;padding:34px 28px 60px}} h1{{font-size:28px;m
 .notes{{max-width:360px;color:var(--muted)}} h2{{margin-top:34px;font-size:20px}} .definitions{{color:var(--muted);max-width:1000px}} code{{font-size:12px}} a{{color:#126247}}
 @media(max-width:1000px){{.cards{{grid-template-columns:repeat(3,1fr)}}}} @media(max-width:620px){{main{{padding:24px 14px}}.cards{{grid-template-columns:repeat(2,1fr)}}.controls{{display:block}}input,select{{width:100%;margin-bottom:8px}}}}
 </style></head><body><main>
-<h1>SciPlot 23-rule evidence status</h1>
+<h1>SciPlot {rule_count}-rule evidence status</h1>
 <p class="lede">Generated {html.escape(payload["generated_at"])}. Evidence, lifecycle, and visual publication review remain separate gates.</p>
 <section class="cards">{card_html}</section>
 <div class="controls"><input id="search" type="search" placeholder="Filter rule, tier, status, or limitation">

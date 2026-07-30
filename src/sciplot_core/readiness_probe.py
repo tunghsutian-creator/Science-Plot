@@ -744,12 +744,14 @@ def run_readiness_probe(*, output_root: Path) -> dict[str, Any]:
             "registry_covers_current_ready_rules",
             "Every current ready rule has a current accepted contract",
             status["status"] == "ready"
-            and status["ready_without_ai_rule_count"] == 23
+            and status["ready_without_ai_rule_count"]
+            == status["current_ready_rule_count"]
             and not status["missing_rule_ids"]
             and not status["stale_rule_ids"],
             detail={
                 "status": status["status"],
                 "ready_without_ai_rule_count": status["ready_without_ai_rule_count"],
+                "current_ready_rule_count": status["current_ready_rule_count"],
                 "evidence_strength_counts": status["evidence_strength_counts"],
             },
         ),

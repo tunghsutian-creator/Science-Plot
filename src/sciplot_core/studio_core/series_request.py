@@ -95,6 +95,7 @@ def _series_from_request(
         "polar_curve",
     }:
         from sciplot_core.performance_comparison import (
+            PERFORMANCE_SCATTER_TEMPLATE_ID,
             PerformanceComparisonError,
             performance_transform_parameters,
             prepare_performance_comparison,
@@ -162,12 +163,13 @@ def _series_from_request(
         if not bool(layout.get("legend_uses_reserved_panel")):
             render_options.setdefault("legend_position", "auto")
             render_options.setdefault("series_label_mode", "legend")
-            for axis, bounds in (
-                ("x", payload["x_bounds"]),
-                ("y", payload["y_bounds"]),
-            ):
-                render_options.setdefault(f"{axis}_min", float(bounds[0]))
-                render_options.setdefault(f"{axis}_max", float(bounds[1]))
+            if template_id == PERFORMANCE_SCATTER_TEMPLATE_ID:
+                for axis, bounds in (
+                    ("x", payload["x_bounds"]),
+                    ("y", payload["y_bounds"]),
+                ):
+                    render_options.setdefault(f"{axis}_min", float(bounds[0]))
+                    render_options.setdefault(f"{axis}_max", float(bounds[1]))
             render_options = _apply_readability_render_defaults(
                 render_options,
                 request=request,

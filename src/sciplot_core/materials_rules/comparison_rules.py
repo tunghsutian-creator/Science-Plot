@@ -46,14 +46,15 @@ COMPARISON_RULES: tuple[SemanticRule, ...] = (
             "series_label_mode": "legend",
         },
         fixture_path=(
-            "tests/fixtures/performance_comparison/material_performance_long.csv"
+            "tests/fixtures/real_world/performance_comparison/"
+            "mrpa_rpa_performance_long.csv"
         ),
-        fixture_status="pending",
+        fixture_status="ready",
         priority=1,
         reason=(
-            "Explicit tidy material-performance comparison with sample/reference "
-            "roles, scatter-axis selection, declared radar bounds, and literature "
-            "metadata."
+            "Accepted tidy material-performance comparison with sample/reference "
+            "roles, scatter-axis selection, declared radar bounds, and optional "
+            "literature metadata."
         ),
     ),
 )

@@ -9,7 +9,7 @@ from typing import Any
 def _write_markdown(path: Path, payload: dict[str, Any]) -> None:
     summary = payload["summary"]
     lines = [
-        "# SciPlot 23-rule evidence status",
+        f"# SciPlot {summary['rule_count']}-rule evidence status",
         "",
         f"Generated: {payload['generated_at']}",
         "",

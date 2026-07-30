@@ -1,0 +1,14 @@
+{
+  "kind": "sciplot_human_daily_use_validation",
+  "version": 1,
+  "status": "passed",
+  "confirmed_at": "2026-07-29T10:50:45+08:00",
+  "confirmed_by": "project_owner",
+  "scope": [
+    "veusz_first_daily_use",
+    "owner_operated_validation"
+  ],
+  "limitations": [
+    "Human daily-use validation does not establish blanket journal compliance."
+  ]
+}

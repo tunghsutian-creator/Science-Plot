@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.foundation.path_names import safe_filename, slug, unique_path
+from sciplot_core.foundation.path_names import (
+    reserve_unique_directory,
+    safe_filename,
+    slug,
+    unique_path,
+)
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.publication import (
     build_publication_intent,
@@ -53,18 +59,59 @@ def create_intake_project(
     recognition: dict[str, Any] | None = None,
     studio_preparer: Callable[[Path], dict[str, Any]],
 ) -> dict[str, Any]:
+    _, experiment = _catalog_item(data_type_id, experiment_type_id)
+    cleaned_groups = [group for group in groups if group.sample.strip() and group.files]
+    if not cleaned_groups:
+        raise ValueError("At least one named sample group with files is required.")
+    project_slug = slug(
+        project_name
+        or f"{experiment['label']}_{'_'.join(group.sample for group in cleaned_groups)}"
+    )
+    resolved_output_root = output_root.expanduser().resolve()
+    project_dir = reserve_unique_directory(resolved_output_root, project_slug)
+    try:
+        return _create_intake_project_in_reserved_directory(
+            project_name=project_name,
+            data_type_id=data_type_id,
+            experiment_type_id=experiment_type_id,
+            groups=cleaned_groups,
+            output_root=resolved_output_root,
+            plot_output=plot_output,
+            exports=exports,
+            render_options=render_options,
+            column_confirmations=column_confirmations,
+            replicate_mode=replicate_mode,
+            recognition=recognition,
+            studio_preparer=studio_preparer,
+            project_dir=project_dir,
+        )
+    except BaseException:
+        shutil.rmtree(project_dir)
+        raise
+
+
+def _create_intake_project_in_reserved_directory(
+    *,
+    project_name: str,
+    data_type_id: str,
+    experiment_type_id: str,
+    groups: list[IntakeGroupInput],
+    output_root: Path,
+    plot_output: str | Path | None,
+    exports: list[str] | tuple[str, ...] | None,
+    render_options: dict[str, Any] | None,
+    column_confirmations: list[dict[str, Any]] | None,
+    replicate_mode: str | None,
+    recognition: dict[str, Any] | None,
+    studio_preparer: Callable[[Path], dict[str, Any]],
+    project_dir: Path,
+) -> dict[str, Any]:
     data_type, experiment = _catalog_item(data_type_id, experiment_type_id)
     cleaned_groups = [group for group in groups if group.sample.strip() and group.files]
     if not cleaned_groups:
         raise ValueError("At least one named sample group with files is required.")
 
     series_order = [group.sample.strip() for group in cleaned_groups]
-    project_slug = slug(
-        project_name
-        or f"{experiment['label']}_{'_'.join(group.sample for group in cleaned_groups)}"
-    )
-    output_root = output_root.expanduser().resolve()
-    project_dir = unique_path(output_root, project_slug)
     project_slug = project_dir.name
     raw_dir = project_dir / "raw"
     source_dir = project_dir / "source"
