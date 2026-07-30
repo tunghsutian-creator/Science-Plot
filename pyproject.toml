@@ -38,6 +38,16 @@ sciplot = "sciplot_core.cli:main"
 [tool.ruff]
 extend-exclude = ["third_party"]
 
+[tool.ruff.lint]
+extend-select = [
+  "B",
+  "DTZ",
+  "FURB162",
+  "PLC0206",
+  "PLW2901",
+  "RUF012",
+]
+
 [tool.pytest.ini_options]
 addopts = "--strict-markers"
 markers = [

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.policy import FIXED_PUBLICATION_FRAME_POLICY
 from sciplot_core.studio_render.axes_spec import (
@@ -104,7 +104,7 @@ def _build_veusz_plot_spec(
     return {
         "kind": "sciplot_veusz_plot_spec",
         "version": 1,
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": utc_now_iso(),
         "render_engine": "veusz",
         "qa_target": "veusz_export",
         "template": template_id,

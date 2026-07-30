@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from typing import Any
 
+from sciplot_core.foundation.iso_timestamps import (
+    require_zoned_iso_timestamp as _timestamp,
+)
 from sciplot_gui.studio_assistant_history.contracts import (
     ASSISTANT_HISTORY_KIND,
     ASSISTANT_HISTORY_VERSION,
@@ -47,12 +49,7 @@ def validate_assistant_history_event(payload: dict[str, Any]) -> dict[str, Any]:
         "recorded_at",
         maximum=64,
     )
-    try:
-        parsed_recorded_at = datetime.fromisoformat(recorded_at)
-    except ValueError as exc:
-        raise ValueError("recorded_at must be an ISO timestamp.") from exc
-    if parsed_recorded_at.tzinfo is None:
-        raise ValueError("recorded_at must include a timezone.")
+    _timestamp(recorded_at, "recorded_at")
     status = _required_text(payload.get("status"), "status", maximum=64)
     if status not in ASSISTANT_HISTORY_STATUSES:
         raise ValueError(f"Unsupported Assistant history status: {status!r}")

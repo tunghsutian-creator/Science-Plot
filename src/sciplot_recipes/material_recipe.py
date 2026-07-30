@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.publication import build_transform_step
 from sciplot_core.render import inspect_payload, render_to_dir
 
@@ -132,7 +132,7 @@ def run_material_recipe(
     manifest = {
         "kind": "sciplot_recipe",
         "recipe": recipe,
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": utc_now_iso(),
         "input": str(input_path),
         "processed_source": str(processed_source),
         "template": template,

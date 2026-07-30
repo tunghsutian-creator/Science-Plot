@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.source_coverage import verify_rendered_mapping_source_coverage
@@ -95,7 +95,7 @@ def build_studio_run_manifest(
     request = inventory.request
     manifest = {
         "kind": "sciplot_run",
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": utc_now_iso(),
         "request_path": str(inventory.request_path),
         "request": json_safe(request),
         "route": "studio",

@@ -7,6 +7,15 @@ from typing import Any
 from sciplot_core.veusz_audit.measurements import _distance_pt, _rounded
 
 
+def _setting_value(
+    settings: dict[str, Any],
+    name: str,
+    default: object = None,
+) -> object:
+    setting = settings.get(name)
+    return setting.val if setting is not None else default
+
+
 def collect_layout_inventory(
     ordered_widgets: list[tuple[str, Any]],
     state_by_path: dict[str, dict[str, Any]],
@@ -117,10 +126,6 @@ def collect_layout_inventory(
         elif widget_type == "axis":
             settings = widget.settings.setdict
 
-            def setting_value(name: str, default: object = None) -> object:
-                setting = settings.get(name)
-                return setting.val if setting is not None else default
-
             axes.append(
                 {
                     "path": widget_path,
@@ -129,13 +134,17 @@ def collect_layout_inventory(
                     "graph_path": (
                         str(widget.parent.path) if widget.parent is not None else None
                     ),
-                    "label": str(setting_value("label", "") or "").strip(),
-                    "scale": ("log" if bool(setting_value("log", False)) else "linear"),
-                    "min": setting_value("min", "Auto"),
-                    "max": setting_value("max", "Auto"),
-                    "direction": str(setting_value("direction", "") or ""),
-                    "mode": str(setting_value("mode", "") or ""),
-                    "hidden": bool(setting_value("hide", False)),
+                    "label": str(_setting_value(settings, "label", "") or "").strip(),
+                    "scale": (
+                        "log"
+                        if bool(_setting_value(settings, "log", False))
+                        else "linear"
+                    ),
+                    "min": _setting_value(settings, "min", "Auto"),
+                    "max": _setting_value(settings, "max", "Auto"),
+                    "direction": str(_setting_value(settings, "direction", "") or ""),
+                    "mode": str(_setting_value(settings, "mode", "") or ""),
+                    "hidden": bool(_setting_value(settings, "hide", False)),
                 }
             )
     return graphs, grids, auxiliaries, axes

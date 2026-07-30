@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -12,6 +13,7 @@ from sciplot_core.intake import IncomingFile, IntakeGroupInput
 from sciplot_core.intake import packaging
 from sciplot_core.intake import session
 from sciplot_core.intake.project import project_builder
+from sciplot_core.workflow import project_state
 
 
 def _group(content: bytes) -> list[IntakeGroupInput]:
@@ -238,3 +240,81 @@ def test_zip_replace_failure_keeps_last_good_archive_and_cleans_stage(
 
     assert zip_path.read_bytes() == initial_bytes
     assert not list(tmp_path.glob(".project.zip.sciplot-tmp-*"))
+
+
+def test_studio_package_preparation_failure_is_explicit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    convergence_calls: list[Path] = []
+
+    def fail_prepare(
+        command: list[str],
+        **_kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        raise subprocess.CalledProcessError(
+            returncode=7,
+            cmd=command,
+            stderr="synthetic Studio preparation failure",
+        )
+
+    def record_convergence(path: str | Path, **_kwargs: object) -> dict[str, object]:
+        convergence_calls.append(Path(path))
+        return {}
+
+    monkeypatch.setattr(packaging.subprocess, "run", fail_prepare)
+    monkeypatch.setattr(
+        packaging,
+        "converge_intake_project_launchers",
+        record_convergence,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="synthetic Studio preparation failure",
+    ):
+        packaging._prepare_studio_project_package(project_dir)
+
+    assert convergence_calls == []
+
+
+def test_failed_studio_preparation_does_not_refresh_project_zip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    request_path = project_dir / "project.sciplot.json"
+    request_path.write_text("{}", encoding="utf-8")
+    (project_dir / "intake_manifest.json").write_text("{}", encoding="utf-8")
+    zip_path = tmp_path / "project.zip"
+    zip_path.write_bytes(b"last complete archive")
+    refresh_calls: list[Path] = []
+
+    def fail_prepare(_project_dir: Path) -> None:
+        raise RuntimeError("synthetic Studio preparation failure")
+
+    def record_refresh(path: str | Path) -> Path:
+        refresh_calls.append(Path(path))
+        return zip_path
+
+    monkeypatch.setattr(packaging, "_prepare_studio_project_package", fail_prepare)
+    monkeypatch.setattr(packaging, "refresh_intake_project_zip", record_refresh)
+
+    with pytest.raises(
+        RuntimeError,
+        match="synthetic Studio preparation failure",
+    ):
+        project_state._update_intake_project_after_run(
+            request_path,
+            {
+                "created_at": "2026-07-30T00:00:00+00:00",
+                "output": str(project_dir / "runs" / "run_001"),
+                "figures": [],
+            },
+        )
+
+    assert refresh_calls == []
+    assert zip_path.read_bytes() == b"last complete archive"

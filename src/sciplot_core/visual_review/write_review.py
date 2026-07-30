@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import shutil
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_io import atomic_write_json
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 
 from sciplot_core.visual_review.transaction import (
@@ -40,7 +40,7 @@ def write_final_size_visual_review(
     rows: list[dict[str, Any]],
     generated_at: str | None = None,
 ) -> dict[str, Any]:
-    timestamp = generated_at or datetime.now(UTC).isoformat()
+    timestamp = generated_at or utc_now_iso()
     review_dir = output_dir / "final_size_visual_review"
     if review_dir.exists():
         shutil.rmtree(review_dir)

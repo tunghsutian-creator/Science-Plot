@@ -9,11 +9,11 @@ import threading
 import time
 import warnings
 import zlib
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.assistant_selection import VeuszSelection
 from sciplot_core.assistant_operations import VeuszSettingOperationBatch
@@ -976,7 +976,7 @@ def run_openai_provider_probe(*, output_root: Path) -> dict[str, Any]:
     payload = {
         "kind": OPENAI_PROVIDER_PROBE_KIND,
         "version": OPENAI_PROVIDER_PROBE_VERSION,
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": utc_now_iso(),
         "status": status,
         "state": "ready" if status == "passed" else "needs_rule_repair",
         "checks": checks,

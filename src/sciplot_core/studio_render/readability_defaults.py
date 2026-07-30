@@ -99,7 +99,7 @@ def _apply_readability_render_defaults(
             if len(axis_ticks) >= 2:
                 tick_step = min(
                     right - left
-                    for left, right in zip(axis_ticks, axis_ticks[1:])
+                    for left, right in zip(axis_ticks, axis_ticks[1:], strict=False)
                     if right > left
                 )
                 edge_step = tick_step / 2.0

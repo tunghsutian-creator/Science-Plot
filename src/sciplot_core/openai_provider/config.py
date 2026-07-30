@@ -51,7 +51,7 @@ class OpenAIResponsesConfig:
                 "OpenAI base URL must not contain credentials, query, or fragment."
             )
         try:
-            parsed.port
+            _ = parsed.port
         except ValueError as exc:
             raise ValueError("OpenAI base URL has an invalid port.") from exc
         if parsed.scheme != "https" and not _is_loopback(parsed.hostname):

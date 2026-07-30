@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.performance_comparison import (
     PERFORMANCE_RADAR_TEMPLATE_ID,
@@ -113,7 +113,7 @@ def build_performance_veusz_spec(
     return {
         "kind": "sciplot_veusz_plot_spec",
         "version": 1,
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": utc_now_iso(),
         "render_engine": "veusz",
         "qa_target": "veusz_export",
         "template": template,

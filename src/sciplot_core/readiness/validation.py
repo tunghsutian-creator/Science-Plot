@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.foundation.iso_timestamps import (
+    require_zoned_iso_timestamp,
+    utc_now_iso,
+)
 
 from sciplot_core.readiness.constants import (
     _HASH_PATTERN,
 )
 
 
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+_now = utc_now_iso
 
 
 def _required_text(
@@ -54,13 +56,7 @@ def _required_hash(value: object, label: str) -> str:
 
 def _timestamp(value: object, label: str) -> str:
     text = _required_text(value, label, maximum=128)
-    try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError as exc:
-        raise ValueError(f"{label} must be an ISO-8601 timestamp.") from exc
-    if parsed.tzinfo is None:
-        raise ValueError(f"{label} must include a timezone.")
-    return text
+    return require_zoned_iso_timestamp(text, label)
 
 
 def _closed_object(

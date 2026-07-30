@@ -91,8 +91,8 @@ def test_curve_template_materializes_independent_condition_and_formula_legends(
     formulas = ("E0", "E2", "E3", "E4")
     conditions = ("33% weight reduction", "50% weight reduction")
     rows: list[list[object]] = [[], [], []]
-    for formula_index, formula in enumerate(formulas):
-        for condition_index, condition in enumerate(conditions):
+    for formula in formulas:
+        for condition in conditions:
             label = f"{formula} || {condition}"
             rows[0].extend(["Tensile strain", "Tensile stress"])
             rows[1].extend(["%", "MPa"])

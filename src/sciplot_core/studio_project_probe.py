@@ -8,11 +8,11 @@ import shutil
 import sys
 import tempfile
 from contextlib import redirect_stdout
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core._paths import resolved_path_is_within
 
@@ -21,8 +21,7 @@ STUDIO_PROJECT_PROBE_KIND = "sciplot_studio_project_probe"
 STUDIO_PROJECT_PROBE_VERSION = 1
 
 
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+_now = utc_now_iso
 
 
 def _check(
@@ -2451,7 +2450,7 @@ def run_studio_project_probe(
         )
 
         class _UnvalidatedSaveBase:
-            children: list[Any] = []
+            children: ClassVar[list[Any]] = []
 
         class _UnvalidatedSaveDocument:
             def __init__(self, filename: Path) -> None:

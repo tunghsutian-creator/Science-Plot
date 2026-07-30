@@ -6,10 +6,10 @@ import copy
 import json
 import os
 import tempfile
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 
 from sciplot_core.smoke.contracts import (
@@ -738,7 +738,7 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
     payload = {
         "kind": "sciplot_runtime_smoke",
         "version": RUNTIME_SMOKE_VERSION,
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": utc_now_iso(),
         "status": status,
         "state": "ready" if status == "passed" else "needs_rule_repair",
         "fixture": fixture,

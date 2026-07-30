@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +12,7 @@ from sciplot_core.batch.source_discovery import (
     normalize_tensile_roots,
     semantic_priority,
 )
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import slug
 from sciplot_core.render import DEFAULT_EXPORT_FORMATS, inspect_payload
@@ -211,7 +211,7 @@ def run_batch(
 
     manifest = {
         "kind": "sciplot_batch",
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": utc_now_iso(),
         "mode": mode,
         "input_dir": str(input_dir),
         "output_dir": str(output_dir),

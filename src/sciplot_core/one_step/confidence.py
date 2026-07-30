@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.readiness import (
     HIGH_CONFIDENCE_THRESHOLD,
     MEDIUM_CONFIDENCE_THRESHOLD,
 )
 
 
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+_now = utc_now_iso
 
 
 def _source_counts(path: Path) -> dict[str, int]:

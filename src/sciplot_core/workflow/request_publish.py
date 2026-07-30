@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from sciplot_core.delivery import build_delivery_package
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.one_step import build_one_step_project
 from sciplot_core.operation_modes import normal_mode_payload
@@ -185,7 +185,7 @@ def _build_request_manifest(
 ) -> dict[str, Any]:
     return {
         "kind": "sciplot_run",
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": utc_now_iso(),
         "request_path": str(request_path),
         "request": json_safe(request),
         "source_request": json_safe(source_request),

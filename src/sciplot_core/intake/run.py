@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload
 
@@ -62,7 +62,7 @@ def create_and_run_intake_project(
             intervention=intervention,
         )
         failed_run = {
-            "failed_at": datetime.now(UTC).isoformat(),
+            "failed_at": utc_now_iso(),
             "output": str(run_output),
             "figures": [],
             "analysis_metrics": [],

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from sciplot_core._paths import (
     REPO_ROOT,
 )
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import slug
 from sciplot_core.evidence import write_evidence_status_dashboard
@@ -72,7 +72,7 @@ def run_rule_acceptance_suite(
         )
     rows = [rows_by_id[rule.rule_id] for rule in ready_rules]
     selected_rows = [rows_by_id[rule_id] for rule_id in selected_ids]
-    generated_at = datetime.now(UTC).isoformat()
+    generated_at = utc_now_iso()
     visual_review = write_final_size_visual_review(
         output_dir=project_dir,
         rows=rows,

@@ -20,7 +20,7 @@ def require_zoned_iso_timestamp(value: object, label: str) -> str:
     if not text:
         raise ValueError(f"{label} must be a non-empty string.")
     try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(text)
     except ValueError as exc:
         raise ValueError(f"{label} must be an ISO-8601 timestamp.") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:

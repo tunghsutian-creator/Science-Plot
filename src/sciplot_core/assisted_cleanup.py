@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import (
     safe_filename,
@@ -28,8 +28,7 @@ _CLEANUP_REQUEST_PATCH_KEYS = {
 }
 
 
-def _timestamp() -> str:
-    return datetime.now(UTC).isoformat()
+_timestamp = utc_now_iso
 
 
 def _path_payload(path: str | Path) -> dict[str, Any]:

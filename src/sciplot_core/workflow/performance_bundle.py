@@ -59,10 +59,10 @@ def _render_veusz_performance_bundle(
                 ),
             },
         )
-        for key in combined:
+        for key, combined_values in combined.items():
             values = result.get(key)
             if isinstance(values, list):
-                combined[key].extend(values)
+                combined_values.extend(values)
     return {
         "kind": "sciplot_veusz_render",
         "render_engine": "veusz",

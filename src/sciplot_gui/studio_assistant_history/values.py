@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_gui.studio_assistant_history.contracts import (
     ASSISTANT_HISTORY_FILENAME,
@@ -15,8 +15,7 @@ from sciplot_gui.studio_assistant_history.contracts import (
 )
 
 
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+_now = utc_now_iso
 
 
 def _required_text(value: object, label: str, *, maximum: int = 512) -> str:

@@ -6,9 +6,9 @@ import hashlib
 import json
 import shutil
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import (
     reserve_unique_directory,
@@ -237,7 +237,7 @@ def _create_intake_project_in_reserved_directory(
     if selected_column_confirmations:
         plot_request["column_confirmations"] = selected_column_confirmations
 
-    created_at = datetime.now(UTC).isoformat()
+    created_at = utc_now_iso()
     warnings = _duplicate_source_warnings(manifest_groups)
     if warnings:
         plot_request["review_notes"].extend(str(item["message"]) for item in warnings)

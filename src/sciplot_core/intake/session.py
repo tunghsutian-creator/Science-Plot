@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import reserve_unique_file, slug
 from sciplot_core.materials_rules import get_rule
@@ -183,7 +183,7 @@ def prepare_intake_session(
     payload = {
         "kind": "sciplot_intake_session",
         "version": 1,
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": utc_now_iso(),
         "session_id": path.stem,
         "session_path": str(path),
         "input_path": str(source),

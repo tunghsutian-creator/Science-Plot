@@ -376,6 +376,18 @@ def _prepare_studio_project_package(project_dir: Path) -> None:
             check=True,
             env=_studio_prepare_env(),
         )
-    except Exception:
-        pass
+    except subprocess.CalledProcessError as exc:
+        diagnostic = exc.stderr or exc.stdout
+        detail = diagnostic.strip()[-2000:] if isinstance(diagnostic, str) else ""
+        message = (
+            f"SciPlot Studio package preparation failed for {project_dir} "
+            f"with exit status {exc.returncode}."
+        )
+        if detail:
+            message = f"{message} {detail}"
+        raise RuntimeError(message) from exc
+    except OSError as exc:
+        raise RuntimeError(
+            f"SciPlot Studio package preparation could not start for {project_dir}."
+        ) from exc
     converge_intake_project_launchers(project_dir)

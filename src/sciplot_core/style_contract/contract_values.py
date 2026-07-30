@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from sciplot_core.policy.contract_models import StyleContract
 
-def _contract_style_values(style: object) -> dict[str, object]:
-    typography = getattr(style, "typography")
-    stroke = getattr(style, "stroke")
+
+def _contract_style_values(style: StyleContract) -> dict[str, object]:
+    typography = style.typography
+    stroke = style.stroke
     return {
         "typography.font_family": typography.font_family,
         "typography.font_size_pt": typography.font_size_pt,

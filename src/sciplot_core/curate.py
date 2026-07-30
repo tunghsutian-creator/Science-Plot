@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import webbrowser
-from datetime import UTC, datetime
 from html import escape
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.intake.packaging import refresh_intake_project_zip
 from sciplot_core.intake.application import create_intake_project_from_session
@@ -264,7 +264,7 @@ def curate_torque_project(
     selection_payload: dict[str, Any] = {
         "kind": "sciplot_torque_curation",
         "version": 1,
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": utc_now_iso(),
         "project_name": project_name or str(project["project_name"]),
         "input_path": str(input_path),
         "mode": "last_batch_event",

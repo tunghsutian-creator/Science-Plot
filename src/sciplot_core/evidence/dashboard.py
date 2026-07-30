@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 
 from sciplot_core.evidence.enrichment import (
@@ -36,7 +36,7 @@ def write_evidence_status_dashboard(
     repo_root: Path,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
-    timestamp = generated_at or datetime.now(UTC).isoformat()
+    timestamp = generated_at or utc_now_iso()
     payload = {
         "kind": "sciplot_23_rule_evidence_status",
         "version": 1,

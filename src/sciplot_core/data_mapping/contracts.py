@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_hashing import (
     canonical_json_sha256 as _canonical_sha256,
 )
@@ -79,8 +79,7 @@ _PRIMARY_NUMERIC_COLUMN_ROLES = frozenset({"x", "y", "z", "value"})
 _DECIMAL_COMMA_NUMBER = re.compile(r"^[+-]?(?:\d+(?:,\d*)?|,\d+)(?:[eE][+-]?\d+)?$")
 
 
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+_now = utc_now_iso
 
 
 def data_mapping_proposal_sha256(proposal: DataMappingProposal) -> str:

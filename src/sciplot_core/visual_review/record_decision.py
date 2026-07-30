@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 
 from sciplot_core.visual_review.transaction import (
     FINAL_SIZE_VISUAL_REVIEW_VERSION,
@@ -126,7 +126,7 @@ def record_final_size_visual_decision(
             acceptance=acceptance,
         )
 
-    reviewed_at = datetime.now(UTC).isoformat()
+    reviewed_at = utc_now_iso()
     reviewed_rules = [
         record["rule_id"] for record in records if record["status"] != "not_run"
     ]

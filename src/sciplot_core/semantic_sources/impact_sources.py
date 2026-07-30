@@ -96,31 +96,31 @@ def _read_impact_canonical_tables(source: Path) -> ImpactReplicatePayload:
 
     parsed: list[tuple[str, str, list[float]]] = []
     unit_candidates: list[object] = []
-    for table_name, raw in _read_candidate_tables(source):
-        raw = raw.dropna(axis=1, how="all")
-        if raw.shape[0] < 4:
+    for table_name, raw_table in _read_candidate_tables(source):
+        table = raw_table.dropna(axis=1, how="all")
+        if table.shape[0] < 4:
             continue
         sheet_label = table_name.split(":", 1)[-1] if ":" in table_name else ""
-        for column in range(raw.shape[1]):
-            metric_token = _token(raw.iat[0, column])
+        for column in range(table.shape[1]):
+            metric_token = _token(table.iat[0, column])
             if not (
                 metric_token == "re"
                 or "impact" in metric_token
                 or "冲击" in metric_token
             ):
                 continue
-            sample = _clean_text(raw.iat[2, column])
+            sample = _clean_text(table.iat[2, column])
             if not sample:
                 continue
             values = [
                 value
-                for row_index in range(3, raw.shape[0])
-                if (value := _float(raw.iat[row_index, column])) is not None
+                for row_index in range(3, table.shape[0])
+                if (value := _float(table.iat[row_index, column])) is not None
             ]
             if not values:
                 continue
             parsed.append((sheet_label, sample, values))
-            unit_candidates.append(raw.iat[1, column])
+            unit_candidates.append(table.iat[1, column])
     if not parsed:
         raise ValueError("Could not find a three-label-row impact table.")
 
@@ -147,31 +147,31 @@ def read_impact_condition_payloads(
     if source.suffix.casefold() not in {".xlsx", ".xls", ".xlsm"}:
         return []
     conditions: list[tuple[str, ImpactReplicatePayload]] = []
-    for table_name, raw in _read_candidate_tables(source):
-        raw = raw.dropna(axis=1, how="all")
-        if raw.shape[0] < 4:
+    for table_name, raw_table in _read_candidate_tables(source):
+        table = raw_table.dropna(axis=1, how="all")
+        if table.shape[0] < 4:
             continue
         groups: dict[str, list[float]] = {}
         unit_candidates: list[object] = []
-        for column in range(raw.shape[1]):
-            metric_token = _token(raw.iat[0, column])
+        for column in range(table.shape[1]):
+            metric_token = _token(table.iat[0, column])
             if not (
                 metric_token == "re"
                 or "impact" in metric_token
                 or "冲击" in metric_token
             ):
                 continue
-            sample = _clean_text(raw.iat[2, column])
+            sample = _clean_text(table.iat[2, column])
             if not sample:
                 continue
             values = [
                 value
-                for row_index in range(3, raw.shape[0])
-                if (value := _float(raw.iat[row_index, column])) is not None
+                for row_index in range(3, table.shape[0])
+                if (value := _float(table.iat[row_index, column])) is not None
             ]
             if values:
                 groups.setdefault(sample, []).extend(values)
-                unit_candidates.append(raw.iat[1, column])
+                unit_candidates.append(table.iat[1, column])
         if not groups:
             continue
         condition = table_name.split(":", 1)[-1] if ":" in table_name else table_name

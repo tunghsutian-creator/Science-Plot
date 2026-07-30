@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.json_contract import (
     reject_unknown_keys,
     require_json_bool,
@@ -20,8 +20,7 @@ VEUSZ_SETTING_OPERATION_VERSION = 1
 SUPPORTED_VEUSZ_SETTING_OPERATIONS = frozenset({"set_setting"})
 
 
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+_now = utc_now_iso
 
 
 def _required_text(value: object, label: str) -> str:

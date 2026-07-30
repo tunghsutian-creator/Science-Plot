@@ -11,12 +11,12 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager
-from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Iterator
 
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.setting_catalog import SUPPORTED_INSPECTOR_TYPES
 from sciplot_core.assistant_operations import (
@@ -40,8 +40,7 @@ STUDIO_ASSISTANT_PROBE_VERSION = 1
 _PROVIDER_ID = "studio_assistant_probe"
 
 
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+_now = utc_now_iso
 
 
 def _check(

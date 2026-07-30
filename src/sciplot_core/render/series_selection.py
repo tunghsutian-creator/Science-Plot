@@ -3,10 +3,24 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import TypeVar
+from typing import Protocol, TypeVar
 
 
 _T = TypeVar("_T")
+
+
+class _HasSample(Protocol):
+    @property
+    def sample(self) -> object: ...
+
+
+class _HasGroup(Protocol):
+    @property
+    def group(self) -> object: ...
+
+
+_SampleT = TypeVar("_SampleT", bound=_HasSample)
+_GroupT = TypeVar("_GroupT", bound=_HasGroup)
 
 
 def _normalized_label(value: object) -> str:
@@ -93,54 +107,54 @@ def _reorder_named_items(
 
 
 def filter_curve_series(
-    series_list: Sequence[_T],
+    series_list: Sequence[_SampleT],
     series_include: Sequence[object] | None,
-) -> list[_T]:
+) -> list[_SampleT]:
     """Keep curve models whose ``sample`` label is explicitly selected."""
 
     return _filter_named_items(
         series_list,
         series_include,
-        label_getter=lambda series: getattr(series, "sample"),
+        label_getter=lambda series: series.sample,
     )
 
 
 def reorder_curve_series(
-    series_list: Sequence[_T],
+    series_list: Sequence[_SampleT],
     series_order: Sequence[object] | None,
-) -> list[_T]:
+) -> list[_SampleT]:
     """Order curve models by ``sample`` and retain unspecified series afterward."""
 
     return _reorder_named_items(
         series_list,
         series_order,
-        label_getter=lambda series: getattr(series, "sample"),
+        label_getter=lambda series: series.sample,
     )
 
 
 def filter_replicate_groups(
-    groups: Sequence[_T],
+    groups: Sequence[_GroupT],
     series_include: Sequence[object] | None,
-) -> list[_T]:
+) -> list[_GroupT]:
     """Keep replicate models whose ``group`` label is explicitly selected."""
 
     return _filter_named_items(
         groups,
         series_include,
-        label_getter=lambda group: getattr(group, "group"),
+        label_getter=lambda group: group.group,
     )
 
 
 def reorder_replicate_groups(
-    groups: Sequence[_T],
+    groups: Sequence[_GroupT],
     series_order: Sequence[object] | None,
-) -> list[_T]:
+) -> list[_GroupT]:
     """Order replicate models by ``group`` and retain unspecified groups afterward."""
 
     return _reorder_named_items(
         groups,
         series_order,
-        label_getter=lambda group: getattr(group, "group"),
+        label_getter=lambda group: group.group,
     )
 
 
