@@ -10,12 +10,13 @@ from sciplot_core.foundation.path_names import slug
 
 
 def _manifest_veusz_documents(manifest: dict[str, Any], output_dir: Path) -> list[Path]:
-    values: list[object] = []
-    values.extend(
+    explicit_values: list[object] = []
+    explicit_values.extend(
         manifest.get("veusz_documents", [])
         if isinstance(manifest.get("veusz_documents"), list)
         else []
     )
+    values: list[object] = []
     values.append(manifest.get("veusz_document"))
     for key in ("result", "studio"):
         payload = manifest.get(key) if isinstance(manifest.get(key), dict) else {}
@@ -42,6 +43,9 @@ def _manifest_veusz_documents(manifest: dict[str, Any], output_dir: Path) -> lis
             seen.add(candidate)
         return documents
 
+    documents = existing_documents(explicit_values)
+    if documents:
+        return documents
     documents = existing_documents(values)
     if documents:
         return documents
@@ -89,6 +93,7 @@ def _copy_project_documents(
         )
         if str(path).strip() and str(value).strip()
     }
+    figure_ids = _document_figure_ids(manifest)
     for index, source_document in enumerate(documents, start=1):
         base_name = _editable_project_name(source_document, index=index)
         name = base_name
@@ -119,7 +124,9 @@ def _copy_project_documents(
                 "path": str(destination),
                 "relative_path": str(destination.relative_to(project_dir.parent)),
                 "format": "vsz",
+                "figure_id": figure_ids.get(str(source_document.resolve())),
                 "source_sha256": source_hash,
+                "expected_sha256": document_expected_hash or source_hash,
                 "delivery_sha256": delivery_hash,
                 "copy_hash_matches": bool(source_hash and source_hash == delivery_hash),
                 "hash_matches_export": hash_matches_export,
@@ -127,3 +134,30 @@ def _copy_project_documents(
             }
         )
     return records
+
+
+def _document_figure_ids(manifest: dict[str, Any]) -> dict[str, str]:
+    plan = (
+        manifest.get("resolved_figure_plan")
+        if isinstance(manifest.get("resolved_figure_plan"), dict)
+        else {}
+    )
+    outcomes = plan.get("outcomes") if isinstance(plan.get("outcomes"), list) else []
+    values: dict[str, str] = {}
+    for outcome in outcomes:
+        if not isinstance(outcome, dict):
+            continue
+        figure_id = str(outcome.get("figure_id") or "").strip()
+        artifacts = (
+            outcome.get("artifacts")
+            if isinstance(outcome.get("artifacts"), list)
+            else []
+        )
+        for value in artifacts:
+            if (
+                figure_id
+                and isinstance(value, str)
+                and Path(value).suffix.casefold() == ".vsz"
+            ):
+                values[str(Path(value).expanduser().resolve())] = figure_id
+    return values

@@ -13,6 +13,11 @@ from sciplot_core.assisted_cleanup import (
     write_cleanup_request,
 )
 from sciplot_core.data_mapping import resolve_data_mapping_request
+from sciplot_core.figure_plan import (
+    FigurePlanResolutionError,
+    resolve_preparation_figure_plan,
+)
+from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.materials_rules import get_rule, resolve_rule_template
 from sciplot_core.one_step import build_one_step_project
@@ -34,6 +39,13 @@ from sciplot_core.workflow.request_io import (
 )
 from sciplot_core.workflow.request_publish import publish_request_result
 from sciplot_core.workflow.request_rendering import execute_request_render
+from sciplot_core.workflow.route_intent import (
+    WorkflowRouteIntent,
+    resolve_workflow_route_intent,
+)
+from sciplot_core.workflow.source_binding import (
+    verify_workflow_figure_plan_source_binding,
+)
 
 
 def run_request(
@@ -90,6 +102,7 @@ def _run_request_in_managed_output(
             "A confirmed DataMappingProposal and assisted cleanup cannot both "
             "replace the same input in one run."
         )
+    route_intent = resolve_workflow_route_intent(request)
     input_path = _resolve_request_path(
         request.get("input"),
         base_dir=base_dir,
@@ -102,11 +115,10 @@ def _run_request_in_managed_output(
         mapping_application=mapping_application,
         cleanup_application=cleanup_application,
     )
-    (output_dir / "request_snapshot.json").write_text(
-        json.dumps(request, indent=2, ensure_ascii=False),
-        encoding="utf-8",
+    atomic_write_json(
+        output_dir / "request_snapshot.json",
+        json_safe(request),
     )
-
     requested_rule_id = (
         request.get("rule_id") if isinstance(request.get("rule_id"), str) else None
     )
@@ -116,6 +128,44 @@ def _run_request_in_managed_output(
         request=request,
         semantic=semantic,
         input_path=input_path,
+    )
+    semantic_rule_id = str(semantic.get("rule_id") or "").strip()
+    effective_template = (
+        resolve_rule_template(
+            semantic_rule_id,
+            (
+                request.get("template")
+                if isinstance(request.get("template"), str)
+                else None
+            ),
+        )
+        if semantic_rule_id
+        else str(request.get("template") or semantic.get("template") or "curve")
+    )
+    try:
+        figure_plan = resolve_preparation_figure_plan(
+            persisted=request.get("resolved_figure_plan"),
+            rule_id=semantic_rule_id,
+            template=effective_template,
+            study_model=study_model,
+            input_path=input_path,
+            request=request,
+        )
+    except FigurePlanResolutionError as exc:
+        raise ValueError(f"{exc.reason_code}: {exc}") from exc
+    request = deepcopy(request)
+    if figure_plan is not None:
+        request["resolved_figure_plan"] = figure_plan.to_payload()
+    else:
+        request.pop("resolved_figure_plan", None)
+    atomic_write_json(
+        output_dir / "request_snapshot.json",
+        json_safe(request),
+    )
+    verify_workflow_figure_plan_source_binding(
+        figure_plan,
+        input_path=input_path,
+        raw_archive=raw_archive,
     )
     publication_intent = build_publication_intent(
         study_model,
@@ -142,6 +192,7 @@ def _run_request_in_managed_output(
     _enforce_intervention_gate(
         request_path=request_path,
         request=request,
+        route_intent=route_intent,
         semantic=semantic,
         input_path=input_path,
         output_dir=output_dir,
@@ -151,6 +202,7 @@ def _run_request_in_managed_output(
     )
     rendered = execute_request_render(
         request=request,
+        route_intent=route_intent,
         semantic=semantic,
         study_model=study_model,
         input_path=input_path,
@@ -189,6 +241,11 @@ def _archive_request_inputs(
         original_input_path if mapping_application is not None else input_path,
         output_dir,
     )
+    if (
+        mapping_application is not None
+        and original_input_path.resolve() != input_path.resolve()
+    ):
+        raw_archive["effective_input"] = _archive_raw_input(input_path, output_dir)
     if (
         cleanup_application is not None
         and original_input_path.resolve() != input_path.resolve()
@@ -258,6 +315,7 @@ def _enforce_intervention_gate(
     *,
     request_path: Path,
     request: dict[str, Any],
+    route_intent: WorkflowRouteIntent,
     semantic: dict[str, Any],
     input_path: Path,
     output_dir: Path,
@@ -265,12 +323,10 @@ def _enforce_intervention_gate(
     study_model: dict[str, Any],
     layout_policy: Any,
 ) -> None:
-    use_auto = request.get("recipe") == "auto" or (
-        not request.get("recipe") and not request.get("template")
-    )
     pending_rule_blocked = semantic.get("rule_readiness") == "pending"
     if not (
-        semantic.get("needs_ai_intervention") and (use_auto or pending_rule_blocked)
+        semantic.get("needs_ai_intervention")
+        and (route_intent.uses_semantic_preparation or pending_rule_blocked)
     ):
         return
     intervention = build_intervention_request(

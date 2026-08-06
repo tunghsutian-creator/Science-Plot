@@ -3,6 +3,11 @@ from __future__ import annotations
 import re
 
 
+STUDIO_FIGURE_SET_KIND = "sciplot_studio_figure_set"
+STUDIO_FIGURE_SET_LEGACY_VERSION = 1
+STUDIO_FIGURE_SET_TASK_VERSION = 2
+
+
 def is_full_figure_set_export_scope(value: object) -> bool:
     """Return whether *value* is a complete all-figures delivery contract."""
 
@@ -63,6 +68,9 @@ def is_primary_figure_set_export_scope(value: object) -> bool:
 
 
 __all__ = [
+    "STUDIO_FIGURE_SET_KIND",
+    "STUDIO_FIGURE_SET_LEGACY_VERSION",
+    "STUDIO_FIGURE_SET_TASK_VERSION",
     "is_full_figure_set_export_scope",
     "is_primary_figure_set_export_scope",
 ]

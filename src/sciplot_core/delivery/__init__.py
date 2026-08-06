@@ -5,6 +5,8 @@ from __future__ import annotations
 from sciplot_core.delivery.contracts import (  # noqa: F401
     PUBLICATION_ARTIFACT_FILENAMES,
     PUBLICATION_ARTIFACT_KINDS,
+    DELIVERY_BINDING_POLICY_LEGACY,
+    DELIVERY_BINDING_POLICY_RESOLVED_PLAN,
     DELIVERY_PACKAGE_CONTRACT_VERSION,
     _project_slug,
 )
@@ -32,6 +34,8 @@ from sciplot_core.delivery.package_builder import (  # noqa: F401
 
 __all__ = [
     "DELIVERY_PACKAGE_CONTRACT_VERSION",
+    "DELIVERY_BINDING_POLICY_LEGACY",
+    "DELIVERY_BINDING_POLICY_RESOLVED_PLAN",
     "build_delivery_package",
     "verify_delivery_package",
 ]

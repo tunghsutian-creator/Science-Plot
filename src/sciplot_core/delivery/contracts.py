@@ -23,7 +23,9 @@ PUBLICATION_ARTIFACT_KINDS = {
 }
 
 
-DELIVERY_PACKAGE_CONTRACT_VERSION = 5
+DELIVERY_PACKAGE_CONTRACT_VERSION = 6
+DELIVERY_BINDING_POLICY_LEGACY = "legacy_unplanned"
+DELIVERY_BINDING_POLICY_RESOLVED_PLAN = "resolved_figure_plan_v1"
 
 
 def _project_slug(output_dir: Path, manifest: dict[str, Any]) -> str:

@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.figure_plan.plan import (
+    ResolvedFigurePlan,
+    resolved_figure_plan_from_payload,
+)
+from sciplot_core.figure_plan.terminal_binding import (
+    BoundTerminalFigureEvidence,
+    bind_terminal_figure_evidence,
+)
 from sciplot_core.materials_rules import compute_analysis_metrics
+from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.semantic import prepare_semantic_source
 from sciplot_recipes import run_recipe
 
@@ -19,21 +29,43 @@ from sciplot_core.workflow.request_io import (
     _request_options,
     _resolve_optional_request_path,
 )
+from sciplot_core.workflow.route_intent import WorkflowRoute, WorkflowRouteIntent
 
 
 @dataclass(frozen=True)
 class RequestRenderResult:
     """Route identity, renderer result, and source actually plotted."""
 
-    route: str
+    route_intent: WorkflowRouteIntent
     final_recipe: str | None
     result: dict[str, Any]
     plotted_data_source: Path
+    selected_figure_plan: ResolvedFigurePlan | None = None
+    figure_evidence: BoundTerminalFigureEvidence | None = field(
+        init=False,
+        default=None,
+    )
+
+    def __post_init__(self) -> None:
+        result = deepcopy(self.result)
+        evidence = bind_terminal_figure_evidence(
+            selected_plan=self.selected_figure_plan,
+            result=result,
+        )
+        object.__setattr__(self, "result", result)
+        object.__setattr__(self, "figure_evidence", evidence)
+
+    @property
+    def route(self) -> WorkflowRoute:
+        """Compatibility projection of the captured workflow route."""
+
+        return self.route_intent.route
 
 
 def execute_request_render(
     *,
     request: dict[str, Any],
+    route_intent: WorkflowRouteIntent,
     semantic: dict[str, Any],
     study_model: dict[str, Any],
     input_path: Path,
@@ -43,21 +75,44 @@ def execute_request_render(
 ) -> RequestRenderResult:
     """Render a request through exactly one normalized route."""
 
-    use_auto = request.get("recipe") == "auto" or (
-        not request.get("recipe") and not request.get("template")
+    selected_figure_plan = resolved_figure_plan_from_payload(
+        request.get("resolved_figure_plan")
     )
-    if use_auto:
+    if selected_figure_plan is not None:
+        request_rule = request.get("rule_id")
+        semantic_rule = semantic.get("rule_id")
+        if (
+            request_rule is not None and request_rule != selected_figure_plan.rule_id
+        ) or (
+            isinstance(semantic_rule, str)
+            and semantic_rule.strip()
+            and semantic_rule.strip() != selected_figure_plan.rule_id
+        ):
+            raise ValueError(
+                "workflow_figure_plan_rule_mismatch: selected FigurePlan rule "
+                "does not match the render request."
+            )
+    if route_intent.route == "auto":
         return _render_auto_request(
             request=request,
+            route_intent=route_intent,
             semantic=semantic,
             study_model=study_model,
             input_path=input_path,
             output_dir=output_dir,
             base_dir=base_dir,
             transform_steps=transform_steps,
+            selected_figure_plan=selected_figure_plan,
         )
-    if request.get("recipe"):
-        final_recipe = str(request["recipe"])
+    if route_intent.route == "recipe":
+        if selected_figure_plan is not None:
+            raise ValueError(
+                "workflow_recipe_figure_plan_unsupported: named recipes cannot "
+                "execute a selected FigurePlan until they consume exact tasks."
+            )
+        final_recipe = route_intent.requested_recipe
+        if final_recipe is None:
+            raise AssertionError("Recipe route lost its captured recipe identity.")
         result = run_recipe(
             final_recipe,
             input_path,
@@ -68,43 +123,54 @@ def execute_request_render(
             step for step in result.get("transform_steps", []) if isinstance(step, dict)
         )
         return RequestRenderResult(
-            route="recipe",
+            route_intent=route_intent,
             final_recipe=final_recipe,
             result=result,
             plotted_data_source=Path(str(result.get("processed_source") or input_path)),
+            selected_figure_plan=None,
         )
-    template = request.get("template")
-    if not isinstance(template, str) or not template.strip():
-        raise ValueError(
-            "Plot requests without `recipe` must define a non-empty `template`."
-        )
+    template = route_intent.requested_template
+    if template is None:
+        raise AssertionError("Direct-render route lost its captured template identity.")
     render_options = request.get("render_options")
+    effective_render_request = (
+        {
+            **request,
+            "rule_id": selected_figure_plan.rule_id,
+        }
+        if selected_figure_plan is not None
+        else request
+    )
     result = _render_with_auto_split(
         input_path,
         template=template,
         output_dir=output_dir,
         options=render_options if isinstance(render_options, dict) else {},
         export_formats=request.get("exports"),
-        request=request,
+        request=effective_render_request,
     )
-    _write_render_report(output_dir, request=request, result=result)
-    return RequestRenderResult(
-        route="render",
+    rendered = RequestRenderResult(
+        route_intent=route_intent,
         final_recipe=None,
         result=result,
         plotted_data_source=input_path,
+        selected_figure_plan=selected_figure_plan,
     )
+    _write_render_report(output_dir, request=request, result=rendered.result)
+    return rendered
 
 
 def _render_auto_request(
     *,
     request: dict[str, Any],
+    route_intent: WorkflowRouteIntent,
     semantic: dict[str, Any],
     study_model: dict[str, Any],
     input_path: Path,
     output_dir: Path,
     base_dir: Path,
     transform_steps: list[dict[str, Any]],
+    selected_figure_plan: ResolvedFigurePlan | None,
 ) -> RequestRenderResult:
     final_recipe = semantic.get("recommended_recipe")
     replicate_policy = (
@@ -150,6 +216,13 @@ def _render_auto_request(
     result = _render_with_auto_split(
         Path(str(prepared["source"])),
         source_input=input_path,
+        source_attestation=(
+            prepared.get("source_attestation")
+            if isinstance(
+                prepared.get("source_attestation"), PreparationSourceAttestation
+            )
+            else None
+        ),
         template=str(template),
         output_dir=output_dir,
         options=render_options,
@@ -176,16 +249,18 @@ def _render_auto_request(
             output_dir=output_dir,
         ),
     }
-    _write_auto_report(
-        output_dir,
-        request=request,
-        result=result,
-        semantic=semantic,
-        final_recipe=final_recipe,
-    )
-    return RequestRenderResult(
-        route="auto",
+    rendered = RequestRenderResult(
+        route_intent=route_intent,
         final_recipe=final_recipe,
         result=result,
         plotted_data_source=plotted_data_source,
+        selected_figure_plan=selected_figure_plan,
     )
+    _write_auto_report(
+        output_dir,
+        request=request,
+        result=rendered.result,
+        semantic=semantic,
+        final_recipe=final_recipe,
+    )
+    return rendered

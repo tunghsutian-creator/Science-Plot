@@ -73,13 +73,16 @@ def _render_request_route(
     requested_recipe: str | None,
     requested_template: str | None,
 ) -> str:
-    if requested_recipe == "auto" or (
-        requested_recipe is None and requested_template is None
-    ):
-        return "auto"
+    # Import lazily because the legacy workflow compatibility facade imports
+    # readiness during renderer startup.
+    from sciplot_core.workflow.route_intent import resolve_workflow_route_intent
+
+    request = {}
     if requested_recipe is not None:
-        return "recipe"
-    return "render"
+        request["recipe"] = requested_recipe
+    if requested_template is not None:
+        request["template"] = requested_template
+    return resolve_workflow_route_intent(request).route
 
 
 def render_request_contract_payload(

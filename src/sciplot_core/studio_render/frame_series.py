@@ -61,6 +61,7 @@ def _series_from_frame_records(
     request: dict[str, Any],
     *,
     frames: list[StudioSourceFrame],
+    strict_metric_binding: bool = False,
 ) -> tuple[list[StudioSeries], dict[str, Any]]:
     """Derive rendered numeric units from already-resolved terminal tables."""
 
@@ -85,7 +86,11 @@ def _series_from_frame_records(
             if numeric.shape[1] < 2:
                 continue
             metadata_order = _series_metadata_order(frame)
-            pairs = _xy_pairs_for_request(numeric, request=request)
+            pairs = _xy_pairs_for_request(
+                numeric,
+                request=request,
+                strict_metric_binding=strict_metric_binding,
+            )
             first_x, first_y = pairs[0]
             if axis_info["x_label"] == "x":
                 axis_info["x_label"] = _axis_label_from_column(frame, first_x)

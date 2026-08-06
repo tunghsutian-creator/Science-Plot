@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+
+from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.policy import canonical_figure_stem
 
 from sciplot_core.study_model.normalization import (
@@ -33,6 +35,7 @@ def attach_run_artifacts_to_study_model(
     figures: list[str],
     analysis_metrics: list[dict[str, Any]] | None = None,
     qa: dict[str, Any] | None = None,
+    resolved_figure_plan: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     updated = normalize_study_model(study_model)
     artifact_groups: dict[str, list[dict[str, Any]]] = {}
@@ -46,6 +49,85 @@ def attach_run_artifacts_to_study_model(
         )
     grouped_artifacts = list(artifact_groups.values())
     queue = list(updated.get("figure_queue", []))
+    figure_plan = resolved_figure_plan_from_payload(resolved_figure_plan)
+    if figure_plan is not None:
+        outcome_by_id = {outcome.figure_id: outcome for outcome in figure_plan.outcomes}
+        plan_task_ids = set(figure_plan.selected_figure_ids)
+        impact_expansion = figure_plan.rule_id == "impact_metric" and not any(
+            isinstance(figure, dict) and str(figure.get("id") or "") in plan_task_ids
+            for figure in queue
+        )
+        if figure_plan.rule_id == "rheology_frequency_sweep":
+            queued_ids = {
+                str(figure.get("id") or "")
+                for figure in queue
+                if isinstance(figure, dict)
+            }
+            queue.extend(
+                {
+                    "id": task.figure_id,
+                    "order": task.order,
+                    "status": "planned",
+                    "title": task.title,
+                    "metric": task.y_metric,
+                    "x_metric": task.x_metric,
+                    "y_metric": task.y_metric,
+                    "default_template": task.template,
+                    "resolved_from_figure_plan": True,
+                }
+                for task in figure_plan.tasks
+                if task.figure_id not in queued_ids
+            )
+        for figure in queue:
+            if not isinstance(figure, dict):
+                continue
+            figure_id = str(figure.get("id") or "")
+            outcome = outcome_by_id.get(figure_id)
+            if outcome is not None:
+                figure["status"] = (
+                    "rendered" if outcome.status == "ready" else "planned"
+                )
+                figure["artifacts"] = _artifact_records(outcome.artifacts)
+            elif impact_expansion and figure_id == "impact_strength_by_sample":
+                figure["status"] = "rendered" if figure_plan.complete else "planned"
+                figure["resolved_figure_ids"] = list(figure_plan.selected_figure_ids)
+                figure["artifacts"] = [
+                    artifact
+                    for outcome in figure_plan.outcomes
+                    for artifact in _artifact_records(outcome.artifacts)
+                ]
+            else:
+                figure["status"] = "planned"
+                figure["artifacts"] = []
+                figure.pop("resolved_figure_ids", None)
+        updated["figure_queue"] = queue
+        bound_paths = {
+            str(Path(path).expanduser().resolve())
+            for outcome in figure_plan.outcomes
+            for path in outcome.artifacts
+        }
+        updated["run"] = {
+            "output": str(output_dir),
+            "figure_artifacts": [
+                artifact for group in grouped_artifacts for artifact in group
+            ],
+            "unbound_figure_artifacts": [
+                artifact
+                for group in grouped_artifacts
+                for artifact in group
+                if str(Path(str(artifact["path"])).expanduser().resolve())
+                not in bound_paths
+            ],
+            "artifact_binding_policy": "resolved_figure_plan",
+            "resolved_figure_plan_id": figure_plan.plan_id,
+            "resolved_figure_plan_sha256": figure_plan.plan_sha256,
+            "figure_outcomes": [
+                outcome.to_payload() for outcome in figure_plan.outcomes
+            ],
+            "analysis_metrics": analysis_metrics or [],
+            "qa": qa or {},
+        }
+        return updated
     bound_keys: set[str] = set()
     bindable_figures = [figure for figure in queue if isinstance(figure, dict)]
     for figure in bindable_figures:
@@ -98,3 +180,14 @@ def attach_run_artifacts_to_study_model(
         "qa": qa or {},
     }
     return updated
+
+
+def _artifact_records(paths: tuple[str, ...]) -> list[dict[str, Any]]:
+    return [
+        {
+            "path": path,
+            "name": Path(path).name,
+            "format": Path(path).suffix.lower().lstrip("."),
+        }
+        for path in paths
+    ]

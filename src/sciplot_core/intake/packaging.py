@@ -28,10 +28,18 @@ from sciplot_core.launchers import (
 )
 
 from .path_security import _resolve_path_within_root
+from sciplot_core.project_manifest import (
+    edit_intake_project_manifest,
+    locked_intake_project_manifest,
+)
 
 
 def _write_zip(project_dir: Path, zip_path: Path) -> None:
-    project_root = Path(project_dir).expanduser().resolve(strict=True)
+    with locked_intake_project_manifest(project_dir) as project_root:
+        _write_zip_snapshot_unlocked(project_root, zip_path)
+
+
+def _write_zip_snapshot_unlocked(project_root: Path, zip_path: Path) -> None:
     zip_path = Path(zip_path).expanduser()
     if zip_path.is_symlink():
         raise PermissionError("Refusing to replace a symlink-backed SciPlot ZIP.")
@@ -113,34 +121,33 @@ def converge_intake_project_launchers(
     contract = inspect_project_launcher_contract(project)
     if not update_manifests:
         return contract
-    for manifest_path in [
-        project / "intake_manifest.json",
-        *sorted(project.glob("*.sciplot.json")),
-    ]:
-        manifest = _read_json_if_exists(manifest_path)
-        if manifest is None:
-            continue
-        _apply_launcher_contract_to_manifest(
-            manifest,
-            contract=contract,
-        )
-        manifest_path.write_text(
-            json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+    with edit_intake_project_manifest(project) as manifest:
+        if manifest is not None:
+            _apply_launcher_contract_to_manifest(
+                manifest,
+                contract=contract,
+            )
     return contract
 
 
 def refresh_intake_project_zip(project_dir: str | Path) -> Path:
-    project_dir = Path(project_dir).expanduser().resolve()
-    manifest_path = project_dir / "intake_manifest.json"
-    if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        zip_name = f"{manifest.get('project_slug') or project_dir.name}.zip"
-    else:
-        zip_name = f"{project_dir.name}.zip"
-    zip_path = project_dir.parent / safe_filename(zip_name)
-    _write_zip(project_dir, zip_path)
+    with locked_intake_project_manifest(Path(project_dir)) as project:
+        manifest_path = project / "intake_manifest.json"
+        manifest = (
+            json.loads(manifest_path.read_text(encoding="utf-8"))
+            if manifest_path.exists()
+            else {}
+        )
+        return _refresh_intake_project_zip_unlocked(project, manifest)
+
+
+def _refresh_intake_project_zip_unlocked(
+    project: Path,
+    manifest: dict[str, Any],
+) -> Path:
+    zip_name = f"{manifest.get('project_slug') or project.name}.zip"
+    zip_path = project.parent / safe_filename(zip_name)
+    _write_zip_snapshot_unlocked(project, zip_path)
     return zip_path
 
 

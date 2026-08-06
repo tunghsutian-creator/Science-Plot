@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import ast
+import subprocess
+import sys
+import textwrap
+import tomllib
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -156,6 +160,211 @@ def test_first_party_import_graph_is_acyclic() -> None:
     assert _strongly_connected_components(graph) == []
 
 
+def test_studio_entry_modules_import_in_fresh_interpreters() -> None:
+    for module in (
+        "sciplot_core.studio",
+        "sciplot_core.studio_core.prepare_generated",
+        "sciplot_core.studio_core.studio_command",
+    ):
+        completed = subprocess.run(
+            [sys.executable, "-c", f"import {module}"],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+
+
+def test_terminal_evidence_entry_modules_import_in_fresh_interpreters() -> None:
+    for module in (
+        "sciplot_core.render",
+        "sciplot_core.veusz_worker",
+        "sciplot_core.workflow.request_rendering",
+    ):
+        completed = subprocess.run(
+            [sys.executable, "-c", f"import {module}"],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        assert completed.returncode == 0, completed.stderr
+
+
+def test_terminal_source_binding_wire_has_only_two_runtime_importers() -> None:
+    importers: set[str] = set()
+    wire_module = "sciplot_core.terminal_source_binding_wire"
+    for path in _source_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            imported = (
+                [alias.name for alias in node.names]
+                if isinstance(node, ast.Import)
+                else [node.module or ""]
+                if isinstance(node, ast.ImportFrom)
+                else []
+            )
+            if any(
+                name == wire_module or name.startswith(f"{wire_module}.")
+                for name in imported
+            ):
+                importers.add(str(path.relative_to(REPO_ROOT)))
+
+    assert importers == {
+        "src/sciplot_core/render/target_paths.py",
+        "src/sciplot_core/veusz_worker/operations.py",
+    }
+
+
+def test_preparation_attestation_keeps_foundation_and_parser_boundaries() -> None:
+    known_modules = {_module_name(path) for path in _source_files()}
+    for relative in (
+        "semantic.py",
+        "preparation_source_attestation.py",
+    ):
+        path = SOURCE_ROOT / "sciplot_core" / relative
+        targets = _import_targets(_module_name(path), path, known_modules)
+        assert not any(
+            target == "sciplot_core.figure_plan"
+            or target.startswith("sciplot_core.figure_plan.")
+            for target in targets
+        )
+
+    task_source = SOURCE_ROOT / "sciplot_core/workflow/rheology_task_sources.py"
+    targets = _import_targets(_module_name(task_source), task_source, known_modules)
+    assert "sciplot_core.semantic_sources.rheology_sweep_sources" not in targets
+
+
+def _assert_fresh_python(source: str) -> None:
+    completed = subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(source)],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_study_model_first_import_uses_figure_plan_leaf_owners() -> None:
+    _assert_fresh_python(
+        """
+        import builtins
+
+        original_import = builtins.__import__
+        forbidden = {
+            "sciplot_core.study_model.run_artifacts": {
+                "resolved_figure_plan_from_payload"
+            },
+            "sciplot_core.study_model.package_contract": {
+                "figure_plan_manifest_gate"
+            },
+        }
+
+        def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+            caller = "" if globals is None else str(globals.get("__name__") or "")
+            if (
+                name == "sciplot_core.figure_plan"
+                and caller in forbidden
+                and forbidden[caller] & set(fromlist)
+            ):
+                raise AssertionError(
+                    f"{caller} imported {sorted(fromlist)} from the package facade"
+                )
+            return original_import(name, globals, locals, fromlist, level)
+
+        builtins.__import__ = guarded_import
+        import sciplot_core.study_model as study_model
+        builtins.__import__ = original_import
+        import sciplot_core.figure_plan as figure_plan
+
+        assert set(study_model.__all__) <= study_model.__dict__.keys()
+        assert set(figure_plan.__all__) <= figure_plan.__dict__.keys()
+
+        from sciplot_core.figure_plan.manifest_gate import (
+            figure_plan_manifest_gate as manifest_gate_leaf,
+        )
+        from sciplot_core.figure_plan.plan import (
+            resolved_figure_plan_from_payload as plan_parser_leaf,
+        )
+
+        assert figure_plan.figure_plan_manifest_gate is manifest_gate_leaf
+        assert figure_plan.resolved_figure_plan_from_payload is plan_parser_leaf
+        """
+    )
+
+
+def test_figure_plan_first_import_does_not_initialize_study_model() -> None:
+    _assert_fresh_python(
+        """
+        import sys
+        import sciplot_core.figure_plan as figure_plan
+
+        premature = sorted(
+            name
+            for name in sys.modules
+            if name == "sciplot_core.study_model"
+            or name.startswith("sciplot_core.study_model.")
+        )
+        assert premature == [], premature
+        assert set(figure_plan.__all__) <= figure_plan.__dict__.keys()
+
+        import sciplot_core.study_model as study_model
+
+        assert set(study_model.__all__) <= study_model.__dict__.keys()
+        assert set(figure_plan.__all__) <= figure_plan.__dict__.keys()
+        """
+    )
+
+
+def test_delivery_gate_consumers_import_figure_plan_leaf_owners() -> None:
+    for filename in ("package_builder.py", "package_validation.py"):
+        path = SOURCE_ROOT / "sciplot_core" / "delivery" / filename
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        imports = {
+            (node.module, alias.name)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+        }
+
+        assert (
+            "sciplot_core.figure_plan.manifest_gate",
+            "figure_plan_manifest_gate",
+        ) in imports
+        assert (
+            "sciplot_core.figure_plan.plan",
+            "resolved_figure_plan_from_payload",
+        ) in imports
+        assert not any(
+            module == "sciplot_core.figure_plan"
+            and name
+            in {
+                "figure_plan_manifest_gate",
+                "resolved_figure_plan_from_payload",
+            }
+            for module, name in imports
+        )
+
+
+def test_publish_state_imports_the_figure_plan_execution_leaf_owner() -> None:
+    path = SOURCE_ROOT / "sciplot_core" / "publish_state.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imports = {
+        (node.module, alias.name)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+
+    assert (
+        "sciplot_core.figure_plan.execution",
+        "figure_plan_gate",
+    ) in imports
+    assert not any(module == "sciplot_core.figure_plan" for module, _name in imports)
+
+
 def test_core_business_and_data_layers_do_not_depend_on_the_gui_layer() -> None:
     offenders: list[str] = []
     for path in (SOURCE_ROOT / "sciplot_core").rglob("*.py"):
@@ -295,6 +504,52 @@ def test_removed_compatibility_runtime_stays_absent() -> None:
         "scienceplots",
     ):
         assert f'"{retired_dependency}"' not in pyproject
+
+
+def test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint() -> None:
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    mypy = project["tool"]["mypy"]
+
+    assert mypy == {
+        "python_version": "3.11",
+        "files": [
+            "src/sciplot_core/foundation",
+            "src/sciplot_core/json_contract.py",
+            "src/sciplot_core/figure_plan",
+            "src/sciplot_core/delivery/plan_binding.py",
+            "src/sciplot_core/delivery/package_builder.py",
+            "src/sciplot_core/delivery/package_validation.py",
+            "src/sciplot_core/study_model/package_contract.py",
+            "src/sciplot_core/publish_state.py",
+        ],
+        "mypy_path": "src",
+        "explicit_package_bases": True,
+        "follow_imports": "silent",
+        "strict": True,
+        "disallow_any_unimported": True,
+        "warn_unreachable": True,
+        "warn_unused_configs": True,
+        "show_error_codes": True,
+        "pretty": True,
+        "incremental": False,
+    }
+    owned_files: set[Path] = set()
+    for value in mypy["files"]:
+        target = REPO_ROOT / value
+        if target.is_dir():
+            owned_files.update(target.rglob("*.py"))
+        else:
+            owned_files.add(target)
+    assert len(owned_files) == 35
+    dev_dependencies = project["project"]["optional-dependencies"]["dev"]
+    assert "mypy==2.3.0" in dev_dependencies
+    assert "pandas-stubs==3.0.3.260530" in dev_dependencies
+
+    workflow = (
+        REPO_ROOT / ".github" / "workflows" / "minimal-repository.yml"
+    ).read_text(encoding="utf-8")
+    assert "Run scoped static type gate" in workflow
+    assert "run: python3 -m mypy" in workflow
 
 
 def test_first_party_source_does_not_import_the_removed_src_namespace() -> None:

@@ -5,9 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from sciplot_core.figure_plan import sync_figure_plan_projection
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import (
     slug,
+)
+from sciplot_core.project_manifest import (
+    edit_intake_project_manifest,
+    read_intake_project_manifest,
 )
 from sciplot_core.one_step import build_quality_actions
 
@@ -169,59 +174,57 @@ def _update_intake_project_after_run(
     request_path: Path, manifest: dict[str, Any]
 ) -> None:
     project_dir = request_path.parent
-    intake_manifest_path = project_dir / "intake_manifest.json"
-    if not intake_manifest_path.exists():
+    if read_intake_project_manifest(project_dir) is None:
         return
-    project_manifest = json.loads(intake_manifest_path.read_text(encoding="utf-8"))
-    project_manifest["last_run"] = {
-        "completed_at": manifest["created_at"],
-        "output": manifest["output"],
-        "figures": manifest["figures"],
-        "analysis_metrics": manifest.get("result", {}).get("analysis_metrics", []),
-        "qa": manifest.get("qa", {}),
-        "revision_brief": manifest.get("revision_brief"),
-        "package_contract": manifest.get("package_contract", {}),
-        "delivery_package": manifest.get("delivery_package", {}),
-        "layout_quality": manifest.get("layout_quality", {}),
-        "one_step": manifest.get("one_step", {}),
-        "publication_intent": manifest.get("publication_intent", {}),
-        "transform_ledger": manifest.get("transform_ledger", {}),
-        "journal_profile": manifest.get("journal_profile", {}),
-        "publication_qa": manifest.get("publication_qa", {}),
-    }
-    if isinstance(manifest.get("study_model"), dict):
-        project_manifest["study_model"] = manifest["study_model"]
-        project_manifest["last_run"]["study_model"] = manifest["study_model"]
-    if isinstance(manifest.get("package_contract"), dict):
-        project_manifest["package_contract"] = manifest["package_contract"]
-    if isinstance(manifest.get("layout_quality"), dict):
-        project_manifest["layout_quality"] = manifest["layout_quality"]
-    if isinstance(manifest.get("delivery_package"), dict):
-        project_manifest["delivery_package"] = manifest["delivery_package"]
-    if isinstance(manifest.get("one_step"), dict):
-        project_manifest["one_step"] = manifest["one_step"]
-    for key in (
-        "publication_intent",
-        "transform_ledger",
-        "journal_profile",
-        "publication_qa",
-    ):
-        if isinstance(manifest.get(key), dict):
-            project_manifest[key] = manifest[key]
-    intake_manifest_path.write_text(
-        json.dumps(json_safe(project_manifest), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    sciplot_paths = sorted(project_dir.glob("*.sciplot.json"))
-    for path in sciplot_paths:
-        path.write_text(
-            json.dumps(json_safe(project_manifest), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
     from sciplot_core.intake.packaging import (
         _prepare_studio_project_package,
         refresh_intake_project_zip,
     )
 
+    # Studio preparation may refresh the Studio block. Complete that lifecycle
+    # before deriving the final project state so a failed preparation does not
+    # publish new run metadata beside an older project ZIP.
     _prepare_studio_project_package(project_dir)
+    with edit_intake_project_manifest(
+        project_dir,
+        require_existing=True,
+    ) as project_manifest:
+        assert project_manifest is not None
+        project_manifest["last_run"] = {
+            "completed_at": manifest["created_at"],
+            "output": manifest["output"],
+            "figures": manifest["figures"],
+            "analysis_metrics": manifest.get("result", {}).get("analysis_metrics", []),
+            "qa": manifest.get("qa", {}),
+            "revision_brief": manifest.get("revision_brief"),
+            "package_contract": manifest.get("package_contract", {}),
+            "delivery_package": manifest.get("delivery_package", {}),
+            "layout_quality": manifest.get("layout_quality", {}),
+            "one_step": manifest.get("one_step", {}),
+            "publication_intent": manifest.get("publication_intent", {}),
+            "transform_ledger": manifest.get("transform_ledger", {}),
+            "journal_profile": manifest.get("journal_profile", {}),
+            "publication_qa": manifest.get("publication_qa", {}),
+        }
+        if isinstance(manifest.get("study_model"), dict):
+            project_manifest["study_model"] = manifest["study_model"]
+            project_manifest["last_run"]["study_model"] = manifest["study_model"]
+        if isinstance(manifest.get("package_contract"), dict):
+            project_manifest["package_contract"] = manifest["package_contract"]
+        if isinstance(manifest.get("layout_quality"), dict):
+            project_manifest["layout_quality"] = manifest["layout_quality"]
+        if isinstance(manifest.get("delivery_package"), dict):
+            project_manifest["delivery_package"] = manifest["delivery_package"]
+        if isinstance(manifest.get("one_step"), dict):
+            project_manifest["one_step"] = manifest["one_step"]
+        sync_figure_plan_projection(project_manifest, manifest)
+        sync_figure_plan_projection(project_manifest["last_run"], manifest)
+        for key in (
+            "publication_intent",
+            "transform_ledger",
+            "journal_profile",
+            "publication_qa",
+        ):
+            if isinstance(manifest.get(key), dict):
+                project_manifest[key] = manifest[key]
     refresh_intake_project_zip(project_dir)

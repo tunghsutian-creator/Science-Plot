@@ -54,10 +54,17 @@ from sciplot_core.readiness.render_request_contract import (  # noqa: F401
     _render_request_policy_evaluation,
 )
 from sciplot_core.readiness.rule_contract import (  # noqa: F401
+    RuleContractHashes,
     rule_contract_payload,
+    rule_contract_hashes,
     semantic_contract_sha256,
     rule_contract_sha256,
     rule_semantic_contract_sha256,
+)
+from sciplot_core.readiness.rule_certification import (  # noqa: F401
+    CurrentCertifiedRuleContractSnapshot,
+    RuleCertificationStatus,
+    current_certified_rule_contract_snapshot,
 )
 from sciplot_core.readiness.envelope_model import (  # noqa: F401
     ValidatedRuleEnvelope,
@@ -100,6 +107,9 @@ __all__ = [
     "READY_RULE_ACCEPTANCE_VERSION",
     "REQUIRED_ACCEPTANCE_CHECKS",
     "RULE_CONTRACT_VERSION",
+    "CurrentCertifiedRuleContractSnapshot",
+    "RuleCertificationStatus",
+    "RuleContractHashes",
     "VALIDATED_ENVELOPE_EVALUATION_KIND",
     "VALIDATED_ENVELOPE_EVALUATION_VERSION",
     "VALIDATED_ENVELOPE_REGISTRY_KIND",
@@ -114,6 +124,7 @@ __all__ = [
     "load_validated_envelope_registry",
     "render_request_contract_payload",
     "rule_contract_payload",
+    "rule_contract_hashes",
     "rule_contract_sha256",
     "rule_semantic_contract_sha256",
     "semantic_contract_payload",
@@ -121,5 +132,6 @@ __all__ = [
     "validated_envelope_evaluation_ready",
     "validated_envelope_status",
     "validated_render_request_policy_payload",
+    "current_certified_rule_contract_snapshot",
     "write_validated_envelope_registry",
 ]

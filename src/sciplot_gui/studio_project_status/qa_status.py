@@ -6,9 +6,16 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_gui.studio_project_status.export_status import (
-    _verify_export_artifacts,
     _standalone_qa_report_current,
+    _verify_export_artifacts,
 )
+from sciplot_gui.studio_project_status.rule_readiness_evidence import (
+    _managed_rule_readiness,
+)
+
+
+def _optional_nonempty_text(value: object) -> str | None:
+    return value.strip() if isinstance(value, str) and value.strip() else None
 
 
 def _qa_display_status(
@@ -51,6 +58,9 @@ def _qa_status(
             "exports_current": False,
             "qa_report_current": False,
             "artifact_qa_current": False,
+            "failure_stage": None,
+            "failure_reason": None,
+            "rule_readiness": None,
             "export_artifacts": {
                 "status": "not_run",
                 "current": False,
@@ -81,6 +91,21 @@ def _qa_status(
         if standalone
         else evidence.get("ready_to_use") is True
     )
+    raw_failure_stage = _optional_nonempty_text(evidence.get("failure_stage"))
+    raw_failure_reason = _optional_nonempty_text(evidence.get("failure_reason"))
+    if standalone or raw_failure_stage is None or raw_failure_reason is None:
+        failure_stage = None
+        failure_reason = None
+    else:
+        failure_stage = raw_failure_stage
+        failure_reason = raw_failure_reason
+    rule_readiness = (
+        _managed_rule_readiness(evidence.get("rule_readiness"))
+        if not standalone
+        else None
+    )
+    if not standalone and "rule_readiness" in evidence and rule_readiness is None:
+        ready = False
     document_hash_current = bool(
         not modified
         and saved_sha256
@@ -125,4 +150,7 @@ def _qa_status(
         "evidence": str(evidence_path) if evidence_path is not None else None,
         "export_artifacts": export_artifacts,
         "state": evidence.get("state"),
+        "failure_stage": failure_stage,
+        "failure_reason": failure_reason,
+        "rule_readiness": rule_readiness,
     }

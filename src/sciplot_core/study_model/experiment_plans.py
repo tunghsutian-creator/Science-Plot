@@ -118,9 +118,9 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
             {
                 "id": "tan_delta_vs_temperature",
                 "title": "tan delta vs temperature",
-                "metric": "tan_delta",
+                "metric": "loss_factor",
                 "x_metric": "temperature",
-                "y_metric": "tan_delta",
+                "y_metric": "loss_factor",
                 "default_template": "point_line",
             },
         ),

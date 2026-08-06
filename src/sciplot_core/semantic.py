@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.foundation.source_tree import source_tree_sha256
+from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
+
 from sciplot_core.semantic_sources.classification import (
     TENSILE_EXPORT_DIR_SUFFIX,
     classify_source,
@@ -88,17 +91,31 @@ def prepare_semantic_source(
 ) -> dict[str, Any]:
     """Prepare one source through the handler for its semantic family."""
 
-    source = Path(input_path).expanduser()
+    source = Path(input_path).expanduser().resolve()
+    family = str(semantic["semantic_family"])
+    rule_value = semantic.get("rule_id")
+    rule_id = (
+        rule_value
+        if isinstance(rule_value, str)
+        and bool(rule_value)
+        and rule_value.strip() == rule_value
+        else None
+    )
+    source_hash_before = (
+        source_tree_sha256(source) if family == "rheology_temperature_sweep" else None
+    )
     processed_dir = output_dir / "processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     context = SemanticPreparationContext(
         source=source,
         processed_dir=processed_dir,
-        family=str(semantic["semantic_family"]),
+        family=family,
+        rule_id=rule_id,
         curation_path=curation_path,
         series_order=series_order,
         column_confirmations=column_confirmations,
         replicate_mode=replicate_mode,
+        source_tree_sha256_before=source_hash_before,
     )
     for handler in (
         prepare_rheology_source,
@@ -107,6 +124,19 @@ def prepare_semantic_source(
     ):
         result = handler(context)
         if result is not None:
+            if family == "rheology_temperature_sweep":
+                attestation = result.get("source_attestation")
+                if (
+                    not isinstance(attestation, PreparationSourceAttestation)
+                    or attestation.rule_id != rule_id
+                    or attestation.source_tree_sha256_before != source_hash_before
+                    or attestation.source_tree_sha256_after != source_hash_before
+                ):
+                    raise RuntimeError(
+                        "semantic_preparation_source_changed: temperature source "
+                        "changed while semantic preparation was running."
+                    )
+                attestation.verify_current(source_root=source)
             return result
 
     return _semantic_preparation_result(

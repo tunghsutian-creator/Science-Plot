@@ -65,6 +65,18 @@ def _sweep_source_files(source: Path) -> list[Path]:
     return instrument_exports or candidates
 
 
+def selected_rheology_sweep_source_files(source: Path) -> tuple[Path, ...]:
+    """Return the exact ordered files selected by the sweep parser.
+
+    Workflow task-source attestations need to fingerprint the same evidence
+    surface as semantic preparation.  Keeping this projection beside the
+    parser prevents adapters from independently rediscovering files or
+    accidentally including a derived workbook alongside raw text exports.
+    """
+
+    return tuple(path.expanduser().resolve() for path in _sweep_source_files(source))
+
+
 def _find_rheology_sweep_headers(
     raw: pd.DataFrame,
     *,

@@ -31,6 +31,7 @@ def _manifest_publish_integrity(manifest: dict[str, Any]) -> dict[str, Any]:
         package_contract=package_contract,
         delivery_package=delivery_package,
         prerequisite_state=manifest_one_step.get("state"),
+        resolved_figure_plan=manifest.get("resolved_figure_plan"),
     )
     recorded_gates = (
         manifest.get("publish_gates")

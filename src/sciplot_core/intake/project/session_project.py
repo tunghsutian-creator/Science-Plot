@@ -21,6 +21,8 @@ def create_intake_project_from_session(
     *,
     studio_preparer: Callable[[Path], dict[str, Any]],
     project_factory: Callable[..., dict[str, Any]] | None = None,
+    template: str | None = None,
+    delivery_root: Path | None = None,
 ) -> dict[str, Any]:
     if isinstance(session, str | Path):
         payload = json.loads(Path(session).expanduser().read_text(encoding="utf-8"))
@@ -81,6 +83,18 @@ def create_intake_project_from_session(
             IntakeGroupInput(sample=str(group.get("sample") or ""), files=tuple(files))
         )
     factory = project_factory or create_intake_project
+    semantic = (
+        dict(payload["semantic"])
+        if isinstance(payload.get("semantic"), dict)
+        else {
+            "semantic_family": payload.get("experiment_type_id"),
+            "rule_id": payload.get("rule_id"),
+            "confidence": payload.get("confidence"),
+            "reason": payload.get("reason"),
+        }
+    )
+    if payload.get("pending_rule_review") is True:
+        semantic["pending_rule_review"] = True
     arguments = {
         "project_name": str(payload.get("project_name") or ""),
         "data_type_id": str(payload.get("data_type_id") or "unknown"),
@@ -92,17 +106,12 @@ def create_intake_project_from_session(
         "render_options": payload.get("render_options"),
         "column_confirmations": payload.get("column_confirmations"),
         "replicate_mode": payload.get("replicate_mode"),
-        "recognition": (
-            payload.get("semantic")
-            if isinstance(payload.get("semantic"), dict)
-            else {
-                "semantic_family": payload.get("experiment_type_id"),
-                "rule_id": payload.get("rule_id"),
-                "confidence": payload.get("confidence"),
-                "reason": payload.get("reason"),
-            }
-        ),
+        "recognition": semantic,
     }
+    if template is not None:
+        arguments["template"] = template
+    if delivery_root is not None:
+        arguments["delivery_root"] = delivery_root
     if project_factory is None:
         arguments["studio_preparer"] = studio_preparer
     return factory(**arguments)

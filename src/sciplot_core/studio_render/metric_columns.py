@@ -14,7 +14,10 @@ from sciplot_core.studio_render.models import (
 
 
 def _xy_pairs_for_request(
-    numeric: pd.DataFrame, *, request: dict[str, Any]
+    numeric: pd.DataFrame,
+    *,
+    request: dict[str, Any],
+    strict_metric_binding: bool = False,
 ) -> list[tuple[Any, Any]]:
     metric_pair = _preferred_metric_pair(request)
     if metric_pair is not None:
@@ -22,6 +25,12 @@ def _xy_pairs_for_request(
         pairs = _metric_xy_pairs(numeric, x_metric=x_metric, y_metric=y_metric)
         if pairs:
             return pairs
+        if strict_metric_binding:
+            raise StudioPreparationBlocked(
+                "terminal_source_binding_metric_unavailable",
+                "The bound terminal table has no exact columns for "
+                f"{x_metric!r} and {y_metric!r}; SciPlot will not substitute.",
+            )
         if str(request.get("rule_id") or "").strip() == "rheology_frequency_sweep":
             raise StudioPreparationBlocked(
                 "figure_metric_unavailable",

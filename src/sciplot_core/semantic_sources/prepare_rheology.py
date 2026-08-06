@@ -201,7 +201,8 @@ def prepare_rheology_source(
                     f"confirmed: {confirmed_error})."
                 ) from confirmed_error
         source_sample_count = len(samples)
-        source_sample_files = [str(sample.source) for sample in samples]
+        source_sample_paths = [sample.source for sample in samples]
+        source_sample_files = [str(path) for path in source_sample_paths]
         interval_selections = [
             {
                 "sample": sample.sample,
@@ -237,6 +238,9 @@ def prepare_rheology_source(
             source,
             processed_source=processed_source,
             operation="aggregate_rheology_temperature_replicates",
+            source_attestation_rule_id=context.rule_id,
+            source_tree_sha256_before=context.source_tree_sha256_before,
+            selected_sources=tuple(source_sample_paths),
             parameters={
                 "replicate_mode": _normalized_replicate_mode(replicate_mode),
                 "source_sample_count": source_sample_count,

@@ -9,6 +9,7 @@ from sciplot_core.automation_states import (
     fail_closed_automation_state,
 )
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.figure_plan import figure_plan_manifest_gate
 from sciplot_core.delivery import verify_delivery_package
 from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.readiness import validated_envelope_evaluation_ready
@@ -40,6 +41,7 @@ def build_autoplot_summary(
     status_path = evidence.status_path
     manifest_path = evidence.manifest_path
     manifest = evidence.manifest
+    figure_plan = figure_plan_manifest_gate(manifest)
     manifest_publish = _manifest_publish_integrity(manifest)
     package_verification = verify_output_package_contract(
         manifest.get("package_contract"),
@@ -81,6 +83,7 @@ def build_autoplot_summary(
     delivery_verification = verify_delivery_package(
         delivery,
         expected_root=expected_delivery_path,
+        expected_manifest=manifest,
     )
     delivery_complete = bool(
         delivery_recorded_complete
@@ -137,6 +140,8 @@ def build_autoplot_summary(
         integrity_reasons.append("validated_envelope_invalid")
     if not qa_ready:
         integrity_reasons.append("figure_qa_not_passed")
+    if figure_plan is not None and figure_plan["complete"] is not True:
+        integrity_reasons.append("resolved_figure_plan_incomplete")
     artifact_integrity_ready = bool(
         manifest_exists
         and manifest_valid
@@ -148,6 +153,7 @@ def build_autoplot_summary(
         and delivery_record_consistent
         and manifest_publish["valid"] is True
         and package_verification["passed"] is True
+        and (figure_plan is None or figure_plan["complete"] is True)
     )
     codex_required = bool(intervention.get("required")) or (
         state == RULE_REPAIR_STATE
@@ -184,6 +190,14 @@ def build_autoplot_summary(
         if (run_output / "revision_brief.md").exists()
         else None,
         "route": evidence.route_package(),
+        "figure_plan": json_safe(
+            figure_plan
+            or {
+                "valid": True,
+                "complete": True,
+                "status": "not_applicable_legacy_or_single_figure",
+            }
+        ),
         "quality": {
             "status": figure_qa.get("status"),
             "qa_status": figure_qa.get("qa_status"),

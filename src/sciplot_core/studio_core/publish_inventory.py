@@ -7,8 +7,20 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.data_mapping import resolve_data_mapping_request
+from sciplot_core.figure_plan import (
+    FigurePlanResolutionError,
+    ResolvedFigurePlan,
+    resolve_current_figure_plan,
+    resolved_figure_plan_from_payload,
+)
+from sciplot_core.figure_plan.constants import SUPPORTED_FIGURE_PLAN_RULE_IDS
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.presentation_identity import (
+    SelectedPresentationIdentity,
+    require_selected_template,
+    resolve_selected_presentation_identity,
+)
 from sciplot_core.studio_figure_set_contract import (
     is_full_figure_set_export_scope as _is_full_figure_set_export_scope,
 )
@@ -25,11 +37,23 @@ from sciplot_core.studio_core.figure_set_state import (
     _studio_figure_set_export_scope,
 )
 from sciplot_core.studio_core.json_files import _read_json
+from sciplot_core.studio_core.presentation_evidence import (
+    validate_prepared_studio_presentation,
+    validate_veusz_spec_presentation,
+)
 from sciplot_core.studio_core.registry_state import (
     _registered_generated_hash,
     _studio_document_state,
+    _veusz_spec_path,
 )
-from sciplot_core.studio_core.request_paths import _next_studio_run_dir
+from sciplot_core.studio_core.request_paths import (
+    _next_studio_run_dir,
+    _resolve_request_input,
+)
+from sciplot_core.studio_core.rule_readiness import (
+    StudioRulePublicationReadiness,
+    resolve_studio_rule_publication_readiness,
+)
 
 
 @dataclass(frozen=True)
@@ -40,7 +64,9 @@ class StudioExportInventory:
     request_path: Path
     document_path: Path
     request: dict[str, Any]
-    pending_rule_review: bool
+    presentation_identity: SelectedPresentationIdentity
+    resolved_figure_plan: ResolvedFigurePlan | None
+    rule_readiness: StudioRulePublicationReadiness
     figure_set_export_scope: dict[str, Any] | None
     exports: list[dict[str, Any]]
     veusz_documents: list[Path]
@@ -50,6 +76,14 @@ class StudioExportInventory:
     document_state: dict[str, Any]
     export_document_sha256: str
     output_dir: Path
+
+    @property
+    def pending_rule_review(self) -> bool:
+        return self.rule_readiness.pending_rule_review
+
+    @property
+    def publication_rule_blocked(self) -> bool:
+        return self.rule_readiness.publication_blocked
 
 
 def prepare_studio_export_inventory(
@@ -73,6 +107,59 @@ def prepare_studio_export_inventory(
         exports=exports,
     )
     request = _read_json(request_path)
+    rule_readiness = resolve_studio_rule_publication_readiness(request)
+    request_rule_id = rule_readiness.rule_id or ""
+    current_rule = rule_readiness.current_rule
+    presentation_identity = resolve_selected_presentation_identity(
+        request,
+        current_rule=current_rule,
+    )
+    require_selected_template(
+        request.get("template"),
+        expected=presentation_identity,
+        source="canonical plot request",
+    )
+    primary_spec = _veusz_spec_path(document_path)
+    if primary_spec.is_file():
+        validate_veusz_spec_presentation(
+            _read_json(primary_spec),
+            expected=presentation_identity,
+            source="primary Studio Veusz spec",
+        )
+    persisted_plan = request.get("resolved_figure_plan")
+    if request_rule_id in SUPPORTED_FIGURE_PLAN_RULE_IDS and persisted_plan is None:
+        raise RuntimeError(
+            "prepared_resolved_figure_plan_required: Reprepare this Studio "
+            "project before publishing the supported figure workflow."
+        )
+    try:
+        resolved_figure_plan = (
+            resolve_current_figure_plan(
+                persisted=persisted_plan,
+                rule_id=request_rule_id,
+                template=presentation_identity.template,
+                study_model=(
+                    request.get("study_model")
+                    if isinstance(request.get("study_model"), dict)
+                    else {}
+                ),
+                input_path=_resolve_request_input(
+                    request,
+                    base_dir=request_path.parent,
+                ),
+                request=request,
+            )
+            if request_rule_id or persisted_plan is not None
+            else None
+        )
+    except FigurePlanResolutionError as exc:
+        raise RuntimeError(f"{exc.reason_code}: {exc}") from exc
+    validate_prepared_studio_presentation(
+        project_dir=project_dir,
+        document_path=document_path,
+        identity=presentation_identity,
+        figure_plan=resolved_figure_plan,
+    )
     scope = _validated_figure_set_scope(project_dir, request=request)
     figure_documents = _collect_figure_documents(
         project_dir=project_dir,
@@ -102,12 +189,15 @@ def prepare_studio_export_inventory(
             "The Veusz document changed before the project run could bind "
             "its exact-current document state."
         )
+    output_dir = _next_studio_run_dir(project_dir)
     return StudioExportInventory(
         project_dir=project_dir,
         request_path=request_path,
         document_path=document_path,
         request=request,
-        pending_rule_review=request.get("pending_rule_review") is True,
+        presentation_identity=presentation_identity,
+        resolved_figure_plan=resolved_figure_plan,
+        rule_readiness=rule_readiness,
         figure_set_export_scope=scope,
         exports=all_exports,
         veusz_documents=veusz_documents,
@@ -116,7 +206,7 @@ def prepare_studio_export_inventory(
         data_mapping_application=mapping_application,
         document_state=document_state,
         export_document_sha256=export_document_sha256,
-        output_dir=_next_studio_run_dir(project_dir),
+        output_dir=output_dir,
     )
 
 
@@ -149,11 +239,35 @@ def _validated_figure_set_scope(
     *,
     request: dict[str, Any],
 ) -> dict[str, Any] | None:
+    try:
+        request_plan = resolved_figure_plan_from_payload(
+            request.get("resolved_figure_plan")
+        )
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(
+            "invalid_resolved_figure_plan: Studio cannot establish an export "
+            "scope from the persisted FigurePlan."
+        ) from exc
+    selected_supported_plan = (
+        request_plan
+        if request_plan is not None
+        and request_plan.rule_id in SUPPORTED_FIGURE_PLAN_RULE_IDS
+        else None
+    )
     scope = _studio_figure_set_export_scope(project_dir, request=request)
     scope_expected = bool(
-        _read_studio_figure_set(project_dir) is not None
+        selected_supported_plan is not None
+        or _read_studio_figure_set(project_dir) is not None
         or _rheology_frequency_figure_queue(request)
     )
+    if selected_supported_plan is not None and not _is_full_figure_set_export_scope(
+        scope
+    ):
+        raise RuntimeError(
+            "A selected supported FigurePlan requires a matching task-aware v2 "
+            "Studio figure-set registry before export. No project delivery "
+            "receipt was published."
+        )
     if scope_expected and not _is_full_figure_set_export_scope(scope):
         raise RuntimeError(
             "SciPlot could not establish the complete all-figures figure-set "

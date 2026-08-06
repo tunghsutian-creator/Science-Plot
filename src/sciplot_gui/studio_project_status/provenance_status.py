@@ -71,6 +71,7 @@ def _provenance_status(
         verify_delivery_package(
             delivery,
             expected_root=evidence_root / DELIVERY_DIR,
+            expected_manifest=latest_run,
         )
         if evidence_root is not None
         else {"passed": False, "failed_checks": ["evidence_root_missing"]}

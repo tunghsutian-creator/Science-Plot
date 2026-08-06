@@ -9,7 +9,8 @@ def clean_text(value: object) -> str:
     if value is None:
         return ""
     try:
-        if pd.isna(value):
+        missing = pd.isna([value])
+        if missing.ndim == 1 and bool(missing[0]):
             return ""
     except TypeError:
         pass

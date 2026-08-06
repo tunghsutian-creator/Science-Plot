@@ -6,13 +6,16 @@ import json
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
-from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.operation_modes import assisted_cleanup_mode_payload
 
 from .config import _DEFAULT_OUTPUT_ROOT
 from .models import IntakeGroupInput
 from .packaging import _write_render_failure_cleanup_request, refresh_intake_project_zip
 from .application import create_intake_project
+from sciplot_core.project_manifest import (
+    edit_intake_project_manifest,
+    read_intake_project_manifest,
+)
 
 
 def create_and_run_intake_project(
@@ -47,9 +50,11 @@ def create_and_run_intake_project(
     try:
         manifest = run_request(plot_request_path)
     except Exception as exc:
-        intake_manifest = json.loads(
-            (project_dir / "intake_manifest.json").read_text(encoding="utf-8")
-        )
+        intake_manifest = read_intake_project_manifest(project_dir)
+        if intake_manifest is None:
+            raise RuntimeError(
+                f"Intake project manifest disappeared from {project_dir}."
+            ) from exc
         request = json.loads(plot_request_path.read_text(encoding="utf-8"))
         run_output = Path(
             str(request.get("output") or intake_manifest.get("outputs_dir"))
@@ -75,18 +80,15 @@ def create_and_run_intake_project(
             else None,
             "assisted_cleanup_request": cleanup_request,
         }
-        intake_manifest["last_run"] = failed_run
-        intake_manifest["run_failed"] = True
-        intake_manifest["failure"] = str(exc)
-        (project_dir / "intake_manifest.json").write_text(
-            json.dumps(json_safe(intake_manifest), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        for path in sorted(project_dir.glob("*.sciplot.json")):
-            path.write_text(
-                json.dumps(json_safe(intake_manifest), indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
+        with edit_intake_project_manifest(
+            project_dir,
+            require_existing=True,
+        ) as current_manifest:
+            assert current_manifest is not None
+            current_manifest["last_run"] = failed_run
+            current_manifest["run_failed"] = True
+            current_manifest["failure"] = str(exc)
+            intake_manifest = current_manifest
         refreshed_zip = refresh_intake_project_zip(project_dir)
         return {
             **project,
@@ -96,9 +98,9 @@ def create_and_run_intake_project(
             "download_name": refreshed_zip.name,
             "last_run": failed_run,
         }
-    intake_manifest = json.loads(
-        (project_dir / "intake_manifest.json").read_text(encoding="utf-8")
-    )
+    intake_manifest = read_intake_project_manifest(project_dir)
+    if intake_manifest is None:
+        raise RuntimeError(f"Intake project manifest disappeared from {project_dir}.")
     refreshed_zip = refresh_intake_project_zip(project_dir)
     return {
         **project,

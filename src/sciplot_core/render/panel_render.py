@@ -13,6 +13,9 @@ from sciplot_core.split import (
     normalize_split_policy,
 )
 from sciplot_core.terminal_request import project_terminal_render_request
+from sciplot_core.terminal_source_binding import (
+    MaterializedTerminalSourceBinding,
+)
 
 from sciplot_core.render.formats import (
     _normalize_export_formats,
@@ -53,6 +56,7 @@ def _render_veusz_panel(
     export_formats: tuple[str, ...],
     split_panel: dict[str, Any] | None = None,
     request_context: dict[str, Any] | None = None,
+    _terminal_source_binding: MaterializedTerminalSourceBinding | None = None,
 ) -> tuple[
     list[Path],
     list[dict[str, Any]],
@@ -68,6 +72,8 @@ def _render_veusz_panel(
         render_options=options,
         request_context=request_context,
     )
+    if _terminal_source_binding is not None and "series_order" not in terminal_request:
+        terminal_request["series_order"] = list(_terminal_source_binding.sample_order)
     request = {
         "input": str(source.resolve()),
         "output": str(output_dir),
@@ -75,10 +81,25 @@ def _render_veusz_panel(
         **terminal_request,
     }
     request_path = panel_dir / "plot_request.json"
+    if _terminal_source_binding is not None:
+        _terminal_source_binding.validate_request(request_path, request)
     request_path.write_text(
         json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    payload = _render_studio_exports(request_path, export_formats)
+    sealed_binding = (
+        _terminal_source_binding.seal(request_path, request)
+        if _terminal_source_binding is not None
+        else None
+    )
+    payload = (
+        _render_studio_exports(
+            request_path,
+            export_formats,
+            _terminal_source_binding=sealed_binding,
+        )
+        if sealed_binding is not None
+        else _render_studio_exports(request_path, export_formats)
+    )
     outputs, export_records = _copy_veusz_exports(
         payload, output_dir=output_dir, output_base=output_base
     )
@@ -118,6 +139,7 @@ def _render_to_dir_veusz(
     export_formats: list[str] | tuple[str, ...] | None = None,
     split_policy: dict[str, Any] | None = None,
     request_context: dict[str, Any] | None = None,
+    _terminal_source_binding: MaterializedTerminalSourceBinding | None = None,
 ) -> dict[str, Any]:
     options = dict(options or {})
     normalized_exports = _normalize_export_formats(export_formats)
@@ -159,6 +181,11 @@ def _render_to_dir_veusz(
                     "policy": dict(normalized_split_policy or {}),
                 }
             output_base = _veusz_target_base(source, template, panel_index=panel_index)
+            panel_binding = (
+                {"_terminal_source_binding": _terminal_source_binding}
+                if _terminal_source_binding is not None
+                else {}
+            )
             (
                 outputs,
                 export_records,
@@ -178,6 +205,7 @@ def _render_to_dir_veusz(
                 export_formats=normalized_exports,
                 split_panel=split_panel,
                 request_context=request_context,
+                **panel_binding,
             )
             all_outputs.extend(outputs)
             all_exports.extend(export_records)

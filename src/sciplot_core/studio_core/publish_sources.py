@@ -7,10 +7,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.figure_plan import (
+    ResolvedFigurePlan,
+    source_trees_match_sha256,
+)
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.materials_rules import compute_analysis_metrics
+from sciplot_core.presentation_identity import SelectedPresentationIdentity
 
 from sciplot_core.studio_core.json_files import _read_json
+from sciplot_core.studio_core.rule_readiness import (
+    StudioRulePublicationReadiness,
+)
 from sciplot_core.studio_core.request_overrides import (
     _write_studio_data_snapshots,
 )
@@ -46,6 +54,8 @@ class StudioRunSources:
 def prepare_studio_run_sources(
     *,
     request: dict[str, Any],
+    rule_readiness: StudioRulePublicationReadiness,
+    presentation_identity: SelectedPresentationIdentity,
     effective_request: dict[str, Any],
     data_mapping_application: dict[str, Any] | None,
     request_path: Path,
@@ -91,6 +101,8 @@ def prepare_studio_run_sources(
         request=request,
         intake_manifest=intake_manifest,
         document_path=document_path,
+        rule_readiness=rule_readiness,
+        presentation_identity=presentation_identity,
     )
     metric_source = _studio_metric_source(snapshot_source or input_path)
     analysis_metrics = (
@@ -114,3 +126,37 @@ def prepare_studio_run_sources(
         metric_source=metric_source,
         analysis_metrics=analysis_metrics,
     )
+
+
+def verify_studio_run_source_binding(
+    plan: ResolvedFigurePlan | None,
+    sources: StudioRunSources,
+) -> None:
+    """Require live and archived sources to match the prepare-time plan."""
+
+    if plan is None:
+        return
+    expected = plan.source_sha256
+    if expected is None:
+        raise RuntimeError(
+            "Resolved figure plan has no prepare-time source fingerprint; "
+            "reprepare the Studio project before publishing."
+        )
+    archive_value = sources.raw_archive.get("path")
+    archive_path = (
+        Path(archive_value).expanduser()
+        if isinstance(archive_value, str) and archive_value.strip()
+        else None
+    )
+    if not source_trees_match_sha256(expected, sources.input_path, archive_path):
+        raise RuntimeError(
+            "Studio source changed after its resolved figure plan was prepared; "
+            "reprepare before publishing."
+        )
+
+
+__all__ = [
+    "StudioRunSources",
+    "prepare_studio_run_sources",
+    "verify_studio_run_source_binding",
+]

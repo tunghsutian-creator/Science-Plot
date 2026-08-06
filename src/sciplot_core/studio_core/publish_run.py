@@ -9,15 +9,23 @@ from sciplot_core.studio_core.publish_evidence import (
     build_studio_publication_evidence,
 )
 from sciplot_core.studio_core.publish_exports import copy_studio_run_exports
-from sciplot_core.studio_core.publish_finalize import finalize_studio_run
+from sciplot_core.studio_core.publish_finalize import (
+    _snapshot_studio_directory,
+    finalize_studio_run,
+)
 from sciplot_core.studio_core.publish_inventory import (
     prepare_studio_export_inventory,
 )
 from sciplot_core.studio_core.publish_manifest import (
+    _studio_snapshot_document_map,
+    _studio_snapshot_documents,
     build_studio_export_result,
     build_studio_run_manifest,
 )
-from sciplot_core.studio_core.publish_sources import prepare_studio_run_sources
+from sciplot_core.studio_core.publish_sources import (
+    prepare_studio_run_sources,
+    verify_studio_run_source_binding,
+)
 
 
 def publish_studio_export_run(
@@ -44,6 +52,8 @@ def publish_studio_export_run(
     )
     sources = prepare_studio_run_sources(
         request=inventory.request,
+        rule_readiness=inventory.rule_readiness,
+        presentation_identity=inventory.presentation_identity,
         effective_request=inventory.effective_request,
         data_mapping_application=inventory.data_mapping_application,
         request_path=inventory.request_path,
@@ -51,22 +61,39 @@ def publish_studio_export_run(
         document_path=inventory.document_path,
         output_dir=inventory.output_dir,
     )
-    evidence = build_studio_publication_evidence(
-        request=inventory.request,
-        document_path=inventory.document_path,
-        output_dir=inventory.output_dir,
-        figures=figures,
-        copied_exports=copied_exports,
-        veusz_documents=inventory.veusz_documents,
-        figure_set_export_scope=inventory.figure_set_export_scope,
-        sources=sources,
+    verify_studio_run_source_binding(inventory.resolved_figure_plan, sources)
+    _snapshot_studio_directory(
+        source=inventory.document_path.parent,
+        destination=inventory.output_dir / "studio",
     )
+    snapshot_documents, _snapshot_hashes = _studio_snapshot_documents(inventory)
+    snapshot_map = _studio_snapshot_document_map(
+        inventory,
+        snapshot_documents=snapshot_documents,
+    )
+    snapshot_primary_document = snapshot_map[str(inventory.document_path.resolve())]
     result = build_studio_export_result(
         inventory=inventory,
         sources=sources,
         copied_exports=copied_exports,
         figures=figures,
     )
+    evidence = build_studio_publication_evidence(
+        request=inventory.request,
+        document_path=snapshot_primary_document,
+        output_dir=inventory.output_dir,
+        figures=figures,
+        copied_exports=copied_exports,
+        veusz_documents=snapshot_documents,
+        figure_set_export_scope=inventory.figure_set_export_scope,
+        sources=sources,
+        resolved_figure_plan=(
+            result.get("resolved_figure_plan")
+            if isinstance(result.get("resolved_figure_plan"), dict)
+            else None
+        ),
+    )
+    verify_studio_run_source_binding(inventory.resolved_figure_plan, sources)
     manifest = build_studio_run_manifest(
         inventory=inventory,
         sources=sources,

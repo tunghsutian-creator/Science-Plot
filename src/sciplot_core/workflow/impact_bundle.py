@@ -7,8 +7,12 @@ from pathlib import Path
 from collections.abc import Callable
 from typing import Any
 import pandas as pd
-from sciplot_core.foundation.path_names import (
-    slug,
+from sciplot_core.figure_plan import (
+    finalize_figure_plan_result,
+    outcomes_for_artifact_map,
+    request_for_figure_task,
+    resolve_figure_plan,
+    resolved_figure_plan_from_payload,
 )
 from sciplot_core.materials_rules import (
     resolve_rule_template,
@@ -59,26 +63,43 @@ def _impact_condition_sources(
     if not source.is_file():
         return []
     conditions = read_impact_condition_payloads(source)
-    if len(conditions) <= 1:
+    figure_plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
+    if figure_plan is None:
+        figure_plan = resolve_figure_plan(
+            rule_id="impact_metric",
+            template=resolve_rule_template(
+                "impact_metric",
+                (
+                    request.get("template")
+                    if isinstance(request.get("template"), str)
+                    else None
+                ),
+            ),
+            study_model=(
+                request.get("study_model")
+                if isinstance(request.get("study_model"), dict)
+                else {}
+            ),
+            input_path=source,
+            request=request,
+        )
+    if figure_plan is None or figure_plan.selection_policy != "all_workbook_conditions":
         return []
 
     source_dir = output_dir / "processed" / "veusz_metric_sources"
     source_dir.mkdir(parents=True, exist_ok=True)
     condition_sources: list[tuple[str, Path, dict[str, Any]]] = []
-    used_ids: set[str] = set()
-    for index, (condition, payload) in enumerate(conditions, start=1):
-        condition_token = slug(str(condition).replace(" ", "")) or f"condition-{index}"
-        figure_id = f"impact_{condition_token}"
-        suffix = 2
-        while figure_id in used_ids:
-            figure_id = f"impact_{condition_token}_{suffix}"
-            suffix += 1
-        used_ids.add(figure_id)
-        metric_source = source_dir / f"{figure_id}.csv"
+    by_condition = dict(conditions)
+    for task in figure_plan.tasks:
+        condition = task.conditions[0]
+        payload = by_condition.get(condition)
+        if payload is None:
+            continue
+        metric_source = source_dir / f"{task.artifact_stem}.csv"
         pd.DataFrame(payload.rows).to_csv(metric_source, header=False, index=False)
         condition_sources.append(
             (
-                figure_id,
+                task.artifact_stem,
                 metric_source,
                 {
                     "legend_position": "none",
@@ -105,31 +126,43 @@ def _render_veusz_impact_bundle(
     ),
     _renderer: Callable[..., dict[str, Any]] = render_to_dir,
 ) -> dict[str, Any] | None:
+    if str(request.get("rule_id") or "").strip() != "impact_metric":
+        return None
     impact_template = resolve_rule_template(
         "impact_metric",
         request.get("template") if isinstance(request.get("template"), str) else None,
     )
+    figure_plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
     if impact_template == "point_line":
-        return _renderer(
+        task_request = (
+            request_for_figure_task(request, figure_plan.tasks[0])
+            if figure_plan is not None
+            else request
+        )
+        result = _renderer(
             source_input,
             template=impact_template,
             output_dir=output_dir / "figures",
             options=options,
             export_formats=export_formats,
             request_context={
-                **request,
+                **task_request,
                 "template": impact_template,
                 "explicit_render_option_keys": request.get(
                     "explicit_render_option_keys", []
                 ),
             },
         )
+        finalize_figure_plan_result(figure_plan, result)
+        return result
     condition_sources = _source_builder(
         source_input,
         request=request,
         output_dir=output_dir,
     )
-    if not condition_sources:
+    if not condition_sources and (
+        figure_plan is None or figure_plan.selection_policy != "all_workbook_conditions"
+    ):
         return None
     figures_dir = output_dir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
@@ -139,8 +172,22 @@ def _render_veusz_impact_bundle(
     combined_documents: list[str] = []
     combined_specs: list[str] = []
     combined_terminal_requests: list[dict[str, Any]] = []
+    task_by_stem = (
+        {task.artifact_stem: task for task in figure_plan.tasks}
+        if figure_plan is not None
+        else {}
+    )
+    artifacts_by_id = (
+        {task.figure_id: [] for task in figure_plan.tasks}
+        if figure_plan is not None
+        else {}
+    )
     for figure_id, metric_source, metric_options in condition_sources:
         metric_dir = figures_dir / f"_{figure_id}_render"
+        task = task_by_stem.get(figure_id)
+        task_request = (
+            request_for_figure_task(request, task) if task is not None else request
+        )
         payload = _renderer(
             metric_source,
             template=impact_template,
@@ -148,7 +195,7 @@ def _render_veusz_impact_bundle(
             options={**options, **metric_options},
             export_formats=export_formats,
             request_context={
-                **request,
+                **task_request,
                 "template": impact_template,
                 "explicit_render_option_keys": request.get(
                     "explicit_render_option_keys", []
@@ -160,6 +207,8 @@ def _render_veusz_impact_bundle(
             metric_id=figure_id,
             figures_dir=figures_dir,
         )
+        if task is not None:
+            exports = [{**item, "figure_id": task.figure_id} for item in exports]
         combined_outputs.extend(outputs)
         combined_exports.extend(exports)
         metric_worker = figures_dir / "_veusz" / figure_id
@@ -189,6 +238,10 @@ def _render_veusz_impact_bundle(
                 mapped_specs.append(str(destination))
         combined_documents.extend(mapped_documents)
         combined_specs.extend(mapped_specs)
+        if task is not None:
+            artifacts_by_id[task.figure_id].extend(
+                [*outputs, *mapped_documents, *mapped_specs]
+            )
         combined_terminal_requests.extend(
             item
             for item in payload.get("terminal_render_requests", [])
@@ -208,7 +261,7 @@ def _render_veusz_impact_bundle(
             combined_reports.append(copied_report)
         if metric_dir.exists():
             shutil.rmtree(metric_dir)
-    return {
+    result = {
         "kind": "sciplot_render_result",
         "template": impact_template,
         "input": str(source_input),
@@ -229,3 +282,17 @@ def _render_veusz_impact_bundle(
             ],
         },
     }
+    if figure_plan is not None:
+        result["multi_metric_bundle"]["figure_ids"] = list(
+            figure_plan.selected_figure_ids
+        )
+        result["figure_outcomes"] = [
+            outcome.to_payload()
+            for outcome in outcomes_for_artifact_map(
+                figure_plan,
+                artifacts_by_id,
+                missing_reason_code="impact_condition_source_unavailable",
+            )
+        ]
+        finalize_figure_plan_result(figure_plan, result)
+    return result

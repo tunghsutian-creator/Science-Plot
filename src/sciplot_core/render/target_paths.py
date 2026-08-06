@@ -11,6 +11,12 @@ from typing import Any
 from sciplot_core.render.worker_runtime import (
     _veusz_worker_env,
 )
+from sciplot_core.terminal_source_binding import (
+    SealedTerminalSourceBinding,
+)
+from sciplot_core.terminal_source_binding_wire import (
+    TERMINAL_SOURCE_BINDING_ENV,
+)
 
 
 def _veusz_target_base(
@@ -23,7 +29,10 @@ def _veusz_target_base(
 
 
 def _render_studio_exports(
-    request_path: Path, export_formats: tuple[str, ...]
+    request_path: Path,
+    export_formats: tuple[str, ...],
+    *,
+    _terminal_source_binding: SealedTerminalSourceBinding | None = None,
 ) -> dict[str, Any]:
     command = [
         sys.executable,
@@ -34,11 +43,17 @@ def _render_studio_exports(
         "--formats",
         ",".join(export_formats),
     ]
+    environment = _veusz_worker_env()
+    environment.pop(TERMINAL_SOURCE_BINDING_ENV, None)
+    if _terminal_source_binding is not None:
+        environment[TERMINAL_SOURCE_BINDING_ENV] = (
+            _terminal_source_binding.to_environment_value()
+        )
     result = subprocess.run(
         command,
         text=True,
         capture_output=True,
         check=True,
-        env=_veusz_worker_env(),
+        env=environment,
     )
     return json.loads(result.stdout)

@@ -59,6 +59,7 @@ def build_studio_publication_evidence(
     veusz_documents: list[Path],
     figure_set_export_scope: dict[str, Any] | None,
     sources: StudioRunSources,
+    resolved_figure_plan: dict[str, Any] | None = None,
 ) -> StudioPublicationEvidence:
     """Create lineage, reports, QA, and study-model run artifacts."""
 
@@ -149,6 +150,7 @@ def build_studio_publication_evidence(
         figures=figures,
         analysis_metrics=sources.analysis_metrics,
         qa=qa,
+        resolved_figure_plan=resolved_figure_plan,
     )
     return StudioPublicationEvidence(
         study_model=study_model,

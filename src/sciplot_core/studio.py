@@ -218,6 +218,12 @@ def prepare_studio_document(
     )
 
 
+def read_studio_figure_set(project_dir: Path) -> dict[str, Any] | None:
+    """Return the validated, canonical-path Studio figure-set registry."""
+
+    return _read_studio_figure_set(project_dir.expanduser().resolve())
+
+
 __all__ = [
     "atomic_save_veusz_document",
     "build_studio_figure_set_export_scope",
@@ -230,6 +236,7 @@ __all__ = [
     "publish_standalone_export_receipt",
     "publish_studio_export_run",
     "qt_smoke_payload",
+    "read_studio_figure_set",
     "resolve_studio_project_context",
     "run_studio_command",
     "upstream_status",

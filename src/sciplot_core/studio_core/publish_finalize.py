@@ -6,8 +6,13 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.automation_states import RULE_REPAIR_STATE
 from sciplot_core.delivery import build_delivery_package
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.presentation_identity import (
+    require_selected_presentation_payload,
+    require_selected_template,
+)
 from sciplot_core.publish_state import build_publish_state
 from sciplot_core.study_model import build_output_package_contract
 
@@ -39,15 +44,67 @@ def finalize_studio_run(
     """Write review artifacts, delivery contracts, publish state, and registry."""
 
     output_dir = inventory.output_dir
+    _validate_presentation_projections(
+        inventory=inventory,
+        manifest=manifest,
+    )
+    canonical_rule_readiness = inventory.rule_readiness.to_payload()
+    result_value = manifest.get("result")
+    if not isinstance(result_value, dict):
+        raise RuntimeError(
+            "Studio manifest result is missing canonical rule readiness evidence."
+        )
+    if manifest.get("rule_readiness") != canonical_rule_readiness:
+        raise RuntimeError(
+            "Studio manifest rule readiness does not match the canonical "
+            "publication inventory."
+        )
+    if result_value.get("rule_readiness") != canonical_rule_readiness:
+        raise RuntimeError(
+            "Studio result rule readiness does not match the canonical "
+            "publication inventory."
+        )
+    semantic = (
+        manifest.get("semantic") if isinstance(manifest.get("semantic"), dict) else None
+    )
+    if (
+        semantic is None
+        or semantic.get("studio_rule_publication_readiness") != canonical_rule_readiness
+    ):
+        raise RuntimeError(
+            "Studio semantic rule readiness does not match the canonical "
+            "publication inventory."
+        )
+    if semantic.get("publication_rule_ready") is not (
+        not inventory.publication_rule_blocked
+    ):
+        raise RuntimeError(
+            "Studio semantic publication-rule projection does not match the "
+            "canonical publication inventory."
+        )
+    expected_projections = {
+        "pending_rule_review": inventory.pending_rule_review,
+        "publication_rule_blocked": inventory.publication_rule_blocked,
+        "autonomous_rule_ready": not inventory.publication_rule_blocked,
+    }
+    for field, expected in expected_projections.items():
+        if manifest.get(field) is not expected:
+            raise RuntimeError(
+                f"Studio manifest `{field}` does not match the canonical "
+                "publication inventory."
+            )
+        if result_value.get(field) is not expected:
+            raise RuntimeError(
+                f"Studio result `{field}` does not match the canonical "
+                "publication inventory."
+            )
+    manifest["rule_readiness"] = canonical_rule_readiness
+    result_value["rule_readiness"] = canonical_rule_readiness
     manifest["revision_brief"] = _write_studio_revision_brief(
         output_dir,
         manifest=manifest,
     )
     _write_studio_review_html(output_dir, manifest=manifest)
-    _snapshot_studio_directory(
-        source=inventory.document_path.parent,
-        destination=output_dir / "studio",
-    )
     manifest["state"] = "publishing"
     manifest["ready_to_use"] = False
     manifest["publish_complete"] = False
@@ -57,24 +114,48 @@ def finalize_studio_run(
         manifest=manifest,
         copied_exports=copied_exports,
     )
+    prerequisite_state = (
+        RULE_REPAIR_STATE if inventory.publication_rule_blocked else None
+    )
     manifest.update(
         build_publish_state(
             qa=evidence.qa,
             package_contract=manifest["package_contract"],
             delivery_package=manifest["delivery_package"],
             delivery_verification=manifest["delivery_verification"],
+            prerequisite_state=prerequisite_state,
+            resolved_figure_plan=manifest.get("resolved_figure_plan"),
         )
     )
     ready_to_use = bool(manifest["ready_to_use"])
     manifest["publish_complete"] = True
-    manifest["failure_stage"] = None if ready_to_use else "quality_or_delivery_gate"
-    manifest["failure_reason"] = (
-        None
-        if ready_to_use
-        else "One or more QA, package, or delivery verification gates failed."
-    )
+    if ready_to_use:
+        failure_stage = None
+        failure_reason = None
+    elif inventory.publication_rule_blocked:
+        failure_stage = (
+            "rule_readiness_gate"
+            if inventory.pending_rule_review
+            else "rule_contract_gate"
+        )
+        failure_reason = inventory.rule_readiness.failure_reason
+        if failure_reason is None:
+            raise RuntimeError(
+                "Studio publication readiness is blocked without a failure reason."
+            )
+    else:
+        failure_stage = "quality_or_delivery_gate"
+        failure_reason = (
+            "One or more QA, package, or delivery verification gates failed."
+        )
+    manifest["failure_stage"] = failure_stage
+    manifest["failure_reason"] = failure_reason
     _write_json_atomic(output_dir / "manifest.json", manifest)
-    _register_studio_run(inventory.project_dir, manifest)
+    durable_exports = (
+        json_safe(result_value.get("exports"))
+        if isinstance(result_value.get("exports"), list)
+        else []
+    )
     payload = {
         "kind": "sciplot_studio_export_run",
         "output": str(output_dir),
@@ -82,22 +163,96 @@ def finalize_studio_run(
         "review_html": str(output_dir / "review.html"),
         "revision_brief": str(output_dir / "revision_brief.md"),
         "figures": figures,
-        "exports": copied_exports,
+        "exports": durable_exports,
         "qa": evidence.qa,
         "package_contract": manifest["package_contract"],
         "delivery_package": manifest["delivery_package"],
         "delivery_verification": manifest["delivery_verification"],
         "state": manifest["state"],
         "ready_to_use": ready_to_use,
+        "failure_stage": failure_stage,
+        "failure_reason": failure_reason,
+        "template": inventory.presentation_identity.template,
+        "presentation_identity": inventory.presentation_identity.to_payload(),
+        "rule_readiness": canonical_rule_readiness,
         "pending_rule_review": inventory.pending_rule_review,
-        "autonomous_rule_ready": not inventory.pending_rule_review,
+        "publication_rule_blocked": inventory.publication_rule_blocked,
+        "autonomous_rule_ready": not inventory.publication_rule_blocked,
         "scope": manifest["scope"],
     }
     if inventory.figure_set_export_scope is not None:
         payload["figure_set_export_scope"] = json_safe(
             inventory.figure_set_export_scope
         )
+    if isinstance(manifest.get("resolved_figure_plan"), dict):
+        payload["resolved_figure_plan"] = json_safe(manifest["resolved_figure_plan"])
+        payload["figure_outcomes"] = json_safe(manifest.get("figure_outcomes", []))
+    _register_studio_run(
+        inventory.project_dir,
+        manifest,
+        studio_run=payload,
+    )
     return payload
+
+
+def _validate_presentation_projections(
+    *,
+    inventory: StudioExportInventory,
+    manifest: dict[str, Any],
+) -> None:
+    """Reject selected-presentation splits before the first publication write."""
+
+    expected = inventory.presentation_identity
+    require_selected_template(
+        inventory.request.get("template"),
+        expected=expected,
+        source="canonical plot request",
+    )
+    require_selected_template(
+        manifest.get("template"),
+        expected=expected,
+        source="Studio manifest",
+    )
+    require_selected_presentation_payload(
+        manifest.get("presentation_identity"),
+        expected=expected,
+        source="Studio manifest",
+    )
+    result = manifest.get("result")
+    if not isinstance(result, dict):
+        raise RuntimeError(
+            "presentation_identity_mismatch: Studio manifest result is missing."
+        )
+    require_selected_template(
+        result.get("template"),
+        expected=expected,
+        source="Studio result",
+    )
+    require_selected_presentation_payload(
+        result.get("presentation_identity"),
+        expected=expected,
+        source="Studio result",
+    )
+    semantic = manifest.get("semantic")
+    if not isinstance(semantic, dict):
+        raise RuntimeError(
+            "presentation_identity_mismatch: Studio semantic evidence is missing."
+        )
+    require_selected_presentation_payload(
+        semantic.get("presentation_identity"),
+        expected=expected,
+        source="Studio semantic evidence",
+    )
+    studio = manifest.get("studio")
+    if not isinstance(studio, dict):
+        raise RuntimeError(
+            "presentation_identity_mismatch: Studio manifest block is missing."
+        )
+    require_selected_presentation_payload(
+        studio.get("presentation_identity"),
+        expected=expected,
+        source="Studio manifest block",
+    )
 
 
 def _snapshot_studio_directory(*, source: Path, destination: Path) -> None:
@@ -135,7 +290,11 @@ def _finalize_delivery_contracts(
             manifest["delivery_package"],
             exports=copied_exports,
             export_document_sha256=inventory.export_document_sha256,
-            document_hashes=inventory.veusz_document_hashes,
+            document_hashes=(
+                manifest.get("veusz_document_hashes")
+                if isinstance(manifest.get("veusz_document_hashes"), dict)
+                else inventory.veusz_document_hashes
+            ),
         )
         failure_stage = "exact_current_binding"
         primary_exports = [

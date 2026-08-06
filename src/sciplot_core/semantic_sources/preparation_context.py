@@ -11,7 +11,9 @@ class SemanticPreparationContext:
     source: Path
     processed_dir: Path
     family: str
+    rule_id: str | None
     curation_path: str | Path | None
     series_order: object
     column_confirmations: object
     replicate_mode: object
+    source_tree_sha256_before: str | None = None

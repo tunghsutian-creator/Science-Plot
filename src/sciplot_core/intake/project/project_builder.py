@@ -16,7 +16,9 @@ from sciplot_core.foundation.path_names import (
     slug,
     unique_path,
 )
-from sciplot_core.materials_rules import get_rule
+from sciplot_core.figure_plan import sync_figure_plan_projection
+from sciplot_core.materials_rules import get_rule, resolve_rule_template
+from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY
 from sciplot_core.publication import (
     build_publication_intent,
     build_transform_ledger,
@@ -32,6 +34,7 @@ from ..packaging import (
     _write_zip,
     converge_intake_project_launchers,
 )
+from sciplot_core.project_manifest import commit_intake_project_manifest
 from ..session import (
     _experiment_render_options,
     _experiment_template,
@@ -57,6 +60,8 @@ def create_intake_project(
     column_confirmations: list[dict[str, Any]] | None = None,
     replicate_mode: str | None = None,
     recognition: dict[str, Any] | None = None,
+    template: str | None = None,
+    delivery_root: Path | None = None,
     studio_preparer: Callable[[Path], dict[str, Any]],
 ) -> dict[str, Any]:
     _, experiment = _catalog_item(data_type_id, experiment_type_id)
@@ -82,6 +87,8 @@ def create_intake_project(
             column_confirmations=column_confirmations,
             replicate_mode=replicate_mode,
             recognition=recognition,
+            template=template,
+            delivery_root=delivery_root,
             studio_preparer=studio_preparer,
             project_dir=project_dir,
         )
@@ -103,6 +110,8 @@ def _create_intake_project_in_reserved_directory(
     column_confirmations: list[dict[str, Any]] | None,
     replicate_mode: str | None,
     recognition: dict[str, Any] | None,
+    template: str | None,
+    delivery_root: Path | None,
     studio_preparer: Callable[[Path], dict[str, Any]],
     project_dir: Path,
 ) -> dict[str, Any]:
@@ -165,12 +174,25 @@ def _create_intake_project_in_reserved_directory(
         default_output=runs_dir / "run_001",
     )
     selected_exports = _selected_exports(exports)
-    template = _experiment_template(experiment)
-    if template is None:
+    requested_template = str(template or "").strip() or None
+    selected_template = _experiment_template(experiment)
+    if selected_template is None:
         semantic_template = recognition_payload.get("template")
         if isinstance(semantic_template, str) and semantic_template.strip():
-            template = semantic_template.strip()
-    contract_template = template
+            selected_template = semantic_template.strip()
+    selected_template = requested_template or selected_template
+    effective_rule_id = str(rule_id or recognition_payload.get("rule_id") or "").strip()
+    if effective_rule_id:
+        selected_template = resolve_rule_template(
+            get_rule(effective_rule_id),
+            selected_template,
+        )
+    selected_experiment = dict(experiment)
+    selected_experiment["rule_id"] = effective_rule_id or None
+    if selected_template is not None:
+        selected_experiment["template"] = selected_template
+        selected_experiment["chart"] = selected_template
+    contract_template = selected_template
     if contract_template is None and isinstance(experiment.get("chart"), str):
         contract_template = str(experiment.get("chart") or "").strip() or None
     semantic_render_options = (
@@ -228,11 +250,18 @@ def _create_intake_project_in_reserved_directory(
     if selected_render_options:
         plot_request["render_options"] = selected_render_options
     plot_request["explicit_render_option_keys"] = sorted(explicit_user_render_options)
-    if template:
-        plot_request["template"] = template
-    effective_rule_id = str(rule_id or recognition_payload.get("rule_id") or "").strip()
+    if selected_template:
+        plot_request["template"] = selected_template
+    if requested_template:
+        plot_request["explicit_template_selection"] = True
     if effective_rule_id:
         plot_request["rule_id"] = effective_rule_id
+    if recognition_payload.get("pending_rule_review") is True:
+        plot_request["pending_rule_review"] = True
+    if delivery_root is not None:
+        plot_request[REQUEST_DELIVERY_ROOT_KEY] = str(
+            delivery_root.expanduser().resolve()
+        )
     converge_material_review_notes(plot_request)
     if selected_column_confirmations:
         plot_request["column_confirmations"] = selected_column_confirmations
@@ -243,7 +272,7 @@ def _create_intake_project_in_reserved_directory(
         plot_request["review_notes"].extend(str(item["message"]) for item in warnings)
     study_model = build_study_model(
         data_type=data_type,
-        experiment=experiment,
+        experiment=selected_experiment,
         groups=manifest_groups,
         replicate_mode=selected_replicate_mode,
         render_options=selected_render_options,
@@ -273,11 +302,11 @@ def _create_intake_project_in_reserved_directory(
         "project_slug": project_slug,
         "data_type": {"id": data_type["id"], "label": data_type["label"]},
         "experiment": {
-            "id": experiment["id"],
-            "label": experiment["label"],
-            "rule_id": rule_id,
-            "chart": experiment.get("chart"),
-            "template": template,
+            "id": selected_experiment["id"],
+            "label": selected_experiment["label"],
+            "rule_id": effective_rule_id or None,
+            "chart": selected_experiment.get("chart"),
+            "template": selected_template,
         },
         "recognition": json_safe(recognition_payload),
         "groups": manifest_groups,
@@ -298,6 +327,9 @@ def _create_intake_project_in_reserved_directory(
             "render_options": selected_render_options,
             "series_order": series_order,
             "replicate_mode": selected_replicate_mode,
+            **(
+                {"template": selected_template} if selected_template is not None else {}
+            ),
         },
     }
     (project_dir / "plot_request.json").write_text(
@@ -306,20 +338,6 @@ def _create_intake_project_in_reserved_directory(
     )
     try:
         studio_payload = studio_preparer(project_dir)
-        if isinstance(studio_payload.get("studio"), dict):
-            manifest["studio"] = studio_payload["studio"]
-        prepared_request = _read_json_if_exists(project_dir / "plot_request.json")
-        if isinstance(prepared_request, dict):
-            for key in ("study_model", "publication_intent", "transform_ledger"):
-                if isinstance(prepared_request.get(key), dict):
-                    manifest[key] = prepared_request[key]
-            intent = prepared_request.get("publication_intent")
-            if isinstance(intent, dict) and isinstance(
-                intent.get("target_profile_id"), str
-            ):
-                manifest["journal_profile"] = get_publication_profile(
-                    intent["target_profile_id"]
-                )
     except Exception as exc:
         manifest["studio"] = {
             "kind": "sciplot_studio_document",
@@ -331,6 +349,26 @@ def _create_intake_project_in_reserved_directory(
             ),
             "error": str(exc),
         }
+    else:
+        if isinstance(studio_payload.get("studio"), dict):
+            manifest["studio"] = studio_payload["studio"]
+        prepared_request = _read_json_if_exists(project_dir / "plot_request.json")
+        if isinstance(prepared_request, dict):
+            for key in (
+                "study_model",
+                "publication_intent",
+                "transform_ledger",
+            ):
+                if isinstance(prepared_request.get(key), dict):
+                    manifest[key] = prepared_request[key]
+            sync_figure_plan_projection(manifest, prepared_request)
+            intent = prepared_request.get("publication_intent")
+            if isinstance(intent, dict) and isinstance(
+                intent.get("target_profile_id"), str
+            ):
+                manifest["journal_profile"] = get_publication_profile(
+                    intent["target_profile_id"]
+                )
     launcher_contract = converge_intake_project_launchers(
         project_dir,
         update_manifests=False,
@@ -339,13 +377,10 @@ def _create_intake_project_in_reserved_directory(
         manifest,
         contract=launcher_contract,
     )
-    (project_dir / "intake_manifest.json").write_text(
-        json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    (project_dir / f"{project_slug}.sciplot.json").write_text(
-        json.dumps(json_safe(manifest), indent=2, ensure_ascii=False),
-        encoding="utf-8",
+    commit_intake_project_manifest(
+        project_dir,
+        manifest,
+        mirror_path=project_dir / f"{project_slug}.sciplot.json",
     )
     zip_path = output_root / f"{project_slug}.zip"
     _write_zip(project_dir, zip_path)

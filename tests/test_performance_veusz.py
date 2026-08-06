@@ -375,8 +375,9 @@ def test_ready_performance_studio_review_preserves_lineage(
     assert manifest["autonomous_rule_ready"] is True
     ledger = manifest["transform_ledger"]
     by_id = {step["id"]: step for step in ledger["steps"]}
-    assert "performance_comparison_preparation" in by_id
-    preparation = by_id["performance_comparison_preparation"]
+    step_id = "performance_comparison_preparation_performance_scatter"
+    assert step_id in by_id
+    preparation = by_id[step_id]
     assert preparation["parameters"]["template"] == "scatter"
     assert preparation["parameters"]["legend_panel_reserved"] is True
     assert preparation["parameters"]["plot_region_mm"] == [41.5, 38.5]

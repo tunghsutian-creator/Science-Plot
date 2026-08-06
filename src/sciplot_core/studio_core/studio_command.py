@@ -39,9 +39,6 @@ from sciplot_core.studio_core.publish_run import (
     publish_studio_export_run,
 )
 
-from sciplot_core.studio_core.registry_writes import (
-    _register_studio_exports,
-)
 
 from sciplot_core.studio_core.studio_prepare import (
     prepare_studio_document,
@@ -157,9 +154,6 @@ def run_studio_command(
             payload["studio_run"] = studio_run
             if isinstance(studio_run.get("exports"), list):
                 payload["exports"] = json_safe(studio_run["exports"])
-            _register_studio_exports(
-                Path(payload["project_dir"]), payload["exports"], studio_run=studio_run
-            )
             figure_set_export_scope = studio_run.get("figure_set_export_scope")
             if isinstance(figure_set_export_scope, dict):
                 payload["figure_set_export_scope"] = json_safe(figure_set_export_scope)

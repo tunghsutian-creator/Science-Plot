@@ -5,6 +5,9 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 from typing import Any
+
+from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
+from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.launchers import (
     inspect_delivery_launcher_contract,
@@ -21,6 +24,8 @@ from sciplot_core.policy import (
 )
 
 from sciplot_core.delivery.contracts import (
+    DELIVERY_BINDING_POLICY_LEGACY,
+    DELIVERY_BINDING_POLICY_RESOLVED_PLAN,
     DELIVERY_PACKAGE_CONTRACT_VERSION,
     _project_slug,
 )
@@ -41,6 +46,7 @@ from sciplot_core.delivery.publication_evidence import (
 from sciplot_core.delivery.package_validation import (
     verify_delivery_package,
 )
+from sciplot_core.delivery.plan_binding import plan_source_figure_ids
 
 
 def build_delivery_package(
@@ -88,6 +94,7 @@ def build_delivery_package(
         directory.mkdir(parents=True, exist_ok=True)
 
     project = _project_slug(output_dir, manifest)
+    figure_ids_by_path = _figure_ids_by_path(manifest)
     figure_records: list[dict[str, Any]] = []
     for figure_value in manifest.get("figures", []):
         if not isinstance(figure_value, str):
@@ -108,6 +115,7 @@ def build_delivery_package(
                 "relative_path": str(destination.relative_to(delivery_dir)),
                 "format": "pdf" if suffix == ".pdf" else "tiff",
                 "export_format": "pdf" if suffix == ".pdf" else "tiff_300",
+                "figure_id": figure_ids_by_path.get(str(source.resolve())),
                 "source_sha256": source_hash,
                 "delivery_sha256": delivery_hash,
                 "copy_hash_matches": bool(source_hash and source_hash == delivery_hash),
@@ -134,7 +142,8 @@ def build_delivery_package(
     data_files_exist = bool(data_records) and all(
         Path(str(item["path"])).exists() for item in data_records
     )
-    qa_payload = manifest.get("qa") if isinstance(manifest.get("qa"), dict) else {}
+    qa_value = manifest.get("qa")
+    qa_payload = qa_value if isinstance(qa_value, dict) else {}
     qa_passed = qa_payload.get("status") == "passed"
     publication_present, publication_status = _publication_status(output_dir)
 
@@ -189,15 +198,19 @@ def build_delivery_package(
         artifact_status.append(
             {
                 "id": "editable_vsz_hash_match",
-                "path": str(project_records[0]["path"]),
-                "exists": bool(project_records[0]["hash_matches_export"]),
+                "path": str(project_dir),
+                "exists": all(
+                    bool(record["hash_matches_export"]) for record in project_records
+                ),
+                "details": project_records,
             }
         )
     if publication_present:
         artifact_status.extend(publication_status)
+        publication_intent_value = manifest.get("publication_intent")
         publication_intent = (
-            manifest.get("publication_intent")
-            if isinstance(manifest.get("publication_intent"), dict)
+            publication_intent_value
+            if isinstance(publication_intent_value, dict)
             else {}
         )
         if publication_intent.get("target_status") == "confirmed":
@@ -210,6 +223,35 @@ def build_delivery_package(
                     and manifest["publication_qa"].get("status") == "passed",
                 }
             )
+    plan_gate = figure_plan_manifest_gate(manifest)
+    if plan_gate is not None:
+        delivered_ids = set(figure_pairing["complete_figure_ids"])
+        selected_ids = set(plan_gate["selected_figure_ids"])
+        project_figure_ids = [
+            str(item.get("figure_id") or "").strip() for item in project_records
+        ]
+        plan_delivery_complete = bool(
+            plan_gate["valid"] is True
+            and plan_gate["complete"] is True
+            and figure_pairing["passed"] is True
+            and delivered_ids == selected_ids
+            and not figure_pairing["unidentified_paths"]
+            and len(project_figure_ids) == len(selected_ids)
+            and all(project_figure_ids)
+            and set(project_figure_ids) == selected_ids
+        )
+        artifact_status.append(
+            {
+                "id": "resolved_figure_plan_complete",
+                "path": str(output_dir / "manifest.json"),
+                "exists": plan_delivery_complete,
+                "details": {
+                    **plan_gate,
+                    "delivered_figure_ids": sorted(delivered_ids),
+                    "editable_project_figure_ids": sorted(project_figure_ids),
+                },
+            }
+        )
 
     project_file = project_records[0]["path"] if project_records else None
     editable_vsz = None
@@ -230,6 +272,11 @@ def build_delivery_package(
     delivery_record: dict[str, Any] = {
         "kind": "sciplot_user_delivery_package",
         "version": DELIVERY_PACKAGE_CONTRACT_VERSION,
+        "binding_policy": (
+            DELIVERY_BINDING_POLICY_RESOLVED_PLAN
+            if plan_gate is not None
+            else DELIVERY_BINDING_POLICY_LEGACY
+        ),
         "path": str(delivery_dir),
         "project": project,
         "data_dir": str(data_dir),
@@ -248,10 +295,13 @@ def build_delivery_package(
         "editable_vsz_projects": project_records,
         "artifacts": artifact_status,
     }
+    if plan_gate is not None:
+        delivery_record["resolved_figure_plan"] = manifest.get("resolved_figure_plan")
     delivery_record["complete"] = all(item["exists"] for item in artifact_status)
     verification = verify_delivery_package(
         delivery_record,
         expected_root=delivery_dir,
+        expected_manifest=manifest,
     )
     delivery_record["verification"] = verification
     delivery_record["complete"] = bool(
@@ -259,3 +309,47 @@ def build_delivery_package(
     )
 
     return delivery_record
+
+
+def _figure_ids_by_path(manifest: dict[str, Any]) -> dict[str, str]:
+    result_value = manifest.get("result")
+    result = result_value if isinstance(result_value, dict) else {}
+    plan = resolved_figure_plan_from_payload(manifest.get("resolved_figure_plan"))
+    single_id = (
+        plan.tasks[0].figure_id if plan is not None and len(plan.tasks) == 1 else None
+    )
+    values: dict[str, str] = {}
+    if plan is not None:
+        values = {
+            path: figure_id
+            for path, figure_id in plan_source_figure_ids(plan).items()
+            if Path(path).suffix.casefold() in {".pdf", ".tif", ".tiff"}
+        }
+    for item in result.get("exports", []):
+        if not isinstance(item, dict):
+            continue
+        path_value = item.get("path")
+        if not isinstance(path_value, str) or not path_value.strip():
+            continue
+        if Path(path_value).suffix.casefold() not in {".pdf", ".tif", ".tiff"}:
+            continue
+        figure_id = str(item.get("figure_id") or single_id or "").strip()
+        if plan is not None and figure_id == "primary":
+            figure_id = plan.primary_figure_id
+        resolved_path = str(Path(path_value).expanduser().resolve())
+        if plan is None:
+            if figure_id:
+                values[resolved_path] = figure_id
+            continue
+        expected_figure_id = values.get(resolved_path)
+        if expected_figure_id is None:
+            raise ValueError(
+                "Renderer export is not bound to a selected FigureOutcome: "
+                f"{resolved_path}"
+            )
+        if figure_id and figure_id != expected_figure_id:
+            raise ValueError(
+                "Renderer export figure_id conflicts with the resolved outcome: "
+                f"{resolved_path}"
+            )
+    return values

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any
+
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.materials_rules import (
     SemanticRule,
@@ -27,6 +29,14 @@ from sciplot_core.readiness.semantic_contract import (
 from sciplot_core.readiness.render_request_contract import (
     validated_render_request_policy_payload,
 )
+
+
+@dataclass(frozen=True)
+class RuleContractHashes:
+    """Full and semantic hashes derived from one canonical rule payload."""
+
+    contract_sha256: str
+    semantic_contract_sha256: str
 
 
 def rule_contract_payload(rule: SemanticRule) -> dict[str, Any]:
@@ -59,11 +69,20 @@ def semantic_contract_sha256(semantic: dict[str, Any]) -> str:
     return _canonical_sha256(semantic_contract_payload(semantic))
 
 
-def rule_contract_sha256(rule: SemanticRule | str) -> str:
+def rule_contract_hashes(rule: SemanticRule | str) -> RuleContractHashes:
+    """Hash one resolved rule without rebuilding its canonical payload."""
+
     resolved = get_rule(rule) if isinstance(rule, str) else rule
-    return _canonical_sha256(rule_contract_payload(resolved))
+    payload = rule_contract_payload(resolved)
+    return RuleContractHashes(
+        contract_sha256=_canonical_sha256(payload),
+        semantic_contract_sha256=_canonical_sha256(payload["semantic"]),
+    )
+
+
+def rule_contract_sha256(rule: SemanticRule | str) -> str:
+    return rule_contract_hashes(rule).contract_sha256
 
 
 def rule_semantic_contract_sha256(rule: SemanticRule | str) -> str:
-    resolved = get_rule(rule) if isinstance(rule, str) else rule
-    return _canonical_sha256(rule_contract_payload(resolved)["semantic"])
+    return rule_contract_hashes(rule).semantic_contract_sha256

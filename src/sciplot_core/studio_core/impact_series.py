@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from sciplot_core.figure_plan import resolved_figure_plan_from_payload
+from sciplot_core.figure_plan.request_values import (
+    impact_condition_label_mapping,
+)
 from sciplot_core.foundation.file_hashing import (
     file_sha256,
 )
@@ -38,7 +42,6 @@ from sciplot_core.studio_render.categorical_values import (
 
 from sciplot_core.studio_core.figure_requests import (
     _impact_point_line_condition_order,
-    _impact_point_line_label_mapping,
     _impact_point_line_source,
 )
 
@@ -60,7 +63,20 @@ def _impact_point_line_series_from_source(
             "Impact point-line comparison needs at least two workbook conditions.",
         )
     by_condition = {condition: payload for condition, payload in available}
-    requested_order = _impact_point_line_condition_order(request)
+    figure_plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
+    planned_task = (
+        figure_plan.tasks[0]
+        if figure_plan is not None
+        and figure_plan.rule_id == "impact_metric"
+        and len(figure_plan.tasks) == 1
+        and figure_plan.tasks[0].template == "point_line"
+        else None
+    )
+    requested_order = (
+        list(planned_task.conditions)
+        if planned_task is not None
+        else _impact_point_line_condition_order(request)
+    )
     if requested_order:
         missing = [
             condition for condition in requested_order if condition not in by_condition
@@ -111,7 +127,20 @@ def _impact_point_line_series_from_source(
             "Impact point-line conditions must all use canonical kJ/m2 units.",
         )
 
-    label_mapping = _impact_point_line_label_mapping(request)
+    if planned_task is not None:
+        label_mapping = (
+            dict(
+                zip(
+                    planned_task.conditions,
+                    planned_task.condition_labels,
+                    strict=True,
+                )
+            )
+            if planned_task.condition_labels
+            else {}
+        )
+    else:
+        label_mapping = impact_condition_label_mapping(request)
     artifact = (str(workbook), file_sha256(workbook))
     raw_point_half_spread = categorical_raw_point_half_spread(
         box_fill_fraction=CATEGORICAL_BOX_FILL_FRACTION,
@@ -245,9 +274,13 @@ def _impact_point_line_series_from_source(
                 payload.total_replicates for _condition, payload in selected
             ),
             "condition_selection_policy": (
-                "explicit_condition_order"
-                if requested_order
-                else "largest_compatible_ordered_sample_axis_group"
+                figure_plan.selection_policy
+                if planned_task is not None and figure_plan is not None
+                else (
+                    "explicit_condition_order"
+                    if requested_order
+                    else "largest_compatible_ordered_sample_axis_group"
+                )
             ),
         },
     )

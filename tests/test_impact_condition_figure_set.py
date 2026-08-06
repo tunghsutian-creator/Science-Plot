@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from sciplot_core.figure_plan import FigureTask, ResolvedFigurePlan
 from sciplot_core.materials_rules import get_rule, resolve_rule_template
 from sciplot_core.readiness import (
     render_request_contract_payload,
@@ -21,6 +22,7 @@ from sciplot_core.studio import (
     _impact_point_line_series_from_source,
     _read_studio_figure_set,
     _veusz_axis_label,
+    prepare_studio_document,
 )
 from sciplot_core import workflow
 from sciplot_core.workflow import (
@@ -122,6 +124,55 @@ def test_impact_rule_certificate_allows_supported_explicit_presentations() -> No
             rule,
             {"recipe": "auto", "template": "curve"},
         )
+
+
+@pytest.mark.parametrize("template", ["bar", "point_line"])
+def test_fresh_impact_prepare_commits_editable_canonical_figure_plan(
+    tmp_path: Path,
+    template: str,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    with pd.ExcelWriter(source) as writer:
+        for sheet_name, offset in (("2mm", 0.0), ("4mm", 10.0)):
+            pd.DataFrame(
+                [
+                    ["Re", "Re"],
+                    ["kJ/m²", "kJ/m²"],
+                    ["E0", "E2"],
+                    [offset + 1.0, offset + 2.0],
+                    [offset + 1.1, offset + 2.1],
+                ]
+            ).to_excel(
+                writer,
+                sheet_name=sheet_name,
+                header=False,
+                index=False,
+            )
+
+    prepared = prepare_studio_document(
+        source,
+        output_root=tmp_path / "projects",
+        rule_id="impact_metric",
+        template=template,
+    )
+    project_dir = Path(str(prepared["project_dir"]))
+    registry = json.loads(
+        (project_dir / "studio" / "figure_set.json").read_text(encoding="utf-8")
+    )
+    resolved_plan = ResolvedFigurePlan.from_payload(registry["resolved_figure_plan"])
+    outcomes = registry["resolved_figure_plan"]["outcomes"]
+
+    assert registry["version"] == 2
+    assert [entry["resolved_figure_task"] for entry in registry["figures"]] == [
+        task.to_payload() for task in resolved_plan.tasks
+    ]
+    assert outcomes
+    assert {outcome["status"] for outcome in outcomes} == {"editable"}
+    assert all(
+        Path(artifact).is_file() and ".sciplot-figure-set-transaction-" not in artifact
+        for outcome in outcomes
+        for artifact in outcome["artifacts"]
+    )
 
 
 @pytest.mark.parametrize("template", ["bar", "box", "box_strip", "point_line"])
@@ -310,19 +361,81 @@ def test_impact_point_line_compares_compatible_conditions_and_preserves_raw_poin
     assert steps[0]["parameters"]["condition_offsets"] == pytest.approx([-0.05, 0.05])
 
 
-def test_impact_point_line_uses_one_combined_document(tmp_path: Path) -> None:
-    assert (
-        _impact_condition_figure_queue(
-            {
-                "rule_id": "impact_metric",
-                "template": "point_line",
-                "input": str(tmp_path / "impact.xlsx"),
-            },
-            base_dir=tmp_path,
-            project_dir=tmp_path / "project",
-        )
-        == []
+def test_impact_point_line_plan_without_custom_labels_uses_condition_names(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    with pd.ExcelWriter(source) as writer:
+        for condition, offset in (("2mm", 0.0), ("4mm", 10.0)):
+            pd.DataFrame(
+                [
+                    ["Re", "Re"],
+                    ["kJ/m²", "kJ/m²"],
+                    ["E0", "E2"],
+                    [1.0 + offset, 2.0 + offset],
+                    [1.5 + offset, 2.5 + offset],
+                ]
+            ).to_excel(writer, sheet_name=condition, header=False, index=False)
+    task = FigureTask(
+        figure_id="impact_strength_by_sample",
+        order=1,
+        title="Impact strength by sample",
+        x_metric="sample",
+        y_metric="impact_strength",
+        template="point_line",
+        artifact_stem="impact_point_line",
+        document_stem="impact_strength_by_sample",
+        conditions=("2mm", "4mm"),
+        condition_labels=(),
+        sample_order=("E0", "E2"),
+        replicate_counts=(("E0", 2), ("E2", 2)),
     )
+    plan = ResolvedFigurePlan.planned(
+        rule_id="impact_metric",
+        selection_policy="explicit_condition_order",
+        primary_figure_id=task.figure_id,
+        tasks=(task,),
+    )
+
+    series, _axis_info, _steps = _impact_point_line_series_from_source(
+        source,
+        request={"resolved_figure_plan": plan.to_payload()},
+    )
+
+    assert [
+        item.label
+        for item in series
+        if item.presentation_kind == IMPACT_POINT_LINE_SUMMARY_KIND
+    ] == ["2mm", "4mm"]
+
+
+def test_impact_point_line_uses_one_combined_document(tmp_path: Path) -> None:
+    source = tmp_path / "impact.xlsx"
+    with pd.ExcelWriter(source) as writer:
+        for thickness, offset in (("2mm", 0.0), ("4mm", 10.0)):
+            pd.DataFrame(
+                [
+                    ["Re", "Re"],
+                    ["kJ/m²", "kJ/m²"],
+                    ["E0", "E2"],
+                    [offset + 1.0, offset + 2.0],
+                ]
+            ).to_excel(writer, sheet_name=thickness, header=False, index=False)
+
+    queue = _impact_condition_figure_queue(
+        {
+            "rule_id": "impact_metric",
+            "template": "point_line",
+            "input": str(source),
+        },
+        base_dir=tmp_path,
+        project_dir=tmp_path / "project",
+    )
+
+    assert len(queue) == 1
+    assert queue[0]["id"] == "impact_strength_by_sample"
+    assert queue[0]["condition_source"] == str(source)
+    assert queue[0]["resolved_figure_task"]["template"] == "point_line"
 
 
 @pytest.mark.comprehensive
@@ -480,6 +593,60 @@ def test_impact_point_line_autoplot_ledger_includes_terminal_selection(
         json.loads((output_dir / "transform_ledger.json").read_text(encoding="utf-8"))
         == ledger
     )
+
+
+@pytest.mark.comprehensive
+def test_impact_workflow_rejects_source_change_after_render(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sciplot_core.workflow.request_run as request_run_module
+
+    source = tmp_path / "impact.xlsx"
+    with pd.ExcelWriter(source) as writer:
+        for sheet_name, offset in (("2mm", 0.0), ("4mm", 10.0)):
+            pd.DataFrame(
+                [
+                    ["Re", "Re"],
+                    ["kJ/m²", "kJ/m²"],
+                    ["E0", "E2"],
+                    [offset + 1.0, offset + 2.0],
+                    [offset + 1.1, offset + 2.1],
+                ]
+            ).to_excel(writer, sheet_name=sheet_name, header=False, index=False)
+    output_dir = tmp_path / "run"
+    request_path = tmp_path / "plot_request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "recipe": "auto",
+                "rule_id": "impact_metric",
+                "template": "point_line",
+                "input": str(source),
+                "output": str(output_dir),
+                "exports": ["pdf", "tiff_300"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    original_render = request_run_module.execute_request_render
+
+    def render_then_mutate(*args: object, **kwargs: object):
+        rendered = original_render(*args, **kwargs)
+        source.write_bytes(source.read_bytes() + b"\nsource-drift")
+        return rendered
+
+    monkeypatch.setattr(
+        request_run_module,
+        "execute_request_render",
+        render_then_mutate,
+    )
+
+    with pytest.raises(RuntimeError, match="Workflow source changed"):
+        workflow.run_request(request_path)
+
+    assert not (output_dir / "manifest.json").exists()
+    assert not (output_dir / "delivery").exists()
 
 
 def test_impact_point_line_ignores_stale_default_figure_set(

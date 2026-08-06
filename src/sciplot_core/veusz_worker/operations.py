@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.terminal_source_binding_wire import (
+    consume_terminal_source_binding_environment,
+)
 from sciplot_core.veusz_worker.widget_bindings import (
     _settings_snapshot,
 )
@@ -16,7 +19,18 @@ def export_request(request_path: Path, *, formats: list[str]) -> dict[str, Any]:
     from sciplot_core.studio_core.export_execution import export_studio_document
     from sciplot_core.studio_core.studio_prepare import prepare_studio_document
 
-    payload = prepare_studio_document(request_path.expanduser().resolve())
+    resolved_request = request_path.expanduser().resolve()
+    terminal_source_binding = consume_terminal_source_binding_environment(
+        resolved_request
+    )
+    payload = (
+        prepare_studio_document(
+            resolved_request,
+            _terminal_source_binding=terminal_source_binding,
+        )
+        if terminal_source_binding is not None
+        else prepare_studio_document(resolved_request)
+    )
     document_path = Path(str(payload["document"]))
     export_payload = export_studio_document(document_path, formats=formats)
     payload["exports"] = export_payload["exports"]

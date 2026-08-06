@@ -14,11 +14,9 @@ from sciplot_core.readiness.constants import (
     EVIDENCE_STRENGTHS,
 )
 
-from sciplot_core.readiness.rule_contract import (
-    rule_contract_sha256,
-    rule_semantic_contract_sha256,
+from sciplot_core.readiness.rule_certification import (
+    current_certified_rule_contract_snapshot,
 )
-
 from sciplot_core.readiness.registry_model import (
     ValidatedEnvelopeRegistry,
 )
@@ -46,41 +44,33 @@ def validated_envelope_status(
     stale_ids: list[str] = []
     missing_ids: list[str] = []
     for rule in current_rules:
-        entry = resolved.entry(rule.rule_id)
-        current_hash = rule_contract_sha256(rule)
-        current_semantic_hash = rule_semantic_contract_sha256(rule)
+        snapshot = current_certified_rule_contract_snapshot(
+            rule=rule,
+            registry=resolved,
+        )
+        entry = snapshot.certified_envelope
+        current_hash = snapshot.current_contract_sha256
+        current_semantic_hash = snapshot.current_semantic_contract_sha256
         if entry is None:
-            status = "missing"
-            certified_hash = None
-            certified_semantic_hash = None
             evidence_strength = None
             limitations: list[str] = []
             missing_ids.append(rule.rule_id)
         else:
-            certified_hash = entry.contract_sha256
-            certified_semantic_hash = entry.semantic_contract_sha256
-            status = (
-                "current"
-                if (
-                    certified_hash == current_hash
-                    and certified_semantic_hash == current_semantic_hash
-                    and entry.semantic_family == rule.semantic_family
-                )
-                else "stale"
-            )
             evidence_strength = entry.evidence_strength
             limitations = list(entry.limitations)
-            if status == "stale":
+            if snapshot.certification_status == "stale":
                 stale_ids.append(rule.rule_id)
         records.append(
             {
                 "rule_id": rule.rule_id,
                 "semantic_family": rule.semantic_family,
-                "status": status,
+                "status": snapshot.certification_status,
                 "current_contract_sha256": current_hash,
-                "certified_contract_sha256": certified_hash,
+                "certified_contract_sha256": snapshot.certified_contract_sha256,
                 "current_semantic_contract_sha256": current_semantic_hash,
-                "certified_semantic_contract_sha256": certified_semantic_hash,
+                "certified_semantic_contract_sha256": (
+                    snapshot.certified_semantic_contract_sha256
+                ),
                 "evidence_strength": evidence_strength,
                 "limitations": limitations,
             }

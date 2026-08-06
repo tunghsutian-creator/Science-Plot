@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 from PyQt6 import QtCore, QtGui, QtWidgets
+from sciplot_core.studio import read_studio_figure_set
 from sciplot_gui.studio_project_status import (
-    _read_json,
     _status_text,
 )
 
@@ -143,15 +142,10 @@ class DockMixin:
     def _figure_set_entries(self) -> list[dict[str, Any]]:
         if self.project_dir is None:
             return []
-        registry_path = self.project_dir / "studio" / "figure_set.json"
-        try:
-            registry = _read_json(registry_path)
-        except (OSError, ValueError, json.JSONDecodeError):
-            return []
-        if registry.get("kind") != "sciplot_studio_figure_set":
+        registry = read_studio_figure_set(self.project_dir)
+        if registry is None:
             return []
         studio_root = (self.project_dir / "studio").resolve()
-        primary_figure_id = str(registry.get("primary_figure_id") or "").strip()
         entries: list[dict[str, Any]] = []
         for value in registry.get("figures", []):
             if not isinstance(value, dict):
@@ -163,11 +157,14 @@ class DockMixin:
                 or figure_id in {".", ".."}
             ):
                 continue
-            document = (
-                studio_root / "document.vsz"
-                if figure_id == primary_figure_id
-                else studio_root / "figures" / f"{figure_id}.vsz"
-            ).resolve()
+            document_value = value.get("document")
+            if not isinstance(document_value, str) or not document_value.strip():
+                continue
+            document = Path(document_value).expanduser().resolve()
+            try:
+                document.relative_to(studio_root)
+            except ValueError:
+                continue
             entries.append({**value, "document": str(document)})
         return sorted(
             entries,

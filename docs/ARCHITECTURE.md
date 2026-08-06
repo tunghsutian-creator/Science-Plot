@@ -11,6 +11,7 @@ implementation narratives belong to `DEVELOPMENT_LOG.md` and Git, not here.
 ```text
 raw files + hashes
   -> confirmed scientific mapping
+  -> resolved selected-figure plan
   -> prepared data + transform ledger
   -> exact-current studio/document.vsz
   -> Veusz PDF/TIFF export
@@ -63,13 +64,18 @@ research-plots/
       mapping_contract/        mapping models and validation
       data_mapping/            mapping execution and state
       study_model/             study and experiment plans
+      figure_plan/             selected tasks, stable IDs, outcomes, gates
+      presentation_identity.py selected rule/template identity contract
       plot_data/               source/spec conversion and CSV export
       policy/                  visual, axis, layout, export, plot contract
       render/                  renderer-independent orchestration
       studio.py                stable Studio facade
       studio_render/           pure series, axis, layout, spec transforms
       studio_core/             VSZ lifecycle, export, publish, Qt ports
+        presentation_evidence.py selected plan/spec consistency gate
+        rule_readiness.py      canonical request/current-rule publish evidence
       workflow/                confirmed-request orchestration
+        route_intent.py        immutable auto/recipe/render request route
       autoplot/                typed persisted-evidence adapter and summary
       one_step/                internal preparation/readiness lifecycle
       qa/ readiness/           artifact checks and rule evidence
@@ -116,6 +122,12 @@ autoplot / workflow / one_step
 semantic + mapping
   -> materials rules + study model + source tables + foundation
 
+study model + current source facts
+  -> resolved figure plan
+
+studio_core + workflow
+  -> resolved figure plan + render
+
 studio_core
   -> studio_render + policy + Veusz runtime boundary
 
@@ -123,7 +135,7 @@ Veusz worker
   -> named studio_core runtime/export ports
 
 QA / readiness / delivery
-  -> saved artifacts + public evidence contracts
+  -> saved artifacts + resolved outcomes + public evidence contracts
 ```
 
 The CLI may assemble GUI presentation. Core business, data, rendering, QA, and
@@ -141,10 +153,24 @@ contracts but may not duplicate scientific calculations.
 | Raw source parsing | `source_tables/` | Typed curve, replicate, and heatmap tables without rendering. |
 | Generic source inspection | `source_inspection/` | Recommend only production-supported templates. |
 | Mapping | `mapping_contract/`, `data_mapping/` | Closed contracts, explicit confirmation, immutable source evidence. |
+| Scoped static typing | `[tool.mypy]` in `pyproject.toml` | Strict Python 3.11 baseline for `foundation/`, `json_contract.py`, `figure_plan/`, the delivery plan-object validator `delivery/plan_binding.py`, the typed delivery manifest-gate consumers `delivery/package_builder.py` and `delivery/package_validation.py`, the persisted output-package owner `study_model/package_contract.py`, and the pure publication-state projection `publish_state.py` only. Imports outside that list provide type information but are not part of the current diagnostic claim. |
+| Intake project manifest | `project_manifest.py` | `intake_manifest.json` is canonical; compatibility `*.sciplot.json` mirrors, read-modify-write updates, and ZIP snapshots share one rollback-capable cross-process project lock. |
+| Raw-source Studio composition | `studio_core/studio_prepare.py` | Pass final source options into Intake, inject and capture exactly one generated preparation, then terminate source dispatch. `intake/project/` separately owns raw copies, the canonical request and in-memory manifest draft, blocked failure projection, and initial ZIP. |
+| Workflow route intent | `workflow/route_intent.py` | Resolve strict optional recipe/template fields once after confirmed mapping/cleanup and before semantic or presentation enrichment. Intervention and rendering consume the same immutable auto/recipe/render decision; readiness keeps only a lazy compatibility projection. |
+| Workflow render-family dispatch | `workflow/auto_split.py` | Validate the canonical request rule once and select exactly one of performance, impact, mechanical, DSC, rheology, or generic execution. Without a selected plan, one specialized adapter may decline only to the generic renderer; with a selected plan, adapter decline fails closed. Workflow never probes another family. |
+| Figure-task metric identity | `figure_plan/metric_binding.py`, `figure_plan/task.py` | Preserve the closed v1 Cartesian wire contract and add explicit v2 `cartesian_xy` or `ordered_metrics` bindings without fake axes. Child-task version is independent from the enclosing v1 plan. |
+| Selected figure execution | `figure_plan/` | Resolve stable ordered tasks from Study Model plus current source facts; own plan identity, per-task outcomes, stale-state rejection, and publish/delivery gates. Impact, frequency, performance, and rheology temperature are enabled runtime rules. Performance and temperature resolution remain lazy leaf imports so worker startup cannot create a materials-rule initialization cycle. Render adapters execute tasks but do not select them. |
+| Terminal FigureTask evidence | `terminal_request.py`, `figure_plan/terminal_binding.py`, `workflow/request_rendering.py` | Preserve the exact unversioned legacy request when no task is selected. Task-aware terminal requests use a closed v2 envelope containing the exact v1/v2 task and only its metric binding. Workflow parses the selected plan before rendering, then binds ordered unique terminal tasks before reports or publication; the binding leaf is not a FigurePlan-facade export. |
+| Studio FigureTask evidence | `studio_figure_set_contract.py`, `studio_core/figure_task_evidence.py`, `studio_core/figure_set_registry.py`, `studio_core/figure_set_storage.py` | Project exact tasks into queue, registry, and spec evidence once. Cartesian tasks alone expose compatibility x/y; ordered tasks expose only ordered metrics. Legacy registry v1 stays readable without task authority, while task-aware registry v2 binds the exact ordered plan, canonical task-owned paths, specs, and editable outcomes before the first replacement. |
+| Selected presentation identity | `presentation_identity.py`, `studio_core/presentation_evidence.py` | Resolve one closed versioned `rule_id`/template value from the canonical request plus the already-resolved current rule. It binds only the plan's declared primary task and primary spec; each secondary spec verifies its own task template without minting another identity. Exact-current VSZ stays hash-bound visual authority; recognition never selects presentation. |
 | Global visual contract | `policy/plot_contract.json`, `policy/`, `style_contract/` | Single hard-style and option authority. |
 | Request validation | `request_contract.py` | Reject unsupported templates/options before rendering. |
 | Pure plot construction | `studio_render/` | Convert confirmed data and policy into render specs. |
 | Veusz lifecycle | `studio_core/`, `studio.py` | Core owns implementation; `studio.py` exposes the stable GUI/CLI integration API. |
+| Rule contract certification | `readiness/rule_contract.py`, `readiness/rule_certification.py` | Build the canonical rule payload once, derive full/semantic hashes, and compare one already-resolved rule with exactly one validated-envelope registry entry. No Studio policy or I/O belongs here. |
+| Studio prepare-time rule binding | `studio_core/rule_contract_binding.py` | Own the closed versioned binding persisted in canonical `plot_request.json`. Only successful generated preparation mints or refreshes it; exact-current reuse preserves it. |
+| Studio publication rule readiness | `studio_core/rule_readiness.py` | Leaf owner combines canonical request identity, strict persisted review evidence, exactly one current catalog lookup, current certification, and prepare-time binding into one immutable publication snapshot. Inventory, semantics, finalization, registry, and native status project that snapshot; they do not resolve competing rule identities. |
+| Managed rule-readiness display evidence | `sciplot_gui/studio_project_status/rule_readiness_evidence.py` | Strictly parses untrusted v1/v2 managed receipts before native status may display a specific rule or contract repair reason. Standalone and secondary receipts remain isolated. |
 | Material performance data | `performance_comparison/` | Validate tidy values and declared bounds; never infer missing science. |
 | Material performance objects | `performance_veusz/` | Native editable scatter/radar objects and index geometry. |
 | Project state | `sciplot_gui/studio_project_status/` | Pure evidence-to-state logic; UI renders it. |
@@ -168,6 +194,26 @@ Presentation contracts own permitted chart alternatives. Template-specific
 geometry belongs to the relevant construction module and executable tests,
 not to architecture prose.
 
+The rule semantic payload retains the certified default template. A Studio run
+separately owns one versioned `SelectedPresentationIdentity`: an explicit
+supported request choice wins over recognition history, while an omitted
+choice materializes the current rule default. Request, Study Model, FigurePlan,
+present VSZ spec, publication payloads, and registry must agree with that
+identity; they may not independently reselect it. A spec-less manual VSZ stays
+valid exact-current visual authority, with its hash bound beside the selected
+identity rather than serving as a source for reverse template inference.
+
+Workflow route is a separate fact from presentation and figure selection.
+`WorkflowRouteIntent` captures auto, named recipe, or direct render before a
+default template can be materialized. Later semantic preparation, FigurePlan
+resolution, intervention, and rendering may consume that route but may not
+recompute it from an enriched request.
+
+`SelectedPresentationIdentity` remains atomic. A bundle may derive several
+ordered `FigureTask` values, including different terminal templates; those
+tasks belong to `figure_plan/` and are not additional selected-presentation
+identities. Bundle-kind strings are orchestration metadata, never templates.
+
 Global typography, strokes, ticks, markers, ordinary frame geometry, exports,
 and plot options belong to `policy/`. Templates may own semantic geometry;
 heatmap scalar colors are the explicit color-policy exception.
@@ -185,9 +231,26 @@ sibling hidden `.sciplot/`; development gates use ignored `.tmp_verify/`.
 The visible package contains only plotting data, PDF/TIFF figures, editable
 VSZ projects, and the Veusz launcher. It is not a runtime workspace.
 
+For a supported resolved plan, every selected task has one stable logical ID,
+the plan records a relocation-stable source-content fingerprint, and each task
+must bind exactly one run-local VSZ, one PDF, and one 300-dpi TIFF. A generated
+rebuild may refresh a plan only within the same rule; exact-current reuse and
+publication require the persisted plan to match current source bytes. The live
+source and archived raw copy must both match the prepare-time fingerprint.
+Manifest, result, Study Model, visible figure records, and editable-project
+records must project the same ordered outcomes. Missing tasks, reused paths,
+cross-ID PDF/TIFF pairs, stale source selection, or mismatched VSZ snapshots
+fail closed before a package can be complete.
+
 Intake session and project names are reserved by exclusive filesystem
 creation. ZIP refreshes are staged, verified, and atomically replaced so a
 failed or concurrent refresh cannot destroy the last complete package.
+For a new raw-source project, Intake commits the canonical manifest and mirror
+after the one Studio preparation, then writes the initial ZIP. A Studio
+preparation exception is deliberately projected as a blocked manifest and ZIP
+before the same exception returns to the caller. A later manifest-projection
+or ZIP failure instead aborts project construction and removes the reserved
+project directory.
 
 ## Dependency rules
 
@@ -224,5 +287,163 @@ failed or concurrent refresh cannot destroy the last complete package.
     not architecture boundaries.
 15. Structural refactors preserve supported interfaces, data formats, and
     user-visible behavior unless the task explicitly changes their contract.
+16. `figure_plan/` owns task selection and outcome identity. Studio, Workflow,
+    QA, and delivery may project or verify that plan but may not independently
+    choose a different figure set.
+17. `figure_plan/payload_types.py` owns the exact canonical output and gate
+    shapes. Producers return total typed payloads; parsers continue to accept
+    untrusted `object` values, reject unknown keys, and preserve the existing
+    valid/invalid gate field differences.
+18. Compatibility facades may expose cross-owner APIs but may not require a
+    partially initialized peer facade. Study-model run/package projections
+    import FigurePlan leaf owners; frequency-plan resolution loads Study Model
+    normalization only when that resolution path executes.
+19. Studio publication derives rule identity only from the canonical request.
+    Every non-empty rule is resolved exactly once before figure collection or
+    run allocation, then compared with one registry entry and the strictly
+    parsed prepare-time binding. Generated preparation writes that binding only
+    through the rollback-capable request/VSZ/spec/figure-set transaction;
+    exact-current reuse never recertifies it. A missing, stale, or mismatched
+    binding/certification blocks handoff without changing `pending_rule_review`.
+    Matching recognition may explain history but cannot replace canonical
+    identity, current rule fields, or contract evidence; mismatched recognition
+    is discarded. Semantic, result, manifest, final payload, registry, and
+    managed native status carry the same v2 snapshot. Finalization rejects
+    split structured or redundant projections before its first write. Project
+    status maps an exact managed rule/contract gate to `needs_fix` with the
+    canonical reason while leaving artifact QA and the separate
+    automation-state vocabulary unchanged.
+20. Studio preparation transactions are rollback-capable file replacement
+    sets, not claims of process- or machine-crash atomicity. For raw files and
+    source directories, Intake resolves the final rule, selected template,
+    project identity, delivery root, pending-review marker, effective
+    experiment, Study Model, canonical request, and in-memory manifest draft
+    before invoking its injected Studio callback. That callback calls
+    `generate_studio_document` exactly once with no second override and carries
+    the configured figure-set replacement seam. Source dispatch returns the
+    captured payload only after the finalized project reports a matching ready
+    request and document; it never falls through to general regeneration.
+    A generation exception may leave raw/source copies plus a blocked canonical
+    manifest, mirror, and diagnostic ZIP, after which the same exception is
+    re-raised. Post-generation projection, manifest, or ZIP failures abort the
+    new project instead of returning a captured ready payload. The Studio
+    rollback set covers its staged request, VSZ/spec, and figure-set state; it
+    does not cover launchers, Intake manifests, or ZIP. Manifest/mirror commit
+    is rollback-capable under the project lock, while ZIP staging, validation,
+    and replacement are a later snapshot phase; these phases do not form one
+    crash-atomic transaction.
+21. Studio resolves one versioned `SelectedPresentationIdentity` before
+    FigurePlan or publication-inventory work. A supported explicit choice beats
+    recognition history; an omitted choice materializes the current rule
+    default. The selected identity agrees with the plan rule, declared primary
+    task, and primary VSZ spec. Secondary tasks may use different terminal
+    templates and verify against their own specs without creating additional
+    presentation identities. Exported semantic, result, manifest, final payload,
+    and project registry carry the same closed primary identity. Finalization
+    rejects split projections before its first write. The semantic rule template
+    remains the certified rule default.
+22. During first multi-figure preparation, only canonical document/spec targets
+    backed by already-hashed staged replacements may count as transaction-ready
+    FigurePlan artifacts. The plan persists final target paths, never temporary
+    staging paths. Task, metric binding, task-owned template, canonical path,
+    staged or exact-current spec, and editable outcome are checked before the
+    first replacement; the figure-set registry is installed after its artifact
+    replacements so rollback cannot leave an editable claim pointing to a
+    missing file.
+23. Workflow resolves `WorkflowRouteIntent` exactly once after confirmed
+    mapping/cleanup and before classification or default-template enrichment.
+    Intervention and rendering receive that immutable object; they never infer
+    auto, recipe, or direct render again from a later request projection.
+24. Workflow render-family dispatch is independent from route and presentation
+    selection. A canonical non-empty `rule_id` is catalog-validated before any
+    family adapter parses, validates a template, writes files, or renders, then
+    maps to exactly one specialized family or the generic renderer. Ruleless
+    direct rendering remains generic; malformed and unknown rules fail before
+    side effects. Performance and impact retain their raw-source boundary,
+    while mechanical, DSC, rheology, and generic rendering retain the prepared
+    source boundary. If no FigurePlan is selected and the specialized adapter
+    legitimately returns no bundle, Workflow may invoke only generic rendering
+    and never probes a second specialized family. Once a plan is selected,
+    adapter decline fails closed before generic rendering.
+25. `FigureTask` v1 remains the exact closed top-level `x_metric`/`y_metric`
+    payload and re-emits byte-for-byte canonical JSON, preserving existing plan
+    hashes and IDs. An explicit v2 task instead contains one closed
+    `metric_binding`: `cartesian_xy` has one real x/y pair and
+    `ordered_metrics` has a non-empty ordered unique metric list. V2 never
+    serializes fake top-level axes. The enclosing `ResolvedFigurePlan` remains
+    v1 because its structure and hash algorithm are unchanged and each nested
+    task owns its own version.
+26. `figure_plan/performance_resolution.py` is the enabled
+    `performance_comparison` plan owner. It fingerprints before and after one
+    validated comparison load and rejects source drift. Default selection is
+    scatter then polar with scatter primary; only the literal external
+    explicit-selection marker produces one task. Scatter metrics come from the
+    declared source axes, polar order comes from
+    `PerformanceComparison.radar_metrics`, and both tasks preserve the exact
+    material order. Global resolution imports this leaf lazily because worker
+    startup may still be inside materials-rule initialization.
+27. An ordinary terminal render request remains the exact unversioned legacy
+    payload, including its compatibility metric fallback. If
+    `resolved_figure_task` is present, the request is instead closed v2 evidence:
+    it re-parses and re-emits the exact nested v1/v2 task, requires the task
+    template, projects Cartesian x/y or ordered metrics exclusively, and never
+    consults the first Study Model queue item. Before Workflow returns
+    `RequestRenderResult`, each terminal task must match the selected plan's
+    rule and complete task payload, be unique, and follow plan order. A selected
+    task may lack terminal evidence only when its ordered outcome is explicitly
+    unavailable under the current source-unavailable reason allowlist. Invalid
+    plans fail before rendering; result-side task splits fail before render
+    reports and publication. Named recipes with a FigurePlan remain fail-closed
+    until the planned prepare/task seam exists. A terminal worker executes its
+    exact incoming task as a single render and never expands it back into the
+    enclosing performance plan; legacy taskless low-level renders likewise
+    retain their one-template behavior.
+28. Studio queue items and task-aware figure-set entries re-parse and re-emit
+    the exact nested v1/v2 `FigureTask`. V1 and v2 Cartesian tasks may expose
+    matching compatibility x/y fields; ordered tasks expose only `metric_ids`
+    and never serialize null or stringified `None` axes. A present malformed
+    nested task never downgrades to legacy. Registry v1 remains a readable
+    compatibility record without task authority; registry v2 requires exactly
+    one same-order entry per selected task and binds the plan primary, current
+    task document stem, final VSZ/spec paths, spec source request, and editable
+    outcome before transaction replacement. The GUI consumes the validated
+    canonical registry path projection rather than rebuilding filenames from
+    figure IDs.
+29. The performance Studio and Workflow adapters consume the same selected
+    tasks. Studio writes a v2 registry even for an explicit one-task selection;
+    default preparation stages scatter plus polar in one rollback-capable
+    replacement set. Workflow renders into a private task transaction, installs
+    task-stem exports and worker trees only after every render succeeds, and
+    namespaces transform-step IDs by figure ID. Prepared payload template,
+    Cartesian or ordered metrics, material order, task, plan, terminal request,
+    outcome, manifest, and delivery record must agree. Source drift, partial
+    rendering, missing registry, mixed legacy/task evidence, or planned adapter
+    decline fails before a ready manifest or delivery.
+30. Temperature-rheology semantic preparation owns one typed source
+    attestation: the source-tree hashes before and after preparation must match,
+    the exact parser-selected file paths and hashes must remain inside that
+    source root, and the prepared workbook path and hash are fixed in the same
+    record. Workflow passes this object out of band to the temperature adapter;
+    the adapter never rediscovers raw files. It materializes exactly storage
+    modulus and loss factor task tables and gives only those two tasks the
+    private terminal-source binding. Frequency and ordinary rendering reject
+    that capability. The wire encoding is consumed only by render target launch
+    and terminal-worker entry modules, never by public JSON. Both temperature
+    renders must return complete export, VSZ, spec, QA, and terminal-request
+    evidence before one rollback-capable figure-directory replacement; returned
+    export paths refer only to installed persistent files.
+31. `figure_plan/temperature_resolution.py` is the enabled
+    `rheology_temperature_sweep` plan owner. It fingerprints before and after
+    one raw source-facts load, rejects drift, and selects exactly two v2
+    Cartesian tasks in order: `storage_modulus_vs_temperature` followed by
+    stable figure identity `tan_delta_vs_temperature` with canonical metric
+    `loss_factor`. Both tasks bind the same source-derived sample order and
+    replicate counts. Studio performs semantic preparation once, reuses its
+    typed attestation for the primary and secondary documents, and installs one
+    v2 registry transaction. Workflow requires the plan before task-source
+    materialization and binds each terminal request to its exact task. Publish
+    and delivery accept only the completed two-task plan and exact membership
+    of two editable VSZ documents, two PDFs, and two 300-dpi TIFFs; source,
+    task, render, or second-artifact failure rolls back the whole set.
 
 Verification requirements are defined once in `skill/SKILL.md`.

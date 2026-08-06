@@ -7,8 +7,9 @@ from pathlib import Path
 import pytest
 
 from sciplot_core import autoplot
-from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.delivery import DELIVERY_PACKAGE_CONTRACT_VERSION
+from sciplot_core.delivery.contracts import DELIVERY_BINDING_POLICY_LEGACY
+from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.launchers import (
     inspect_delivery_launcher_contract,
     write_delivery_launcher,
@@ -37,6 +38,7 @@ def _delivery_record(delivery: Path) -> dict[str, object]:
     return {
         "kind": "sciplot_user_delivery_package",
         "version": DELIVERY_PACKAGE_CONTRACT_VERSION,
+        "binding_policy": DELIVERY_BINDING_POLICY_LEGACY,
         "path": str(delivery),
         "data_csvs": [
             {

@@ -7,12 +7,11 @@ from sciplot_core.automation_states import (
     READY_STATE,
     RULE_REPAIR_STATE,
 )
+from sciplot_core.figure_plan.execution import figure_plan_gate
 
 
 PUBLISH_GATE_REPORT_KIND = "sciplot_publish_gate_report"
 PUBLISH_GATE_REPORT_VERSION = 1
-
-_PRESERVED_BLOCKING_STATES = {RULE_REPAIR_STATE, HUMAN_CONFIRMATION_STATE}
 
 
 def build_publish_state(
@@ -22,6 +21,7 @@ def build_publish_state(
     delivery_package: object,
     delivery_verification: object | None = None,
     prerequisite_state: object | None = None,
+    resolved_figure_plan: object | None = None,
 ) -> dict[str, Any]:
     """Derive the final manifest state from explicit publication gates.
 
@@ -48,13 +48,18 @@ def build_publish_state(
         )
     if prerequisite_state is not None:
         gates["prerequisite_state_ready"] = prerequisite_state == READY_STATE
+    plan_gate = figure_plan_gate(resolved_figure_plan)
+    if plan_gate is not None:
+        gates["resolved_figure_plan_complete"] = bool(
+            plan_gate["valid"] is True and plan_gate["complete"] is True
+        )
 
     failed_gates = [gate_id for gate_id, passed in gates.items() if not passed]
     ready_to_use = not failed_gates
     if ready_to_use:
         state = READY_STATE
-    elif prerequisite_state in _PRESERVED_BLOCKING_STATES:
-        state = str(prerequisite_state)
+    elif prerequisite_state == HUMAN_CONFIRMATION_STATE:
+        state = HUMAN_CONFIRMATION_STATE
     else:
         state = RULE_REPAIR_STATE
     return {

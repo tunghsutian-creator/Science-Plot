@@ -5,10 +5,15 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from pathlib import Path
+from types import TracebackType
 from typing import Any
 
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY
+from sciplot_core.terminal_source_binding import (
+    SealedTerminalSourceBinding,
+    TerminalSourceBindingError,
+)
 
 from sciplot_core.studio_core.context import (
     _normalize_optional_string,
@@ -24,7 +29,6 @@ from sciplot_core.studio_core.prepare_generated import (
     generate_studio_document,
 )
 from sciplot_core.studio_core.request_overrides import (
-    _apply_studio_request_overrides,
     _existing_document_payload,
 )
 
@@ -39,6 +43,7 @@ def prepare_studio_document(
     project_name: str | None = None,
     regenerate_generated: bool = False,
     figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
+    _terminal_source_binding: SealedTerminalSourceBinding | None = None,
 ) -> dict[str, Any]:
     resolved = Path(target).expanduser().resolve()
     target_info = _resolve_studio_target(
@@ -48,16 +53,34 @@ def prepare_studio_document(
         rule_id=rule_id,
         template=template,
         project_name=project_name,
+        figure_set_path_replacer=figure_set_path_replacer,
     )
     if target_info["mode"] == "vsz":
+        if _terminal_source_binding is not None:
+            raise TerminalSourceBindingError(
+                "terminal_source_binding_request_mismatch",
+                "A materialized terminal source requires an internal request target.",
+            )
         if _normalize_optional_string(rule_id):
             raise ValueError(
                 "--rule applies to raw data, a SciPlot project, or plot_request.json; not an existing VSZ."
             )
         return _existing_document_payload(target_info["document"])
+    if target_info["mode"] == "source":
+        if _terminal_source_binding is not None:
+            raise TerminalSourceBindingError(
+                "terminal_source_binding_request_mismatch",
+                "A materialized terminal source cannot enter raw-source intake.",
+            )
+        return target_info["prepared"]
 
     request_path = target_info["request"]
     project_dir = target_info["project_dir"]
+    if _terminal_source_binding is not None:
+        _terminal_source_binding.validate_request(
+            request_path,
+            _read_json(request_path),
+        )
     if delivery_root is not None:
         request = _read_json(request_path)
         request[REQUEST_DELIVERY_ROOT_KEY] = str(delivery_root.expanduser().resolve())
@@ -79,6 +102,11 @@ def prepare_studio_document(
             request_path=request_path,
             document_path=existing_document,
         )
+    binding_option = (
+        {"_terminal_source_binding": _terminal_source_binding}
+        if _terminal_source_binding is not None
+        else {}
+    )
     return generate_studio_document(
         project_dir=project_dir,
         request_path=request_path,
@@ -86,6 +114,7 @@ def prepare_studio_document(
         template=template,
         project_name=project_name,
         figure_set_path_replacer=figure_set_path_replacer,
+        **binding_option,
     )
 
 
@@ -97,6 +126,7 @@ def _resolve_studio_target(
     rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
+    figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
 ) -> dict[str, Any]:
     if path.suffix.lower() == ".vsz":
         if not path.exists():
@@ -112,6 +142,7 @@ def _resolve_studio_target(
                 rule_id=rule_id,
                 template=template,
                 project_name=project_name,
+                figure_set_path_replacer=figure_set_path_replacer,
             )
         return {"mode": "project", "project_dir": path, "request": request}
     if path.is_file() and path.suffix.lower() == ".json":
@@ -124,6 +155,7 @@ def _resolve_studio_target(
             rule_id=rule_id,
             template=template,
             project_name=project_name,
+            figure_set_path_replacer=figure_set_path_replacer,
         )
     raise ValueError(
         "studio accepts a SciPlot project directory, plot_request.json, or .vsz document."
@@ -138,6 +170,7 @@ def _qt_first_project_from_source(
     rule_id: str | None = None,
     template: str | None = None,
     project_name: str | None = None,
+    figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
 ) -> dict[str, Any]:
     from sciplot_core.intake.project import create_intake_project_from_session
     from sciplot_core.intake.session import prepare_intake_session
@@ -160,32 +193,78 @@ def _qt_first_project_from_source(
                 json.dumps(json_safe(session), indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
+    prepared: dict[str, Any] | None = None
+    preparation_error: Exception | None = None
+    preparation_traceback: TracebackType | None = None
+
+    def prepare_once(project_dir: Path) -> dict[str, Any]:
+        nonlocal prepared, preparation_error, preparation_traceback
+        try:
+            payload = generate_studio_document(
+                project_dir=project_dir,
+                request_path=project_dir / "plot_request.json",
+                rule_id=None,
+                template=None,
+                project_name=None,
+                figure_set_path_replacer=figure_set_path_replacer,
+            )
+            prepared = payload
+        except Exception as exc:
+            preparation_error = exc
+            preparation_traceback = exc.__traceback__
+            raise
+        return payload
+
     project = create_intake_project_from_session(
         session,
-        studio_preparer=prepare_studio_document,
+        studio_preparer=prepare_once,
+        template=template,
+        delivery_root=delivery_root,
     )
     project_dir = Path(str(project["project_dir"])).expanduser().resolve()
     request = project_dir / "plot_request.json"
-    if delivery_root is not None:
-        request_payload = _read_json(request)
-        request_payload[REQUEST_DELIVERY_ROOT_KEY] = str(
-            delivery_root.expanduser().resolve()
+    if preparation_error is not None:
+        preparation_error.add_note(
+            "SciPlot retained the blocked intake project at "
+            f"{project_dir} and its diagnostic ZIP at {project['zip_path']}."
         )
-        request.write_text(
-            json.dumps(json_safe(request_payload), indent=2, ensure_ascii=False),
-            encoding="utf-8",
+        raise preparation_error.with_traceback(preparation_traceback)
+    if prepared is None:
+        raise RuntimeError(
+            f"Studio preparation did not return a document for intake project: {project_dir}"
         )
-    _apply_studio_request_overrides(
-        project_dir,
-        request_path=request,
-        rule_id=rule_id,
-        template=template,
-        project_name=normalized_name,
+    project_studio = (
+        project.get("studio") if isinstance(project.get("studio"), dict) else {}
     )
+    prepared_project = Path(str(prepared.get("project_dir") or "")).expanduser()
+    prepared_request = Path(str(prepared.get("request") or "")).expanduser()
+    prepared_document = Path(str(prepared.get("document") or "")).expanduser()
+    registered_document = str(project_studio.get("document") or "").strip()
+    registered_request = str(project_studio.get("generated_from") or "").strip()
+    if (
+        project_studio.get("status") != "ready"
+        or prepared_project.resolve() != project_dir
+        or prepared_request.resolve() != request
+        or not prepared_document.is_file()
+        or (
+            registered_document
+            and Path(registered_document).expanduser().resolve()
+            != prepared_document.resolve()
+        )
+        or (
+            registered_request
+            and Path(registered_request).expanduser().resolve() != request
+        )
+    ):
+        raise RuntimeError(
+            "Studio preparation and the finalized intake project disagree; "
+            f"inspect the retained project at {project_dir}."
+        )
     return {
         "mode": "source",
         "source": path,
         "session": session.get("session_path"),
         "project_dir": project_dir,
         "request": request,
+        "prepared": prepared,
     }

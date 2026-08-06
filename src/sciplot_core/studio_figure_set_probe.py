@@ -359,6 +359,9 @@ def run_studio_figure_set_probe(
     transactional_document = Path(str(synthetic_loss["document"]))
     transactional_spec = transactional_document.with_suffix(".spec.json")
     transactional_registry = synthetic_project / "studio" / "figure_set.json"
+    transactional_request = synthetic_project / "plot_request.json"
+    transactional_primary_document = synthetic_project / "studio" / "document.vsz"
+    transactional_primary_spec = synthetic_project / "studio" / "spec.json"
     transactional_document.write_bytes(
         transactional_document.read_bytes()
         + b"\n# SciPlot failed-transaction manual edit probe\n"
@@ -367,6 +370,9 @@ def run_studio_figure_set_probe(
     canonical_before = {
         path: path.read_bytes()
         for path in (
+            transactional_request,
+            transactional_primary_document,
+            transactional_primary_spec,
             transactional_document,
             transactional_spec,
             transactional_registry,
@@ -380,17 +386,17 @@ def run_studio_figure_set_probe(
     replace_calls: list[dict[str, str]] = []
     original_replace = studio_module._replace_studio_figure_set_path
 
-    def _fail_second_replace(source: Path, target: Path) -> None:
+    def _fail_secondary_spec_replace(source: Path, target: Path) -> None:
         replace_calls.append({"source": str(source), "target": str(target)})
-        if len(replace_calls) == 2:
-            raise OSError("injected second figure-set replace failure")
+        if target == transactional_spec:
+            raise OSError("injected Studio preparation replace failure")
         original_replace(source, target)
 
     transaction_error: Exception | None = None
     with patch.object(
         studio_module,
         "_replace_studio_figure_set_path",
-        side_effect=_fail_second_replace,
+        side_effect=_fail_secondary_spec_replace,
     ):
         try:
             prepare_studio_document(
@@ -402,6 +408,9 @@ def run_studio_figure_set_probe(
     canonical_after = {
         path: path.read_bytes()
         for path in (
+            transactional_request,
+            transactional_primary_document,
+            transactional_primary_spec,
             transactional_document,
             transactional_spec,
             transactional_registry,
@@ -419,14 +428,13 @@ def run_studio_figure_set_probe(
     checks.append(
         _check(
             "second_replace_failure_rolls_back_secondary_transaction",
-            "A failure replacing the staged secondary spec restores the prior VSZ, spec, and registry bytes without archiving or leaving transaction files",
+            "A secondary replacement failure restores request, primary and secondary VSZ/spec, and registry bytes without residue",
             transaction_error is not None
-            and "injected second figure-set replace failure" in str(transaction_error)
+            and "injected Studio preparation replace failure" in str(transaction_error)
             and canonical_after == canonical_before
             and history_after == history_before
             and not transaction_residue
-            and [item["target"] for item in replace_calls]
-            == [str(transactional_document), str(transactional_spec)],
+            and replace_calls[-1]["target"] == str(transactional_spec),
             {
                 "error": str(transaction_error) if transaction_error else None,
                 "replace_calls": replace_calls,

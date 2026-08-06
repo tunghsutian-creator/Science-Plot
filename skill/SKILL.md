@@ -240,6 +240,21 @@ Use the smallest discriminating test while iterating:
 .venv/bin/python -m pytest -q tests/test_module.py::test_changed_behavior
 ```
 
+Run the source-controlled scoped static type gate when changing
+`foundation/`, `json_contract.py`, `figure_plan/`, or
+`delivery/plan_binding.py`, `delivery/package_builder.py`,
+`delivery/package_validation.py`, `study_model/package_contract.py`, or
+`publish_state.py`:
+
+```bash
+.venv/bin/python -m mypy
+```
+
+Its exact scope and strictness belong to `pyproject.toml`. It currently proves
+only the 35 configured files; imported modules outside that owned scope are
+analyzed for type information but do not enter the diagnostic baseline. A
+passing result is not a claim of repository-wide type safety.
+
 Pytest assigns every test to exactly one logical tier:
 
 - `focused`: single-owner, in-process behavior. All tests without an explicit

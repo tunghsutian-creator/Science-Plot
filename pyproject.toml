@@ -21,6 +21,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "mypy==2.3.0",
+  "pandas-stubs==3.0.3.260530",
   "pytest>=9,<10",
   "ruff>=0.15,<1",
 ]
@@ -54,6 +56,29 @@ markers = [
   "focused: single-owner, in-process tests used during local iteration",
   "comprehensive: cross-process Veusz, real export, or complete Studio lifecycle tests",
 ]
+
+[tool.mypy]
+python_version = "3.11"
+files = [
+  "src/sciplot_core/foundation",
+  "src/sciplot_core/json_contract.py",
+  "src/sciplot_core/figure_plan",
+  "src/sciplot_core/delivery/plan_binding.py",
+  "src/sciplot_core/delivery/package_builder.py",
+  "src/sciplot_core/delivery/package_validation.py",
+  "src/sciplot_core/study_model/package_contract.py",
+  "src/sciplot_core/publish_state.py",
+]
+mypy_path = "src"
+explicit_package_bases = true
+follow_imports = "silent"
+strict = true
+disallow_any_unimported = true
+warn_unreachable = true
+warn_unused_configs = true
+show_error_codes = true
+pretty = true
+incremental = false
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -9,8 +9,11 @@ from sciplot_core.foundation.file_hashing import (
     existing_file_sha256,
 )
 from sciplot_core.materials_rules import (
-    get_rule,
     semantic_payload_from_rule,
+)
+from sciplot_core.presentation_identity import (
+    SelectedPresentationIdentity,
+    resolve_selected_presentation_identity,
 )
 
 from sciplot_core.studio_core.json_files import (
@@ -23,6 +26,22 @@ from sciplot_core.studio_core.axis_identity import (
 
 from sciplot_core.studio_core.registry_state import (
     _veusz_spec_path,
+)
+from sciplot_core.studio_core.rule_readiness import (
+    StudioRulePublicationReadiness,
+    resolve_studio_rule_publication_readiness,
+)
+
+
+_CURRENT_RULE_AUTHORITY_FIELDS = (
+    "rule_id",
+    "semantic_family",
+    "confidence",
+    "needs_ai_intervention",
+    "production_status",
+    "rule_readiness",
+    "missing_requirements",
+    "template",
 )
 
 
@@ -55,20 +74,55 @@ def _studio_export_semantic_payload(
     request: dict[str, Any],
     intake_manifest: dict[str, Any],
     document_path: Path,
+    rule_readiness: StudioRulePublicationReadiness | None = None,
+    presentation_identity: SelectedPresentationIdentity | None = None,
 ) -> dict[str, Any]:
     recognition = (
         intake_manifest.get("recognition")
         if isinstance(intake_manifest.get("recognition"), dict)
         else {}
     )
-    rule_id = str(recognition.get("rule_id") or request.get("rule_id") or "").strip()
-    rule = get_rule(rule_id) if rule_id else None
+    readiness = (
+        rule_readiness
+        if rule_readiness is not None
+        else resolve_studio_rule_publication_readiness(request)
+    )
+    rule_id = readiness.rule_id
+    rule = readiness.current_rule
+    selected_presentation = (
+        presentation_identity
+        if presentation_identity is not None
+        else resolve_selected_presentation_identity(
+            request,
+            current_rule=rule,
+        )
+    )
+    recognition_rule_id = (
+        recognition.get("rule_id")
+        if isinstance(recognition.get("rule_id"), str)
+        else None
+    )
+    matching_recognition = (
+        recognition
+        if (
+            rule_id is not None
+            and recognition_rule_id is not None
+            and recognition_rule_id.strip() == rule_id
+        )
+        else {}
+    )
+    recognition_reason = (
+        matching_recognition.get("reason")
+        if isinstance(matching_recognition.get("reason"), str)
+        and str(matching_recognition["reason"]).strip()
+        else None
+    )
     rule_payload = (
         semantic_payload_from_rule(
             rule,
             confidence=100.0,
             reason=(
-                recognition.get("reason")
+                recognition_reason
                 or "Resolved from the persisted request rule for Studio export."
             ),
         )
@@ -82,22 +136,33 @@ def _studio_export_semantic_payload(
     )
     semantic = {
         **rule_payload,
-        **recognition,
+        **matching_recognition,
         "semantic_family": (
-            recognition.get("semantic_family")
-            or rule_payload.get("semantic_family")
+            rule_payload.get("semantic_family")
             or experiment.get("id")
             or rule_id
             or "unknown"
         ),
-        "rule_id": recognition.get("rule_id") or rule_id or None,
+        "rule_id": rule_id,
         "reason": (
-            recognition.get("reason")
+            recognition_reason
             or rule_payload.get("reason")
             or "Exported from the canonical SciPlot Veusz document."
         ),
         "route": "studio",
     }
+    if rule is not None:
+        for field in _CURRENT_RULE_AUTHORITY_FIELDS:
+            semantic[field] = deepcopy(rule_payload[field])
+        if "fixture_status" in semantic:
+            semantic["fixture_status"] = rule.fixture_status
+    if readiness.pending_rule_review:
+        semantic["pending_rule_review"] = True
+    else:
+        semantic.pop("pending_rule_review", None)
+    semantic["studio_rule_publication_readiness"] = readiness.to_payload()
+    semantic["publication_rule_ready"] = not readiness.publication_blocked
+    semantic["presentation_identity"] = selected_presentation.to_payload()
     return _semantic_payload_with_terminal_axes(
         semantic,
         document_path=document_path,

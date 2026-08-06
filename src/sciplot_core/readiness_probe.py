@@ -10,7 +10,10 @@ from typing import Any
 from sciplot_core.autoplot import build_autoplot_summary
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
-from sciplot_core.delivery import DELIVERY_PACKAGE_CONTRACT_VERSION
+from sciplot_core.delivery import (
+    DELIVERY_BINDING_POLICY_LEGACY,
+    DELIVERY_PACKAGE_CONTRACT_VERSION,
+)
 from sciplot_core.launchers import (
     inspect_delivery_launcher_contract,
     write_delivery_launcher,
@@ -80,6 +83,7 @@ def _write_probe_delivery(root: Path) -> dict[str, Any]:
     return {
         "kind": "sciplot_user_delivery_package",
         "version": DELIVERY_PACKAGE_CONTRACT_VERSION,
+        "binding_policy": DELIVERY_BINDING_POLICY_LEGACY,
         "path": str(root),
         "data_csvs": [{"path": str(data), "sha256": existing_file_sha256(data)}],
         "figures": [

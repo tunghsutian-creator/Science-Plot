@@ -8,6 +8,9 @@ from typing import Any
 from sciplot_gui.studio_project_status.live_document import (
     _evidence_path,
 )
+from sciplot_gui.studio_project_status.rule_readiness_evidence import (
+    _managed_rule_readiness,
+)
 
 
 def _project_audit_state(status: dict[str, Any]) -> str:
@@ -57,7 +60,8 @@ def _workflow_status(
             else {}
         )
         result_ready = bool(
-            qa.get("artifact_qa_current") is True
+            qa.get("ready_to_use") is True
+            and qa.get("artifact_qa_current") is True
             and (
                 status.get("mode") == "standalone_vsz"
                 or status.get("document_scope")
@@ -80,7 +84,37 @@ def _workflow_status(
             message = "Save and export the current Veusz document when ready."
         else:
             state = "needs_fix"
-            message = "The current export or delivery needs review."
+            failure_reason = qa.get("failure_reason")
+            rule_readiness = _managed_rule_readiness(qa.get("rule_readiness"))
+            managed_rule_gate = False
+            if rule_readiness is not None:
+                if rule_readiness["version"] == 1:
+                    managed_rule_gate = bool(
+                        rule_readiness["pending_rule_review"] is True
+                        and qa.get("failure_stage") == "rule_readiness_gate"
+                    )
+                else:
+                    expected_stage = (
+                        "rule_readiness_gate"
+                        if rule_readiness["pending_rule_review"] is True
+                        else "rule_contract_gate"
+                    )
+                    managed_rule_gate = bool(
+                        rule_readiness["publication_blocked"] is True
+                        and qa.get("failure_stage") == expected_stage
+                    )
+            if (
+                status.get("mode") == "project"
+                and status.get("document_scope")
+                != "project_secondary_standalone_receipt"
+                and qa.get("artifact_qa_current") is True
+                and managed_rule_gate
+                and isinstance(failure_reason, str)
+                and failure_reason.strip()
+            ):
+                message = f"Publication is blocked: {failure_reason.strip()}"
+            else:
+                message = "The current export or delivery needs review."
     return {
         "state": state,
         "result_ready": state == "ready",

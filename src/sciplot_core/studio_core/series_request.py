@@ -43,21 +43,34 @@ from sciplot_core.studio_render.series_transforms import (
 from sciplot_core.studio_render.template_resolution import (
     _request_template,
 )
-
 from sciplot_core.studio_core.impact_series import (
     _impact_point_line_series_from_source,
 )
+from sciplot_core.studio_core.performance_task_binding import (
+    validate_performance_payload_task,
+)
+from sciplot_core.studio_core.semantic_source import _studio_source_for_request
+from sciplot_core.terminal_source_binding import (
+    MaterializedTerminalSourceBinding,
+    TerminalSourceBindingError,
+)
+from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 
 
 def _series_from_request(
     request: dict[str, Any],
     *,
     base_dir: Path,
+    _terminal_source_binding: MaterializedTerminalSourceBinding | None = None,
+    _prepared_source_attestation: PreparationSourceAttestation | None = None,
+    _prepared_transform_steps: list[dict[str, Any]] | None = None,
 ) -> tuple[list[StudioSeries], dict[str, Any], list[dict[str, Any]], Path]:
-    if "_terminal_source_prepared" in request:
+    if any(
+        field in request
+        for field in ("_terminal_source_binding", "_terminal_source_prepared")
+    ):
         raise ValueError(
-            "`_terminal_source_prepared` is reserved and cannot appear in a "
-            "plot request."
+            "Internal terminal-source authority cannot appear in a plot request."
         )
     input_value = request.get("input")
     if not isinstance(input_value, str) or not input_value.strip():
@@ -110,6 +123,11 @@ def _series_from_request(
             )
         except PerformanceComparisonError as exc:
             raise StudioPreparationBlocked(exc.reason_code, str(exc)) from exc
+        performance_task = validate_performance_payload_task(
+            payload,
+            request=request,
+            authority_source=source_root,
+        )
         records = performance_series_records(payload)
         artifact = (str(payload["source"]), str(payload["source_sha256"]))
         styled = [
@@ -131,7 +149,12 @@ def _series_from_request(
         ]
         transform_steps.append(
             build_transform_step(
-                step_id="performance_comparison_preparation",
+                step_id=(
+                    "performance_comparison_preparation"
+                    if performance_task is None
+                    else "performance_comparison_preparation_"
+                    f"{performance_task.figure_id}"
+                ),
                 operation=(
                     "validate_material_metric_contract_and_derive_presentation_geometry"
                 ),
@@ -217,14 +240,48 @@ def _series_from_request(
         axis_info["series_count"] = len(styled)
         axis_info["semantic_terminal_series_order"] = [item.label for item in styled]
         return styled, axis_info, transform_steps, source_root
-    source, semantic_steps = _studio_source_for_request(
-        source,
-        request=request,
-        base_dir=base_dir,
-    )
+    if (
+        _terminal_source_binding is not None
+        and _prepared_source_attestation is not None
+    ):
+        raise ValueError(
+            "A terminal-source binding and a semantic-preparation attestation "
+            "cannot be used together."
+        )
+    if _prepared_source_attestation is not None:
+        if str(request.get("rule_id") or "").strip() != "rheology_temperature_sweep":
+            raise ValueError(
+                "The private prepared-source seam is temperature-Studio only."
+            )
+        _prepared_source_attestation.verify_current(source_root=source_root)
+        source = Path(_prepared_source_attestation.prepared_source.path)
+        semantic_steps = [dict(step) for step in (_prepared_transform_steps or [])]
+    elif _terminal_source_binding is None:
+        source, semantic_steps, _source_attestation = _studio_source_for_request(
+            source,
+            request=request,
+            base_dir=base_dir,
+        )
+    else:
+        _terminal_source_binding.verify_sources()
+        if (
+            str(source.expanduser().resolve())
+            != _terminal_source_binding.terminal_source.path
+        ):
+            raise TerminalSourceBindingError(
+                "terminal_source_binding_request_mismatch",
+                "Resolved Studio input does not match the bound terminal table.",
+            )
+        semantic_steps = []
     transform_steps.extend(semantic_steps)
     frames = _read_source_frame_records(source, request=request)
-    styled, axis_info = _series_from_frame_records(request, frames=frames)
+    styled, axis_info = _series_from_frame_records(
+        request,
+        frames=frames,
+        strict_metric_binding=_terminal_source_binding is not None,
+    )
+    if _terminal_source_binding is not None:
+        _terminal_source_binding.validate_series(styled)
     axis_info["semantic_terminal_series_order"] = [item.label for item in styled]
     if mapping_application is not None:
         axis_info["data_mapping_coverage"] = _mapping_series_coverage(
@@ -274,73 +331,6 @@ def _veusz_literal_text(value: object) -> str:
 
 
 veusz_literal_text = _veusz_literal_text
-
-
-def _studio_source_for_request(
-    source: Path,
-    *,
-    request: dict[str, Any],
-    base_dir: Path,
-) -> tuple[Path, list[dict[str, Any]]]:
-    rule_id = str(request.get("rule_id") or "").strip()
-    if not rule_id:
-        return source, []
-    from sciplot_core.semantic import classify_source, prepare_semantic_source
-
-    output_dir = base_dir / "studio"
-    semantic = classify_source(source, requested_rule_id=rule_id)
-    curation_value = request.get("curation")
-    curation_path: Path | None = None
-    if isinstance(curation_value, str) and curation_value.strip():
-        curation_path = Path(curation_value).expanduser()
-        if not curation_path.is_absolute():
-            curation_path = (base_dir / curation_path).resolve()
-    prepared = prepare_semantic_source(
-        source,
-        output_dir=output_dir,
-        semantic=semantic,
-        curation_path=curation_path,
-        series_order=request.get("series_order"),
-        column_confirmations=request.get("column_confirmations"),
-        replicate_mode=request.get("replicate_mode"),
-    )
-    prepared_source = prepared.get("source")
-    transform_steps = [
-        step for step in prepared.get("transform_steps", []) if isinstance(step, dict)
-    ]
-    terminal_series_order = _semantic_terminal_series_order(transform_steps)
-    if terminal_series_order:
-        request["series_order"] = terminal_series_order
-        render_options = request.get("render_options")
-        if isinstance(render_options, dict) and "series_order" in render_options:
-            request["render_options"] = {
-                **render_options,
-                "series_order": terminal_series_order,
-            }
-    if isinstance(prepared_source, str) and prepared_source.strip():
-        return Path(prepared_source).expanduser(), transform_steps
-    return source, transform_steps
-
-
-def _semantic_terminal_series_order(
-    transform_steps: list[dict[str, Any]],
-) -> list[str]:
-    for step in reversed(transform_steps):
-        parameters = step.get("parameters")
-        if not isinstance(parameters, dict):
-            continue
-        for key in ("output_sample_labels", "series_order", "sample_order"):
-            values = parameters.get(key)
-            if not isinstance(values, list | tuple):
-                continue
-            result: list[str] = []
-            for value in values:
-                label = str(value).strip()
-                if label and label not in result:
-                    result.append(label)
-            if result:
-                return result
-    return []
 
 
 def _read_source_frames(

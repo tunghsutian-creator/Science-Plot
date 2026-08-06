@@ -75,6 +75,12 @@ skill/scripts/sciplot studio PATH \
 `--json` 表示 headless，不会打开 Veusz。交互入口和 headless 导出是同一个 Studio
 生命周期的两种调用方式，不是两套绘图系统。
 
+当 `PATH` 是原始文件或尚未建项的数据目录时，规则、展示模板、项目名和交付目录会先
+收敛到一次 Intake 建项，再只执行一次生成式 Studio 准备。成功后的规范请求、Study
+Model、VSZ/spec、项目清单和初始 ZIP 属于同一代结果。若这次生成失败，命令仍返回失败，
+但可以保留一个明确标记为 `blocked` 的 Intake 项目及诊断 ZIP；它用于排错，不能当作
+`ready` 交付。
+
 日常流程是：
 
 ```text
@@ -132,12 +138,46 @@ transform lineage 或完整 SciPlot 项目交付。显式重新生成前必须�
   独立 renderer。
 - `one-step`：内部状态/manifest 合同，不是用户命令。
 
+`run`/`autoplot` 会在已确认的 mapping 或 cleanup 补丁应用后，只根据当时请求中的
+`recipe`/`template` 判定一次 auto、命名 recipe 或直接 render。之后即使规则解析补写了
+默认模板，也不会把 auto 请求改成直接 render，或绕过语义准备与干预门。命名 recipe
+仍允许带显式模板覆盖；字段存在但不是非空文本时会在渲染前失败。
+
+进入 auto 渲染后，规范 `rule_id` 只选择一个执行家族：performance、impact、
+mechanical、DSC、rheology 或普通 generic。SciPlot 不再用“逐个尝试 bundle”的方式
+判断归属，因此拉伸曲线不会先进入 impact 的模板校验，普通 `point_line` 规则也不会被
+impact 路径截走。未知、畸形或带首尾空格的非空规则在任何家族解析或写盘前失败；没有
+规则的低层 direct render 仍走 generic。选中的专用 adapter 若明确不接管，只能回退
+generic，不能继续探测另一个专用家族；但请求已经选定 `ResolvedFigurePlan` 时必须
+失败关闭，不能用 generic 图替代计划任务。
+
 需要从原始路径直接生成自动化项目、QA 和 delivery 时：
 
 ```bash
 skill/scripts/sciplot autoplot PATH \
   --json
 ```
+
+对 `rheology_frequency_sweep`、`rheology_temperature_sweep`、
+`impact_metric` 和 `performance_comparison`，Studio 与 Autoplot 在渲染前共同解析
+一份 `ResolvedFigurePlan`。它固定本次选中的
+逻辑图 ID、顺序、指标、模板、条件/样品轴、兼容输出文件名和准备时的源内容指纹；
+渲染器只执行这些任务，不能再自行增删图。保存过的计划若与当前规则、模板、Study
+Model 或源文件字节不一致，复用旧 VSZ 或直接发布都会停止，而不是沿用旧的 ready
+结果。显式重新生成可在同一规则内根据当前源重新解析计划，但不能跨规则静默刷新。
+
+温度流变扫描固定生成两张 `point_line` 图：先生成
+`storage_modulus_vs_temperature`，再生成稳定身份为
+`tan_delta_vs_temperature`、机器指标为规范 `loss_factor` 的第二张图。两张图共享
+源文件派生的样品顺序和同一次语义准备；Studio 与 Autoplot 都必须保留精确任务证据，
+并整体交付两份 VSZ、两份 PDF 和两份 300-dpi TIFF。任一任务、源指纹或终端证据不一致
+时整组失败，不留下部分 ready 结果。
+
+频率扫描保留 Study Model 现有的四张默认图：储能模量、损耗模量、损耗因子和复数黏度。
+若当前工作簿还含有受支持且旧 Autoplot 路线会输出的复数模量列，该图也进入同一计划，
+不会因入口不同而被静默遗漏。抗冲击强度的非 `point_line` 多工作表输入仍按每个条件
+生成一张独立图；条件的逻辑 ID 不依赖工作表排列，并兼容中文、空格和标点。
+`point_line` 仍是把已确认的兼容条件合并为一张比较图。
 
 分类重复数据的科学识别与图形表达彼此独立。规则负责样品、重复值、单位和指标语义；
 presentation contract 负责允许的图形。以抗冲击强度为例，同一数据可显式选择：
@@ -227,7 +267,10 @@ marker 多边形：轮廓使用样品主色，填充使用对应浅色并保持 
 source-controlled 示例仍只承担确定性合同回归；本机验收使用经用户授权并完成日常使用
 确认的 m-rPA/rPA 真实数据摘要。`performance_comparison` 已通过 scatter 与
 `polar_curve` 的完整 acceptance 并进入 `ready`。只有严格满足上述长表合同的数据才会
-被自动识别；需要明确选择图形时仍可使用显式 Studio 请求：
+被自动识别。未显式选择模板时，同一计划按 scatter、`polar_curve` 顺序生成两份
+独立可编辑 VSZ，并在一次 exact-current 发布中交付各自的 PDF 和 300-dpi TIFF；
+scatter 是唯一主图 presentation identity。显式选择模板时计划只含对应的一项任务。
+需要明确选择图形时可使用：
 
 ```bash
 skill/scripts/sciplot studio PATH \
@@ -309,6 +352,43 @@ revision、越权目标、未知 setting、错误类型或超范围值必须整�
 `ready`、`needs_human_confirmation` 或 `needs_rule_repair`。两组状态属于不同层级，不能
 互相替代；来源审计 `pending` 也不能被误写成当前制品失效。
 
+规范 `plot_request.json` 的顶层 `rule_id` 是 Studio 发布时唯一的规则身份。每次发布都会
+重新查询当前中央规则：项目保留的 `pending_rule_review=true` 或当前规则状态不是
+`ready`，任一条件都使最终发布成为 `needs_rule_repair`。
+
+规则型项目成功生成时，还会在同一回滚事务中把版本化
+`studio_rule_contract_binding` 写入规范请求；它记录准备时的完整/语义规则哈希，以及当时
+validated-envelope 认证的 current、missing 或 stale 状态。普通“打开并沿用现有 VSZ”
+只保留这份证据，不会按后来变化的中央规则偷偷刷新。发布会在收集图和分配运行目录之前，
+比较准备时合同、当前中央合同和当前认证合同：三者不一致、当前认证缺失/过期，或旧规则
+项目没有 binding，都允许继续编辑，但不能作为 ready 结果交付，必须重新准备。空规则
+兼容路径不要求 binding。
+
+`pending_rule_review` 仍只表示规则审阅问题；纯合同过期使用独立的
+`publication_rule_blocked` 和结构化 blocker，不伪装成 pending。相同 v2 证据贯穿 exported
+semantic、result、manifest、最终 payload、项目 registry 和原生状态；首次写入前若投影
+分裂，finalizer 会拒绝。在 managed 发布证据及 exact-current artifact QA 仍然当前时，
+Project 状态面板显示具体修复原因；即时导出警告仍是通用提示。制品 QA 即使通过，也不能
+单独把规则或合同受阻项目变成可交付的 `ready`。
+
+Intake recognition 只保留与规范 `rule_id` 相符的历史解释和轴契约，不能覆盖当前规则的
+生产状态、干预要求或缺失条件；请求没有规则身份时，旧 recognition 也不能把它恢复出来。
+空规则兼容路径仍保留，未知非空规则以及畸形的规则/审阅字段会在分配发布运行目录之前
+失败。显式改选规则或模板会先使旧 binding 失效，只有随后成功重新生成才会写入新
+binding；仅改项目名保留原证据。以上操作都不能绕过阻断。
+
+Studio 每次准备或发布还会从规范请求和当前规则的 presentation contract 解析一份版本化
+`presentation_identity`，由 `rule_id` 和本次选中的 `template` 组成。显式支持的模板优先
+于同规则 recognition 保存的历史默认；未指定时才采用当前规则默认并写回规范请求。
+`presentation_identity` 只约束本次主图；一个 `ResolvedFigurePlan` 可以包含使用其他
+模板的副图，每份 VSZ spec 都必须携带并匹配自己的完整 `FigureTask`。新生成的多图项目
+使用严格的 figure-set registry v2，按计划顺序绑定每个任务、最终文档路径和 spec；
+旧 registry v1 仍可读取，但不作为精确任务证据。任务、模板或路径分裂会在第一次文件
+替换或 run 分配前失败。手工或旧版 exact-current VSZ 可以没有 spec，发布证据会把主图
+身份与 VSZ 当前哈希并列绑定，而不从 VSZ 内容反推模板。exported semantic、result、
+manifest、最终 payload 和项目 registry 携带同一主图身份；semantic 普通字段中的
+`template` 仍描述认证规则默认，不会因本次呈现选择而改写科学合同。
+
 `--out` 表示最终用户可见的专用交付目录，而不是软件内部工作目录；省略时，SciPlot 在
 数据源旁创建 `SOURCE_SciPlot/`。manifest、raw archive、分析表、QA、publication intent、
 transform ledger 和运行历史进入同级隐藏 `.sciplot/`，不再堆在显眼的 `outputs/` 下。
@@ -328,7 +408,9 @@ SOURCE_SciPlot/  # 或 --out 指定目录
 视觉权威，作用上接近单文件科研绘图工程。隐藏运行区保留重新识别、重算、追溯和
 验收所需的内部证据，但不属于用户交付。
 一个项目登记了多张独立图时，同一次交付必须把全部 ready 图的 VSZ 和对应 PDF/TIFF
-放进这一个可见交付目录；任一计划图缺失时，不发布只含主图的半套交付。
+放进这一个可见交付目录。每个计划任务必须精确绑定一份 VSZ、一份 PDF 和一份
+`_300dpi.tiff`；跨任务错配、路径复用、快照或哈希不一致以及任一计划图缺失都会阻止
+完整状态，不能发布只含主图的半套交付。
 交付前应检查隐藏运行区的 `manifest.json`、`review.html`、QA，以及最终可见交付，不能只看退出码。
 
 ## 检查与首次确认
@@ -359,7 +441,14 @@ skill/scripts/sciplot app PATH --out /原始数据所在目录/SOURCE_SciPlot
 .venv/bin/python -m pytest -q -m focused
 .venv/bin/python -m pytest -q -m comprehensive
 .venv/bin/python -m pytest -q
+.venv/bin/python -m mypy
 ```
+
+`mypy` 当前只对 `pyproject.toml` 明确列出的 `foundation/`、
+`json_contract.py`、`figure_plan/`、`delivery/plan_binding.py`、
+`delivery/package_builder.py`、`delivery/package_validation.py`、
+`study_model/package_contract.py` 和 `publish_state.py` 33 个文件执行严格基线检查，
+不表示全仓已经完成静态类型覆盖。
 
 完整测试留给生产/公共合同交付、测试基础设施、发布、广泛重构或影响不确定的变化；
 具体升级规则由 `skill/SKILL.md` 统一定义。
@@ -386,7 +475,7 @@ skill/scripts/sciplot acceptance rules --out .tmp_verify/acceptance --json
 runtime smoke 是 synthetic 变化门，不是真实数据证据；生命周期、artifact QA、
 provenance、人工日用验证和期刊合规仍是不同声明。
 
-## 安装与代码入口
+## 当前本机开发环境与代码入口
 
 ```bash
 python3 -m venv .venv
@@ -396,6 +485,8 @@ skill/scripts/sciplot doctor --json
 
 已有 `.venv/bin/python` 时统一使用它；缺失时只探测一次 `python3` 并按上面创建。
 环境故障和重复问题的记录规则见 `skill/SKILL.md`。
+这里描述的是当前源码开发环境；安装版和分发工作只是暂缓，不是对 SciPlot 长期产品形态
+的重新定义。
 
 当前维护优先级见 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)，代码和模块边界见
 `docs/ARCHITECTURE.md`，第三方许可见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。

@@ -102,6 +102,9 @@ def _studio_block(
     series_count: int,
     generated_hash: str | None,
     figure_set: dict[str, Any] | None = None,
+    rule_contract_binding: dict[str, Any] | None = None,
+    resolved_figure_plan: dict[str, Any] | None = None,
+    presentation_identity: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     document_state = _studio_document_state(
         document_path, generated_hash=generated_hash
@@ -132,4 +135,10 @@ def _studio_block(
         block["figure_set_registry"] = str(
             _studio_figure_set_path(document_path.parent.parent)
         )
+    if rule_contract_binding is not None:
+        block["rule_contract_binding"] = json_safe(rule_contract_binding)
+    if resolved_figure_plan is not None:
+        block["resolved_figure_plan"] = json_safe(resolved_figure_plan)
+    if presentation_identity is not None:
+        block["presentation_identity"] = json_safe(presentation_identity)
     return block

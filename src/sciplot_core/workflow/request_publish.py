@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.delivery import build_delivery_package
+from sciplot_core.figure_plan import (
+    finalize_figure_plan_result,
+    resolved_figure_plan_from_payload,
+)
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.one_step import build_one_step_project
@@ -39,6 +43,9 @@ from sciplot_core.workflow.request_io import (
     _figures_from_result,
 )
 from sciplot_core.workflow.request_rendering import RequestRenderResult
+from sciplot_core.workflow.source_binding import (
+    verify_workflow_figure_plan_source_binding,
+)
 
 
 def publish_request_result(
@@ -66,6 +73,18 @@ def publish_request_result(
         plotted_source=rendered.plotted_data_source,
         mapping_application=mapping_application,
         request=request,
+    )
+    resolved_figure_plan = resolved_figure_plan_from_payload(
+        request.get("resolved_figure_plan")
+    )
+    verify_workflow_figure_plan_source_binding(
+        resolved_figure_plan,
+        input_path=input_path,
+        raw_archive=raw_archive,
+    )
+    completed_figure_plan = finalize_figure_plan_result(
+        resolved_figure_plan,
+        result,
     )
     _extend_runtime_transform_steps(transform_steps, result.get("transform_steps"))
     transform_ledger = build_transform_ledger(
@@ -122,6 +141,11 @@ def publish_request_result(
         figures=figures,
         analysis_metrics=analysis_metrics,
         qa=qa,
+        resolved_figure_plan=(
+            completed_figure_plan.to_payload()
+            if completed_figure_plan is not None
+            else None
+        ),
     )
     manifest = _build_request_manifest(
         request_path=request_path,
@@ -144,6 +168,11 @@ def publish_request_result(
         qa=qa,
         figures=figures,
         layout_policy=layout_policy,
+    )
+    verify_workflow_figure_plan_source_binding(
+        completed_figure_plan,
+        input_path=input_path,
+        raw_archive=raw_archive,
     )
     _finalize_request_manifest(
         manifest,
@@ -183,7 +212,7 @@ def _build_request_manifest(
     figures: list[str],
     layout_policy: Any,
 ) -> dict[str, Any]:
-    return {
+    manifest = {
         "kind": "sciplot_run",
         "created_at": utc_now_iso(),
         "request_path": str(request_path),
@@ -217,6 +246,10 @@ def _build_request_manifest(
         "layout_policy": layout_policy_payload(layout_policy),
         "operation_mode": normal_mode_payload(route=rendered.route),
     }
+    if isinstance(result.get("resolved_figure_plan"), dict):
+        manifest["resolved_figure_plan"] = json_safe(result["resolved_figure_plan"])
+        manifest["figure_outcomes"] = json_safe(result.get("figure_outcomes", []))
+    return manifest
 
 
 def _finalize_request_manifest(
@@ -262,6 +295,7 @@ def _finalize_request_manifest(
             package_contract=manifest["package_contract"],
             delivery_package=manifest["delivery_package"],
             prerequisite_state=manifest["one_step"]["state"],
+            resolved_figure_plan=manifest.get("resolved_figure_plan"),
         )
     )
     _write_one_step_status(output_dir, manifest["one_step"])

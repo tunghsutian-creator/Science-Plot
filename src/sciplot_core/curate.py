@@ -10,6 +10,9 @@ from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.intake.packaging import refresh_intake_project_zip
 from sciplot_core.intake.application import create_intake_project_from_session
+from sciplot_core.project_manifest import (
+    edit_intake_project_manifest,
+)
 from sciplot_core.intake.session import prepare_intake_session
 from sciplot_core.semantic import (
     _apply_torque_selection,
@@ -323,36 +326,34 @@ def curate_torque_project(
 
     studio_payload = prepare_studio_document(project_dir, regenerate_generated=True)
 
-    manifest_path = project_dir / "intake_manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["kind"] = "sciplot_torque_curation_project"
-    manifest["curation"] = {
-        "mode": "last_batch_event",
-        "selection_path": str(selection_path),
-        "plot_data_path": str(plot_data_path),
-        "review_html": str(review_path),
-        "samples": selection_items,
-    }
-    manifest["files"] = {
-        "project_dir": str(project_dir),
-        "plot_request": str(plot_request_path),
-        "project_file": str(project_file),
-        "selection": str(selection_path),
-        "plot_data": str(plot_data_path),
-        "review_html": str(review_path),
-    }
-    if isinstance(studio_payload.get("studio"), dict):
-        manifest["studio"] = studio_payload["studio"]
-    prepared_request = json.loads(plot_request_path.read_text(encoding="utf-8"))
-    for key in ("study_model", "publication_intent", "transform_ledger"):
-        if isinstance(prepared_request.get(key), dict):
-            manifest[key] = prepared_request[key]
-    manifest_path.write_text(
-        json.dumps(json_safe(manifest), indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-    project_file.write_text(
-        json.dumps(json_safe(manifest), indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    with edit_intake_project_manifest(
+        project_dir,
+        mirror_path=project_file,
+        require_existing=True,
+    ) as manifest:
+        assert manifest is not None
+        manifest["kind"] = "sciplot_torque_curation_project"
+        manifest["curation"] = {
+            "mode": "last_batch_event",
+            "selection_path": str(selection_path),
+            "plot_data_path": str(plot_data_path),
+            "review_html": str(review_path),
+            "samples": selection_items,
+        }
+        manifest["files"] = {
+            "project_dir": str(project_dir),
+            "plot_request": str(plot_request_path),
+            "project_file": str(project_file),
+            "selection": str(selection_path),
+            "plot_data": str(plot_data_path),
+            "review_html": str(review_path),
+        }
+        if isinstance(studio_payload.get("studio"), dict):
+            manifest["studio"] = studio_payload["studio"]
+        prepared_request = json.loads(plot_request_path.read_text(encoding="utf-8"))
+        for key in ("study_model", "publication_intent", "transform_ledger"):
+            if isinstance(prepared_request.get(key), dict):
+                manifest[key] = prepared_request[key]
     zip_path = refresh_intake_project_zip(project_dir)
     selection_payload["files"]["zip"] = str(zip_path)
     selection_path.write_text(

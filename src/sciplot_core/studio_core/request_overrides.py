@@ -10,12 +10,20 @@ from sciplot_core.foundation.file_hashing import (
     existing_file_sha256,
 )
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.project_manifest import (
+    edit_intake_project_manifest,
+)
 from sciplot_core.materials_rules import (
     get_rule,
     resolve_rule_template,
     semantic_payload_from_rule,
 )
 from sciplot_core.operation_modes import normal_mode_payload
+from sciplot_core.presentation_identity import (
+    SelectedPresentationIdentity,
+    project_selected_presentation_to_request,
+)
+from sciplot_core.study_model import study_model_from_request
 from sciplot_core.studio_render.models import (
     StudioPreparationBlocked,
 )
@@ -43,6 +51,7 @@ from sciplot_core.studio_core.series_request import (
 from sciplot_core.studio_core.registry_state import (
     _veusz_spec_reference,
 )
+from sciplot_core.studio_core.request_paths import _resolve_request_input
 
 
 def _apply_studio_request_overrides(
@@ -90,11 +99,15 @@ def _apply_studio_request_overrides(
         return
     if request_path.exists():
         request = _read_json(request_path)
+        original_rule_id = str(request.get("rule_id") or "").strip()
+        original_template = str(request.get("template") or "").strip()
         if selected_rule is not None:
             request["rule_id"] = selected_rule.rule_id
             request.setdefault("recipe", "auto")
             if pending_rule_review:
                 request["pending_rule_review"] = True
+            else:
+                request.pop("pending_rule_review", None)
             current_options = (
                 dict(request.get("render_options"))
                 if isinstance(request.get("render_options"), dict)
@@ -163,17 +176,43 @@ def _apply_studio_request_overrides(
                     pass
             request["template"] = selected_template
             request["explicit_template_selection"] = True
+        rule_changed = bool(
+            selected_rule is not None and selected_rule.rule_id != original_rule_id
+        )
+        template_changed = bool(
+            selected_template and selected_template != original_template
+        )
+        if rule_changed:
+            request.pop("study_model", None)
+            request.pop("publication_intent", None)
+            request.pop("transform_ledger", None)
+            request["study_model"] = study_model_from_request(
+                request=request,
+                semantic=selected_rule_payload or {},
+                input_path=(
+                    _resolve_request_input(request, base_dir=request_path.parent)
+                    or project_dir
+                ),
+            )
+        if selected_template:
+            projected_rule_id = str(request.get("rule_id") or "").strip() or None
+            project_selected_presentation_to_request(
+                request,
+                SelectedPresentationIdentity(
+                    rule_id=projected_rule_id,
+                    template=selected_template,
+                ),
+            )
+        if rule_changed or template_changed:
+            request.pop("resolved_figure_plan", None)
+            request.pop("studio_rule_contract_binding", None)
         request_path.write_text(
             json.dumps(json_safe(request), indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-    for manifest_path in [
-        project_dir / "intake_manifest.json",
-        *sorted(project_dir.glob("*.sciplot.json")),
-    ]:
-        if not manifest_path.exists():
-            continue
-        payload = _read_json(manifest_path)
+    with edit_intake_project_manifest(project_dir) as payload:
+        if payload is None:
+            return
         if selected_project_name:
             payload["project_name"] = selected_project_name
         if selected_template:
@@ -230,10 +269,6 @@ def _apply_studio_request_overrides(
             experiment.setdefault("id", selected_rule.rule_id)
             experiment.setdefault("label", selected_rule.rule_id)
             payload["experiment"] = experiment
-        manifest_path.write_text(
-            json.dumps(json_safe(payload), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
 
 
 def _existing_document_payload(document_path: Path) -> dict[str, Any]:

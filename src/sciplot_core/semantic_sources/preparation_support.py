@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 from sciplot_core.publication import build_transform_step
 
+from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
+
 
 from sciplot_core.semantic_sources.models import (
     CurveSeriesPayload,
@@ -30,9 +32,26 @@ def _semantic_preparation_result(
     operation: str,
     parameters: dict[str, Any] | None = None,
     additional_outputs: tuple[Path, ...] = (),
+    source_attestation_rule_id: str | None = None,
+    source_tree_sha256_before: str | None = None,
+    selected_sources: tuple[Path, ...] = (),
 ) -> dict[str, Any]:
     output_path = processed_source if processed_source is not None else source
-    return {
+    attestation = (
+        PreparationSourceAttestation.capture(
+            rule_id=source_attestation_rule_id,
+            source_root=source,
+            source_tree_sha256_before=str(source_tree_sha256_before or ""),
+            selected_sources=selected_sources,
+            prepared_source=output_path,
+        )
+        if source_attestation_rule_id is not None
+        else None
+    )
+    recorded_parameters = dict(parameters or {})
+    if attestation is not None:
+        recorded_parameters["source_attestation"] = attestation.to_payload()
+    result = {
         "source": str(output_path),
         "processed": processed_source is not None,
         "processed_source": str(processed_source)
@@ -45,11 +64,14 @@ def _semantic_preparation_result(
                 input_path=source,
                 output_path=output_path,
                 implementation_ref="sciplot_core.semantic.prepare_semantic_source",
-                parameters=parameters,
+                parameters=recorded_parameters,
                 additional_outputs=additional_outputs,
             )
         ],
     }
+    if attestation is not None:
+        result["source_attestation"] = attestation
+    return result
 
 
 _SHARED_RHEOLOGY_SWEEP_CONFIG: dict[str, dict[str, Any]] = {

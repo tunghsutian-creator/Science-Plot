@@ -10,7 +10,7 @@ from sciplot_core.foundation.text_values import (
     token as _token,
 )
 from sciplot_core.ingest import normalized_source
-from sciplot_core.materials_rules import (
+from sciplot_core.materials_rules.unit_formatting import (
     format_unit_label,
 )
 
@@ -118,13 +118,14 @@ def _read_candidate_tables(source: Path) -> list[tuple[str, pd.DataFrame]]:
             path
             for path in sorted(source.rglob("*"))
             if path.is_file()
-            and path.suffix.lower() in {".csv", ".tsv", ".txt", ".xlsx", ".xls"}
+            and path.suffix.lower()
+            in {".csv", ".tsv", ".txt", ".xlsx", ".xls", ".xlsm"}
         ]
     else:
         paths = [source]
     tables: list[tuple[str, pd.DataFrame]] = []
     for path in paths:
-        if path.suffix.lower() in {".xlsx", ".xls"}:
+        if path.suffix.lower() in {".xlsx", ".xls", ".xlsm"}:
             workbook = pd.ExcelFile(path)
             tables.extend(
                 (

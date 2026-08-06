@@ -60,6 +60,13 @@ def _recorded_file_set(
                     "actual_sha256": actual_hash,
                 }
             )
+        if path in recorded_files:
+            invalid.append(
+                {
+                    "reason": "duplicate_record_path",
+                    "path": str(path),
+                }
+            )
         recorded_files.add(path)
     return {
         "passed": bool(live_files) and not invalid and live_files == recorded_files,

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, TypedDict
+
+from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
+from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.launchers import (
     inspect_delivery_launcher_contract,
 )
@@ -16,6 +19,8 @@ from sciplot_core.policy import (
 )
 
 from sciplot_core.delivery.contracts import (
+    DELIVERY_BINDING_POLICY_LEGACY,
+    DELIVERY_BINDING_POLICY_RESOLVED_PLAN,
     DELIVERY_PACKAGE_CONTRACT_VERSION,
 )
 
@@ -26,12 +31,33 @@ from sciplot_core.delivery.figure_pairing import (
 from sciplot_core.delivery.file_set_validation import (
     _recorded_file_set,
 )
+from sciplot_core.delivery.plan_binding import (
+    DeliveryRecordsMatchPlanPayload,
+    delivery_records_match_plan,
+    figure_artifact_hashes_current,
+    project_document_hashes_current,
+)
+
+
+class _DeliveryVerificationBindingStatusPayload(TypedDict):
+    passed: bool
+    reason: Literal[
+        "resolved_plan_missing_or_invalid",
+        "explicit_legacy_without_resolved_plan",
+        "delivery_binding_policy_missing_or_invalid",
+    ]
+
+
+_DeliveryVerificationBindingPayload = (
+    DeliveryRecordsMatchPlanPayload | _DeliveryVerificationBindingStatusPayload
+)
 
 
 def verify_delivery_package(
     delivery_package: object,
     *,
     expected_root: Path,
+    expected_manifest: dict[str, Any],
 ) -> dict[str, Any]:
     """Revalidate the persisted minimal delivery against live files and hashes."""
 
@@ -93,6 +119,13 @@ def verify_delivery_package(
         suffixes={".tif", ".tiff"},
         hash_field="delivery_sha256",
     )
+    recorded_pairing = (
+        _delivery_figure_pairing(
+            [item for item in figure_records if isinstance(item, dict)]
+        )
+        if isinstance(figure_records, list)
+        else {}
+    )
     project_check = _recorded_file_set(
         record.get("project_documents"),
         directory=expected / DELIVERY_PROJECT_DIR,
@@ -144,6 +177,152 @@ def verify_delivery_package(
         and launcher_contract_current
     )
     artifacts = record.get("artifacts")
+    plan_artifact = (
+        next(
+            (
+                item
+                for item in artifacts
+                if isinstance(item, dict)
+                and item.get("id") == "resolved_figure_plan_complete"
+            ),
+            None,
+        )
+        if isinstance(artifacts, list)
+        else None
+    )
+    plan_details = (
+        plan_artifact.get("details")
+        if isinstance(plan_artifact, dict)
+        and isinstance(plan_artifact.get("details"), dict)
+        else None
+    )
+    try:
+        recorded_plan = resolved_figure_plan_from_payload(
+            record.get("resolved_figure_plan")
+        )
+    except (TypeError, ValueError):
+        recorded_plan = None
+    try:
+        expected_plan = resolved_figure_plan_from_payload(
+            expected_manifest.get("resolved_figure_plan")
+        )
+    except (TypeError, ValueError):
+        expected_plan = None
+    expected_binding_policy = (
+        DELIVERY_BINDING_POLICY_RESOLVED_PLAN
+        if figure_plan_manifest_gate(expected_manifest) is not None
+        else DELIVERY_BINDING_POLICY_LEGACY
+    )
+    binding_policy = record.get("binding_policy")
+    resolved_binding = binding_policy == DELIVERY_BINDING_POLICY_RESOLVED_PLAN
+    legacy_binding = binding_policy == DELIVERY_BINDING_POLICY_LEGACY
+    binding_policy_current = bool(
+        (
+            resolved_binding
+            and binding_policy == expected_binding_policy
+            and plan_artifact is not None
+            and recorded_plan is not None
+            and expected_plan is not None
+            and recorded_plan.to_payload() == expected_plan.to_payload()
+        )
+        or (
+            legacy_binding
+            and binding_policy == expected_binding_policy
+            and plan_artifact is None
+            and record.get("resolved_figure_plan") is None
+            and expected_plan is None
+        )
+    )
+    if resolved_binding:
+        plan_record_current = bool(
+            recorded_plan is not None
+            and expected_plan is not None
+            and recorded_plan.to_payload() == expected_plan.to_payload()
+            and recorded_plan.complete
+            and isinstance(plan_details, dict)
+            and plan_details.get("plan_id") == recorded_plan.plan_id
+            and plan_details.get("plan_sha256") == recorded_plan.plan_sha256
+            and plan_details.get("selected_figure_ids")
+            == list(recorded_plan.selected_figure_ids)
+        )
+    elif legacy_binding:
+        plan_record_current = bool(
+            plan_artifact is None and record.get("resolved_figure_plan") is None
+        )
+    else:
+        plan_record_current = False
+    selected_values = (
+        plan_details.get("selected_figure_ids")
+        if isinstance(plan_details, dict)
+        else None
+    )
+    selected_figure_ids = (
+        {value for value in selected_values if isinstance(value, str) and value}
+        if isinstance(selected_values, list)
+        and all(isinstance(value, str) and value for value in selected_values)
+        else set()
+    )
+    if resolved_binding:
+        plan_coverage_current = bool(
+            isinstance(plan_artifact, dict)
+            and plan_artifact.get("exists") is True
+            and isinstance(plan_details, dict)
+            and plan_details.get("valid") is True
+            and plan_details.get("complete") is True
+            and plan_record_current
+            and recorded_pairing.get("passed") is True
+            and selected_figure_ids
+            == set(recorded_pairing.get("complete_figure_ids", []))
+            and not recorded_pairing.get("unidentified_paths")
+        )
+    elif legacy_binding:
+        plan_coverage_current = binding_policy_current
+    else:
+        plan_coverage_current = False
+    project_records = record.get("project_documents")
+    project_figure_ids = (
+        [
+            str(item.get("figure_id") or "").strip()
+            for item in project_records
+            if isinstance(item, dict)
+        ]
+        if isinstance(project_records, list)
+        else []
+    )
+    plan_record_binding: _DeliveryVerificationBindingPayload
+    if resolved_binding:
+        plan_project_coverage_current = bool(
+            len(project_figure_ids) == len(selected_figure_ids)
+            and all(project_figure_ids)
+            and set(project_figure_ids) == selected_figure_ids
+        )
+        plan_project_hashes_current = project_document_hashes_current(project_records)
+        plan_record_binding = (
+            delivery_records_match_plan(
+                recorded_plan,
+                figure_records=figure_records,
+                project_records=project_records,
+            )
+            if recorded_plan is not None
+            else {"passed": False, "reason": "resolved_plan_missing_or_invalid"}
+        )
+        plan_figure_hashes_current = figure_artifact_hashes_current(figure_records)
+    elif legacy_binding:
+        plan_project_coverage_current = binding_policy_current
+        plan_project_hashes_current = binding_policy_current
+        plan_record_binding = {
+            "passed": binding_policy_current,
+            "reason": "explicit_legacy_without_resolved_plan",
+        }
+        plan_figure_hashes_current = binding_policy_current
+    else:
+        plan_project_coverage_current = False
+        plan_project_hashes_current = False
+        plan_record_binding = {
+            "passed": False,
+            "reason": "delivery_binding_policy_missing_or_invalid",
+        }
+        plan_figure_hashes_current = False
     artifact_records_ready = bool(
         isinstance(artifacts, list)
         and artifacts
@@ -159,6 +338,7 @@ def verify_delivery_package(
         "record_kind_current": record.get("kind") == "sciplot_user_delivery_package"
         and record.get("version") == DELIVERY_PACKAGE_CONTRACT_VERSION,
         "recorded_complete": record.get("complete") is True,
+        "binding_policy_current": binding_policy_current,
         "canonical_root": root_ready,
         "minimal_top_level": actual_top_level == expected_top_level,
         "data_files_current": data_check["passed"],
@@ -166,6 +346,14 @@ def verify_delivery_package(
         "tiff_files_current": tiff_check["passed"],
         "project_files_current": project_check["passed"],
         "canonical_pdf_tiff_pairs": pairing["passed"],
+        "resolved_figure_plan_record_current": plan_record_current,
+        "resolved_figure_plan_coverage": plan_coverage_current,
+        "resolved_figure_plan_project_document_coverage": (
+            plan_project_coverage_current
+        ),
+        "resolved_figure_plan_project_document_hashes": (plan_project_hashes_current),
+        "resolved_figure_plan_record_bindings": plan_record_binding["passed"],
+        "resolved_figure_plan_figure_hashes": plan_figure_hashes_current,
         "launcher_path_current": launcher_path_current,
         "launcher_hash_current": launcher_hash_current,
         "launcher_structure_current": launcher_structure_current,
@@ -190,5 +378,6 @@ def verify_delivery_package(
         "tiff": tiff_check,
         "project": project_check,
         "pairing": pairing,
+        "resolved_figure_plan_binding": plan_record_binding,
         "launcher": live_launcher_contract,
     }
