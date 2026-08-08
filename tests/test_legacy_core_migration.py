@@ -135,7 +135,7 @@ def test_source_inspection_recommends_only_implemented_veusz_templates(
         "legend_position": "auto",
         "series_label_mode": "legend",
         "style_preset": "nature",
-        "palette_preset": "jama_editorial",
+        "palette_preset": "control_first_bright",
         "visual_theme_id": "clean_light",
     }
     assert recommendation_ids <= VEUSZ_IMPLEMENTED_TEMPLATE_IDS
@@ -176,5 +176,5 @@ def test_plot_contract_is_loaded_from_the_first_party_policy_asset() -> None:
     assert CONTRACT_PATH.name == "plot_contract.json"
     assert CONTRACT_PATH.parent.name == "policy"
     assert "_vendor" not in CONTRACT_PATH.parts
-    assert contract.version == 3
+    assert contract.version == 4
     assert contract.templates["curve"].default_size == "60x55"

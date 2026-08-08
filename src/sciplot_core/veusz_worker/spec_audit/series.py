@@ -4,9 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from sciplot_core.studio_core.series_encoding_contract import (
+    validate_series_encoding_contract,
+)
+from sciplot_core.studio_core.axis_data_visibility import (
+    validate_axis_data_visibility,
+)
+from sciplot_core.studio_render.models import CATEGORICAL_POINT_LINE_KIND
 from sciplot_core.veusz_worker.axis_matchers import _axis_record_matches_spec
 from sciplot_core.veusz_worker.numeric_evidence import _dataset_evidence
 from sciplot_core.veusz_worker.spec_audit.model import SpecAuditInventory
+from sciplot_core.veusz_worker.spec_audit.series_encoding import (
+    audit_series_encoding,
+)
 from sciplot_core.veusz_worker.widget_bindings import _visible_data_bindings
 
 
@@ -31,6 +41,9 @@ def audit_axes_and_series(
     component_bar_record = inventory.component_bar_record
     component_bar_datasets_by_y = inventory.component_bar_datasets_by_y
     axes = spec.get("axes")
+    style = spec.get("style") if isinstance(spec.get("style"), dict) else {}
+    validate_series_encoding_contract(spec)
+    validate_axis_data_visibility(spec)
 
     if (
         not isinstance(axes, dict)
@@ -100,7 +113,32 @@ def audit_axes_and_series(
             )
         series_by_y[y_name] = raw_series
 
-    if isinstance(categorical, dict):
+    if (
+        isinstance(categorical, dict)
+        and categorical.get("presentation_kind") == CATEGORICAL_POINT_LINE_KIND
+    ):
+        x_axis = axes["x"]
+        expected_labels = list(categorical.get("category_labels") or [])
+        expected_positions = [
+            float(value) for value in categorical.get("category_positions") or []
+        ]
+        if (
+            list(x_axis.get("category_labels") or []) != expected_labels
+            or [float(value) for value in x_axis.get("category_positions") or []]
+            != expected_positions
+            or any(
+                list(item.get("component_labels") or []) != expected_labels
+                or [float(value) for value in item.get("x_values") or []]
+                != expected_positions
+                for item in spec.get("series", [])
+                if isinstance(item, dict)
+            )
+        ):
+            raise ValueError(
+                "Categorical point-line labels do not match the source-bound "
+                "numeric positions."
+            )
+    elif isinstance(categorical, dict):
         categorical_labels: list[str] = []
         for y_name, group in categorical_groups.items():
             raw_series = series_by_y.get(y_name)
@@ -176,6 +214,12 @@ def audit_axes_and_series(
             raise ValueError(
                 f"Exact-current Veusz document does not contain exactly one bound xy widget for series {name!r}."
             )
+        audit_series_encoding(
+            inventory,
+            raw_series=raw_series,
+            matching_xy=matching_xy[0],
+            style=style,
+        )
         expected_channels = raw_series.get("expected_mark_channels")
         if isinstance(expected_channels, list) and matching_xy[0]["mark_channels"] != [
             str(value) for value in expected_channels

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 from sciplot_core.policy import (
-    DEFAULT_PALETTE_PRESET,
+    resolve_palette_authority,
 )
 
 from sciplot_core.studio_render.models import (
@@ -13,8 +13,8 @@ from sciplot_core.studio_render.models import (
     StudioSeries,
 )
 
-from sciplot_core.studio_render.series_options import (
-    _effective_render_options,
+from sciplot_core.studio_render.series_option_context import (
+    effective_render_options,
 )
 
 from sciplot_core.studio_render.domain_defaults import (
@@ -24,6 +24,9 @@ from sciplot_core.studio_render.domain_defaults import (
 
 from sciplot_core.studio_render.axis_scale import (
     _axis_scale,
+)
+from sciplot_core.studio_render.template_resolution import (
+    _request_template,
 )
 
 
@@ -83,22 +86,30 @@ def _resolved_domain_render_options(
     axis_info: dict[str, Any],
     series: list[StudioSeries],
 ) -> dict[str, Any]:
-    render_options = _effective_render_options(request)
-    if "palette_preset" not in _explicit_render_options(request):
-        # Persisted requests may contain the default that was current when the
-        # project was created.  Non-explicit defaults follow the live shared
-        # policy; a user-selected palette remains authoritative.
-        render_options["palette_preset"] = DEFAULT_PALETTE_PRESET
+    palette = resolve_palette_authority(
+        request,
+        template_id=_request_template(request),
+    )
+    render_options = effective_render_options(request)
+    render_options["palette_preset"] = palette.palette_id
+    if palette.custom_colors:
+        render_options["palette_colors"] = list(palette.colors)
     render_options = _apply_series_domain_contract_defaults(
         render_options,
         request=request,
         series=series,
     )
-    return _apply_domain_render_defaults(
+    resolved = _apply_domain_render_defaults(
         render_options,
         request=request,
         axis_info=axis_info,
     )
+    # Template defaults may supply semantic geometry, but ordinary categorical
+    # color remains owned by the request/global palette resolver.
+    resolved["palette_preset"] = palette.palette_id
+    if palette.custom_colors:
+        resolved["palette_colors"] = list(palette.colors)
+    return resolved
 
 
 def _validate_log_domain_series(

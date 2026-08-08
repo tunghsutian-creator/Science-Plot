@@ -226,6 +226,8 @@ def test_performance_resolution_rejects_source_drift_during_load(
 def test_performance_plan_is_registered_in_runtime_resolution() -> None:
     assert SUPPORTED_FIGURE_PLAN_RULE_IDS == frozenset(
         {
+            "dma_temperature_sweep",
+            "dsc_curve",
             "impact_metric",
             "performance_comparison",
             "rheology_frequency_sweep",

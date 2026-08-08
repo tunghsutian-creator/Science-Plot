@@ -5,6 +5,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 import pandas as pd
+from sciplot_core.dma_temperature_contract import (
+    DMA_TEMPERATURE_CANONICAL_MODULUS_UNIT,
+    DMA_TEMPERATURE_CANONICAL_TEMPERATURE_UNIT,
+    DMA_TEMPERATURE_CANONICAL_TO_DISPLAY_FACTOR,
+    DMA_TEMPERATURE_DISPLAY_MODULUS_UNIT,
+    DMA_TEMPERATURE_MODULUS_TO_PA,
+)
 from sciplot_core.foundation.text_values import (
     clean_text as _clean_text,
     token as _token,
@@ -38,25 +45,20 @@ def _dma_modulus_unit(
         if match is None:
             continue
         normalized = match.group("unit").casefold()
-        return {
-            "gpa": ("GPa", 1.0e9),
-            "mpa": ("MPa", 1.0e6),
-            "kpa": ("kPa", 1.0e3),
-            "pa": ("Pa", 1.0),
-        }[normalized]
+        return DMA_TEMPERATURE_MODULUS_TO_PA[normalized]
     return None
 
 
-_DMA_CANONICAL_MODULUS_UNIT = "Pa"
+_DMA_CANONICAL_MODULUS_UNIT = DMA_TEMPERATURE_CANONICAL_MODULUS_UNIT
 
 
-_DMA_DISPLAY_MODULUS_UNIT = "MPa"
+_DMA_DISPLAY_MODULUS_UNIT = DMA_TEMPERATURE_DISPLAY_MODULUS_UNIT
 
 
-_DMA_CANONICAL_TO_DISPLAY_FACTOR = 1.0e-6
+_DMA_CANONICAL_TO_DISPLAY_FACTOR = DMA_TEMPERATURE_CANONICAL_TO_DISPLAY_FACTOR
 
 
-_DMA_CANONICAL_TEMPERATURE_UNIT = "°C"
+_DMA_CANONICAL_TEMPERATURE_UNIT = DMA_TEMPERATURE_CANONICAL_TEMPERATURE_UNIT
 
 
 def _dma_unit_candidates(value: object, *, exact: bool) -> tuple[str, ...]:
@@ -318,8 +320,9 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
                     "negative_value_policy": (
                         "Preserve finite negative acquisition values in the "
                         "processed table; the registered y_min=0 display "
-                        "bound may clip them visually, and every potentially "
-                        "clipped point is counted here."
+                        "bound may affect them, so this parser records the "
+                        "potential count while spec.axis_data_visibility "
+                        "records final clipping."
                     ),
                 },
             )

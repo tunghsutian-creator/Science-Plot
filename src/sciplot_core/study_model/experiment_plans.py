@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from sciplot_core.dma_temperature_contract import dma_temperature_experiment_plan
+
 
 STUDY_MODEL_KIND = "sciplot_study_model"
 
@@ -67,6 +69,7 @@ _TENSILE_DESCRIPTIVE_STATISTICS = {
 
 
 _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
+    "dma_temperature_sweep": dma_temperature_experiment_plan(),
     "rheology_frequency_sweep": {
         "default_replicate_mode": "mean",
         "figure_queue": (

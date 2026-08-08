@@ -40,6 +40,12 @@ from sciplot_core.policy.visual_identity import (  # noqa: F401
     DEFAULT_SCALAR_FIELD_COLORMAP_ID,
     DEFAULT_SCALAR_FIELD_COLORS,
 )
+from sciplot_core.policy.palette_authority import (  # noqa: F401
+    PALETTE_RESOLUTION_KIND,
+    PALETTE_RESOLUTION_VERSION,
+    PaletteResolution,
+    resolve_palette_authority,
+)
 from sciplot_core.policy.frame_export import (  # noqa: F401
     SCIENTIFIC_UNIT_EXPRESSION_CONTRACT_VERSION,
     SCIENTIFIC_UNIT_FACTOR_SEPARATOR,
@@ -285,6 +291,9 @@ __all__ = [
     "MIN_VISUAL_EXTENT_CLEARANCE_MM",
     "DEFAULT_PALETTE_COLORS",
     "DEFAULT_PALETTE_PRESET",
+    "PALETTE_RESOLUTION_KIND",
+    "PALETTE_RESOLUTION_VERSION",
+    "PaletteResolution",
     "DEFAULT_RENDER_OPTIONS",
     "DEFAULT_SCALAR_FIELD_COLORS",
     "DEFAULT_SCALAR_FIELD_COLORMAP_ID",
@@ -356,5 +365,6 @@ __all__ = [
     "layout_policy_for_semantic",
     "layout_policy_payload",
     "normalize_export_formats",
+    "resolve_palette_authority",
     "rheology_metric_axis_label",
 ]

@@ -216,6 +216,8 @@ def doctor_payload() -> dict[str, Any]:
                 "implemented_veusz_templates"
             )
             or [],
+            "ordinary_palette_contract": style_audit.get("ordinary_palette_contract")
+            or {},
             "unit_expression_contract": style_audit.get("unit_expression_contract")
             or {},
             "issues": style_audit.get("issues") or [],

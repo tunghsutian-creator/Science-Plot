@@ -79,6 +79,11 @@ from sciplot_core.semantic_sources.torque_sources import (  # noqa: F401
 )
 
 
+_SOURCE_ATTESTED_FAMILIES = frozenset(
+    {"dma_temperature_sweep", "rheology_temperature_sweep"}
+)
+
+
 def prepare_semantic_source(
     input_path: str | Path,
     *,
@@ -101,8 +106,9 @@ def prepare_semantic_source(
         and rule_value.strip() == rule_value
         else None
     )
+    attestation_rule_id = rule_id or family
     source_hash_before = (
-        source_tree_sha256(source) if family == "rheology_temperature_sweep" else None
+        source_tree_sha256(source) if family in _SOURCE_ATTESTED_FAMILIES else None
     )
     processed_dir = output_dir / "processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
@@ -124,16 +130,17 @@ def prepare_semantic_source(
     ):
         result = handler(context)
         if result is not None:
-            if family == "rheology_temperature_sweep":
+            if family in _SOURCE_ATTESTED_FAMILIES:
                 attestation = result.get("source_attestation")
                 if (
                     not isinstance(attestation, PreparationSourceAttestation)
-                    or attestation.rule_id != rule_id
+                    or attestation.rule_id != attestation_rule_id
                     or attestation.source_tree_sha256_before != source_hash_before
                     or attestation.source_tree_sha256_after != source_hash_before
                 ):
                     raise RuntimeError(
-                        "semantic_preparation_source_changed: temperature source "
+                        "semantic_preparation_source_changed: source-attested "
+                        "temperature data "
                         "changed while semantic preparation was running."
                     )
                 attestation.verify_current(source_root=source)

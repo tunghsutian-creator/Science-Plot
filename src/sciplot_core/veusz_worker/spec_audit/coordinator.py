@@ -78,6 +78,8 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             },
             "units": inventory.units,
             "unit_count": len(inventory.units),
+            "series_encodings": inventory.series_encoding_evidence,
+            "series_encoding_count": len(inventory.series_encoding_evidence),
         }
     finally:
         if existing_app is None:

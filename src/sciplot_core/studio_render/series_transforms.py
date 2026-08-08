@@ -40,10 +40,7 @@ def _apply_template_series_transforms(
         transformed = _stack_studio_series(
             transformed,
             render_options=render_options,
-            full_peak_envelope=(
-                str(request.get("rule_id") or "").strip() == "dsc_curve"
-                or render_options.get("stack_peak_envelope") is True
-            ),
+            full_peak_envelope=render_options.get("stack_peak_envelope") is True,
         )
     return transformed
 

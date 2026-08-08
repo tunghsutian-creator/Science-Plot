@@ -48,7 +48,6 @@ from sciplot_core.workflow.impact_bundle import (
     _render_veusz_impact_bundle as _render_veusz_impact_bundle_impl,
 )
 from sciplot_core.workflow.dsc_bundle import (  # noqa: F401
-    _dsc_phase_sources,
     _render_veusz_dsc_bundle,
 )
 from sciplot_core.workflow.performance_bundle import (  # noqa: F401

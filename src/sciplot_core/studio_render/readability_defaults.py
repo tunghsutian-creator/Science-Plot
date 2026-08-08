@@ -189,10 +189,7 @@ def _apply_readability_render_defaults(
 
     if template_id in STACKED_TEMPLATE_IDS:
         if (
-            (
-                str(request.get("rule_id") or "").strip() == "dsc_curve"
-                or updated.get("stack_peak_envelope") is True
-            )
+            updated.get("stack_peak_envelope") is True
             and _axis_scale(updated, "y") == "linear"
             and not {"y_min", "y_max", "y_ticks"} & explicit_options.keys()
         ):
@@ -210,7 +207,7 @@ def _apply_readability_render_defaults(
                 updated.update(
                     {"y_min": y_min, "y_max": y_max, "y_ticks": list(y_ticks)}
                 )
-                autofixes.append("dsc_full_peak_envelope_axis")
+                autofixes.append("stack_full_peak_envelope_axis")
         if _looks_like_wavenumber_axis(axis_info):
             y_label = str(
                 updated.get("y_label_override") or axis_info.get("y_label") or ""

@@ -157,14 +157,20 @@ contracts but may not duplicate scientific calculations.
 | Intake project manifest | `project_manifest.py` | `intake_manifest.json` is canonical; compatibility `*.sciplot.json` mirrors, read-modify-write updates, and ZIP snapshots share one rollback-capable cross-process project lock. |
 | Raw-source Studio composition | `studio_core/studio_prepare.py` | Pass final source options into Intake, inject and capture exactly one generated preparation, then terminate source dispatch. `intake/project/` separately owns raw copies, the canonical request and in-memory manifest draft, blocked failure projection, and initial ZIP. |
 | Workflow route intent | `workflow/route_intent.py` | Resolve strict optional recipe/template fields once after confirmed mapping/cleanup and before semantic or presentation enrichment. Intervention and rendering consume the same immutable auto/recipe/render decision; readiness keeps only a lazy compatibility projection. |
-| Workflow render-family dispatch | `workflow/auto_split.py` | Validate the canonical request rule once and select exactly one of performance, impact, mechanical, DSC, rheology, or generic execution. Without a selected plan, one specialized adapter may decline only to the generic renderer; with a selected plan, adapter decline fails closed. Workflow never probes another family. |
+| Workflow render-family dispatch | `workflow/auto_split.py` | Validate the canonical request rule once and select exactly one of performance, impact, mechanical, DSC, DMA temperature, rheology, or generic execution. Without a selected plan, one specialized adapter may decline only to the generic renderer; with a selected plan, adapter decline fails closed. Workflow never probes another family. |
 | Figure-task metric identity | `figure_plan/metric_binding.py`, `figure_plan/task.py` | Preserve the closed v1 Cartesian wire contract and add explicit v2 `cartesian_xy` or `ordered_metrics` bindings without fake axes. Child-task version is independent from the enclosing v1 plan. |
-| Selected figure execution | `figure_plan/` | Resolve stable ordered tasks from Study Model plus current source facts; own plan identity, per-task outcomes, stale-state rejection, and publish/delivery gates. Impact, frequency, performance, and rheology temperature are enabled runtime rules. Performance and temperature resolution remain lazy leaf imports so worker startup cannot create a materials-rule initialization cycle. Render adapters execute tasks but do not select them. |
+| Selected figure execution | `figure_plan/` | Resolve stable ordered tasks from Study Model plus current source facts; own plan identity, per-task outcomes, stale-state rejection, and publish/delivery gates. Impact, frequency, performance, rheology temperature, DMA temperature, and publication-digitized DSC are enabled runtime rules. Performance, rheology-temperature, DMA-temperature, and DSC resolution remain lazy leaf imports so worker startup cannot create a materials-rule initialization cycle. Render adapters execute tasks but do not select them. |
+| Publication-digitized DSC single-curve plan | `figure_plan/dsc_resolution.py`, `figure_plan/dsc_provenance.py` | Validate the registered DSC CSV plus its adjacent provenance, or an exact content copy plus the registered provenance, as one role-and-hash-bound inventory. Resolve exactly one v2 temperature/heat-flow `curve` task with the canonical three-series order. Studio and Workflow consume the same plan and source identity; cycle workbooks fail closed and cannot imply phase, raw-instrument, transition, enthalpy, or crystallinity claims. |
+| DMA temperature single-task plan | `dma_temperature_contract.py`, `figure_plan/dma_temperature_resolution.py`, `semantic_sources/dma_sources.py`, `studio_core/source_bound_prepare.py`, `workflow/dma_temperature_plan.py`, `workflow/dma_temperature_bundle.py` | Own one independent temperature/storage-modulus task, explicit source-to-Pa-to-MPa conversion, complete source-derived sample/point evidence, typed semantic-preparation attestation, and a sealed terminal table. Tan-delta evidence cannot select it. Studio and Workflow consume the same one-task plan without entering the rheology-temperature two-task resolver. |
+| DMA named-recipe plan seam | `workflow/dma_named_recipe.py`, `workflow/request_rendering.py`, `workflow/dma_execution_evidence.py` | Admit only `rheology_dma` paired with the exact selected `dma_temperature_sweep` plan. Preflight rejects recipe, rule, task, source, sample, metric, unit, encoding-claim, or clipping-bound conflicts before semantic preparation. Auto and recipe then share preparation and task execution while preserving distinct route identity; a route-neutral evidence digest covers terminal data, units, encodings, and axis visibility. Other named recipes remain fail-closed with selected plans. |
+| Workflow task-artifact installation | `workflow/task_artifacts.py`, `workflow/single_task_bundle.py` | Install task-owned editable worker trees and remap QA evidence for selected-task bundles. Performance has its own multi-task loop; DSC and DMA share the single-task mechanical lifecycle. These owners never select figures, templates, metrics, or scientific identities. |
 | Terminal FigureTask evidence | `terminal_request.py`, `figure_plan/terminal_binding.py`, `workflow/request_rendering.py` | Preserve the exact unversioned legacy request when no task is selected. Task-aware terminal requests use a closed v2 envelope containing the exact v1/v2 task and only its metric binding. Workflow parses the selected plan before rendering, then binds ordered unique terminal tasks before reports or publication; the binding leaf is not a FigurePlan-facade export. |
 | Studio FigureTask evidence | `studio_figure_set_contract.py`, `studio_core/figure_task_evidence.py`, `studio_core/figure_set_registry.py`, `studio_core/figure_set_storage.py` | Project exact tasks into queue, registry, and spec evidence once. Cartesian tasks alone expose compatibility x/y; ordered tasks expose only ordered metrics. Legacy registry v1 stays readable without task authority, while task-aware registry v2 binds the exact ordered plan, canonical task-owned paths, specs, and editable outcomes before the first replacement. |
 | Selected presentation identity | `presentation_identity.py`, `studio_core/presentation_evidence.py` | Resolve one closed versioned `rule_id`/template value from the canonical request plus the already-resolved current rule. It binds only the plan's declared primary task and primary spec; each secondary spec verifies its own task template without minting another identity. Exact-current VSZ stays hash-bound visual authority; recognition never selects presentation. |
 | Global visual contract | `policy/plot_contract.json`, `policy/`, `style_contract/` | Single hard-style and option authority. |
 | Request validation | `request_contract.py` | Reject unsupported templates/options before rendering. |
+| Ordinary XY series encoding | `studio_render/series_option_context.py`, `studio_render/series_options.py`, `studio_core/series_encoding_contract.py`, `studio_core/veusz_primitives.py`, `veusz_worker/spec_audit/series_encoding.py` | Resolve request provenance, palette, final-series order, per-series overrides, line style, marker, fill, and provenance once. Persist a closed versioned encoding per series; the writer consumes it without re-resolution, and exact-current audit enforces only fields owned by explicit/direct request intent. Performance scatter/radar and scalar fields retain separate semantic contracts. |
+| Ordinary XY axis-data visibility | `studio_core/axis_data_visibility.py`, `veusz_worker/spec_audit/series.py` | Recompute finite data extents against both configured render-option bounds and final effective axes. Persist potential below/above-bound counts separately from coordinates actually clipped by the final spec; reject stale or forged visibility evidence during exact-current audit. |
 | Pure plot construction | `studio_render/` | Convert confirmed data and policy into render specs. |
 | Veusz lifecycle | `studio_core/`, `studio.py` | Core owns implementation; `studio.py` exposes the stable GUI/CLI integration API. |
 | Rule contract certification | `readiness/rule_contract.py`, `readiness/rule_certification.py` | Build the canonical rule payload once, derive full/semantic hashes, and compare one already-resolved rule with exactly one validated-envelope registry entry. No Studio policy or I/O belongs here. |
@@ -217,6 +223,23 @@ identities. Bundle-kind strings are orchestration metadata, never templates.
 Global typography, strokes, ticks, markers, ordinary frame geometry, exports,
 and plot options belong to `policy/`. Templates may own semantic geometry;
 heatmap scalar colors are the explicit color-policy exception.
+
+Ordinary-series palette authority is resolved once in
+`policy/palette_authority.py`: explicit request options outrank the shared
+project default, and inherited semantic/template values have no selection
+authority. The resolved id, colors, and source are projected into publication
+intent and every Veusz spec. `style_contract/` fails Doctor when the Python,
+serialized contract, style, template, or ready-rule defaults drift.
+
+Ordinary generic XY request provenance is normalized by
+`studio_render/series_option_context.py`; visual channels are then bound once
+by `studio_render/series_options.py` after final series selection and order.
+`studio_core/series_encoding_contract.py` freezes the result and its authority
+source into the spec. `studio_core/veusz_primitives.py` is a consumer, not a
+second selector; `veusz_worker/spec_audit/series_encoding.py` compares
+request-bound fields with the loaded exact-current VSZ. Manual Veusz edits
+remain valid for channels that the request did not claim. Performance
+comparison and scalar field builders remain independent semantic renderers.
 
 Visible units use product notation with Unicode negative exponents. Unit
 normalization belongs to material rules and is enforced by style/VSZ QA.
@@ -360,8 +383,8 @@ project directory.
     maps to exactly one specialized family or the generic renderer. Ruleless
     direct rendering remains generic; malformed and unknown rules fail before
     side effects. Performance and impact retain their raw-source boundary,
-    while mechanical, DSC, rheology, and generic rendering retain the prepared
-    source boundary. If no FigurePlan is selected and the specialized adapter
+    while mechanical, DSC, DMA temperature, rheology, and generic rendering
+    retain the prepared source boundary. If no FigurePlan is selected and the specialized adapter
     legitimately returns no bundle, Workflow may invoke only generic rendering
     and never probes a second specialized family. Once a plan is selected,
     adapter decline fails closed before generic rendering.
@@ -445,5 +468,51 @@ project directory.
     and delivery accept only the completed two-task plan and exact membership
     of two editable VSZ documents, two PDFs, and two 300-dpi TIFFs; source,
     task, render, or second-artifact failure rolls back the whole set.
+32. `figure_plan/dsc_resolution.py` is the enabled `dsc_curve` plan owner for
+    the registered publication-digitized source only. It fingerprints the
+    selected CSV and its provenance before and after one parse, validates their
+    content hashes, exact `UDC 2`, `UDC 3`, `UDC 4` order, canonical
+    temperature and heat-flow units, point coverage, publication identity,
+    digitization evidence, and passed peak-error gate, then selects exactly one
+    v2 Cartesian `curve` task, `dsc_heat_flow_vs_temperature`. An exact CSV
+    content copy may move or change filename and still resolve against the
+    registered provenance; an altered or unregistered copy without adjacent
+    provenance fails closed. Studio writes the task-aware v2 registry/spec and
+    Workflow binds the same task in its terminal/result evidence. Publication
+    and delivery complete only with exact membership of one editable VSZ, one
+    PDF, and one 300-dpi TIFF; preparation/render failure and source drift use
+    the enclosing Studio or Workflow rollback transaction. Workbook intake,
+    phase expansion, implicit `stacked_curve`, and generic fallback are
+    rejected under this rule. The plan makes no cycle-phase, raw-instrument,
+    transition identity, enthalpy, or crystallinity claim; a future instrument
+    cycle contract requires an independent authorized and registered
+    `dsc_cycle` rule.
+33. `dma_temperature_contract.py` is the shared identity and unit owner for
+    `dma_temperature_sweep`; its parser accepts only explicit Celsius/Kelvin
+    temperature units and Pa-family modulus units, canonicalizes modulus to Pa,
+    and materializes MPa without dropping finite negative acquisition values.
+    `figure_plan/dma_temperature_resolution.py` fingerprints around one raw
+    facts load and selects exactly one v2 Cartesian `point_line` task,
+    `storage_modulus_vs_temperature`, with the source-derived four-sample order.
+    Studio reuses one typed semantic-preparation attestation. Workflow seals the
+    prepared CSV, raw-source inventory, exact sample order, and per-sample point
+    counts into a private terminal binding so the worker cannot repeat semantic
+    preparation or substitute another metric. Completion requires exactly one
+    task-owned VSZ, PDF, and 300-dpi TIFF.
+34. Every ordinary-series Veusz spec contains a closed
+    `axis_data_visibility` record. For each axis it separates coordinates below
+    or above configured render-option bounds from coordinates outside the final
+    effective axis. Automatic relaxation is explicit; a potential default-bound
+    count is never treated as proof of actual clipping. The worker recomputes
+    the record from final spec series and axes and rejects any mismatch.
+35. A named Workflow recipe may consume a selected FigurePlan only through an
+    explicitly bounded seam. The current sole seam is `rheology_dma` with
+    `dma_temperature_sweep`: route identity remains `recipe`, while plan and
+    source validation happen before semantic preparation and the execution then
+    reuses auto's preparation, sealed terminal source, and single-task bundle.
+    The recipe contributes no template, metric, sample, unit, encoding, or axis
+    authority. Its route-neutral DMA execution evidence must equal the auto
+    route for the same source and request options. All other named recipe/plan
+    combinations fail before recipe execution.
 
 Verification requirements are defined once in `skill/SKILL.md`.

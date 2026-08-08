@@ -32,11 +32,24 @@ def verify_workflow_figure_plan_source_binding(
         if isinstance(archive_value, str) and archive_value.strip()
         else None
     )
-    if not source_trees_match_sha256(
-        plan.source_sha256,
-        input_path,
-        archive_path,
-    ):
+    if plan.rule_id == "dsc_curve":
+        from sciplot_core.figure_plan.dsc_resolution import (
+            dsc_single_curve_source_sha256,
+        )
+
+        sources_match = bool(
+            plan.source_sha256
+            and archive_path is not None
+            and dsc_single_curve_source_sha256(input_path) == plan.source_sha256
+            and dsc_single_curve_source_sha256(archive_path) == plan.source_sha256
+        )
+    else:
+        sources_match = source_trees_match_sha256(
+            plan.source_sha256,
+            input_path,
+            archive_path,
+        )
+    if not sources_match:
         raise RuntimeError(
             "Workflow source changed after its resolved figure plan was "
             "prepared; rerun the request from a stable source."

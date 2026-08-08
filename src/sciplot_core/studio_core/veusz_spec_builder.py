@@ -6,7 +6,10 @@ from typing import Any
 
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.policy import FIXED_PUBLICATION_FRAME_POLICY
+from sciplot_core.policy import (
+    FIXED_PUBLICATION_FRAME_POLICY,
+    resolve_palette_authority,
+)
 from sciplot_core.studio_render.axes_spec import (
     _reference_guides_contract,
     _veusz_axes_spec,
@@ -25,6 +28,12 @@ from sciplot_core.studio_render.scalar_plot_spec import (
 from sciplot_core.studio_render.value_parsing import _string_list
 
 from sciplot_core.studio_core.runtime import upstream_status
+from sciplot_core.studio_core.axis_data_visibility import (
+    axis_data_visibility_payload,
+)
+from sciplot_core.studio_core.series_encoding_contract import (
+    series_encoding_contract_payload,
+)
 from sciplot_core.studio_core.semantic_validation import _visual_data_transforms
 from sciplot_core.studio_core.veusz_spec_labels import (
     build_veusz_direct_labels,
@@ -101,6 +110,26 @@ def _build_veusz_plot_spec(
         factor_legend=factor_legend,
         show_key=show_key,
     )
+    palette_resolution = resolve_palette_authority(
+        request,
+        template_id=template_id,
+        resolved_render_options=render_options,
+    )
+    series_specs = build_veusz_series_specs(
+        series=series,
+        template_id=template_id,
+        render_options=render_options,
+        categorical_contract=categorical,
+        categorical_visual_style=categorical_style,
+        style=style,
+    )
+    axes = _veusz_axes_spec(
+        render_options=render_options,
+        axis_info=axis_info,
+        axis_contract=axis_contract,
+        categorical_contract=categorical,
+        style=style,
+    )
     return {
         "kind": "sciplot_veusz_plot_spec",
         "version": 1,
@@ -110,6 +139,13 @@ def _build_veusz_plot_spec(
         "template": template_id,
         "source_request": json_safe(request),
         "render_options": json_safe(render_options),
+        "palette_resolution": palette_resolution.to_payload(),
+        "series_encoding_contract": series_encoding_contract_payload(series_specs),
+        "axis_data_visibility": axis_data_visibility_payload(
+            series_specs=series_specs,
+            axes=axes,
+            render_options=render_options,
+        ),
         "size_mm": [width_mm, height_mm],
         "frame_alignment": _frame_alignment(style),
         "autofixes_applied": _string_list(render_options.get("_autofixes_applied")),
@@ -124,25 +160,12 @@ def _build_veusz_plot_spec(
         ),
         "provenance": {"veusz": upstream_status()["veusz"]},
         "style": _style_spec(style),
-        "axes": _veusz_axes_spec(
-            render_options=render_options,
-            axis_info=axis_info,
-            axis_contract=axis_contract,
-            categorical_contract=categorical,
-            style=style,
-        ),
+        "axes": axes,
         "legend": legend,
         "categorical": categorical,
         "scalar_field": scalar_field,
         "reference_guides": _reference_guides_contract(render_options),
-        "series": build_veusz_series_specs(
-            series=series,
-            template_id=template_id,
-            render_options=render_options,
-            categorical_contract=categorical,
-            categorical_visual_style=categorical_style,
-            style=style,
-        ),
+        "series": series_specs,
         "direct_labels": direct_labels,
     }
 

@@ -1033,6 +1033,78 @@ def test_bar_template_materializes_grouped_replicates_with_segmented_legend(
     assert text.count("Set('hide', True)") >= 8
 
 
+def test_grouped_bar_omits_zero_sd_error_caps(tmp_path: Path) -> None:
+    source = tmp_path / "single_value_groups.csv"
+    pd.DataFrame(
+        {
+            "Sample": ["E0", "E0", "E2", "E2"],
+            "Condition": ["33%", "50%", "33%", "50%"],
+            "Cell size (µm)": [147.6, 107.1, 32.0, 56.4],
+        }
+    ).to_csv(source, index=False)
+
+    result = render_to_dir(
+        source,
+        template="bar",
+        output_dir=tmp_path / "rendered_single_value_groups",
+        options={"size": "60x55", "y_min": 0.0, "y_max": 200.0},
+        export_formats=("pdf",),
+    )
+    spec = json.loads(Path(result["veusz_specs"][0]).read_text(encoding="utf-8"))
+    text = Path(result["veusz_documents"][0]).read_text(encoding="utf-8")
+
+    assert all(group["bar_error"] == 0.0 for group in spec["categorical"]["groups"])
+    assert "categorical_bar_error_" not in text
+    assert not any(
+        item["name"].startswith("categorical_bar_error_")
+        for item in _categorical_line_contracts(spec)
+    )
+    assert result["qa_reports"][0]["issues"] == []
+
+
+def test_point_line_binds_source_sample_labels_to_numeric_positions(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "categorical_point_line.csv"
+    pd.DataFrame(
+        {
+            "Position": [0.0, 1.0, 2.0, 3.0],
+            "Sample": ["E0", "E2", "E3", "E4"],
+            "33%": [6.2e5, 5.3e7, 3.9e7, 2.8e9],
+            "50%": [3.3e6, 1.7e7, 1.8e7, 1.3e9],
+        }
+    ).to_csv(source, index=False)
+
+    result = render_to_dir(
+        source,
+        template="point_line",
+        output_dir=tmp_path / "rendered_categorical_point_line",
+        options={
+            "size": "120x55",
+            "yscale": "log",
+            "x_min": -0.3,
+            "x_max": 3.3,
+            "x_ticks": [0.0, 1.0, 2.0, 3.0],
+            "legend_position": "upper_left",
+        },
+        export_formats=("pdf",),
+    )
+    spec = json.loads(Path(result["veusz_specs"][0]).read_text(encoding="utf-8"))
+    text = Path(result["veusz_documents"][0]).read_text(encoding="utf-8")
+
+    assert spec["categorical"]["presentation_kind"] == "categorical_point_line"
+    assert spec["axes"]["x"]["category_labels"] == ["E0", "E2", "E3", "E4"]
+    assert spec["axes"]["x"]["category_positions"] == [0.0, 1.0, 2.0, 3.0]
+    assert all(
+        item["x_values"] == [0.0, 1.0, 2.0, 3.0]
+        and item["component_labels"] == ["E0", "E2", "E3", "E4"]
+        for item in spec["series"]
+    )
+    assert "Set('mode', 'labels')" in text
+    assert "Set('labels', 'category_axis_labels')" in text
+    assert result["qa_reports"][0]["issues"] == []
+
+
 @pytest.mark.comprehensive
 @pytest.mark.parametrize(
     ("template", "expected_widget"),

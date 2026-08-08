@@ -251,7 +251,7 @@ Run the source-controlled scoped static type gate when changing
 ```
 
 Its exact scope and strictness belong to `pyproject.toml`. It currently proves
-only the 35 configured files; imported modules outside that owned scope are
+only the 38 configured files; imported modules outside that owned scope are
 analyzed for type information but do not enter the diagnostic baseline. A
 passing result is not a claim of repository-wide type safety.
 

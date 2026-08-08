@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import pandas as pd
 from sciplot_core.policy import (
@@ -41,6 +41,9 @@ CATEGORICAL_SERIES_KINDS = {
 }
 
 
+CATEGORICAL_POINT_LINE_KIND = "categorical_point_line"
+
+
 IMPACT_POINT_LINE_SUMMARY_KIND = "impact_point_line_summary"
 
 
@@ -72,6 +75,18 @@ class StudioPreparationBlocked(ValueError):
 
 
 @dataclass(frozen=True)
+class SeriesEncodingProvenance:
+    """Explain which authority selected each resolved visual channel."""
+
+    color_source: str = "unresolved_series"
+    line_style_source: str = "unresolved_series"
+    marker_source: str = "unresolved_series"
+    marker_fill_source: str = "unresolved_series"
+    marker_line_source: str = "unresolved_series"
+    request_bound_fields: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class StudioSeries:
     label: str
     x_name: str
@@ -84,6 +99,7 @@ class StudioSeries:
     marker: str | bool | None = None
     marker_size: float | None = None
     marker_alpha: float | None = None
+    marker_fill_color: str | None = None
     marker_line_color: str | None = None
     marker_line_width: float | None = None
     line_style: str = "solid"
@@ -91,6 +107,9 @@ class StudioSeries:
     category_position: float | None = None
     component_labels: tuple[str, ...] = ()
     source_artifacts: tuple[tuple[str, str], ...] = ()
+    encoding_provenance: SeriesEncodingProvenance = field(
+        default_factory=SeriesEncodingProvenance
+    )
 
 
 @dataclass(frozen=True)

@@ -151,6 +151,34 @@ def resolve_figure_plan(
     """Resolve the current plan for supported rule families without writes."""
 
     normalized_rule = str(rule_id or "").strip()
+    if normalized_rule == "dma_temperature_sweep":
+        if input_path is None:
+            raise FigurePlanResolutionError(
+                "figure_plan_source_required",
+                "DMA temperature figure planning requires an explicit source path.",
+            )
+        from sciplot_core.figure_plan.dma_temperature_resolution import (
+            resolve_dma_temperature_plan,
+        )
+
+        return resolve_dma_temperature_plan(
+            input_path=input_path,
+            request={**request, "template": template},
+        )
+    if normalized_rule == "dsc_curve":
+        if input_path is None:
+            raise FigurePlanResolutionError(
+                "figure_plan_source_required",
+                "DSC figure planning requires an explicit source path.",
+            )
+        from sciplot_core.figure_plan.dsc_resolution import (
+            resolve_dsc_single_curve_plan,
+        )
+
+        return resolve_dsc_single_curve_plan(
+            input_path=input_path,
+            request={**request, "template": template},
+        )
     if normalized_rule == "performance_comparison":
         if input_path is None:
             raise FigurePlanResolutionError(

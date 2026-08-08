@@ -7,7 +7,6 @@ from typing import Any
 from sciplot_core.policy.visual_identity import (
     DEFAULT_FIGURE_SIZE,
     STACKED_SPECTRUM_FIGURE_SIZE,
-    JAMA_EDITORIAL_PALETTE_ID,
     DEFAULT_PALETTE_PRESET,
 )
 
@@ -44,7 +43,7 @@ CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS: dict[str, Any] = {
 
 CURVE_RENDER_OPTIONS: dict[str, Any] = {
     **DEFAULT_RENDER_OPTIONS,
-    "palette_preset": JAMA_EDITORIAL_PALETTE_ID,
+    "palette_preset": DEFAULT_PALETTE_PRESET,
     "line_alpha": 1.0,
     "legend_curve_clearance_mm": DEFAULT_LEGEND_CURVE_CLEARANCE_MM,
     "legend_edge_padding_mm": DEFAULT_LEGEND_EDGE_PADDING_MM,

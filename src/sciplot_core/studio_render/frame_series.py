@@ -5,12 +5,17 @@ from __future__ import annotations
 from typing import Any
 
 from sciplot_core.studio_render.models import (
+    CATEGORICAL_POINT_LINE_KIND,
     DEFAULT_PALETTE,
     CATEGORICAL_TEMPLATE_IDS,
     SCALAR_FIELD_TEMPLATE_IDS,
     StudioPreparationBlocked,
     StudioSeries,
     StudioSourceFrame,
+)
+
+from sciplot_core.studio_render.categorical_point_line import (
+    categorical_point_line_axis_from_frame,
 )
 
 from sciplot_core.studio_render.scalar_series import (
@@ -43,9 +48,12 @@ from sciplot_core.studio_render.metric_columns import (
     _series_label_from_column,
 )
 
+from sciplot_core.studio_render.series_option_context import (
+    effective_render_options,
+)
+
 from sciplot_core.studio_render.series_options import (
-    _apply_series_options,
-    _effective_render_options,
+    resolve_series_encodings,
 )
 
 from sciplot_core.studio_render.series_transforms import (
@@ -65,15 +73,16 @@ def _series_from_frame_records(
 ) -> tuple[list[StudioSeries], dict[str, Any]]:
     """Derive rendered numeric units from already-resolved terminal tables."""
 
-    render_options = _effective_render_options(request)
+    render_options = effective_render_options(request)
+    template_id = _request_template(request)
     raw_series: list[StudioSeries] = []
     axis_info: dict[str, Any] = {"x_label": "x", "y_label": "y"}
-    if _request_template(request) in SCALAR_FIELD_TEMPLATE_IDS:
+    if template_id in SCALAR_FIELD_TEMPLATE_IDS:
         raw_series, axis_info = _scalar_field_from_frames(
             frames,
             render_options=render_options,
         )
-    elif _request_template(request) in CATEGORICAL_TEMPLATE_IDS:
+    elif template_id in CATEGORICAL_TEMPLATE_IDS:
         raw_series, axis_info = _categorical_series_from_frames(
             frames,
             render_options=render_options,
@@ -112,6 +121,47 @@ def _series_from_frame_records(
                     fallback=fallback,
                     metadata_order=metadata_order,
                 )
+                categorical_axis = (
+                    categorical_point_line_axis_from_frame(
+                        frame,
+                        row_indices=pair_frame.index,
+                        x_column=x_column,
+                    )
+                    if template_id == "point_line"
+                    else None
+                )
+                component_labels: tuple[str, ...] = ()
+                presentation_kind = "curve"
+                if categorical_axis is not None:
+                    component_labels, category_positions = categorical_axis
+                    if category_positions != x_values:
+                        raise StudioPreparationBlocked(
+                            "point_line_category_position_mismatch",
+                            "Categorical point-line labels do not align with the "
+                            "rendered numeric positions.",
+                        )
+                    previous_labels = tuple(axis_info.get("category_labels") or ())
+                    previous_positions = tuple(
+                        float(value)
+                        for value in axis_info.get("category_positions") or ()
+                    )
+                    if previous_labels and (
+                        previous_labels != component_labels
+                        or previous_positions != category_positions
+                    ):
+                        raise StudioPreparationBlocked(
+                            "mixed_point_line_category_axes",
+                            "All categorical point-line series must use one ordered "
+                            "Sample axis.",
+                        )
+                    axis_info.update(
+                        {
+                            "presentation_kind": CATEGORICAL_POINT_LINE_KIND,
+                            "category_labels": list(component_labels),
+                            "category_positions": list(category_positions),
+                        }
+                    )
+                    presentation_kind = CATEGORICAL_POINT_LINE_KIND
                 raw_series.append(
                     StudioSeries(
                         label=label,
@@ -120,6 +170,8 @@ def _series_from_frame_records(
                         x_values=x_values,
                         y_values=y_values,
                         color=DEFAULT_PALETTE[(len(raw_series)) % len(DEFAULT_PALETTE)],
+                        presentation_kind=presentation_kind,
+                        component_labels=component_labels,
                         source_artifacts=(
                             (str(source_frame.path), source_frame.sha256),
                         ),
@@ -140,7 +192,7 @@ def _series_from_frame_records(
         series=raw_series,
     )
     _validate_log_domain_series(raw_series, render_options=render_options)
-    styled = _apply_series_options(
+    styled = resolve_series_encodings(
         raw_series, render_options=render_options, request=request
     )
     axis_info["series_count"] = len(styled)

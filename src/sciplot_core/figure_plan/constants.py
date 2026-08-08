@@ -15,6 +15,8 @@ FIGURE_OUTCOME_KIND: Final = "sciplot_figure_outcome"
 FIGURE_OUTCOME_VERSION: Final = 1
 SUPPORTED_FIGURE_PLAN_RULE_IDS = frozenset(
     {
+        "dma_temperature_sweep",
+        "dsc_curve",
         "impact_metric",
         "performance_comparison",
         "rheology_frequency_sweep",

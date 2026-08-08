@@ -144,7 +144,8 @@ transform lineage 或完整 SciPlot 项目交付。显式重新生成前必须�
 仍允许带显式模板覆盖；字段存在但不是非空文本时会在渲染前失败。
 
 进入 auto 渲染后，规范 `rule_id` 只选择一个执行家族：performance、impact、
-mechanical、DSC、rheology 或普通 generic。SciPlot 不再用“逐个尝试 bundle”的方式
+mechanical、DSC、DMA temperature、rheology 或普通 generic。SciPlot 不再用“逐个尝试
+bundle”的方式
 判断归属，因此拉伸曲线不会先进入 impact 的模板校验，普通 `point_line` 规则也不会被
 impact 路径截走。未知、畸形或带首尾空格的非空规则在任何家族解析或写盘前失败；没有
 规则的低层 direct render 仍走 generic。选中的专用 adapter 若明确不接管，只能回退
@@ -159,7 +160,8 @@ skill/scripts/sciplot autoplot PATH \
 ```
 
 对 `rheology_frequency_sweep`、`rheology_temperature_sweep`、
-`impact_metric` 和 `performance_comparison`，Studio 与 Autoplot 在渲染前共同解析
+`dma_temperature_sweep`、`impact_metric`、`performance_comparison` 和 `dsc_curve`，Studio
+与 Autoplot 在渲染前共同解析
 一份 `ResolvedFigurePlan`。它固定本次选中的
 逻辑图 ID、顺序、指标、模板、条件/样品轴、兼容输出文件名和准备时的源内容指纹；
 渲染器只执行这些任务，不能再自行增删图。保存过的计划若与当前规则、模板、Study
@@ -172,6 +174,32 @@ Model 或源文件字节不一致，复用旧 VSZ 或直接发布都会停止，
 源文件派生的样品顺序和同一次语义准备；Studio 与 Autoplot 都必须保留精确任务证据，
 并整体交付两份 VSZ、两份 PDF 和两份 300-dpi TIFF。任一任务、源指纹或终端证据不一致
 时整组失败，不留下部分 ready 结果。
+
+DMA 温度扫描是独立合同，不借用温度流变的双图解析器。它固定生成一张
+`storage_modulus_vs_temperature` `point_line` 图，横轴为温度，纵轴只允许储能模量
+E-prime；tan delta/损耗因子不能匹配该任务。源模量单位必须明确为 Pa、kPa、MPa 或
+GPa，先统一到规范 Pa，再以 MPa 写入绘图表和坐标轴。语义准备保留所有 4074 个有限
+测量点，包括当前登记数据中一个负值。VSZ spec 的 `axis_data_visibility` 同时记录规则
+默认 `y_min=0` 以下的潜在点数和最终有效轴实际裁掉的点数；自动放宽边界不能再把
+“可能受默认值影响”误写成“已经裁点”。Studio 与 Autoplot 共享同一源指纹、样品顺序、
+准备证明、终端任务和一份 VSZ/PDF/300-dpi TIFF 结果。
+
+Workflow 中显式命名的 `recipe: rheology_dma` 只在规则已经解析为
+`dma_temperature_sweep` 且存在上述精确 FigurePlan 时进入同一执行路径。manifest 仍记录
+`route=recipe` 和 `final_recipe=rheology_dma`，但该路径没有独立 `curve` 默认、复制后模板
+推荐或第二次数据选择；它复用 auto 的语义准备、源证明、密封终端表和单任务安装器。
+渲染前会核对 recipe/规则、计划任务、源指纹、样品顺序、指标、单位以及会裁掉原始点的
+显式轴范围；冲突不会产生 processed、figure、manifest 或 delivery 制品。两条入口都
+记录同一份 route-neutral DMA 执行证据，其哈希覆盖终端数据、单位、编码和
+`axis_data_visibility`。其他带 FigurePlan 的命名 recipe 仍失败关闭。
+
+当前 `dsc_curve` 只表示已登记的 publication-digitized DSC 单曲线合同，不表示仪器原始
+循环。它固定生成一张 `dsc_heat_flow_vs_temperature` `curve` 图，曲线顺序为 `UDC 2`、
+`UDC 3`、`UDC 4`，并整体交付一份 VSZ、一份 PDF 和一份 300-dpi TIFF。源身份同时绑定
+曲线 CSV 与登记的数字化 provenance；内容完全相同的 CSV 副本可在移动或改名后复用登记
+证据，其他无 provenance 文件会失败关闭。`dsc_curve` 不再把工作簿投影成 cooling/heating
+相位或隐式切换到 `stacked_curve`；循环工作簿必须等待有授权、已登记真实数据后再建立独立
+`dsc_cycle` 规则。当前合同也不从曲线自动宣称 Tg、熔融/结晶峰身份、焓或结晶度。
 
 频率扫描保留 Study Model 现有的四张默认图：储能模量、损耗模量、损耗因子和复数黏度。
 若当前工作簿还含有受支持且旧 Autoplot 路线会输出的复数模量列，该图也进入同一计划，
@@ -329,6 +357,21 @@ Journal/Year 放在右侧标准 60x55 mm 索引区，使一列索引的总图幅
 其它模板必须在请求边界明确失败，不能悄悄退化成曲线图。全局硬样式由
 `src/sciplot_core/policy/` 统一定义，并与包内的 `plot_contract.json` 保持一致。
 模板只拥有图形语义和允许编辑的选项；热图标量色带、等高线和色条配色是显式的语义例外。
+
+普通序列颜色也只有一个权威链：请求中显式声明的 `palette_preset` 或
+`palette_colors` 优先；直接低层请求中实际提供的颜色选项视为显式选择；其余情况统一使用
+共享 `control_first_bright`。`jama_editorial`、`npg_modern` 和 `tol_bright`
+仍可显式选择，但不会再被模板或历史请求静默提升为当前意图。每个 Veusz spec 都记录
+`palette_resolution`（最终 palette、色值、选择来源及优先级），`doctor --json` 同时审计
+Python 默认、`plot_contract.json`、样式、模板和 ready rule 是否一致。
+
+普通 XY 序列的颜色、线型、marker 与 marker 填充也只解析一次。最终序列顺序确定后，
+显式 `line_style_sequence` 和 `marker_sequence` 按该顺序逐项绑定；`series_styles` 的逐序列
+覆盖和 `marker_fill_mode` 在同一解析器中合并。每个 Veusz spec 保存顶层
+`series_encoding_contract` 以及每条序列的 versioned `encoding`，VSZ 写入器只消费这份结果，
+不再自行猜颜色或线型。exact-current 审计会逐项核对请求明确拥有的颜色、线型、marker、
+填充色和轮廓色；未由请求锁定的通道仍可在原生 Veusz 中手工调整。性能散点/雷达图和热图
+继续使用各自的语义图形合同，不借用普通 XY 序列编码。
 
 单位显示也属于全局绘图契约：仪器输入仍兼容 `/`，但坐标轴、色条、图内文字、图例
 单位限定、交付绘图数据和分析指标统一使用“单位因子相乘 + Unicode 负上标”，不显示

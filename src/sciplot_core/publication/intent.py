@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
+from sciplot_core.policy import resolve_palette_authority
 from sciplot_core.publication_layouts import (
     build_composite_layout,
 )
@@ -144,13 +145,16 @@ def build_publication_intent(
         if isinstance(existing.get("palette_policy"), dict)
         else None,
     )
-    render_options = (
-        request.get("render_options")
-        if isinstance(request.get("render_options"), dict)
-        else {}
+    palette_resolution = resolve_palette_authority(
+        request,
+        template_id=(
+            str(request.get("template")).strip()
+            if isinstance(request.get("template"), str)
+            else None
+        ),
     )
-    if "palette_preset" in render_options:
-        palette_policy["palette_id"] = render_options.get("palette_preset")
+    palette_policy["palette_id"] = palette_resolution.palette_id
+    palette_policy["resolution"] = palette_resolution.to_payload()
 
     layout_slot_count = len(layout.get("slots", [])) if isinstance(layout, dict) else 0
     panel_count_mismatch = bool(layout and len(panel_contracts) != layout_slot_count)

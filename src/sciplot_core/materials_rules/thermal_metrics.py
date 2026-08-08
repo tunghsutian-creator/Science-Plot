@@ -28,10 +28,22 @@ def _dsc_metrics(source_path: Path) -> list[dict[str, Any]]:
         if len(finite) < 3:
             reason = "At least three finite temperature/heat-flow points are required."
             rows.append(
-                _metric(f"tg_candidate_C{suffix}", None, "C", "skipped", reason)
+                _metric(
+                    f"maximum_absolute_heat_flow_slope_temperature_C{suffix}",
+                    None,
+                    "C",
+                    "skipped",
+                    reason,
+                )
             )
             rows.append(
-                _metric(f"peak_temperature_C{suffix}", None, "C", "skipped", reason)
+                _metric(
+                    f"maximum_absolute_heat_flow_temperature_C{suffix}",
+                    None,
+                    "C",
+                    "skipped",
+                    reason,
+                )
             )
             continue
         temperatures = finite["x"].to_numpy(dtype=float)
@@ -41,28 +53,42 @@ def _dsc_metrics(source_path: Path) -> list[dict[str, Any]]:
         peak_index = int(np.nanargmax(np.abs(heat_flow)))
         rows.append(
             _metric(
-                f"tg_candidate_C{suffix}",
+                f"maximum_absolute_heat_flow_slope_temperature_C{suffix}",
                 float(temperatures[slope_index]),
                 "C",
                 reason=(
-                    "Largest absolute heat-flow slope; this is an algorithmic candidate, not a confirmed glass-transition assignment."
+                    "Temperature of the largest absolute finite heat-flow slope; "
+                    "no transition identity is assigned."
                 ),
             )
         )
         rows.append(
             _metric(
-                f"peak_temperature_C{suffix}",
+                f"maximum_absolute_heat_flow_temperature_C{suffix}",
                 float(temperatures[peak_index]),
                 "C",
-                reason="Temperature of the largest absolute recorded heat-flow excursion.",
+                reason=(
+                    "Temperature of the largest absolute finite recorded heat-flow "
+                    "value; no melting or crystallization identity is assigned."
+                ),
             )
         )
     if rows:
         return rows
     return [
-        _metric("tg_candidate_C", None, "C", "skipped", "No finite DSC curve found."),
         _metric(
-            "peak_temperature_C", None, "C", "skipped", "No finite DSC curve found."
+            "maximum_absolute_heat_flow_slope_temperature_C",
+            None,
+            "C",
+            "skipped",
+            "No finite DSC curve found.",
+        ),
+        _metric(
+            "maximum_absolute_heat_flow_temperature_C",
+            None,
+            "C",
+            "skipped",
+            "No finite DSC curve found.",
         ),
     ]
 

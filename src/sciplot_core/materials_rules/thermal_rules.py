@@ -25,14 +25,14 @@ THERMAL_RULES: tuple[SemanticRule, ...] = (
         column_aliases=("heat flow",),
         analysis=(
             AnalysisSpec(
-                "tg_candidate_C",
-                "largest heat-flow slope candidate",
+                "maximum_absolute_heat_flow_slope_temperature_C",
+                "temperature of the largest absolute heat-flow slope",
                 ("temperature", "heat flow"),
                 "C",
             ),
             AnalysisSpec(
-                "peak_temperature_C",
-                "largest absolute heat-flow peak",
+                "maximum_absolute_heat_flow_temperature_C",
+                "temperature of the largest absolute heat-flow value",
                 ("temperature", "heat flow"),
                 "C",
             ),

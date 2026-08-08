@@ -238,7 +238,7 @@ def prepare_rheology_source(
             source,
             processed_source=processed_source,
             operation="aggregate_rheology_temperature_replicates",
-            source_attestation_rule_id=context.rule_id,
+            source_attestation_rule_id=context.rule_id or family,
             source_tree_sha256_before=context.source_tree_sha256_before,
             selected_sources=tuple(source_sample_paths),
             parameters={

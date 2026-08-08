@@ -19,6 +19,10 @@ from sciplot_core.materials_rules import compute_analysis_metrics
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.semantic import prepare_semantic_source
 from sciplot_recipes import run_recipe
+from sciplot_core.dma_temperature_contract import (
+    DMA_TEMPERATURE_RECIPE,
+    DMA_TEMPERATURE_RULE_ID,
+)
 
 from sciplot_core.workflow.auto_split import _render_with_auto_split
 from sciplot_core.workflow.reports import (
@@ -30,6 +34,10 @@ from sciplot_core.workflow.request_io import (
     _resolve_optional_request_path,
 )
 from sciplot_core.workflow.route_intent import WorkflowRoute, WorkflowRouteIntent
+from sciplot_core.workflow.dma_named_recipe import (
+    DmaNamedRecipePlanBinding,
+    bind_dma_named_recipe_request,
+)
 
 
 @dataclass(frozen=True)
@@ -105,14 +113,39 @@ def execute_request_render(
             selected_figure_plan=selected_figure_plan,
         )
     if route_intent.route == "recipe":
-        if selected_figure_plan is not None:
-            raise ValueError(
-                "workflow_recipe_figure_plan_unsupported: named recipes cannot "
-                "execute a selected FigurePlan until they consume exact tasks."
-            )
         final_recipe = route_intent.requested_recipe
         if final_recipe is None:
             raise AssertionError("Recipe route lost its captured recipe identity.")
+        if (
+            selected_figure_plan is not None
+            and final_recipe == DMA_TEMPERATURE_RECIPE
+            and selected_figure_plan.rule_id == DMA_TEMPERATURE_RULE_ID
+        ):
+            binding = bind_dma_named_recipe_request(
+                requested_recipe=final_recipe,
+                request=request,
+                semantic=semantic,
+                plan=selected_figure_plan,
+                input_path=input_path,
+            )
+            return _render_semantic_plan_request(
+                request=request,
+                route_intent=route_intent,
+                semantic=semantic,
+                study_model=study_model,
+                input_path=input_path,
+                output_dir=output_dir,
+                base_dir=base_dir,
+                transform_steps=transform_steps,
+                selected_figure_plan=selected_figure_plan,
+                final_recipe=final_recipe,
+                named_recipe_binding=binding,
+            )
+        if selected_figure_plan is not None:
+            raise ValueError(
+                "workflow_recipe_figure_plan_unsupported: named recipes cannot "
+                "execute this selected FigurePlan without a bounded exact-task seam."
+            )
         result = run_recipe(
             final_recipe,
             input_path,
@@ -172,7 +205,43 @@ def _render_auto_request(
     transform_steps: list[dict[str, Any]],
     selected_figure_plan: ResolvedFigurePlan | None,
 ) -> RequestRenderResult:
-    final_recipe = semantic.get("recommended_recipe")
+    """Execute the automatic route through shared semantic-plan preparation."""
+
+    return _render_semantic_plan_request(
+        request=request,
+        route_intent=route_intent,
+        semantic=semantic,
+        study_model=study_model,
+        input_path=input_path,
+        output_dir=output_dir,
+        base_dir=base_dir,
+        transform_steps=transform_steps,
+        selected_figure_plan=selected_figure_plan,
+        final_recipe=(
+            str(semantic["recommended_recipe"])
+            if semantic.get("recommended_recipe") is not None
+            else None
+        ),
+        named_recipe_binding=None,
+    )
+
+
+def _render_semantic_plan_request(
+    *,
+    request: dict[str, Any],
+    route_intent: WorkflowRouteIntent,
+    semantic: dict[str, Any],
+    study_model: dict[str, Any],
+    input_path: Path,
+    output_dir: Path,
+    base_dir: Path,
+    transform_steps: list[dict[str, Any]],
+    selected_figure_plan: ResolvedFigurePlan | None,
+    final_recipe: str | None,
+    named_recipe_binding: DmaNamedRecipePlanBinding | None,
+) -> RequestRenderResult:
+    """Prepare semantic data once and execute the already-selected plan."""
+
     replicate_policy = (
         study_model.get("replicate_policy")
         if isinstance(study_model.get("replicate_policy"), dict)
@@ -249,6 +318,8 @@ def _render_auto_request(
             output_dir=output_dir,
         ),
     }
+    if named_recipe_binding is not None:
+        result["named_recipe_plan_binding"] = named_recipe_binding.to_payload()
     rendered = RequestRenderResult(
         route_intent=route_intent,
         final_recipe=final_recipe,
@@ -262,5 +333,6 @@ def _render_auto_request(
         result=rendered.result,
         semantic=semantic,
         final_recipe=final_recipe,
+        route=route_intent.route,
     )
     return rendered

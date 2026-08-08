@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from sciplot_core.dma_temperature_contract import (
+    DMA_TEMPERATURE_CANONICAL_MODULUS_UNIT,
+    DMA_TEMPERATURE_DEFAULT_Y_MIN,
+    DMA_TEMPERATURE_RULE_ID,
+    DMA_TEMPERATURE_TEMPLATE,
+    DMA_TEMPERATURE_Y_LABEL,
+)
 from sciplot_core.policy import (
     DEFAULT_RENDER_OPTIONS as _DEFAULT_RENDER_OPTIONS,
 )
@@ -18,20 +25,20 @@ from sciplot_core.materials_rules.catalog_axes import (
 
 DMA_TEMPERATURE_RULES: tuple[SemanticRule, ...] = (
     _rule(
-        "dma_temperature_sweep",
-        "dma_temperature_sweep",
+        DMA_TEMPERATURE_RULE_ID,
+        DMA_TEMPERATURE_RULE_ID,
         "rheology_dma",
-        "point_line",
+        DMA_TEMPERATURE_TEMPLATE,
         RHEOLOGY_X_TEMPERATURE,
         AxisSpec(
             "Storage modulus",
-            "MPa",
-            "Storage modulus, E′ (MPa)",
-            aliases=("E'", "storage modulus", "tan delta"),
+            DMA_TEMPERATURE_CANONICAL_MODULUS_UNIT,
+            DMA_TEMPERATURE_Y_LABEL,
+            aliases=("E'", "E′", "E prime", "storage modulus"),
         ),
-        keywords=("dma", "storagemodulusmpa", "tanδ", "tandelta"),
+        keywords=("dma", "eprime", "storagemodulus", "storagemodulusmpa"),
         path_keywords=("dma_temperature_sweep", "dma_temperature"),
-        column_aliases=("temperature", "storage modulus", "loss factor", "tan delta"),
+        column_aliases=("temperature", "storage modulus", "E'", "E prime"),
         analysis=(
             AnalysisSpec(
                 "storage_modulus_drop_temperature_C",
@@ -40,7 +47,10 @@ DMA_TEMPERATURE_RULES: tuple[SemanticRule, ...] = (
                 "C",
             ),
         ),
-        render_options={**_DEFAULT_RENDER_OPTIONS, "y_min": 0.0},
+        render_options={
+            **_DEFAULT_RENDER_OPTIONS,
+            "y_min": DMA_TEMPERATURE_DEFAULT_Y_MIN,
+        },
         fixture_path=(
             "tests/fixtures/real_world/dma_temperature_sweep/Fig2b_storage_modulus_temperature.csv"
         ),

@@ -4,18 +4,27 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from typing import Any
-from sciplot_core.contract import PlotContract, load_plot_contract
+from sciplot_core.contract import (
+    PlotContract,
+    lint_public_template_contract,
+    load_plot_contract,
+)
 from sciplot_core.materials_rules import (
     iter_public_rules,
     scientific_unit_expression_contract,
     unit_solidus_violations,
 )
 from sciplot_core.policy import (
+    CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
+    CURVE_RENDER_OPTIONS,
+    DEFAULT_PALETTE_COLORS,
+    DEFAULT_PALETTE_PRESET,
     DEFAULT_RENDER_OPTIONS,
     DEFAULT_SCALAR_FIELD_COLORMAP_ID,
     DEFAULT_SCALAR_FIELD_COLORS,
     UNIFIED_FOREGROUND_COLOR,
     UNIFIED_HARD_OPTION_KEYS,
+    POINT_LINE_RENDER_OPTIONS,
 )
 from sciplot_recipes.contracts import iter_recipe_specs
 
@@ -62,6 +71,105 @@ def audit_style_template_contract(
     contract_templates = set(resolved_contract.templates)
     issues: list[dict[str, Any]] = []
     unit_expression_violations: list[dict[str, Any]] = []
+
+    contract_reference_issues = list(lint_public_template_contract(resolved_contract))
+    if contract_reference_issues:
+        issues.append(
+            {
+                "code": "plot_contract_reference_drift",
+                "issues": contract_reference_issues,
+            }
+        )
+
+    contract_default_palette = resolved_contract.defaults.palette_preset
+    runtime_default_palette = str(resolved_render_defaults.get("palette_preset") or "")
+    if contract_default_palette != DEFAULT_PALETTE_PRESET or (
+        runtime_default_palette != DEFAULT_PALETTE_PRESET
+    ):
+        issues.append(
+            {
+                "code": "ordinary_palette_default_drift",
+                "expected": DEFAULT_PALETTE_PRESET,
+                "contract": contract_default_palette,
+                "runtime": runtime_default_palette,
+            }
+        )
+    default_palette = resolved_contract.palettes.get(DEFAULT_PALETTE_PRESET)
+    contract_default_colors = (
+        tuple(default_palette.categorical) if default_palette is not None else ()
+    )
+    if contract_default_colors != tuple(DEFAULT_PALETTE_COLORS):
+        issues.append(
+            {
+                "code": "ordinary_palette_color_drift",
+                "palette_id": DEFAULT_PALETTE_PRESET,
+                "expected": list(DEFAULT_PALETTE_COLORS),
+                "contract": list(contract_default_colors),
+            }
+        )
+
+    template_palette_drift = {
+        template_id: {
+            "default": template.default_options.get("palette_preset"),
+            "available": list(template.available_palettes),
+        }
+        for template_id, template in sorted(resolved_contract.templates.items())
+        if template.default_options.get("palette_preset") != DEFAULT_PALETTE_PRESET
+        or DEFAULT_PALETTE_PRESET not in template.available_palettes
+    }
+    if template_palette_drift:
+        issues.append(
+            {
+                "code": "template_ordinary_palette_drift",
+                "templates": template_palette_drift,
+            }
+        )
+
+    policy_default_drift = {
+        policy_name: options.get("palette_preset")
+        for policy_name, options in {
+            "curve": CURVE_RENDER_OPTIONS,
+            "point_line": POINT_LINE_RENDER_OPTIONS,
+            "categorical_distribution": CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
+        }.items()
+        if options.get("palette_preset") != DEFAULT_PALETTE_PRESET
+    }
+    if policy_default_drift:
+        issues.append(
+            {
+                "code": "python_palette_policy_drift",
+                "expected": DEFAULT_PALETTE_PRESET,
+                "policies": policy_default_drift,
+            }
+        )
+
+    style_palette_drift = {
+        style_id: style.recommended_palette_preset
+        for style_id, style in sorted(resolved_contract.styles.items())
+        if style.recommended_palette_preset != DEFAULT_PALETTE_PRESET
+    }
+    if style_palette_drift:
+        issues.append(
+            {
+                "code": "style_palette_recommendation_drift",
+                "expected": DEFAULT_PALETTE_PRESET,
+                "styles": style_palette_drift,
+            }
+        )
+
+    rule_palette_drift = {
+        rule.rule_id: rule.render_options.get("palette_preset")
+        for rule in ready_rules
+        if rule.render_options.get("palette_preset") != DEFAULT_PALETTE_PRESET
+    }
+    if rule_palette_drift:
+        issues.append(
+            {
+                "code": "ready_rule_palette_default_drift",
+                "expected": DEFAULT_PALETTE_PRESET,
+                "rules": rule_palette_drift,
+            }
+        )
     for rule in ready_rules:
         candidates = [
             ("x_axis.display_label", rule.x_axis.display_label),
@@ -228,7 +336,7 @@ def audit_style_template_contract(
 
     return {
         "kind": "sciplot_style_template_contract_audit",
-        "version": 4,
+        "version": 5,
         "status": "passed" if not issues else "failed",
         "issues": issues,
         "implemented_veusz_templates": sorted(VEUSZ_IMPLEMENTED_TEMPLATE_IDS),
@@ -257,5 +365,24 @@ def audit_style_template_contract(
                 "id": DEFAULT_SCALAR_FIELD_COLORMAP_ID,
                 "colors": list(DEFAULT_SCALAR_FIELD_COLORS),
             }
+        },
+        "ordinary_palette_contract": {
+            "palette_id": DEFAULT_PALETTE_PRESET,
+            "colors": list(DEFAULT_PALETTE_COLORS),
+            "authority_order": [
+                "explicit_render_option",
+                "direct_render_option",
+                "shared_project_default",
+            ],
+            "explicit_alternatives": sorted(
+                palette_id
+                for palette_id, palette in resolved_contract.palettes.items()
+                if palette.public and palette_id != DEFAULT_PALETTE_PRESET
+            ),
+            "scalar_field_exception": {
+                "template": "heatmap",
+                "colormap_id": DEFAULT_SCALAR_FIELD_COLORMAP_ID,
+                "colors": list(DEFAULT_SCALAR_FIELD_COLORS),
+            },
         },
     }

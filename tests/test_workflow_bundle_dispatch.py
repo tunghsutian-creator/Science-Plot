@@ -75,7 +75,7 @@ def _install_render_spies(
         ("rheology_stress_sweep", "generic"),
         ("rheology_time_sweep", "generic"),
         ("dma_frequency_sweep", "generic"),
-        ("dma_temperature_sweep", "generic"),
+        ("dma_temperature_sweep", "dma_temperature"),
         ("rheology_creep", "generic"),
         ("dtg_curve", "generic"),
         ("uvvis_spectrum", "generic"),

@@ -5,15 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 from sciplot_core.studio_render.models import (
-    CATEGORICAL_SERIES_KINDS,
     IMPACT_POINT_LINE_MARKER_KIND,
     IMPACT_POINT_LINE_RAW_KIND,
     StudioSeries,
     _VeuszStyleContract,
 )
 
-from sciplot_core.studio_core.models import MARKER_MAP
-from sciplot_core.studio_core.series_request import _marker_thin_factor
+from sciplot_core.studio_core.series_encoding_contract import (
+    build_series_encoding_resolution,
+)
 
 
 def build_veusz_series_specs(
@@ -52,6 +52,16 @@ def _build_veusz_series_spec(
     categorical_visual_style: dict[str, Any],
     style: _VeuszStyleContract,
 ) -> dict[str, Any]:
+    raw_points_visible = _raw_points_visible(item, categorical_contract)
+    encoding = build_series_encoding_resolution(
+        item,
+        template_id=template_id,
+        categorical_visual_style=categorical_visual_style,
+        style=style,
+        raw_points_visible=raw_points_visible,
+    )
+    line = encoding["line"]
+    marker = encoding["marker"]
     return {
         "name": f"series_{index}",
         "label": item.label,
@@ -70,68 +80,27 @@ def _build_veusz_series_spec(
         "x_values": list(item.x_values),
         "y_values": list(item.y_values),
         "error_values": list(item.error_values),
-        "color": item.color,
-        "line_width_pt": item.line_width,
-        "line_style": item.line_style,
-        "marker": str(MARKER_MAP.get(item.marker, item.marker or "none")),
-        "marker_size_pt": item.marker_size,
-        "marker_thin_factor": _marker_thin_factor(item, template_id=template_id),
-        "marker_fill_color": _marker_fill_color(item, render_options),
-        "marker_line_color": item.marker_line_color or item.color,
-        "marker_line_width_pt": (
-            item.marker_line_width
-            if item.marker_line_width is not None
-            else style.marker_line_width_pt
-        ),
-        "marker_alpha": _marker_alpha(
-            item,
-            categorical_visual_style=categorical_visual_style,
-            style=style,
-        ),
+        "encoding": encoding,
+        "color": line["color"],
+        "line_width_pt": line["width_pt"],
+        "line_style": line["style"],
+        "marker": marker["shape"],
+        "marker_size_pt": marker["size_pt"],
+        "marker_thin_factor": marker["thin_factor"],
+        "marker_fill_color": marker["fill_color"],
+        "marker_line_color": marker["line_color"],
+        "marker_line_width_pt": marker["line_width_pt"],
+        "marker_alpha": marker["fill_alpha"],
         "presentation_kind": item.presentation_kind,
         "category_position": item.category_position,
         "component_labels": list(item.component_labels),
-        "plot_line_hide": item.presentation_kind
-        in (
-            CATEGORICAL_SERIES_KINDS
-            | {
-                IMPACT_POINT_LINE_MARKER_KIND,
-                IMPACT_POINT_LINE_RAW_KIND,
-            }
-        ),
-        "marker_line_hide": item.presentation_kind
-        in (CATEGORICAL_SERIES_KINDS | {IMPACT_POINT_LINE_RAW_KIND}),
-        "raw_points_visible": _raw_points_visible(item, categorical_contract),
+        "plot_line_hide": not line["visible"],
+        "marker_line_hide": not marker["line_visible"],
+        "raw_points_visible": raw_points_visible,
         "source_artifacts": [
             {"path": path, "sha256": digest} for path, digest in item.source_artifacts
         ],
     }
-
-
-def _marker_fill_color(
-    item: StudioSeries,
-    render_options: dict[str, Any],
-) -> str:
-    if item.presentation_kind == "categorical_replicates":
-        return item.color
-    if str(render_options.get("marker_fill_mode") or "filled").casefold() == "open":
-        return "white"
-    return item.color
-
-
-def _marker_alpha(
-    item: StudioSeries,
-    *,
-    categorical_visual_style: dict[str, Any],
-    style: _VeuszStyleContract,
-) -> float:
-    if item.marker_alpha is not None:
-        return item.marker_alpha
-    if item.presentation_kind == "categorical_replicates":
-        return float(
-            categorical_visual_style.get("raw_point_alpha", style.marker_alpha)
-        )
-    return style.marker_alpha
 
 
 def _raw_points_visible(

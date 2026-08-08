@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from sciplot_core.policy import (
@@ -100,6 +101,8 @@ def _add_error_lines(
         position = float(group["position"])
         mean = float(group["bar_mean"])
         error = float(group["bar_error"])
+        if not math.isfinite(error) or error <= 0.0:
+            continue
         low = mean - error
         high = mean + error
         segments = (

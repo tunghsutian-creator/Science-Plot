@@ -35,6 +35,9 @@ from sciplot_core.workflow.impact_bundle import (
 from sciplot_core.workflow.dsc_bundle import (
     _render_veusz_dsc_bundle,
 )
+from sciplot_core.workflow.dma_temperature_bundle import (
+    _render_veusz_dma_temperature_bundle,
+)
 
 from sciplot_core.workflow.performance_bundle import (
     _render_veusz_performance_bundle,
@@ -45,6 +48,7 @@ WorkflowRenderFamily = Literal[
     "impact",
     "mechanical",
     "dsc",
+    "dma_temperature",
     "rheology",
     "generic",
 ]
@@ -56,6 +60,7 @@ _SPECIALIZED_RENDER_FAMILY_BY_RULE: dict[str, WorkflowRenderFamily] = {
     "compression_curve": "mechanical",
     "flexural_curve": "mechanical",
     "dsc_curve": "dsc",
+    "dma_temperature_sweep": "dma_temperature",
     "rheology_frequency_sweep": "rheology",
     "rheology_temperature_sweep": "rheology",
 }
@@ -220,6 +225,16 @@ def _render_resolved_bundle(
     if family == "dsc":
         return _render_veusz_dsc_bundle(
             input_path,
+            output_dir=output_dir,
+            options=options,
+            export_formats=export_formats,
+            request=request,
+        )
+    if family == "dma_temperature":
+        return _render_veusz_dma_temperature_bundle(
+            input_path,
+            source_input=source_input,
+            source_attestation=source_attestation,
             output_dir=output_dir,
             options=options,
             export_formats=export_formats,

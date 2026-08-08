@@ -31,6 +31,7 @@ from sciplot_core.studio_render.series_domain import (
 )
 from sciplot_core.studio_render.series_options import (
     _apply_series_options as _apply_series_options,
+    resolve_series_encodings as resolve_series_encodings,
 )
 from sciplot_core.studio_core.request_overrides import (
     _apply_studio_request_overrides as _apply_studio_request_overrides,
@@ -237,6 +238,7 @@ __all__ = [
     "publish_studio_export_run",
     "qt_smoke_payload",
     "read_studio_figure_set",
+    "resolve_series_encodings",
     "resolve_studio_project_context",
     "run_studio_command",
     "upstream_status",

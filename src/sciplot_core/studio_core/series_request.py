@@ -32,7 +32,7 @@ from sciplot_core.studio_render.table_io import (
     _read_source_frame_records,
 )
 from sciplot_core.studio_render.series_options import (
-    _apply_series_options,
+    resolve_series_encodings,
 )
 from sciplot_core.studio_render.readability_defaults import (
     _apply_readability_render_defaults,
@@ -226,7 +226,7 @@ def _series_from_request(
             axis_info=axis_info,
             series=raw_series,
         )
-        styled = _apply_series_options(
+        styled = resolve_series_encodings(
             raw_series,
             render_options=render_options,
             request=request,
@@ -249,9 +249,12 @@ def _series_from_request(
             "cannot be used together."
         )
     if _prepared_source_attestation is not None:
-        if str(request.get("rule_id") or "").strip() != "rheology_temperature_sweep":
+        if str(request.get("rule_id") or "").strip() not in {
+            "dma_temperature_sweep",
+            "rheology_temperature_sweep",
+        }:
             raise ValueError(
-                "The private prepared-source seam is temperature-Studio only."
+                "The private prepared-source seam is source-bound Studio only."
             )
         _prepared_source_attestation.verify_current(source_root=source_root)
         source = Path(_prepared_source_attestation.prepared_source.path)

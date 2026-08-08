@@ -229,6 +229,8 @@ def _categorical_line_contracts(
             position = float(group["position"])
             mean = float(group["bar_mean"])
             error = float(group["bar_error"])
+            if not math.isfinite(error) or error <= 0.0:
+                continue
             low = mean - error
             high = mean + error
             for line_index, (x_pos, y_pos, x_pos_2, y_pos_2) in enumerate(

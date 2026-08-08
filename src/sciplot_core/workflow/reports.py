@@ -38,11 +38,12 @@ def _write_auto_report(
     result: dict[str, Any],
     semantic: dict[str, Any],
     final_recipe: str | None,
+    route: str = "auto",
 ) -> None:
     lines = [
         "# SciPlot Run",
         "",
-        "- Route: `auto`",
+        f"- Route: `{route}`",
         f"- Semantic family: `{semantic['semantic_family']}`",
         f"- Final recipe: `{final_recipe or 'direct_render'}`",
         f"- Template: `{result['template']}`",

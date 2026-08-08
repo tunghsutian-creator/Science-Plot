@@ -7,6 +7,9 @@ from typing import Any
 from sciplot_core.studio_render.component_stack_contract import (
     _component_stack_contract,
 )
+from sciplot_core.studio_render.categorical_point_line import (
+    categorical_point_line_contract,
+)
 from sciplot_core.studio_render.impact_point_line_contract import (
     _impact_point_line_contract,
 )
@@ -22,6 +25,13 @@ def _categorical_plot_contract(
     template_id: str,
     render_options: dict[str, Any],
 ) -> dict[str, Any] | None:
+    point_line_contract = categorical_point_line_contract(
+        series,
+        template_id=template_id,
+    )
+    if point_line_contract is not None:
+        return point_line_contract
+
     impact_contract = _impact_point_line_contract(
         series,
         template_id=template_id,

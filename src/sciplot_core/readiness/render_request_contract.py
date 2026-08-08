@@ -10,6 +10,10 @@ from sciplot_core.materials_rules import (
     get_rule,
     resolve_rule_template,
 )
+from sciplot_core.dma_temperature_contract import (
+    DMA_TEMPERATURE_RECIPE,
+    DMA_TEMPERATURE_RULE_ID,
+)
 from sciplot_core.policy import (
     DEFAULT_EXPORT_FORMATS_POLICY,
     DEFAULT_FIGURE_SIZE,
@@ -51,9 +55,12 @@ def validated_render_request_policy_payload(
             + ", ".join(sorted(unknown_visual_keys))
         )
     exact_keys = RENDER_OPTION_KEYS - VALIDATED_VISUAL_OVERRIDE_KEYS
+    allowed_routes = ["auto"]
+    if resolved.rule_id == DMA_TEMPERATURE_RULE_ID:
+        allowed_routes.append("recipe")
     return {
         "version": VALIDATED_RENDER_REQUEST_POLICY_VERSION,
-        "allowed_routes": ["auto"],
+        "allowed_routes": allowed_routes,
         "template_policy": "explicit_supported_template_or_default",
         "default_template": resolved.template,
         "supported_templates": list(resolved.presentation_templates),
@@ -102,10 +109,15 @@ def render_request_contract_payload(
             requested_template if isinstance(requested_template, str) else None
         ),
     )
-    effective_recipe = resolved.recipe if route == "auto" else requested_recipe
+    rule_bound_route = route == "auto" or _is_dma_named_recipe_route(
+        resolved,
+        route=route,
+        requested_recipe=requested_recipe,
+    )
+    effective_recipe = resolved.recipe if rule_bound_route else requested_recipe
     effective_template = (
         resolve_rule_template(resolved, requested_template)
-        if route == "auto"
+        if rule_bound_route
         else requested_template
     )
     exports = render_request.get("exports")
@@ -205,7 +217,11 @@ def _render_request_policy_evaluation(
         requested_recipe=requested_recipe,
         requested_template=requested_template,
     )
-    if route != "auto":
+    if route != "auto" and not _is_dma_named_recipe_route(
+        rule,
+        route=route,
+        requested_recipe=requested_recipe,
+    ):
         confirmation_reasons.append("render_route_outside_validated_policy")
     if (
         requested_template is not None
@@ -351,4 +367,20 @@ def _render_request_policy_evaluation(
         contract,
         list(dict.fromkeys(repair_reasons)),
         list(dict.fromkeys(confirmation_reasons)),
+    )
+
+
+def _is_dma_named_recipe_route(
+    rule: SemanticRule,
+    *,
+    route: str,
+    requested_recipe: object,
+) -> bool:
+    """Return whether this one certified rule admits its exact named route."""
+
+    return (
+        route == "recipe"
+        and rule.rule_id == DMA_TEMPERATURE_RULE_ID
+        and rule.recipe == DMA_TEMPERATURE_RECIPE
+        and requested_recipe == DMA_TEMPERATURE_RECIPE
     )

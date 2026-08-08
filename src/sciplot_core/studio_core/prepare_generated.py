@@ -85,8 +85,8 @@ from sciplot_core.studio_core.terminal_task_request import (
     is_terminal_worker_request,
     terminal_figure_task_from_request,
 )
-from sciplot_core.studio_core.temperature_prepare import (
-    prepare_temperature_figure_queue,
+from sciplot_core.studio_core.source_bound_prepare import (
+    prepare_source_bound_figure_queue,
 )
 from sciplot_core.studio_core.veusz_document import _write_veusz_document
 
@@ -194,6 +194,8 @@ def generate_studio_document(
         )
     )
     performance_queue = figure_queue_from_plan(figure_plan, "performance_comparison")
+    dsc_queue = figure_queue_from_plan(figure_plan, "dsc_curve")
+    selected_figure_queue = impact_queue or performance_queue or dsc_queue
     primary_impact_figure = (
         next(
             (
@@ -226,10 +228,10 @@ def generate_studio_document(
         else {}
     )
     (
-        temperature_queue,
-        temperature_source_attestation,
-        temperature_preparation_steps,
-    ) = prepare_temperature_figure_queue(
+        source_bound_queue,
+        source_bound_attestation,
+        source_bound_preparation_steps,
+    ) = prepare_source_bound_figure_queue(
         figure_plan=figure_plan,
         source_input=source_input,
         request=primary_render_request,
@@ -239,8 +241,8 @@ def generate_studio_document(
         primary_render_request,
         base_dir=request_path.parent,
         **binding_option,
-        _prepared_source_attestation=temperature_source_attestation,
-        _prepared_transform_steps=temperature_preparation_steps,
+        _prepared_source_attestation=source_bound_attestation,
+        _prepared_transform_steps=source_bound_preparation_steps,
     )
     terminal_series_order = _string_list(
         axis_info.get("semantic_terminal_series_order")
@@ -286,15 +288,13 @@ def generate_studio_document(
         publication_intent, transform_ledger
     )
     study_model["publication_intent_ref"] = "publication_intent.json"
-    request["publication_intent"] = publication_intent
-    request["transform_ledger"] = transform_ledger
+    for target in (request, primary_render_request):
+        target["publication_intent"] = publication_intent
+        target["transform_ledger"] = transform_ledger
     transaction_id = uuid4().hex
-    staged_request = request_path.with_name(
-        f".sciplot-studio-prepare-{transaction_id}.json"
-    )
-    staged_document = document_path.with_name(
-        f".sciplot-studio-prepare-{transaction_id}.vsz"
-    )
+    staged_stem = f".sciplot-studio-prepare-{transaction_id}"
+    staged_request = request_path.with_name(f"{staged_stem}.json")
+    staged_document = document_path.with_name(f"{staged_stem}.vsz")
     staged_spec = _veusz_spec_path(staged_document)
     prior_generated_hash = _registered_generated_hash(project_dir)
     try:
@@ -336,11 +336,9 @@ def generate_studio_document(
             primary_staged_spec=staged_spec,
             staged_request=staged_request,
             preserve_existing=False,
-            queue_override=(
-                impact_queue or performance_queue or temperature_queue or None
-            ),
+            queue_override=selected_figure_queue or source_bound_queue or None,
             figure_plan=figure_plan,
-            prepared_source_attestation=temperature_source_attestation,
+            prepared_source_attestation=source_bound_attestation,
             path_replacer=figure_set_path_replacer,
         )
     finally:

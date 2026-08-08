@@ -124,7 +124,13 @@ _METRIC_ALIASES: dict[str, tuple[str, ...]] = {
     "strain": ("strain", "shear strain", "gamma"),
     "stress": ("stress", "shear stress"),
     "time": ("time", "elapsed time"),
-    "storage_modulus": ("storage modulus", "g'", "g prime"),
+    "storage_modulus": (
+        "storage modulus",
+        "storage modulus, e'",
+        "e'",
+        "g'",
+        "g prime",
+    ),
     "loss_modulus": ("loss modulus", 'g"', "g double prime"),
     "loss_factor": ("loss factor", "tan delta", "tan_delta"),
     "complex_modulus": ("complex modulus", "complex shear modulus", "g*"),
@@ -252,6 +258,12 @@ def _series_label_from_column(
         for value in values.tolist()[:4]
         if not pd.isna(value) and str(value).strip()
     ]
+    if leading and all(_is_numeric_text(value) for value in leading):
+        # Plain numeric observations are data, not a unit/sample metadata
+        # prefix.  In particular, a series starting with 1, 2 previously
+        # treated dimensionless ``1`` as a unit and mislabeled the series
+        # with its second measured value.
+        return fallback
     if len(leading) >= 2:
         first_is_unit = _is_unit_label(leading[0].casefold())
         second_is_unit = _is_unit_label(leading[1].casefold())
@@ -280,6 +292,14 @@ def _series_label_from_column(
         if not _is_unit_label(lowered):
             return text
     return fallback
+
+
+def _is_numeric_text(value: str) -> bool:
+    try:
+        float(value)
+    except ValueError:
+        return False
+    return True
 
 
 def _is_unit_label(label: str) -> bool:

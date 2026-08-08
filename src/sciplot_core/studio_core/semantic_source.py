@@ -10,6 +10,11 @@ from sciplot_core.studio_render.models import StudioPreparationBlocked
 from sciplot_core.studio_render.value_parsing import _string_list
 
 
+_SOURCE_ATTESTED_RULE_IDS = frozenset(
+    {"dma_temperature_sweep", "rheology_temperature_sweep"}
+)
+
+
 def _studio_source_for_request(
     source: Path,
     *,
@@ -51,11 +56,11 @@ def _studio_source_for_request(
         if isinstance(source_attestation_value, PreparationSourceAttestation)
         else None
     )
-    if rule_id == "rheology_temperature_sweep" and source_attestation is None:
+    if rule_id in _SOURCE_ATTESTED_RULE_IDS and source_attestation is None:
+        reason_prefix = _source_attestation_reason_prefix(rule_id)
         raise StudioPreparationBlocked(
-            "temperature_preparation_attestation_missing",
-            "Temperature Studio preparation did not retain its typed source "
-            "attestation.",
+            f"{reason_prefix}_preparation_attestation_missing",
+            f"{rule_id} Studio preparation did not retain its typed source attestation.",
         )
     transform_steps = [
         step for step in prepared.get("transform_steps", []) if isinstance(step, dict)
@@ -64,14 +69,15 @@ def _studio_source_for_request(
     if terminal_series_order:
         current_order = _string_list(request.get("series_order"))
         if (
-            rule_id == "rheology_temperature_sweep"
+            rule_id in _SOURCE_ATTESTED_RULE_IDS
             and current_order
             and current_order != terminal_series_order
         ):
+            reason_prefix = _source_attestation_reason_prefix(rule_id)
             raise StudioPreparationBlocked(
-                "temperature_figure_plan_source_mismatch",
-                "The resolved temperature FigureTask sample order diverges "
-                "from semantic preparation.",
+                f"{reason_prefix}_figure_plan_source_mismatch",
+                f"The resolved {rule_id} FigureTask sample order diverges from "
+                "semantic preparation.",
             )
         request["series_order"] = terminal_series_order
         render_options = request.get("render_options")
@@ -110,6 +116,10 @@ def _semantic_terminal_series_order(
             if result:
                 return result
     return []
+
+
+def _source_attestation_reason_prefix(rule_id: str) -> str:
+    return "temperature" if rule_id == "rheology_temperature_sweep" else rule_id
 
 
 __all__ = ["_studio_source_for_request"]

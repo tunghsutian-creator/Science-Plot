@@ -59,7 +59,27 @@ def build_spec_audit_inventory(
     xy_records = _visible_data_bindings(
         loaded_document,
         widget_type="xy",
-        setting_names=("xData", "yData", "labels", "key"),
+        setting_names=(
+            "xData",
+            "yData",
+            "labels",
+            "key",
+            "PlotLine/color",
+            "PlotLine/style",
+            "PlotLine/width",
+            "PlotLine/hide",
+            "PlotLine/transparency",
+            "marker",
+            "markerSize",
+            "thinfactor",
+            "MarkerFill/color",
+            "MarkerFill/hide",
+            "MarkerFill/transparency",
+            "MarkerLine/color",
+            "MarkerLine/width",
+            "MarkerLine/hide",
+            "MarkerLine/transparency",
+        ),
     )
 
     boxplot_records = _visible_data_bindings(
@@ -169,4 +189,5 @@ def build_spec_audit_inventory(
         component_bar_record=component_bar_record,
         component_bar_datasets_by_y=component_bar_datasets_by_y,
         allowed_bar_paths=allowed_bar_paths,
+        series_encoding_evidence=[],
     )

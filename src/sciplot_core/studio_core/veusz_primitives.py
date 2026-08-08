@@ -18,6 +18,9 @@ from sciplot_core.studio_render.categorical_values import (
 from sciplot_core.studio_core.series_request import (
     _veusz_literal_text,
 )
+from sciplot_core.studio_core.series_encoding_contract import (
+    series_encoding_from_spec,
+)
 
 from sciplot_core.studio_core.veusz_units import (
     _pt,
@@ -31,6 +34,9 @@ def _add_veusz_xy_series(
     item: dict[str, Any],
     style: dict[str, Any],
 ) -> None:
+    encoding = series_encoding_from_spec(item, style=style)
+    line = encoding["line"]
+    marker = encoding["marker"]
     interface.Add("xy", name=item["name"], autoadd=False)
     interface.To(item["name"])
     interface.Set("xData", item["x_name"])
@@ -39,15 +45,15 @@ def _add_veusz_xy_series(
         "key",
         _veusz_literal_text(item.get("legend_key", item["label"])),
     )
-    interface.Set("PlotLine/color", item["color"])
-    interface.Set("PlotLine/style", item.get("line_style") or "solid")
-    interface.Set("MarkerFill/color", item.get("marker_fill_color") or item["color"])
-    interface.Set("MarkerLine/color", item.get("marker_line_color") or item["color"])
+    interface.Set("PlotLine/color", line["color"])
+    interface.Set("PlotLine/style", line["style"])
+    interface.Set("MarkerFill/color", marker["fill_color"])
+    interface.Set("MarkerLine/color", marker["line_color"])
     interface.Set(
         "MarkerLine/width",
-        _pt(float(item.get("marker_line_width_pt") or style["marker_line_width_pt"])),
+        _pt(float(marker["line_width_pt"])),
     )
-    interface.Set("marker", item["marker"])
+    interface.Set("marker", marker["shape"])
     # Veusz's XY legend renderer always asks the error-bar painter to draw a
     # key sample.  With the default ``bar`` error style, datasets without
     # errors still produce zero-length strokes at the centre of the legend
@@ -56,35 +62,27 @@ def _add_veusz_xy_series(
     # XY-based template (curve, point_line, stacked_curve, and raw-point
     # layers).  Real categorical error bars are separate native line objects.
     interface.Set("ErrorBarLine/hide", True)
-    if str(item.get("marker") or "none").strip().casefold() == "none":
+    if str(marker["shape"]).strip().casefold() == "none":
         interface.Set("MarkerFill/hide", True)
         interface.Set("MarkerLine/hide", True)
-    if item.get("marker_line_hide") is True:
+    if marker["fill_visible"] is not True:
+        interface.Set("MarkerFill/hide", True)
+    if marker["line_visible"] is not True:
         interface.Set("MarkerLine/hide", True)
-    if item.get("plot_line_hide") is True:
+    if line["visible"] is not True:
         interface.Set("PlotLine/hide", True)
-    if item.get("raw_points_visible") is False:
-        interface.Set("MarkerFill/hide", True)
-        interface.Set("MarkerLine/hide", True)
-    interface.Set(
-        "PlotLine/transparency", _alpha_to_transparency(float(style["line_alpha"]))
-    )
+    interface.Set("PlotLine/transparency", _alpha_to_transparency(float(line["alpha"])))
     interface.Set(
         "MarkerFill/transparency",
-        _alpha_to_transparency(float(item.get("marker_alpha", style["marker_alpha"]))),
+        _alpha_to_transparency(float(marker["fill_alpha"])),
     )
     interface.Set(
         "MarkerLine/transparency",
-        _alpha_to_transparency(float(item.get("marker_alpha", style["marker_alpha"]))),
+        _alpha_to_transparency(float(marker["line_alpha"])),
     )
-    if item.get("line_width_pt") is not None:
-        interface.Set("PlotLine/width", _pt(float(item["line_width_pt"])))
-    marker = str(item.get("marker") or "none")
-    if item.get("marker_size_pt") is not None:
-        interface.Set("markerSize", _pt(float(item["marker_size_pt"])))
-    elif marker != "none":
-        interface.Set("markerSize", _pt(float(style["marker_size_pt"])))
-    marker_thin_factor = max(1, int(item.get("marker_thin_factor") or 1))
+    interface.Set("PlotLine/width", _pt(float(line["width_pt"])))
+    interface.Set("markerSize", _pt(float(marker["size_pt"])))
+    marker_thin_factor = max(1, int(marker["thin_factor"]))
     if marker_thin_factor > 1:
         interface.Set("thinfactor", marker_thin_factor)
     interface.To("..")

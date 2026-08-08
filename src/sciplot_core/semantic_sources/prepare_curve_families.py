@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from sciplot_core.dma_temperature_contract import DMA_TEMPERATURE_DEFAULT_Y_MIN
 
 from sciplot_core.semantic_sources.preparation_context import SemanticPreparationContext
 
@@ -17,10 +18,6 @@ from sciplot_core.semantic_sources.dma_sources import (
     _DMA_CANONICAL_TO_DISPLAY_FACTOR,
     _DMA_DISPLAY_MODULUS_UNIT,
     _read_dma_temperature_series_list,
-)
-
-from sciplot_core.semantic_sources.dsc_sources import (
-    _read_dsc_cycle_series,
 )
 
 from sciplot_core.semantic_sources.ftir_sources import (
@@ -55,6 +52,9 @@ from sciplot_core.semantic_sources.swelling_sources import (
 from sciplot_core.semantic_sources.table_scanning import (
     _scan_curve_series_source,
 )
+from sciplot_core.semantic_sources.rheology_sweep_sources import (
+    _sweep_source_files,
+)
 
 
 def prepare_curve_family_source(
@@ -73,31 +73,21 @@ def prepare_curve_family_source(
             for path in source.iterdir()
         )
     ):
-        processed_source = processed_dir / "dsc_cycle_comparison.csv"
-        series_list = _read_dsc_cycle_series(source)
-        _write_curve_table(series_list, processed_source)
-        return _semantic_preparation_result(
-            source,
-            processed_source=processed_source,
-            operation="extract_dsc_cooling_and_second_heating_ramps",
-            parameters={
-                "phase_order": ["Cooling", "Second heating"],
-                "series_order": [series.sample for series in series_list],
-                "active_ramp_selection": (
-                    "Temperature/time ramp-rate selection; heat-flow values are "
-                    "not used to choose crop boundaries."
-                ),
-                "source_selections": [
-                    {"sample": series.sample, **(series.diagnostics or {})}
-                    for series in series_list
-                ],
-            },
+        raise ValueError(
+            "dsc_cycle_rule_required: `dsc_curve` accepts only the registered "
+            "publication-digitized single-curve source. Cycle workbooks require "
+            "a separate authorized `dsc_cycle` rule."
         )
 
     if family == "dma_temperature_sweep":
         processed_source = processed_dir / "dma_temperature_comparison.csv"
         series_list = _read_dma_temperature_series_list(source)
         series_list = _order_curve_series(series_list, series_order)
+        below_default_y_min_count = sum(
+            y_value < DMA_TEMPERATURE_DEFAULT_Y_MIN
+            for series in series_list
+            for _x_value, y_value in series.points
+        )
         _write_curve_table(series_list, processed_source)
         return _semantic_preparation_result(
             source,
@@ -134,17 +124,20 @@ def prepare_curve_family_source(
                     )
                     for series in series_list
                 ),
-                "default_y_min_clipped_point_count": sum(
-                    int(
-                        (series.diagnostics or {}).get(
-                            "default_y_min_clipped_point_count",
-                            0,
-                        )
-                    )
-                    for series in series_list
+                "configured_default_y_min": DMA_TEMPERATURE_DEFAULT_Y_MIN,
+                "below_configured_default_y_min_count": (below_default_y_min_count),
+                # Compatibility key: this is a potential bound count, not
+                # evidence that the final axis actually clipped those points.
+                "default_y_min_clipped_point_count": below_default_y_min_count,
+                "default_y_min_clipped_point_count_semantics": (
+                    "legacy_potential_count_not_final_axis_clipping"
                 ),
+                "final_axis_clipping_authority": "spec.axis_data_visibility",
                 "unit_conversion_recorded": True,
             },
+            source_attestation_rule_id=context.rule_id or family,
+            source_tree_sha256_before=context.source_tree_sha256_before,
+            selected_sources=tuple(_sweep_source_files(source)),
         )
 
     if family in {"saxs_profile", "gpc_sec_chromatogram"}:
