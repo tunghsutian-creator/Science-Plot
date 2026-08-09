@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 import pytest
@@ -43,6 +44,7 @@ def test_help_exposes_one_studio_family_and_hides_internal_probes() -> None:
     help_text = cli._build_parser().format_help()
     assert "studio" in help_text
     assert "autoplot" in help_text
+    assert "plan" in help_text
     assert "one-step" not in help_text
     assert "workbench" not in help_text
     assert "readiness-probe" not in help_text
@@ -60,6 +62,106 @@ def test_help_exposes_one_studio_family_and_hides_internal_probes() -> None:
 def test_specialized_figure_route_is_not_a_cli_command() -> None:
     assert "figure" not in _command_choices()
     assert "figure" not in _visible_command_choices()
+
+
+def test_plan_parser_accepts_explicit_rule_and_template() -> None:
+    args = cli._build_parser().parse_args(
+        [
+            "plan",
+            "source.csv",
+            "--rule",
+            "tensile_curve",
+            "--template",
+            "curve",
+            "--json",
+        ]
+    )
+
+    assert args.command == "plan"
+    assert args.input == Path("source.csv")
+    assert args.rule == "tensile_curve"
+    assert args.template == "curve"
+    assert args.json is True
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_exit"),
+    [("planned", 0), ("not_applicable", 0), ("blocked", 1)],
+)
+def test_plan_cli_emits_owner_payload_and_status_exit_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    status: str,
+    expected_exit: int,
+) -> None:
+    source = tmp_path / "source.csv"
+    source.write_text("x,y\n1,2\n", encoding="utf-8")
+    payload = {
+        "kind": "sciplot_figure_plan_preview",
+        "version": 1,
+        "status": status,
+        "source": str(source),
+        "rule_id": "tensile_curve",
+        "template": "curve",
+        "resolved_figure_plan": None,
+        "blocker": (
+            {"reason_code": "fixture_blocked", "message": "Blocked fixture."}
+            if status == "blocked"
+            else None
+        ),
+    }
+    captured: dict[str, object] = {}
+    import sciplot_core.plan_preview as preview_module
+
+    def fake_preview(
+        input_path: Path,
+        *,
+        request: dict[str, object],
+    ) -> dict[str, object]:
+        captured["input_path"] = input_path
+        captured["request"] = request
+        return payload
+
+    monkeypatch.setattr(preview_module, "build_plan_preview", fake_preview)
+
+    exit_code = cli.main(
+        [
+            "plan",
+            str(source),
+            "--rule",
+            "tensile_curve",
+            "--template",
+            "curve",
+            "--json",
+        ]
+    )
+
+    assert exit_code == expected_exit
+    assert captured == {
+        "input_path": source,
+        "request": {"rule_id": "tensile_curve", "template": "curve"},
+    }
+    assert json.loads(capsys.readouterr().out) == payload
+
+
+def test_plan_cli_human_output_is_one_status_line(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "source.csv"
+    source.write_text("x,y\n1,2\n", encoding="utf-8")
+    import sciplot_core.plan_preview as preview_module
+
+    monkeypatch.setattr(
+        preview_module,
+        "build_plan_preview",
+        lambda *_args, **_kwargs: {"status": "planned"},
+    )
+
+    assert cli.main(["plan", str(source)]) == 0
+    assert capsys.readouterr().out == "SciPlot plan: planned\n"
 
 
 def test_batch_regression_runner_is_parseable_but_not_public_automation() -> None:

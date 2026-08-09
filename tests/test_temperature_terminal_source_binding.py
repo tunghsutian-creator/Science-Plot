@@ -245,6 +245,46 @@ def test_binding_rejects_request_metric_mismatch(tmp_path: Path) -> None:
     _assert_no_published_artifacts(output)
 
 
+def test_binding_accepts_existing_mechanical_canonical_metric_case(
+    tmp_path: Path,
+) -> None:
+    binding, _source, _expected = _binding_fixture(tmp_path)
+
+    mechanical = replace(
+        binding,
+        x_metric="sample",
+        y_metric="strength_MPa",
+    )
+
+    assert mechanical.x_metric == "sample"
+    assert mechanical.y_metric == "strength_MPa"
+
+
+@pytest.mark.parametrize(
+    "metric",
+    ["", "Strength_MPa", "strength MPa", "strength-MPa"],
+)
+def test_binding_still_rejects_noncanonical_metric_tokens(
+    tmp_path: Path,
+    metric: str,
+) -> None:
+    binding, _source, _expected = _binding_fixture(tmp_path)
+
+    with pytest.raises(TerminalSourceBindingError) as exc_info:
+        replace(binding, y_metric=metric)
+
+    assert exc_info.value.reason_code == "terminal_source_binding_contract_mismatch"
+
+
+def test_binding_does_not_relax_rule_task_or_template_identity(tmp_path: Path) -> None:
+    binding, _source, _expected = _binding_fixture(tmp_path)
+
+    with pytest.raises(TerminalSourceBindingError) as exc_info:
+        replace(binding, rule_id="Tensile_curve")
+
+    assert exc_info.value.reason_code == "terminal_source_binding_contract_mismatch"
+
+
 @pytest.mark.comprehensive
 def test_bound_terminal_source_is_read_directly_without_second_semantic_prepare(
     tmp_path: Path,

@@ -13,6 +13,24 @@ from sciplot_core.cli.value_io import (
 
 
 def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
+    if args.command == "plan":
+        from sciplot_core.plan_preview import build_plan_preview
+
+        request = {
+            key: value
+            for key, value in (
+                ("rule_id", args.rule),
+                ("template", args.template),
+            )
+            if value is not None
+        }
+        payload = build_plan_preview(_resolve_input(args.input), request=request)
+        if args.json:
+            _print_json(payload)
+        else:
+            print(f"SciPlot plan: {payload['status']}")
+        return 1 if payload["status"] == "blocked" else 0
+
     if args.command == "inspect":
         from sciplot_core.render import inspect_payload
 

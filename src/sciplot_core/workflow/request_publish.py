@@ -7,10 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.delivery import build_delivery_package
-from sciplot_core.figure_plan import (
-    finalize_figure_plan_result,
-    resolved_figure_plan_from_payload,
-)
+from sciplot_core.figure_plan import ResolvedFigurePlan, resolved_figure_plan_from_payload
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.one_step import build_one_step_project
@@ -77,15 +74,17 @@ def publish_request_result(
     resolved_figure_plan = resolved_figure_plan_from_payload(
         request.get("resolved_figure_plan")
     )
+    if resolved_figure_plan != rendered.selected_figure_plan:
+        raise ValueError(
+            "workflow_result_figure_plan_mismatch: the rendered result belongs "
+            "to a different selected FigurePlan."
+        )
     verify_workflow_figure_plan_source_binding(
         resolved_figure_plan,
         input_path=input_path,
         raw_archive=raw_archive,
     )
-    completed_figure_plan = finalize_figure_plan_result(
-        resolved_figure_plan,
-        result,
-    )
+    completed_figure_plan = rendered.completed_figure_plan
     _extend_runtime_transform_steps(transform_steps, result.get("transform_steps"))
     transform_ledger = build_transform_ledger(
         study_model,
@@ -169,11 +168,6 @@ def publish_request_result(
         figures=figures,
         layout_policy=layout_policy,
     )
-    verify_workflow_figure_plan_source_binding(
-        completed_figure_plan,
-        input_path=input_path,
-        raw_archive=raw_archive,
-    )
     _finalize_request_manifest(
         manifest,
         request_path=request_path,
@@ -185,6 +179,7 @@ def publish_request_result(
         layout_policy=layout_policy,
         output_dir=output_dir,
         qa=qa,
+        completed_figure_plan=completed_figure_plan,
     )
     return manifest
 
@@ -248,7 +243,6 @@ def _build_request_manifest(
     }
     if isinstance(result.get("resolved_figure_plan"), dict):
         manifest["resolved_figure_plan"] = json_safe(result["resolved_figure_plan"])
-        manifest["figure_outcomes"] = json_safe(result.get("figure_outcomes", []))
     return manifest
 
 
@@ -264,6 +258,7 @@ def _finalize_request_manifest(
     layout_policy: Any,
     output_dir: Path,
     qa: dict[str, Any],
+    completed_figure_plan: ResolvedFigurePlan | None,
 ) -> None:
     manifest["layout_quality"] = _layout_quality_from_result(manifest["result"])
     manifest["revision_brief"] = _write_revision_brief(output_dir, manifest=manifest)
@@ -288,6 +283,7 @@ def _finalize_request_manifest(
         layout_quality=manifest["layout_quality"],
         qa=qa,
         delivery_package=manifest["delivery_package"],
+        resolved_figure_plan=completed_figure_plan,
     )
     manifest.update(
         build_publish_state(

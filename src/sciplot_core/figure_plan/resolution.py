@@ -16,6 +16,7 @@ from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.figure_plan.source_binding import source_tree_sha256
 from sciplot_core.figure_plan.task import FigureTask
+from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
 
 
 _RHEOLOGY_FREQUENCY_METRICS = {
@@ -178,6 +179,23 @@ def resolve_figure_plan(
         return resolve_dsc_single_curve_plan(
             input_path=input_path,
             request={**request, "template": template},
+        )
+    if normalized_rule in MECHANICAL_RULE_IDS:
+        if input_path is None:
+            raise FigurePlanResolutionError(
+                "figure_plan_source_required",
+                "Mechanical figure planning requires an explicit source path.",
+            )
+        from sciplot_core.figure_plan.mechanical_resolution import (
+            resolve_mechanical_plan,
+        )
+
+        return resolve_mechanical_plan(
+            input_path=input_path,
+            rule_id=normalized_rule,
+            template=template,
+            study_model=study_model,
+            request=request,
         )
     if normalized_rule == "performance_comparison":
         if input_path is None:

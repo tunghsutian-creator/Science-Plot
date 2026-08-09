@@ -244,14 +244,15 @@ Run the source-controlled scoped static type gate when changing
 `foundation/`, `json_contract.py`, `figure_plan/`, or
 `delivery/plan_binding.py`, `delivery/package_builder.py`,
 `delivery/package_validation.py`, `study_model/package_contract.py`, or
-`publish_state.py`:
+`publish_state.py`, `autoplot/publish_integrity.py`, or
+`autoplot/evidence.py`, or `autoplot/summary.py`:
 
 ```bash
 .venv/bin/python -m mypy
 ```
 
 Its exact scope and strictness belong to `pyproject.toml`. It currently proves
-only the 38 configured files; imported modules outside that owned scope are
+only the 42 configured files; imported modules outside that owned scope are
 analyzed for type information but do not enter the diagnostic baseline. A
 passing result is not a claim of repository-wide type safety.
 

@@ -148,7 +148,6 @@ def _completed_result(plan: ResolvedFigurePlan) -> dict[str, Any]:
         "terminal_render_requests": [
             _terminal_request(task, rule_id=plan.rule_id) for task in plan.tasks
         ],
-        "figure_outcomes": [outcome.to_payload() for outcome in completed.outcomes],
         "resolved_figure_plan": completed.to_payload(),
     }
 
@@ -340,7 +339,6 @@ def test_source_unavailable_outcome_can_explain_missing_terminal_task() -> None:
         "terminal_render_requests": [
             _terminal_request(plan.tasks[0], rule_id=plan.rule_id)
         ],
-        "figure_outcomes": [outcome.to_payload() for outcome in outcomes],
         "resolved_figure_plan": completed.to_payload(),
     }
 
@@ -599,7 +597,6 @@ def test_multi_task_authoritative_source_coverage_fails_before_derivation(
         ("rule_mismatch", "terminal_figure_rule_mismatch"),
         ("binding_mismatch", "terminal_figure_task_mismatch"),
         ("legacy_evidence", "terminal_figure_task_missing"),
-        ("outcome_mismatch", "terminal_figure_outcome_mismatch"),
         ("result_plan_mismatch", "terminal_figure_plan_mismatch"),
     ],
 )
@@ -641,8 +638,6 @@ def test_bound_terminal_figure_evidence_rejects_plan_splits(
             "x_metric": "temperature",
             "y_metric": "storage_modulus",
         }
-    elif mutation == "outcome_mismatch":
-        result["figure_outcomes"].reverse()
     else:
         different = ResolvedFigurePlan(
             rule_id="different_rule",

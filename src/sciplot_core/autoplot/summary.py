@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, Protocol
+
 from sciplot_core.automation_states import (
     READY_STATE,
     RULE_REPAIR_STATE,
     fail_closed_automation_state,
 )
-from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.figure_plan import figure_plan_manifest_gate
 from sciplot_core.delivery import verify_delivery_package
+from sciplot_core.figure_plan import (
+    FigurePlanManifestGatePayload,
+    figure_plan_manifest_gate,
+)
+from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.readiness import validated_envelope_evaluation_ready
 from sciplot_core.study_model import verify_output_package_contract
@@ -30,10 +35,21 @@ from sciplot_core.autoplot.publish_integrity import (
 )
 
 
+class _ValidatedEnvelopeReady(Protocol):
+    def __call__(
+        self,
+        payload: object,
+        *,
+        render_request: object,
+    ) -> bool: ...
+
+
 def build_autoplot_summary(
     one_step_result: dict[str, Any],
     *,
-    _validated_envelope_ready=validated_envelope_evaluation_ready,
+    _validated_envelope_ready: _ValidatedEnvelopeReady = (
+        validated_envelope_evaluation_ready
+    ),
 ) -> dict[str, Any]:
     evidence = AutoplotRunEvidence.load(one_step_result)
     run_output = evidence.run_output
@@ -41,7 +57,12 @@ def build_autoplot_summary(
     status_path = evidence.status_path
     manifest_path = evidence.manifest_path
     manifest = evidence.manifest
-    figure_plan = figure_plan_manifest_gate(manifest)
+    figure_plan, figure_plan_gate, figure_plan_projection_consistent = (
+        _autoplot_figure_plan_projection(
+            manifest=manifest,
+            one_step=evidence.effective_one_step,
+        )
+    )
     manifest_publish = _manifest_publish_integrity(manifest)
     package_verification = verify_output_package_contract(
         manifest.get("package_contract"),
@@ -59,13 +80,29 @@ def build_autoplot_summary(
         or evidence.persisted_state
         or evidence.reported_payload_state
     )
-    if not state_consistent or manifest_publish["valid"] is not True:
+    if (
+        not state_consistent
+        or manifest_publish["valid"] is not True
+        or not figure_plan_projection_consistent
+    ):
         state = RULE_REPAIR_STATE
     delivery = evidence.delivery_package
     figure_qa = evidence.figure_qa
     intervention = evidence.intervention
     validated_envelope = evidence.validated_envelope
     render_request = evidence.render_request
+    repair_reasons_value = validated_envelope.get("repair_reasons")
+    repair_reasons = (
+        list(repair_reasons_value)
+        if isinstance(repair_reasons_value, list)
+        else []
+    )
+    confirmation_reasons_value = validated_envelope.get("confirmation_reasons")
+    confirmation_reasons = (
+        list(confirmation_reasons_value)
+        if isinstance(confirmation_reasons_value, list)
+        else []
+    )
     delivery_path = _truthy_path(delivery.get("path"))
     manifest_exists = manifest_path.is_file()
     status_exists = status_path.is_file()
@@ -140,7 +177,9 @@ def build_autoplot_summary(
         integrity_reasons.append("validated_envelope_invalid")
     if not qa_ready:
         integrity_reasons.append("figure_qa_not_passed")
-    if figure_plan is not None and figure_plan["complete"] is not True:
+    if not figure_plan_projection_consistent:
+        integrity_reasons.append("resolved_figure_plan_projection_mismatch")
+    if figure_plan_gate is not None and figure_plan_gate["complete"] is not True:
         integrity_reasons.append("resolved_figure_plan_incomplete")
     artifact_integrity_ready = bool(
         manifest_exists
@@ -153,7 +192,8 @@ def build_autoplot_summary(
         and delivery_record_consistent
         and manifest_publish["valid"] is True
         and package_verification["passed"] is True
-        and (figure_plan is None or figure_plan["complete"] is True)
+        and figure_plan_projection_consistent
+        and (figure_plan_gate is None or figure_plan_gate["complete"] is True)
     )
     codex_required = bool(intervention.get("required")) or (
         state == RULE_REPAIR_STATE
@@ -193,6 +233,13 @@ def build_autoplot_summary(
         "figure_plan": json_safe(
             figure_plan
             or {
+                "complete": True,
+                "status": "not_applicable_legacy_or_single_figure",
+            }
+        ),
+        "figure_plan_gate": json_safe(
+            figure_plan_gate
+            or {
                 "valid": True,
                 "complete": True,
                 "status": "not_applicable_legacy_or_single_figure",
@@ -213,19 +260,8 @@ def build_autoplot_summary(
             "ready_without_ai": envelope_ready,
             "contract_current": validated_envelope.get("contract_current") is True,
             "evidence": json_safe(validated_envelope.get("accepted_evidence")),
-            "repair_reasons": list(
-                validated_envelope.get("repair_reasons")
-                if isinstance(validated_envelope.get("repair_reasons"), list)
-                else []
-            ),
-            "confirmation_reasons": list(
-                validated_envelope.get("confirmation_reasons")
-                if isinstance(
-                    validated_envelope.get("confirmation_reasons"),
-                    list,
-                )
-                else []
-            ),
+            "repair_reasons": repair_reasons,
+            "confirmation_reasons": confirmation_reasons,
         },
         "integrity": {
             "state_consistent": state_consistent,
@@ -238,6 +274,9 @@ def build_autoplot_summary(
             "one_step_status_exists": status_exists,
             "one_step_status_valid": status_valid,
             "one_step_manifest_consistent": one_step_payload_consistent,
+            "figure_plan_projection_consistent": (
+                figure_plan_projection_consistent
+            ),
             "delivery_path_exists": delivery_path_exists,
             "delivery_path_canonical": delivery_path_canonical,
             "delivery_package_consistent": delivery_record_consistent,
@@ -276,3 +315,24 @@ def build_autoplot_summary(
         },
     }
     return summary
+
+
+def _autoplot_figure_plan_projection(
+    *,
+    manifest: dict[str, Any],
+    one_step: dict[str, Any],
+) -> tuple[
+    Mapping[str, object] | None,
+    FigurePlanManifestGatePayload | None,
+    bool,
+]:
+    """Reuse the manifest gate and compare one-step without re-parsing the plan."""
+
+    gate = figure_plan_manifest_gate(manifest)
+    manifest_value: object = manifest.get("resolved_figure_plan")
+    one_step_value: object = one_step.get("resolved_figure_plan")
+    if gate is None:
+        return None, None, one_step_value is None
+    if gate["valid"] is not True or not isinstance(manifest_value, dict):
+        return None, gate, False
+    return manifest_value, gate, bool(one_step_value == manifest_value)

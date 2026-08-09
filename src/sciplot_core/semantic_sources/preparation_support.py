@@ -10,19 +10,10 @@ from sciplot_core.preparation_source_attestation import PreparationSourceAttesta
 
 
 from sciplot_core.semantic_sources.models import (
-    CurveSeriesPayload,
     RheologySweepSample,
     _RHEOLOGY_AMPLITUDE_OUTPUT_METRICS,
     _RHEOLOGY_TIME_OUTPUT_METRICS,
 )
-
-from sciplot_core.semantic_sources.series_labels import (
-    _intake_group_name,
-)
-
-
-def _has_intake_grouped_series(series_list: list[CurveSeriesPayload]) -> bool:
-    return any(_intake_group_name(series.sample) for series in series_list)
 
 
 def _semantic_preparation_result(

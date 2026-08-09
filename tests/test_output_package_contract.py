@@ -269,19 +269,15 @@ def test_output_package_contract_preserves_figure_plan_gate_states(
         ),
     )
     plan_payload = plan.to_payload()
-    outcomes = [outcome.to_payload() for outcome in plan.outcomes]
     manifest.update(
         {
             "resolved_figure_plan": plan_payload,
-            "figure_outcomes": outcomes,
             "result": {
                 "resolved_figure_plan": plan_payload,
-                "figure_outcomes": outcomes,
             },
             "study_model": {
                 "run": {
-                    "resolved_figure_plan_id": plan.plan_id,
-                    "figure_outcomes": outcomes,
+                    "resolved_figure_plan": plan_payload,
                 }
             },
         }

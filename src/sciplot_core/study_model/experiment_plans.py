@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-import copy
 from typing import Any
 
 from sciplot_core.dma_temperature_contract import dma_temperature_experiment_plan
+from sciplot_core.mechanical_figure_contract import (
+    mechanical_experiment_plan,
+    mechanical_statistics_method,
+)
 
 
 STUDY_MODEL_KIND = "sciplot_study_model"
@@ -50,22 +53,9 @@ _DEFAULT_FIGURE_QUEUE = (
 )
 
 
-_TENSILE_DESCRIPTIVE_STATISTICS = {
-    "kind": "sciplot_statistics_method_contract",
-    "version": 1,
-    "status": "confirmed",
-    "auto_inference_allowed": False,
-    "significance_required": False,
-    "method_id": "descriptive_median_iqr_raw_points",
-    "method_version": "1",
-    "source": "tensile_curve rule",
-    "n_definition": "one independently tested specimen",
-    "center": "median",
-    "spread_or_interval": "interquartile range",
-    "test": "none",
-    "multiple_comparisons": "none",
-    "parameters": {"raw_points_visible": True},
-}
+# First-party compatibility alias; executable mechanical queues are built from
+# ``mechanical_experiment_plan`` and this payload is not an independent owner.
+_TENSILE_DESCRIPTIVE_STATISTICS = mechanical_statistics_method()
 
 
 _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
@@ -209,99 +199,9 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
             },
         ),
     },
-    "tensile_curve": {
-        "default_replicate_mode": "representative",
-        "figure_queue": (
-            {
-                "id": "stress_vs_strain",
-                "title": "Tensile stress vs strain",
-                "metric": "stress",
-                "x_metric": "strain",
-                "y_metric": "stress",
-                "default_template": "curve",
-            },
-            {
-                "id": "tensile_strength_by_sample",
-                "title": "Tensile strength by sample",
-                "metric": "strength_MPa",
-                "x_metric": "sample",
-                "y_metric": "strength_MPa",
-                "default_template": "box_strip",
-                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
-            },
-            {
-                "id": "elongation_at_break_by_sample",
-                "title": "Elongation at break by sample",
-                "metric": "elongation_at_break_percent",
-                "x_metric": "sample",
-                "y_metric": "elongation_at_break_percent",
-                "default_template": "box_strip",
-                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
-            },
-            {
-                "id": "tensile_modulus_by_sample",
-                "title": "Tensile modulus by sample",
-                "metric": "modulus_MPa",
-                "x_metric": "sample",
-                "y_metric": "modulus_MPa",
-                "default_template": "box_strip",
-                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
-            },
-            {
-                "id": "toughness_by_sample",
-                "title": "Toughness by sample",
-                "metric": "toughness_MJ_m3",
-                "x_metric": "sample",
-                "y_metric": "toughness_MJ_m3",
-                "default_template": "box_strip",
-                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
-            },
-        ),
-    },
-    "compression_curve": {
-        "default_replicate_mode": "representative",
-        "figure_queue": (
-            {
-                "id": "compressive_stress_vs_strain",
-                "title": "Compressive stress vs strain",
-                "metric": "compressive_stress",
-                "x_metric": "strain",
-                "y_metric": "compressive_stress",
-                "default_template": "curve",
-            },
-            {
-                "id": "compressive_strength_by_sample",
-                "title": "Compressive strength by sample",
-                "metric": "compressive_strength_MPa",
-                "x_metric": "sample",
-                "y_metric": "compressive_strength_MPa",
-                "default_template": "box_strip",
-                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
-            },
-        ),
-    },
-    "flexural_curve": {
-        "default_replicate_mode": "representative",
-        "figure_queue": (
-            {
-                "id": "flexural_stress_vs_strain",
-                "title": "Flexural stress vs strain",
-                "metric": "flexural_stress",
-                "x_metric": "strain",
-                "y_metric": "flexural_stress",
-                "default_template": "curve",
-            },
-            {
-                "id": "flexural_strength_by_sample",
-                "title": "Flexural strength by sample",
-                "metric": "flexural_strength_MPa",
-                "x_metric": "sample",
-                "y_metric": "flexural_strength_MPa",
-                "default_template": "box_strip",
-                "statistics_method": copy.deepcopy(_TENSILE_DESCRIPTIVE_STATISTICS),
-            },
-        ),
-    },
+    "tensile_curve": mechanical_experiment_plan("tensile_curve"),
+    "compression_curve": mechanical_experiment_plan("compression_curve"),
+    "flexural_curve": mechanical_experiment_plan("flexural_curve"),
     "torque_curve": {
         "default_replicate_mode": "individual",
         "figure_queue": (

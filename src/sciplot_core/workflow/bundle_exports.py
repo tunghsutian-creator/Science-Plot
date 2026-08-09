@@ -6,14 +6,10 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.mechanical_render_options import SHARED_FIGURE_STYLE_KEYS
 
-_SHARED_FIGURE_STYLE_KEYS = {
-    "size",
-    "visual_theme_id",
-    "style_preset",
-    "palette_preset",
-    "marker_alpha",
-}
+
+_SHARED_FIGURE_STYLE_KEYS = SHARED_FIGURE_STYLE_KEYS
 
 
 def _metric_token(value: object) -> str:

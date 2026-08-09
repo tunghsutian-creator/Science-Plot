@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+
+from sciplot_core.figure_plan import ResolvedFigurePlan
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import slug
 from sciplot_core.policy import (
@@ -52,6 +54,7 @@ def build_one_step_project(
     qa: dict[str, Any] | None,
     delivery_package: dict[str, Any] | None = None,
     intervention_request: dict[str, Any] | None = None,
+    resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> dict[str, Any]:
     source_package = build_source_package(
         input_path=input_path, raw_archive=raw_archive, semantic=semantic
@@ -79,8 +82,9 @@ def build_one_step_project(
         render_request=render_request,
         figure_qa_report=figure_qa_report,
         validated_envelope=validated_envelope,
+        resolved_figure_plan=resolved_figure_plan,
     )
-    return {
+    payload = {
         "kind": ONE_STEP_MODEL_KIND,
         "version": ONE_STEP_MODEL_VERSION,
         "created_at": _now(),
@@ -100,3 +104,6 @@ def build_one_step_project(
         ),
         "delivery_package": json_safe(delivery_package or {}),
     }
+    if resolved_figure_plan is not None:
+        payload["resolved_figure_plan"] = resolved_figure_plan.to_payload()
+    return payload

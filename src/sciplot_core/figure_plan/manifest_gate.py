@@ -12,7 +12,6 @@ from sciplot_core.figure_plan.payload_types import (
     FigurePlanManifestGateValidPayload,
     FigurePlanProjectionConsistencyPayload,
 )
-from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 
 
 def figure_plan_manifest_gate(
@@ -38,9 +37,8 @@ def figure_plan_manifest_gate(
         return None
     if gate["valid"] is not True:
         return gate
-    plan = resolved_figure_plan_from_payload(manifest["resolved_figure_plan"])
-    assert plan is not None
-    expected_outcomes = [outcome.to_payload() for outcome in plan.outcomes]
+    plan_payload = manifest["resolved_figure_plan"]
+    assert isinstance(plan_payload, dict)
     result_value = manifest.get("result")
     if isinstance(result_value, dict):
         result = result_value
@@ -58,17 +56,13 @@ def figure_plan_manifest_gate(
         study_run = {}
     consistency: FigurePlanProjectionConsistencyPayload = {
         "manifest_rule_matches": not declared_rule_ids
-        or declared_rule_ids == {plan.rule_id},
-        "manifest_outcomes_match": manifest.get("figure_outcomes") == expected_outcomes,
-        "result_plan_matches": result.get("resolved_figure_plan") == plan.to_payload(),
-        "result_outcomes_match": result.get("figure_outcomes") == expected_outcomes,
-        "study_plan_id_matches": study_run.get("resolved_figure_plan_id")
-        == plan.plan_id,
-        "study_outcomes_match": study_run.get("figure_outcomes") == expected_outcomes,
+        or declared_rule_ids == {plan_payload["rule_id"]},
+        "result_plan_matches": result.get("resolved_figure_plan") == plan_payload,
+        "study_plan_matches": study_run.get("resolved_figure_plan") == plan_payload,
         "outcome_artifacts_exist": all(
             Path(path).expanduser().is_file()
-            for outcome in plan.outcomes
-            for path in outcome.artifacts
+            for outcome in plan_payload["outcomes"]
+            for path in outcome["artifacts"]
         ),
     }
     manifest_gate: FigurePlanManifestGateValidPayload = {

@@ -104,7 +104,14 @@ def _replicate_distribution_contract(
         values = [
             float(value) for value in item.y_values if math.isfinite(float(value))
         ]
-        mean, error = _mean_and_sample_sd(values)
+        bar_statistics: dict[str, float | str] = {}
+        if template_id == "bar":
+            mean, error = _mean_and_sample_sd(values)
+            bar_statistics = {
+                "bar_mean": mean,
+                "bar_error": error,
+                "bar_error_statistic": "sd",
+            }
         position = float(
             item.category_position if item.category_position is not None else index
         )
@@ -184,9 +191,7 @@ def _replicate_distribution_contract(
                     "q3": q3,
                     "maximum": max(values),
                 },
-                "bar_mean": mean,
-                "bar_error": error,
-                "bar_error_statistic": "sd",
+                **bar_statistics,
                 "raw_points_visible": (
                     template_id == "box_strip"
                     or summary_statistic == "raw_only"
@@ -217,7 +222,7 @@ def _replicate_distribution_contract(
             else None
         ),
         "mean_marker_visible": False,
-        "bar_error_statistic": "sd",
+        **({"bar_error_statistic": "sd"} if template_id == "bar" else {}),
         "condition_labels": grouped_condition_labels,
         "condition_count": len(grouped_condition_labels),
         "sample_color_binding": ("categorical_root_by_sample" if grouped_bar else None),

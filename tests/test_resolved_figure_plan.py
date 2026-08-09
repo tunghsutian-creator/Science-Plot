@@ -345,21 +345,17 @@ def test_public_payload_json_shape_and_order_stay_stable() -> None:
         "reason",
     ]
 
-    outcomes = [expected_outcome]
     manifest_valid = figure_plan_manifest_gate(
         {
             "semantic": {"rule_id": plan.rule_id},
             "request": {"rule_id": plan.rule_id},
             "resolved_figure_plan": plan_payload,
-            "figure_outcomes": outcomes,
             "result": {
                 "resolved_figure_plan": plan_payload,
-                "figure_outcomes": outcomes,
             },
             "study_model": {
                 "run": {
-                    "resolved_figure_plan_id": plan.plan_id,
-                    "figure_outcomes": outcomes,
+                    "resolved_figure_plan": plan_payload,
                 }
             },
         }
@@ -373,11 +369,8 @@ def test_public_payload_json_shape_and_order_stay_stable() -> None:
     ]
     assert list(manifest_valid["projection_consistency"]) == [
         "manifest_rule_matches",
-        "manifest_outcomes_match",
         "result_plan_matches",
-        "result_outcomes_match",
-        "study_plan_id_matches",
-        "study_outcomes_match",
+        "study_plan_matches",
         "outcome_artifacts_exist",
     ]
 
@@ -942,6 +935,7 @@ def test_finalize_does_not_inherit_old_ready_outcomes(
     assert gate is not None
     assert gate["ready_figure_ids"] == []
     assert gate["incomplete_figure_ids"] == list(plan.selected_figure_ids)
+    assert "figure_outcomes" not in current_result
 
 
 def test_supported_manifest_cannot_drop_resolved_plan(
@@ -974,20 +968,16 @@ def test_manifest_rule_must_match_embedded_plan(
     tmp_path: Path,
 ) -> None:
     plan = _frequency_plan(tmp_path)
-    outcomes = [outcome.to_payload() for outcome in plan.outcomes]
     manifest = {
         "semantic": {"rule_id": "legacy_custom_rule"},
         "request": {"rule_id": "legacy_custom_rule"},
         "resolved_figure_plan": plan.to_payload(),
-        "figure_outcomes": outcomes,
         "result": {
             "resolved_figure_plan": plan.to_payload(),
-            "figure_outcomes": outcomes,
         },
         "study_model": {
             "run": {
-                "resolved_figure_plan_id": plan.plan_id,
-                "figure_outcomes": outcomes,
+                "resolved_figure_plan": plan.to_payload(),
             }
         },
     }

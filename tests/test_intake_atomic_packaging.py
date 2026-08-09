@@ -43,7 +43,7 @@ def _build_project(output_root: Path, content: bytes) -> dict[str, object]:
     )
 
 
-def test_initial_project_plan_and_outcomes_match_in_canonical_mirror_and_zip(
+def test_initial_project_plan_matches_in_canonical_mirror_and_zip(
     tmp_path: Path,
 ) -> None:
     task = FigureTask(
@@ -88,10 +88,9 @@ def test_initial_project_plan_and_outcomes_match_in_canonical_mirror_and_zip(
     with zipfile.ZipFile(Path(str(created["zip_path"]))) as archive:
         archived = json.loads(archive.read(f"{project_dir.name}/intake_manifest.json"))
 
-    expected_outcomes = [outcome.to_payload() for outcome in plan.outcomes]
     for payload in (canonical, mirror, archived):
         assert payload["resolved_figure_plan"] == plan.to_payload()
-        assert payload["figure_outcomes"] == expected_outcomes
+        assert "figure_outcomes" not in payload
 
 
 def test_studio_run_projection_set_and_pop_reaches_canonical_mirror_and_zip(
@@ -160,8 +159,9 @@ def test_studio_run_projection_set_and_pop_reaches_canonical_mirror_and_zip(
 
     for payload in persisted_payloads():
         assert payload["resolved_figure_plan"] == plan.to_payload()
-        assert payload["figure_outcomes"] == outcomes
+        assert "figure_outcomes" not in payload
         assert payload["last_run"]["resolved_figure_plan"] == plan.to_payload()
+        assert "figure_outcomes" not in payload["last_run"]
         assert payload["studio"]["last_export_run"] == studio_run
         assert payload["studio"]["exports"] == studio_run["exports"]
 

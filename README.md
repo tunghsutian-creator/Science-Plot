@@ -123,6 +123,8 @@ transform lineage 或完整 SciPlot 项目交付。显式重新生成前必须�
 
 ## 其它命令的角色
 
+- `plan`：只读解析当前源的有效规则、模板和完整 FigurePlan，供人或本机助手在执行前
+  查看；它不渲染、不建项目、不写交付物。
 - `app`：仅在需要首次浏览器确认时使用；不是绘图或精修前端。
 - `autoplot`：唯一公开的程序化全自动项目入口。它内部复用
   `one-step`/`run_request`，并负责稳定 summary、QA 和 delivery；它不是第三个
@@ -160,13 +162,25 @@ skill/scripts/sciplot autoplot PATH \
 ```
 
 对 `rheology_frequency_sweep`、`rheology_temperature_sweep`、
-`dma_temperature_sweep`、`impact_metric`、`performance_comparison` 和 `dsc_curve`，Studio
+`dma_temperature_sweep`、`tensile_curve`、`compression_curve`、`flexural_curve`、
+`impact_metric`、`performance_comparison` 和 `dsc_curve`，Studio
 与 Autoplot 在渲染前共同解析
 一份 `ResolvedFigurePlan`。它固定本次选中的
 逻辑图 ID、顺序、指标、模板、条件/样品轴、兼容输出文件名和准备时的源内容指纹；
 渲染器只执行这些任务，不能再自行增删图。保存过的计划若与当前规则、模板、Study
 Model 或源文件字节不一致，复用旧 VSZ 或直接发布都会停止，而不是沿用旧的 ready
 结果。显式重新生成可在同一规则内根据当前源重新解析计划，但不能跨规则静默刷新。
+
+机械 FigurePlan 由一套共享合同生成，不能再由 Study Model、Studio 和 Workflow 各自
+解释。拉伸依次交付应力–应变曲线、强度、断裂伸长率、模量和韧性五张图；压缩和弯曲
+各交付一张曲线与一张强度图。曲线默认选择“保留强度距组内中位数最近”的真实试样，
+拉伸同距时再比较断裂伸长率，最后按源顺序决定；可以显式选择逐试样曲线，但不允许把
+曲线静默平均。所有汇总任务固定为 `box_strip`，使用线性四分位数、median/IQR、1.5 IQR
+须线和可见原始点，不显示 mean 或 sample-SD。终端证据逐任务绑定原始源哈希、准备表、
+绘图表、样品顺序、重复数、指标、单位、模板、调色板解析和实际 series encoding；任何
+冲突都使整组失败并回滚，而不是留下部分图。当前登记数据为拉伸 `E0 2MM` n=9、压缩
+`Conventional PU foam` n=6、弯曲 `A_HA56` n=6；这些 n 来自明确试样身份，不从普通
+数字标签猜测重复关系。
 
 温度流变扫描固定生成两张 `point_line` 图：先生成
 `storage_modulus_vs_temperature`，再生成稳定身份为
@@ -466,6 +480,16 @@ skill/scripts/sciplot rules list --json
 skill/scripts/sciplot rules show RULE_ID --json
 ```
 
+查看程序在真正执行前会选择哪些图，不创建项目或交付物：
+
+```bash
+skill/scripts/sciplot plan PATH --json
+skill/scripts/sciplot plan PATH --rule RULE_ID --template TEMPLATE_ID --json
+```
+
+`planned` 返回完整任务集，`not_applicable` 表示该源不使用 FigurePlan，`blocked`
+返回一个稳定阻断原因并使用非零退出码。该结果是只读意图预览，不是渲染或交付证明。
+
 只有明确需要浏览器首次确认时才使用：
 
 ```bash
@@ -490,8 +514,9 @@ skill/scripts/sciplot app PATH --out /原始数据所在目录/SOURCE_SciPlot
 `mypy` 当前只对 `pyproject.toml` 明确列出的 `foundation/`、
 `json_contract.py`、`figure_plan/`、`delivery/plan_binding.py`、
 `delivery/package_builder.py`、`delivery/package_validation.py`、
-`study_model/package_contract.py` 和 `publish_state.py` 33 个文件执行严格基线检查，
-不表示全仓已经完成静态类型覆盖。
+`study_model/package_contract.py`、`publish_state.py` 和
+`autoplot/publish_integrity.py`、`autoplot/evidence.py`、
+`autoplot/summary.py` 42 个文件执行严格基线检查，不表示全仓已经完成静态类型覆盖。
 
 完整测试留给生产/公共合同交付、测试基础设施、发布、广泛重构或影响不确定的变化；
 具体升级规则由 `skill/SKILL.md` 统一定义。

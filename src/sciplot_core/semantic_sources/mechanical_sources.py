@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 from typing import Any
 import pandas as pd
@@ -26,10 +25,6 @@ from sciplot_core.semantic_sources.models import (
 from sciplot_core.semantic_sources.table_scanning import (
     _float,
     _scan_curve_series_source,
-)
-
-from sciplot_core.semantic_sources.series_labels import (
-    _intake_group_name,
 )
 
 _NON_TENSILE_MECHANICAL_CONTRACTS: dict[str, dict[str, Any]] = {
@@ -91,7 +86,21 @@ def _read_non_tensile_mechanical_series(
         except (OSError, ValueError) as exc:
             errors.append(f"{path.name}: {exc}")
             continue
-        series_list.extend(parsed)
+        series_list.extend(
+            CurveSeriesPayload(
+                sample=series.sample,
+                x_label=series.x_label,
+                x_unit=series.x_unit,
+                y_label=series.y_label,
+                y_unit=series.y_unit,
+                points=series.points,
+                diagnostics={
+                    **(series.diagnostics or {}),
+                    "source_file": str(path.resolve()),
+                },
+            )
+            for series in parsed
+        )
     if not series_list:
         detail = "; ".join(errors[:3])
         raise ValueError(
@@ -226,46 +235,3 @@ def _read_non_tensile_mechanical_workbook_directory(
             f"strengths found under {source}."
         )
     return representatives, summary_rows
-
-
-def _write_non_tensile_mechanical_summary_table(
-    series_list: list[CurveSeriesPayload],
-    output: Path,
-    *,
-    family: str,
-) -> Path:
-    contract = _NON_TENSILE_MECHANICAL_CONTRACTS[family]
-    rows: list[dict[str, Any]] = []
-    for series in series_list:
-        finite_stress = [
-            float(stress)
-            for _strain, stress in series.points
-            if math.isfinite(float(stress))
-        ]
-        if not finite_stress:
-            continue
-        strength = (
-            max(abs(value) for value in finite_stress)
-            if contract["magnitude"]
-            else max(finite_stress)
-        )
-        group = _intake_group_name(series.sample) or series.sample
-        replicate = (
-            series.sample.split("__", 1)[1] if "__" in series.sample else series.sample
-        )
-        rows.append(
-            {
-                "sample": group,
-                "replicate": replicate,
-                str(contract["strength_metric"]): strength,
-                "source_file": (series.diagnostics or {}).get("source_table"),
-                "strength_source": (
-                    "curve_maximum_magnitude"
-                    if contract["magnitude"]
-                    else "curve_maximum"
-                ),
-            }
-        )
-    output.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows).to_csv(output, index=False)
-    return output

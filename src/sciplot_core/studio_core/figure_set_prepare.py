@@ -9,7 +9,6 @@ from uuid import uuid4
 from sciplot_core.figure_plan import (
     ResolvedFigurePlan,
     editable_figure_plan,
-    request_for_figure_task,
 )
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.foundation.file_hashing import (
@@ -19,15 +18,15 @@ from sciplot_core.studio_render.models import (
     StudioPreparationBlocked,
 )
 
-from sciplot_core.studio_core.json_files import (
-    _read_json,
+from sciplot_core.studio_core.json_files import _read_json
+from sciplot_core.studio_core.mechanical_task_source_lifecycle import (
+    manage_mechanical_task_source_lifecycle,
 )
 
 from sciplot_core.studio_core.figure_requests import (
     _rheology_frequency_figure_queue,
-    _rheology_frequency_figure_request,
-    _impact_condition_figure_request,
 )
+from sciplot_core.studio_core.figure_source_request import figure_source_request
 from sciplot_core.studio_core.figure_task_evidence import (
     figure_task_from_queue_item,
     validate_figure_queue_against_plan,
@@ -44,6 +43,9 @@ from sciplot_core.studio_core.figure_set_storage import (
 )
 from sciplot_core.studio_core.figure_set_registry import (
     build_studio_figure_set_registry,
+)
+from sciplot_core.studio_core.figure_set_primary_stage import (
+    append_staged_primary_replacements,
 )
 
 from sciplot_core.studio_core.export_execution import (
@@ -64,6 +66,7 @@ from sciplot_core.studio_core.registry_state import (
 )
 
 
+@manage_mechanical_task_source_lifecycle
 def _prepare_studio_figure_set(
     *,
     project_dir: Path,
@@ -100,6 +103,9 @@ def _prepare_studio_figure_set(
                 "requires its selected FigurePlan."
             )
         validate_figure_queue_against_plan(queue, figure_plan)
+    bind_primary_in_transaction = any(
+        isinstance(item, dict) and "_mechanical_task_source" in item for item in queue
+    )
     figures_dir = project_dir / "studio" / "figures"
     if queue:
         figures_dir.mkdir(parents=True, exist_ok=True)
@@ -112,38 +118,15 @@ def _prepare_studio_figure_set(
     entries: list[dict[str, Any]] = []
     replacements: list[dict[str, Any]] = []
     manual_archive_requests: list[dict[str, Any]] = []
-    if primary_staged_document is not None or primary_staged_spec is not None:
-        if primary_staged_document is None or primary_staged_spec is None:
-            raise ValueError(
-                "A staged primary Studio document and spec must be supplied together."
-            )
-        primary_document_hash = existing_file_sha256(primary_staged_document)
-        primary_spec_hash = existing_file_sha256(primary_staged_spec)
-        if not primary_document_hash or not primary_spec_hash:
-            raise RuntimeError("The staged primary Studio document is incomplete.")
-        replacements.extend(
-            [
-                {
-                    "staged": primary_staged_document,
-                    "target": primary_document,
-                    "expected_hash": primary_document_hash,
-                    "kind": "document",
-                },
-                {
-                    "staged": primary_staged_spec,
-                    "target": _veusz_spec_path(primary_document),
-                    "expected_hash": primary_spec_hash,
-                    "kind": "spec",
-                },
-            ]
-        )
-        manual_archive_requests.append(
-            {
-                "document": primary_document,
-                "spec": _veusz_spec_path(primary_document),
-                "generated_hash": primary_prior_generated_hash,
-            }
-        )
+    append_staged_primary_replacements(
+        primary_document=primary_document,
+        primary_staged_document=primary_staged_document,
+        primary_staged_spec=primary_staged_spec,
+        primary_prior_generated_hash=primary_prior_generated_hash,
+        task_source_rendered=bind_primary_in_transaction,
+        replacements=replacements,
+        manual_archive_requests=manual_archive_requests,
+    )
     if staged_request is not None:
         staged_request_hash = existing_file_sha256(staged_request)
         if not staged_request_hash:
@@ -200,11 +183,17 @@ def _prepare_studio_figure_set(
                 / f"{str(figure_context.get('document_stem') or figure_id)}.vsz"
             )
             registered_hash = (
-                primary_generated_hash
+                primary_prior_generated_hash
+                if is_primary and bind_primary_in_transaction
+                else primary_generated_hash
                 if is_primary and primary_generated_hash
                 else str(prior.get("generated_hash") or "").strip() or None
             )
-            if is_primary and primary_staged_document is not None:
+            if (
+                is_primary
+                and primary_staged_document is not None
+                and not bind_primary_in_transaction
+            ):
                 if task is None:
                     raise ValueError(
                         "studio_figure_task_mismatch: staged primary figure "
@@ -226,7 +215,11 @@ def _prepare_studio_figure_set(
                     )
                 )
                 continue
-            if is_primary and document_path.is_file():
+            if (
+                is_primary
+                and document_path.is_file()
+                and not bind_primary_in_transaction
+            ):
                 generated_hash = registered_hash or _registered_generated_hash(
                     project_dir
                 )
@@ -243,7 +236,11 @@ def _prepare_studio_figure_set(
                     )
                 )
                 continue
-            if preserve_existing and document_path.is_file():
+            if (
+                preserve_existing
+                and document_path.is_file()
+                and not bind_primary_in_transaction
+            ):
                 entries.append(
                     _figure_registry_entry(
                         figure=figure_context,
@@ -254,14 +251,12 @@ def _prepare_studio_figure_set(
                 )
                 continue
             spec_path = _veusz_spec_path(document_path)
-            figure_request = (
-                request_for_figure_task(request, task)
-                if task is not None
-                and figure_plan is not None
-                and figure_plan.rule_id != "impact_metric"
-                else _impact_condition_figure_request(request, figure_context)
-                if queue_override is not None
-                else _rheology_frequency_figure_request(request, figure_context)
+            figure_request, terminal_source_binding = figure_source_request(
+                request,
+                figure=figure_context,
+                task=task,
+                figure_plan=figure_plan,
+                queue_override=queue_override,
             )
             staged_document = document_path.with_name(
                 f".sciplot-figure-set-transaction-{uuid4().hex}.vsz"
@@ -271,7 +266,12 @@ def _prepare_studio_figure_set(
                 series, axis_info, _steps, _source = _series_from_request(
                     figure_request,
                     base_dir=request_path.parent,
-                    _prepared_source_attestation=prepared_source_attestation,
+                    _terminal_source_binding=terminal_source_binding,
+                    _prepared_source_attestation=(
+                        None
+                        if terminal_source_binding is not None
+                        else prepared_source_attestation
+                    ),
                 )
                 _write_veusz_document(
                     staged_document,

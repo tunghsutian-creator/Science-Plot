@@ -15,6 +15,7 @@ from sciplot_core.assisted_cleanup import (
 from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.figure_plan import (
     FigurePlanResolutionError,
+    ResolvedFigurePlan,
     resolve_preparation_figure_plan,
 )
 from sciplot_core.foundation.json_io import atomic_write_json
@@ -199,6 +200,7 @@ def _run_request_in_managed_output(
         raw_archive=raw_archive,
         study_model=study_model,
         layout_policy=layout_policy,
+        figure_plan=figure_plan,
     )
     rendered = execute_request_render(
         request=request,
@@ -322,6 +324,7 @@ def _enforce_intervention_gate(
     raw_archive: dict[str, Any],
     study_model: dict[str, Any],
     layout_policy: Any,
+    figure_plan: ResolvedFigurePlan | None = None,
 ) -> None:
     pending_rule_blocked = semantic.get("rule_readiness") == "pending"
     if not (
@@ -361,6 +364,7 @@ def _enforce_intervention_gate(
         qa=None,
         delivery_package=None,
         intervention_request=intervention,
+        resolved_figure_plan=figure_plan,
     )
     _write_one_step_status(output_dir, one_step_status)
     failure = (

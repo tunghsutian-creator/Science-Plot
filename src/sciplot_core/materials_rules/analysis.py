@@ -11,6 +11,7 @@ from sciplot_core.materials_rules.metric_tables import (
 )
 
 from sciplot_core.materials_rules.mechanical_metrics import (
+    _mechanical_strength_summary_metrics,
     _stress_relaxation_metrics,
     _creep_metrics,
     _tensile_metrics,
@@ -129,20 +130,46 @@ def compute_analysis_metrics(
             )
         )
     elif rule_id == "compression_curve":
-        rows = _peak_y_metrics(
-            canonical_source,
-            metric_name="compressive_strength_MPa",
-            y_unit=semantic["axis_plan"]["y"]["canonical_unit"],
-            magnitude=True,
-            y_tokens=("stress",),
+        summary_source = canonical_source.with_name(
+            f"{canonical_source.stem}_summary.csv"
         )
+        rows = (
+            _mechanical_strength_summary_metrics(
+                summary_source,
+                metric_name="compressive_strength_MPa",
+                iqr_name="compressive_strength_iqr_MPa",
+            )
+            if summary_source.is_file()
+            else []
+        )
+        if not rows:
+            rows = _peak_y_metrics(
+                canonical_source,
+                metric_name="compressive_strength_MPa",
+                y_unit=semantic["axis_plan"]["y"]["canonical_unit"],
+                magnitude=True,
+                y_tokens=("stress",),
+            )
     elif rule_id == "flexural_curve":
-        rows = _peak_y_metrics(
-            canonical_source,
-            metric_name="flexural_strength_MPa",
-            y_unit=semantic["axis_plan"]["y"]["canonical_unit"],
-            y_tokens=("stress",),
+        summary_source = canonical_source.with_name(
+            f"{canonical_source.stem}_summary.csv"
         )
+        rows = (
+            _mechanical_strength_summary_metrics(
+                summary_source,
+                metric_name="flexural_strength_MPa",
+                iqr_name="flexural_strength_iqr_MPa",
+            )
+            if summary_source.is_file()
+            else []
+        )
+        if not rows:
+            rows = _peak_y_metrics(
+                canonical_source,
+                metric_name="flexural_strength_MPa",
+                y_unit=semantic["axis_plan"]["y"]["canonical_unit"],
+                y_tokens=("stress",),
+            )
     elif rule_id == "rheology_time_sweep":
         rows = _paired_extreme_position_metrics(
             canonical_source,

@@ -86,7 +86,6 @@ def _builder_manifest(
         "x,y\ns,MPa\nsample,sample\n1,2\n",
         encoding="utf-8",
     )
-    outcomes = [outcome.to_payload() for outcome in plan.outcomes]
     figures = [
         str(source_artifacts[figure_id][role])
         for figure_id in plan.selected_figure_ids
@@ -136,17 +135,14 @@ def _builder_manifest(
                 path: existing_file_sha256(Path(path)) for path in documents
             },
             "resolved_figure_plan": plan_payload,
-            "figure_outcomes": outcomes,
             "result": {
                 "processed_source": str(data),
                 "resolved_figure_plan": plan_payload,
-                "figure_outcomes": outcomes,
                 "exports": exports,
             },
             "study_model": {
                 "run": {
-                    "resolved_figure_plan_id": plan.plan_id,
-                    "figure_outcomes": outcomes,
+                    "resolved_figure_plan": plan_payload,
                 }
             },
             "qa": qa,
@@ -319,26 +315,16 @@ def test_package_builder_consumes_typed_gate_and_nullable_json_objects(
         ]
         is False
     )
-    assert (
-        rejected_plan_artifact["details"]["projection_consistency"][
-            "result_outcomes_match"
-        ]
-        is False
-    )
-
-
 def test_package_builder_distinguishes_legacy_and_required_plan_gates(
     tmp_path: Path,
 ) -> None:
     run, manifest, _plan = _builder_manifest(tmp_path)
     legacy = deepcopy(manifest)
     legacy.pop("resolved_figure_plan")
-    legacy.pop("figure_outcomes")
     legacy["semantic"] = {"rule_id": "legacy_custom_rule"}
     legacy["request"] = {"rule_id": "legacy_custom_rule"}
     legacy_result = deepcopy(legacy["result"])
     legacy_result.pop("resolved_figure_plan")
-    legacy_result.pop("figure_outcomes")
     legacy["result"] = legacy_result
     legacy["study_model"] = {"run": {}}
 

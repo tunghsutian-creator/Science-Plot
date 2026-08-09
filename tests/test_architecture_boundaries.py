@@ -521,6 +521,9 @@ def test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint() -> None
             "src/sciplot_core/delivery/package_validation.py",
             "src/sciplot_core/study_model/package_contract.py",
             "src/sciplot_core/publish_state.py",
+            "src/sciplot_core/autoplot/publish_integrity.py",
+            "src/sciplot_core/autoplot/evidence.py",
+            "src/sciplot_core/autoplot/summary.py",
         ],
         "mypy_path": "src",
         "explicit_package_bases": True,
@@ -540,7 +543,7 @@ def test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint() -> None
             owned_files.update(target.rglob("*.py"))
         else:
             owned_files.add(target)
-    assert len(owned_files) == 38
+    assert len(owned_files) == 42
     dev_dependencies = project["project"]["optional-dependencies"]["dev"]
     assert "mypy==2.3.0" in dev_dependencies
     assert "pandas-stubs==3.0.3.260530" in dev_dependencies

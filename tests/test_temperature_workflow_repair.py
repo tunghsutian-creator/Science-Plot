@@ -279,10 +279,13 @@ def test_real_temperature_bundle_publishes_exact_two_metric_workers(
         "tan_delta_vs_temperature",
     ]
     assert result["resolved_figure_plan"]["status"] == "ready"
-    assert [item["status"] for item in result["figure_outcomes"]] == [
+    assert [
+        item["status"] for item in result["resolved_figure_plan"]["outcomes"]
+    ] == [
         "ready",
         "ready",
     ]
+    assert "figure_outcomes" not in result
     assert all(
         item["source"] == item["path"] and Path(item["source"]).is_file()
         for item in result["exports"]

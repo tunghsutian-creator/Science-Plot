@@ -5,12 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.studio_render.models import StudioPreparationBlocked
 from sciplot_core.studio_render.value_parsing import _string_list
 
 
-_SOURCE_ATTESTED_RULE_IDS = frozenset(
+_SOURCE_ATTESTED_RULE_IDS = MECHANICAL_RULE_IDS | frozenset(
     {"dma_temperature_sweep", "rheology_temperature_sweep"}
 )
 

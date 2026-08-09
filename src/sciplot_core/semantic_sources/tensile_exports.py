@@ -1,13 +1,11 @@
-"""Read tensile exports, select representatives, and write tensile summaries."""
+"""Read tensile instrument exports without reducing specimen curves."""
 
 from __future__ import annotations
 
 import csv
-import json
 import re
 from pathlib import Path
 from typing import Any
-import pandas as pd
 from sciplot_core.foundation.text_files import (
     decode_text as _decode_text,
 )
@@ -17,7 +15,6 @@ from sciplot_core.foundation.text_values import (
 )
 from sciplot_core.materials_rules import (
     ELONGATION_AT_BREAK_METRIC,
-    tensile_curve_metric_values,
 )
 
 
@@ -38,10 +35,7 @@ from sciplot_core.semantic_sources.table_scanning import (
     _scan_curve_series_source,
 )
 
-from sciplot_core.semantic_sources.series_labels import (
-    _with_series_sample,
-    _intake_group_name,
-)
+from sciplot_core.semantic_sources.series_labels import _with_series_sample
 
 
 def _reported_tensile_metrics(
@@ -259,7 +253,22 @@ def _read_tensile_export_series_list(source: Path) -> list[CurveSeriesPayload]:
             sample_prefix=source.stem,
         )
         if structured:
-            return structured
+            resolved_source = str(source.resolve())
+            return [
+                CurveSeriesPayload(
+                    sample=series.sample,
+                    x_label=series.x_label,
+                    x_unit=series.x_unit,
+                    y_label=series.y_label,
+                    y_unit=series.y_unit,
+                    points=series.points,
+                    diagnostics={
+                        **(series.diagnostics or {}),
+                        "source_file": resolved_source,
+                    },
+                )
+                for series in structured
+            ]
     series_list: list[CurveSeriesPayload] = []
     errors: list[str] = []
     direct_export_group = (
@@ -281,88 +290,3 @@ def _read_tensile_export_series_list(source: Path) -> list[CurveSeriesPayload]:
             f"No tensile CSV exports found under {source}. {detail}".strip()
         )
     return series_list
-
-
-def _series_summary(series: CurveSeriesPayload) -> tuple[float, float]:
-    y_values = [y_value for _x_value, y_value in series.points]
-    x_values = [x_value for x_value, _y_value in series.points]
-    return (max(y_values), x_values[-1])
-
-
-def _representative_tensile_series(
-    series_list: list[CurveSeriesPayload],
-) -> list[CurveSeriesPayload]:
-    groups: dict[str, list[CurveSeriesPayload]] = {}
-    for series in series_list:
-        group = _intake_group_name(series.sample)
-        if group is None:
-            return series_list
-        groups.setdefault(group, []).append(series)
-
-    representatives: list[CurveSeriesPayload] = []
-    for group, items in groups.items():
-        summaries = [_series_summary(item) for item in items]
-        median_strength = float(
-            pd.Series(strength for strength, _strain in summaries).median()
-        )
-        median_strain = float(
-            pd.Series(strain for _strength, strain in summaries).median()
-        )
-        representative = min(
-            zip(items, summaries, strict=True),
-            key=lambda item: (
-                abs(item[1][0] - median_strength),
-                abs(item[1][1] - median_strain),
-                item[0].sample.casefold(),
-            ),
-        )[0]
-        representatives.append(
-            CurveSeriesPayload(
-                sample=group,
-                x_label=representative.x_label,
-                x_unit=representative.x_unit,
-                y_label=representative.y_label,
-                y_unit=representative.y_unit,
-                points=representative.points,
-                diagnostics=representative.diagnostics,
-            )
-        )
-    return representatives
-
-
-def _write_tensile_summary_table(
-    series_list: list[CurveSeriesPayload], output: Path
-) -> Path:
-    rows: list[dict[str, Any]] = []
-    for series in series_list:
-        group = _intake_group_name(series.sample) or series.sample
-        replicate = (
-            series.sample.split("__", 1)[1] if "__" in series.sample else series.sample
-        )
-        diagnostics = series.diagnostics or {}
-        reported = {
-            key: float(diagnostics[key])
-            for key in ("strength_MPa", ELONGATION_AT_BREAK_METRIC, "modulus_MPa")
-            if diagnostics.get(key) is not None
-        }
-        metrics = tensile_curve_metric_values(
-            series.points,
-            x_unit=series.x_unit,
-            reported=reported,
-        )
-        rows.append(
-            {
-                "sample": group,
-                "replicate": replicate,
-                **metrics,
-                "source_file": diagnostics.get("source_file"),
-                "reported_metric_headers": json.dumps(
-                    diagnostics.get("reported_metric_headers") or {},
-                    ensure_ascii=False,
-                    sort_keys=True,
-                ),
-            }
-        )
-    output.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows).to_csv(output, index=False)
-    return output

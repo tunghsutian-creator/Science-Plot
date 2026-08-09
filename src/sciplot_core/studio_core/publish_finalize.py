@@ -186,7 +186,6 @@ def finalize_studio_run(
         )
     if isinstance(manifest.get("resolved_figure_plan"), dict):
         payload["resolved_figure_plan"] = json_safe(manifest["resolved_figure_plan"])
-        payload["figure_outcomes"] = json_safe(manifest.get("figure_outcomes", []))
     _register_studio_run(
         inventory.project_dir,
         manifest,

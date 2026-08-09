@@ -126,11 +126,8 @@ FigurePlanGatePayload = FigurePlanGateInvalidPayload | FigurePlanGateValidPayloa
 
 class FigurePlanProjectionConsistencyPayload(TypedDict):
     manifest_rule_matches: bool
-    manifest_outcomes_match: bool
     result_plan_matches: bool
-    result_outcomes_match: bool
-    study_plan_id_matches: bool
-    study_outcomes_match: bool
+    study_plan_matches: bool
     outcome_artifacts_exist: bool
 
 

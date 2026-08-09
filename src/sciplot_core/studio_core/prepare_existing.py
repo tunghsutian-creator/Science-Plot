@@ -11,7 +11,9 @@ from sciplot_core.figure_plan import (
     FigurePlanResolutionError,
     resolve_current_figure_plan,
 )
+from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.presentation_identity import (
     project_selected_presentation_to_request,
@@ -28,6 +30,13 @@ from sciplot_core.studio_core.figure_requests import (
 )
 from sciplot_core.studio_core.figure_set_prepare import (
     _prepare_studio_figure_set,
+)
+from sciplot_core.studio_core.figure_set_state import _read_studio_figure_set
+from sciplot_core.studio_core.figure_set_storage import (
+    _commit_studio_figure_set_transaction,
+)
+from sciplot_core.studio_core.figure_task_evidence import (
+    validate_figure_registry_against_plan,
 )
 from sciplot_core.studio_core.json_files import _read_json
 from sciplot_core.studio_core.launchers import (
@@ -123,16 +132,51 @@ def reuse_existing_studio_document(
                 encoding="utf-8",
             )
             _read_json(staged_request)
-        figure_set = _prepare_studio_figure_set(
-            project_dir=project_dir,
-            request_path=request_path,
-            request=request,
-            primary_document=document_path,
-            staged_request=staged_request,
-            preserve_existing=True,
-            queue_override=impact_queue or None,
-            figure_plan=figure_plan,
-        )
+        if figure_plan is not None and figure_plan.rule_id in MECHANICAL_RULE_IDS:
+            figure_set = _read_studio_figure_set(project_dir)
+            if figure_set is None:
+                raise StudioPreparationBlocked(
+                    "mechanical_figure_set_mismatch",
+                    "Mechanical exact-current reuse requires its complete "
+                    "registered figure set.",
+                )
+            try:
+                validate_figure_registry_against_plan(figure_set, figure_plan)
+            except (TypeError, ValueError) as exc:
+                raise StudioPreparationBlocked(
+                    "mechanical_figure_set_mismatch",
+                    str(exc),
+                ) from exc
+            replacements: list[dict[str, Any]] = []
+            if staged_request is not None:
+                staged_hash = existing_file_sha256(staged_request)
+                if not staged_hash:
+                    raise RuntimeError("The staged Studio request is empty.")
+                replacements.append(
+                    {
+                        "staged": staged_request,
+                        "target": request_path,
+                        "expected_hash": staged_hash,
+                        "kind": "request",
+                    }
+                )
+            _commit_studio_figure_set_transaction(
+                project_dir=project_dir,
+                replacements=replacements,
+                manual_archive_requests=[],
+                registry=None,
+            )
+        else:
+            figure_set = _prepare_studio_figure_set(
+                project_dir=project_dir,
+                request_path=request_path,
+                request=request,
+                primary_document=document_path,
+                staged_request=staged_request,
+                preserve_existing=True,
+                queue_override=impact_queue or None,
+                figure_plan=figure_plan,
+            )
     finally:
         if staged_request is not None:
             staged_request.unlink(missing_ok=True)

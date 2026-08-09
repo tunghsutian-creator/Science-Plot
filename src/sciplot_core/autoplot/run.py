@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
+
+from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.workflow import run_one_step
 
@@ -30,10 +31,7 @@ def run_autoplot(
     )
     summary = build_autoplot_summary(result)
     run_output = Path(str(summary["run_output"]))
-    run_output.mkdir(parents=True, exist_ok=True)
     summary_path = run_output / "autoplot_summary.json"
     summary["summary_path"] = str(summary_path)
-    summary_path.write_text(
-        json.dumps(json_safe(summary), indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+    atomic_write_json(summary_path, json_safe(summary))
     return summary

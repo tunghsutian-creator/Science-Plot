@@ -94,37 +94,22 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
         "experiments": (
             {
                 "id": "tensile_curve",
-                "label": "拉伸曲线",
+                "label": "拉伸（曲线与重复测量汇总）",
                 "rule_id": "tensile_curve",
                 "default_replicate_mode": "representative",
             },
             {
-                "id": "tensile_strength",
-                "label": "拉伸强度",
-                "rule_id": "tensile_curve",
-                "chart": "box_strip",
-                "template": "box_strip",
-            },
-            {
-                "id": "elongation_at_break",
-                "label": "断裂伸长率",
-                "rule_id": "tensile_curve",
-                "chart": "box_strip",
-                "template": "box_strip",
-            },
-            {
-                "id": "youngs_modulus",
-                "label": "杨氏模量",
-                "rule_id": "tensile_curve",
-                "chart": "box_strip",
-                "template": "box_strip",
-            },
-            {
                 "id": "compression_curve",
-                "label": "压缩",
+                "label": "压缩（曲线与重复测量汇总）",
                 "rule_id": "compression_curve",
+                "default_replicate_mode": "representative",
             },
-            {"id": "flexural_curve", "label": "弯曲", "rule_id": "flexural_curve"},
+            {
+                "id": "flexural_curve",
+                "label": "弯曲（曲线与重复测量汇总）",
+                "rule_id": "flexural_curve",
+                "default_replicate_mode": "representative",
+            },
             {
                 "id": "torque_curve",
                 "label": "转矩曲线",

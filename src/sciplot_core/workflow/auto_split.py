@@ -217,6 +217,8 @@ def _render_resolved_bundle(
     if family == "mechanical":
         return _render_veusz_mechanical_bundle(
             input_path,
+            source_input=source_input,
+            source_attestation=source_attestation,
             output_dir=output_dir,
             options=options,
             export_formats=export_formats,

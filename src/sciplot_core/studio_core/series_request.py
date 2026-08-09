@@ -250,8 +250,11 @@ def _series_from_request(
         )
     if _prepared_source_attestation is not None:
         if str(request.get("rule_id") or "").strip() not in {
+            "compression_curve",
             "dma_temperature_sweep",
+            "flexural_curve",
             "rheology_temperature_sweep",
+            "tensile_curve",
         }:
             raise ValueError(
                 "The private prepared-source seam is source-bound Studio only."

@@ -164,18 +164,16 @@ def _reported_plan_and_outcomes(
             "terminal_figure_plan_mismatch: renderer result plan does not match "
             "the selected FigurePlan."
         )
-    if raw_outcomes is None:
-        if completed_plan is not None:
-            raise ValueError(
-                "terminal_figure_outcome_mismatch: renderer result plan has no "
-                "matching figure_outcomes projection."
-            )
-        return completed_plan, ()
-    if not isinstance(raw_outcomes, list):
+    if completed_plan is not None:
+        outcomes = completed_plan.outcomes
+    elif raw_outcomes is None:
+        return None, ()
+    elif not isinstance(raw_outcomes, list):
         raise ValueError(
             "terminal_figure_outcome_mismatch: figure_outcomes must be a list."
         )
-    outcomes = tuple(FigureOutcome.from_payload(item) for item in raw_outcomes)
+    else:
+        outcomes = tuple(FigureOutcome.from_payload(item) for item in raw_outcomes)
     if (
         tuple(outcome.figure_id for outcome in outcomes)
         != selected_plan.selected_figure_ids
@@ -188,11 +186,6 @@ def _reported_plan_and_outcomes(
         raise ValueError(
             "terminal_figure_outcome_mismatch: a terminal renderer cannot report "
             "pending outcomes."
-        )
-    if completed_plan is not None and outcomes != completed_plan.outcomes:
-        raise ValueError(
-            "terminal_figure_outcome_mismatch: renderer outcome projection does "
-            "not match its result plan."
         )
     return completed_plan, outcomes
 

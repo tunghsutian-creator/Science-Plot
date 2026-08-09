@@ -238,8 +238,8 @@ def finalize_figure_plan_result(
         key=lambda outcome: fresh_plan.selected_figure_ids.index(outcome.figure_id)
     )
     completed = merge_figure_outcomes(fresh_plan, outcomes)
-    result["figure_outcomes"] = [outcome.to_payload() for outcome in completed.outcomes]
     result["resolved_figure_plan"] = completed.to_payload()
+    result.pop("figure_outcomes", None)
     return completed
 
 
@@ -355,15 +355,14 @@ def sync_figure_plan_projection(
     target: dict[str, Any],
     source: dict[str, Any],
 ) -> None:
-    """Atomically replace or remove the duplicated plan/outcome projection."""
+    """Replace the Intake plan projection and retire its outcomes mirror."""
 
     plan = resolved_figure_plan_from_payload(source.get("resolved_figure_plan"))
+    target.pop("figure_outcomes", None)
     if plan is None:
         target.pop("resolved_figure_plan", None)
-        target.pop("figure_outcomes", None)
         return
     target["resolved_figure_plan"] = plan.to_payload()
-    target["figure_outcomes"] = [outcome.to_payload() for outcome in plan.outcomes]
 
 
 def _existing_result_artifacts(result: dict[str, Any]) -> tuple[str, ...]:

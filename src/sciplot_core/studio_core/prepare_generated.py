@@ -22,7 +22,6 @@ from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.presentation_identity import (
     project_selected_presentation_to_request,
     require_selected_template,
-    resolve_selected_presentation_identity,
 )
 from sciplot_core.publication import (
     build_publication_intent,
@@ -33,7 +32,6 @@ from sciplot_core.readiness import load_validated_envelope_registry
 from sciplot_core.readiness.rule_certification import (
     current_certified_rule_contract_snapshot,
 )
-from sciplot_core.study_model import normalize_study_model
 from sciplot_core.studio_render.models import StudioPreparationBlocked
 from sciplot_core.studio_render.value_parsing import _string_list
 from sciplot_core.terminal_source_binding import (
@@ -62,6 +60,11 @@ from sciplot_core.studio_core.launchers import (
     _write_export_edited_launcher,
     _write_studio_launcher,
     _write_veusz_launcher,
+)
+from sciplot_core.studio_core.mechanical_plan_context import (
+    initial_studio_study_model,
+    normalized_studio_study_model,
+    studio_presentation_identity,
 )
 from sciplot_core.studio_core.presentation_evidence import (
     validate_veusz_spec_presentation,
@@ -133,9 +136,13 @@ def generate_studio_document(
     terminal_task = terminal_figure_task_from_request(request)
     request_rule_id = str(request.get("rule_id") or "").strip()
     current_rule = get_rule(request_rule_id) if request_rule_id else None
-    presentation_identity = resolve_selected_presentation_identity(
+    presentation_identity = studio_presentation_identity(
         request,
         current_rule=current_rule,
+        request_rule_id=request_rule_id,
+        terminal_task=terminal_task,
+        terminal_worker=terminal_worker,
+        has_terminal_source_binding=_terminal_source_binding is not None,
     )
     project_selected_presentation_to_request(request, presentation_identity)
     document_path = project_dir / "studio" / "document.vsz"
@@ -150,17 +157,21 @@ def generate_studio_document(
     else:
         request.pop(STUDIO_RULE_CONTRACT_BINDING_KEY, None)
     source_input = _resolve_request_input(request, base_dir=request_path.parent)
+    planning_study_model = initial_studio_study_model(
+        request,
+        current_rule=current_rule,
+        request_rule_id=request_rule_id,
+        presentation_template=presentation_identity.template,
+        source_input=source_input,
+        project_dir=project_dir,
+    )
     try:
         figure_plan = (
             resolve_preparation_figure_plan(
                 persisted=request.get("resolved_figure_plan"),
                 rule_id=request_rule_id,
                 template=presentation_identity.template,
-                study_model=(
-                    request.get("study_model")
-                    if isinstance(request.get("study_model"), dict)
-                    else {}
-                ),
+                study_model=planning_study_model,
                 input_path=source_input,
                 request=request,
             )
@@ -253,16 +264,7 @@ def generate_studio_document(
     if isinstance(axis_info.get("data_mapping_coverage"), dict):
         request["data_mapping_coverage"] = json_safe(axis_info["data_mapping_coverage"])
 
-    study_model = normalize_study_model(
-        request.get("study_model")
-        if isinstance(request.get("study_model"), dict)
-        else {
-            "kind": "sciplot_study_model",
-            "version": 1,
-            "samples": [],
-            "figure_queue": [],
-        }
-    )
+    study_model = normalized_studio_study_model(planning_study_model)
     request["study_model"] = study_model
     project_selected_presentation_to_request(request, presentation_identity)
     render_defaults = study_model.get("render_defaults")

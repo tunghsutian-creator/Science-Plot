@@ -184,7 +184,6 @@ def build_studio_run_manifest(
         manifest["studio"]["figure_set_export_scope"] = scope
     if isinstance(result.get("resolved_figure_plan"), dict):
         manifest["resolved_figure_plan"] = json_safe(result["resolved_figure_plan"])
-        manifest["figure_outcomes"] = json_safe(result.get("figure_outcomes", []))
     return manifest
 
 

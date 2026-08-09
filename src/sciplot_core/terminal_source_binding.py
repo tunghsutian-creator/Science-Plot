@@ -21,6 +21,7 @@ _SOURCE_CHANGED = "terminal_source_binding_source_changed"
 _SERIES_MISMATCH = "terminal_source_binding_series_mismatch"
 _HASH = re.compile(r"[0-9a-f]{64}")
 _IDENTIFIER = re.compile(r"[a-z][a-z0-9_]*")
+_METRIC_IDENTIFIER = re.compile(r"[a-z][A-Za-z0-9_]*")
 
 
 class TerminalSourceBindingError(ValueError):
@@ -44,6 +45,15 @@ def _identifier(value: object, *, label: str) -> str:
     _require(
         isinstance(value, str) and _IDENTIFIER.fullmatch(value) is not None,
         f"{label} must be one canonical lowercase identifier.",
+        reason_code=_CONTRACT_MISMATCH,
+    )
+    return value
+
+
+def _metric_identifier(value: object, *, label: str) -> str:
+    _require(
+        isinstance(value, str) and _METRIC_IDENTIFIER.fullmatch(value) is not None,
+        f"{label} must be one canonical metric identifier.",
         reason_code=_CONTRACT_MISMATCH,
     )
     return value
@@ -117,10 +127,13 @@ class MaterializedTerminalSourceBinding:
             ("task_key", self.task_key),
             ("rule_id", self.rule_id),
             ("template", self.template),
+        ):
+            _identifier(value, label=label)
+        for label, value in (
             ("x_metric", self.x_metric),
             ("y_metric", self.y_metric),
         ):
-            _identifier(value, label=label)
+            _metric_identifier(value, label=label)
         _require(
             self.x_metric != self.y_metric,
             "Terminal x_metric and y_metric must differ.",

@@ -19,8 +19,11 @@ SUPPORTED_FIGURE_PLAN_RULE_IDS = frozenset(
         "dsc_curve",
         "impact_metric",
         "performance_comparison",
+        "compression_curve",
+        "flexural_curve",
         "rheology_frequency_sweep",
         "rheology_temperature_sweep",
+        "tensile_curve",
     }
 )
 

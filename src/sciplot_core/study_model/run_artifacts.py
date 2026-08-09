@@ -119,11 +119,7 @@ def attach_run_artifacts_to_study_model(
                 not in bound_paths
             ],
             "artifact_binding_policy": "resolved_figure_plan",
-            "resolved_figure_plan_id": figure_plan.plan_id,
-            "resolved_figure_plan_sha256": figure_plan.plan_sha256,
-            "figure_outcomes": [
-                outcome.to_payload() for outcome in figure_plan.outcomes
-            ],
+            "resolved_figure_plan": figure_plan.to_payload(),
             "analysis_metrics": analysis_metrics or [],
             "qa": qa or {},
         }

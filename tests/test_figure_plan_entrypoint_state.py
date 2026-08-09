@@ -225,7 +225,6 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
         "build_studio_export_result",
         lambda **_kwargs: {
             "resolved_figure_plan": plan.to_payload(),
-            "figure_outcomes": [outcome.to_payload() for outcome in plan.outcomes],
         },
     )
     monkeypatch.setattr(
@@ -234,7 +233,6 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
         lambda *, evidence, result, **_kwargs: {
             "study_model": evidence.study_model,
             "resolved_figure_plan": result["resolved_figure_plan"],
-            "figure_outcomes": result["figure_outcomes"],
         },
     )
     monkeypatch.setattr(
@@ -253,10 +251,10 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
 
     run = manifest["study_model"]["run"]
     assert run["artifact_binding_policy"] == "resolved_figure_plan"
-    assert run["resolved_figure_plan_id"] == plan.plan_id
-    assert run["resolved_figure_plan_sha256"] == plan.plan_sha256
-    assert run["figure_outcomes"] == manifest["figure_outcomes"]
-    assert run["figure_outcomes"] == [outcome.to_payload() for outcome in plan.outcomes]
+    assert run["resolved_figure_plan"] == plan.to_payload()
+    assert "resolved_figure_plan_id" not in run
+    assert "resolved_figure_plan_sha256" not in run
+    assert "figure_outcomes" not in run
 
 
 def test_workflow_projects_completed_plan_into_intake_top_level_and_last_run(
@@ -268,7 +266,6 @@ def test_workflow_projects_completed_plan_into_intake_top_level_and_last_run(
 
     plan, (_document, pdf, tiff) = _completed_impact_plan(tmp_path)
     plan_payload = plan.to_payload()
-    outcomes = [outcome.to_payload() for outcome in plan.outcomes]
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     request_path = project_dir / "plot_request.json"
@@ -321,16 +318,15 @@ def test_workflow_projects_completed_plan_into_intake_top_level_and_last_run(
         "figures": [str(pdf), str(tiff)],
         "result": {},
         "resolved_figure_plan": plan_payload,
-        "figure_outcomes": outcomes,
     }
 
     project_state._update_intake_project_after_run(request_path, run_manifest)
 
     assert calls == ["prepare", "edit", "zip"]
     assert project_manifest["resolved_figure_plan"] == plan_payload
-    assert project_manifest["figure_outcomes"] == outcomes
+    assert "figure_outcomes" not in project_manifest
     assert project_manifest["last_run"]["resolved_figure_plan"] == plan_payload
-    assert project_manifest["last_run"]["figure_outcomes"] == outcomes
+    assert "figure_outcomes" not in project_manifest["last_run"]
 
     legacy_manifest = {
         "created_at": "2026-07-30T00:01:00+00:00",
@@ -383,9 +379,7 @@ def test_studio_registration_replaces_and_removes_plan_projection_atomically(
     )
 
     assert payload["resolved_figure_plan"] == plan.to_payload()
-    assert payload["figure_outcomes"] == [
-        outcome.to_payload() for outcome in plan.outcomes
-    ]
+    assert "figure_outcomes" not in payload
 
     registry_writes._register_studio_block(tmp_path, {})
 

@@ -68,6 +68,9 @@ files = [
   "src/sciplot_core/delivery/package_validation.py",
   "src/sciplot_core/study_model/package_contract.py",
   "src/sciplot_core/publish_state.py",
+  "src/sciplot_core/autoplot/publish_integrity.py",
+  "src/sciplot_core/autoplot/evidence.py",
+  "src/sciplot_core/autoplot/summary.py",
 ]
 mypy_path = "src"
 explicit_package_bases = true

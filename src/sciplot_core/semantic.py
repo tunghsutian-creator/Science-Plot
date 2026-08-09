@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
+from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 
 from sciplot_core.semantic_sources.classification import (
@@ -28,6 +29,9 @@ from sciplot_core.semantic_sources.impact_sources import (  # noqa: F401
     read_impact_condition_payloads,
 )
 from sciplot_core.semantic_sources.interventions import build_intervention_request
+from sciplot_core.semantic_sources.mechanical_facts import (
+    load_mechanical_source_facts,
+)
 from sciplot_core.semantic_sources.models import (  # noqa: F401
     CurveSeriesPayload,
     ImpactReplicatePayload,
@@ -79,7 +83,7 @@ from sciplot_core.semantic_sources.torque_sources import (  # noqa: F401
 )
 
 
-_SOURCE_ATTESTED_FAMILIES = frozenset(
+_SOURCE_ATTESTED_FAMILIES = MECHANICAL_RULE_IDS | frozenset(
     {"dma_temperature_sweep", "rheology_temperature_sweep"}
 )
 
@@ -140,7 +144,7 @@ def prepare_semantic_source(
                 ):
                     raise RuntimeError(
                         "semantic_preparation_source_changed: source-attested "
-                        "temperature data "
+                        "semantic data "
                         "changed while semantic preparation was running."
                     )
                 attestation.verify_current(source_root=source)
@@ -165,6 +169,7 @@ __all__ = [
     "is_tensile_export_dir",
     "is_rheology_frequency_comparison_dir",
     "is_rheology_temperature_comparison_dir",
+    "load_mechanical_source_facts",
     "prepare_semantic_source",
     "TENSILE_EXPORT_DIR_SUFFIX",
     "tensile_export_csv_files",

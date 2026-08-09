@@ -1,352 +1,366 @@
-"""Materialize and render mechanical curve and summary figures."""
+"""Render one exact source-bound mechanical FigurePlan transactionally."""
 
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-import pandas as pd
-from sciplot_core.materials_rules import (
-    ELONGATION_AT_BREAK_LABEL,
-    ELONGATION_AT_BREAK_METRIC,
+from uuid import uuid4
+
+from sciplot_core.figure_plan import (
+    finalize_figure_plan_result,
+    outcomes_for_artifact_map,
+    request_for_figure_task,
+    resolved_figure_plan_from_payload,
 )
-from sciplot_core.policy import (
-    CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
-    DEFAULT_EXPORT_FORMATS_POLICY,
-    compact_linear_axis,
+from sciplot_core.mechanical_figure_contract import (
+    MECHANICAL_FIGURE_CONTRACTS,
+    MECHANICAL_RULE_IDS,
 )
+from sciplot_core.mechanical_task_sources import (
+    MechanicalTaskSource,
+    build_mechanical_task_sources,
+)
+from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY, normalize_export_formats
+from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.render import render_to_dir
-
-from sciplot_core.workflow.bundle_exports import (
-    _SHARED_FIGURE_STYLE_KEYS,
-    _rename_metric_exports,
+from sciplot_core.workflow.bundle_exports import _rename_metric_exports
+from sciplot_core.workflow.mechanical_execution_evidence import (
+    build_mechanical_execution_evidence,
+)
+from sciplot_core.workflow.mechanical_summary_sources import (
+    _mechanical_summary_sources,
+)
+from sciplot_core.workflow.mechanical_terminal_validation import (
+    validate_mechanical_render_payload,
+)
+from sciplot_core.workflow.task_artifacts import (
+    install_task_worker_tree,
+    task_qa_reports,
 )
 
-_MECHANICAL_FIGURE_CONTRACTS: dict[str, dict[str, Any]] = {
-    "tensile_curve": {
-        "curve_id": "stress_vs_strain",
-        "summaries": (
-            {
-                "id": "tensile_strength_by_sample",
-                "metric": "strength_MPa",
-                "label": "Tensile strength (MPa)",
-                "unit": "MPa",
-                "template": "bar",
-            },
-            {
-                "id": "elongation_at_break_by_sample",
-                "metric": ELONGATION_AT_BREAK_METRIC,
-                "label": ELONGATION_AT_BREAK_LABEL,
-                "unit": "%",
-                "template": "bar",
-            },
-            {
-                "id": "tensile_modulus_by_sample",
-                "metric": "modulus_MPa",
-                "label": "Tensile modulus (MPa)",
-                "unit": "MPa",
-                "template": "bar",
-            },
-        ),
-    },
-    "compression_curve": {
-        "curve_id": "compressive_stress_vs_strain",
-        "summaries": (
-            {
-                "id": "compressive_strength_by_sample",
-                "metric": "compressive_strength_MPa",
-                "label": "Compressive strength (MPa)",
-                "unit": "MPa",
-                "template": "bar",
-            },
-        ),
-    },
-    "flexural_curve": {
-        "curve_id": "flexural_stress_vs_strain",
-        "summaries": (
-            {
-                "id": "flexural_strength_by_sample",
-                "metric": "flexural_strength_MPa",
-                "label": "Flexural strength (MPa)",
-                "unit": "MPa",
-                "template": "bar",
-            },
-        ),
-    },
-}
 
-
-def _mechanical_summary_sources(
-    input_path: Path,
-    *,
-    request: dict[str, Any],
-    output_dir: Path,
-    options: dict[str, Any],
-) -> list[tuple[str, Path, dict[str, Any]]]:
-    rule_id = str(request.get("rule_id") or "")
-    figure_contract = _MECHANICAL_FIGURE_CONTRACTS.get(rule_id)
-    if figure_contract is None:
-        return []
-    summary_source = input_path.with_name(f"{input_path.stem}_summary.csv")
-    if not summary_source.exists():
-        return []
-    summary = pd.read_csv(summary_source)
-    if "sample" not in summary.columns:
-        return []
-    study_model = (
-        request.get("study_model")
-        if isinstance(request.get("study_model"), dict)
-        else {}
-    )
-    figure_queue = (
-        study_model.get("figure_queue")
-        if isinstance(study_model.get("figure_queue"), list)
-        else []
-    )
-    queued_ids = {
-        str(item.get("id") or "").strip()
-        for item in figure_queue
-        if isinstance(item, dict)
-    }
-    queued_metrics = {
-        str(item.get("metric") or item.get("y_metric") or "").strip()
-        for item in figure_queue
-        if isinstance(item, dict)
-    }
-    requested = [
-        contract
-        for contract in figure_contract["summaries"]
-        if not figure_queue
-        or contract["id"] in queued_ids
-        or contract["metric"] in queued_metrics
-    ]
-    sample_order = [
-        str(value)
-        for value in study_model.get("sample_order", [])
-        if str(value).strip()
-    ]
-    observed_order = [
-        str(value) for value in summary["sample"].dropna().drop_duplicates().tolist()
-    ]
-    ordered_samples = [sample for sample in sample_order if sample in observed_order]
-    ordered_samples.extend(
-        sample for sample in observed_order if sample not in ordered_samples
-    )
-    if not ordered_samples:
-        return []
-
-    source_dir = output_dir / "processed" / "veusz_metric_sources"
-    source_dir.mkdir(parents=True, exist_ok=True)
-    shared_style = {
-        key: value for key, value in options.items() if key in _SHARED_FIGURE_STYLE_KEYS
-    }
-    metric_sources: list[tuple[str, Path, dict[str, Any]]] = []
-    for contract in requested:
-        metric = contract["metric"]
-        if metric not in summary.columns:
-            continue
-        group_values = [
-            pd.to_numeric(
-                summary.loc[summary["sample"].astype(str) == sample, metric],
-                errors="coerce",
-            )
-            .dropna()
-            .tolist()
-            for sample in ordered_samples
-        ]
-        if not any(group_values):
-            continue
-        compact_axis = compact_linear_axis(
-            value for values in group_values for value in values
-        )
-        rows: list[list[Any]] = [
-            [contract["label"] for _sample in ordered_samples],
-            [contract["unit"] for _sample in ordered_samples],
-            list(ordered_samples),
-        ]
-        for row_index in range(max(len(values) for values in group_values)):
-            rows.append(
-                [
-                    values[row_index] if row_index < len(values) else ""
-                    for values in group_values
-                ]
-            )
-        metric_source = source_dir / f"{contract['id']}.csv"
-        pd.DataFrame(rows).to_csv(metric_source, header=False, index=False)
-        metric_options: dict[str, Any] = {
-            **CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
-            **shared_style,
-            "legend_position": "none",
-            "series_label_mode": "none",
-            "x_label_override": "Sample",
-            "y_label_override": contract["label"],
-            "summary_statistic": "median_iqr",
-            "template": contract["template"],
-        }
-        if compact_axis is not None:
-            axis_values = (
-                [0.0] + [value for values in group_values for value in values]
-                if contract.get("template") == "bar"
-                else [value for values in group_values for value in values]
-            )
-            bar_axis = (
-                compact_linear_axis(axis_values)
-                if contract.get("template") == "bar"
-                else compact_axis
-            )
-            metric_options.update(
-                {
-                    "y_min": 0.0
-                    if contract.get("template") == "bar"
-                    else compact_axis[0],
-                    "y_max": bar_axis[1] if bar_axis is not None else compact_axis[1],
-                    "y_ticks": list(
-                        bar_axis[2] if bar_axis is not None else compact_axis[2]
-                    ),
-                }
-            )
-        metric_sources.append(
-            (
-                contract["id"],
-                metric_source,
-                metric_options,
-            )
-        )
-    return metric_sources
+_MECHANICAL_FIGURE_CONTRACTS = MECHANICAL_FIGURE_CONTRACTS
 
 
 def _render_veusz_mechanical_bundle(
     input_path: Path,
     *,
+    source_input: Path | None = None,
+    source_attestation: PreparationSourceAttestation | None = None,
     output_dir: Path,
     options: dict[str, Any],
     export_formats: object,
     request: dict[str, Any],
+    _source_builder: Callable[..., list[MechanicalTaskSource]] = (
+        build_mechanical_task_sources
+    ),
+    _renderer: Callable[..., dict[str, Any]] = render_to_dir,
+    _payload_validator: Callable[..., None] = validate_mechanical_render_payload,
+    _evidence_builder: Callable[..., dict[str, Any]] = (
+        build_mechanical_execution_evidence
+    ),
 ) -> dict[str, Any] | None:
-    rule_id = str(request.get("rule_id") or "")
-    figure_contract = _MECHANICAL_FIGURE_CONTRACTS.get(rule_id)
-    if figure_contract is None:
+    """Render every selected curve/summary task, then install the whole set."""
+
+    rule_id = str(request.get("rule_id") or "").strip()
+    if rule_id not in MECHANICAL_RULE_IDS:
         return None
-    metric_sources = _mechanical_summary_sources(
-        input_path,
-        request=request,
-        output_dir=output_dir,
-        options=options,
+    plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
+    if plan is None:
+        raise ValueError(
+            "mechanical_figure_plan_required: mechanical Workflow execution "
+            "requires one exact resolved FigurePlan."
+        )
+    if plan.rule_id != rule_id:
+        raise ValueError(
+            "mechanical_figure_plan_mismatch: selected FigurePlan belongs to "
+            "another rule."
+        )
+    if source_input is None or source_attestation is None:
+        raise ValueError(
+            "mechanical_preparation_attestation_missing: mechanical Workflow "
+            "requires its raw source and typed prepare-time attestation."
+        )
+    requested_formats = normalize_export_formats(export_formats)
+    if not {"pdf", "tiff_300"}.issubset(requested_formats):
+        raise ValueError(
+            "mechanical_export_contract_mismatch: every selected task requires "
+            "PDF and 300-dpi TIFF exports."
+        )
+
+    output = output_dir.expanduser().resolve()
+    transaction = output / f".sciplot-mechanical-stage-{uuid4().hex}"
+    staged_figures = transaction / "figures"
+    render_root = transaction / "render"
+    source_root = (
+        output / "processed" / "veusz_metric_sources" / f"mechanical_{plan.plan_id}"
     )
-    if not metric_sources:
-        return None
-    figures_dir = output_dir / "figures"
-    figures_dir.mkdir(parents=True, exist_ok=True)
-    curve_options = dict(options)
-    curve_options.setdefault("legend_position", "auto")
-    render_jobs: list[tuple[str, Path, str, dict[str, Any]]] = [
-        (
-            str(figure_contract["curve_id"]),
+    source_backup = transaction / "previous_metric_sources"
+    transaction.mkdir(parents=True, exist_ok=False)
+    staged_figures.mkdir()
+    render_root.mkdir()
+    source_root.parent.mkdir(parents=True, exist_ok=True)
+    source_replaced = False
+    installed = False
+    if source_root.exists() or source_root.is_symlink():
+        source_root.replace(source_backup)
+        source_replaced = True
+
+    try:
+        records = _source_builder(
             input_path,
-            str(request.get("template") or "curve"),
-            curve_options,
+            raw_source=source_input,
+            source_attestation=source_attestation,
+            figure_plan=plan,
+            output_dir=source_root,
+            request=request,
+            options=options,
         )
-    ]
-    render_jobs.extend(
-        (
-            metric_id,
-            metric_source,
-            str(metric_options.pop("template", "bar")),
-            metric_options,
+        if tuple(record.task for record in records) != plan.tasks:
+            raise ValueError(
+                "mechanical_task_source_unavailable: task-source materialization "
+                "did not preserve the exact selected sequence."
+            )
+        combined: dict[str, list[Any]] = {
+            "outputs": [],
+            "exports": [],
+            "qa_reports": [],
+            "veusz_documents": [],
+            "veusz_specs": [],
+            "terminal_render_requests": [],
+            "transform_steps": [],
+        }
+        staged_artifacts = {task.figure_id: [] for task in plan.tasks}
+        final_artifacts = {task.figure_id: [] for task in plan.tasks}
+        staged_specs: dict[str, Path] = {}
+        figures_dir = output / "figures"
+        for record in records:
+            payload = _render_task(
+                record,
+                request=request,
+                render_root=render_root,
+                export_formats=requested_formats,
+                renderer=_renderer,
+            )
+            metric_dir = render_root / record.task.artifact_stem
+            _payload_validator(
+                payload,
+                record=record,
+                metric_dir=metric_dir,
+                export_formats=requested_formats,
+            )
+            staged_outputs, staged_exports = _rename_metric_exports(
+                payload,
+                metric_id=record.task.artifact_stem,
+                figures_dir=staged_figures,
+            )
+            staged_documents, staged_spec_paths = install_task_worker_tree(
+                payload,
+                task=record.task,
+                figures_dir=staged_figures,
+            )
+            if len(staged_documents) != 1 or len(staged_spec_paths) != 1:
+                raise ValueError(
+                    "mechanical_terminal_evidence_mismatch: every task requires "
+                    "one editable VSZ and one terminal specification."
+                )
+            staged_specs[record.task.figure_id] = Path(staged_spec_paths[0])
+            outputs = _rebase_paths(
+                staged_outputs,
+                source_root=staged_figures,
+                target_root=figures_dir,
+            )
+            documents = _rebase_paths(
+                staged_documents,
+                source_root=staged_figures,
+                target_root=figures_dir,
+            )
+            specs = _rebase_paths(
+                staged_spec_paths,
+                source_root=staged_figures,
+                target_root=figures_dir,
+            )
+            exports = [
+                {
+                    **item,
+                    "source": output_path,
+                    "path": output_path,
+                    "figure_id": record.task.figure_id,
+                }
+                for item, output_path in zip(staged_exports, outputs, strict=True)
+            ]
+            combined["outputs"].extend(outputs)
+            combined["exports"].extend(exports)
+            combined["veusz_documents"].extend(documents)
+            combined["veusz_specs"].extend(specs)
+            combined["qa_reports"].extend(
+                task_qa_reports(
+                    payload,
+                    outputs=outputs,
+                    documents=documents,
+                )
+            )
+            combined["terminal_render_requests"].extend(
+                item
+                for item in payload.get("terminal_render_requests", [])
+                if isinstance(item, dict)
+            )
+            combined["transform_steps"].extend(
+                item
+                for item in payload.get("transform_steps", [])
+                if isinstance(item, dict)
+            )
+            staged_artifacts[record.task.figure_id].extend(
+                [*staged_outputs, *staged_documents, *staged_spec_paths]
+            )
+            final_artifacts[record.task.figure_id].extend(
+                [*outputs, *documents, *specs]
+            )
+
+        evidence = _evidence_builder(
+            plan=plan,
+            records=records,
+            specs_by_figure_id=staged_specs,
         )
-        for metric_id, metric_source, metric_options in metric_sources
+        result = _result_payload(
+            input_path=input_path,
+            plan=plan,
+            records=records,
+            export_formats=requested_formats,
+            combined=combined,
+            evidence=evidence,
+            staged_artifacts=staged_artifacts,
+            final_artifacts=final_artifacts,
+        )
+        completed = finalize_figure_plan_result(plan, result)
+        if completed is None or not completed.complete:
+            raise ValueError(
+                "mechanical_task_artifacts_incomplete: every selected mechanical "
+                "task requires one VSZ, PDF, and 300-dpi TIFF."
+            )
+        _install_staged_figures(
+            staged_figures,
+            figures_dir=figures_dir,
+            transaction_dir=transaction,
+        )
+        installed = True
+        return result
+    finally:
+        if not installed:
+            if source_root.exists() or source_root.is_symlink():
+                shutil.rmtree(source_root, ignore_errors=True)
+            if source_replaced and source_backup.exists():
+                source_backup.replace(source_root)
+        shutil.rmtree(transaction, ignore_errors=True)
+
+
+def _render_task(
+    record: MechanicalTaskSource,
+    *,
+    request: dict[str, Any],
+    render_root: Path,
+    export_formats: tuple[str, ...],
+    renderer: Callable[..., dict[str, Any]],
+) -> dict[str, Any]:
+    task_request = request_for_figure_task(request, record.task)
+    return renderer(
+        record.source,
+        template=record.task.template,
+        output_dir=render_root / record.task.artifact_stem,
+        options=record.render_options,
+        export_formats=export_formats,
+        request_context={
+            **task_request,
+            "explicit_render_option_keys": list(record.explicit_render_option_keys),
+        },
+        _terminal_source_binding=record.binding,
     )
-    combined_outputs: list[str] = []
-    combined_exports: list[dict[str, Any]] = []
-    combined_reports: list[dict[str, Any]] = []
-    combined_documents: list[str] = []
-    combined_specs: list[str] = []
-    combined_terminal_requests: list[dict[str, Any]] = []
-    for metric_id, metric_source, template, metric_options in render_jobs:
-        metric_dir = figures_dir / f"_{metric_id}_render"
-        payload = render_to_dir(
-            metric_source,
-            template=template,
-            output_dir=metric_dir,
-            options=metric_options,
-            export_formats=export_formats,
-            request_context={
-                **request,
-                "explicit_render_option_keys": request.get(
-                    "explicit_render_option_keys", []
-                ),
-            },
-        )
-        outputs, exports = _rename_metric_exports(
-            payload, metric_id=metric_id, figures_dir=figures_dir
-        )
-        combined_outputs.extend(outputs)
-        combined_exports.extend(exports)
-        metric_worker = figures_dir / "_veusz" / metric_id
-        if metric_worker.exists():
-            shutil.rmtree(metric_worker)
-        source_worker = metric_dir / "_veusz"
-        if source_worker.exists():
-            metric_worker.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(source_worker, metric_worker)
-        mapped_documents: list[str] = []
-        for item in payload.get("veusz_documents", []):
-            source_path = Path(str(item))
-            try:
-                destination = metric_worker / source_path.relative_to(source_worker)
-            except ValueError:
-                continue
-            if destination.exists():
-                mapped_documents.append(str(destination))
-        mapped_specs: list[str] = []
-        for item in payload.get("veusz_specs", []):
-            source_path = Path(str(item))
-            try:
-                destination = metric_worker / source_path.relative_to(source_worker)
-            except ValueError:
-                continue
-            if destination.exists():
-                mapped_specs.append(str(destination))
-        combined_documents.extend(mapped_documents)
-        combined_specs.extend(mapped_specs)
-        combined_terminal_requests.extend(
-            item
-            for item in payload.get("terminal_render_requests", [])
-            if isinstance(item, dict)
-        )
-        for report in payload.get("qa_reports", []):
-            if not isinstance(report, dict):
-                continue
-            copied_report = dict(report)
-            summary = report.get("layout_summary")
-            if isinstance(summary, dict):
-                copied_summary = dict(summary)
-                if mapped_documents:
-                    copied_summary["document"] = mapped_documents[0]
-                copied_summary["outputs"] = list(outputs)
-                copied_report["layout_summary"] = copied_summary
-            combined_reports.append(copied_report)
-        if metric_dir.exists():
-            shutil.rmtree(metric_dir)
+
+
+def _result_payload(
+    *,
+    input_path: Path,
+    plan: Any,
+    records: list[MechanicalTaskSource],
+    export_formats: tuple[str, ...],
+    combined: dict[str, list[Any]],
+    evidence: dict[str, Any],
+    staged_artifacts: dict[str, list[str]],
+    final_artifacts: dict[str, list[str]],
+) -> dict[str, Any]:
+    staged_outcomes = outcomes_for_artifact_map(
+        plan,
+        staged_artifacts,
+        missing_reason_code="mechanical_task_artifacts_incomplete",
+    )
     return {
         "kind": "sciplot_render_result",
-        "template": str(request.get("template") or "curve"),
+        "template": "mechanical_figure_set",
         "input": str(input_path),
-        "sheet": 0,
+        "sheet": None,
         "render_engine": "veusz",
         "qa_target": "veusz_export",
         "export_formats": list(export_formats or DEFAULT_EXPORT_FORMATS_POLICY),
-        "exports": combined_exports,
-        "outputs": combined_outputs,
-        "qa_reports": combined_reports,
-        "veusz_documents": combined_documents,
-        "veusz_specs": combined_specs,
-        "terminal_render_requests": combined_terminal_requests,
+        **combined,
         "multi_metric_bundle": {
-            "kind": "mechanical_curve_and_summary_bundle",
-            "rule_id": rule_id,
-            "metric_ids": [
-                metric_id for metric_id, _source, _template, _options in render_jobs
-            ],
+            "kind": "mechanical_curve_and_descriptive_summary_figure_set",
+            "metric_ids": [record.metric for record in records],
+            "templates": [record.task.template for record in records],
+            "figure_ids": list(plan.selected_figure_ids),
+            "document_policy": "independent_single_page_vsz",
         },
+        "figure_outcomes": [
+            {
+                **outcome.to_payload(),
+                "artifacts": list(final_artifacts[outcome.figure_id]),
+            }
+            for outcome in staged_outcomes
+        ],
+        "mechanical_execution_evidence": evidence,
     }
+
+
+def _rebase_paths(
+    values: list[str],
+    *,
+    source_root: Path,
+    target_root: Path,
+) -> list[str]:
+    rebased: list[str] = []
+    for value in values:
+        path = Path(value).expanduser().resolve()
+        try:
+            relative = path.relative_to(source_root.resolve())
+        except ValueError as exc:
+            raise ValueError(
+                "mechanical_transaction_scope_mismatch: staged artifact escaped "
+                "the mechanical transaction."
+            ) from exc
+        rebased.append(str(target_root / relative))
+    return rebased
+
+
+def _install_staged_figures(
+    staged_figures: Path,
+    *,
+    figures_dir: Path,
+    transaction_dir: Path,
+) -> None:
+    previous = transaction_dir / "previous_figures"
+    try:
+        if figures_dir.exists() or figures_dir.is_symlink():
+            figures_dir.replace(previous)
+        staged_figures.replace(figures_dir)
+    except BaseException:
+        if previous.exists() and not figures_dir.exists():
+            previous.replace(figures_dir)
+        raise
+
+
+__all__ = [
+    "_MECHANICAL_FIGURE_CONTRACTS",
+    "_mechanical_summary_sources",
+    "_render_veusz_mechanical_bundle",
+]

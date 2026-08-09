@@ -216,6 +216,68 @@ def _tensile_summary_metrics(summary_source: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _mechanical_strength_summary_metrics(
+    summary_source: Path,
+    *,
+    metric_name: str,
+    iqr_name: str,
+) -> list[dict[str, Any]]:
+    """Report the same specimen-level median/IQR used by mechanical figures."""
+
+    summary = pd.read_csv(summary_source)
+    if not {"sample", metric_name} <= set(summary.columns):
+        return []
+    samples = [
+        str(value) for value in summary["sample"].dropna().drop_duplicates().tolist()
+    ]
+    rows: list[dict[str, Any]] = []
+    for sample in samples:
+        values = (
+            pd.to_numeric(
+                summary.loc[summary["sample"].astype(str) == sample, metric_name],
+                errors="coerce",
+            )
+            .dropna()
+            .to_numpy(dtype=float)
+        )
+        suffix = "" if len(samples) == 1 else f"[{sample}]"
+        rows.append(_metric(f"replicate_count{suffix}", int(values.size), "count"))
+        if values.size == 0:
+            reason = "No finite retained specimen strength."
+            rows.append(
+                _metric(f"{metric_name}{suffix}", None, "MPa", "skipped", reason)
+            )
+            rows.append(_metric(f"{iqr_name}{suffix}", None, "MPa", "skipped", reason))
+            continue
+        rows.append(
+            _metric(
+                f"{metric_name}{suffix}",
+                float(np.median(values)),
+                "MPa",
+                reason=f"Median of {values.size} retained raw specimen value(s).",
+            )
+        )
+        if values.size >= 2:
+            rows.append(
+                _metric(
+                    f"{iqr_name}{suffix}",
+                    float(np.quantile(values, 0.75) - np.quantile(values, 0.25)),
+                    "MPa",
+                )
+            )
+        else:
+            rows.append(
+                _metric(
+                    f"{iqr_name}{suffix}",
+                    None,
+                    "MPa",
+                    "skipped",
+                    "At least two specimens are required for an IQR.",
+                )
+            )
+    return rows
+
+
 def _tensile_metrics(processed_source: Path) -> list[dict[str, Any]]:
     summary_source = processed_source.with_name(f"{processed_source.stem}_summary.csv")
     if summary_source.exists():

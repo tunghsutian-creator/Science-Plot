@@ -8,6 +8,27 @@ from typing import Any
 
 
 def register_diagnostics_commands(subparsers: Any) -> None:
+    plan_parser = subparsers.add_parser(
+        "plan",
+        help="Resolve the exact FigurePlan without rendering or writing a project.",
+    )
+
+    plan_parser.add_argument("input", type=Path)
+
+    plan_parser.add_argument(
+        "--rule",
+        help="Explicit material rule selected by the user or an assistant.",
+    )
+
+    plan_parser.add_argument(
+        "--template",
+        help="Explicit presentation template within the selected rule.",
+    )
+
+    plan_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
+
     inspect_parser = subparsers.add_parser(
         "inspect", help="Inspect a source and return ranked plot recommendations."
     )

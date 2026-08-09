@@ -202,15 +202,22 @@ def verify_delivery_package(
         )
     except (TypeError, ValueError):
         recorded_plan = None
-    try:
-        expected_plan = resolved_figure_plan_from_payload(
-            expected_manifest.get("resolved_figure_plan")
-        )
-    except (TypeError, ValueError):
-        expected_plan = None
+    expected_plan_gate = figure_plan_manifest_gate(expected_manifest)
+    expected_plan_payload = (
+        expected_manifest.get("resolved_figure_plan")
+        if expected_plan_gate is not None
+        and expected_plan_gate["valid"] is True
+        and isinstance(expected_manifest.get("resolved_figure_plan"), dict)
+        else None
+    )
+    plans_match = bool(
+        recorded_plan is not None
+        and expected_plan_payload is not None
+        and recorded_plan.to_payload() == expected_plan_payload
+    )
     expected_binding_policy = (
         DELIVERY_BINDING_POLICY_RESOLVED_PLAN
-        if figure_plan_manifest_gate(expected_manifest) is not None
+        if expected_plan_gate is not None
         else DELIVERY_BINDING_POLICY_LEGACY
     )
     binding_policy = record.get("binding_policy")
@@ -221,29 +228,21 @@ def verify_delivery_package(
             resolved_binding
             and binding_policy == expected_binding_policy
             and plan_artifact is not None
-            and recorded_plan is not None
-            and expected_plan is not None
-            and recorded_plan.to_payload() == expected_plan.to_payload()
+            and plans_match
         )
         or (
             legacy_binding
             and binding_policy == expected_binding_policy
             and plan_artifact is None
             and record.get("resolved_figure_plan") is None
-            and expected_plan is None
+            and expected_plan_gate is None
         )
     )
     if resolved_binding:
         plan_record_current = bool(
             recorded_plan is not None
-            and expected_plan is not None
-            and recorded_plan.to_payload() == expected_plan.to_payload()
+            and plans_match
             and recorded_plan.complete
-            and isinstance(plan_details, dict)
-            and plan_details.get("plan_id") == recorded_plan.plan_id
-            and plan_details.get("plan_sha256") == recorded_plan.plan_sha256
-            and plan_details.get("selected_figure_ids")
-            == list(recorded_plan.selected_figure_ids)
         )
     elif legacy_binding:
         plan_record_current = bool(
@@ -251,15 +250,9 @@ def verify_delivery_package(
         )
     else:
         plan_record_current = False
-    selected_values = (
-        plan_details.get("selected_figure_ids")
-        if isinstance(plan_details, dict)
-        else None
-    )
     selected_figure_ids = (
-        {value for value in selected_values if isinstance(value, str) and value}
-        if isinstance(selected_values, list)
-        and all(isinstance(value, str) and value for value in selected_values)
+        set(recorded_plan.selected_figure_ids)
+        if recorded_plan is not None
         else set()
     )
     if resolved_binding:

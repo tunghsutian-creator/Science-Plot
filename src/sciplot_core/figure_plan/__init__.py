@@ -29,6 +29,7 @@ from sciplot_core.figure_plan.metric_binding import (
     FigureMetricBinding,
     OrderedMetricsBinding,
 )
+from sciplot_core.figure_plan.mechanical_resolution import resolve_mechanical_plan
 from sciplot_core.figure_plan.outcome import FigureOutcome, FigureOutcomeStatus
 from sciplot_core.figure_plan.payload_types import (
     CartesianMetricBindingPayload,
@@ -109,6 +110,7 @@ __all__ = [
     "request_for_figure_task",
     "resolve_current_figure_plan",
     "resolve_figure_plan",
+    "resolve_mechanical_plan",
     "resolve_preparation_figure_plan",
     "resolved_figure_plan_from_payload",
     "stable_impact_figure_id",

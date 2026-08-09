@@ -100,3 +100,8 @@ def test_impact_plan_expansion_does_not_bind_unselected_queue_entries(
     assert aggregate["resolved_figure_ids"] == ["impact_condition_a"]
     assert unrelated.get("status") == "planned"
     assert unrelated.get("artifacts") in (None, [])
+    run = updated["run"]
+    assert run["resolved_figure_plan"] == completed.to_payload()
+    assert "resolved_figure_plan_id" not in run
+    assert "resolved_figure_plan_sha256" not in run
+    assert "figure_outcomes" not in run

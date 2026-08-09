@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 import json
 
 import pytest
 
+from sciplot_core.figure_plan import (
+    FigureOutcome,
+    FigureTask,
+    ResolvedFigurePlan,
+    merge_figure_outcomes,
+)
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.presentation_identity import (
     resolve_selected_presentation_identity,
@@ -21,6 +28,41 @@ from sciplot_core.studio_core.publish_manifest import (
     build_studio_run_manifest,
 )
 from sciplot_core.studio_core.publish_sources import StudioRunSources
+
+
+def _figure_plan(tmp_path: Path, *, complete: bool = False) -> ResolvedFigurePlan:
+    task = FigureTask(
+        figure_id="figure_a",
+        order=1,
+        title="Figure A",
+        x_metric="x",
+        y_metric="y",
+        template="curve",
+        artifact_stem="figure_a",
+        document_stem="figure_a",
+    )
+    planned = ResolvedFigurePlan.planned(
+        rule_id="test_rule",
+        selection_policy="test_selection",
+        primary_figure_id=task.figure_id,
+        tasks=(task,),
+    )
+    if not complete:
+        return planned
+    return merge_figure_outcomes(
+        planned,
+        (
+            FigureOutcome(
+                figure_id=task.figure_id,
+                status="ready",
+                artifacts=(
+                    str(tmp_path / "figure_a.vsz"),
+                    str(tmp_path / "figure_a.pdf"),
+                    str(tmp_path / "figure_a_300dpi.tiff"),
+                ),
+            ),
+        ),
+    )
 
 
 def _inventory(
@@ -138,6 +180,7 @@ def test_studio_durable_document_fields_use_only_run_local_snapshots(
     tmp_path: Path,
 ) -> None:
     inventory, sources, snapshots = _inventory(tmp_path)
+    inventory = replace(inventory, resolved_figure_plan=_figure_plan(tmp_path))
     run_sources = StudioRunSources(
         input_path=None,
         raw_archive={},
@@ -194,6 +237,9 @@ def test_studio_durable_document_fields_use_only_run_local_snapshots(
     assert manifest["veusz_spec"] == str(snapshots[0].parent / "spec.json")
     assert manifest["studio"]["document"] == str(snapshots[0])
     assert manifest["rule_readiness"] == inventory.rule_readiness.to_payload()
+    assert manifest["resolved_figure_plan"] == result["resolved_figure_plan"]
+    assert "figure_outcomes" not in manifest
+    assert "figure_outcomes" not in result
     durable_json = json.dumps(manifest)
     assert str(sources[0]) not in durable_json
     assert str(sources[1]) not in durable_json
@@ -227,12 +273,14 @@ def test_finalize_returns_snapshot_bound_exports_from_durable_result(
         "publication_rule_blocked": inventory.publication_rule_blocked,
         "autonomous_rule_ready": not inventory.publication_rule_blocked,
     }
+    completed_plan = _figure_plan(tmp_path, complete=True)
     manifest = {
         "result": {
             "exports": [durable_export],
             "template": inventory.presentation_identity.template,
             "presentation_identity": identity,
             "rule_readiness": canonical_rule_readiness,
+            "resolved_figure_plan": completed_plan.to_payload(),
             **projections,
         },
         "semantic": {
@@ -245,6 +293,7 @@ def test_finalize_returns_snapshot_bound_exports_from_durable_result(
         "studio": {"presentation_identity": identity},
         "scope": "project_delivery",
         "rule_readiness": canonical_rule_readiness,
+        "resolved_figure_plan": completed_plan.to_payload(),
         **projections,
     }
 
@@ -297,6 +346,9 @@ def test_finalize_returns_snapshot_bound_exports_from_durable_result(
     assert payload["failure_stage"] is None
     assert payload["failure_reason"] is None
     assert payload["rule_readiness"] == inventory.rule_readiness.to_payload()
+    assert payload["resolved_figure_plan"] == completed_plan.to_payload()
+    assert "figure_outcomes" not in payload
+    assert "figure_outcomes" not in manifest["result"]
     assert (
         manifest["result"]["rule_readiness"]
         == manifest["rule_readiness"]
@@ -308,6 +360,7 @@ def test_finalize_returns_snapshot_bound_exports_from_durable_result(
         "package_contract_complete": True,
         "delivery_package_complete": True,
         "delivery_verification_passed": True,
+        "resolved_figure_plan_complete": True,
     }
     assert registered[0]["exports"] == [durable_export]
     assert registered[0]["state"] == "ready"

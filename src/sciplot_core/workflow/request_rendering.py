@@ -11,11 +11,13 @@ from sciplot_core.figure_plan.plan import (
     ResolvedFigurePlan,
     resolved_figure_plan_from_payload,
 )
+from sciplot_core.figure_plan.execution import finalize_figure_plan_result
 from sciplot_core.figure_plan.terminal_binding import (
     BoundTerminalFigureEvidence,
     bind_terminal_figure_evidence,
 )
 from sciplot_core.materials_rules import compute_analysis_metrics
+from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.semantic import prepare_semantic_source
 from sciplot_recipes import run_recipe
@@ -49,6 +51,10 @@ class RequestRenderResult:
     result: dict[str, Any]
     plotted_data_source: Path
     selected_figure_plan: ResolvedFigurePlan | None = None
+    completed_figure_plan: ResolvedFigurePlan | None = field(
+        init=False,
+        default=None,
+    )
     figure_evidence: BoundTerminalFigureEvidence | None = field(
         init=False,
         default=None,
@@ -56,11 +62,28 @@ class RequestRenderResult:
 
     def __post_init__(self) -> None:
         result = deepcopy(self.result)
-        evidence = bind_terminal_figure_evidence(
+        terminal_evidence = bind_terminal_figure_evidence(
             selected_plan=self.selected_figure_plan,
             result=result,
         )
+        completed = (
+            terminal_evidence.completed_plan
+            if terminal_evidence is not None
+            and terminal_evidence.completed_plan is not None
+            else finalize_figure_plan_result(self.selected_figure_plan, result)
+        )
+        evidence = terminal_evidence
+        if terminal_evidence is not None and completed is not None:
+            result["resolved_figure_plan"] = completed.to_payload()
+            result.pop("figure_outcomes", None)
+            evidence = BoundTerminalFigureEvidence(
+                selected_plan=terminal_evidence.selected_plan,
+                terminal_tasks=terminal_evidence.terminal_tasks,
+                reported_outcomes=completed.outcomes,
+                completed_plan=completed,
+            )
         object.__setattr__(self, "result", result)
+        object.__setattr__(self, "completed_figure_plan", completed)
         object.__setattr__(self, "figure_evidence", evidence)
 
     @property
@@ -165,6 +188,23 @@ def execute_request_render(
     template = route_intent.requested_template
     if template is None:
         raise AssertionError("Direct-render route lost its captured template identity.")
+    if (
+        selected_figure_plan is not None
+        and selected_figure_plan.rule_id in MECHANICAL_RULE_IDS
+    ):
+        return _render_semantic_plan_request(
+            request=request,
+            route_intent=route_intent,
+            semantic=semantic,
+            study_model=study_model,
+            input_path=input_path,
+            output_dir=output_dir,
+            base_dir=base_dir,
+            transform_steps=transform_steps,
+            selected_figure_plan=selected_figure_plan,
+            final_recipe=None,
+            named_recipe_binding=None,
+        )
     render_options = request.get("render_options")
     effective_render_request = (
         {
