@@ -7,6 +7,7 @@ from sciplot_core.materials_rules.tokens import (  # noqa: F401
     _metric_header_matches,
 )
 from sciplot_core.materials_rules.unit_data import (  # noqa: F401
+    NORMALIZED_STRESS_RATIO_DISPLAY_LABEL,
     UnitRule,
     _UNIT_RULES,
     _DIMENSIONLESS_EXPRESSION_LABELS,
@@ -127,6 +128,7 @@ from sciplot_core.materials_rules.analysis import (  # noqa: F401
 __all__ = [
     "AnalysisSpec",
     "AxisSpec",
+    "NORMALIZED_STRESS_RATIO_DISPLAY_LABEL",
     "ELONGATION_AT_BREAK_IQR_METRIC",
     "ELONGATION_AT_BREAK_LABEL",
     "ELONGATION_AT_BREAK_METRIC",

@@ -6,6 +6,9 @@ import re
 from dataclasses import dataclass
 
 
+NORMALIZED_STRESS_RATIO_DISPLAY_LABEL = "$\\sigma/\\sigma_0$"
+
+
 @dataclass(frozen=True)
 class UnitRule:
     source: str
@@ -43,8 +46,8 @@ _UNIT_RULES = {
 
 _DIMENSIONLESS_EXPRESSION_LABELS = {
     "G/G0": "$G(t)/G_0$",
-    "sigma/sigma0": "$\\sigma/\\sigma_0$",
-    "$\\sigma/\\sigma_0$": "$\\sigma/\\sigma_0$",
+    "sigma/sigma0": NORMALIZED_STRESS_RATIO_DISPLAY_LABEL,
+    NORMALIZED_STRESS_RATIO_DISPLAY_LABEL: NORMALIZED_STRESS_RATIO_DISPLAY_LABEL,
     "\\sigma/\\sigma_{0}": "\\sigma/\\sigma_{0}",
     "σ/σ₀": "σ/σ₀",
     "G′/G′ₘ": "G′/G′ₘ",

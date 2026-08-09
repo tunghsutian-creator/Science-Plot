@@ -14,6 +14,9 @@ from sciplot_core.materials_rules.models import (
     SemanticRule,
     _rule,
 )
+from sciplot_core.materials_rules.unit_data import (
+    NORMALIZED_STRESS_RATIO_DISPLAY_LABEL,
+)
 
 from sciplot_core.materials_rules.catalog_axes import (
     RHEOLOGY_X_FREQUENCY,
@@ -244,7 +247,7 @@ RHEOLOGY_RULES: tuple[SemanticRule, ...] = (
         AxisSpec(
             "Normalized stress",
             "sigma/sigma0",
-            "Normalized stress ($\\sigma/\\sigma_0$)",
+            NORMALIZED_STRESS_RATIO_DISPLAY_LABEL,
             aliases=("shear stress", "relaxation modulus", "stress"),
         ),
         keywords=(

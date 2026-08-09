@@ -819,16 +819,19 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
     checks = [
         _check(
             "stress_hold_onset_contract",
-            "Stress relaxation crops loading, resets time, and uses the hold-onset response as sigma0",
+            "Stress relaxation crops loading, preserves source time, and retains the sigma0 anchor",
             (
-                stress_series.x_label == "Elapsed time"
-                and stress_series.points[0] == (1.0, 0.9)
+                stress_series.x_label == "Time"
+                and stress_series.points[0] == (5.0, 1.0)
                 and stress_diagnostics.get("hold_target_strain") == 10.0
                 and stress_diagnostics.get("hold_onset_source_time") == 5.0
                 and stress_diagnostics.get("normalization_baseline_value") == 100.0
+                and stress_diagnostics.get("normalization_baseline_time") == 5.0
                 and stress_diagnostics.get("excluded_loading_points") == 5
-                and "elapsed_time = source_time"
-                in str(stress_diagnostics.get("time_reset_definition"))
+                and stress_diagnostics.get("excluded_hold_onset_points") == 0
+                and stress_diagnostics.get("time_reset_applied") is False
+                and "preserve the instrument time"
+                in str(stress_diagnostics.get("time_coordinate_definition"))
                 and stress_source_normalizations[0].get("normalization_baseline_value")
                 == 100.0
             ),
@@ -846,9 +849,9 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         ),
         _check(
             "stress_interval_identity_contract",
-            "Stress relaxation pairs reset time values within one explicit interval",
+            "Stress relaxation pairs preserved source-time values within one explicit interval",
             (
-                multi_interval_series.points[0] == (1.0, 0.9)
+                multi_interval_series.points[0] == (5.0, 1.0)
                 and multi_interval_diagnostics.get("hold_interval_index") == 2
                 and multi_interval_diagnostics.get("hold_interval_selection_policy")
                 == "last_common_selected_interval"

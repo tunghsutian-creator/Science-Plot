@@ -26,7 +26,7 @@ def _normalize_strain_controlled_hold(
     y_label: str = "Normalized stress",
     y_unit: str = "sigma/sigma0",
 ) -> CurveSeriesPayload:
-    """Crop a loading ramp and normalize from the detected strain-hold onset."""
+    """Crop loading and normalize from a retained, source-time hold onset."""
 
     response_result = (response.diagnostics or {}).get("selected_result_index")
     control_result = (control.diagnostics or {}).get("selected_result_index")
@@ -220,13 +220,12 @@ def _normalize_strain_controlled_hold(
         )
 
     normalized_points = tuple(
-        (time_value - onset_time, response_value / baseline)
-        for time_value, response_value, _control_value in aligned[onset_index + 1 :]
-        if time_value - onset_time > 0.0
+        (time_value, response_value / baseline)
+        for time_value, response_value, _control_value in aligned[onset_index:]
     )
     if len(normalized_points) < 2:
         raise _StressRelaxationHoldError(
-            "The detected hold has fewer than two positive elapsed-time response points."
+            "The detected hold has fewer than two response points at or after onset."
         )
     normalized_values = [value for _time, value in normalized_points]
     peak_index = max(
@@ -281,15 +280,20 @@ def _normalize_strain_controlled_hold(
             if interval_index != hold_interval_index
         ),
         "excluded_loading_points": onset_index,
-        "excluded_hold_onset_points": 1,
+        "excluded_hold_onset_points": 0,
         "source_point_count": len(aligned),
         "selected_point_count": len(normalized_points),
+        "time_reset_applied": False,
         "time_reset_definition": (
-            "elapsed_time = source_time - hold_onset_source_time; "
-            "retain elapsed_time > 0"
+            "not applied; source time is preserved"
+        ),
+        "time_coordinate_definition": (
+            "time = source_time; preserve the instrument time at and after "
+            "the detected hold onset"
         ),
         "normalization_definition": (
-            "divide hold-phase response by the response at detected shear-strain hold onset"
+            "divide the response at and after detected shear-strain hold onset "
+            "by the onset response; retain the onset point as sigma/sigma0 = 1"
         ),
         "baseline_response": baseline,
         "baseline_response_unit": response.y_unit,
@@ -297,7 +301,7 @@ def _normalize_strain_controlled_hold(
         "sigma0_unit": response.y_unit,
         "normalization_baseline_value": baseline,
         "normalization_baseline_source_time": onset_time,
-        "normalization_baseline_time": 0.0,
+        "normalization_baseline_time": onset_time,
         "normalized_minimum": min(normalized_values),
         "normalized_maximum": max(normalized_values),
         "normalized_final": normalized_values[-1],
@@ -311,7 +315,7 @@ def _normalize_strain_controlled_hold(
     }
     return CurveSeriesPayload(
         sample=response.sample,
-        x_label="Elapsed time",
+        x_label="Time",
         x_unit=response.x_unit,
         y_label=y_label,
         y_unit=y_unit,

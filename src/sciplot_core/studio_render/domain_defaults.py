@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from sciplot_core.materials_rules.unit_data import (
+    NORMALIZED_STRESS_RATIO_DISPLAY_LABEL,
+)
 from sciplot_core.policy import (
     CATEGORICAL_BOX_FILL_FRACTION,
     CATEGORICAL_DISTRIBUTION_RENDER_OPTIONS,
@@ -292,7 +295,10 @@ def _apply_domain_render_defaults(
         updated["axis_mode"] = "auto"
     if str(request.get("rule_id") or "").strip() == "rheology_stress_relaxation":
         updated.setdefault("x_label_override", "Time (s)")
-        updated.setdefault("y_label_override", "Normalized stress (\\sigma/\\sigma_0)")
+        updated.setdefault(
+            "y_label_override",
+            NORMALIZED_STRESS_RATIO_DISPLAY_LABEL,
+        )
     if str(request.get("rule_id") or "").strip() == "gpc_sec_chromatogram":
         detected_y_label = str(axis_info.get("y_label") or "").strip()
         requested_y_label = (

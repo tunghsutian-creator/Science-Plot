@@ -7,6 +7,9 @@ import pandas as pd
 import pytest
 import sciplot_core.workflow as workflow
 
+from sciplot_core.materials_rules.unit_data import (
+    NORMALIZED_STRESS_RATIO_DISPLAY_LABEL,
+)
 from sciplot_core.policy import (
     AUTOPLOT_RENDER_OPTIONS,
     CATEGORICAL_BAR_FILL_TRANSPARENCY,
@@ -358,6 +361,21 @@ def test_tensile_contract_uses_short_labels_two_sided_padding_and_auto_legend() 
     assert options["x_min"] < 0.0 < max(series[0].x_values) < options["x_max"]
     assert options["y_min"] < 0.1 < max(series[0].y_values) < options["y_max"]
     assert options["legend_position"] != "lower_left"
+
+
+def test_stress_relaxation_contract_uses_ratio_only_y_axis_label() -> None:
+    options = _apply_domain_render_defaults(
+        {},
+        request={
+            "rule_id": "rheology_stress_relaxation",
+            "template": "curve",
+            "render_options": {},
+        },
+        axis_info={"x_label": "Time", "y_label": "Normalized stress"},
+    )
+
+    assert options["x_label_override"] == "Time (s)"
+    assert options["y_label_override"] == NORMALIZED_STRESS_RATIO_DISPLAY_LABEL
 
 
 def test_tensile_summary_bar_keeps_metric_axis_labels() -> None:

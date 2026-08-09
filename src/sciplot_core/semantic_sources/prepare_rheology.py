@@ -299,8 +299,9 @@ def prepare_rheology_source(
             parameters={
                 "normalization_definition": (
                     "strain-controlled interval sources: detect the terminal "
-                    "shear-strain hold, crop the loading ramp, reset elapsed "
-                    "time at hold onset, and divide by the onset response; "
+                    "shear-strain hold, crop the loading ramp, preserve source "
+                    "time, retain the hold-onset point, and divide by the onset "
+                    "response; "
                     "sources without a control signal: preserve source time "
                     "and divide by the first finite non-zero response; already "
                     "normalized sources are preserved"

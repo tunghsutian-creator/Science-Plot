@@ -16,7 +16,10 @@ from sciplot_core.figure_plan.terminal_binding import (
     BoundTerminalFigureEvidence,
     bind_terminal_figure_evidence,
 )
-from sciplot_core.materials_rules import compute_analysis_metrics
+from sciplot_core.materials_rules import (
+    NORMALIZED_STRESS_RATIO_DISPLAY_LABEL,
+    compute_analysis_metrics,
+)
 from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.semantic import prepare_semantic_source
@@ -313,7 +316,7 @@ def _render_semantic_plan_request(
         render_options.setdefault("x_label_override", "Time (s)")
         render_options.setdefault(
             "y_label_override",
-            "Normalized stress ($\\sigma/\\sigma_0$)",
+            NORMALIZED_STRESS_RATIO_DISPLAY_LABEL,
         )
     template = request.get("template") or semantic["template"]
     effective_render_request = {
