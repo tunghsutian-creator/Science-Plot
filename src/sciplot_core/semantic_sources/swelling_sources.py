@@ -20,27 +20,40 @@ from sciplot_core.semantic_sources.table_scanning import (
     _float,
     _read_candidate_tables,
     _axis_match,
-    _scan_curve_series_source,
 )
 
 _SWELLING_Y_ALIASES = ("swelling ratio", "ai/a0", "normalized projected area")
 
 
-def _swelling_time_conversion(header: object) -> tuple[str, float]:
-    text = _clean_text(header).casefold().replace("µ", "u")
-    if (
-        re.search(r"\b(?:s|sec|secs|second|seconds)\b", text)
-        or "(s)" in text
-        or "[s]" in text
-    ):
-        return "s", 1.0 / 3600.0
-    if (
-        re.search(r"\b(?:min|mins|minute|minutes)\b", text)
-        or "(min)" in text
-        or "[min]" in text
-    ):
-        return "min", 1.0 / 60.0
-    return "h", 1.0
+def _swelling_time_conversion(
+    header: object,
+    adjacent_unit: object = None,
+) -> tuple[str, float]:
+    source_header = _clean_text(header)
+    for candidate in (source_header, _clean_text(adjacent_unit)):
+        text = candidate.casefold().replace("µ", "u")
+        if (
+            re.search(r"\b(?:s|sec|secs|second|seconds)\b", text)
+            or "(s)" in text
+            or "[s]" in text
+        ):
+            return "s", 1.0 / 3600.0
+        if (
+            re.search(r"\b(?:min|mins|minute|minutes)\b", text)
+            or "(min)" in text
+            or "[min]" in text
+        ):
+            return "min", 1.0 / 60.0
+        if (
+            re.search(r"\b(?:h|hr|hrs|hour|hours)\b", text)
+            or "(h)" in text
+            or "[h]" in text
+        ):
+            return "h", 1.0
+    raise ValueError(
+        "Swelling time unit is missing or unsupported in header "
+        f"`{source_header}`; expected s, min, or h."
+    )
 
 
 def _source_row_number(value: object) -> int | str:
@@ -50,20 +63,24 @@ def _source_row_number(value: object) -> int | str:
         return str(value)
 
 
-def _contiguous_table_stop(raw: pd.DataFrame, data_start: int) -> int:
-    """Stop before a disconnected lower table whose blank separator was dropped."""
+def _labeled_table_stop(raw: pd.DataFrame, data_start: int) -> int:
+    """Stop only at the next explicit table header, never at whitespace."""
 
-    stop = raw.shape[0]
     for row_position in range(data_start + 1, raw.shape[0]):
-        try:
-            previous = int(raw.index[row_position - 1])
-            current = int(raw.index[row_position])
-        except (TypeError, ValueError):
-            continue
-        if current - previous > 1:
-            stop = row_position
-            break
-    return stop
+        values = raw.iloc[row_position].tolist()
+        time_columns = {
+            column
+            for column, value in enumerate(values)
+            if _axis_match(value, ("time",))
+        }
+        if time_columns and any(
+            column not in time_columns
+            and bool(_clean_text(value))
+            and _float(value) is None
+            for column, value in enumerate(values)
+        ):
+            return row_position
+    return raw.shape[0]
 
 
 def _nearest_row_label(raw: pd.DataFrame, row_position: int, column: int) -> str:
@@ -117,10 +134,10 @@ def _parallel_swelling_series(
             data_start += 1
         if data_start >= raw.shape[0]:
             continue
-        data_stop = _contiguous_table_stop(raw, data_start)
+        data_stop = _labeled_table_stop(raw, data_start)
         excluded_rows = raw.shape[0] - data_stop
         block_diagnostics: dict[str, Any] = {
-            "selection_policy": "contiguous_labeled_swelling_block",
+            "selection_policy": "labeled_block_until_next_explicit_header",
             "source_header_row": _source_row_number(raw.index[header_index]),
             "source_data_row_start": _source_row_number(raw.index[data_start]),
             "source_data_row_end": _source_row_number(raw.index[data_stop - 1]),
@@ -134,7 +151,12 @@ def _parallel_swelling_series(
         candidate: list[CurveSeriesPayload] = []
         for series_index, (x_index, y_index) in enumerate(pairs, start=1):
             points: list[tuple[float, float]] = []
-            source_unit, factor = _swelling_time_conversion(headers[x_index])
+            source_unit, factor = _swelling_time_conversion(
+                headers[x_index],
+                raw.iat[header_index + 1, x_index]
+                if header_index + 1 < raw.shape[0]
+                else None,
+            )
             for row_index in range(data_start, data_stop):
                 x_value = _float(raw.iat[row_index, x_index])
                 y_value = _float(raw.iat[row_index, y_index])
@@ -221,8 +243,13 @@ def _read_swelling_series_list(source: Path) -> list[CurveSeriesPayload]:
             if time_column is None or swelling_column is None:
                 continue
             data_start = header_index + 1
-            data_stop = _contiguous_table_stop(raw, data_start)
-            source_unit, factor = _swelling_time_conversion(headers[time_column])
+            data_stop = _labeled_table_stop(raw, data_start)
+            source_unit, factor = _swelling_time_conversion(
+                headers[time_column],
+                raw.iat[header_index + 1, time_column]
+                if header_index + 1 < raw.shape[0]
+                else None,
+            )
             grouped: dict[str, list[tuple[float, float]]] = {}
             for row_index in range(data_start, data_stop):
                 x_value = _float(raw.iat[row_index, time_column])
@@ -269,13 +296,4 @@ def _read_swelling_series_list(source: Path) -> list[CurveSeriesPayload]:
                 best = candidate
     if best:
         return best
-    return _scan_curve_series_source(
-        source,
-        x_aliases=("time",),
-        y_aliases=_SWELLING_Y_ALIASES,
-        x_label="Time",
-        y_label="Swelling ratio",
-        default_x_unit="h",
-        default_y_unit="1",
-        sample_prefix=source.stem,
-    )
+    return []

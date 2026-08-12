@@ -19,6 +19,7 @@ from sciplot_core.terminal_source_binding import (
 
 
 TERMINAL_SOURCE_BINDING_ENV = "SCIPLOT_INTERNAL_TERMINAL_SOURCE_BINDING"
+TERMINAL_SOURCE_PREPARED_ENV = "SCIPLOT_INTERNAL_TERMINAL_SOURCE_PREPARED"
 _CONTRACT_MISMATCH = "terminal_source_binding_contract_mismatch"
 _REQUEST_MISMATCH = "terminal_source_binding_request_mismatch"
 _PAYLOAD_FIELDS = {
@@ -129,8 +130,16 @@ def consume_terminal_source_binding_environment(
     return binding
 
 
+def consume_terminal_source_prepared_environment() -> bool:
+    """Consume the private single-pass semantic-preparation marker."""
+
+    return os.environ.pop(TERMINAL_SOURCE_PREPARED_ENV, None) == "1"
+
+
 __all__ = [
     "TERMINAL_SOURCE_BINDING_ENV",
+    "TERMINAL_SOURCE_PREPARED_ENV",
     "consume_terminal_source_binding_environment",
+    "consume_terminal_source_prepared_environment",
     "sealed_terminal_source_binding_from_payload",
 ]

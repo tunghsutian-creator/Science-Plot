@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core.figure_plan import (
+    ResolvedFigurePlan,
     finalize_figure_plan_result,
     outcomes_for_artifact_map,
     request_for_figure_task,
@@ -43,6 +44,7 @@ def _sweep_metric_sources(
     request: dict[str, Any],
     output_dir: Path,
     source_attestation: PreparationSourceAttestation | None = None,
+    _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> list[tuple[str, Path, dict[str, Any]]]:
     return [
         (record.metric_id, record.source, dict(record.render_options))
@@ -51,6 +53,7 @@ def _sweep_metric_sources(
             request=request,
             output_dir=output_dir,
             source_attestation=source_attestation,
+            _resolved_figure_plan=_resolved_figure_plan,
         )
     ]
 
@@ -68,10 +71,15 @@ def _render_veusz_sweep_bundle(
         ..., list[RheologyTaskSource]
     ] = build_rheology_task_sources,
     _renderer: Callable[..., dict[str, Any]] = render_to_dir,
+    _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> dict[str, Any] | None:
     output_dir = output_dir.expanduser().resolve()
     prefix = _sweep_prefix_for_request(request)
-    figure_plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
+    figure_plan = _resolved_figure_plan
+    if figure_plan is None and request.get("resolved_figure_plan") is not None:
+        figure_plan = resolved_figure_plan_from_payload(
+            request["resolved_figure_plan"]
+        )
     if prefix == "temp" and figure_plan is None:
         raise ValueError(
             "temperature_figure_plan_required: temperature Workflow rendering "
@@ -83,6 +91,7 @@ def _render_veusz_sweep_bundle(
         output_dir=output_dir,
         raw_source=source_input,
         source_attestation=source_attestation,
+        _resolved_figure_plan=figure_plan,
     )
     if not task_sources and figure_plan is None:
         return None

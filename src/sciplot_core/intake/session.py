@@ -55,22 +55,23 @@ def prepare_intake_session(
         raise ValueError(f"Input path does not exist: {source}")
     output_root = output_root.expanduser().resolve()
     output_root.mkdir(parents=True, exist_ok=True)
+    selected_rule_id = str(requested_rule_id or "").strip() or None
 
     tensile_dirs = _tensile_export_dirs(source)
     temperature_files = (
         _rheology_comparison_files(source)
-        if is_rheology_temperature_comparison_dir(source)
+        if selected_rule_id is None and is_rheology_temperature_comparison_dir(source)
         else []
     )
     frequency_files = (
         _rheology_comparison_files(source)
-        if not temperature_files and is_rheology_frequency_comparison_dir(source)
+        if selected_rule_id is None
+        and not temperature_files
+        and is_rheology_frequency_comparison_dir(source)
         else []
     )
     torque_files = _torque_files(source)
     semantic: dict[str, Any] | None = None
-    selected_rule_id = str(requested_rule_id or "").strip() or None
-
     if selected_rule_id:
         selected_rule = get_rule(selected_rule_id)
         pending_rule_review = selected_rule.fixture_status != "ready"
@@ -197,6 +198,10 @@ def prepare_intake_session(
         "confidence": confidence,
         "reason": reason,
         "groups": groups,
+        # Discovery order describes how intake found the files.  It does not
+        # become a scientific series-order choice until a user confirms or
+        # reorders the groups in the intake UI.
+        "group_order_is_explicit": False,
         "warnings": warnings,
         "semantic": semantic,
         "pending_rule_review": bool(

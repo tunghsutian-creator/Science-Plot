@@ -143,4 +143,22 @@ def _status_text(status: dict[str, Any]) -> str:
             f"Evidence: {qa.get('evidence') or 'not run'}",
         ]
     )
+    scientific_review = status.get("scientific_transform_review")
+    if isinstance(scientific_review, dict):
+        lines.extend(["", "Scientific review:"])
+        if scientific_review.get("status") == "available":
+            lines.append(
+                f"  Family: {scientific_review.get('semantic_family') or '—'}"
+            )
+            for item in scientific_review.get("items", []):
+                if isinstance(item, dict):
+                    lines.append(
+                        f"  {item.get('label') or item.get('id') or 'Item'}: "
+                        f"{item.get('value') or '—'}"
+                    )
+        else:
+            lines.append(
+                "  Unavailable: "
+                f"{scientific_review.get('message') or 'invalid persisted contract'}"
+            )
     return "\n".join(lines)

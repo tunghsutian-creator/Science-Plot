@@ -635,7 +635,7 @@ def test_categorical_axis_labels_are_owned_by_shared_native_axis() -> None:
     assert labels == []
 
 
-def test_ftir_stacked_defaults_keep_scientific_labels_without_offset_suffix() -> None:
+def test_ftir_stacked_defaults_keep_source_extent_and_auto_ticks() -> None:
     request = {
         "rule_id": "ftir_spectrum",
         "template": "stacked_curve",
@@ -652,7 +652,7 @@ def test_ftir_stacked_defaults_keep_scientific_labels_without_offset_suffix() ->
             label=label,
             x_name=f"x_{label}",
             y_name=f"y_{label}",
-            x_values=(400.0, 1000.0, 4000.0),
+            x_values=(350.0, 1000.0, 4100.0),
             y_values=(80.0, 70.0, 90.0),
             color="#374E55",
         )
@@ -669,9 +669,23 @@ def test_ftir_stacked_defaults_keep_scientific_labels_without_offset_suffix() ->
     )
 
     assert options["x_label_override"] == "Wavenumber (cm⁻¹)"
-    assert options["x_ticks"] == [400.0, 1000.0, 2000.0, 3000.0, 4000.0]
+    assert options["reverse_x"] is True
+    assert "x_min" not in options
+    assert "x_max" not in options
+    assert "x_ticks" not in options
     assert options["y_label_override"] == "Transmittance (%)"
     assert "offset" not in options["y_label_override"].casefold()
+    axis = _veusz_axis_contract(
+        options,
+        template_id="stacked_curve",
+        series=series,
+        explicit_render_options={},
+    )
+    assert axis.x_min is not None
+    assert axis.x_max is not None
+    assert min(axis.x_min, axis.x_max) < 350.0
+    assert max(axis.x_min, axis.x_max) > 4100.0
+    assert axis.x_ticks != (400.0, 1000.0, 2000.0, 3000.0, 4000.0)
 
 
 def test_autoplot_writes_a_canonical_default_render_request(
@@ -694,11 +708,12 @@ def test_autoplot_writes_a_canonical_default_render_request(
     assert captured["render_options"] == normalize_render_options(
         AUTOPLOT_RENDER_OPTIONS
     )
+    assert captured["explicit_render_option_keys"] == []
     assert "legend_position" not in captured["render_options"]
     assert "series_label_mode" not in captured["render_options"]
 
 
-def test_autoplot_preserves_an_explicit_supported_presentation_template(
+def test_autoplot_preserves_an_explicit_rule_and_supported_presentation_template(
     tmp_path, monkeypatch
 ) -> None:
     captured: dict[str, object] = {}
@@ -712,12 +727,29 @@ def test_autoplot_preserves_an_explicit_supported_presentation_template(
         tmp_path / "impact.xlsx",
         output_root=tmp_path / "outputs",
         project_name="impact_bar",
+        rule_id="impact_metric",
         template="bar",
     )
 
     assert result["status"] == "ready"
     assert captured["recipe"] == "auto"
+    assert captured["rule_id"] == "impact_metric"
     assert captured["template"] == "bar"
+    assert captured["explicit_render_option_keys"] == []
+    assert "explicit_rule_selection" not in captured
+
+
+def test_autoplot_rejects_an_empty_explicit_rule_before_project_creation(
+    tmp_path,
+) -> None:
+    with pytest.raises(ValueError, match="non-empty canonical identifier"):
+        workflow.run_one_step(
+            tmp_path / "input.csv",
+            output_root=tmp_path / "outputs",
+            rule_id=" ",
+        )
+
+    assert not (tmp_path / "outputs").exists()
 
 
 def test_style_and_template_contract_audit_passes_current_registry() -> None:

@@ -8,7 +8,10 @@ from typing import Any
 
 import pandas as pd
 
-from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
+from sciplot_core.figure_plan.plan import (
+    ResolvedFigurePlan,
+    resolved_figure_plan_from_payload,
+)
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.policy import (
@@ -54,6 +57,7 @@ def build_rheology_task_sources(
     output_dir: Path,
     raw_source: Path | None = None,
     source_attestation: PreparationSourceAttestation | None = None,
+    _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> list[RheologyTaskSource]:
     """Build ordered metric tables from one prepared comparison workbook."""
 
@@ -63,7 +67,11 @@ def build_rheology_task_sources(
     if prefix is None or prepared_source.suffix.casefold() not in {".xlsx", ".xls"}:
         return []
 
-    figure_plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
+    figure_plan = _resolved_figure_plan
+    if figure_plan is None and request.get("resolved_figure_plan") is not None:
+        figure_plan = resolved_figure_plan_from_payload(
+            request["resolved_figure_plan"]
+        )
     if prefix == "temp" and figure_plan is None:
         raise ValueError(
             "temperature_figure_plan_required: temperature task sources require "
@@ -149,6 +157,7 @@ def build_rheology_task_sources(
         metric_keys = selected_frequency_metric_keys(
             available_metrics,
             request=request,
+            _resolved_figure_plan=figure_plan,
         )
     metric_keys = [metric for metric in metric_keys if metric in available_metrics]
     if prefix == "temp" and tuple(metric_keys) != TEMPERATURE_METRICS:

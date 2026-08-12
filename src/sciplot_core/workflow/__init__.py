@@ -41,14 +41,12 @@ from sciplot_core.workflow.mechanical_bundle import (  # noqa: F401
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.render import render_to_dir as render_to_dir
 from sciplot_core.semantic import classify_source as classify_source
 from sciplot_core.workflow.impact_bundle import (
     _impact_condition_sources,
     _render_veusz_impact_bundle as _render_veusz_impact_bundle_impl,
-)
-from sciplot_core.workflow.dsc_bundle import (  # noqa: F401
-    _render_veusz_dsc_bundle,
 )
 from sciplot_core.workflow.performance_bundle import (  # noqa: F401
     _render_veusz_performance_bundle,
@@ -86,6 +84,7 @@ def run_one_step(
     output_root: Path,
     project_name: str | None = None,
     delivery_root: Path | None = None,
+    rule_id: str | None = None,
     template: str | None = None,
 ) -> dict[str, Any]:
     """Run the one-step route through the facade's current request runner."""
@@ -95,6 +94,7 @@ def run_one_step(
         output_root=output_root,
         project_name=project_name,
         delivery_root=delivery_root,
+        rule_id=rule_id,
         template=template,
         _request_runner=run_request,
     )
@@ -107,6 +107,7 @@ def _render_veusz_impact_bundle(
     options: dict[str, Any],
     export_formats: object,
     request: dict[str, Any],
+    _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> dict[str, Any] | None:
     """Render impact figures with explicit source and renderer dependencies."""
 
@@ -118,6 +119,7 @@ def _render_veusz_impact_bundle(
         request=request,
         _source_builder=_impact_condition_sources,
         _renderer=render_to_dir,
+        _resolved_figure_plan=_resolved_figure_plan,
     )
 
 

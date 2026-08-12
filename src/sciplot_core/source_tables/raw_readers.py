@@ -54,13 +54,20 @@ def _read_ragged_delimited(path: Path, *, delimiter: str) -> pd.DataFrame:
 def read_raw_table(
     path: str | Path,
     sheet_name: str | int = 0,
+    *,
+    preserve_na_tokens: bool = False,
 ) -> pd.DataFrame:
     """Read CSV/TSV/TXT/XLSX without assigning a header row."""
 
     table_path = Path(path)
     suffix = table_path.suffix.lower()
     if suffix in {".xlsx", ".xlsm"}:
-        return pd.read_excel(table_path, header=None, sheet_name=sheet_name)
+        return pd.read_excel(
+            table_path,
+            header=None,
+            sheet_name=sheet_name,
+            keep_default_na=not preserve_na_tokens,
+        )
     if suffix == ".csv":
         try:
             return _read_delimited(
@@ -68,11 +75,18 @@ def read_raw_table(
                 header=None,
                 sep=None,
                 engine="python",
+                keep_default_na=not preserve_na_tokens,
             )
         except (ValueError, csv.Error):
             return _read_ragged_delimited(table_path, delimiter="\t")
     if suffix in {".tsv", ".txt"}:
-        return _read_delimited(table_path, header=None, sep=None, engine="python")
+        return _read_delimited(
+            table_path,
+            header=None,
+            sep=None,
+            engine="python",
+            keep_default_na=not preserve_na_tokens,
+        )
     raise ValueError(f"Unsupported file format: {suffix}")
 
 

@@ -82,7 +82,7 @@ def dispatch_rendering(
     if args.command == "autoplot":
         from sciplot_core.output_contract import resolve_user_output_layout
 
-        source = _resolve_input(args.input)
+        source = args.input if args.rule is not None else _resolve_input(args.input)
         layout = resolve_user_output_layout(
             source, requested_delivery_root=args.out, project_name=args.name
         )
@@ -91,6 +91,7 @@ def dispatch_rendering(
             output_root=layout.workspace_root / "autoplot_projects",
             project_name=args.name,
             delivery_root=layout.delivery_root,
+            rule_id=args.rule,
             template=args.template,
         )
         if args.json:

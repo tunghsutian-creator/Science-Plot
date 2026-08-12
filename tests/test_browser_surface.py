@@ -20,6 +20,8 @@ def test_browser_surface_keeps_first_project_creation_and_read_only_review() -> 
     assert "run_after_create: true" in html
     assert "render_options: { size: S.figureSize }" in html
     assert "Result Review is read-only" in html
+    assert "renderScientificTransformReview(scientificReview)" in html
+    assert '<div class="section-title">Scientific Review</div>' in html
     assert "Open_in_Veusz.command" in html
     assert "canonical_figure_stem" in html
     assert '.replace(/_\\d+dpi$/i, "")' in html

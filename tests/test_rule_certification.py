@@ -5,6 +5,10 @@ from dataclasses import replace
 
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.readiness import rule_contract as rule_contract_module
+from sciplot_core.readiness.constants import (
+    VALIDATED_ENVELOPE_ACCEPTANCE_LINEAGE_KIND,
+    VALIDATED_ENVELOPE_ACCEPTANCE_LINEAGE_VERSION,
+)
 from sciplot_core.readiness.registry_io import (
     load_validated_envelope_registry,
 )
@@ -12,6 +16,7 @@ from sciplot_core.readiness.registry_model import ValidatedEnvelopeRegistry
 from sciplot_core.readiness.envelope_model import ValidatedRuleEnvelope
 from sciplot_core.readiness.rule_certification import (
     current_certified_rule_contract_snapshot,
+    current_rule_invocation_contract_payload,
 )
 from sciplot_core.readiness.rule_contract import (
     rule_contract_hashes,
@@ -25,13 +30,26 @@ def _registry_without_rule(
     rule_id: str,
 ) -> ValidatedEnvelopeRegistry:
     source_acceptance = deepcopy(registry.source_acceptance)
-    for field in (
-        "ready_rule_count",
-        "lifecycle_passed_count",
-        "physical_size_passed_count",
-        "real_data_lifecycle_passed_count",
-    ):
-        source_acceptance[field] -= 1
+    if registry.version == 1:
+        for field in (
+            "ready_rule_count",
+            "lifecycle_passed_count",
+            "physical_size_passed_count",
+            "real_data_lifecycle_passed_count",
+        ):
+            source_acceptance[field] -= 1
+    else:
+        records = []
+        for record in source_acceptance["records"]:
+            retained_ids = [
+                candidate
+                for candidate in record["rule_ids"]
+                if candidate != rule_id
+            ]
+            if retained_ids:
+                record["rule_ids"] = retained_ids
+                records.append(record)
+        source_acceptance["records"] = records
     return replace(
         registry,
         source_acceptance=source_acceptance,
@@ -202,8 +220,70 @@ def test_certified_family_drift_reports_family_reason() -> None:
     assert snapshot.certification_reasons == ("certified_semantic_family_mismatch",)
 
 
-def test_status_facade_preserves_its_version_one_public_schema() -> None:
-    payload = validated_envelope_status()
+def test_invocation_projection_uses_certification_without_changing_rule_hashes() -> None:
+    rule = get_rule("swelling_curve")
+    registry = load_validated_envelope_registry()
+    entry = registry.entry(rule.rule_id)
+    assert entry is not None
+    hashes = rule_contract_hashes(rule)
+    static_payload = deepcopy(rule.to_payload())
+    current_registry = _registry_with_replaced_entry(
+        registry,
+        replace(
+            entry,
+            contract_sha256=hashes.contract_sha256,
+            semantic_contract_sha256=hashes.semantic_contract_sha256,
+            semantic_family=rule.semantic_family,
+        ),
+    )
+    current_entry = current_registry.entry(rule.rule_id)
+    assert current_entry is not None
+    stale_registry = _registry_with_replaced_entry(
+        current_registry,
+        replace(
+            current_entry,
+            contract_sha256="0" * 64,
+            semantic_contract_sha256="1" * 64,
+        ),
+    )
+    missing_registry = _registry_without_rule(current_registry, rule.rule_id)
+
+    projections = {
+        "current": current_rule_invocation_contract_payload(
+            rule=rule,
+            registry=current_registry,
+        ),
+        "missing": current_rule_invocation_contract_payload(
+            rule=rule,
+            registry=missing_registry,
+        ),
+        "stale": current_rule_invocation_contract_payload(
+            rule=rule,
+            registry=stale_registry,
+        ),
+    }
+
+    assert {
+        status: (payload["availability"], payload["reason_codes"])
+        for status, payload in projections.items()
+    } == {
+        "current": ("ready", []),
+        "missing": ("needs_rule_repair", ["validated_envelope_missing"]),
+        "stale": (
+            "needs_rule_repair",
+            [
+                "certified_rule_contract_sha256_mismatch",
+                "certified_rule_semantic_contract_sha256_mismatch",
+            ],
+        ),
+    }
+    assert rule.to_payload() == static_payload
+    assert rule_contract_hashes(rule) == hashes
+
+
+def test_status_facade_projects_one_version_two_lineage_schema() -> None:
+    registry = load_validated_envelope_registry()
+    payload = validated_envelope_status(registry)
 
     assert set(payload) == {
         "kind",
@@ -222,7 +302,12 @@ def test_status_facade_preserves_its_version_one_public_schema() -> None:
         "limitations",
     }
     assert payload["kind"] == "sciplot_validated_envelope_status"
-    assert payload["version"] == 1
+    assert payload["version"] == 2
+    assert payload["source_acceptance"] == {
+        "kind": VALIDATED_ENVELOPE_ACCEPTANCE_LINEAGE_KIND,
+        "version": VALIDATED_ENVELOPE_ACCEPTANCE_LINEAGE_VERSION,
+        "records": list(registry.acceptance_lineage_records()),
+    }
     assert all(
         set(record)
         == {

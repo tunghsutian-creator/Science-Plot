@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.figure_plan.constants import SUPPORTED_FIGURE_PLAN_RULE_IDS
+from sciplot_core.figure_plan.constants import REQUIRED_FIGURE_PLAN_RULE_IDS
 from sciplot_core.figure_plan.execution import figure_plan_gate
 from sciplot_core.figure_plan.payload_types import (
     FigurePlanManifestGatePayload,
@@ -20,7 +20,7 @@ def figure_plan_manifest_gate(
     """Verify that every durable manifest projection carries one completed plan."""
 
     declared_rule_ids = _manifest_rule_ids(manifest)
-    applicable_rule_ids = declared_rule_ids & SUPPORTED_FIGURE_PLAN_RULE_IDS
+    applicable_rule_ids = declared_rule_ids & REQUIRED_FIGURE_PLAN_RULE_IDS
     gate = figure_plan_gate(manifest.get("resolved_figure_plan"))
     if gate is None:
         if applicable_rule_ids:

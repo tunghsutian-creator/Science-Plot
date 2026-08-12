@@ -10,7 +10,10 @@ from typing import Any
 def register_diagnostics_commands(subparsers: Any) -> None:
     plan_parser = subparsers.add_parser(
         "plan",
-        help="Resolve the exact FigurePlan without rendering or writing a project.",
+        help=(
+            "Preview the exact FigurePlan and source-bound scientific transform "
+            "without rendering or writing a project."
+        ),
     )
 
     plan_parser.add_argument("input", type=Path)
@@ -50,6 +53,22 @@ def register_diagnostics_commands(subparsers: Any) -> None:
         "--json", action="store_true", help="Emit machine-readable JSON."
     )
 
+    verify_parser = subparsers.add_parser(
+        "verify",
+        help="Run one changed-owner focused verification pass.",
+    )
+
+    verify_parser.add_argument(
+        "--changed",
+        action="store_true",
+        required=True,
+        help="Verify the staged, unstaged, and untracked HEAD worktree.",
+    )
+
+    verify_parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable JSON."
+    )
+
     readiness_parser = subparsers.add_parser(
         "readiness",
         help="Inspect or certify deterministic ready-rule validation envelopes.",
@@ -79,6 +98,19 @@ def register_diagnostics_commands(subparsers: Any) -> None:
     readiness_certify_parser.add_argument("--out", type=Path, required=True)
 
     readiness_certify_parser.add_argument("--json", action="store_true")
+
+    readiness_merge_parser = readiness_subparsers.add_parser(
+        "merge",
+        help="Merge scoped real-data acceptance into one existing registry.",
+    )
+
+    readiness_merge_parser.add_argument("base_registry", type=Path)
+
+    readiness_merge_parser.add_argument("acceptance_summary", type=Path)
+
+    readiness_merge_parser.add_argument("--out", type=Path, required=True)
+
+    readiness_merge_parser.add_argument("--json", action="store_true")
 
     smoke_parser = subparsers.add_parser(
         "smoke", help="Run the fixture-free Studio lifecycle and delivery change gate."

@@ -50,6 +50,39 @@ class DockMixin:
         self.figure_group.hide()
         layout.addWidget(self.figure_group)
 
+        self.series_revision_group = QtWidgets.QGroupBox("Samples")
+        revision_layout = QtWidgets.QVBoxLayout(self.series_revision_group)
+        revision_note = QtWidgets.QLabel(
+            "Show, hide, or reorder source-authorized samples in this Veusz document."
+        )
+        revision_note.setWordWrap(True)
+        self.series_revision_list = QtWidgets.QListWidget()
+        self.series_revision_list.setMaximumHeight(90)
+        move_buttons = QtWidgets.QHBoxLayout()
+        self.series_revision_up = QtWidgets.QPushButton("Move up")
+        self.series_revision_down = QtWidgets.QPushButton("Move down")
+        move_buttons.addWidget(self.series_revision_up)
+        move_buttons.addWidget(self.series_revision_down)
+        self.series_revision_summary = QtWidgets.QPlainTextEdit()
+        self.series_revision_summary.setReadOnly(True)
+        self.series_revision_summary.setMaximumHeight(78)
+        revision_buttons = QtWidgets.QHBoxLayout()
+        self.series_revision_preview = QtWidgets.QPushButton("Preview")
+        self.series_revision_apply = QtWidgets.QPushButton("Apply")
+        self.series_revision_commit = QtWidgets.QPushButton("Commit figure set")
+        self.series_revision_undo = QtWidgets.QPushButton("Undo revision")
+        revision_buttons.addWidget(self.series_revision_preview)
+        revision_buttons.addWidget(self.series_revision_apply)
+        revision_buttons.addWidget(self.series_revision_commit)
+        revision_buttons.addWidget(self.series_revision_undo)
+        revision_layout.addWidget(revision_note)
+        revision_layout.addWidget(self.series_revision_list)
+        revision_layout.addLayout(move_buttons)
+        revision_layout.addWidget(self.series_revision_summary)
+        revision_layout.addLayout(revision_buttons)
+        self.series_revision_group.hide()
+        layout.addWidget(self.series_revision_group)
+
         self.status_view = QtWidgets.QPlainTextEdit()
         self.status_view.setReadOnly(True)
         self.status_view.setLineWrapMode(
@@ -258,6 +291,8 @@ class DockMixin:
         self.refresh_button.setEnabled(not exporting and not context_changed)
         figure_blocker = self._figure_set_export_blocker()
         assistant_blocker = self._assistant_export_blocker()
+        # Save && Export commits a pending series revision before it exports.
+        # The post-save guard still rejects any revision that did not commit.
         export_blocker = context_blocker or figure_blocker or assistant_blocker
         export_tooltip_blocker = (
             "An exact-current export is already in progress."
@@ -322,3 +357,4 @@ class DockMixin:
                     and target.get("available") is True
                 )
             )
+        self._update_series_revision_controls()

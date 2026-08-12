@@ -37,6 +37,7 @@ def render_selected_single_task_bundle(
     bundle_kind: str,
     missing_reason_code: str,
     terminal_source_binding: MaterializedTerminalSourceBinding | None = None,
+    terminal_source_prepared: bool = False,
 ) -> dict[str, Any]:
     """Render and atomically install one task without selecting its identity."""
 
@@ -56,6 +57,7 @@ def render_selected_single_task_bundle(
                 ),
             },
             _terminal_source_binding=terminal_source_binding,
+            _terminal_source_prepared=terminal_source_prepared,
         )
         figures_dir = output_dir / "figures"
         figures_dir.mkdir(parents=True, exist_ok=True)

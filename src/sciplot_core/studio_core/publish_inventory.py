@@ -13,7 +13,7 @@ from sciplot_core.figure_plan import (
     resolve_current_figure_plan,
     resolved_figure_plan_from_payload,
 )
-from sciplot_core.figure_plan.constants import SUPPORTED_FIGURE_PLAN_RULE_IDS
+from sciplot_core.figure_plan.constants import REQUIRED_FIGURE_PLAN_RULE_IDS
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.presentation_identity import (
@@ -127,10 +127,10 @@ def prepare_studio_export_inventory(
             source="primary Studio Veusz spec",
         )
     persisted_plan = request.get("resolved_figure_plan")
-    if request_rule_id in SUPPORTED_FIGURE_PLAN_RULE_IDS and persisted_plan is None:
+    if request_rule_id in REQUIRED_FIGURE_PLAN_RULE_IDS and persisted_plan is None:
         raise RuntimeError(
             "prepared_resolved_figure_plan_required: Reprepare this Studio "
-            "project before publishing the supported figure workflow."
+            "project before publishing a rule that requires a figure plan."
         )
     try:
         resolved_figure_plan = (
@@ -251,7 +251,7 @@ def _validated_figure_set_scope(
     selected_supported_plan = (
         request_plan
         if request_plan is not None
-        and request_plan.rule_id in SUPPORTED_FIGURE_PLAN_RULE_IDS
+        and request_plan.rule_id in REQUIRED_FIGURE_PLAN_RULE_IDS
         else None
     )
     scope = _studio_figure_set_export_scope(project_dir, request=request)
@@ -264,7 +264,7 @@ def _validated_figure_set_scope(
         scope
     ):
         raise RuntimeError(
-            "A selected supported FigurePlan requires a matching task-aware v2 "
+            "A selected required FigurePlan needs a matching task-aware v2 "
             "Studio figure-set registry before export. No project delivery "
             "receipt was published."
         )

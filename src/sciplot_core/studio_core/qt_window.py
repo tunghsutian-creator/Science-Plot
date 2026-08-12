@@ -138,7 +138,17 @@ def _ensure_veusz_mainwindow_compat(main_window_type: type[Any]) -> None:
     def save_to_target(window: Any, target: Path) -> bool:
         old_window_filename = str(getattr(window, "filename", "") or "")
         try:
-            receipt = atomic_save_veusz_document(window.document, target)
+            bridge = getattr(window, "_sciplot_project_bridge", None)
+            project_save = getattr(
+                bridge,
+                "save_or_commit_current_document",
+                None,
+            )
+            receipt = (
+                project_save(target)
+                if callable(project_save)
+                else atomic_save_veusz_document(window.document, target)
+            )
         except Exception as exc:
             window.filename = old_window_filename
             record_save_error(window, target=target, exc=exc)

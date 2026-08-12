@@ -92,9 +92,9 @@ def test_stress_relaxation_uses_internal_test_labels_and_deduplicates_exports(
         (item.diagnostics or {})["equivalent_source_file_count"] == 2 for item in series
     )
     assert all(item.x_label == "Time" for item in series)
-    assert all(item.points[0] == (0.3, 1.0) for item in series)
+    assert all(item.points[0] == (0.1, 1.0) for item in series)
     assert all(
-        (item.diagnostics or {})["normalization_baseline_time"] == 0.3
+        (item.diagnostics or {})["normalization_baseline_time"] == 0.1
         and (item.diagnostics or {})["excluded_hold_onset_points"] == 0
         and (item.diagnostics or {})["time_reset_applied"] is False
         for item in series

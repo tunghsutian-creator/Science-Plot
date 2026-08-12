@@ -52,6 +52,9 @@ MECHANICAL_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/tensile_curve/E0 2MM.is_tens_Exports",
         fixture_status="ready",
         priority=40,
+        render_adapter="mechanical",
+        figure_plan_adapter="mechanical",
+        preparation_adapter="mechanical",
     ),
     _rule(
         "torque_curve",
@@ -81,6 +84,7 @@ MECHANICAL_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/torque_curve/260607",
         fixture_status="ready",
         priority=42,
+        preparation_adapter="mechanical",
         reason="Torque rheometer export with Screw Torque over time.",
     ),
     _rule(
@@ -103,6 +107,9 @@ MECHANICAL_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/compression_curve/conventional_pu_compression.csv",
         fixture_status="ready",
         priority=34,
+        render_adapter="mechanical",
+        figure_plan_adapter="mechanical",
+        preparation_adapter="mechanical",
     ),
     _rule(
         "flexural_curve",
@@ -124,6 +131,9 @@ MECHANICAL_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/flexural_curve/A_HA56_dry_flexural.csv",
         fixture_status="ready",
         priority=34,
+        render_adapter="mechanical",
+        figure_plan_adapter="mechanical",
+        preparation_adapter="mechanical",
     ),
     _rule(
         "impact_metric",
@@ -169,5 +179,8 @@ MECHANICAL_RULES: tuple[SemanticRule, ...] = (
         ),
         presentation_data_shape="categorical_replicates",
         supported_templates=("bar", "box", "box_strip", "point_line"),
+        render_adapter="impact",
+        figure_plan_adapter="impact",
+        preparation_adapter="mechanical",
     ),
 )

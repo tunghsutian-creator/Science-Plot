@@ -148,23 +148,11 @@ def verify_studio_run_source_binding(
         if isinstance(archive_value, str) and archive_value.strip()
         else None
     )
-    if plan.rule_id == "dsc_curve":
-        from sciplot_core.figure_plan.dsc_resolution import (
-            dsc_single_curve_source_sha256,
-        )
-
-        sources_match = bool(
-            sources.input_path is not None
-            and archive_path is not None
-            and dsc_single_curve_source_sha256(sources.input_path) == expected
-            and dsc_single_curve_source_sha256(archive_path) == expected
-        )
-    else:
-        sources_match = source_trees_match_sha256(
-            expected,
-            sources.input_path,
-            archive_path,
-        )
+    sources_match = source_trees_match_sha256(
+        expected,
+        sources.input_path,
+        archive_path,
+    )
     if not sources_match:
         raise RuntimeError(
             "Studio source changed after its resolved figure plan was prepared; "

@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sciplot_core.figure_plan.plan import (
     ResolvedFigurePlan,
@@ -34,15 +34,21 @@ from sciplot_core.workflow.reports import (
     _write_auto_report,
     _write_render_report,
 )
-from sciplot_core.workflow.request_io import (
-    _request_options,
-    _resolve_optional_request_path,
-)
+from sciplot_core.workflow.request_io import _resolve_optional_request_path
 from sciplot_core.workflow.route_intent import WorkflowRoute, WorkflowRouteIntent
 from sciplot_core.workflow.dma_named_recipe import (
     DmaNamedRecipePlanBinding,
     bind_dma_named_recipe_request,
 )
+from sciplot_core.workflow.legacy_route_rendering import (
+    _render_legacy_direct_request,
+    _render_legacy_recipe_request,
+)
+
+if TYPE_CHECKING:
+    from sciplot_core.semantic_sources.scientific_source import (
+        ResolvedScientificSource,
+    )
 
 
 @dataclass(frozen=True)
@@ -106,12 +112,15 @@ def execute_request_render(
     output_dir: Path,
     base_dir: Path,
     transform_steps: list[dict[str, Any]],
+    resolved_scientific_source: ResolvedScientificSource | None = None,
+    _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> RequestRenderResult:
     """Render a request through exactly one normalized route."""
 
-    selected_figure_plan = resolved_figure_plan_from_payload(
-        request.get("resolved_figure_plan")
-    )
+    selected_figure_plan = _resolved_figure_plan
+    plan_payload = request.get("resolved_figure_plan")
+    if selected_figure_plan is None and plan_payload is not None:
+        selected_figure_plan = resolved_figure_plan_from_payload(plan_payload)
     if selected_figure_plan is not None:
         request_rule = request.get("rule_id")
         semantic_rule = semantic.get("rule_id")
@@ -137,6 +146,7 @@ def execute_request_render(
             base_dir=base_dir,
             transform_steps=transform_steps,
             selected_figure_plan=selected_figure_plan,
+            resolved_scientific_source=resolved_scientific_source,
         )
     if route_intent.route == "recipe":
         final_recipe = route_intent.requested_recipe
@@ -153,6 +163,7 @@ def execute_request_render(
                 semantic=semantic,
                 plan=selected_figure_plan,
                 input_path=input_path,
+                resolved_scientific_source=resolved_scientific_source,
             )
             return _render_semantic_plan_request(
                 request=request,
@@ -166,34 +177,47 @@ def execute_request_render(
                 selected_figure_plan=selected_figure_plan,
                 final_recipe=final_recipe,
                 named_recipe_binding=binding,
+                resolved_scientific_source=resolved_scientific_source,
+            )
+        if resolved_scientific_source is not None:
+            return _render_semantic_plan_request(
+                request=request,
+                route_intent=route_intent,
+                semantic=semantic,
+                study_model=study_model,
+                input_path=input_path,
+                output_dir=output_dir,
+                base_dir=base_dir,
+                transform_steps=transform_steps,
+                selected_figure_plan=selected_figure_plan,
+                final_recipe=final_recipe,
+                named_recipe_binding=None,
+                resolved_scientific_source=resolved_scientific_source,
             )
         if selected_figure_plan is not None:
             raise ValueError(
                 "workflow_recipe_figure_plan_unsupported: named recipes cannot "
                 "execute this selected FigurePlan without a bounded exact-task seam."
             )
-        result = run_recipe(
-            final_recipe,
-            input_path,
-            output_dir=output_dir,
-            options=_request_options(request),
-        )
-        transform_steps.extend(
-            step for step in result.get("transform_steps", []) if isinstance(step, dict)
-        )
-        return RequestRenderResult(
+        return _render_legacy_recipe_request(
             route_intent=route_intent,
             final_recipe=final_recipe,
-            result=result,
-            plotted_data_source=Path(str(result.get("processed_source") or input_path)),
-            selected_figure_plan=None,
+            request=request,
+            input_path=input_path,
+            output_dir=output_dir,
+            transform_steps=transform_steps,
+            recipe_runner=run_recipe,
+            result_factory=RequestRenderResult,
         )
     template = route_intent.requested_template
     if template is None:
         raise AssertionError("Direct-render route lost its captured template identity.")
     if (
-        selected_figure_plan is not None
-        and selected_figure_plan.rule_id in MECHANICAL_RULE_IDS
+        resolved_scientific_source is not None
+        or (
+            selected_figure_plan is not None
+            and selected_figure_plan.rule_id in MECHANICAL_RULE_IDS
+        )
     ):
         return _render_semantic_plan_request(
             request=request,
@@ -207,33 +231,19 @@ def execute_request_render(
             selected_figure_plan=selected_figure_plan,
             final_recipe=None,
             named_recipe_binding=None,
+            resolved_scientific_source=resolved_scientific_source,
         )
-    render_options = request.get("render_options")
-    effective_render_request = (
-        {
-            **request,
-            "rule_id": selected_figure_plan.rule_id,
-        }
-        if selected_figure_plan is not None
-        else request
-    )
-    result = _render_with_auto_split(
-        input_path,
-        template=template,
-        output_dir=output_dir,
-        options=render_options if isinstance(render_options, dict) else {},
-        export_formats=request.get("exports"),
-        request=effective_render_request,
-    )
-    rendered = RequestRenderResult(
+    return _render_legacy_direct_request(
         route_intent=route_intent,
-        final_recipe=None,
-        result=result,
-        plotted_data_source=input_path,
+        template=template,
+        request=request,
+        input_path=input_path,
+        output_dir=output_dir,
         selected_figure_plan=selected_figure_plan,
+        render_with_auto_split=_render_with_auto_split,
+        result_factory=RequestRenderResult,
+        write_render_report=_write_render_report,
     )
-    _write_render_report(output_dir, request=request, result=rendered.result)
-    return rendered
 
 
 def _render_auto_request(
@@ -247,6 +257,7 @@ def _render_auto_request(
     base_dir: Path,
     transform_steps: list[dict[str, Any]],
     selected_figure_plan: ResolvedFigurePlan | None,
+    resolved_scientific_source: ResolvedScientificSource | None,
 ) -> RequestRenderResult:
     """Execute the automatic route through shared semantic-plan preparation."""
 
@@ -266,6 +277,7 @@ def _render_auto_request(
             else None
         ),
         named_recipe_binding=None,
+        resolved_scientific_source=resolved_scientific_source,
     )
 
 
@@ -282,6 +294,7 @@ def _render_semantic_plan_request(
     selected_figure_plan: ResolvedFigurePlan | None,
     final_recipe: str | None,
     named_recipe_binding: DmaNamedRecipePlanBinding | None,
+    resolved_scientific_source: ResolvedScientificSource | None,
 ) -> RequestRenderResult:
     """Prepare semantic data once and execute the already-selected plan."""
 
@@ -304,6 +317,7 @@ def _render_semantic_plan_request(
         series_order=request.get("series_order"),
         column_confirmations=request.get("column_confirmations"),
         replicate_mode=effective_replicate_mode,
+        resolved_scientific_source=resolved_scientific_source,
     )
     transform_steps.extend(
         step for step in prepared.get("transform_steps", []) if isinstance(step, dict)
@@ -340,6 +354,9 @@ def _render_semantic_plan_request(
         options=render_options,
         export_formats=request.get("exports"),
         request=effective_render_request,
+        _terminal_source_prepared=True,
+        _resolved_scientific_source=resolved_scientific_source,
+        _resolved_figure_plan=selected_figure_plan,
     )
     plotted_data_source = Path(str(prepared["source"]))
     processed_source = (

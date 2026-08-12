@@ -11,6 +11,7 @@ from sciplot_core.figure_plan.constants import (
     FIGURE_TASK_VERSION,
     RESOLVED_FIGURE_PLAN_KIND,
     RESOLVED_FIGURE_PLAN_VERSION,
+    REQUIRED_FIGURE_PLAN_RULE_IDS,
     SUPPORTED_FIGURE_PLAN_RULE_IDS,
 )
 from sciplot_core.figure_plan.execution import (
@@ -53,6 +54,9 @@ from sciplot_core.figure_plan.plan import (
     ResolvedFigurePlan,
     resolved_figure_plan_from_payload,
 )
+from sciplot_core.figure_plan.preparation_validation import (
+    validate_preparation_figure_plan,
+)
 from sciplot_core.figure_plan.resolution import (
     FigurePlanResolutionError,
     resolve_current_figure_plan,
@@ -75,6 +79,7 @@ __all__ = [
     "FIGURE_TASK_VERSION",
     "RESOLVED_FIGURE_PLAN_KIND",
     "RESOLVED_FIGURE_PLAN_VERSION",
+    "REQUIRED_FIGURE_PLAN_RULE_IDS",
     "SUPPORTED_FIGURE_PLAN_RULE_IDS",
     "CartesianMetricBinding",
     "CartesianMetricBindingPayload",
@@ -112,6 +117,7 @@ __all__ = [
     "resolve_figure_plan",
     "resolve_mechanical_plan",
     "resolve_preparation_figure_plan",
+    "validate_preparation_figure_plan",
     "resolved_figure_plan_from_payload",
     "stable_impact_figure_id",
     "source_tree_sha256",

@@ -198,7 +198,9 @@ def _categorical_line_contracts(
             statistics = group["descriptive_statistics"]
             median = float(statistics["median"])
             append(
-                name=f"categorical_box_median_{box_index}",
+                name=str(
+                    group.get("median_name") or f"categorical_box_median_{box_index}"
+                ),
                 x_pos=left,
                 y_pos=median,
                 x_pos_2=right,

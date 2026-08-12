@@ -84,6 +84,9 @@ from sciplot_core.readiness.evidence import (  # noqa: F401
 from sciplot_core.readiness.registry_build import (  # noqa: F401
     build_validated_envelope_registry,
 )
+from sciplot_core.readiness.registry_merge import (  # noqa: F401
+    merge_validated_envelope_registry,
+)
 from sciplot_core.readiness.status import (  # noqa: F401
     validated_envelope_status,
 )
@@ -122,6 +125,7 @@ __all__ = [
     "build_validated_envelope_registry",
     "evaluate_validated_envelope",
     "load_validated_envelope_registry",
+    "merge_validated_envelope_registry",
     "render_request_contract_payload",
     "rule_contract_payload",
     "rule_contract_hashes",

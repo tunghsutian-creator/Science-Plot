@@ -86,6 +86,16 @@ def _write_frequency_source(
     )
 
 
+def _write_frequency_text_source(path: Path) -> None:
+    path.write_text(
+        "Angular Frequency,Storage Modulus\n"
+        "rad/s,Pa\n"
+        "1,100\n"
+        "10,90\n",
+        encoding="utf-8",
+    )
+
+
 def test_frequency_plan_keeps_source_available_complex_modulus(
     tmp_path: Path,
 ) -> None:
@@ -154,6 +164,29 @@ def test_frequency_plan_without_extra_metric_keeps_default_four(
     assert plan is not None
     assert len(plan.tasks) == 4
     assert "complex_modulus_vs_frequency" not in plan.selected_figure_ids
+
+
+def test_frequency_directory_plan_uses_parser_selected_text_sources(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "frequency"
+    source.mkdir()
+    raw = source / "sample_a.csv"
+    _write_frequency_text_source(raw)
+    (source / "derived.xlsx").write_bytes(b"must not become planning evidence")
+
+    plan = resolve_figure_plan(
+        rule_id="rheology_frequency_sweep",
+        template="point_line",
+        study_model=_frequency_study_model(),
+        input_path=source,
+        request={},
+    )
+
+    assert plan is not None
+    assert plan.selected_figure_ids == ("storage_modulus_vs_frequency",)
+    assert all(task.sample_order == ("sample_a",) for task in plan.tasks)
+    assert all(task.replicate_counts == (("sample_a", 1),) for task in plan.tasks)
 
 
 def test_frequency_queue_fallback_does_not_scan_process_working_directory(

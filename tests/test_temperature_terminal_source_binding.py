@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -8,7 +9,9 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from sciplot_core.render import render_to_dir
+import sciplot_core.terminal_source_binding as terminal_source_binding_module
+from sciplot_core.render import panel_render, render_to_dir
+from sciplot_core.studio_core import export_execution, prepare_generated
 from sciplot_core.terminal_request import authoritative_terminal_render_request
 from sciplot_core.terminal_source_binding import (
     MaterializedTerminalSourceBinding,
@@ -20,6 +23,7 @@ from sciplot_core.terminal_source_binding_wire import (
     consume_terminal_source_binding_environment,
     sealed_terminal_source_binding_from_payload,
 )
+from sciplot_core.veusz_worker import operations as worker_operations
 
 
 RULE_ID = "rheology_temperature_sweep"
@@ -184,6 +188,172 @@ def test_terminal_source_binding_environment_is_consumed_once(
 
     assert consume_terminal_source_binding_environment(request_path) == sealed
     assert consume_terminal_source_binding_environment(request_path) is None
+
+
+def test_worker_binding_is_verified_once_at_worker_entry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding, source, _expected = _binding_fixture(tmp_path)
+    request = {
+        **_request_context(),
+        "input": str(source.resolve()),
+        "output": str((tmp_path / "out").resolve()),
+        "exports": ["pdf"],
+        "series_order": list(EXPECTED_SAMPLE_ORDER),
+        "render_options": {
+            "x_metric": "temperature",
+            "y_metric": "loss_factor",
+        },
+    }
+    request_path = tmp_path / "_veusz" / "single" / "plot_request.json"
+    request_path.parent.mkdir(parents=True)
+    request_path.write_text(json.dumps(request), encoding="utf-8")
+    sealed = binding.seal(request_path, request)
+
+    verify_calls = 0
+    hash_calls: list[Path] = []
+    original_verify_sources = MaterializedTerminalSourceBinding.verify_sources
+    original_file_sha256 = terminal_source_binding_module.file_sha256
+
+    def verify_sources_spy(bound: MaterializedTerminalSourceBinding) -> None:
+        nonlocal verify_calls
+        verify_calls += 1
+        original_verify_sources(bound)
+
+    def file_sha256_spy(path: Path) -> str:
+        hash_calls.append(path.expanduser().resolve())
+        return original_file_sha256(path)
+
+    def fake_generated_transaction(**kwargs: Any) -> None:
+        document_path = Path(kwargs["document_path"])
+        document_path.parent.mkdir(parents=True, exist_ok=True)
+        document_path.write_text("stub Veusz document\n", encoding="utf-8")
+        (document_path.parent / "spec.json").write_text("{}\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        MaterializedTerminalSourceBinding,
+        "verify_sources",
+        verify_sources_spy,
+    )
+    monkeypatch.setattr(
+        terminal_source_binding_module,
+        "file_sha256",
+        file_sha256_spy,
+    )
+    monkeypatch.setattr(
+        prepare_generated,
+        "_prepare_generated_figure_set_transaction",
+        fake_generated_transaction,
+    )
+    monkeypatch.setattr(
+        prepare_generated,
+        "_register_studio_block",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        export_execution,
+        "export_studio_document",
+        lambda *_args, **_kwargs: {"exports": []},
+    )
+    monkeypatch.setenv(TERMINAL_SOURCE_BINDING_ENV, sealed.to_environment_value())
+
+    worker_operations.export_request(request_path, formats=["pdf"])
+
+    expected_paths = {
+        request_path.resolve(),
+        *(Path(item.path) for item in binding.raw_sources),
+        Path(binding.prepared_source.path),
+        Path(binding.terminal_source.path),
+    }
+    assert verify_calls == 1
+    assert Counter(hash_calls) == Counter({path: 1 for path in expected_paths})
+
+
+def test_panel_seal_owns_single_parent_binding_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding, source, _expected = _binding_fixture(tmp_path)
+    panel_dir = tmp_path / "out" / "_veusz" / "single"
+    request_path = panel_dir / "plot_request.json"
+    verify_calls = 0
+    hash_calls: list[Path] = []
+    worker_calls: list[SealedTerminalSourceBinding] = []
+    original_verify_sources = MaterializedTerminalSourceBinding.verify_sources
+    original_file_sha256 = terminal_source_binding_module.file_sha256
+
+    class WorkerBoundaryReached(RuntimeError):
+        pass
+
+    def verify_sources_spy(bound: MaterializedTerminalSourceBinding) -> None:
+        nonlocal verify_calls
+        verify_calls += 1
+        original_verify_sources(bound)
+
+    def file_sha256_spy(path: Path) -> str:
+        hash_calls.append(path.expanduser().resolve())
+        return original_file_sha256(path)
+
+    def stop_at_worker_boundary(
+        _request_path: Path,
+        _export_formats: tuple[str, ...],
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        sealed = kwargs.get("_terminal_source_binding")
+        assert isinstance(sealed, SealedTerminalSourceBinding)
+        assert sealed.materialized == binding
+        worker_calls.append(sealed)
+        raise WorkerBoundaryReached
+
+    def render(bound: MaterializedTerminalSourceBinding) -> None:
+        panel_render._render_veusz_panel(
+            source,
+            template=TEMPLATE,
+            output_dir=tmp_path / "out",
+            panel_dir=panel_dir,
+            output_base="temp_loss_factor",
+            options={"x_metric": "temperature", "y_metric": "loss_factor"},
+            export_formats=("pdf",),
+            request_context=_request_context(),
+            _terminal_source_binding=bound,
+        )
+
+    monkeypatch.setattr(
+        MaterializedTerminalSourceBinding,
+        "verify_sources",
+        verify_sources_spy,
+    )
+    monkeypatch.setattr(
+        terminal_source_binding_module,
+        "file_sha256",
+        file_sha256_spy,
+    )
+    monkeypatch.setattr(
+        panel_render,
+        "_render_studio_exports",
+        stop_at_worker_boundary,
+    )
+
+    with pytest.raises(TerminalSourceBindingError) as exc_info:
+        render(replace(binding, y_metric="storage_modulus"))
+    assert exc_info.value.reason_code == "terminal_source_binding_request_mismatch"
+    assert worker_calls == []
+
+    verify_calls = 0
+    hash_calls.clear()
+    with pytest.raises(WorkerBoundaryReached):
+        render(binding)
+
+    expected_paths = {
+        request_path.resolve(),
+        *(Path(item.path) for item in binding.raw_sources),
+        Path(binding.prepared_source.path),
+        Path(binding.terminal_source.path),
+    }
+    assert len(worker_calls) == 1
+    assert verify_calls == 1
+    assert Counter(hash_calls) == Counter({path: 1 for path in expected_paths})
 
 
 def test_binding_seal_rejects_dataclass_field_tamper(tmp_path: Path) -> None:

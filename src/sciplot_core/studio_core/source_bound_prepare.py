@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 from uuid import uuid4
 
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
-from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
+from sciplot_core.preparation_source_attestation import (
+    PreparationSourceAttestation,
+    requires_preparation_source_attestation,
+)
 from sciplot_core.studio_core.figure_task_evidence import (
     figure_queue_from_plan,
     validate_figure_queue_against_plan,
@@ -17,10 +20,10 @@ from sciplot_core.studio_core.figure_task_evidence import (
 from sciplot_core.studio_core.semantic_source import _studio_source_for_request
 from sciplot_core.studio_render.models import StudioPreparationBlocked
 
-
-_SOURCE_BOUND_PLAN_RULE_IDS = MECHANICAL_RULE_IDS | frozenset(
-    {"dma_temperature_sweep", "rheology_temperature_sweep"}
-)
+if TYPE_CHECKING:
+    from sciplot_core.semantic_sources.scientific_source import (
+        ResolvedScientificSource,
+    )
 
 
 def prepare_source_bound_figure_queue(
@@ -29,6 +32,7 @@ def prepare_source_bound_figure_queue(
     source_input: Path | None,
     request: dict[str, Any],
     base_dir: Path,
+    resolved_scientific_source: ResolvedScientificSource | None = None,
 ) -> tuple[
     list[dict[str, Any]],
     PreparationSourceAttestation | None,
@@ -36,7 +40,9 @@ def prepare_source_bound_figure_queue(
 ]:
     """Build one exact queue and share its attested semantic preparation."""
 
-    if figure_plan is None or figure_plan.rule_id not in _SOURCE_BOUND_PLAN_RULE_IDS:
+    if figure_plan is None or not requires_preparation_source_attestation(
+        figure_plan.rule_id
+    ):
         return [], None, None
     rule_id = figure_plan.rule_id
     queue = figure_queue_from_plan(figure_plan, rule_id)
@@ -47,6 +53,7 @@ def prepare_source_bound_figure_queue(
             source_input,
             request=request,
             base_dir=base_dir,
+            resolved_scientific_source=resolved_scientific_source,
         )
     )
     if (

@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Any
 from sciplot_core.figure_plan import resolved_figure_plan_from_payload
-from sciplot_core.figure_plan.constants import SUPPORTED_FIGURE_PLAN_RULE_IDS
+from sciplot_core.figure_plan.constants import REQUIRED_FIGURE_PLAN_RULE_IDS
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.studio_figure_set_contract import (
     STUDIO_FIGURE_SET_KIND,
@@ -133,7 +133,7 @@ def _studio_figure_set_export_scope(
     selected_supported_plan = (
         request_plan
         if request_plan is not None
-        and request_plan.rule_id in SUPPORTED_FIGURE_PLAN_RULE_IDS
+        and request_plan.rule_id in REQUIRED_FIGURE_PLAN_RULE_IDS
         else None
     )
     if selected_supported_plan is not None:

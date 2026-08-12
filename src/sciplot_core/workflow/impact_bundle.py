@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import Any
 import pandas as pd
 from sciplot_core.figure_plan import (
+    ResolvedFigurePlan,
     finalize_figure_plan_result,
     outcomes_for_artifact_map,
     request_for_figure_task,
@@ -35,6 +36,7 @@ def _impact_condition_sources(
     *,
     request: dict[str, Any],
     output_dir: Path,
+    _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> list[tuple[str, Path, dict[str, Any]]]:
     """Materialize one canonical categorical source per impact workbook sheet."""
 
@@ -63,7 +65,11 @@ def _impact_condition_sources(
     if not source.is_file():
         return []
     conditions = read_impact_condition_payloads(source)
-    figure_plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
+    figure_plan = _resolved_figure_plan
+    if figure_plan is None and request.get("resolved_figure_plan") is not None:
+        figure_plan = resolved_figure_plan_from_payload(
+            request["resolved_figure_plan"]
+        )
     if figure_plan is None:
         figure_plan = resolve_figure_plan(
             rule_id="impact_metric",
@@ -125,6 +131,7 @@ def _render_veusz_impact_bundle(
         _impact_condition_sources
     ),
     _renderer: Callable[..., dict[str, Any]] = render_to_dir,
+    _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> dict[str, Any] | None:
     if str(request.get("rule_id") or "").strip() != "impact_metric":
         return None
@@ -132,7 +139,11 @@ def _render_veusz_impact_bundle(
         "impact_metric",
         request.get("template") if isinstance(request.get("template"), str) else None,
     )
-    figure_plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
+    figure_plan = _resolved_figure_plan
+    if figure_plan is None and request.get("resolved_figure_plan") is not None:
+        figure_plan = resolved_figure_plan_from_payload(
+            request["resolved_figure_plan"]
+        )
     if impact_template == "point_line":
         task_request = (
             request_for_figure_task(request, figure_plan.tasks[0])
@@ -159,6 +170,7 @@ def _render_veusz_impact_bundle(
         source_input,
         request=request,
         output_dir=output_dir,
+        _resolved_figure_plan=figure_plan,
     )
     if not condition_sources and (
         figure_plan is None or figure_plan.selection_policy != "all_workbook_conditions"

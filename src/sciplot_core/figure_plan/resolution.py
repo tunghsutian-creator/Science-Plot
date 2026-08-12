@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.figure_plan.constants import SUPPORTED_FIGURE_PLAN_RULE_IDS
+from sciplot_core.figure_plan.constants import REQUIRED_FIGURE_PLAN_RULE_IDS
 from sciplot_core.figure_plan.errors import FigurePlanResolutionError
 from sciplot_core.figure_plan.impact_resolution import (
     resolve_impact_plan,
@@ -14,26 +13,10 @@ from sciplot_core.figure_plan.impact_resolution import (
 )
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
-from sciplot_core.figure_plan.source_binding import source_tree_sha256
-from sciplot_core.figure_plan.task import FigureTask
-from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
-
-
-_RHEOLOGY_FREQUENCY_METRICS = {
-    "complex_modulus",
-    "storage_modulus",
-    "loss_modulus",
-    "loss_factor",
-    "complex_viscosity",
-}
-_RHEOLOGY_SOURCE_METRICS = (
-    ("storage_modulus", "Storage Modulus"),
-    ("loss_modulus", "Loss Modulus"),
-    ("loss_factor", "Loss Factor"),
-    ("complex_modulus", "Complex Modulus"),
-    ("complex_viscosity", "Complex Viscosity"),
+from sciplot_core.figure_plan.preparation_validation import (
+    validate_preparation_figure_plan,
 )
-_FIGURE_ID_PATTERN = re.compile(r"[a-z0-9][a-z0-9_]*")
+from sciplot_core.figure_plan.source_binding import source_tree_sha256
 
 
 def resolve_current_figure_plan(
@@ -55,7 +38,7 @@ def resolve_current_figure_plan(
             f"The persisted figure plan is invalid: {exc}",
         ) from exc
     normalized_rule = str(rule_id or "").strip()
-    if normalized_rule in SUPPORTED_FIGURE_PLAN_RULE_IDS and input_path is None:
+    if normalized_rule in REQUIRED_FIGURE_PLAN_RULE_IDS and input_path is None:
         raise FigurePlanResolutionError(
             "figure_plan_source_required",
             f"Figure planning for `{normalized_rule}` requires an explicit source.",
@@ -75,14 +58,14 @@ def resolve_current_figure_plan(
             "resolved_figure_plan_unavailable",
             f"SciPlot could not resolve the current figure plan: {exc}",
         ) from exc
-    if current_plan is None and normalized_rule in SUPPORTED_FIGURE_PLAN_RULE_IDS:
+    if current_plan is None and normalized_rule in REQUIRED_FIGURE_PLAN_RULE_IDS:
         raise FigurePlanResolutionError(
             "resolved_figure_plan_unavailable",
             f"SciPlot could not resolve a figure plan for `{normalized_rule}`.",
         )
     if (
         current_plan is not None
-        and normalized_rule in SUPPORTED_FIGURE_PLAN_RULE_IDS
+        and normalized_rule in REQUIRED_FIGURE_PLAN_RULE_IDS
         and current_plan.source_sha256 is None
     ):
         raise FigurePlanResolutionError(
@@ -116,13 +99,6 @@ def resolve_preparation_figure_plan(
     Exact-current reuse and publication must use ``resolve_current_figure_plan``.
     """
 
-    try:
-        persisted_plan = resolved_figure_plan_from_payload(persisted)
-    except (TypeError, ValueError) as exc:
-        raise FigurePlanResolutionError(
-            "invalid_resolved_figure_plan",
-            f"The persisted figure plan is invalid: {exc}",
-        ) from exc
     current_plan = resolve_current_figure_plan(
         persisted=None,
         rule_id=rule_id,
@@ -131,14 +107,11 @@ def resolve_preparation_figure_plan(
         input_path=input_path,
         request=request,
     )
-    if persisted_plan is not None and (
-        current_plan is None or persisted_plan.rule_id != current_plan.rule_id
-    ):
-        raise FigurePlanResolutionError(
-            "stale_resolved_figure_plan",
-            "The persisted figure plan cannot be refreshed across rule boundaries.",
-        )
-    return current_plan
+    return validate_preparation_figure_plan(
+        persisted=persisted,
+        rule_id=rule_id,
+        current_plan=current_plan,
+    )
 
 
 def resolve_figure_plan(
@@ -148,11 +121,22 @@ def resolve_figure_plan(
     study_model: dict[str, Any],
     input_path: Path | None,
     request: dict[str, Any],
+    dma_temperature_source_resolution: Any | None = None,
 ) -> ResolvedFigurePlan | None:
     """Resolve the current plan for supported rule families without writes."""
 
     normalized_rule = str(rule_id or "").strip()
-    if normalized_rule == "dma_temperature_sweep":
+    if not normalized_rule:
+        return None
+    from sciplot_core.materials_rules.catalog import get_rule
+
+    try:
+        adapter = get_rule(normalized_rule).figure_plan_adapter
+    except ValueError:
+        return None
+    if adapter is None:
+        return None
+    if adapter == "dma_temperature":
         if input_path is None:
             raise FigurePlanResolutionError(
                 "figure_plan_source_required",
@@ -165,22 +149,36 @@ def resolve_figure_plan(
         return resolve_dma_temperature_plan(
             input_path=input_path,
             request={**request, "template": template},
+            source_resolution=dma_temperature_source_resolution,
         )
-    if normalized_rule == "dsc_curve":
+    if adapter == "registered_single_curve":
         if input_path is None:
             raise FigurePlanResolutionError(
                 "figure_plan_source_required",
-                "DSC figure planning requires an explicit source path.",
+                "Registered single-curve planning requires an explicit source path.",
             )
-        from sciplot_core.figure_plan.dsc_resolution import (
-            resolve_dsc_single_curve_plan,
+        from sciplot_core.semantic_sources.scientific_source import (
+            ScientificSourceResolutionError,
+            resolve_scientific_source,
         )
 
-        return resolve_dsc_single_curve_plan(
-            input_path=input_path,
-            request={**request, "template": template},
-        )
-    if normalized_rule in MECHANICAL_RULE_IDS:
+        try:
+            source_resolution = resolve_scientific_source(
+                input_path,
+                rule_id=normalized_rule,
+                request=request,
+                template=template,
+                study_model=study_model,
+            )
+        except ScientificSourceResolutionError as exc:
+            raise FigurePlanResolutionError(exc.reason_code, str(exc)) from exc
+        if source_resolution is None or source_resolution.figure_plan is None:
+            raise FigurePlanResolutionError(
+                "registered_single_curve_source_unavailable",
+                "SciPlot could not resolve the registered single-curve source.",
+            )
+        return source_resolution.figure_plan
+    if adapter == "mechanical":
         if input_path is None:
             raise FigurePlanResolutionError(
                 "figure_plan_source_required",
@@ -197,7 +195,7 @@ def resolve_figure_plan(
             study_model=study_model,
             request=request,
         )
-    if normalized_rule == "performance_comparison":
+    if adapter == "performance":
         if input_path is None:
             raise FigurePlanResolutionError(
                 "figure_plan_source_required",
@@ -211,7 +209,7 @@ def resolve_figure_plan(
             input_path=input_path,
             request=request,
         )
-    if normalized_rule == "rheology_temperature_sweep":
+    if adapter == "rheology_temperature":
         if input_path is None:
             raise FigurePlanResolutionError(
                 "figure_plan_source_required",
@@ -225,14 +223,17 @@ def resolve_figure_plan(
             input_path=input_path,
             request=request,
         )
-    source_sha256 = source_tree_sha256(input_path)
-    if normalized_rule == "rheology_frequency_sweep":
-        return _resolve_frequency_plan(
-            study_model,
-            input_path=input_path,
-            source_sha256=source_sha256,
+    if adapter == "rheology_frequency":
+        from sciplot_core.figure_plan.frequency_resolution import (
+            resolve_frequency_plan,
         )
-    if normalized_rule == "impact_metric":
+
+        return resolve_frequency_plan(
+            study_model=study_model,
+            input_path=input_path,
+            request=request,
+        )
+    if adapter == "impact":
         if input_path is None:
             raise FigurePlanResolutionError(
                 "figure_plan_source_required",
@@ -242,125 +243,9 @@ def resolve_figure_plan(
             input_path=input_path,
             template=template,
             request=request,
-            source_sha256=source_sha256,
+            source_sha256=source_tree_sha256(input_path),
         )
-    return None
-
-
-def _resolve_frequency_plan(
-    study_model: dict[str, Any],
-    *,
-    input_path: Path | None,
-    source_sha256: str | None,
-) -> ResolvedFigurePlan | None:
-    from sciplot_core.study_model.normalization import normalize_study_model
-
-    normalized = normalize_study_model(study_model)
-    raw_queue_value = normalized.get("figure_queue")
-    if isinstance(raw_queue_value, list):
-        raw_queue = raw_queue_value
-    else:
-        raw_queue = []
-    tasks: list[FigureTask] = []
-    seen_ids: set[str] = set()
-    for value in raw_queue:
-        if not isinstance(value, dict):
-            continue
-        figure_id = str(value.get("id") or "").strip()
-        x_metric = _metric_id(value.get("x_metric"))
-        y_metric = _metric_id(value.get("y_metric") or value.get("metric"))
-        if (
-            _FIGURE_ID_PATTERN.fullmatch(figure_id) is None
-            or figure_id in seen_ids
-            or x_metric != "angular_frequency"
-            or y_metric not in _RHEOLOGY_FREQUENCY_METRICS
-        ):
-            continue
-        seen_ids.add(figure_id)
-        tasks.append(
-            FigureTask(
-                figure_id=figure_id,
-                order=len(tasks) + 1,
-                title=str(value.get("title") or figure_id),
-                x_metric=x_metric,
-                y_metric=y_metric,
-                template="point_line",
-                artifact_stem=f"freq_{y_metric}",
-                document_stem=figure_id,
-            )
-        )
-    selected_metrics = {task.y_metric for task in tasks}
-    for y_metric in _frequency_source_metrics(input_path):
-        if y_metric in selected_metrics:
-            continue
-        selected_metrics.add(y_metric)
-        figure_id = f"{y_metric}_vs_frequency"
-        tasks.append(
-            FigureTask(
-                figure_id=figure_id,
-                order=len(tasks) + 1,
-                title=f"{dict(_RHEOLOGY_SOURCE_METRICS)[y_metric]} vs frequency",
-                x_metric="angular_frequency",
-                y_metric=y_metric,
-                template="point_line",
-                artifact_stem=f"freq_{y_metric}",
-                document_stem=figure_id,
-            )
-        )
-    primary = next(
-        (task.figure_id for task in tasks if task.y_metric == "storage_modulus"),
-        None,
-    )
-    if primary is None:
-        return None
-    return ResolvedFigurePlan.planned(
-        rule_id="rheology_frequency_sweep",
-        selection_policy="study_model_queue_plus_available_recognized_metrics",
-        primary_figure_id=primary,
-        tasks=tuple(tasks),
-        source_sha256=source_sha256,
-    )
-
-
-def _frequency_source_metrics(source: Path | None) -> tuple[str, ...]:
-    if source is None:
-        return ()
-    workbook = _single_frequency_workbook(source)
-    if workbook is None:
-        return ()
-    import pandas as pd
-
-    frame = pd.read_excel(workbook, sheet_name=0, header=None, nrows=1)
-    if frame.empty:
-        return ()
-    header_tokens = {_header_token(value) for value in frame.iloc[0].tolist()}
-    return tuple(
-        metric
-        for metric, label in _RHEOLOGY_SOURCE_METRICS
-        if _header_token(label) in header_tokens
-    )
-
-
-def _single_frequency_workbook(source: Path) -> Path | None:
-    resolved = source.expanduser().resolve()
-    if resolved.is_file():
-        return resolved if resolved.suffix.casefold() in {".xlsx", ".xls"} else None
-    if not resolved.is_dir():
-        return None
-    workbooks = sorted(
-        path
-        for path in resolved.rglob("*")
-        if path.is_file() and path.suffix.casefold() in {".xlsx", ".xls"}
-    )
-    return workbooks[0] if len(workbooks) == 1 else None
-
-
-def _header_token(value: object) -> str:
-    return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
-
-
-def _metric_id(value: object) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", str(value or "").casefold()).strip("_")
+    raise RuntimeError(f"Unknown FigurePlan adapter `{adapter}`.")
 
 
 __all__ = [

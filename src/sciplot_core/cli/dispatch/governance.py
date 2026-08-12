@@ -82,10 +82,30 @@ def dispatch_governance(args: Any, argv: list[str] | None) -> int | None:
             return 0
 
     if args.command == "rules":
-        from sciplot_core.materials_rules import list_rules_payload, show_rule_payload
+        from sciplot_core.materials_rules.catalog import (
+            list_rules_payload,
+            show_rule_payload,
+        )
+        from sciplot_core.readiness.registry_io import (
+            load_validated_envelope_registry,
+        )
+        from sciplot_core.readiness.rule_certification import (
+            current_rule_invocation_contract_payload,
+        )
+
+        registry = load_validated_envelope_registry()
+
+        def invocation_projector(rule: Any) -> dict[str, Any]:
+            return current_rule_invocation_contract_payload(
+                rule=rule,
+                registry=registry,
+            )
 
         if args.rules_command == "list":
-            payload = list_rules_payload(include_pending=args.all)
+            payload = list_rules_payload(
+                include_pending=args.all,
+                invocation_projector=invocation_projector,
+            )
             if args.json:
                 _print_json(payload)
             else:
@@ -98,7 +118,10 @@ def dispatch_governance(args: Any, argv: list[str] | None) -> int | None:
                     print(f"{item['rule_id']}{status}: {item['x']} -> {item['y']}")
             return 0
         if args.rules_command == "show":
-            payload = show_rule_payload(args.rule_id)
+            payload = show_rule_payload(
+                args.rule_id,
+                invocation_projector=invocation_projector,
+            )
             if args.json:
                 _print_json(payload)
             else:

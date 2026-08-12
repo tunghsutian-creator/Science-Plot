@@ -40,7 +40,7 @@ class ImpactReplicatePayload:
     samples: tuple[str, ...]
     replicate_counts: tuple[int, ...]
     values: tuple[tuple[float, ...], ...]
-    unit: str = "kJ/m2"
+    unit: str
 
     @property
     def total_replicates(self) -> int:
@@ -86,6 +86,7 @@ _RHEOLOGY_FREQUENCY_OUTPUT_METRICS = (
     _RHEOLOGY_SWEEP_METRICS[1],
     _RHEOLOGY_SWEEP_METRICS[2],
     _RHEOLOGY_SWEEP_METRICS[3],
+    _RHEOLOGY_COMPLEX_MODULUS_METRIC,
 )
 
 

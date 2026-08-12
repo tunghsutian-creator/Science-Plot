@@ -58,13 +58,16 @@ def _read_wide_stress_relaxation_series(source: Path) -> list[CurveSeriesPayload
         default_y_unit="Pa",
         sample_prefix=source.stem,
     )
-    series_list = [
-        _normalize_series(series, y_label="Normalized stress", y_unit="sigma/sigma0")
-        for series in series_list
-    ]
     if not series_list:
         raise ValueError("Could not find wide stress-relaxation time/stress series.")
-    return series_list
+    return [
+        _normalize_series(
+            _retain_positive_stress_relaxation_time(series),
+            y_label="Normalized stress",
+            y_unit="sigma/sigma0",
+        )
+        for series in series_list
+    ]
 
 
 def _read_strain_controlled_stress_relaxation_series(
@@ -94,6 +97,19 @@ def _read_strain_controlled_stress_relaxation_series(
 def _retain_positive_stress_relaxation_time(
     series: CurveSeriesPayload,
 ) -> CurveSeriesPayload:
+    baseline_time = (series.diagnostics or {}).get(
+        "normalization_baseline_source_time",
+        (series.diagnostics or {}).get("normalization_baseline_time"),
+    )
+    if (
+        isinstance(baseline_time, int | float)
+        and math.isfinite(float(baseline_time))
+        and float(baseline_time) <= 0.0
+    ):
+        raise ValueError(
+            "The normalization anchor is not compatible with logarithmic time: "
+            "its retained source time must be greater than zero."
+        )
     retained = tuple(
         (time_value, response_value)
         for time_value, response_value in series.points
@@ -189,7 +205,19 @@ def _read_stress_relaxation_source_series(source: Path) -> list[CurveSeriesPaylo
             "contract and is not relabeled as sigma/sigma0."
         ) from exc
     series_list = [
-        _retain_positive_stress_relaxation_time(series) for series in series_list
+        CurveSeriesPayload(
+            sample=series.sample,
+            x_label=series.x_label,
+            x_unit=series.x_unit,
+            y_label=series.y_label,
+            y_unit=series.y_unit,
+            points=series.points,
+            diagnostics={
+                **(series.diagnostics or {}),
+                "source_file": str(source),
+            },
+        )
+        for series in series_list
     ]
     if len(series_list) == 1:
         return [_with_series_sample(series_list[0], fallback)]

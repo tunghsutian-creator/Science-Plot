@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 import pandas as pd
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.data_mapping import resolve_data_mapping_request
@@ -54,7 +54,15 @@ from sciplot_core.terminal_source_binding import (
     MaterializedTerminalSourceBinding,
     TerminalSourceBindingError,
 )
-from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
+from sciplot_core.preparation_source_attestation import (
+    PreparationSourceAttestation,
+    requires_preparation_source_attestation,
+)
+
+if TYPE_CHECKING:
+    from sciplot_core.semantic_sources.scientific_source import (
+        ResolvedScientificSource,
+    )
 
 
 def _series_from_request(
@@ -62,8 +70,10 @@ def _series_from_request(
     *,
     base_dir: Path,
     _terminal_source_binding: MaterializedTerminalSourceBinding | None = None,
+    _terminal_source_prepared: bool = False,
     _prepared_source_attestation: PreparationSourceAttestation | None = None,
     _prepared_transform_steps: list[dict[str, Any]] | None = None,
+    _resolved_scientific_source: ResolvedScientificSource | None = None,
 ) -> tuple[list[StudioSeries], dict[str, Any], list[dict[str, Any]], Path]:
     if any(
         field in request
@@ -248,28 +258,37 @@ def _series_from_request(
             "A terminal-source binding and a semantic-preparation attestation "
             "cannot be used together."
         )
+    if _terminal_source_prepared and (
+        _terminal_source_binding is not None
+        or _prepared_source_attestation is not None
+    ):
+        raise ValueError(
+            "A prepared terminal source cannot be combined with another "
+            "private source authority."
+        )
     if _prepared_source_attestation is not None:
-        if str(request.get("rule_id") or "").strip() not in {
-            "compression_curve",
-            "dma_temperature_sweep",
-            "flexural_curve",
-            "rheology_temperature_sweep",
-            "tensile_curve",
-        }:
+        if not requires_preparation_source_attestation(
+            str(request.get("rule_id") or "").strip()
+        ):
             raise ValueError(
                 "The private prepared-source seam is source-bound Studio only."
             )
-        _prepared_source_attestation.verify_current(source_root=source_root)
+        if Path(_prepared_source_attestation.source_root) != source_root.resolve():
+            raise ValueError(
+                "Prepared source attestation does not belong to the Studio source."
+            )
         source = Path(_prepared_source_attestation.prepared_source.path)
         semantic_steps = [dict(step) for step in (_prepared_transform_steps or [])]
+    elif _terminal_source_prepared:
+        semantic_steps = []
     elif _terminal_source_binding is None:
         source, semantic_steps, _source_attestation = _studio_source_for_request(
             source,
             request=request,
             base_dir=base_dir,
+            resolved_scientific_source=_resolved_scientific_source,
         )
     else:
-        _terminal_source_binding.verify_sources()
         if (
             str(source.expanduser().resolve())
             != _terminal_source_binding.terminal_source.path

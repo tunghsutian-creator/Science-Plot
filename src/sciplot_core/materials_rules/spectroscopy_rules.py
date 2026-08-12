@@ -27,9 +27,9 @@ SPECTROSCOPY_RULES: tuple[SemanticRule, ...] = (
             reverse=True,
         ),
         AxisSpec(
-            "Transmittance",
-            "%",
-            "Transmittance (%)",
+            "Spectral response",
+            "",
+            "Spectral response",
             aliases=("transmittance", "%T", "absorbance"),
         ),
         keywords=("ftir", "wavenumber"),
@@ -38,15 +38,21 @@ SPECTROSCOPY_RULES: tuple[SemanticRule, ...] = (
         render_options=dict(FTIR_SPECTRUM_RENDER_OPTIONS),
         analysis=(
             AnalysisSpec(
-                "strongest_peak_position",
-                "per-series transmittance minimum or absorbance maximum position from canonical paired traces",
-                ("wavenumber", "transmittance or absorbance"),
+                "observed_response_extremum_wavenumber_cm-1",
+                (
+                    "per-series observed minimum for explicitly identified percent "
+                    "transmittance or maximum for explicitly identified absorbance"
+                ),
+                ("wavenumber", "explicit percent transmittance or absorbance"),
                 "cm^-1",
             ),
         ),
         fixture_path="tests/fixtures/real_world/ftir_headerless/A40-20.CSV",
         fixture_status="ready",
         priority=50,
+        scientific_source_adapter="ftir",
+        figure_plan_adapter="registered_single_curve",
+        preparation_adapter="curve_family",
     ),
     _rule(
         "uvvis_spectrum",
@@ -69,38 +75,54 @@ SPECTROSCOPY_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/uvvis_spectrum/pda_uvvis_spectra.csv",
         fixture_status="ready",
         priority=36,
+        scientific_source_adapter="registered_paired_curve",
+        figure_plan_adapter="registered_single_curve",
+        preparation_adapter="curve_family",
     ),
     _rule(
         "xrd_pattern",
         "xrd_pattern",
         "scattering",
         "curve",
-        AxisSpec("2θ", "degree", "2θ (°)", aliases=("2theta", "2θ")),
         AxisSpec(
-            "Intensity", "count", "Intensity (counts)", aliases=("intensity", "count")
+            "Diffraction angle",
+            "degree",
+            "Diffraction angle (°)",
+            aliases=("angle", "2theta", "2θ"),
         ),
+        AxisSpec("Intensity", "a.u.", "Intensity (a.u.)", aliases=("intensity",)),
         keywords=("2theta", "xrd"),
         column_aliases=("2theta", "intensity"),
         analysis=(
             AnalysisSpec(
                 "main_peak_2theta",
-                "per-series maximum intensity position from canonical paired traces",
-                ("2theta", "intensity"),
+                (
+                    "per-series maximum observed intensity position from "
+                    "canonical paired traces"
+                ),
+                ("diffraction_angle", "intensity"),
                 "degree",
             ),
         ),
         fixture_path="tests/fixtures/real_world/xrd_pattern/pda_xrd_patterns.csv",
         fixture_status="ready",
         priority=46,
+        scientific_source_adapter="registered_paired_curve",
+        figure_plan_adapter="registered_single_curve",
+        preparation_adapter="curve_family",
     ),
     _rule(
         "saxs_profile",
         "saxs_profile",
         "scattering",
         "curve",
-        AxisSpec("q", "nm^-1", "q (nm$^{-1}$)", aliases=("q", "q_nm-1"), scale="log"),
+        AxisSpec("q", "nm^-1", "q (nm$^{-1}$)", aliases=("q", "q_nm-1")),
         AxisSpec(
-            "Intensity", "a.u.", "Intensity (a.u.)", aliases=("intensity",), scale="log"
+            "Intensity",
+            "a.u.",
+            "Log intensity (a.u.)",
+            aliases=("intensity", "log intensity"),
+            scale="log",
         ),
         keywords=("saxs", "qnm1", "q_nm1", "q_nm-1"),
         path_keywords=("saxs_profile", "/saxs/"),
@@ -109,7 +131,10 @@ SPECTROSCOPY_RULES: tuple[SemanticRule, ...] = (
         analysis=(
             AnalysisSpec(
                 "main_scattering_peak_q",
-                "per-series highest interior local-intensity maximum; boundary maxima are excluded",
+                (
+                    "per-series highest interior discrete local-intensity maximum; "
+                    "boundary maxima are excluded and no structural assignment is inferred"
+                ),
                 ("q", "intensity"),
                 "nm^-1",
             ),
@@ -117,7 +142,10 @@ SPECTROSCOPY_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/saxs_profile/Fig3f_saxs_q_intensity.csv",
         fixture_status="ready",
         priority=47,
-        reason="Multi-sample SAXS profiles use a documented 120 mm log-log frame so their long legend labels remain legible.",
+        scientific_source_adapter="registered_paired_curve",
+        figure_plan_adapter="registered_single_curve",
+        preparation_adapter="curve_family",
+        reason="Multi-sample SAXS profiles use a documented 120 mm frame so their long legend labels remain legible.",
     ),
     _rule(
         "gpc_sec_chromatogram",
@@ -132,8 +160,8 @@ SPECTROSCOPY_RULES: tuple[SemanticRule, ...] = (
         ),
         AxisSpec(
             "Detector response",
-            "a.u.",
-            "Detector response (a.u.)",
+            "mV",
+            "RI detector response (mV)",
             aliases=("dri", "ri", "rayleigh ratio"),
         ),
         keywords=("gpc", "sec", "dri", "rayleigh"),
@@ -150,5 +178,8 @@ SPECTROSCOPY_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/gpc_sec_chromatogram",
         fixture_status="ready",
         priority=49,
+        scientific_source_adapter="gpc_sec",
+        figure_plan_adapter="registered_single_curve",
+        preparation_adapter="curve_family",
     ),
 )

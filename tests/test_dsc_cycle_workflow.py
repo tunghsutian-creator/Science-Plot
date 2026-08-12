@@ -60,13 +60,13 @@ def _stack_source_series() -> list[StudioSeries]:
     ]
 
 
-def test_dsc_curve_semantics_reject_cycle_workbooks_without_phase_projection(
+def test_dsc_curve_rejects_ambiguous_cycle_sheets_without_phase_projection(
     tmp_path: Path,
 ) -> None:
     workbook = tmp_path / "cycle.xlsx"
     _write_cycle_workbook(workbook)
 
-    with pytest.raises(ValueError, match="dsc_cycle_rule_required"):
+    with pytest.raises(ValueError, match="More than one source table"):
         prepare_semantic_source(
             workbook,
             output_dir=tmp_path / "prepared",

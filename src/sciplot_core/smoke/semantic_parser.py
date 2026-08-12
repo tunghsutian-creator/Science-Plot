@@ -39,7 +39,7 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
     saxs_source = contracts / "saxs_profile" / "paired_q_intensity.csv"
     saxs_source.parent.mkdir(parents=True, exist_ok=True)
     saxs_source.write_text(
-        "HDPE,,2 wt% UDC 3,\n"
+        "Series A,,Series B,\n"
         "q (nm-1),Log intensity (a.u.),q (nm-1),Log intensity (a.u.)\n"
         "0.01,1000,0.01,100000\n"
         "0.02,500,0.02,50000\n"
@@ -550,7 +550,7 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
     else:
         log_domain_rejection = None
 
-    expected_saxs_order = ["HDPE", "2 wt% UDC 3"]
+    expected_saxs_order = ["Series A", "Series B"]
     expected_impact_order = ["V-PA (2 mm)", "E-PA (2 mm)", "V-PA (4 mm)", "E-PA (4 mm)"]
     expected_impact_metric_names = {
         f"impact_group_{metric}[{sample}]"
@@ -571,7 +571,8 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         saxs_semantic.get("rule_id") == "saxs_profile"
         and saxs_parameters.get("series_order") == expected_saxs_order
         and saxs_parameters.get("source_point_counts") == [4, 4]
-        and (saxs_semantic.get("axis_plan") or {}).get("x", {}).get("scale") == "log"
+        and (saxs_semantic.get("axis_plan") or {}).get("x", {}).get("scale")
+        == "linear"
         and (saxs_semantic.get("axis_plan") or {}).get("y", {}).get("scale") == "log"
         and gpc_semantic.get("rule_id") == "gpc_sec_chromatogram"
         and gpc_parameters.get("series_order") == ["Sample 8"]

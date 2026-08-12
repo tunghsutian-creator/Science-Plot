@@ -129,6 +129,15 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
         veusz_documents=[document],
         output_dir=output_dir,
     )
+    publication_events: list[str] = []
+    binding_calls: list[tuple[object, object]] = []
+
+    def record_source_binding(bound_plan: object, bound_sources: object) -> None:
+        publication_events.append("binding")
+        binding_calls.append((bound_plan, bound_sources))
+
+    def record_studio_snapshot(**_kwargs: Any) -> None:
+        publication_events.append("snapshot")
 
     monkeypatch.setattr(
         evidence_module,
@@ -203,12 +212,12 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
     monkeypatch.setattr(
         publish_run_module,
         "verify_studio_run_source_binding",
-        lambda *_args, **_kwargs: None,
+        record_source_binding,
     )
     monkeypatch.setattr(
         publish_run_module,
         "_snapshot_studio_directory",
-        lambda **_kwargs: None,
+        record_studio_snapshot,
     )
     monkeypatch.setattr(
         publish_run_module,
@@ -255,6 +264,10 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
     assert "resolved_figure_plan_id" not in run
     assert "resolved_figure_plan_sha256" not in run
     assert "figure_outcomes" not in run
+    assert publication_events == ["binding", "snapshot"]
+    assert len(binding_calls) == 1
+    assert binding_calls[0][0] is plan
+    assert binding_calls[0][1] is sources
 
 
 def test_workflow_projects_completed_plan_into_intake_top_level_and_last_run(

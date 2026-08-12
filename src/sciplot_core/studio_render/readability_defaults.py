@@ -220,37 +220,6 @@ def _apply_readability_render_defaults(
                 updated.setdefault("show_single_series_label", True)
                 updated.setdefault("series_label_offset_fraction", 0.018)
                 updated.setdefault("series_label_vertical_align", "bottom")
-                x_values = [
-                    float(value)
-                    for item in series
-                    for value in item.x_values
-                    if math.isfinite(float(value))
-                ]
-                if x_values:
-                    measured_min = min(x_values)
-                    measured_max = max(x_values)
-                    nominal_span = 4000.0 - 400.0
-                    boundary_tolerance = nominal_span * 0.001
-                    if (
-                        "x_min" not in explicit_options
-                        and 400.0 - boundary_tolerance <= measured_min < 400.0
-                    ):
-                        updated["x_min"] = measured_min
-                        autofixes.append("spectrum_lower_boundary_tolerance")
-                    if (
-                        "x_max" not in explicit_options
-                        and 4000.0 < measured_max <= 4000.0 + boundary_tolerance
-                    ):
-                        updated["x_max"] = measured_max
-                        if "x_ticks" not in explicit_options:
-                            updated["x_ticks"] = [
-                                400.0,
-                                1000.0,
-                                2000.0,
-                                3000.0,
-                                4000.0,
-                            ]
-                        autofixes.append("spectrum_upper_boundary_tolerance")
                 if not {"y_min", "y_max", "y_ticks"} & explicit_options.keys():
                     compact_axis = compact_linear_axis(
                         value

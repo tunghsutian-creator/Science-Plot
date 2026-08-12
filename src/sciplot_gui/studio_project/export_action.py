@@ -57,10 +57,7 @@ class ExportActionMixin:
                 context_blocker = self._document_context_blocker()
                 if context_blocker is not None:
                     raise RuntimeError(context_blocker)
-                save_receipt = self._atomic_save_document(
-                    self.document,
-                    self.document_path,
-                )
+                save_receipt = self.save_or_commit_current_document(self.document_path)
                 if (
                     save_receipt.get("status") != "passed"
                     or save_receipt.get("reopen_validated") is not True
@@ -83,7 +80,11 @@ class ExportActionMixin:
                         "The saved Veusz document has no readable SHA-256."
                     )
                 figure_blocker = self._figure_set_export_blocker()
-                blocker = figure_blocker or self._assistant_export_blocker()
+                blocker = (
+                    figure_blocker
+                    or self._assistant_export_blocker()
+                    or self._series_revision_export_blocker()
+                )
                 context_blocker = self._document_context_blocker()
                 if context_blocker is not None:
                     raise RuntimeError(context_blocker)
@@ -99,7 +100,11 @@ class ExportActionMixin:
                 post_modified = bool(self.document.isModified())
                 post_document_sha256 = existing_file_sha256(self.document_path)
                 post_figure_blocker = self._figure_set_export_blocker()
-                post_blocker = post_figure_blocker or self._assistant_export_blocker()
+                post_blocker = (
+                    post_figure_blocker
+                    or self._assistant_export_blocker()
+                    or self._series_revision_export_blocker()
+                )
                 post_context_blocker = self._document_context_blocker()
                 changed_during_export = bool(
                     post_revision != export_revision

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
-from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
+from sciplot_core.preparation_source_attestation import (
+    PreparationSourceAttestation,
+    requires_preparation_source_attestation,
+)
 
 from sciplot_core.semantic_sources.classification import (
     TENSILE_EXPORT_DIR_SUFFIX,
@@ -82,10 +84,11 @@ from sciplot_core.semantic_sources.torque_sources import (  # noqa: F401
     _torque_source_files,
 )
 
-
-_SOURCE_ATTESTED_FAMILIES = MECHANICAL_RULE_IDS | frozenset(
-    {"dma_temperature_sweep", "rheology_temperature_sweep"}
-)
+if TYPE_CHECKING:
+    from sciplot_core.materials_rules.models import PreparationAdapterId
+    from sciplot_core.semantic_sources.scientific_source import (
+        ResolvedScientificSource,
+    )
 
 
 def prepare_semantic_source(
@@ -97,6 +100,7 @@ def prepare_semantic_source(
     series_order: object = None,
     column_confirmations: object = None,
     replicate_mode: object = None,
+    resolved_scientific_source: ResolvedScientificSource | None = None,
 ) -> dict[str, Any]:
     """Prepare one source through the handler for its semantic family."""
 
@@ -111,9 +115,25 @@ def prepare_semantic_source(
         else None
     )
     attestation_rule_id = rule_id or family
-    source_hash_before = (
-        source_tree_sha256(source) if family in _SOURCE_ATTESTED_FAMILIES else None
-    )
+    if (
+        resolved_scientific_source is not None
+        and (
+            resolved_scientific_source.source != source
+            or resolved_scientific_source.rule_id != (rule_id or family)
+            or resolved_scientific_source.semantic_family != family
+        )
+    ):
+        raise ValueError(
+            "Resolved scientific domain does not match the selected semantic family."
+        )
+    source_hash_before = None
+    if requires_preparation_source_attestation(attestation_rule_id):
+        source_hash_before = (
+            resolved_scientific_source.source_sha256
+            if resolved_scientific_source is not None
+            and resolved_scientific_source.source_sha256 is not None
+            else source_tree_sha256(source)
+        )
     processed_dir = output_dir / "processed"
     processed_dir.mkdir(parents=True, exist_ok=True)
     context = SemanticPreparationContext(
@@ -126,29 +146,25 @@ def prepare_semantic_source(
         column_confirmations=column_confirmations,
         replicate_mode=replicate_mode,
         source_tree_sha256_before=source_hash_before,
+        resolved_scientific_source=resolved_scientific_source,
     )
-    for handler in (
-        prepare_rheology_source,
-        prepare_curve_family_source,
-        prepare_mechanical_source,
-    ):
-        result = handler(context)
-        if result is not None:
-            if family in _SOURCE_ATTESTED_FAMILIES:
-                attestation = result.get("source_attestation")
-                if (
-                    not isinstance(attestation, PreparationSourceAttestation)
-                    or attestation.rule_id != attestation_rule_id
-                    or attestation.source_tree_sha256_before != source_hash_before
-                    or attestation.source_tree_sha256_after != source_hash_before
-                ):
-                    raise RuntimeError(
-                        "semantic_preparation_source_changed: source-attested "
-                        "semantic data "
-                        "changed while semantic preparation was running."
-                    )
-                attestation.verify_current(source_root=source)
-            return result
+    adapter = _semantic_preparation_adapter(family=family, rule_id=rule_id)
+    result = _run_semantic_preparation_adapter(adapter, context)
+    if result is not None:
+        if requires_preparation_source_attestation(attestation_rule_id):
+            attestation = result.get("source_attestation")
+            if (
+                not isinstance(attestation, PreparationSourceAttestation)
+                or attestation.rule_id != attestation_rule_id
+                or attestation.source_tree_sha256_before != source_hash_before
+                or attestation.source_tree_sha256_after != source_hash_before
+            ):
+                raise RuntimeError(
+                    "semantic_preparation_source_changed: source-attested "
+                    "semantic data "
+                    "changed while semantic preparation was running."
+                )
+        return result
 
     return _semantic_preparation_result(
         source,
@@ -160,6 +176,48 @@ def prepare_semantic_source(
             )
         },
     )
+
+
+def _semantic_preparation_adapter(
+    *,
+    family: str,
+    rule_id: str | None,
+) -> PreparationAdapterId | None:
+    """Resolve one canonical preparation adapter without a parallel family map."""
+
+    from sciplot_core.materials_rules.catalog import get_rule, iter_rules
+
+    if rule_id is not None:
+        rule = get_rule(rule_id)
+        if rule.semantic_family != family:
+            raise ValueError(
+                "semantic_preparation_rule_mismatch: semantic family and rule differ."
+            )
+        return rule.preparation_adapter
+    matches = tuple(rule for rule in iter_rules() if rule.semantic_family == family)
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise ValueError(
+            "semantic_preparation_rule_required: semantic family does not identify "
+            "one canonical rule."
+        )
+    return matches[0].preparation_adapter
+
+
+def _run_semantic_preparation_adapter(
+    adapter: PreparationAdapterId | None,
+    context: SemanticPreparationContext,
+) -> dict[str, Any] | None:
+    if adapter == "rheology":
+        return prepare_rheology_source(context)
+    if adapter == "curve_family":
+        return prepare_curve_family_source(context)
+    if adapter == "mechanical":
+        return prepare_mechanical_source(context)
+    if adapter is None:
+        return None
+    raise RuntimeError(f"Unknown semantic preparation adapter `{adapter}`.")
 
 
 __all__ = [

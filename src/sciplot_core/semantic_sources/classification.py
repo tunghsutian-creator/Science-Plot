@@ -28,6 +28,13 @@ from sciplot_core.source_inspection import (
 from sciplot_core.semantic_sources.rheology_replicates import (
     is_rheology_temperature_comparison_dir,
 )
+from sciplot_core.semantic_sources.tensile_export_identity import (
+    TENSILE_EXPORT_DIR_SUFFIX as TENSILE_EXPORT_DIR_SUFFIX,
+    has_tensile_export_parent,
+    is_tensile_export_dir,
+    tensile_export_csv_files as tensile_export_csv_files,
+    tensile_export_sample_name as tensile_export_sample_name,
+)
 
 
 def _inspect_source_shape(
@@ -100,43 +107,6 @@ def _classification(
     }
 
 
-TENSILE_EXPORT_DIR_SUFFIX = ".is_tens_exports"
-
-
-def is_tensile_export_dir(path: Path) -> bool:
-    return path.is_dir() and path.name.casefold().endswith(TENSILE_EXPORT_DIR_SUFFIX)
-
-
-def has_tensile_export_parent(path: Path) -> bool:
-    return any(
-        parent.name.casefold().endswith(TENSILE_EXPORT_DIR_SUFFIX)
-        for parent in path.parents
-    )
-
-
-def tensile_export_sample_name(path: Path) -> str:
-    """Return the sample name encoded by a tensile-export directory."""
-
-    if not is_tensile_export_dir(path):
-        raise ValueError(f"Not a tensile export directory: {path}")
-    return path.name[: -len(TENSILE_EXPORT_DIR_SUFFIX)].strip()
-
-
-def tensile_export_csv_files(path: Path) -> list[Path]:
-    """Return tensile CSV members with case-insensitive suffix handling."""
-
-    if not is_tensile_export_dir(path):
-        return []
-    return sorted(
-        (
-            candidate
-            for candidate in path.rglob("*")
-            if candidate.is_file() and candidate.suffix.casefold() == ".csv"
-        ),
-        key=lambda candidate: candidate.as_posix().casefold(),
-    )
-
-
 def classify_source(
     input_path: str | Path,
     *,
@@ -145,6 +115,20 @@ def classify_source(
     requested_rule_id: str | None = None,
 ) -> dict[str, Any]:
     path = Path(input_path).expanduser()
+    if requested_rule_id is not None:
+        requested_rule = get_rule(requested_rule_id)
+        return semantic_payload_from_rule(
+            requested_rule,
+            confidence=100.0,
+            reason=(
+                f"Explicitly requested material rule `{requested_rule.rule_id}` "
+                "is pending fixture-backed acceptance and cannot run in "
+                "deterministic mode."
+                if requested_rule.fixture_status != "ready"
+                else f"Explicit material rule `{requested_rule.rule_id}` selected "
+                "by the user or an assistant."
+            ),
+        )
     performance_rule = get_rule("performance_comparison")
     if (
         requested_rule_id is None
@@ -180,7 +164,9 @@ def classify_source(
     match_inspection_model = inspection_model
     match_experiment_family = experiment_family
     structured_temperature_comparison = bool(
-        path.is_dir() and is_rheology_temperature_comparison_dir(path)
+        requested_rule_id is None
+        and path.is_dir()
+        and is_rheology_temperature_comparison_dir(path)
     )
     explicit_instrument_temperature_sweep = bool(
         inspection_model == "frequency_metric_sheet"

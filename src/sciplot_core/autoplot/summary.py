@@ -44,6 +44,57 @@ class _ValidatedEnvelopeReady(Protocol):
     ) -> bool: ...
 
 
+def _autoplot_result_payload(
+    *,
+    state: str,
+    ready_to_use: bool,
+    project_dir: str | None,
+    run_output: str | None,
+    request_path: object,
+    manifest: str | None,
+    one_step_status: str | None,
+    delivery: str | None,
+    delivery_complete: bool,
+    delivery_recorded_complete: bool,
+    review_html: str | None,
+    revision_brief: str | None,
+    route: dict[str, Any],
+    figure_plan: object,
+    figure_plan_gate: object,
+    quality: dict[str, Any],
+    validated_envelope: dict[str, Any],
+    integrity: dict[str, Any],
+    token_policy: dict[str, Any],
+    codex_handoff: dict[str, Any],
+) -> dict[str, Any]:
+    """Assemble the one existing Autoplot v2 result shape."""
+
+    return {
+        "kind": AUTOPLOT_MODEL_KIND,
+        "version": AUTOPLOT_MODEL_VERSION,
+        "state": state,
+        "ready_to_use": ready_to_use,
+        "project_dir": project_dir,
+        "run_output": run_output,
+        "request_path": request_path,
+        "manifest": manifest,
+        "one_step_status": one_step_status,
+        "delivery": delivery,
+        "delivery_complete": delivery_complete,
+        "delivery_recorded_complete": delivery_recorded_complete,
+        "review_html": review_html,
+        "revision_brief": revision_brief,
+        "route": route,
+        "figure_plan": figure_plan,
+        "figure_plan_gate": figure_plan_gate,
+        "quality": quality,
+        "validated_envelope": validated_envelope,
+        "integrity": integrity,
+        "token_policy": token_policy,
+        "codex_handoff": codex_handoff,
+    }
+
+
 def build_autoplot_summary(
     one_step_result: dict[str, Any],
     *,
@@ -202,11 +253,9 @@ def build_autoplot_summary(
         or not artifact_integrity_ready
     )
 
-    summary = {
-        "kind": AUTOPLOT_MODEL_KIND,
-        "version": AUTOPLOT_MODEL_VERSION,
-        "state": state,
-        "ready_to_use": (
+    summary = _autoplot_result_payload(
+        state=state,
+        ready_to_use=(
             state == READY_STATE
             and delivery_complete
             and envelope_ready
@@ -215,29 +264,29 @@ def build_autoplot_summary(
             and artifact_integrity_ready
             and manifest_publish["expected"]["ready_to_use"] is True
         ),
-        "project_dir": str(project_dir),
-        "run_output": str(run_output),
-        "request_path": evidence.reported_result.get("request_path"),
-        "manifest": str(manifest_path) if manifest_exists else None,
-        "one_step_status": str(status_path) if status_exists else None,
-        "delivery": str(delivery_path) if delivery_path is not None else None,
-        "delivery_complete": delivery_complete,
-        "delivery_recorded_complete": delivery_recorded_complete,
-        "review_html": str(run_output / "review.html")
+        project_dir=str(project_dir),
+        run_output=str(run_output),
+        request_path=evidence.reported_result.get("request_path"),
+        manifest=str(manifest_path) if manifest_exists else None,
+        one_step_status=str(status_path) if status_exists else None,
+        delivery=str(delivery_path) if delivery_path is not None else None,
+        delivery_complete=delivery_complete,
+        delivery_recorded_complete=delivery_recorded_complete,
+        review_html=str(run_output / "review.html")
         if (run_output / "review.html").exists()
         else None,
-        "revision_brief": str(run_output / "revision_brief.md")
+        revision_brief=str(run_output / "revision_brief.md")
         if (run_output / "revision_brief.md").exists()
         else None,
-        "route": evidence.route_package(),
-        "figure_plan": json_safe(
+        route=evidence.route_package(),
+        figure_plan=json_safe(
             figure_plan
             or {
                 "complete": True,
                 "status": "not_applicable_legacy_or_single_figure",
             }
         ),
-        "figure_plan_gate": json_safe(
+        figure_plan_gate=json_safe(
             figure_plan_gate
             or {
                 "valid": True,
@@ -245,7 +294,7 @@ def build_autoplot_summary(
                 "status": "not_applicable_legacy_or_single_figure",
             }
         ),
-        "quality": {
+        quality={
             "status": figure_qa.get("status"),
             "qa_status": figure_qa.get("qa_status"),
             "layout_review_mode": figure_qa.get("layout_review_mode")
@@ -254,7 +303,7 @@ def build_autoplot_summary(
             "quality_actions": figure_qa.get("quality_actions") or [],
             "image_review_required": image_review_required,
         },
-        "validated_envelope": {
+        validated_envelope={
             "state": validated_envelope.get("state") or "missing",
             "rule_id": validated_envelope.get("rule_id"),
             "ready_without_ai": envelope_ready,
@@ -263,7 +312,7 @@ def build_autoplot_summary(
             "repair_reasons": repair_reasons,
             "confirmation_reasons": confirmation_reasons,
         },
-        "integrity": {
+        integrity={
             "state_consistent": state_consistent,
             "preparation_state_consistent": preparation_state_consistent,
             "publish_state_consistent": publish_state_consistent,
@@ -286,7 +335,7 @@ def build_autoplot_summary(
             "package_contract_verification": json_safe(package_verification),
             "reasons": integrity_reasons,
         },
-        "token_policy": {
+        token_policy={
             "default_codex_context": "structured_qa_summary",
             "codex_reads_images_by_default": False,
             "image_review_required": image_review_required,
@@ -297,7 +346,7 @@ def build_autoplot_summary(
             ],
             "codex_role": "rule_repair_or_user_requested_visual_refinement",
         },
-        "codex_handoff": {
+        codex_handoff={
             "required": codex_required,
             "read_first": [
                 path
@@ -313,7 +362,7 @@ def build_autoplot_summary(
             "image_review_required": image_review_required,
             "intervention_package": json_safe(intervention),
         },
-    }
+    )
     return summary
 
 

@@ -13,19 +13,29 @@ FIGURE_TASK_V2_VERSION: Final = 2
 FIGURE_TASK_VERSION: Final = FIGURE_TASK_V2_VERSION
 FIGURE_OUTCOME_KIND: Final = "sciplot_figure_outcome"
 FIGURE_OUTCOME_VERSION: Final = 1
-SUPPORTED_FIGURE_PLAN_RULE_IDS = frozenset(
+REQUIRED_FIGURE_PLAN_RULE_IDS = frozenset(
     {
         "dma_temperature_sweep",
         "dsc_curve",
+        "dtg_curve",
+        "ftir_spectrum",
         "impact_metric",
         "performance_comparison",
         "compression_curve",
         "flexural_curve",
         "rheology_frequency_sweep",
         "rheology_temperature_sweep",
+        "saxs_profile",
+        "gpc_sec_chromatogram",
         "tensile_curve",
+        "tga_curve",
+        "uvvis_spectrum",
+        "xrd_pattern",
     }
 )
+# Compatibility name retained for callers that inspected the original public
+# capability constant. Runtime gates use the requirement-oriented name above.
+SUPPORTED_FIGURE_PLAN_RULE_IDS = REQUIRED_FIGURE_PLAN_RULE_IDS
 
 
 __all__ = [
@@ -37,5 +47,6 @@ __all__ = [
     "FIGURE_TASK_VERSION",
     "RESOLVED_FIGURE_PLAN_KIND",
     "RESOLVED_FIGURE_PLAN_VERSION",
+    "REQUIRED_FIGURE_PLAN_RULE_IDS",
     "SUPPORTED_FIGURE_PLAN_RULE_IDS",
 ]

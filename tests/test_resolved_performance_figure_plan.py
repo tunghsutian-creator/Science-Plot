@@ -1,21 +1,27 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
 import sciplot_core.figure_plan.performance_resolution as performance_resolution
+import sciplot_core.figure_plan.resolution as figure_plan_resolution
+import sciplot_core.materials_rules.catalog as rule_catalog
 from sciplot_core.figure_plan import (
     CartesianMetricBinding,
     FigurePlanResolutionError,
     OrderedMetricsBinding,
     ResolvedFigurePlan,
+    REQUIRED_FIGURE_PLAN_RULE_IDS,
     SUPPORTED_FIGURE_PLAN_RULE_IDS,
     resolve_figure_plan,
     source_tree_sha256,
 )
 from sciplot_core.figure_plan.performance_resolution import resolve_performance_plan
+from sciplot_core.materials_rules import get_rule, iter_rules
+from sciplot_core.readiness.rule_contract import rule_contract_hashes
 
 
 FIXTURE = (
@@ -223,20 +229,70 @@ def test_performance_resolution_rejects_source_drift_during_load(
     assert exc_info.value.reason_code == "performance_source_changed_during_resolution"
 
 
-def test_performance_plan_is_registered_in_runtime_resolution() -> None:
-    assert SUPPORTED_FIGURE_PLAN_RULE_IDS == frozenset(
+def test_required_figure_plan_rules_match_the_rule_owned_adapters() -> None:
+    expected = frozenset(
         {
             "dma_temperature_sweep",
             "dsc_curve",
+            "dtg_curve",
+            "ftir_spectrum",
             "impact_metric",
             "performance_comparison",
             "compression_curve",
             "flexural_curve",
             "rheology_frequency_sweep",
             "rheology_temperature_sweep",
+            "saxs_profile",
+            "gpc_sec_chromatogram",
             "tensile_curve",
+            "tga_curve",
+            "uvvis_spectrum",
+            "xrd_pattern",
         }
     )
+    assert REQUIRED_FIGURE_PLAN_RULE_IDS == expected
+    assert SUPPORTED_FIGURE_PLAN_RULE_IDS is REQUIRED_FIGURE_PLAN_RULE_IDS
+    assert frozenset(
+        rule.rule_id for rule in iter_rules() if rule.figure_plan_adapter is not None
+    ) == expected
+
+
+def test_figure_plan_adapter_is_read_from_the_semantic_rule(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = get_rule("performance_comparison")
+    monkeypatch.setattr(
+        rule_catalog,
+        "get_rule",
+        lambda _rule_id: replace(base, figure_plan_adapter=None),
+    )
+    monkeypatch.setattr(
+        figure_plan_resolution,
+        "source_tree_sha256",
+        lambda _source: pytest.fail("unadapted rules must not hash source trees"),
+    )
+
+    assert (
+        resolve_figure_plan(
+            rule_id="performance_comparison",
+            template="scatter",
+            study_model={},
+            input_path=None,
+            request={"template": "scatter"},
+        )
+        is None
+    )
+
+
+def test_figure_plan_adapter_is_internal_execution_metadata() -> None:
+    original = get_rule("tga_curve")
+    rerouted = replace(original, figure_plan_adapter="performance")
+
+    assert rerouted.to_payload() == original.to_payload()
+    assert rule_contract_hashes(rerouted) == rule_contract_hashes(original)
+
+
+def test_performance_plan_resolves_through_the_selected_adapter() -> None:
     plan = resolve_figure_plan(
         rule_id="performance_comparison",
         template="scatter",

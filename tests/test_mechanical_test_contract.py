@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from sciplot_core.figure_plan import resolve_figure_plan
 from sciplot_core.materials_rules import get_rule, semantic_payload_from_rule
 from sciplot_core.policy import DEFAULT_PALETTE_COLORS, mechanical_axis_labels
 from sciplot_core.semantic import prepare_semantic_source
@@ -244,7 +245,7 @@ def test_flexural_workbook_directory_uses_all_specimen_strengths(
     assert set(summary["strength_source"]) == {"instrument_report"}
 
 
-def test_recycled_pa_mechanical_pair_is_control_first(
+def test_mechanical_order_comes_from_source_or_explicit_request(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "flexural"
@@ -299,10 +300,26 @@ def test_recycled_pa_mechanical_pair_is_control_first(
     processed = Path(prepared["processed_source"])
     curve = pd.read_csv(processed, header=None)
     summary = pd.read_csv(processed.with_name(f"{processed.stem}_summary.csv"))
-    assert curve.iloc[2].tolist() == ["rPA", "rPA", "m-rPA", "m-rPA"]
-    assert summary["sample"].tolist() == ["rPA", "rPA", "m-rPA", "m-rPA"]
+    assert curve.iloc[2].tolist() == ["m-rPA", "m-rPA", "rPA", "rPA"]
+    assert summary["sample"].tolist() == ["m-rPA", "m-rPA", "rPA", "rPA"]
     assert prepared["transform_steps"][0]["parameters"]["series_order"] == [
-        "rPA",
         "m-rPA",
+        "rPA",
     ]
+
+    explicitly_ordered = resolve_figure_plan(
+        rule_id="flexural_curve",
+        template="curve",
+        study_model=experiment_recommendation_payload(rule_id="flexural_curve"),
+        input_path=source,
+        request={
+            "template": "curve",
+            "series_order": ["rPA", "m-rPA"],
+        },
+    )
+    assert explicitly_ordered is not None
+    assert all(
+        task.sample_order == ("rPA", "m-rPA")
+        for task in explicitly_ordered.tasks
+    )
     assert DEFAULT_PALETTE_COLORS[:2] == ("#222222", "#3568C0")

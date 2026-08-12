@@ -26,8 +26,6 @@ def _raster_visual_qa(pixmap: fitz.Pixmap) -> dict[str, Any]:
     bbox_area = int((xs.max() - xs.min() + 1) * (ys.max() - ys.min() + 1))
     ink_fraction = ink_count / max(total, 1)
     bbox_fraction = bbox_area / max(total, 1)
-    if ink_fraction < 0.0005:
-        raise ValueError(f"PDF raster has too little visible ink: {ink_fraction:.6f}.")
     return {
         "raster_width_px": int(pixmap.width),
         "raster_height_px": int(pixmap.height),

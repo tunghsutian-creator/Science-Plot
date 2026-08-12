@@ -43,6 +43,11 @@ def _canonical_impact_unit(value: object) -> str | None:
 
 def _validated_impact_unit(values: list[object]) -> str:
     explicit = [_clean_text(value) for value in values if _clean_text(value)]
+    if not explicit:
+        raise _ImpactDataValidationError(
+            "Impact strength unit is missing; include an explicit kJ/m2 unit "
+            "in the metric header, unit row, or unit column."
+        )
     unknown = [value for value in explicit if _canonical_impact_unit(value) is None]
     if unknown:
         raise _ImpactDataValidationError(
@@ -251,9 +256,16 @@ def _read_impact_compact_table(source: Path) -> ImpactReplicatePayload:
     )
     if sample_col is None or metric_col is None:
         raise ValueError("Impact compact table needs sample and impact columns.")
-    unit_col = metric_col + 1 if metric_col + 1 < raw.shape[1] else None
+    header_unit = _impact_unit_candidate_from_header(
+        _clean_text(raw.iat[0, metric_col])
+    )
+    unit_col = (
+        metric_col + 1
+        if header_unit is None and metric_col + 1 < raw.shape[1]
+        else None
+    )
     groups: dict[str, list[float]] = {}
-    units: list[object] = []
+    units: list[object] = [header_unit] if header_unit is not None else []
     for row_index in range(1, raw.shape[0]):
         sample = _clean_text(raw.iat[row_index, sample_col])
         value = _float(raw.iat[row_index, metric_col])
@@ -279,6 +291,7 @@ def _read_impact_source(source: Path) -> ImpactReplicatePayload:
     if not sources:
         raise ValueError(f"No impact-strength tables found under {source}.")
     groups: dict[str, list[float]] = {}
+    payload_units: list[str] = []
     errors: list[str] = []
     for path in sources:
         try:
@@ -298,8 +311,9 @@ def _read_impact_source(source: Path) -> ImpactReplicatePayload:
         except ValueError as exc:
             errors.append(f"{path.name}: {exc}")
             continue
+        payload_units.append(payload.unit)
         for sample, values in zip(payload.samples, payload.values, strict=True):
             groups.setdefault(sample, []).extend(values)
     if not groups:
         raise ValueError("Could not parse impact-strength tables: " + "; ".join(errors))
-    return _impact_payload(groups, unit="kJ/m2")
+    return _impact_payload(groups, unit=_validated_impact_unit(payload_units))

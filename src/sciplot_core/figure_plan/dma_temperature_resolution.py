@@ -25,8 +25,11 @@ from sciplot_core.figure_plan.metric_binding import CartesianMetricBinding
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
 from sciplot_core.figure_plan.task import FigureTask
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.semantic_sources.dma_sources import (
-    _read_dma_temperature_series_list,
+from sciplot_core.semantic_sources.dma_temperature_transform import (
+    resolve_dma_temperature_transform,
+)
+from sciplot_core.semantic_sources.scientific_transform import (
+    ResolvedScientificTransform,
 )
 
 
@@ -49,10 +52,19 @@ class DmaTemperatureSourceFacts:
     maximum_display_value_MPa: float
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedDmaTemperatureSource:
+    """One source snapshot shared by DMA transform preview and FigurePlan."""
+
+    facts: DmaTemperatureSourceFacts
+    scientific_transform: ResolvedScientificTransform
+
+
 def resolve_dma_temperature_plan(
     *,
     input_path: Path,
     request: dict[str, Any],
+    source_resolution: ResolvedDmaTemperatureSource | None = None,
 ) -> ResolvedFigurePlan:
     """Resolve exactly one point-line task from DMA source facts."""
 
@@ -62,7 +74,11 @@ def resolve_dma_temperature_plan(
             "dma_temperature_template_invalid",
             "The DMA temperature contract supports only 'point_line'.",
         )
-    facts = load_dma_temperature_source_facts(input_path)
+    resolved_source = source_resolution or resolve_dma_temperature_source(
+        input_path,
+        series_order=request.get("series_order"),
+    )
+    facts = resolved_source.facts
     task = FigureTask.with_metric_binding(
         figure_id=DMA_TEMPERATURE_FIGURE_ID,
         order=1,
@@ -88,15 +104,33 @@ def resolve_dma_temperature_plan(
 
 def load_dma_temperature_source_facts(
     input_path: Path,
+    *,
+    series_order: object = None,
 ) -> DmaTemperatureSourceFacts:
-    """Parse once between two source-tree hashes and validate unit/point facts."""
+    """Return validated facts from one resolved DMA source snapshot."""
+
+    return resolve_dma_temperature_source(
+        input_path,
+        series_order=series_order,
+    ).facts
+
+
+def resolve_dma_temperature_source(
+    input_path: Path,
+    *,
+    series_order: object = None,
+) -> ResolvedDmaTemperatureSource:
+    """Parse once between existing source hashes for transform and plan reuse."""
 
     source = input_path.expanduser().resolve()
     before = source_tree_sha256(source)
     if before is None:
         _fail("dma_temperature_source_unavailable", "The DMA source does not exist.")
     try:
-        series_list = _read_dma_temperature_series_list(source)
+        scientific_transform = resolve_dma_temperature_transform(
+            source,
+            series_order=series_order,
+        )
     except (OSError, ValueError) as exc:
         raise FigurePlanResolutionError(
             "dma_temperature_source_contract_invalid",
@@ -109,6 +143,24 @@ def load_dma_temperature_source_facts(
             "The DMA temperature source changed during FigurePlan resolution.",
         )
 
+    facts = dma_temperature_source_facts_from_transform(
+        scientific_transform,
+        source_sha256=before,
+    )
+    return ResolvedDmaTemperatureSource(
+        facts=facts,
+        scientific_transform=scientific_transform,
+    )
+
+
+def dma_temperature_source_facts_from_transform(
+    scientific_transform: ResolvedScientificTransform,
+    *,
+    source_sha256: str,
+) -> DmaTemperatureSourceFacts:
+    """Derive execution facts from an already-resolved transform without I/O."""
+
+    series_list = list(scientific_transform.series)
     sample_order = tuple(series.sample for series in series_list)
     if not sample_order or len(sample_order) != len(set(sample_order)):
         _fail(
@@ -168,8 +220,8 @@ def load_dma_temperature_source_facts(
             "dma_temperature_source_contract_invalid",
             "DMA negative-point diagnostics disagree with the parsed measurements.",
         )
-    return DmaTemperatureSourceFacts(
-        source_sha256=before,
+    facts = DmaTemperatureSourceFacts(
+        source_sha256=source_sha256,
         sample_order=sample_order,
         point_counts=tuple(point_counts),
         source_temperature_units=tuple(source_temperature_units),
@@ -183,6 +235,7 @@ def load_dma_temperature_source_facts(
         minimum_display_value_MPa=min(display_values),
         maximum_display_value_MPa=max(display_values),
     )
+    return facts
 
 
 def dma_temperature_source_sha256(source: Path) -> str | None:
@@ -223,7 +276,10 @@ def _fail(reason_code: str, message: str) -> NoReturn:
 
 __all__ = [
     "DmaTemperatureSourceFacts",
+    "ResolvedDmaTemperatureSource",
+    "dma_temperature_source_facts_from_transform",
     "dma_temperature_source_sha256",
     "load_dma_temperature_source_facts",
     "resolve_dma_temperature_plan",
+    "resolve_dma_temperature_source",
 ]

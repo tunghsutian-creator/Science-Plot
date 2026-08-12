@@ -16,7 +16,6 @@ from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.figure_plan import (
     FigurePlanResolutionError,
     ResolvedFigurePlan,
-    resolve_preparation_figure_plan,
 )
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.json_values import json_safe
@@ -29,6 +28,9 @@ from sciplot_core.publication import (
     get_publication_profile,
 )
 from sciplot_core.semantic import build_intervention_request, classify_source
+from sciplot_core.semantic_sources.scientific_source import (
+    ScientificSourceResolutionError,
+)
 from sciplot_core.study_model import study_model_from_request
 
 from sciplot_core.workflow.project_state import _write_one_step_status
@@ -46,6 +48,10 @@ from sciplot_core.workflow.route_intent import (
 )
 from sciplot_core.workflow.source_binding import (
     verify_workflow_figure_plan_source_binding,
+)
+from sciplot_core.workflow.scientific_source_resolution import (
+    bind_workflow_semantic_render_options,
+    resolve_workflow_scientific_source,
 )
 
 
@@ -144,21 +150,26 @@ def _run_request_in_managed_output(
         else str(request.get("template") or semantic.get("template") or "curve")
     )
     try:
-        figure_plan = resolve_preparation_figure_plan(
-            persisted=request.get("resolved_figure_plan"),
+        resolved_scientific_source, figure_plan = resolve_workflow_scientific_source(
+            input_path=input_path,
             rule_id=semantic_rule_id,
             template=effective_template,
             study_model=study_model,
-            input_path=input_path,
             request=request,
         )
-    except FigurePlanResolutionError as exc:
+    except (FigurePlanResolutionError, ScientificSourceResolutionError) as exc:
         raise ValueError(f"{exc.reason_code}: {exc}") from exc
     request = deepcopy(request)
     if figure_plan is not None:
         request["resolved_figure_plan"] = figure_plan.to_payload()
     else:
         request.pop("resolved_figure_plan", None)
+    request = bind_workflow_semantic_render_options(
+        request=request,
+        semantic=semantic,
+        figure_plan=figure_plan,
+        resolved_scientific_source=resolved_scientific_source,
+    )
     atomic_write_json(
         output_dir / "request_snapshot.json",
         json_safe(request),
@@ -167,6 +178,7 @@ def _run_request_in_managed_output(
         figure_plan,
         input_path=input_path,
         raw_archive=raw_archive,
+        resolved_scientific_source=resolved_scientific_source,
     )
     publication_intent = build_publication_intent(
         study_model,
@@ -211,6 +223,8 @@ def _run_request_in_managed_output(
         output_dir=output_dir,
         base_dir=base_dir,
         transform_steps=transform_steps,
+        resolved_scientific_source=resolved_scientific_source,
+        _resolved_figure_plan=figure_plan,
     )
     return publish_request_result(
         request_path=request_path,

@@ -9,7 +9,7 @@ from sciplot_core.figure_plan import (
     CartesianMetricBinding,
     FigurePlanResolutionError,
     ResolvedFigurePlan,
-    SUPPORTED_FIGURE_PLAN_RULE_IDS,
+    REQUIRED_FIGURE_PLAN_RULE_IDS,
     resolve_figure_plan,
     source_tree_sha256,
 )
@@ -86,7 +86,7 @@ def _resolve(
 
 
 def test_study_model_and_runtime_share_the_complete_mechanical_contract() -> None:
-    assert MECHANICAL_RULE_IDS <= SUPPORTED_FIGURE_PLAN_RULE_IDS
+    assert MECHANICAL_RULE_IDS <= REQUIRED_FIGURE_PLAN_RULE_IDS
     for rule_id in sorted(MECHANICAL_RULE_IDS):
         contract = mechanical_figure_contract(rule_id)
         recommendation = experiment_recommendation_payload(rule_id=rule_id)

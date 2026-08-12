@@ -2,20 +2,15 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.foundation.path_names import (
-    reserve_unique_directory,
-    safe_filename,
-    slug,
-    unique_path,
-)
+from sciplot_core.foundation.path_names import reserve_unique_directory, slug
 from sciplot_core.figure_plan import sync_figure_plan_projection
 from sciplot_core.materials_rules import get_rule, resolve_rule_template
 from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY
@@ -24,7 +19,9 @@ from sciplot_core.publication import (
     build_transform_ledger,
     get_publication_profile,
 )
+from sciplot_core.project_manifest import commit_intake_project_manifest
 from sciplot_core.study_model import build_study_model
+
 from ..catalog import _catalog_item, converge_material_review_notes
 from ..config import _DEFAULT_OUTPUT_ROOT
 from ..models import IntakeGroupInput
@@ -34,7 +31,6 @@ from ..packaging import (
     _write_zip,
     converge_intake_project_launchers,
 )
-from sciplot_core.project_manifest import commit_intake_project_manifest
 from ..session import (
     _experiment_render_options,
     _experiment_template,
@@ -45,6 +41,7 @@ from ..session import (
     _selected_replicate_mode,
 )
 from ..table_preview import _duplicate_source_warnings
+from .source_materialization import materialize_intake_groups
 
 
 def create_intake_project(
@@ -62,6 +59,7 @@ def create_intake_project(
     recognition: dict[str, Any] | None = None,
     template: str | None = None,
     delivery_root: Path | None = None,
+    group_order_is_explicit: bool = True,
     studio_preparer: Callable[[Path], dict[str, Any]],
 ) -> dict[str, Any]:
     _, experiment = _catalog_item(data_type_id, experiment_type_id)
@@ -89,6 +87,7 @@ def create_intake_project(
             recognition=recognition,
             template=template,
             delivery_root=delivery_root,
+            group_order_is_explicit=group_order_is_explicit,
             studio_preparer=studio_preparer,
             project_dir=project_dir,
         )
@@ -112,6 +111,7 @@ def _create_intake_project_in_reserved_directory(
     recognition: dict[str, Any] | None,
     template: str | None,
     delivery_root: Path | None,
+    group_order_is_explicit: bool,
     studio_preparer: Callable[[Path], dict[str, Any]],
     project_dir: Path,
 ) -> dict[str, Any]:
@@ -120,37 +120,16 @@ def _create_intake_project_in_reserved_directory(
     if not cleaned_groups:
         raise ValueError("At least one named sample group with files is required.")
 
-    series_order = [group.sample.strip() for group in cleaned_groups]
+    group_series_order = (
+        [group.sample.strip() for group in cleaned_groups]
+        if group_order_is_explicit
+        else []
+    )
     project_slug = project_dir.name
-    raw_dir = project_dir / "raw"
-    source_dir = project_dir / "source"
-    runs_dir = project_dir / "runs"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    source_dir.mkdir(parents=True, exist_ok=True)
-    runs_dir.mkdir(parents=True, exist_ok=True)
-
-    manifest_groups: list[dict[str, Any]] = []
-    for group in cleaned_groups:
-        sample = group.sample.strip()
-        sample_dir = raw_dir / slug(sample)
-        sample_dir.mkdir(parents=True, exist_ok=True)
-        group_files: list[dict[str, Any]] = []
-        for incoming in group.files:
-            raw_path = unique_path(sample_dir, safe_filename(incoming.name))
-            raw_path.write_bytes(incoming.content)
-            source_name = safe_filename(f"{sample}__{raw_path.name}")
-            source_path = unique_path(source_dir, source_name)
-            source_path.write_bytes(incoming.content)
-            group_files.append(
-                {
-                    "original_name": incoming.name,
-                    "raw_path": str(raw_path),
-                    "source_path": str(source_path),
-                    "size_bytes": len(incoming.content),
-                    "sha256": hashlib.sha256(incoming.content).hexdigest(),
-                }
-            )
-        manifest_groups.append({"sample": sample, "files": group_files})
+    source_dir, runs_dir, manifest_groups = materialize_intake_groups(
+        project_dir=project_dir,
+        groups=cleaned_groups,
+    )
 
     rule_id = experiment.get("rule_id")
     recognition_payload = dict(recognition) if isinstance(recognition, dict) else {}
@@ -231,7 +210,14 @@ def _create_intake_project_in_reserved_directory(
         display_label = axis_payload.get("display_label")
         if isinstance(display_label, str) and display_label.strip():
             selected_render_options.setdefault(option_name, display_label.strip())
-    selected_render_options.setdefault("series_order", series_order)
+    if group_series_order:
+        selected_render_options.setdefault("series_order", group_series_order)
+    render_series_order = selected_render_options.get("series_order")
+    series_order = (
+        [str(value).strip() for value in render_series_order if str(value).strip()]
+        if isinstance(render_series_order, list | tuple)
+        else []
+    )
     selected_column_confirmations = _selected_column_confirmations(column_confirmations)
     selected_replicate_mode = _selected_replicate_mode(
         replicate_mode
@@ -243,10 +229,11 @@ def _create_intake_project_in_reserved_directory(
         "input": str(source_dir),
         "output": str(selected_output),
         "exports": selected_exports,
-        "series_order": series_order,
         "replicate_mode": selected_replicate_mode,
         "review_notes": ["Prepared by SciPlot from the selected data mapping."],
     }
+    if series_order:
+        plot_request["series_order"] = series_order
     if selected_render_options:
         plot_request["render_options"] = selected_render_options
     plot_request["explicit_render_option_keys"] = sorted(explicit_user_render_options)

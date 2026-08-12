@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.studio_core.series_presentation import (
+    effective_series_presentation,
+)
 from sciplot_core.veusz_worker.spec_audit.categorical_axis import (
     audit_categorical_axis,
 )
@@ -49,14 +52,15 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
         _ = dataimport, widgets
         loaded_document = document.Document()
         loaded_document.load(str(resolved_document))
-        inventory = build_spec_audit_inventory(loaded_document, spec)
-        series = audit_axes_and_series(inventory, spec)
-        audit_legends_and_labels(inventory, spec, series)
-        audit_categorical_axis(inventory, spec)
-        allowed_scalar_dataset, visual = audit_scalar_field(inventory, spec)
+        visible_spec = effective_series_presentation(spec)
+        inventory = build_spec_audit_inventory(loaded_document, visible_spec)
+        series = audit_axes_and_series(inventory, visible_spec)
+        audit_legends_and_labels(inventory, visible_spec, series)
+        audit_categorical_axis(inventory, visible_spec)
+        allowed_scalar_dataset, visual = audit_scalar_field(inventory, visible_spec)
         allowed_polygon_paths = audit_overlay_inventory(
             loaded_document,
-            spec,
+            visible_spec,
             visual,
         )
         audit_closed_document_inventory(

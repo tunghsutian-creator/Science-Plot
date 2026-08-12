@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core.figure_plan import (
+    ResolvedFigurePlan,
     finalize_figure_plan_result,
     outcomes_for_artifact_map,
     request_for_figure_task,
@@ -61,13 +62,16 @@ def _render_veusz_mechanical_bundle(
     _evidence_builder: Callable[..., dict[str, Any]] = (
         build_mechanical_execution_evidence
     ),
+    _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> dict[str, Any] | None:
     """Render every selected curve/summary task, then install the whole set."""
 
     rule_id = str(request.get("rule_id") or "").strip()
     if rule_id not in MECHANICAL_RULE_IDS:
         return None
-    plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
+    plan = _resolved_figure_plan
+    if plan is None and request.get("resolved_figure_plan") is not None:
+        plan = resolved_figure_plan_from_payload(request["resolved_figure_plan"])
     if plan is None:
         raise ValueError(
             "mechanical_figure_plan_required: mechanical Workflow execution "

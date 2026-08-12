@@ -109,7 +109,5 @@ SPECTRUM_STACK_RENDER_OPTIONS: dict[str, Any] = {
 FTIR_SPECTRUM_RENDER_OPTIONS: dict[str, Any] = {
     **SPECTRUM_STACK_RENDER_OPTIONS,
     "reverse_x": True,
-    "x_min": 400.0,
-    "x_max": 4000.0,
     "x_tick_density": "auto",
 }

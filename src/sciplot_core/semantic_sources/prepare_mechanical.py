@@ -90,17 +90,12 @@ def prepare_mechanical_source(
                 else None,
                 "curation_applied": curation is not None,
                 "series_order": [series.sample for series in series_list],
-                "automatic_event_selection_applied": curation is None,
-                "event_selection_policy": (
-                    "explicit_curation"
-                    if curation is not None
-                    else "last_confident_feed_peak_to_discharge_drop"
-                ),
+                "automatic_event_selection_applied": False,
+                "event_selection_policy": "explicit_curation_or_full_source",
                 "event_selections": event_selections,
                 "needs_human_review": any(
                     bool(item.get("needs_human_review")) for item in event_selections
                 ),
-                "unconfirmed_events_preserve_full_curve": True,
             },
         )
 

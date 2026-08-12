@@ -44,6 +44,7 @@ def test_intake_session_restore_requires_original_file_bytes(
     source = tmp_path / "source.csv"
     source.write_text("x,y\n1,2\n", encoding="utf-8")
     payload = _session_payload(source, output_root=tmp_path / "outputs")
+    payload["group_order_is_explicit"] = False
     captured: dict[str, object] = {}
 
     def fake_create_intake_project(**kwargs):
@@ -56,6 +57,7 @@ def test_intake_session_restore_requires_original_file_bytes(
     groups = captured["groups"]
     assert len(groups) == 1
     assert groups[0].files[0].content == b"x,y\n1,2\n"
+    assert captured["group_order_is_explicit"] is False
 
     source.write_text("x,y\n1,3\n", encoding="utf-8")
     with pytest.raises(ValueError, match="changed after the session"):

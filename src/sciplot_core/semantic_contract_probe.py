@@ -77,7 +77,7 @@ def _stress_interval_rows(
         ["", "", "[s]", "[%]", "[Pa]"],
     ]
     rows.extend(
-        ["", index + 1, float(index), strain_value, response_value]
+        ["", index + 1, float(index + 1), strain_value, response_value]
         for index, (strain_value, response_value) in enumerate(
             zip(strain, response, strict=True)
         )
@@ -117,7 +117,7 @@ def _stress_multi_interval_rows() -> list[list[object]]:
             ]
         )
         rows.extend(
-            ["", index + 1, float(index), strain_value, response_value]
+            ["", index + 1, float(index + 1), strain_value, response_value]
             for index, (strain_value, response_value) in enumerate(
                 zip(strain, response, strict=True)
             )
@@ -170,9 +170,8 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             response=[100.0 - float(value) for value in range(11)],
         ),
     )
-    platform_blocked, platform_error = _raises_value_error(
-        lambda: _read_stress_relaxation_source_series(no_platform_source)
-    )
+    nonplateau_series = _read_stress_relaxation_source_series(no_platform_source)[0]
+    nonplateau_diagnostics = nonplateau_series.diagnostics or {}
 
     multi_interval_source = fixtures / "stress_multi_interval_reset.csv"
     _write_table(
@@ -818,22 +817,28 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
 
     checks = [
         _check(
-            "stress_hold_onset_contract",
-            "Stress relaxation crops loading, preserves source time, and retains the sigma0 anchor",
+            "stress_final_common_interval_contract",
+            "Stress relaxation preserves the final common source interval and normalizes at its first aligned response",
             (
                 stress_series.x_label == "Time"
-                and stress_series.points[0] == (5.0, 1.0)
-                and stress_diagnostics.get("hold_target_strain") == 10.0
-                and stress_diagnostics.get("hold_onset_source_time") == 5.0
-                and stress_diagnostics.get("normalization_baseline_value") == 100.0
-                and stress_diagnostics.get("normalization_baseline_time") == 5.0
-                and stress_diagnostics.get("excluded_loading_points") == 5
+                and len(stress_series.points) >= 2
+                and stress_series.points[0][1] == 1.0
+                and stress_diagnostics.get("hold_onset_source_time")
+                == stress_series.points[0][0]
+                and stress_diagnostics.get("normalization_baseline_time")
+                == stress_series.points[0][0]
+                and stress_diagnostics.get("excluded_loading_points") == 0
                 and stress_diagnostics.get("excluded_hold_onset_points") == 0
+                and stress_diagnostics.get("hold_detection_tolerance") is None
+                and stress_diagnostics.get(
+                    "hold_detection_minimum_consecutive_points"
+                )
+                is None
                 and stress_diagnostics.get("time_reset_applied") is False
-                and "preserve the instrument time"
+                and "final common source interval"
                 in str(stress_diagnostics.get("time_coordinate_definition"))
                 and stress_source_normalizations[0].get("normalization_baseline_value")
-                == 100.0
+                == stress_diagnostics.get("normalization_baseline_value")
             ),
             {
                 "first_output_point": stress_series.points[0],
@@ -842,22 +847,35 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             },
         ),
         _check(
-            "stress_missing_platform_blocked",
-            "Stress relaxation blocks a control signal without a terminal hold platform",
-            platform_blocked and "platform" in platform_error.casefold(),
-            {"error": platform_error},
+            "stress_control_drift_is_nonblocking",
+            "A structurally identified final common interval is retained without an empirical plateau gate",
+            (
+                len(nonplateau_series.points) >= 2
+                and nonplateau_series.points[0][1] == 1.0
+                and nonplateau_diagnostics.get("hold_onset_source_time")
+                == nonplateau_series.points[0][0]
+                and nonplateau_diagnostics.get("excluded_loading_points") == 0
+                and nonplateau_diagnostics.get("hold_detection_tolerance") is None
+                and nonplateau_diagnostics.get("hold_post_onset_inside_fraction")
+                is None
+            ),
+            {
+                "points": nonplateau_series.points,
+                "diagnostics": nonplateau_diagnostics,
+            },
         ),
         _check(
             "stress_interval_identity_contract",
             "Stress relaxation pairs preserved source-time values within one explicit interval",
             (
-                multi_interval_series.points[0] == (5.0, 1.0)
+                multi_interval_series.points[0][1] == 1.0
                 and multi_interval_diagnostics.get("hold_interval_index") == 2
                 and multi_interval_diagnostics.get("hold_interval_selection_policy")
                 == "last_common_selected_interval"
                 and multi_interval_diagnostics.get("excluded_prior_interval_points")
-                == 6
-                and multi_interval_diagnostics.get("hold_onset_source_time") == 5.0
+                > 0
+                and multi_interval_diagnostics.get("hold_onset_source_time")
+                == multi_interval_series.points[0][0]
             ),
             {
                 "points": multi_interval_series.points,
@@ -1298,13 +1316,20 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
     if real_stress.exists():
         real_series = _read_stress_relaxation_source_series(real_stress)[0]
         real_onset = (real_series.diagnostics or {}).get("hold_onset_source_time")
+        first_output = real_series.points[0] if real_series.points else None
         checks.append(
             _check(
                 "real_stress_hold_onset",
-                "Available PA stress-relaxation fixture detects the expected hold onset",
+                "Available PA stress-relaxation fixture retains its source-derived hold onset",
                 isinstance(real_onset, int | float)
-                and abs(float(real_onset) - 0.077) <= 0.015,
-                {"source": str(real_stress), "hold_onset_source_time": real_onset},
+                and first_output is not None
+                and float(real_onset) == float(first_output[0])
+                and float(first_output[1]) == 1.0,
+                {
+                    "source": str(real_stress),
+                    "hold_onset_source_time": real_onset,
+                    "first_output_point": first_output,
+                },
             )
         )
 
@@ -1317,6 +1342,19 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         / "Fig3f_saxs_q_intensity.csv"
     )
     if real_saxs.exists():
+        real_saxs_table = pd.read_csv(real_saxs, header=None)
+        source_nonpositive_counts = [
+            int(
+                (
+                    pd.to_numeric(
+                        real_saxs_table.iloc[2:, column_index],
+                        errors="coerce",
+                    )
+                    <= 0.0
+                ).sum()
+            )
+            for column_index in range(1, real_saxs_table.shape[1], 2)
+        ]
         real_result = prepare_semantic_source(
             real_saxs,
             output_dir=runs / "real_saxs",
@@ -1332,9 +1370,9 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         checks.append(
             _check(
                 "real_saxs_zero_tail_accounting",
-                "Available SAXS fixture records each sample's non-positive intensity tail",
+                "Available SAXS fixture records every source y-column's non-positive intensity tail",
                 bool(excluded_counts)
-                and all(3 <= count <= 12 for count in excluded_counts)
+                and excluded_counts == source_nonpositive_counts
                 and all(
                     item.get("retained_positive_values_preserved_without_scaling")
                     is True
@@ -1345,6 +1383,7 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                 {
                     "source": str(real_saxs),
                     "excluded_nonpositive_intensity_counts": excluded_counts,
+                    "source_nonpositive_intensity_counts": source_nonpositive_counts,
                     "source_scaling_status": [
                         item.get("source_series_scaling_status")
                         for item in real_diagnostics

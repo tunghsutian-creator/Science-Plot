@@ -1273,7 +1273,9 @@ function renderReviewPanel() {
   const figureQA = oneStep.figure_qa_report || {};
   const issues = Array.isArray(figureQA.issue_ids) ? figureQA.issue_ids : [];
   const actions = qualityActions();
+  const scientificReview = S.projectStatus?.scientific_transform_review;
   return `
+    ${renderScientificTransformReview(scientificReview)}
     <div class="section">
       <div class="section-title">QA</div>
       <div class="artifact-links">
@@ -1305,6 +1307,28 @@ function renderReviewPanel() {
       <div class="artifact-links">
         ${artifactLink("Open_in_Veusz.command", veuszLauncher)}
         ${artifactLink("Export_Edited_Veusz.command", exportLauncher)}
+      </div>
+    </div>
+  `;
+}
+
+function renderScientificTransformReview(review) {
+  if (!review || typeof review !== "object") return "";
+  if (review.status !== "available") {
+    return `
+      <div class="section">
+        <div class="section-title">Scientific Review</div>
+        <p class="quality-action-reason">${esc(review.message || "Persisted scientific-transform evidence is unavailable.")}</p>
+      </div>
+    `;
+  }
+  const items = Array.isArray(review.items) ? review.items : [];
+  return `
+    <div class="section">
+      <div class="section-title">Scientific Review</div>
+      <div class="artifact-links">
+        <div class="artifact-link"><span>Family</span><b>${esc(review.semantic_family || "unknown")}</b></div>
+        ${items.map(item => `<div class="artifact-link"><span>${esc(item.label || item.id || "Item")}</span><b>${esc(item.value || "not declared")}</b></div>`).join("")}
       </div>
     </div>
   `;

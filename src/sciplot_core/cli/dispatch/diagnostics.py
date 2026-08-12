@@ -24,11 +24,25 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
             )
             if value is not None
         }
-        payload = build_plan_preview(_resolve_input(args.input), request=request)
+        if args.template is not None:
+            request["explicit_template_selection"] = True
+        payload = build_plan_preview(args.input, request=request)
         if args.json:
             _print_json(payload)
         else:
             print(f"SciPlot plan: {payload['status']}")
+            transform = payload.get("scientific_transform")
+            if isinstance(transform, dict):
+                output = transform.get("output")
+                series_order = (
+                    output.get("series_order") if isinstance(output, dict) else []
+                )
+                print(
+                    "Scientific transform: "
+                    f"{transform.get('semantic_family')} "
+                    f"({len(series_order) if isinstance(series_order, list) else 0} "
+                    "series)"
+                )
         return 1 if payload["status"] == "blocked" else 0
 
     if args.command == "inspect":
@@ -65,11 +79,35 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
                 )
         return 0 if payload["status"] == "ready" else 1
 
+    if args.command == "verify":
+        from sciplot_core.verification import run_changed_verification
+
+        payload = run_changed_verification()
+        if args.json:
+            _print_json(payload)
+        else:
+            print(f"SciPlot changed verification: {payload['status']}")
+            owner_ids = [owner["owner_id"] for owner in payload["owners"]]
+            print("Owners: " + (", ".join(owner_ids) if owner_ids else "none"))
+            for check in payload["checks"]:
+                print(f"{check['check_id']}: {check['status']}")
+                if check["status"] == "failed":
+                    detail = str(check.get("stderr") or check.get("stdout") or "").strip()
+                    if detail:
+                        print(detail)
+            if payload["unowned_paths"]:
+                print("Unowned: " + ", ".join(payload["unowned_paths"]))
+            for scope, gates in payload["required_later"].items():
+                if gates:
+                    print(f"{scope}: {', '.join(gates)}")
+        return 0 if payload["status"] == "passed" else 1
+
     if args.command == "readiness":
         from sciplot_core.foundation.file_hashing import file_sha256
         from sciplot_core.readiness import (
             build_validated_envelope_registry,
             load_validated_envelope_registry,
+            merge_validated_envelope_registry,
             validated_envelope_status,
             write_validated_envelope_registry,
         )
@@ -94,6 +132,41 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
                     f"Current validated envelopes: {payload['ready_without_ai_rule_count']}/{payload['current_ready_rule_count']}"
                 )
             return 0 if payload["status"] == "ready" else 1
+        if args.readiness_command == "merge":
+            base_path = _resolve_input(
+                args.base_registry,
+                kind="Base validated-envelope registry",
+            )
+            acceptance_summary = _resolve_input(
+                args.acceptance_summary,
+                kind="Ready-rule acceptance summary",
+            )
+            registry = merge_validated_envelope_registry(
+                load_validated_envelope_registry(base_path),
+                acceptance_summary,
+            )
+            output = write_validated_envelope_registry(args.out, registry)
+            selected_rule_ids = list(
+                registry.source_acceptance["records"][-1]["rule_ids"]
+            )
+            payload = {
+                "kind": "sciplot_validated_envelope_scoped_merge",
+                "version": 1,
+                "status": "ready",
+                "selected_rule_ids": selected_rule_ids,
+                "base_registry": str(base_path),
+                "acceptance_summary": str(acceptance_summary),
+                "registry": str(output),
+            }
+            if args.json:
+                _print_json(payload)
+            else:
+                print(
+                    "SciPlot readiness scoped merge: "
+                    + ", ".join(selected_rule_ids)
+                )
+                print(payload["registry"])
+            return 0
         acceptance_summary = _resolve_input(
             args.acceptance_summary, kind="Ready-rule acceptance summary"
         )

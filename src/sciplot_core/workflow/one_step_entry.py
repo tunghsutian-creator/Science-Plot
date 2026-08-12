@@ -29,11 +29,16 @@ def run_one_step(
     output_root: Path,
     project_name: str | None = None,
     delivery_root: Path | None = None,
+    rule_id: str | None = None,
     template: str | None = None,
     _request_runner: Callable[[Path], dict[str, Any]] = run_request,
 ) -> dict[str, Any]:
     input_path = input_path.expanduser().resolve()
     output_root = output_root.expanduser().resolve()
+    if rule_id is not None and (
+        not isinstance(rule_id, str) or not rule_id or rule_id.strip() != rule_id
+    ):
+        raise ValueError("Autoplot rule_id must be one non-empty canonical identifier.")
     project_dir = _one_step_project_dir(input_path, output_root, project_name)
     project_dir.mkdir(parents=True, exist_ok=True)
     run_dir = _next_run_dir(project_dir)
@@ -44,7 +49,10 @@ def run_one_step(
         "output": str(run_dir),
         "exports": list(DEFAULT_EXPORT_FORMATS_POLICY),
         "render_options": normalize_render_options(AUTOPLOT_RENDER_OPTIONS),
+        "explicit_render_option_keys": [],
     }
+    if rule_id is not None:
+        request["rule_id"] = rule_id
     if template is not None and str(template).strip():
         request["template"] = str(template).strip()
         request["explicit_template_selection"] = True

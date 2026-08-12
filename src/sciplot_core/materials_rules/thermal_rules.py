@@ -40,6 +40,9 @@ THERMAL_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/dsc_curve/udc_dsc_digitized.csv",
         fixture_status="ready",
         priority=8,
+        scientific_source_adapter="registered_paired_curve",
+        figure_plan_adapter="registered_single_curve",
+        preparation_adapter="curve_family",
     ),
     _rule(
         "tga_curve",
@@ -70,6 +73,9 @@ THERMAL_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/tga_curve/evoh1_tga_curve.csv",
         fixture_status="ready",
         priority=42,
+        scientific_source_adapter="registered_paired_curve",
+        figure_plan_adapter="registered_single_curve",
+        preparation_adapter="curve_family",
     ),
     _rule(
         "dtg_curve",
@@ -94,5 +100,8 @@ THERMAL_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/dtg_curve/evoh1_dtg_curve.csv",
         fixture_status="ready",
         priority=32,
+        scientific_source_adapter="registered_paired_curve",
+        figure_plan_adapter="registered_single_curve",
+        preparation_adapter="curve_family",
     ),
 )

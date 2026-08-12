@@ -52,7 +52,9 @@ def build_spec_audit_inventory(
     ]
 
     expected_box_name_by_y = {
-        str(group["y_name"]): f"categorical_boxplot_{index}"
+        str(group["y_name"]): str(
+            group.get("boxplot_name") or f"categorical_boxplot_{index}"
+        )
         for index, group in enumerate(eligible_box_groups, start=1)
     }
 

@@ -12,6 +12,8 @@ from sciplot_core.materials_rules import (
 from sciplot_core.readiness.constants import (
     NEEDS_RULE_REPAIR,
     EVIDENCE_STRENGTHS,
+    VALIDATED_ENVELOPE_ACCEPTANCE_LINEAGE_KIND,
+    VALIDATED_ENVELOPE_ACCEPTANCE_LINEAGE_VERSION,
 )
 
 from sciplot_core.readiness.rule_certification import (
@@ -79,7 +81,7 @@ def validated_envelope_status(
     ready = not stale_ids and not missing_ids and not extra_ids
     return {
         "kind": "sciplot_validated_envelope_status",
-        "version": 1,
+        "version": 2,
         "status": "ready" if ready else NEEDS_RULE_REPAIR,
         "ready_without_ai_rule_count": sum(
             record["status"] == "current" for record in records
@@ -88,7 +90,11 @@ def validated_envelope_status(
         "missing_rule_ids": missing_ids,
         "stale_rule_ids": stale_ids,
         "extra_rule_ids": extra_ids,
-        "source_acceptance": deepcopy(resolved.source_acceptance),
+        "source_acceptance": {
+            "kind": VALIDATED_ENVELOPE_ACCEPTANCE_LINEAGE_KIND,
+            "version": VALIDATED_ENVELOPE_ACCEPTANCE_LINEAGE_VERSION,
+            "records": list(resolved.acceptance_lineage_records()),
+        },
         "human_daily_use_validation": deepcopy(human_validation),
         "evidence_strength_counts": {
             strength: sum(record["evidence_strength"] == strength for record in records)

@@ -95,3 +95,21 @@ def test_template_only_override_preserves_the_pending_review_marker(
     assert request["study_model"]["experiment"]["chart"] == "polar_curve"
     assert project["recognition"]["pending_rule_review"] is True
     assert project["recognition"]["production_status"] == "needs_rule_repair"
+
+
+def test_registered_single_curve_override_leaves_axis_labels_source_bound(
+    tmp_path: Path,
+) -> None:
+    project_dir, request_path = _pending_project(tmp_path)
+
+    _apply_studio_request_overrides(
+        project_dir,
+        request_path=request_path,
+        rule_id="ftir_spectrum",
+        template="stacked_curve",
+    )
+
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    options = request["render_options"]
+    assert "x_label_override" not in options
+    assert "y_label_override" not in options

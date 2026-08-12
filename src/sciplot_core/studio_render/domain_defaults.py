@@ -174,9 +174,6 @@ def _apply_domain_render_defaults(
         legend_position = str(updated.get("legend_position") or "").strip().casefold()
         domain_defaults: dict[str, Any] = {
             "reverse_x": True,
-            "x_min": 400.0,
-            "x_max": 4000.0,
-            "x_ticks": [400.0, 1000.0, 2000.0, 3000.0, 4000.0],
             "baseline": "none",
             "series_label_side": "left",
             "show_single_series_label": series_count == 1,

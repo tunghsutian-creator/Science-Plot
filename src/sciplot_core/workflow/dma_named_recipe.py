@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import math
 from pathlib import Path
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sciplot_core.dma_temperature_contract import (
     DMA_TEMPERATURE_CANONICAL_MODULUS_UNIT,
@@ -28,6 +28,11 @@ from sciplot_core.request_contract import normalize_render_options
 from sciplot_core.workflow.dma_temperature_plan import (
     require_dma_temperature_execution_plan,
 )
+
+if TYPE_CHECKING:
+    from sciplot_core.semantic_sources.scientific_source import (
+        ResolvedScientificSource,
+    )
 
 
 _FORGED_TERMINAL_FIELDS = frozenset(
@@ -100,6 +105,7 @@ def bind_dma_named_recipe_request(
     semantic: dict[str, Any],
     plan: ResolvedFigurePlan,
     input_path: Path,
+    resolved_scientific_source: ResolvedScientificSource | None = None,
 ) -> DmaNamedRecipePlanBinding:
     """Reject every recipe/plan conflict before semantic preparation writes."""
 
@@ -127,7 +133,11 @@ def bind_dma_named_recipe_request(
             "bypass DMA semantic readiness or intervention."
         )
 
-    facts = require_dma_temperature_execution_plan(plan, source=input_path)
+    facts = require_dma_temperature_execution_plan(
+        plan,
+        source=input_path,
+        resolved_scientific_source=resolved_scientific_source,
+    )
     _validate_request_identity(request, sample_order=facts.sample_order)
     render_options = _validated_render_options(request)
     _validate_render_series_identity(

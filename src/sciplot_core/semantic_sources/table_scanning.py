@@ -2,24 +2,23 @@
 
 from __future__ import annotations
 
-import re
+import math
 from pathlib import Path
 import pandas as pd
-from sciplot_core.foundation.text_values import (
-    clean_text as _clean_text,
-    token as _token,
-)
+from sciplot_core.foundation.text_values import clean_text as _clean_text, token as _token
 from sciplot_core.ingest import normalized_source
-from sciplot_core.materials_rules.unit_formatting import (
-    format_unit_label,
+from sciplot_core.materials_rules.unit_formatting import format_unit_label
+from sciplot_core.source_tables import read_raw_table
+from sciplot_core.semantic_sources.models import CurveSeriesPayload
+from sciplot_core.semantic_sources.paired_curve_table_metadata import (
+    axis_match as _axis_match,
+    curve_axis_unit as _curve_axis_unit,
+    looks_like_unit as _looks_like_unit,
+    preceding_pair_sample as _preceding_pair_sample,
 )
-
-from sciplot_core.source_tables import (
-    read_raw_table,
-)
-
-from sciplot_core.semantic_sources.models import (
-    CurveSeriesPayload,
+from sciplot_core.semantic_sources.table_source_files import (
+    is_workbook_source,
+    table_source_files,
 )
 
 
@@ -49,11 +48,11 @@ def _rheology_test_sections(
         if raw.shape[1] and _token(raw.iat[row_index, 0]) == "test"
     ]
     if not starts:
-        return [(fallback, raw.reset_index(drop=True))]
+        return [(fallback, raw)]
     sections: list[tuple[str, pd.DataFrame]] = []
     for index, start in enumerate(starts):
         stop = starts[index + 1] if index + 1 < len(starts) else raw.shape[0]
-        block = raw.iloc[start:stop].reset_index(drop=True).dropna(how="all")
+        block = raw.iloc[start:stop].dropna(how="all")
         sample = _sample_from_interval_metadata(block, fallback)
         sections.append((sample, block))
     return sections
@@ -98,34 +97,10 @@ def _read_raw_table_normalized(path: Path) -> pd.DataFrame:
         return read_raw_table(normalized)
 
 
-def _table_uses_decimal_comma(raw: pd.DataFrame, *, start_row: int = 0) -> bool:
-    comma_decimal = 0
-    point_decimal = 0
-    stop = min(raw.shape[0], start_row + 240)
-    for row_index in range(start_row, stop):
-        for value in raw.iloc[row_index].tolist():
-            text = _clean_text(value)
-            if re.search(r"[+-]?\d+,\d+(?:[Ee][+-]?\d+)?", text):
-                comma_decimal += 1
-            if re.search(r"[+-]?\d+\.\d+(?:[Ee][+-]?\d+)?", text):
-                point_decimal += 1
-    return comma_decimal >= 3 and comma_decimal > point_decimal * 2
-
-
 def _read_candidate_tables(source: Path) -> list[tuple[str, pd.DataFrame]]:
-    if source.is_dir():
-        paths = [
-            path
-            for path in sorted(source.rglob("*"))
-            if path.is_file()
-            and path.suffix.lower()
-            in {".csv", ".tsv", ".txt", ".xlsx", ".xls", ".xlsm"}
-        ]
-    else:
-        paths = [source]
     tables: list[tuple[str, pd.DataFrame]] = []
-    for path in paths:
-        if path.suffix.lower() in {".xlsx", ".xls", ".xlsm"}:
+    for path in table_source_files(source):
+        if is_workbook_source(path):
             workbook = pd.ExcelFile(path)
             tables.extend(
                 (
@@ -147,55 +122,10 @@ def _read_candidate_tables(source: Path) -> list[tuple[str, pd.DataFrame]]:
     ]
 
 
-def _axis_match(value: object, aliases: tuple[str, ...]) -> bool:
-    text = _clean_text(value).casefold()
-    token = _token(value)
-    for alias in aliases:
-        alias_text = alias.casefold()
-        alias_token = _token(alias)
-        if alias_text and (text == alias_text or alias_text in text):
-            return True
-        if not alias_token:
-            continue
-        if token == alias_token or alias_token in token:
-            return True
-    return False
-
-
-def _looks_like_unit(value: object) -> bool:
-    raw = _clean_text(value)
-    if raw == "PA":
-        return False
-    if "%" in raw:
-        return True
-    token = _token(value)
-    if not token:
-        return False
-    return token in {
-        "c",
-        "degc",
-        "s",
-        "sec",
-        "min",
-        "h",
-        "pa",
-        "kpa",
-        "mpa",
-        "gpa",
-        "cm1",
-        "nm1",
-        "au",
-        "abs",
-        "百分比",
-        "kjm2",
-        "kjm²",
-        "jm",
-        "j",
-    } or token in {"", "1"}
-
-
 def _unit_row_score(raw: pd.DataFrame, row_index: int, columns: tuple[int, ...]) -> int:
     if row_index >= raw.shape[0]:
+        return -1
+    if columns and all(_float(raw.iat[row_index, column]) is not None for column in columns):
         return -1
     return sum(1 for column in columns if _looks_like_unit(raw.iat[row_index, column]))
 
@@ -246,10 +176,23 @@ def _scan_curve_series_table(
         second_extra = header_index + 2
         first_unit_score = _unit_row_score(raw, first_extra, columns)
         second_unit_score = _unit_row_score(raw, second_extra, columns)
-        unit_index = (
-            first_extra if first_unit_score >= second_unit_score else second_extra
-        )
+        unit_index = first_extra if first_unit_score >= second_unit_score else second_extra
         sample_index = second_extra if unit_index == first_extra else first_extra
+        preceding_sample_index = header_index - 1
+        preceding_samples = (
+            {
+                x_index: _preceding_pair_sample(
+                    raw.iat[preceding_sample_index, x_index],
+                    axis_aliases=(*x_aliases, *y_aliases),
+                )
+                for x_index, _y_index in pairs
+            }
+            if header_index > 0
+            else {}
+        )
+        preceding_row_has_samples = bool(preceding_samples) and all(
+            preceding_samples.values()
+        )
         if max(first_unit_score, second_unit_score) <= 0:
             unit_index = -1
             first_row_is_numeric_data = any(
@@ -258,50 +201,89 @@ def _scan_curve_series_table(
                 for x_index, y_index in pairs
                 if first_extra < raw.shape[0]
             )
-            preceding_sample_index = header_index - 1
-            preceding_row_has_samples = header_index > 0 and all(
-                any(
-                    (label := _clean_text(raw.iat[preceding_sample_index, column]))
-                    and _float(label) is None
-                    and (not _looks_like_unit(label) or len(_token(label)) > 5)
-                    and not _axis_match(label, (*x_aliases, *y_aliases))
-                    for column in range(x_index, min(y_index + 1, raw.shape[1]))
-                )
-                for x_index, y_index in pairs
-            )
             if first_row_is_numeric_data:
                 sample_index = (
                     preceding_sample_index if preceding_row_has_samples else None
                 )
             else:
                 sample_index = header_index + 1
-            data_start = (
-                header_index + 1 if first_row_is_numeric_data else header_index + 2
-            )
+            data_start = header_index + (1 if first_row_is_numeric_data else 2)
         else:
-            data_start = max(header_index + 1, unit_index + 1, sample_index + 1)
+            sample_row_is_numeric_data = sample_index < raw.shape[0] and any(
+                _float(raw.iat[sample_index, x_index]) is not None
+                or _float(raw.iat[sample_index, y_index]) is not None
+                for x_index, y_index in pairs
+            )
+            data_start = sample_index if sample_row_is_numeric_data else max(header_index + 1, unit_index + 1, sample_index + 1)
+            if sample_row_is_numeric_data:
+                sample_index = None
         candidate_series: list[CurveSeriesPayload] = []
         for series_index, (x_index, y_index) in enumerate(pairs, start=1):
             points: list[tuple[float, float]] = []
+            excluded_empty_pair_count = 0
+            excluded_partial_or_nonnumeric_pair_count = 0
+            excluded_nonfinite_pair_count = 0
             for row_index in range(data_start, raw.shape[0]):
-                x_value = _float(raw.iat[row_index, x_index])
-                y_value = _float(raw.iat[row_index, y_index])
-                if x_value is not None and y_value is not None:
-                    points.append((x_value, y_value))
+                x_cell = raw.iat[row_index, x_index]
+                y_cell = raw.iat[row_index, y_index]
+                if not _clean_text(x_cell) and not _clean_text(y_cell):
+                    excluded_empty_pair_count += 1
+                    continue
+                x_value = _float(x_cell)
+                y_value = _float(y_cell)
+                if x_value is None or y_value is None:
+                    excluded_partial_or_nonnumeric_pair_count += 1
+                    continue
+                if not (math.isfinite(x_value) and math.isfinite(y_value)):
+                    excluded_nonfinite_pair_count += 1
+                    continue
+                points.append((x_value, y_value))
             if not points:
                 continue
-            x_unit = default_x_unit
-            y_unit = default_y_unit
-            if unit_index >= 0:
-                x_unit = _clean_text(raw.iat[unit_index, x_index]).strip("[]") or x_unit
-                y_unit = _clean_text(raw.iat[unit_index, y_index]).strip("[]") or y_unit
-            sample = _sample_from_row(
-                raw,
-                sample_index,
-                start=x_index,
-                stop=min(y_index + 3, raw.shape[1]),
-                fallback=f"{sample_prefix} {series_index}",
+            (
+                x_unit,
+                x_unit_detection,
+                x_unit_row_index,
+                x_unit_value,
+            ) = _curve_axis_unit(
+                row_values[x_index],
+                raw.iat[unit_index, x_index] if unit_index >= 0 else "",
+                header_index=header_index,
+                unit_index=unit_index,
+                default=default_x_unit,
             )
+            (
+                y_unit,
+                y_unit_detection,
+                y_unit_row_index,
+                y_unit_value,
+            ) = _curve_axis_unit(
+                row_values[y_index],
+                raw.iat[unit_index, y_index] if unit_index >= 0 else "",
+                header_index=header_index,
+                unit_index=unit_index,
+                default=default_y_unit,
+            )
+            fallback_sample = sample_prefix if len(pairs) == 1 else f"{sample_prefix} {series_index}"
+            if sample_index == preceding_sample_index and preceding_row_has_samples:
+                sample = preceding_samples[x_index]
+                sample_detection = "detected_from_preceding_sample_row"
+                sample_row_index: int | None = preceding_sample_index
+            else:
+                sample = _sample_from_row(
+                    raw,
+                    sample_index,
+                    start=x_index,
+                    stop=min(y_index + 3, raw.shape[1]),
+                    fallback=fallback_sample,
+                )
+                sample_detected = sample_index is not None and sample != fallback_sample
+                sample_detection = (
+                    "detected_from_adjacent_sample_row"
+                    if sample_detected
+                    else "fallback_from_source_table"
+                )
+                sample_row_index = sample_index if sample_detected else None
             candidate_series.append(
                 CurveSeriesPayload(
                     sample=sample,
@@ -311,10 +293,27 @@ def _scan_curve_series_table(
                     y_unit=y_unit,
                     points=tuple(points),
                     diagnostics={
+                        "source_header_row_index": header_index,
+                        "source_x_column_index": x_index,
                         "source_x_header": _clean_text(row_values[x_index]),
+                        "source_y_column_index": y_index,
                         "source_y_header": _clean_text(row_values[y_index]),
                         "source_x_unit": x_unit,
                         "source_y_unit": y_unit,
+                        "source_x_unit_detection": x_unit_detection,
+                        "source_x_unit_detection_row_index": x_unit_row_index,
+                        "source_x_unit_detection_value": x_unit_value,
+                        "source_y_unit_detection": y_unit_detection,
+                        "source_y_unit_detection_row_index": y_unit_row_index,
+                        "source_y_unit_detection_value": y_unit_value,
+                        "source_sample_detection": sample_detection,
+                        "source_sample_row_index": sample_row_index,
+                        "source_sample_value": sample,
+                        "candidate_row_count": raw.shape[0] - data_start,
+                        "retained_point_count": len(points),
+                        "excluded_empty_pair_count": excluded_empty_pair_count,
+                        "excluded_partial_or_nonnumeric_pair_count": excluded_partial_or_nonnumeric_pair_count,
+                        "excluded_nonfinite_pair_count": excluded_nonfinite_pair_count,
                     },
                 )
             )
@@ -336,7 +335,7 @@ def _scan_curve_series_source(
     default_y_unit: str,
     sample_prefix: str,
 ) -> list[CurveSeriesPayload]:
-    best: list[CurveSeriesPayload] = []
+    matches: list[tuple[str, list[CurveSeriesPayload]]] = []
     for sheet_name, raw in _read_candidate_tables(source):
         series = _scan_curve_series_table(
             raw,
@@ -348,22 +347,26 @@ def _scan_curve_series_source(
             default_y_unit=default_y_unit,
             sample_prefix=sheet_name or sample_prefix,
         )
-        if sum(len(item.points) for item in series) > sum(
-            len(item.points) for item in best
-        ):
-            best = [
-                CurveSeriesPayload(
-                    sample=item.sample,
-                    x_label=item.x_label,
-                    x_unit=item.x_unit,
-                    y_label=item.y_label,
-                    y_unit=item.y_unit,
-                    points=item.points,
-                    diagnostics={
-                        **(item.diagnostics or {}),
-                        "source_table": sheet_name,
-                    },
-                )
-                for item in series
-            ]
-    return best
+        if series:
+            matches.append((sheet_name, series))
+    if len(matches) > 1:
+        names = ", ".join(name for name, _series in matches)
+        raise ValueError(
+            "More than one source table contains the registered curve axes: "
+            f"{names}. Select one table explicitly."
+        )
+    if not matches:
+        return []
+    sheet_name, series = matches[0]
+    return [
+        CurveSeriesPayload(
+            sample=item.sample,
+            x_label=item.x_label,
+            x_unit=item.x_unit,
+            y_label=item.y_label,
+            y_unit=item.y_unit,
+            points=item.points,
+            diagnostics={**(item.diagnostics or {}), "source_table": sheet_name},
+        )
+        for item in series
+    ]

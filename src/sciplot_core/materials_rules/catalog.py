@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import re
 from typing import Any
 from sciplot_core.study_model import experiment_recommendation_payload
@@ -18,6 +19,9 @@ from sciplot_core.materials_rules.catalog_data import (
     RULES,
     _RULE_BY_ID,
 )
+
+
+RuleInvocationProjector = Callable[[SemanticRule], dict[str, Any]]
 
 
 def iter_rules() -> tuple[SemanticRule, ...]:
@@ -66,7 +70,11 @@ def iter_public_rules(*, include_pending: bool = False) -> tuple[SemanticRule, .
     return tuple(rule for rule in rules if _is_ready_rule(rule))
 
 
-def list_rules_payload(*, include_pending: bool = False) -> dict[str, Any]:
+def list_rules_payload(
+    *,
+    include_pending: bool = False,
+    invocation_projector: RuleInvocationProjector | None = None,
+) -> dict[str, Any]:
     rules = iter_public_rules(include_pending=include_pending)
     all_rules = iter_rules()
     return {
@@ -75,25 +83,56 @@ def list_rules_payload(*, include_pending: bool = False) -> dict[str, Any]:
         "ready_count": sum(1 for rule in all_rules if _is_ready_rule(rule)),
         "pending_count": sum(1 for rule in all_rules if not _is_ready_rule(rule)),
         "rules": [
-            {
-                "rule_id": rule.rule_id,
-                "semantic_family": rule.semantic_family,
-                "recipe": rule.recipe,
-                "template": rule.template,
-                "supported_templates": list(rule.presentation_templates),
-                "presentation_data_shape": rule.presentation_data_shape,
-                "x": rule.x_axis.display_label,
-                "y": rule.y_axis.display_label,
-                "fixture_status": rule.fixture_status,
-                "priority": rule.priority,
-            }
+            _rule_list_item(rule, invocation_projector=invocation_projector)
             for rule in rules
         ],
     }
 
 
-def show_rule_payload(rule_id: str) -> dict[str, Any]:
-    return get_rule(rule_id).to_payload()
+def _rule_list_item(
+    rule: SemanticRule,
+    *,
+    invocation_projector: RuleInvocationProjector | None,
+) -> dict[str, Any]:
+    payload = _public_rule_payload(
+        rule,
+        invocation_projector=invocation_projector,
+    )
+    return {
+        "rule_id": rule.rule_id,
+        "semantic_family": rule.semantic_family,
+        "recipe": rule.recipe,
+        "template": rule.template,
+        "supported_templates": list(rule.presentation_templates),
+        "presentation_data_shape": rule.presentation_data_shape,
+        "x": rule.x_axis.display_label,
+        "y": rule.y_axis.display_label,
+        "fixture_status": rule.fixture_status,
+        "priority": rule.priority,
+        "invocation": payload["invocation"],
+    }
+
+
+def show_rule_payload(
+    rule_id: str,
+    *,
+    invocation_projector: RuleInvocationProjector | None = None,
+) -> dict[str, Any]:
+    return _public_rule_payload(
+        get_rule(rule_id),
+        invocation_projector=invocation_projector,
+    )
+
+
+def _public_rule_payload(
+    rule: SemanticRule,
+    *,
+    invocation_projector: RuleInvocationProjector | None,
+) -> dict[str, Any]:
+    payload = rule.to_payload()
+    if invocation_projector is not None:
+        payload["invocation"] = invocation_projector(rule)
+    return payload
 
 
 def match_rule(
@@ -176,10 +215,6 @@ def semantic_payload_from_rule(
         render_options.setdefault("yscale", rule.y_axis.scale)
     if rule.x_axis.reverse:
         render_options.setdefault("reverse_x", True)
-    if rule.rule_id == "ftir_spectrum":
-        render_options.setdefault("x_min", 400.0)
-        render_options.setdefault("x_max", 4000.0)
-        render_options.setdefault("x_tick_density", "auto")
     return {
         "rule_id": rule.rule_id,
         "semantic_family": rule.semantic_family,

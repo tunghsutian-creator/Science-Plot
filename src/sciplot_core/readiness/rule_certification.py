@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from sciplot_core.materials_rules import SemanticRule
+from sciplot_core.materials_rules.models import SemanticRule
 from sciplot_core.readiness.envelope_model import ValidatedRuleEnvelope
 from sciplot_core.readiness.registry_model import ValidatedEnvelopeRegistry
 from sciplot_core.readiness.rule_contract import rule_contract_hashes
@@ -94,8 +94,35 @@ def current_certified_rule_contract_snapshot(
     )
 
 
+def current_rule_invocation_contract_payload(
+    *,
+    rule: SemanticRule,
+    registry: ValidatedEnvelopeRegistry,
+) -> dict[str, Any]:
+    """Project current certification onto the existing invocation contract.
+
+    The caller supplies an already-loaded registry.  This keeps the projection
+    independent from source discovery and preserves ``SemanticRule.to_payload``
+    as the static input to rule-contract hashing.
+    """
+
+    snapshot = current_certified_rule_contract_snapshot(
+        rule=rule,
+        registry=registry,
+    )
+    payload = rule.invocation_contract_payload()
+    payload["availability"] = (
+        "ready"
+        if snapshot.certification_status == "current"
+        else "needs_rule_repair"
+    )
+    payload["reason_codes"] = list(snapshot.certification_reasons)
+    return payload
+
+
 __all__ = [
     "CurrentCertifiedRuleContractSnapshot",
     "RuleCertificationStatus",
     "current_certified_rule_contract_snapshot",
+    "current_rule_invocation_contract_payload",
 ]

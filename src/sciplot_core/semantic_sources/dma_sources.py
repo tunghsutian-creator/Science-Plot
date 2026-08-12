@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 import pandas as pd
@@ -150,7 +151,7 @@ def _dma_temperature_sample_label(
 
 
 def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
-    raw = read_raw_table(source).dropna(axis=1, how="all").dropna(how="all")
+    raw = read_raw_table(source, preserve_na_tokens=True)
     best: tuple[int, list[tuple[int, int]]] | None = None
     for row_index in range(raw.shape[0]):
         headers = [_clean_text(value) for value in raw.iloc[row_index].tolist()]
@@ -174,16 +175,21 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
         y_header = _clean_text(raw.iat[header_index, y_index])
         x_unit_match = _dma_temperature_unit(x_header)
         x_unit_detection = "detected_from_header"
+        x_unit_detection_row_index = header_index
+        x_unit_detection_value = x_header
         if x_unit_match is None:
             for row_index in range(
                 header_index + 1, min(raw.shape[0], header_index + 4)
             ):
+                candidate = raw.iat[row_index, x_index]
                 x_unit_match = _dma_temperature_unit(
-                    raw.iat[row_index, x_index],
+                    candidate,
                     exact=True,
                 )
                 if x_unit_match is not None:
                     x_unit_detection = "detected_from_adjacent_unit_row"
+                    x_unit_detection_row_index = row_index
+                    x_unit_detection_value = _clean_text(candidate)
                     break
         if x_unit_match is None:
             unknown_x_unit = _dma_explicit_unknown_unit(x_header)
@@ -206,17 +212,22 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
 
         y_unit_match = _dma_modulus_unit(y_header)
         y_unit_detection = "detected_from_header"
+        y_unit_detection_row_index = header_index
+        y_unit_detection_value = y_header
         if y_unit_match is None:
             for row_index in range(
                 header_index + 1,
                 min(raw.shape[0], header_index + 4),
             ):
+                candidate = raw.iat[row_index, y_index]
                 y_unit_match = _dma_modulus_unit(
-                    raw.iat[row_index, y_index],
+                    candidate,
                     exact=True,
                 )
                 if y_unit_match is not None:
                     y_unit_detection = "detected_from_adjacent_unit_row"
+                    y_unit_detection_row_index = row_index
+                    y_unit_detection_value = _clean_text(candidate)
                     break
         if y_unit_match is None:
             unknown_y_unit = _dma_explicit_unknown_unit(y_header)
@@ -242,10 +253,22 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
         factor_to_display = factor_to_pa * _DMA_CANONICAL_TO_DISPLAY_FACTOR
         points: list[tuple[float, float]] = []
         negative_display_values: list[float] = []
+        excluded_empty_pair_count = 0
+        excluded_partial_or_nonnumeric_pair_count = 0
+        excluded_nonfinite_pair_count = 0
         for row_index in range(header_index + 1, raw.shape[0]):
-            x_value = _float(raw.iat[row_index, x_index])
-            y_value = _float(raw.iat[row_index, y_index])
+            x_cell = raw.iat[row_index, x_index]
+            y_cell = raw.iat[row_index, y_index]
+            if not _clean_text(x_cell) and not _clean_text(y_cell):
+                excluded_empty_pair_count += 1
+                continue
+            x_value = _float(x_cell)
+            y_value = _float(y_cell)
             if x_value is None or y_value is None:
+                excluded_partial_or_nonnumeric_pair_count += 1
+                continue
+            if not (math.isfinite(x_value) and math.isfinite(y_value)):
+                excluded_nonfinite_pair_count += 1
                 continue
             display_x_value = x_value * x_factor_to_display + x_offset_to_display
             # Compose the recorded source -> Pa -> MPa factors before
@@ -255,6 +278,11 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
             points.append((display_x_value, display_y_value))
             if display_y_value < 0.0:
                 negative_display_values.append(display_y_value)
+        if not points and excluded_nonfinite_pair_count:
+            raise ValueError(
+                f"DMA temperature pair {pair_index} in {source} contains "
+                "nonfinite values and no finite measurements."
+            )
         if not points:
             continue
         display_values = [y_value for _x_value, y_value in points]
@@ -277,10 +305,15 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
                 points=tuple(points),
                 diagnostics={
                     "source_file": str(source),
+                    "source_header_row_index": header_index,
+                    "source_x_column_index": x_index,
+                    "source_y_column_index": y_index,
                     "source_x_header": x_header,
                     "source_y_header": y_header,
                     "source_x_unit": source_x_unit,
                     "source_x_unit_detection": x_unit_detection,
+                    "source_x_unit_detection_row_index": x_unit_detection_row_index,
+                    "source_x_unit_detection_value": x_unit_detection_value,
                     "canonical_x_unit": (_DMA_CANONICAL_TEMPERATURE_UNIT),
                     "display_x_unit": _DMA_CANONICAL_TEMPERATURE_UNIT,
                     "source_x_to_display_factor": x_factor_to_display,
@@ -291,6 +324,8 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
                     ),
                     "source_y_unit": source_unit,
                     "source_y_unit_detection": y_unit_detection,
+                    "source_y_unit_detection_row_index": y_unit_detection_row_index,
+                    "source_y_unit_detection_value": y_unit_detection_value,
                     "canonical_y_unit": _DMA_CANONICAL_MODULUS_UNIT,
                     "display_y_unit": _DMA_DISPLAY_MODULUS_UNIT,
                     "source_to_canonical_factor": factor_to_pa,
@@ -305,6 +340,13 @@ def _read_dma_temperature_series(source: Path) -> list[CurveSeriesPayload]:
                     "conversion_factor_to_Pa": factor_to_pa,
                     "source_point_count": len(points),
                     "display_point_count": len(points),
+                    "candidate_row_count": raw.shape[0] - header_index - 1,
+                    "retained_point_count": len(points),
+                    "excluded_empty_pair_count": excluded_empty_pair_count,
+                    "excluded_partial_or_nonnumeric_pair_count": (
+                        excluded_partial_or_nonnumeric_pair_count
+                    ),
+                    "excluded_nonfinite_pair_count": excluded_nonfinite_pair_count,
                     "display_minimum": min(display_values),
                     "display_maximum": max(display_values),
                     "negative_display_point_count": len(negative_display_values),

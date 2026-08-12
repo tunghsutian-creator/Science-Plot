@@ -128,6 +128,8 @@ lineage remain in the hidden runtime workspace.
 - `readiness`, `cleanup`, `mapping`, and `publication`: maintenance or metadata
   commands, not plotting entrypoints.
 - `batch`, `smoke`, and `acceptance`: development evidence routes.
+- `verify --changed`: public changed-owner development verification; it does
+  not render, open Veusz, or publish artifacts.
 - `one-step`: internal manifest/readiness model, never a user recommendation.
 
 Do not recommend retired command names. Legacy-launcher detection may remain
@@ -234,7 +236,23 @@ These routes do not replace Studio as final editor and visual authority.
 
 ## Test tiers and verification
 
-Use the smallest discriminating test while iterating:
+Default to the source-controlled changed-owner route while iterating:
+
+```bash
+skill/scripts/sciplot verify --changed --json
+```
+
+It compares the current `HEAD` with staged, unstaged, and untracked paths in
+one selection pass. It runs at most one Ruff command over existing changed
+Python files, one focused pytest command over explicit owner targets, and one
+mypy command only when the changed owner intersects the scope declared in
+`pyproject.toml`, plus one tracked diff whitespace check. Unknown production or
+configuration paths fail closed; they
+never trigger a repository-wide focused, comprehensive, full, smoke, or
+acceptance fallback. The command does not render, edit, hash-check, or export a
+Veusz document.
+
+For a single known behavior, the smallest discriminating test remains valid:
 
 ```bash
 .venv/bin/python -m pytest -q tests/test_module.py::test_changed_behavior
@@ -271,20 +289,19 @@ Run the tier that matches the changed boundary:
 .venv/bin/python -m pytest -q
 ```
 
-Do not run the full suite after every intermediate edit. Run it before handoff
-when production code, a public interface, shared contract, test
-classification/configuration, broad refactor, release/merge state, or an
-uncertain impact radius changed. A documentation-only or isolated fixture
-change may close with its directly related tests when no executable contract
-changed.
+Do not run the full suite after intermediate edits or use it to compensate for
+an unknown owner. Full pytest is a release/merge gate. A documentation-only or
+isolated fixture change may close with its directly related owner tests when no
+executable contract changed.
 
 A gate is invalid if it passes only because coverage was deleted, types or
 assertions were weakened, checks were disabled, errors were ignored, or broad
 suppressions were added.
 
-Run `doctor` for command/runtime contract changes. Run runtime smoke when the
-change crosses Studio, renderer, worker, export, QA, delivery, launcher, or
-runtime-environment boundaries:
+Run `doctor` once at handoff for command/runtime contract changes. Run runtime
+smoke once at the final cross-boundary milestone when the completed change
+crosses Studio, renderer, worker, export, QA, delivery, launcher, or runtime
+environment:
 
 ```bash
 skill/scripts/sciplot doctor --json
@@ -292,7 +309,8 @@ skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json
 git diff --check
 ```
 
-For shared style, renderer, rule, QA, or delivery changes, also run:
+Acceptance and full pytest are release/merge gates. At that gate, shared style,
+renderer, rule, QA, or delivery changes also run:
 
 ```bash
 skill/scripts/sciplot acceptance rules \

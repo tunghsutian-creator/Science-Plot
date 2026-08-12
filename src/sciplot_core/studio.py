@@ -183,6 +183,18 @@ from sciplot_core.studio_core.context import (
 from sciplot_core.studio_core.studio_command import (
     run_studio_command as run_studio_command,
 )
+from sciplot_core.studio_core.veusz_series_revision import (
+    VeuszSeriesRevisionError as VeuszSeriesRevisionError,
+    apply_veusz_series_revision as apply_veusz_series_revision,
+    can_revert_veusz_series_revision as can_revert_veusz_series_revision,
+    has_pending_veusz_series_revision as has_pending_veusz_series_revision,
+    inspect_veusz_series_revision as inspect_veusz_series_revision,
+    preview_veusz_series_revision as preview_veusz_series_revision,
+    revert_veusz_series_revision as revert_veusz_series_revision,
+)
+from sciplot_core.studio_core.series_revision_persistence import (
+    commit_project_series_revision as commit_project_series_revision,
+)
 
 
 def atomic_save_veusz_document(document: Any, target: Path) -> dict[str, Any]:
@@ -227,19 +239,27 @@ def read_studio_figure_set(project_dir: Path) -> dict[str, Any] | None:
 
 __all__ = [
     "atomic_save_veusz_document",
+    "apply_veusz_series_revision",
     "build_studio_figure_set_export_scope",
+    "can_revert_veusz_series_revision",
+    "commit_project_series_revision",
+    "has_pending_veusz_series_revision",
     "configure_studio_window_presentation",
     "ensure_veusz_qsettings_compat",
     "export_studio_document",
     "maybe_reexec_with_qt_runtime",
     "migrate_studio_document_unit_labels",
     "prepare_studio_document",
+    "preview_veusz_series_revision",
     "publish_standalone_export_receipt",
     "publish_studio_export_run",
     "qt_smoke_payload",
     "read_studio_figure_set",
+    "revert_veusz_series_revision",
     "resolve_series_encodings",
     "resolve_studio_project_context",
     "run_studio_command",
+    "inspect_veusz_series_revision",
     "upstream_status",
+    "VeuszSeriesRevisionError",
 ]

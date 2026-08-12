@@ -9,7 +9,15 @@ from sciplot_core._paths import PACKAGE_ROOT
 VALIDATED_ENVELOPE_REGISTRY_KIND = "sciplot_validated_envelope_registry"
 
 
-VALIDATED_ENVELOPE_REGISTRY_VERSION = 1
+VALIDATED_ENVELOPE_REGISTRY_VERSION = 2
+
+
+VALIDATED_ENVELOPE_ACCEPTANCE_LINEAGE_KIND = (
+    "sciplot_validated_envelope_acceptance_lineage"
+)
+
+
+VALIDATED_ENVELOPE_ACCEPTANCE_LINEAGE_VERSION = 1
 
 
 VALIDATED_ENVELOPE_EVALUATION_KIND = "sciplot_validated_envelope_evaluation"

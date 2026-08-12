@@ -93,6 +93,81 @@ def test_initial_project_plan_matches_in_canonical_mirror_and_zip(
         assert "figure_outcomes" not in payload
 
 
+def test_inferred_intake_group_order_does_not_override_source_order(
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def prepare(project_dir: Path) -> dict[str, object]:
+        captured.update(
+            json.loads((project_dir / "plot_request.json").read_text(encoding="utf-8"))
+        )
+        return {}
+
+    project_builder.create_intake_project(
+        project_name="automatic discovery order",
+        data_type_id="mechanical",
+        experiment_type_id="flexural_curve",
+        groups=[
+            IntakeGroupInput(
+                sample="modified",
+                files=(IncomingFile(name="modified.csv", content=b"x,y\n0,1\n"),),
+            ),
+            IntakeGroupInput(
+                sample="control",
+                files=(IncomingFile(name="control.csv", content=b"x,y\n0,2\n"),),
+            ),
+        ],
+        output_root=tmp_path / "projects",
+        group_order_is_explicit=False,
+        studio_preparer=prepare,
+    )
+
+    assert "series_order" not in captured
+    assert "series_order" not in captured.get("render_options", {})
+
+
+def test_explicit_frequency_intake_skips_competing_sweep_detectors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sciplot_core.semantic_sources.classification as classification
+
+    source = tmp_path / "frequency"
+    source.mkdir()
+    (source / "sample.csv").write_text(
+        "Angular Frequency,Storage Modulus\nrad/s,Pa\n1,100\n10,90\n",
+        encoding="utf-8",
+    )
+
+    def unexpected_detector(*_args: object, **_kwargs: object) -> bool:
+        raise AssertionError("explicit frequency selection reran a shape detector")
+
+    monkeypatch.setattr(
+        session,
+        "is_rheology_temperature_comparison_dir",
+        unexpected_detector,
+    )
+    monkeypatch.setattr(
+        session,
+        "is_rheology_frequency_comparison_dir",
+        unexpected_detector,
+    )
+    monkeypatch.setattr(
+        classification,
+        "is_rheology_temperature_comparison_dir",
+        unexpected_detector,
+    )
+
+    prepared = session.prepare_intake_session(
+        source,
+        output_root=tmp_path / "intake",
+        requested_rule_id="rheology_frequency_sweep",
+    )
+
+    assert prepared["rule_id"] == "rheology_frequency_sweep"
+
+
 def test_studio_run_projection_set_and_pop_reaches_canonical_mirror_and_zip(
     tmp_path: Path,
 ) -> None:

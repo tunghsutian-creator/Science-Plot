@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from sciplot_core.data_mapping import resolve_data_mapping_request
 from sciplot_core.figure_plan import (
     FigurePlanResolutionError,
     request_for_figure_task,
     resolve_preparation_figure_plan,
+    validate_preparation_figure_plan,
 )
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_values import json_safe
@@ -32,6 +31,10 @@ from sciplot_core.readiness import load_validated_envelope_registry
 from sciplot_core.readiness.rule_certification import (
     current_certified_rule_contract_snapshot,
 )
+from sciplot_core.semantic_sources.scientific_source import (
+    ScientificSourceResolutionError,
+    resolve_scientific_source,
+)
 from sciplot_core.studio_render.models import StudioPreparationBlocked
 from sciplot_core.studio_render.value_parsing import _string_list
 from sciplot_core.terminal_source_binding import (
@@ -47,13 +50,10 @@ from sciplot_core.studio_core.figure_requests import (
     _impact_condition_figure_request,
     _rheology_frequency_primary_request,
 )
-from sciplot_core.studio_core.figure_set_prepare import (
-    _prepare_studio_figure_set,
-)
 from sciplot_core.studio_core.figure_task_evidence import (
     figure_queue_from_plan,
+    generic_figure_queue_from_plan,
     primary_figure_task,
-    validate_veusz_spec_figure_task,
 )
 from sciplot_core.studio_core.json_files import _read_json
 from sciplot_core.studio_core.launchers import (
@@ -66,11 +66,10 @@ from sciplot_core.studio_core.mechanical_plan_context import (
     normalized_studio_study_model,
     studio_presentation_identity,
 )
-from sciplot_core.studio_core.presentation_evidence import (
-    validate_veusz_spec_presentation,
+from sciplot_core.studio_core.prepare_generated_transaction import (
+    _prepare_generated_figure_set_transaction,
 )
 from sciplot_core.studio_core.registry_state import (
-    _registered_generated_hash,
     _studio_block,
     _veusz_spec_path,
 )
@@ -91,7 +90,6 @@ from sciplot_core.studio_core.terminal_task_request import (
 from sciplot_core.studio_core.source_bound_prepare import (
     prepare_source_bound_figure_queue,
 )
-from sciplot_core.studio_core.veusz_document import _write_veusz_document
 
 
 def generate_studio_document(
@@ -103,6 +101,7 @@ def generate_studio_document(
     project_name: str | None,
     figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
     _terminal_source_binding: SealedTerminalSourceBinding | None = None,
+    _terminal_source_prepared: bool = False,
 ) -> dict[str, Any]:
     """Build a generated VSZ plus the publication and figure-set contracts."""
 
@@ -114,8 +113,6 @@ def generate_studio_document(
         project_name=project_name,
     )
     request = _read_json(request_path)
-    if _terminal_source_binding is not None:
-        _terminal_source_binding.validate_request(request_path, request)
     _converge_studio_request_review_notes(request)
     effective_request, data_mapping_application = resolve_data_mapping_request(
         request,
@@ -132,6 +129,10 @@ def generate_studio_document(
         raise TerminalSourceBindingError(
             "terminal_source_binding_request_mismatch",
             "A materialized terminal source is valid only in the internal worker.",
+        )
+    if _terminal_source_prepared and not terminal_worker:
+        raise ValueError(
+            "A prepared terminal source is valid only in the internal worker."
         )
     terminal_task = terminal_figure_task_from_request(request)
     request_rule_id = str(request.get("rule_id") or "").strip()
@@ -166,20 +167,40 @@ def generate_studio_document(
         project_dir=project_dir,
     )
     try:
-        figure_plan = (
-            resolve_preparation_figure_plan(
-                persisted=request.get("resolved_figure_plan"),
+        resolved_scientific_source = (
+            resolve_scientific_source(
+                source_input,
                 rule_id=request_rule_id,
+                request=request,
                 template=presentation_identity.template,
                 study_model=planning_study_model,
-                input_path=source_input,
-                request=request,
             )
-            if not terminal_worker
-            and (request_rule_id or request.get("resolved_figure_plan") is not None)
+            if not terminal_worker and source_input is not None
             else None
         )
-    except FigurePlanResolutionError as exc:
+        if resolved_scientific_source is not None:
+            figure_plan = validate_preparation_figure_plan(
+                persisted=request.get("resolved_figure_plan"),
+                rule_id=request_rule_id,
+                current_plan=resolved_scientific_source.figure_plan,
+            )
+        else:
+            figure_plan = (
+                resolve_preparation_figure_plan(
+                    persisted=request.get("resolved_figure_plan"),
+                    rule_id=request_rule_id,
+                    template=presentation_identity.template,
+                    study_model=planning_study_model,
+                    input_path=source_input,
+                    request=request,
+                )
+                if not terminal_worker
+                and (
+                    request_rule_id or request.get("resolved_figure_plan") is not None
+                )
+                else None
+            )
+    except (FigurePlanResolutionError, ScientificSourceResolutionError) as exc:
         raise StudioPreparationBlocked(exc.reason_code, str(exc)) from exc
     primary_task = terminal_task or (
         primary_figure_task(figure_plan) if figure_plan is not None else None
@@ -205,8 +226,13 @@ def generate_studio_document(
         )
     )
     performance_queue = figure_queue_from_plan(figure_plan, "performance_comparison")
-    dsc_queue = figure_queue_from_plan(figure_plan, "dsc_curve")
-    selected_figure_queue = impact_queue or performance_queue or dsc_queue
+    generic_queue = generic_figure_queue_from_plan(
+        figure_plan,
+        render_adapter=(
+            current_rule.render_adapter if current_rule is not None else None
+        ),
+    )
+    selected_figure_queue = impact_queue or performance_queue or generic_queue
     primary_impact_figure = (
         next(
             (
@@ -247,13 +273,16 @@ def generate_studio_document(
         source_input=source_input,
         request=primary_render_request,
         base_dir=request_path.parent,
+        resolved_scientific_source=resolved_scientific_source,
     )
     series, axis_info, transform_steps, source_root = _series_from_request(
         primary_render_request,
         base_dir=request_path.parent,
         **binding_option,
+        _terminal_source_prepared=_terminal_source_prepared,
         _prepared_source_attestation=source_bound_attestation,
         _prepared_transform_steps=source_bound_preparation_steps,
+        _resolved_scientific_source=resolved_scientific_source,
     )
     terminal_series_order = _string_list(
         axis_info.get("semantic_terminal_series_order")
@@ -293,60 +322,22 @@ def generate_studio_document(
     for target in (request, primary_render_request):
         target["publication_intent"] = publication_intent
         target["transform_ledger"] = transform_ledger
-    transaction_id = uuid4().hex
-    staged_stem = f".sciplot-studio-prepare-{transaction_id}"
-    staged_request = request_path.with_name(f"{staged_stem}.json")
-    staged_document = document_path.with_name(f"{staged_stem}.vsz")
-    staged_spec = _veusz_spec_path(staged_document)
-    prior_generated_hash = _registered_generated_hash(project_dir)
-    try:
-        staged_request.write_text(
-            json.dumps(json_safe(request), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
-        _read_json(staged_request)
-        _write_veusz_document(
-            staged_document,
-            request=primary_render_request,
-            series=series,
-            axis_info=axis_info,
-        )
-        generated_hash = existing_file_sha256(staged_document)
-        if not generated_hash or not existing_file_sha256(staged_spec):
-            raise RuntimeError("The staged primary Studio document is incomplete.")
-        staged_spec_payload = _read_json(staged_spec)
-        validate_veusz_spec_presentation(
-            staged_spec_payload,
-            expected=presentation_identity,
-            source="staged primary Veusz spec",
-        )
-        if primary_task is not None:
-            validate_veusz_spec_figure_task(
-                staged_spec_payload,
-                expected=primary_task,
-                source="staged primary Veusz spec",
-            )
-        figure_set = _prepare_studio_figure_set(
-            project_dir=project_dir,
-            request_path=request_path,
-            request=request,
-            primary_document=document_path,
-            primary_series_count=len(series),
-            primary_generated_hash=generated_hash,
-            primary_prior_generated_hash=prior_generated_hash,
-            primary_staged_document=staged_document,
-            primary_staged_spec=staged_spec,
-            staged_request=staged_request,
-            preserve_existing=False,
-            queue_override=selected_figure_queue or source_bound_queue or None,
-            figure_plan=figure_plan,
-            prepared_source_attestation=source_bound_attestation,
-            path_replacer=figure_set_path_replacer,
-        )
-    finally:
-        staged_request.unlink(missing_ok=True)
-        staged_document.unlink(missing_ok=True)
-        staged_spec.unlink(missing_ok=True)
+    figure_set = _prepare_generated_figure_set_transaction(
+        project_dir=project_dir,
+        request_path=request_path,
+        request=request,
+        document_path=document_path,
+        primary_render_request=primary_render_request,
+        series=series,
+        axis_info=axis_info,
+        presentation_identity=presentation_identity,
+        primary_task=primary_task,
+        selected_figure_queue=selected_figure_queue,
+        source_bound_queue=source_bound_queue,
+        source_bound_attestation=source_bound_attestation,
+        figure_plan=figure_plan,
+        figure_set_path_replacer=figure_set_path_replacer,
+    )
     spec_path = _veusz_spec_path(document_path)
     launcher = _write_studio_launcher(project_dir)
     veusz_launcher = _write_veusz_launcher(project_dir, document_path)

@@ -164,17 +164,6 @@ _ISSUE_QUALITY_ACTIONS: dict[str, dict[str, Any]] = {
         },
         "layout_strategy": _LEGEND_AUTO_STRATEGY,
     },
-    "ftir_wavenumber_bounds_missing": {
-        "id": "restore_ftir_wavenumber_axis",
-        "label": "Restore FTIR axis",
-        "reason": "FTIR/wavenumber plots must show 4000 to 400 cm^-1 with endpoint ticks.",
-        "render_options_patch": {
-            "x_min": 400.0,
-            "x_max": 4000.0,
-            "reverse_x": True,
-            "x_tick_density": "auto",
-        },
-    },
     "stacked_top_blank_excess": {
         "id": "tighten_stacked_y_axis",
         "label": "Tighten stacked y-axis",

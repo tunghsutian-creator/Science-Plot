@@ -40,9 +40,6 @@ from sciplot_core.workflow.request_io import (
     _figures_from_result,
 )
 from sciplot_core.workflow.request_rendering import RequestRenderResult
-from sciplot_core.workflow.source_binding import (
-    verify_workflow_figure_plan_source_binding,
-)
 
 
 def publish_request_result(
@@ -79,11 +76,6 @@ def publish_request_result(
             "workflow_result_figure_plan_mismatch: the rendered result belongs "
             "to a different selected FigurePlan."
         )
-    verify_workflow_figure_plan_source_binding(
-        resolved_figure_plan,
-        input_path=input_path,
-        raw_archive=raw_archive,
-    )
     completed_figure_plan = rendered.completed_figure_plan
     _extend_runtime_transform_steps(transform_steps, result.get("transform_steps"))
     transform_ledger = build_transform_ledger(

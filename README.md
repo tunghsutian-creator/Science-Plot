@@ -94,6 +94,15 @@ Model、VSZ/spec、项目清单和初始 ZIP 属于同一代结果。若这次�
   -> PDF/TIFF + QA + delivery
 ```
 
+对 task-aware 的普通 `curve`/`box_strip` 图集，Project dock 的 `Samples`
+区可以预览、隐藏、加回或重排来源中已经存在的样品。`Apply` 只在当前 Veusz
+`Document` 中创建一个原生 Undo 步骤；保存、`Commit figure set` 或
+`Save && Export` 才把同一 `active_order` 原子提交到整套 VSZ、spec、规范请求和
+figure-set registry。完整 `spec.series`、FigurePlan、原始数值与既有颜色不会因视觉隐藏而
+删除或重算。提交后的原生 Undo 会重新成为待提交修订；有待提交修订时 `Save As` 会先要求
+提交或撤销，避免产生没有配套项目合同的孤立 VSZ。直接标签和 factorized 自定义图例暂不在
+这条窄修订路径内。
+
 ## 打开和精确导出
 
 打开已有 VSZ 直接使用 Studio；不需要另一个“高级编辑器”入口：
@@ -123,14 +132,17 @@ transform lineage 或完整 SciPlot 项目交付。显式重新生成前必须�
 
 ## 其它命令的角色
 
-- `plan`：只读解析当前源的有效规则、模板和完整 FigurePlan，供人或本机助手在执行前
-  查看；它不渲染、不建项目、不写交付物。
+- `plan`：只读解析当前源的有效规则、模板、完整 FigurePlan，以及适用时的
+  source-bound `scientific_transform`，供人或本机助手在执行前查看；它不渲染、
+  不建项目、不写交付物。
 - `app`：仅在需要首次浏览器确认时使用；不是绘图或精修前端。
 - `autoplot`：唯一公开的程序化全自动项目入口。它内部复用
   `one-step`/`run_request`，并负责稳定 summary、QA 和 delivery；它不是第三个
   renderer。
 - `run`：重放已经确认的 `plot_request.json`。
 - `render`、`recipe`：供开发、测试和已知低层合同使用的原语。
+- `verify --changed`：公开的开发变更验证入口；按 source-controlled owner 映射选择
+  最小测试，不参与绘图、Veusz 编辑或交付。
 - `curate torque`：只负责转矩事件选择、复核资料和 Studio 项目准备；最终编辑、导出和
   delivery 仍回到 `studio`。
 - `batch`、`smoke`、`acceptance`：开发与回归验证路线，不是另一种用户自动出图入口；
@@ -146,30 +158,62 @@ transform lineage 或完整 SciPlot 项目交付。显式重新生成前必须�
 仍允许带显式模板覆盖；字段存在但不是非空文本时会在渲染前失败。
 
 进入 auto 渲染后，规范 `rule_id` 只选择一个执行家族：performance、impact、
-mechanical、DSC、DMA temperature、rheology 或普通 generic。SciPlot 不再用“逐个尝试
+mechanical、DMA temperature、rheology 或普通 generic。DSC 现在属于 generic
+单任务路径。SciPlot 不再用“逐个尝试
 bundle”的方式
 判断归属，因此拉伸曲线不会先进入 impact 的模板校验，普通 `point_line` 规则也不会被
 impact 路径截走。未知、畸形或带首尾空格的非空规则在任何家族解析或写盘前失败；没有
 规则的低层 direct render 仍走 generic。选中的专用 adapter 若明确不接管，只能回退
 generic，不能继续探测另一个专用家族；但请求已经选定 `ResolvedFigurePlan` 时必须
 失败关闭，不能用 generic 图替代计划任务。
+专用或 generic adapter 的选择来自同一 `SemanticRule`，Workflow 不再维护另一张
+rule→family 表；这个执行适配器字段不替代独立的 FigurePlan 任务选择。
+需要 FigurePlan 的规则同样由该 `SemanticRule` 选择一个内部 plan adapter；解析器不再
+按原始 rule ID 维护另一棵家族判断树。独立的低层
+`REQUIRED_FIGURE_PLAN_RULE_IDS` 只表达持久化不变量：这些规则必须保存完整计划并走
+task-aware 全图集发布门。两者不是同一个概念，当前成员由聚焦合同保持一致；plan adapter
+不进入公开 rule payload、调用参数或认证哈希。没有 plan adapter 的规则在读取或哈希源
+目录之前即返回“无 FigurePlan”。
 
 需要从原始路径直接生成自动化项目、QA 和 delivery 时：
 
 ```bash
 skill/scripts/sciplot autoplot PATH \
+  --rule RULE_ID \
+  --template TEMPLATE_ID \
   --json
 ```
 
+`--rule` 与 `--template` 会原样进入唯一的 `plot_request.json`，因此外部 AI 可以先用
+`rules show` / `plan` 选择意图，再让 Autoplot 执行同一规则和展示模板。显式 rule 为空或
+不规范时直接失败，不会悄悄退回自动分类；未传 `--rule` 时才允许现有自动识别。
+机器 `invocation.required_arguments` 要求 AI 同时传入 `input` 和 `template`；建议值来自同一规则的
+`template.default`，不是 AI 猜测。`plan --template` 和 `autoplot --template` 都记为同一种显式选择，
+所以 performance 等可多图规则的预览与执行不会一个返回全图集、另一个只返回单模板。
+人类仍可以省略 template 使用现有自动默认；这只是要求外部 AI 走可重现的显式路线。
+显式规则还会在读取科学源之前检查当前 validated envelope：current 才继续；missing 或
+stale 时，`rules list/show`、`plan` 与 `autoplot` 返回同一组既有 repair reason。
+此时 Autoplot 不创建项目、不调用 runner，也不写 summary。认证通过后若输入不存在，
+只在 runner 前做一次路径存在性检查，不会先写出半个项目。
+
 对 `rheology_frequency_sweep`、`rheology_temperature_sweep`、
 `dma_temperature_sweep`、`tensile_curve`、`compression_curve`、`flexural_curve`、
-`impact_metric`、`performance_comparison` 和 `dsc_curve`，Studio
-与 Autoplot 在渲染前共同解析
+`impact_metric`、`performance_comparison`、`dsc_curve`、`tga_curve`、`dtg_curve`、
+`uvvis_spectrum`、`xrd_pattern`、`saxs_profile` 和 `gpc_sec_chromatogram`，Studio 与
+Autoplot 在渲染前共同解析
 一份 `ResolvedFigurePlan`。它固定本次选中的
 逻辑图 ID、顺序、指标、模板、条件/样品轴、兼容输出文件名和准备时的源内容指纹；
 渲染器只执行这些任务，不能再自行增删图。保存过的计划若与当前规则、模板、Study
 Model 或源文件字节不一致，复用旧 VSZ 或直接发布都会停止，而不是沿用旧的 ready
 结果。显式重新生成可在同一规则内根据当前源重新解析计划，但不能跨规则静默刷新。
+
+语义准备也只选择一个内部 adapter：rheology、curve-family、mechanical，或明确的
+identity。SciPlot 不再按固定顺序调用三个 handler 来猜谁接管；`SemanticRule` 选择一次，
+该 handler 返回 `None` 就直接使用统一 identity，不再尝试下一家。只提供旧式
+`semantic_family` 的内部调用仍通过现有 catalog 唯一匹配规则，不维护第二张 family 表。
+这项元数据不进入公开 rules payload 或认证哈希。已登记的单曲线规则，包括
+`dsc_curve`，由 curve-family adapter 直接物化同一个 resolved transform，不再进入
+图族专用拒绝或二次解析分支。
 
 机械 FigurePlan 由一套共享合同生成，不能再由 Study Model、Studio 和 Workflow 各自
 解释。拉伸依次交付应力–应变曲线、强度、断裂伸长率、模量和韧性五张图；压缩和弯曲
@@ -188,12 +232,17 @@ Model 或源文件字节不一致，复用旧 VSZ 或直接发布都会停止，
 源文件派生的样品顺序和同一次语义准备；Studio 与 Autoplot 都必须保留精确任务证据，
 并整体交付两份 VSZ、两份 PDF 和两份 300-dpi TIFF。任一任务、源指纹或终端证据不一致
 时整组失败，不留下部分 ready 结果。
+该图族在一次事务中只解析一次原始多指标数据：同一个内存中 typed domain 同时保存
+raw samples、按请求合并/排序的 prepared samples、样品与重复事实。FigurePlan 和语义准备
+消费同一对象，不得各自重读、重新合并或重新排序。这不是单 y 科学变换，因此
+`plan` 仍诚实返回 `scientific_transform: null`，不伪造 dummy transform。
 
 DMA 温度扫描是独立合同，不借用温度流变的双图解析器。它固定生成一张
 `storage_modulus_vs_temperature` `point_line` 图，横轴为温度，纵轴只允许储能模量
 E-prime；tan delta/损耗因子不能匹配该任务。源模量单位必须明确为 Pa、kPa、MPa 或
-GPa，先统一到规范 Pa，再以 MPa 写入绘图表和坐标轴。语义准备保留所有 4074 个有限
-测量点，包括当前登记数据中一个负值。VSZ spec 的 `axis_data_visibility` 同时记录规则
+GPa，先统一到规范 Pa，再以 MPa 写入绘图表和坐标轴。语义准备保留源中所有有限
+测量点，包括合法的负响应值；点数和值只从当前输入读取。VSZ spec 的
+`axis_data_visibility` 同时记录规则
 默认 `y_min=0` 以下的潜在点数和最终有效轴实际裁掉的点数；自动放宽边界不能再把
 “可能受默认值影响”误写成“已经裁点”。Studio 与 Autoplot 共享同一源指纹、样品顺序、
 准备证明、终端任务和一份 VSZ/PDF/300-dpi TIFF 结果。
@@ -207,13 +256,19 @@ Workflow 中显式命名的 `recipe: rheology_dma` 只在规则已经解析为
 记录同一份 route-neutral DMA 执行证据，其哈希覆盖终端数据、单位、编码和
 `axis_data_visibility`。其他带 FigurePlan 的命名 recipe 仍失败关闭。
 
-当前 `dsc_curve` 只表示已登记的 publication-digitized DSC 单曲线合同，不表示仪器原始
-循环。它固定生成一张 `dsc_heat_flow_vs_temperature` `curve` 图，曲线顺序为 `UDC 2`、
-`UDC 3`、`UDC 4`，并整体交付一份 VSZ、一份 PDF 和一份 300-dpi TIFF。源身份同时绑定
-曲线 CSV 与登记的数字化 provenance；内容完全相同的 CSV 副本可在移动或改名后复用登记
-证据，其他无 provenance 文件会失败关闭。`dsc_curve` 不再把工作簿投影成 cooling/heating
-相位或隐式切换到 `stacked_curve`；循环工作簿必须等待有授权、已登记真实数据后再建立独立
-`dsc_cycle` 规则。当前合同也不从曲线自动宣称 Tg、熔融/结晶峰身份、焓或结晶度。
+当前 `dsc_curve` 是 shared registered paired-curve 规则。它从普通 CSV 或
+XLSX 中唯一匹配的 Temperature/Heat Flow 配对表读取显式单位、样品身份、
+源顺序和实测值，再由 shared `registered_single_curve` 计划生成一张
+`dsc_heat_flow_vs_temperature` `curve` 图。Workflow 与 Studio 都执行普通
+generic 单任务生命周期，整体交付一份 VSZ、一份 PDF 和一份 300-dpi TIFF。
+
+登记 fixture 旁的 `digitization_provenance.json` 只是该 fixture 的来源与数字化
+证据，不是普通 DSC 输入的 runtime 附件；用户自己的 CSV/XLSX 不需要
+DOI、论文字段或相邻 provenance 才能解析。源绑定使用共享 source-tree 身份。
+一个 workbook 若有多个 worksheet 同时匹配登记坐标轴，则作为歧义失败关闭，
+不会暗自选择 cooling/heating、展开相位或切换到 `stacked_curve`。一条普通
+DSC 曲线也不能自动宣称 Tg、熔融/结晶峰身份、焓或结晶度；真正的仪器
+循环语义仍需独立、有真实协议证据的规则。
 
 频率扫描保留 Study Model 现有的四张默认图：储能模量、损耗模量、损耗因子和复数黏度。
 若当前工作簿还含有受支持且旧 Autoplot 路线会输出的复数模量列，该图也进入同一计划，
@@ -480,15 +535,108 @@ skill/scripts/sciplot rules list --json
 skill/scripts/sciplot rules show RULE_ID --json
 ```
 
-查看程序在真正执行前会选择哪些图，不创建项目或交付物：
+`rules list --json` 与 `rules show --json` 的 `invocation` 共用同一投影。静态操作、参数和
+模板选项来自一个 `SemanticRule`；动态 `availability` 与 `reason_codes` 来自当前
+validated-envelope certification。它声明当前规则是否可生产调用、只读预览使用 `plan`、
+稳定出图使用 `autoplot`、必需的 `input`、固定 `rule_id`，以及 `template` 的默认值和合法选项。
+外部 AI 应只执行 `availability=ready` 的规则，并把同一组 rule/template 先交给 preview、
+再交给 render；不能从样品名、文件名或提示词自行发明另一套调用参数。
+
+普通外部 AI 的稳定调用闭环只有一条：从 `rules list/show` 读取一个
+`availability=ready` 的 `invocation`，把其中同一组 `rule_id` 和 `template` 交给
+`plan`，仅在预览未阻断时再原样交给 `autoplot`。最终只接受机器结果中的
+`state=ready`；`blocked`、`needs_human_confirmation` 或 `needs_rule_repair` 应直接报告
+其结构化原因，不能换规则、猜单位、改样品身份或绕过认证。
+
+查看程序在真正执行前会选择哪些图、以及 source-bound 科学变换，不创建项目或交付物：
 
 ```bash
 skill/scripts/sciplot plan PATH --json
 skill/scripts/sciplot plan PATH --rule RULE_ID --template TEMPLATE_ID --json
 ```
 
-`planned` 返回完整任务集，`not_applicable` 表示该源不使用 FigurePlan，`blocked`
-返回一个稳定阻断原因并使用非零退出码。该结果是只读意图预览，不是渲染或交付证明。
+空或未知规则、不支持的模板、缺失输入和可预期的源检查错误都会返回同一个 v1
+`status=blocked` 机器 payload 与非零退出码；不会改成散落的 stderr 文本，也不会吞掉
+真正的程序错误。
+
+`planned` 返回完整 FigurePlan 任务集；`not_applicable` 只表示该源不使用 FigurePlan，
+不表示科学变换不可用。应力松弛会在同一 v1 payload 的 `scientific_transform` 中预览
+实际 Time / Shear Stress / Shear Strain 列、单位、每组锚点与 σ₀、归一化、真实时间策略、
+锚点保留、轴兼容性、点数和排除原因；随后 semantic preparation 使用同一个 resolved
+transform 写表，并把同一合同放入既有 `semantic_preparation` step。锚点时间和值只能
+来自当前源或显式用户选择；程序没有固定 onset 时间，`0.077` 也不是任何默认值或算法常量。
+带 result/interval 身份的应力松弛源以最终共同 interval 的第一个实际对齐点作为源边界，
+不会再用尾部百分比、固定点数、漂移容差或“平台”经验门槛挑 onset；有限值、时间身份、
+非零归一化基线和 log-time 正域等通用不变量仍会严格检查。
+DMA temperature 在
+同一字段中预览每组 Temperature / Storage Modulus 列、MPa→Pa→MPa 单位路径、原始行序、
+候选/保留/空尾行以及线性登记轴与数学 log 兼容性的区别；它明确报告 anchor 和 scientific
+normalizer 不适用。DMA 的同一次 plan 解析同时供 transform 与 source-bound FigurePlan
+使用，不会为两个 payload 重读源表。DSC、TGA、DTG、UV-Vis、XRD 和 SAXS 共用 registered
+paired-curve transform/FigurePlan 骨架：一个受支持表文件中的一组或多组配对列、显式且与
+规则等价的单位、源生样品身份、点数、坐标顺序和行排除都从当前源读取；缺少单位或尚未实现
+转换的单位会阻断，不会靠默认单位改标签。TGA 生成 `temperature → mass`；DTG 生成
+`temperature → derivative_mass` 并原样保留响应正负号，绝不从 TGA 重新求导；UV-Vis
+生成 `wavelength → absorbance`，保留每个样品独立且可降序的波长坐标；XRD 生成
+`diffraction_angle → intensity`，保留各序列独立网格，其最大观测强度位置只作描述；SAXS
+生成 `q → intensity`，保留线性 q 坐标与源中正的 log-y 显示域，仅排除 log-y 不允许的
+非正响应，不额外执行 log10/ln、排序、插值或结构归属。DSC 生成
+`temperature → heat_flow`，同样不从数值推断热转变身份。semantic preparation 只物化同一个
+snapshot，Workflow 与 Studio 再复用通用单任务、Veusz、QA 和交付生命周期。该共享 owner
+不拥有固定样品名、固定点数、固定首末值、峰位、锚点、onset 时间或归一化常量。GPC/SEC
+也使用同一个通用单任务下游，但只增加薄的 Agilent RT/RI 源适配：样品名保持工作簿原文，
+洗脱时间和 RI detector response 的 `min`/`mV` 单位来自当前工作簿，Slice Table 行序和值原样
+保留；程序不会添加 `Sample` 前缀、改成 `a.u.`、归一化，或从 RI 曲线推断 Mn、Mw、Đ。
+FTIR 也进入同一个单任务下游，但使用薄的 FTIR source adapter：每个实际文件只读一次，
+headerless 两列数据保留全部有限点、零值、源坐标和源行序，响应身份保持中性的
+`Spectral response`；只有源表头明确声明时才使用 Transmittance 或 Absorbance，单位缺失不会
+补猜。显式 Transmittance 只报告观测最小值位置，显式 Absorbance 只报告观测最大值位置，
+未知响应跳过该分析。程序没有 `%T` 数值阈值、固定 400–4000 输入域、固定峰位、FTIR 专用
+renderer 或第二 request/schema；坐标反向仅是可编辑显示策略，不改变源点顺序。
+其他专用准备器也遵守同一证据原则：swelling 的时间只接受表头或相邻单位行明确声明的
+秒、分钟或小时并统一换算到小时，裸 `Time` 不会被猜成小时，格式空行也不会截断测量点；
+torque 在没有显式 curation 时保留完整源曲线和绝对时间，自动 peak/drop 只作为用户主动
+`curate torque` 的建议，而且时间必须显式声明为秒、分钟或小时、响应必须明确为等价的
+`N·m`；Index、裸 Time 或缺失扭矩单位不能进入终端表。Impact 缺少明确单位时在写表前
+阻断，不能默认成 `kJ m⁻²`。
+其他尚未接入声明式变换的规则返回
+`scientific_transform: null`。`blocked` 返回稳定阻断原因并使用非零退出码。
+该结果是只读意图预览，不是渲染或交付证明。
+
+一次 `autoplot`、`run` 或 Studio preparation 事务会先形成一个 typed
+`ResolvedScientificSource`，把当前源身份、图族 domain 和适用的 FigurePlan 一起传到准备与
+渲染；后续路由不得重新解析该图族。auto、显式 template 和 named recipe 都遵守这条
+边界。是否需要这个快照由同一 `SemanticRule` 的内部 scientific-source adapter 决定；
+共享 resolver 不再按 raw rule ID 猜图族，pending 与普通规则也不会提前读取数据。
+这个 domain 可以是带声明式合同的单曲线科学变换，也可以是不序列化的多指标源快照；公共
+request、preview、ledger 和认证哈希不因内部 domain 类型增加字段。
+anchor 的时间和值只能来自当前源的检测结果或显式请求，不存在任何测试样本时间
+默认值；任何某次实验出现的具体坐标都只是数据，不进入程序策略。单独执行的 `plan` 与稍后执行命令共享同一 resolver 和合同，但跨命令、跨 HTTP
+确认不会伪称保留同一个 Python 对象。
+adapter 可预期的数据失败只通过既有 `reason_code + message` 对外报告；Plan、Studio 与
+Workflow 消费同一个 typed 内部错误。其它 `ValueError` 不再被兜底伪装成数据问题。
+
+私有 terminal-source binding 在父进程只由 `seal()` 校验一次并捕获 request hash，在 worker
+入口再做一次跨进程当前态校验；同一 worker 内的 Studio/series 消费者只检查样品顺序、点数
+和 source-artifact 结构，不重复整套文件哈希。归档、重开、安装和发布仍是独立 authority
+边界，不能用这条同事务去重绕过。
+
+目录形式的 rheology temperature 与 rheology frequency 共用一个进程内
+`ResolvedRheologySweepDomain`。它只解析 parser 实际选择的原始文件一次，并把相同的
+样品顺序、重复数和准备后多指标数据同时交给 FigurePlan 与 semantic preparation。频扫
+目录中的邻接分析工作簿不会替代原始文本；只有每个已选样品都至少含一个配对数值点的
+指标才会进入任务和准备工作簿，显式或由 G′/G″ 计算得到的 complex modulus 遵守同一
+条件。单个 plot-ready XLS/XLSX 仍保留原有直接路径。显式选择 frequency rule 时不会先跑
+temperature shape detector。这个共享 domain 不序列化，也不新增 cache、receipt 或 hash
+ledger。
+流变文本的小数分隔符只从 parser 已经选中的坐标/响应列判断，不扫描备注或其它表格；
+一两个 `0,5` 值也能被正确解析。点/逗号小数明确混用或没有其它证据的歧义分组会阻断，
+不会再用“至少几个点”或多数票猜 locale 并静默放大数值。
+
+浏览器 Result Review 只投影本次 run-local manifest 中已经落盘的合同；尚未运行的 prepared
+项目则只投影 canonical `plot_request.json`。Veusz Studio 的只读项目状态使用同一纯投影，
+切换到另一份 VSZ 后立即清空旧 review。上述界面不重读原始数据，不另建 review ledger；
+真正需要绘图前审阅时使用 `plan`。
 
 只有明确需要浏览器首次确认时才使用：
 
@@ -499,6 +647,19 @@ skill/scripts/sciplot app PATH --out /原始数据所在目录/SOURCE_SciPlot
 确认完成后回到 Studio/Veusz；浏览器结果页保持只读。
 
 ## 工程验证与证据边界
+
+日常代码迭代默认从当前 `HEAD` 的 staged、unstaged 和 untracked 变化出发：
+
+```bash
+skill/scripts/sciplot verify --changed --json
+```
+
+该命令合并变化一次，并按 source-controlled owner 表稳定选择检查：对仍存在的已改 Python
+文件运行一次 Ruff，对显式 owner targets 运行一次 `pytest -m focused`，只在命中
+`pyproject.toml` 已声明的类型范围时运行一次 mypy，并做一次 tracked diff whitespace
+检查。未知 production/configuration 路径会
+直接失败并要求补齐 owner；它不会因未知影响范围退回全量 focused、comprehensive、full、
+smoke 或 acceptance，也不生成或修改 VSZ。
 
 测试分为单模块、进程内的 `focused` 层和跨 Veusz/导出/Studio 生命周期的
 `comprehensive` 层。迭代从最小相关测试开始，按影响范围逐级扩大：
@@ -518,10 +679,11 @@ skill/scripts/sciplot app PATH --out /原始数据所在目录/SOURCE_SciPlot
 `autoplot/publish_integrity.py`、`autoplot/evidence.py`、
 `autoplot/summary.py` 42 个文件执行严格基线检查，不表示全仓已经完成静态类型覆盖。
 
-完整测试留给生产/公共合同交付、测试基础设施、发布、广泛重构或影响不确定的变化；
-具体升级规则由 `skill/SKILL.md` 统一定义。
+完整 `pytest` 和 acceptance 是 release/merge gate，不是未知 owner 的自动兜底。
+具体 owner 选择与升级规则由 `skill/SKILL.md` 和 source-controlled 验证合同统一定义。
 
-运行时或生命周期边界变化还应运行：
+命令或运行时合同变化在 handoff 时运行一次 Doctor；跨 Studio、renderer、worker、export、
+QA 或 delivery 的工作只在最终跨边界 milestone 运行一次 smoke：
 
 ```bash
 skill/scripts/sciplot doctor --json
@@ -529,7 +691,7 @@ skill/scripts/sciplot smoke --out .tmp_verify/runtime_smoke --json
 git diff --check
 ```
 
-共享样式、渲染、规则、QA 或 delivery 合同变化还必须运行：
+共享样式、渲染、规则、QA 或 delivery 合同的 acceptance 只在 release/merge gate 运行：
 
 ```bash
 skill/scripts/sciplot acceptance rules --out .tmp_verify/acceptance --json
@@ -539,6 +701,21 @@ skill/scripts/sciplot acceptance rules --out .tmp_verify/acceptance --json
 只是用于检查裁切、遮挡和损坏的未校准预览，不能证明最终尺寸可读性。检查后用
 `skill/scripts/sciplot acceptance visual-review PATH/final_size_visual_review/final_size_visual_review.json --decision passed|failed --reviewer NAME --json`
 记录结论；最终尺寸可读性仍需校准显示器或打印件证据。
+
+完整基线认证仍使用 `readiness certify`。当只有少数规则合同变化且已有当前全规则基线时，
+维护者可把一次已通过人工视觉复核的 scoped acceptance 合并进同一 registry schema：
+
+```bash
+skill/scripts/sciplot readiness merge BASE_REGISTRY ACCEPTANCE_SUMMARY \
+  --out CANDIDATE_REGISTRY \
+  --json
+skill/scripts/sciplot readiness status --registry CANDIDATE_REGISTRY --json
+```
+
+`merge` 只替换本次 `selected_rule_ids` 的严格验收条目；每个未选条目的基础认证必须仍与当前
+规则合同一致，否则失败。registry v2 的 lineage records 必须无重叠地覆盖全部条目，并分别
+保留实际 acceptance summary 的身份。旧 registry v1 仍可读取，但新建和合并结果统一写 v2。
+该命令只生成候选 registry，不自动安装、不重跑未选规则，也不建立第二套认证目录或手工哈希。
 
 runtime smoke 是 synthetic 变化门，不是真实数据证据；生命周期、artifact QA、
 provenance、人工日用验证和期刊合规仍是不同声明。

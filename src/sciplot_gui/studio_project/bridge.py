@@ -15,10 +15,12 @@ from sciplot_gui.studio_project.refresh import RefreshMixin
 from sciplot_gui.studio_project.result_targets import ResultTargetsMixin
 from sciplot_gui.studio_project.export_helpers import ExportHelpersMixin
 from sciplot_gui.studio_project.export_action import ExportActionMixin
+from sciplot_gui.studio_project.series_revision import SeriesRevisionMixin
 from sciplot_gui.studio_project.services import atomic_save_veusz_document
 
 
 class StudioProjectBridge(
+    SeriesRevisionMixin,
     ExportActionMixin,
     ExportHelpersMixin,
     ResultTargetsMixin,
@@ -80,6 +82,7 @@ class StudioProjectBridge(
         self.open_pdf_button.clicked.connect(self.open_current_pdf)
         self.show_delivery_button.clicked.connect(self.show_current_delivery)
         self.reveal_vsz_button.clicked.connect(self.reveal_current_vsz)
+        self._initialize_series_revision()
         self.refresh()
 
 

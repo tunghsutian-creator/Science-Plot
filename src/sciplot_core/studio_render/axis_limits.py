@@ -81,14 +81,28 @@ def _solve_linear_axis_policy(
         labeled_max = effective_max + step
         if force_zero_min and data_min >= 0:
             labeled_min = 0.0
-    else:
+    elif force_zero_min and effective_min >= 0:
         step = _nice_step_at_least((effective_max - effective_min) / 5.0)
-        labeled_min = np.floor(effective_min / step) * step
+        labeled_min = 0.0
         labeled_max = np.ceil(effective_max / step) * step
-        if force_zero_min and data_min >= 0:
-            labeled_min = 0.0
         if np.isclose(labeled_min, labeled_max):
             labeled_max = labeled_min + step
+    else:
+        data_span = float(effective_max - effective_min)
+        step = _nice_step_at_least(data_span / 5.0)
+        display_min = float(
+            effective_min - data_span * lower_padding_fraction
+        )
+        display_max = float(
+            effective_max + data_span * upper_padding_fraction
+        )
+        labeled_min = float(np.ceil(display_min / step) * step)
+        labeled_max = float(np.floor(display_max / step) * step)
+        return AxisTickPolicy(
+            display_bounds=(display_min, display_max),
+            labeled_bounds=(labeled_min, labeled_max),
+            major_ticks=_build_linear_ticks(labeled_min, labeled_max, step),
+        )
 
     labeled_span = float(labeled_max - labeled_min)
     if labeled_span <= 0:

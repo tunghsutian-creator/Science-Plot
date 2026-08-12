@@ -9,9 +9,10 @@ import pytest
 from sciplot_core import workflow
 from sciplot_core._paths import resolve_fixture_path
 from sciplot_core.delivery.plan_binding import plan_source_figure_ids
-from sciplot_core.figure_plan import FigurePlanResolutionError, ResolvedFigurePlan
-from sciplot_core.figure_plan.dsc_resolution import (
-    load_dsc_single_curve_source_facts,
+from sciplot_core.figure_plan import (
+    FigurePlanResolutionError,
+    ResolvedFigurePlan,
+    source_tree_sha256,
 )
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.studio_core.export_execution import export_studio_document
@@ -92,10 +93,8 @@ def test_dsc_studio_activates_exact_single_task_registry(tmp_path: Path) -> None
     plan = ResolvedFigurePlan.from_payload(request["resolved_figure_plan"])
     assert plan.selected_figure_ids == (FIGURE_ID,)
     assert plan.tasks[0].sample_order == EXPECTED_SAMPLE_ORDER
-    assert (
-        plan.source_sha256
-        == load_dsc_single_curve_source_facts(_fixture()).source_sha256
-    )
+    assert plan.selection_policy == "registered_single_curve"
+    assert plan.source_sha256 == source_tree_sha256(_fixture())
 
     registry = json.loads(
         (project_dir / "studio" / "figure_set.json").read_text(encoding="utf-8")
@@ -320,7 +319,7 @@ def test_dsc_curve_rejects_cycle_workbooks_before_workflow_writes(
 
     with pytest.raises(
         ValueError,
-        match="dsc_single_curve_phase_source_unsupported",
+        match="dsc_curve_transform_invalid",
     ):
         workflow.run_request(request_path)
 
@@ -343,4 +342,4 @@ def test_dsc_global_resolver_rejects_cycle_workbook_identity(tmp_path: Path) -> 
             request={"template": "curve"},
         )
 
-    assert exc_info.value.reason_code == "dsc_single_curve_phase_source_unsupported"
+    assert exc_info.value.reason_code == "dsc_curve_transform_invalid"

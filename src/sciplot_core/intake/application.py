@@ -37,6 +37,7 @@ def create_intake_project(
     column_confirmations: list[dict[str, Any]] | None = None,
     replicate_mode: str | None = None,
     recognition: dict[str, Any] | None = None,
+    group_order_is_explicit: bool = True,
 ) -> dict[str, Any]:
     return _create_intake_project(
         project_name=project_name,
@@ -50,6 +51,7 @@ def create_intake_project(
         column_confirmations=column_confirmations,
         replicate_mode=replicate_mode,
         recognition=recognition,
+        group_order_is_explicit=group_order_is_explicit,
         studio_preparer=prepare_studio_document,
     )
 

@@ -127,12 +127,13 @@ def _apply_studio_request_overrides(
             current_options = dict(
                 (selected_rule_payload or {}).get("render_options") or {}
             )
-            current_options.setdefault(
-                "x_label_override", selected_rule.x_axis.display_label
-            )
-            current_options.setdefault(
-                "y_label_override", selected_rule.y_axis.display_label
-            )
+            if selected_rule.figure_plan_adapter != "registered_single_curve":
+                current_options.setdefault(
+                    "x_label_override", selected_rule.x_axis.display_label
+                )
+                current_options.setdefault(
+                    "y_label_override", selected_rule.y_axis.display_label
+                )
             current_options.update(explicit_options)
             request["render_options"] = current_options
         if selected_template:

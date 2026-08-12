@@ -17,7 +17,14 @@ from sciplot_core.dma_temperature_contract import (
 from sciplot_core.figure_plan import CartesianMetricBinding, ResolvedFigurePlan
 from sciplot_core.figure_plan.dma_temperature_resolution import (
     DmaTemperatureSourceFacts,
+    dma_temperature_source_facts_from_transform,
     load_dma_temperature_source_facts,
+)
+from sciplot_core.semantic_sources.scientific_source import (
+    ResolvedScientificSource,
+)
+from sciplot_core.semantic_sources.scientific_transform import (
+    ResolvedScientificTransform,
 )
 
 
@@ -25,6 +32,7 @@ def require_dma_temperature_execution_plan(
     plan: ResolvedFigurePlan,
     *,
     source: Path,
+    resolved_scientific_source: ResolvedScientificSource | None = None,
 ) -> DmaTemperatureSourceFacts:
     """Return source facts only when every executable plan identity is exact."""
 
@@ -52,7 +60,28 @@ def require_dma_temperature_execution_plan(
     ):
         _mismatch("task, metric, template, or artifact identity")
 
-    facts = load_dma_temperature_source_facts(source)
+    if resolved_scientific_source is not None:
+        if (
+            resolved_scientific_source.rule_id != DMA_TEMPERATURE_RULE_ID
+            or resolved_scientific_source.source != source.expanduser().resolve()
+            or resolved_scientific_source.figure_plan is None
+            or resolved_scientific_source.figure_plan.plan_sha256 != plan.plan_sha256
+            or not resolved_scientific_source.source_sha256
+            or resolved_scientific_source.source_sha256 != plan.source_sha256
+        ):
+            raise ValueError(
+                "dma_temperature_scientific_source_mismatch: the resolved source "
+                "snapshot does not belong to the selected DMA FigurePlan."
+            )
+        facts = dma_temperature_source_facts_from_transform(
+            resolved_scientific_source.require_domain(ResolvedScientificTransform),
+            source_sha256=resolved_scientific_source.source_sha256,
+        )
+    else:
+        facts = load_dma_temperature_source_facts(
+            source,
+            series_order=task.sample_order,
+        )
     if plan.source_sha256 != facts.source_sha256:
         raise ValueError(
             "dma_temperature_figure_plan_source_changed: the live DMA source "

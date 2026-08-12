@@ -17,7 +17,11 @@ from sciplot_core.materials_rules import (
 
 from sciplot_core.semantic_sources.models import (
     RheologySweepSample,
+    _RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
     _RHEOLOGY_SWEEP_METRICS,
+)
+from sciplot_core.semantic_sources.numeric_separators import (
+    selected_columns_use_decimal_comma,
 )
 
 from sciplot_core.semantic_sources.table_scanning import (
@@ -27,7 +31,6 @@ from sciplot_core.semantic_sources.table_scanning import (
     _unit_for,
     _float,
     _read_raw_table_normalized,
-    _table_uses_decimal_comma,
     _axis_match,
     _unit_row_score,
 )
@@ -246,7 +249,11 @@ def _read_rheology_sweep_sample(
             or "Pa"
         )
 
-    decimal_comma = _table_uses_decimal_comma(raw, start_row=header_index + 1)
+    decimal_comma = selected_columns_use_decimal_comma(
+        raw,
+        start_row=header_index + 1,
+        columns=(x_index, *metric_indexes.values()),
+    )
     rows: list[dict[str, float]] = []
     for row_index in range(header_index + 1, raw.shape[0]):
         x_value = _float(raw.iat[row_index, x_index], decimal_comma=decimal_comma)
@@ -351,6 +358,7 @@ def _read_rheology_frequency_comparison_samples(
         x_aliases=("angularfrequency", "frequency", "omega", "ω"),
         x_label="Angular Frequency",
         default_x_unit="rad/s",
+        metrics=_RHEOLOGY_FREQUENCY_OUTPUT_METRICS,
         strict_scope=strict_scope,
     )
 

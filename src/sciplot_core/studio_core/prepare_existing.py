@@ -36,6 +36,7 @@ from sciplot_core.studio_core.figure_set_storage import (
     _commit_studio_figure_set_transaction,
 )
 from sciplot_core.studio_core.figure_task_evidence import (
+    generic_figure_queue_from_plan,
     validate_figure_registry_against_plan,
 )
 from sciplot_core.studio_core.json_files import _read_json
@@ -120,6 +121,12 @@ def reuse_existing_studio_document(
         project_dir=project_dir,
         figure_plan=figure_plan,
     )
+    generic_queue = generic_figure_queue_from_plan(
+        figure_plan,
+        render_adapter=(
+            current_rule.render_adapter if current_rule is not None else None
+        ),
+    )
     staged_request = (
         request_path.with_name(f".sciplot-studio-reuse-{uuid4().hex}.json")
         if request_changed
@@ -174,7 +181,7 @@ def reuse_existing_studio_document(
                 primary_document=document_path,
                 staged_request=staged_request,
                 preserve_existing=True,
-                queue_override=impact_queue or None,
+                queue_override=impact_queue or generic_queue or None,
                 figure_plan=figure_plan,
             )
     finally:

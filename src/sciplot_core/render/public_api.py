@@ -25,6 +25,7 @@ def render_to_dir(
     split_policy: dict[str, Any] | None = None,
     request_context: dict[str, Any] | None = None,
     _terminal_source_binding: MaterializedTerminalSourceBinding | None = None,
+    _terminal_source_prepared: bool = False,
 ) -> dict[str, Any]:
     reserved = {"_terminal_source_binding", "_terminal_source_prepared"}
     if isinstance(request_context, dict) and reserved.intersection(request_context):
@@ -52,5 +53,6 @@ def render_to_dir(
         export_formats=export_formats,
         split_policy=split_policy,
         request_context=request_context,
+        _terminal_source_prepared=_terminal_source_prepared,
         **binding_option,
     )

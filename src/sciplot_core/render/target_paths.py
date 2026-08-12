@@ -16,6 +16,7 @@ from sciplot_core.terminal_source_binding import (
 )
 from sciplot_core.terminal_source_binding_wire import (
     TERMINAL_SOURCE_BINDING_ENV,
+    TERMINAL_SOURCE_PREPARED_ENV,
 )
 
 
@@ -33,6 +34,7 @@ def _render_studio_exports(
     export_formats: tuple[str, ...],
     *,
     _terminal_source_binding: SealedTerminalSourceBinding | None = None,
+    _terminal_source_prepared: bool = False,
 ) -> dict[str, Any]:
     command = [
         sys.executable,
@@ -45,10 +47,13 @@ def _render_studio_exports(
     ]
     environment = _veusz_worker_env()
     environment.pop(TERMINAL_SOURCE_BINDING_ENV, None)
+    environment.pop(TERMINAL_SOURCE_PREPARED_ENV, None)
     if _terminal_source_binding is not None:
         environment[TERMINAL_SOURCE_BINDING_ENV] = (
             _terminal_source_binding.to_environment_value()
         )
+    if _terminal_source_prepared:
+        environment[TERMINAL_SOURCE_PREPARED_ENV] = "1"
     result = subprocess.run(
         command,
         text=True,

@@ -6,6 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.scientific_review import (
+    scientific_transform_review_from_ledger,
+)
+
 from sciplot_gui.studio_project_status.project_runs import (
     _read_json,
     _request_path_value,
@@ -106,6 +110,7 @@ def build_studio_project_status(
                 "project_delivery_current": False,
             },
             "qa": qa,
+            "scientific_transform_review": None,
             "results": _result_targets(
                 live_document=live_document,
                 qa=qa,
@@ -186,6 +191,7 @@ def build_studio_project_status(
                 "standalone_receipt_current": (qa.get("artifact_qa_current") is True),
             },
             "qa": qa,
+            "scientific_transform_review": None,
             "results": _result_targets(
                 live_document=live_document,
                 qa=qa,
@@ -315,6 +321,9 @@ def build_studio_project_status(
         "mapping": mapping,
         "provenance": provenance,
         "qa": qa,
+        "scientific_transform_review": scientific_transform_review_from_ledger(
+            request.get("transform_ledger")
+        ),
         "results": _result_targets(
             live_document=live_document,
             qa=qa,

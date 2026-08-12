@@ -100,6 +100,8 @@ def create_intake_project_from_session(
         "data_type_id": str(payload.get("data_type_id") or "unknown"),
         "experiment_type_id": str(payload.get("experiment_type_id") or "unknown"),
         "groups": groups,
+        "group_order_is_explicit": payload.get("group_order_is_explicit", True)
+        is not False,
         "output_root": Path(str(payload.get("output_root") or _DEFAULT_OUTPUT_ROOT)),
         "plot_output": payload.get("plot_output"),
         "exports": payload.get("exports"),

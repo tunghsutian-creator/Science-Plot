@@ -44,6 +44,7 @@ def prepare_studio_document(
     regenerate_generated: bool = False,
     figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
     _terminal_source_binding: SealedTerminalSourceBinding | None = None,
+    _terminal_source_prepared: bool = False,
 ) -> dict[str, Any]:
     resolved = Path(target).expanduser().resolve()
     target_info = _resolve_studio_target(
@@ -76,11 +77,6 @@ def prepare_studio_document(
 
     request_path = target_info["request"]
     project_dir = target_info["project_dir"]
-    if _terminal_source_binding is not None:
-        _terminal_source_binding.validate_request(
-            request_path,
-            _read_json(request_path),
-        )
     if delivery_root is not None:
         request = _read_json(request_path)
         request[REQUEST_DELIVERY_ROOT_KEY] = str(delivery_root.expanduser().resolve())
@@ -114,6 +110,7 @@ def prepare_studio_document(
         template=template,
         project_name=project_name,
         figure_set_path_replacer=figure_set_path_replacer,
+        _terminal_source_prepared=_terminal_source_prepared,
         **binding_option,
     )
 

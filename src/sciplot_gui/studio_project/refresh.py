@@ -290,9 +290,11 @@ class RefreshMixin:
             return
         try:
             self._refresh_document_state()
+            self._refresh_series_revision()
         except Exception as exc:
             self._audit_failure_status(exc)
 
     def _dock_visibility_changed(self, visible: bool) -> None:
         if visible and not self._exporting:
             self._refresh_document_state()
+            self._refresh_series_revision()

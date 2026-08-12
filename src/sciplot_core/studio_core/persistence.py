@@ -108,24 +108,13 @@ def _validate_staged_veusz_document(
     return True
 
 
-def atomic_save_veusz_document(
+def stage_veusz_document(
     document: Any,
     target: Path,
     *,
     staged_validator: Callable[..., bool] | None = None,
 ) -> dict[str, Any]:
-    """Serialize a live Veusz document without ever truncating its target.
-
-    Veusz's native ``Document.save`` writes directly to the requested path and
-    marks the live document unmodified before the caller knows whether a
-    durable replacement exists.  This adapter serializes beside the target,
-    fsyncs, and attempts a secure-mode structural reopen before replacing the
-    public path.  A VSZ containing commands which secure-mode validation cannot
-    execute is still saved atomically so the owner's work is not lost, but its
-    receipt is explicitly ``saved_unvalidated`` and callers must not publish
-    it as an exact-current verified export.  The live filename, modified flag,
-    and revision are restored exactly when any pre-commit step fails.
-    """
+    """Serialize beside a target while leaving both target and live state intact."""
 
     requested = target.expanduser()
     if not requested.is_absolute():
@@ -151,7 +140,6 @@ def atomic_save_veusz_document(
     )
     os.close(staged_fd)
     staged_path = Path(staged_name)
-    replaced = False
 
     def restore_live_state() -> None:
         document.filename = old_document_filename
@@ -184,12 +172,46 @@ def atomic_save_veusz_document(
         os.chmod(staged_path, existing_mode)
         staged_size = staged_path.stat().st_size
         staged_sha256 = file_sha256(staged_path)
+        return {
+            "kind": "sciplot_staged_veusz_document",
+            "version": 1,
+            "status": "passed" if reopen_validated else "saved_unvalidated",
+            "target": str(resolved_target),
+            "staged": str(staged_path),
+            "mode": mode,
+            "size_bytes": staged_size,
+            "sha256": staged_sha256,
+            "reopen_validated": reopen_validated,
+            "ready_for_export": reopen_validated,
+        }
+    except Exception:
+        restore_live_state()
+        if hasattr(document, "blockSignals"):
+            document.blockSignals(signals_blocked)
+        staged_path.unlink(missing_ok=True)
+        raise
+
+
+def atomic_save_veusz_document(
+    document: Any,
+    target: Path,
+    *,
+    staged_validator: Callable[..., bool] | None = None,
+) -> dict[str, Any]:
+    """Serialize, validate, and atomically replace one Veusz target."""
+
+    stage = stage_veusz_document(
+        document,
+        target,
+        staged_validator=staged_validator,
+    )
+    staged_path = Path(stage["staged"])
+    resolved_target = Path(stage["target"])
+    parent = resolved_target.parent
+    replaced = False
+    try:
         os.replace(staged_path, resolved_target)
         replaced = True
-
-        # Directory fsync is not supported on every filesystem.  The replace
-        # is already the commit point, so an unsupported durability hint must
-        # not roll the live state back to a filename that has in fact changed.
         directory_fd: int | None = None
         directory_fsync = False
         try:
@@ -209,31 +231,15 @@ def atomic_save_veusz_document(
         try:
             document.setModified(False)
         except Exception:
-            # The file replacement is already committed.  Do not report a
-            # save failure that could tempt the caller to retry against a
-            # target which did change; preserve the truthful saved state.
             document.modified = False
         return {
+            **{key: value for key, value in stage.items() if key != "staged"},
             "kind": "sciplot_atomic_veusz_save",
-            "version": 1,
-            "status": "passed" if reopen_validated else "saved_unvalidated",
-            "target": str(resolved_target),
-            "mode": mode,
-            "size_bytes": staged_size,
-            "sha256": staged_sha256,
-            "reopen_validated": reopen_validated,
-            "ready_for_export": reopen_validated,
             "directory_fsync": directory_fsync,
         }
-    except Exception:
-        if not replaced:
-            restore_live_state()
-            if hasattr(document, "blockSignals"):
-                document.blockSignals(signals_blocked)
-        raise
     finally:
-        if staged_path.exists():
-            staged_path.unlink()
+        if not replaced:
+            staged_path.unlink(missing_ok=True)
 
 
 def migrate_studio_document_unit_labels(document_path: Path) -> dict[str, Any]:

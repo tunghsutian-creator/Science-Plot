@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -7,13 +8,14 @@ import pytest
 
 import sciplot_core.workflow.auto_split as auto_split
 import sciplot_core.workflow.impact_bundle as impact_bundle
+from sciplot_core.materials_rules import get_rule
 
 
 _BUNDLE_ATTRIBUTES = {
     "performance": "_render_veusz_performance_bundle",
     "impact": "_render_veusz_impact_bundle",
     "mechanical": "_render_veusz_mechanical_bundle",
-    "dsc": "_render_veusz_dsc_bundle",
+    "dma_temperature": "_render_veusz_dma_temperature_bundle",
     "rheology": "_render_veusz_sweep_bundle",
 }
 
@@ -66,7 +68,7 @@ def _install_render_spies(
         ("tensile_curve", "mechanical"),
         ("compression_curve", "mechanical"),
         ("flexural_curve", "mechanical"),
-        ("dsc_curve", "dsc"),
+        ("dsc_curve", "generic"),
         ("rheology_frequency_sweep", "rheology"),
         ("rheology_temperature_sweep", "rheology"),
         ("ftir_spectrum", "generic"),
@@ -103,13 +105,27 @@ def test_render_family_rejects_noncanonical_rule_id(rule_id: object) -> None:
         auto_split._resolve_workflow_render_family(rule_id)
 
 
+def test_render_family_is_read_from_the_semantic_rule(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = get_rule("tga_curve")
+    monkeypatch.setattr(
+        auto_split,
+        "get_rule",
+        lambda _rule_id: replace(base, render_adapter="performance"),
+    )
+
+    assert auto_split._resolve_workflow_render_family("tga_curve") == "performance"
+
+
 @pytest.mark.parametrize(
     ("rule_id", "template", "expected_family", "uses_raw_source"),
     [
         ("performance_comparison", "scatter", "performance", True),
         ("impact_metric", "box_strip", "impact", True),
         ("tensile_curve", "curve", "mechanical", False),
-        ("dsc_curve", "curve", "dsc", False),
+        ("dsc_curve", "curve", "generic", False),
+        ("dma_temperature_sweep", "point_line", "dma_temperature", False),
         ("rheology_frequency_sweep", "point_line", "rheology", False),
         ("tga_curve", "curve", "generic", False),
         (None, "curve", "generic", False),

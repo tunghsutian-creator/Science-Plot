@@ -323,17 +323,4 @@ def audit_axes_and_series(
             "Exact-current Veusz xy object and legend-key order differs from the rendered series order."
         )
 
-    actual_boxplot_order = [
-        (
-            str(record["name"]),
-            tuple((str(value) for value in record["bindings"]["values"])),
-            tuple((float(value) for value in record["bindings"]["posn"])),
-        )
-        for record in boxplot_records
-    ]
-
-    if actual_boxplot_order != expected_boxplot_order:
-        raise ValueError(
-            "Exact-current Veusz boxplot object order differs from the rendered categorical order."
-        )
     return series

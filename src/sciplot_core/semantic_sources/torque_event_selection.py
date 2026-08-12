@@ -190,11 +190,13 @@ def _apply_torque_selection(
     if not selected:
         selected = list(series.points)
         start_s = selected[0][0]
-    zero = (
-        start_s
-        if selection.get("time_zero", "start_s") == "start_s"
-        else selected[0][0]
-    )
+    time_zero = selection.get("time_zero", "start_s")
+    if time_zero == "absolute":
+        zero = 0.0
+    elif time_zero == "start_s":
+        zero = start_s
+    else:
+        zero = selected[0][0]
     sample = _clean_text(selection.get("plot_label")) or series.sample
     return CurveSeriesPayload(
         sample=sample,

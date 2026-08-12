@@ -14,6 +14,9 @@ from sciplot_core.operation_modes import (
     normal_mode_payload,
 )
 from sciplot_core.policy import canonical_figure_stem
+from sciplot_core.scientific_review import (
+    scientific_transform_review_from_ledger,
+)
 
 from .artifact_previews import _figure_preview_info
 from .packaging import _artifact_info, _project_package_info, _read_json_if_exists
@@ -98,6 +101,36 @@ def _project_scoped_manifest_path(
         root=project_dir,
         require_regular_file=False,
     )
+
+
+def _scientific_transform_review(
+    project_dir: Path,
+    *,
+    last_run: dict[str, Any],
+) -> dict[str, Any] | None:
+    if last_run:
+        run_output = _project_scoped_manifest_path(project_dir, last_run.get("output"))
+        run_manifest = (
+            _read_json_if_exists(run_output / "manifest.json")
+            if run_output is not None
+            else None
+        )
+        ledger = (
+            run_manifest.get("transform_ledger")
+            if isinstance(run_manifest, dict)
+            else None
+        )
+        phase = "run_result"
+    else:
+        plot_request = _read_json_if_exists(project_dir / "plot_request.json")
+        ledger = (
+            plot_request.get("transform_ledger")
+            if isinstance(plot_request, dict)
+            else None
+        )
+        phase = "prepared"
+    review = scientific_transform_review_from_ledger(ledger)
+    return {**review, "phase": phase} if review is not None else None
 
 
 def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
@@ -221,6 +254,10 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         if needs_assisted_cleanup
         else normal_mode_payload(route="web")
     )
+    scientific_transform_review = _scientific_transform_review(
+        project_path,
+        last_run=last_run,
+    )
     return {
         "kind": "sciplot_project_status",
         "project_slug": project_slug,
@@ -235,6 +272,7 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         ),
         "figures": figures,
         "preview_figure": preview_figure,
+        "scientific_transform_review": scientific_transform_review,
         "review": {
             "mode": "read_only",
             "preview_source": "rendered_artifacts_only",

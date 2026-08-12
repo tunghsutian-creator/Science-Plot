@@ -15,7 +15,13 @@ from sciplot_core.materials_rules.metric_tables import (
 )
 
 
-def _ftir_peak_position_metrics(source_path: Path) -> list[dict[str, Any]]:
+def _ftir_peak_position_metrics(
+    source_path: Path,
+    *,
+    metric_name: str = "observed_response_extremum_wavenumber_cm-1",
+) -> list[dict[str, Any]]:
+    """Report only a mode-explicit observed FTIR response extremum."""
+
     series = _read_labeled_paired_curve_series(source_path)
     rows: list[dict[str, Any]] = []
     for sample, y_header, data in series:
@@ -24,11 +30,11 @@ def _ftir_peak_position_metrics(source_path: Path) -> list[dict[str, Any]]:
         if finite.empty:
             rows.append(
                 _metric(
-                    f"strongest_peak_position{suffix}",
+                    f"{metric_name}{suffix}",
                     None,
                     "cm^-1",
                     "skipped",
-                    "No finite spectrum found.",
+                    "No finite observed spectral response is available.",
                 )
             )
             continue
@@ -36,27 +42,33 @@ def _ftir_peak_position_metrics(source_path: Path) -> list[dict[str, Any]]:
         if "transmittance" in mode or mode in {"t", "percentt"}:
             index = finite["y"].idxmin()
             reason = (
-                "Position of the minimum transmittance in this canonical paired trace."
+                "Observed wavenumber of the minimum finite transmittance response; "
+                "this descriptive extremum makes no spectral-band or chemical "
+                "assignment."
             )
         elif "absorbance" in mode:
             index = finite["y"].idxmax()
             reason = (
-                "Position of the maximum absorbance in this canonical paired trace."
+                "Observed wavenumber of the maximum finite absorbance response; "
+                "this descriptive extremum makes no spectral-band or chemical "
+                "assignment."
             )
         else:
             rows.append(
                 _metric(
-                    f"strongest_peak_position{suffix}",
+                    f"{metric_name}{suffix}",
                     None,
                     "cm^-1",
                     "skipped",
-                    f"Unsupported FTIR response mode `{y_header}`; expected transmittance or absorbance.",
+                    "Observed response extremum skipped because the response mode "
+                    f"`{y_header}` is not explicitly Transmittance or Absorbance; "
+                    "no spectral-band or chemical assignment is made.",
                 )
             )
             continue
         rows.append(
             _metric(
-                f"strongest_peak_position{suffix}",
+                f"{metric_name}{suffix}",
                 float(finite.loc[index, "x"]),
                 "cm^-1",
                 reason=reason,
@@ -64,11 +76,11 @@ def _ftir_peak_position_metrics(source_path: Path) -> list[dict[str, Any]]:
         )
     return rows or [
         _metric(
-            "strongest_peak_position",
+            metric_name,
             None,
             "cm^-1",
             "skipped",
-            "No canonical paired FTIR trace found.",
+            "No canonical paired observed spectral response is available.",
         )
     ]
 

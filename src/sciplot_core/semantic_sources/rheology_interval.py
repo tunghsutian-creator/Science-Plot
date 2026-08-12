@@ -103,10 +103,13 @@ def _read_rheology_interval_series(
                     break
             points: list[tuple[float, float]] = []
             numeric_x_rows = 0
+            candidate_rows = 0
             for row_index in range(header_index + 1, interval_stop):
                 row = raw.iloc[row_index].tolist()
                 x_value = _float(row[x_index] if x_index < len(row) else None)
                 y_value = _float(row[y_index] if y_index < len(row) else None)
+                if x_value is not None or y_value is not None:
+                    candidate_rows += 1
                 if x_value is not None and math.isfinite(x_value):
                     numeric_x_rows += 1
                 if (
@@ -121,10 +124,16 @@ def _read_rheology_interval_series(
                     {
                         "interval_index": interval_index,
                         "header_index": header_index,
+                        "source_header_index": int(raw.index[header_index]),
+                        "x_column_index": x_index,
+                        "x_column_header": headers[x_index],
+                        "y_column_index": y_index,
+                        "y_column_header": headers[y_index],
                         "x_unit": _unit_for(units, x_index, "s"),
                         "y_unit": _unit_for(units, y_index, y_unit),
                         "points": tuple(points),
                         "numeric_x_rows": numeric_x_rows,
+                        "candidate_rows": candidate_rows,
                     }
                 )
         combined_points = tuple(
@@ -193,6 +202,38 @@ def _read_rheology_interval_series(
         "selected_interval_point_counts": [
             len(interval["points"]) for interval in selected_intervals
         ],
+        "selected_interval_numeric_x_row_counts": [
+            int(interval["numeric_x_rows"]) for interval in selected_intervals
+        ],
+        "selected_interval_candidate_row_counts": [
+            int(interval["candidate_rows"]) for interval in selected_intervals
+        ],
+        "selected_interval_header_rows": [
+            int(interval["source_header_index"]) for interval in selected_intervals
+        ],
+        "selected_interval_columns": [
+            {
+                "interval_index": int(interval["interval_index"]),
+                "header_row_index": int(interval["source_header_index"]),
+                "x": {
+                    "header": str(interval["x_column_header"]),
+                    "column_index_zero_based": int(interval["x_column_index"]),
+                    "unit": str(interval["x_unit"]),
+                },
+                "y": {
+                    "header": str(interval["y_column_header"]),
+                    "column_index_zero_based": int(interval["y_column_index"]),
+                    "unit": str(interval["y_unit"]),
+                },
+            }
+            for interval in selected_intervals
+        ],
+        "source_x_column_index": int(selected_intervals[0]["x_column_index"]),
+        "source_x_header": str(selected_intervals[0]["x_column_header"]),
+        "source_x_unit": str(selected_intervals[0]["x_unit"]),
+        "source_y_column_index": int(selected_intervals[0]["y_column_index"]),
+        "source_y_header": str(selected_intervals[0]["y_column_header"]),
+        "source_y_unit": str(selected_intervals[0]["y_unit"]),
         "selected_point_interval_indexes": [
             int(interval["interval_index"])
             for interval in selected_intervals

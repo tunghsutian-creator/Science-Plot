@@ -207,16 +207,26 @@ def compute_analysis_metrics(
             canonical_source,
             metric_name=_analysis_metric_name(semantic, "dtg_peak_temperature_C"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
-            extreme="minimum",
+            extreme="maximum",
             x_tokens=("temperature",),
             y_tokens=("derivative mass", "dtg", "derivative"),
+            reason=(
+                "Temperature of the maximum finite -d(mass)/dT response in "
+                "the canonical paired trace."
+            ),
         )
     elif rule_id == "swelling_curve":
         rows = _swelling_metrics(canonical_source)
     elif rule_id == "impact_metric" and processed is not None:
         rows = _impact_metrics(processed)
     elif rule_id == "ftir_spectrum":
-        rows = _ftir_peak_position_metrics(canonical_source)
+        rows = _ftir_peak_position_metrics(
+            canonical_source,
+            metric_name=_analysis_metric_name(
+                semantic,
+                "observed_response_extremum_wavenumber_cm-1",
+            ),
+        )
     elif rule_id == "uvvis_spectrum":
         rows = _paired_extreme_position_metrics(
             canonical_source,
@@ -229,11 +239,15 @@ def compute_analysis_metrics(
     elif rule_id == "xrd_pattern":
         rows = _paired_extreme_position_metrics(
             canonical_source,
-            metric_name=_analysis_metric_name(semantic, "main_scattering_peak_q"),
+            metric_name=_analysis_metric_name(semantic, "main_peak_2theta"),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
             extreme="maximum",
-            x_tokens=("2theta", "2 theta"),
+            x_tokens=("diffraction angle", "angle", "2theta", "2 theta"),
             y_tokens=("intensity",),
+            reason=(
+                "Diffraction angle of the maximum finite observed intensity; "
+                "this descriptive position does not assign a crystalline phase."
+            ),
         )
     elif rule_id == "saxs_profile":
         rows = _interior_local_peak_position_metrics(
@@ -246,8 +260,8 @@ def compute_analysis_metrics(
     elif rule_id == "gpc_sec_chromatogram":
         rows = _paired_extreme_position_metrics(
             canonical_source,
-            metric_name="peak_elution_time_min",
-            x_unit="min",
+            metric_name=_analysis_metric_name(semantic, "peak_elution_time_min"),
+            x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
             extreme="maximum",
             x_tokens=("elution time", "retention time"),
             y_tokens=("detector response", "response", "dri", "ri", "rayleigh"),

@@ -191,9 +191,16 @@ def _commit_studio_figure_set_transaction(
                     )
                 _read_json(spec)
                 document_record = by_target.get(document)
-                if document_record is not None and entry.get(
-                    "generated_hash"
-                ) != existing_file_sha256(document):
+                document_state = entry.get("document_state")
+                expected_current_hash = (
+                    document_state.get("current_hash")
+                    if isinstance(document_state, dict)
+                    else entry.get("generated_hash")
+                )
+                if (
+                    document_record is not None
+                    and expected_current_hash != existing_file_sha256(document)
+                ):
                     raise RuntimeError(
                         f"Ready figure {entry.get('figure_id')} has a stale hash."
                     )

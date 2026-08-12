@@ -35,10 +35,15 @@ def selected_frequency_metric_keys(
     available_metrics: list[str],
     *,
     request: dict[str, Any],
+    _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> list[str]:
     """Project an optional frequency plan onto the available prepared metrics."""
 
-    figure_plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
+    figure_plan = _resolved_figure_plan
+    if figure_plan is None and request.get("resolved_figure_plan") is not None:
+        figure_plan = resolved_figure_plan_from_payload(
+            request["resolved_figure_plan"]
+        )
     if figure_plan is None:
         return available_metrics
     if figure_plan.rule_id != "rheology_frequency_sweep":

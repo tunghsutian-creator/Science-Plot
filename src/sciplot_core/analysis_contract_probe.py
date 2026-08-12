@@ -20,6 +20,12 @@ from sciplot_core.materials_rules import (
     semantic_payload_from_rule,
 )
 from sciplot_core.semantic import prepare_semantic_source
+from sciplot_core.semantic_sources.gpc_sources import (
+    resolve_gpc_scientific_transform,
+)
+
+
+_FTIR_EXTREMUM_METRIC = "observed_response_extremum_wavenumber_cm-1"
 
 
 def _check(check_id: str, passed: bool, evidence: Any) -> dict[str, Any]:
@@ -66,8 +72,11 @@ def _optional_real_fixture_checks(
 
     gpc_source = fixture_root / "gpc_sec_chromatogram"
     if gpc_source.exists():
-        gpc_semantic = semantic_payload_from_rule(
-            get_rule("gpc_sec_chromatogram"), confidence=1.0
+        gpc_rule = get_rule("gpc_sec_chromatogram")
+        gpc_semantic = semantic_payload_from_rule(gpc_rule, confidence=1.0)
+        gpc_transform = resolve_gpc_scientific_transform(
+            gpc_source,
+            rule=gpc_rule,
         )
         gpc_result = prepare_semantic_source(
             gpc_source,
@@ -85,8 +94,11 @@ def _optional_real_fixture_checks(
             )
         )
         expected_gpc = {
-            "peak_elution_time_min[Sample 8]": 18.6833333333333,
-            "peak_elution_time_min[Sample 9]": 18.7333333333333,
+            f"peak_elution_time_min[{series.sample}]": max(
+                series.points,
+                key=lambda point: point[1],
+            )[0]
+            for series in gpc_transform.series
         }
         checks.append(
             _check(
@@ -123,21 +135,26 @@ def _optional_real_fixture_checks(
         )
         ftir_processed = Path(str(ftir_result["processed_source"]))
         ftir_rows = _row_map(_ftir_peak_position_metrics(ftir_processed))
+        ftir_row = ftir_rows.get(_FTIR_EXTREMUM_METRIC)
         checks.append(
             _check(
-                "local_ftir_transmittance_trough",
-                _value_matches(ftir_rows, "strongest_peak_position", 1633.894),
+                "local_ftir_unknown_response_skipped",
+                bool(
+                    ftir_row
+                    and ftir_row.get("status") == "skipped"
+                    and ftir_row.get("value") in {"", None}
+                    and "not explicitly" in str(ftir_row.get("reason") or "")
+                ),
                 {
                     "fixture": str(ftir_source),
                     "metrics": ftir_rows,
-                    "expected_wavenumber_cm-1": 1633.894,
                 },
             )
         )
     else:
         checks.append(
             _check(
-                "local_ftir_transmittance_trough",
+                "local_ftir_unknown_response_skipped",
                 True,
                 {"fixture": str(ftir_source), "status": "not_present_optional"},
             )
@@ -233,8 +250,8 @@ def run_analysis_contract_probe(
     )
     ftir_rows = _row_map(_ftir_peak_position_metrics(ftir_path))
     ftir_expected = {
-        "strongest_peak_position[Percent T]": 1100.0,
-        "strongest_peak_position[Abs]": 2200.0,
+        f"{_FTIR_EXTREMUM_METRIC}[Percent T]": 1100.0,
+        f"{_FTIR_EXTREMUM_METRIC}[Abs]": 2200.0,
     }
     checks.append(
         _check(

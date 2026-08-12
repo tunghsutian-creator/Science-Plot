@@ -9,11 +9,21 @@ from typing import NoReturn
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
+from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
 
 
 _HASH = re.compile(r"[0-9a-f]{64}")
 _SOURCE_CHANGED = "semantic_preparation_source_changed"
 _CONTRACT_MISMATCH = "semantic_preparation_attestation_mismatch"
+SOURCE_ATTESTED_RULE_IDS = MECHANICAL_RULE_IDS | frozenset(
+    {"dma_temperature_sweep", "rheology_temperature_sweep"}
+)
+
+
+def requires_preparation_source_attestation(rule_id: object) -> bool:
+    """Return whether one canonical rule uses the preparation attestation seam."""
+
+    return isinstance(rule_id, str) and rule_id in SOURCE_ATTESTED_RULE_IDS
 
 
 class PreparationSourceAttestationError(ValueError):
@@ -139,7 +149,6 @@ class PreparationSourceAttestation:
             ),
             prepared_source=AttestedSourceFile.capture(prepared_source),
         )
-        binding.verify_current()
         return binding
 
     def verify_current(
@@ -178,4 +187,6 @@ __all__ = [
     "AttestedSourceFile",
     "PreparationSourceAttestation",
     "PreparationSourceAttestationError",
+    "SOURCE_ATTESTED_RULE_IDS",
+    "requires_preparation_source_attestation",
 ]

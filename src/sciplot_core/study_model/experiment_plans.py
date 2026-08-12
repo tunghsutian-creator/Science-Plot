@@ -245,12 +245,12 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
         "default_replicate_mode": "individual",
         "figure_queue": (
             {
-                "id": "ftir_intensity_vs_wavenumber",
+                "id": "ftir_spectrum_spectral_response_vs_wavenumber",
                 "title": "FTIR spectrum",
-                "metric": "infrared_intensity",
+                "metric": "spectral_response",
                 "x_metric": "wavenumber",
-                "y_metric": "intensity",
-                "default_template": "curve",
+                "y_metric": "spectral_response",
+                "default_template": "stacked_curve",
             },
         ),
     },
@@ -271,7 +271,7 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
         "default_replicate_mode": "individual",
         "figure_queue": (
             {
-                "id": "uvvis_absorbance_vs_wavelength",
+                "id": "uvvis_spectrum_absorbance_vs_wavelength",
                 "title": "UV-vis spectrum",
                 "metric": "absorbance",
                 "x_metric": "wavelength",

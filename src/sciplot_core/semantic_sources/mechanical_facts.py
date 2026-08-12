@@ -27,8 +27,6 @@ from sciplot_core.semantic_sources.mechanical_sources import (
 from sciplot_core.semantic_sources.models import CurveSeriesPayload
 from sciplot_core.semantic_sources.series_ordering import (
     _order_curve_series,
-    _order_recycled_pa_pair_control_first,
-    _series_order_map,
 )
 from sciplot_core.semantic_sources.tensile_exports import (
     _read_tensile_export_series_list,
@@ -152,11 +150,7 @@ def _read_source(
 def _order_mechanical_series(
     series: list[CurveSeriesPayload], *, series_order: object
 ) -> list[CurveSeriesPayload]:
-    if _series_order_map(series_order):
-        return _order_curve_series(series, series_order)
-    return _order_recycled_pa_pair_control_first(
-        series, sample_of=lambda item: item.sample
-    )
+    return _order_curve_series(series, series_order)
 
 
 def _selected_paths(series: list[CurveSeriesPayload], source: Path) -> tuple[Path, ...]:

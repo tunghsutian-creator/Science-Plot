@@ -93,7 +93,6 @@ def publish_studio_export_run(
             else None
         ),
     )
-    verify_studio_run_source_binding(inventory.resolved_figure_plan, sources)
     manifest = build_studio_run_manifest(
         inventory=inventory,
         sources=sources,

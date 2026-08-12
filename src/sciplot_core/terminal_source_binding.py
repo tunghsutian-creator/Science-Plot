@@ -222,7 +222,6 @@ class MaterializedTerminalSourceBinding:
             "Terminal point_counts must exactly cover sample_order.",
             reason_code=_CONTRACT_MISMATCH,
         )
-        binding.verify_sources()
         return binding
 
     def verify_sources(self) -> None:
@@ -291,7 +290,6 @@ class MaterializedTerminalSourceBinding:
         )
 
     def validate_series(self, series: Sequence[Any]) -> None:
-        self.verify_sources()
         try:
             records = tuple(
                 (

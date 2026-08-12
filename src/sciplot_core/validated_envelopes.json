@@ -1,21 +1,119 @@
 {
   "kind": "sciplot_validated_envelope_registry",
-  "version": 1,
-  "generated_at": "2026-08-09T12:37:40.576851+00:00",
+  "version": 2,
+  "generated_at": "2026-08-09T23:57:57.473487+00:00",
   "source_acceptance": {
-    "kind": "sciplot_ready_rule_acceptance",
-    "version": 3,
-    "generated_at": "2026-08-09T12:35:54.982608+00:00",
-    "summary_sha256": "3f07f8b5d6bf1e6eb03622356a2acb63ddbd6c5384930f0b36a8279d679c726e",
-    "ready_rule_count": 24,
-    "lifecycle_passed_count": 24,
-    "physical_size_passed_count": 24,
-    "real_data_lifecycle_passed_count": 24,
-    "limitations": [
-      "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
-      "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and real-data breadth rather than journal compliance.",
-      "Final PDF/TIFF dimensions are machine-checked. Contact sheets are uncalibrated overview previews whose explicit manual or agent decision does not prove final-physical-size readability.",
-      "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. This rule matrix does not infer composition from independent figures, and SciPlot has no standalone composition UI."
+    "kind": "sciplot_validated_envelope_acceptance_lineage",
+    "version": 1,
+    "records": [
+      {
+        "kind": "sciplot_ready_rule_acceptance",
+        "version": 3,
+        "generated_at": "2026-08-09T12:35:54.982608+00:00",
+        "summary_sha256": "3f07f8b5d6bf1e6eb03622356a2acb63ddbd6c5384930f0b36a8279d679c726e",
+        "rule_ids": [
+          "compression_curve",
+          "dma_frequency_sweep",
+          "dma_temperature_sweep",
+          "dtg_curve",
+          "flexural_curve",
+          "impact_metric",
+          "performance_comparison",
+          "rheology_creep",
+          "rheology_frequency_sweep",
+          "rheology_strain_sweep",
+          "rheology_stress_relaxation",
+          "rheology_stress_sweep",
+          "rheology_temperature_sweep",
+          "rheology_time_sweep",
+          "swelling_curve",
+          "tensile_curve",
+          "tga_curve",
+          "torque_curve"
+        ],
+        "limitations": [
+          "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
+          "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and real-data breadth rather than journal compliance.",
+          "Final PDF/TIFF dimensions are machine-checked. Contact sheets are uncalibrated overview previews whose explicit manual or agent decision does not prove final-physical-size readability.",
+          "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. This rule matrix does not infer composition from independent figures, and SciPlot has no standalone composition UI."
+        ]
+      },
+      {
+        "kind": "sciplot_ready_rule_acceptance",
+        "version": 3,
+        "generated_at": "2026-08-09T21:25:22.028016+00:00",
+        "summary_sha256": "221e521df0cd0fc04755e48b84845cfa3050c23953212656d59617e2f717db89",
+        "rule_ids": [
+          "uvvis_spectrum",
+          "xrd_pattern"
+        ],
+        "limitations": [
+          "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
+          "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and real-data breadth rather than journal compliance.",
+          "Final PDF/TIFF dimensions are machine-checked. Contact sheets are uncalibrated overview previews whose explicit manual or agent decision does not prove final-physical-size readability.",
+          "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. This rule matrix does not infer composition from independent figures, and SciPlot has no standalone composition UI."
+        ]
+      },
+      {
+        "kind": "sciplot_ready_rule_acceptance",
+        "version": 3,
+        "generated_at": "2026-08-09T21:53:12.127077+00:00",
+        "summary_sha256": "d933a06522f4fbb6df4f88d5ceb4801f04c8b97946e728d5c281a46dbe64e2c4",
+        "rule_ids": [
+          "saxs_profile"
+        ],
+        "limitations": [
+          "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
+          "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and real-data breadth rather than journal compliance.",
+          "Final PDF/TIFF dimensions are machine-checked. Contact sheets are uncalibrated overview previews whose explicit manual or agent decision does not prove final-physical-size readability.",
+          "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. This rule matrix does not infer composition from independent figures, and SciPlot has no standalone composition UI."
+        ]
+      },
+      {
+        "kind": "sciplot_ready_rule_acceptance",
+        "version": 3,
+        "generated_at": "2026-08-09T22:23:20.879008+00:00",
+        "summary_sha256": "e387034cad073503bdf3fc159b49f06f3539d2f04546f35b606a562c834df601",
+        "rule_ids": [
+          "gpc_sec_chromatogram"
+        ],
+        "limitations": [
+          "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
+          "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and real-data breadth rather than journal compliance.",
+          "Final PDF/TIFF dimensions are machine-checked. Contact sheets are uncalibrated overview previews whose explicit manual or agent decision does not prove final-physical-size readability.",
+          "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. This rule matrix does not infer composition from independent figures, and SciPlot has no standalone composition UI."
+        ]
+      },
+      {
+        "kind": "sciplot_ready_rule_acceptance",
+        "version": 3,
+        "generated_at": "2026-08-09T23:20:06.700339+00:00",
+        "summary_sha256": "931fdb0bc2c0079a182d50e547f75c1b92985fa33a97ffb08f67155d87f93684",
+        "rule_ids": [
+          "dsc_curve"
+        ],
+        "limitations": [
+          "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
+          "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and real-data breadth rather than journal compliance.",
+          "Final PDF/TIFF dimensions are machine-checked. Contact sheets are uncalibrated overview previews whose explicit manual or agent decision does not prove final-physical-size readability.",
+          "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. This rule matrix does not infer composition from independent figures, and SciPlot has no standalone composition UI."
+        ]
+      },
+      {
+        "kind": "sciplot_ready_rule_acceptance",
+        "version": 3,
+        "generated_at": "2026-08-09T23:57:37.512287+00:00",
+        "summary_sha256": "7834fad8e27c274dd8bc9074b249a10922cf964bff8beaf00b99cf6cd95649b2",
+        "rule_ids": [
+          "ftir_spectrum"
+        ],
+        "limitations": [
+          "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
+          "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and real-data breadth rather than journal compliance.",
+          "Final PDF/TIFF dimensions are machine-checked. Contact sheets are uncalibrated overview previews whose explicit manual or agent decision does not prove final-physical-size readability.",
+          "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. This rule matrix does not infer composition from independent figures, and SciPlot has no standalone composition UI."
+        ]
+      }
     ]
   },
   "entries": [
@@ -122,8 +220,8 @@
       "semantic_family": "dsc_curve",
       "contract_sha256": "b4b60013da784fe87ae4e8526a4421d68887d9412c12d8e61ce71a80696d9538",
       "semantic_contract_sha256": "fa80511005fbaccb46a0b6ecf69fb44a2c07d83af2d97dff1756a92c4c34737b",
-      "accepted_manifest_sha256": "edfe38e5f9496e5a32edc7081abe18f3f991e72a6818af006a99630332a8f84f",
-      "acceptance_generated_at": "2026-08-09T12:35:54.982608+00:00",
+      "accepted_manifest_sha256": "d9f323b02d6cb7e72be33896d2f3ae4afb87bde4e963dcccbd72afdb61050eb1",
+      "acceptance_generated_at": "2026-08-09T23:20:06.700339+00:00",
       "evidence_tier": "user_authorized_digitized_publication_excerpt",
       "evidence_strength": "computed_fixture_hash",
       "real_data_evidence": true,
@@ -218,10 +316,10 @@
     {
       "rule_id": "ftir_spectrum",
       "semantic_family": "ftir_spectrum",
-      "contract_sha256": "228334137a9e97ff63cc60e0f3c03ae1dc34e120681753f23cb3c44dabb9d5df",
-      "semantic_contract_sha256": "99102d0f5939d39d999a17e4ca5c3d1026e8fdfd5bfe082b87823a30d95a1210",
-      "accepted_manifest_sha256": "cad880e9e799d2722f01eca76141250f936da7100a7ca6328043e36d20053363",
-      "acceptance_generated_at": "2026-08-09T12:35:54.982608+00:00",
+      "contract_sha256": "a1eaf88f9088d9d34b592038d47b53c12adc36ba7c4b51e4b166d1f8276d6d6f",
+      "semantic_contract_sha256": "ad7f7c9debc0950f0cee5d18f86d5fe834ee79e966ee7d814125b3de6ec56af9",
+      "accepted_manifest_sha256": "d23e82dcf9b02f103cea8ef0e57be8afb7e626627a0d2bdf416f58b131b3d087",
+      "acceptance_generated_at": "2026-08-09T23:57:37.512287+00:00",
       "evidence_tier": "user_authorized_real_excerpt",
       "evidence_strength": "registered_fixture_and_source",
       "real_data_evidence": true,
@@ -251,10 +349,10 @@
     {
       "rule_id": "gpc_sec_chromatogram",
       "semantic_family": "gpc_sec_chromatogram",
-      "contract_sha256": "d5878abb2c54540d285980cf0afeac0b7028632d8e15f634dca84288c60f43b2",
-      "semantic_contract_sha256": "6754a32bf59fcb819f8e7b2c1d4ad8d896f211beb727ad617595f349833ccc38",
-      "accepted_manifest_sha256": "7b4e07a1095ea364dcfd800a98225c46eed7cfa654b5b82e8ac96a2d6e20c1db",
-      "acceptance_generated_at": "2026-08-09T12:35:54.982608+00:00",
+      "contract_sha256": "643ace54f2a7deeb423987230962b4d8333e0f5f5344364af4d9053bbb2b3b04",
+      "semantic_contract_sha256": "663d1dd9b133bc7fa4b34c6d89cde7178d72cddaaefcea7ce4181aa8c7a1a55c",
+      "accepted_manifest_sha256": "2b7065b379e71f12ac8b5039a2606fc114f0ae9a0584c8da0bcd53873f542f04",
+      "acceptance_generated_at": "2026-08-09T22:23:20.879008+00:00",
       "evidence_tier": "user_authorized_real_instrument_export",
       "evidence_strength": "registered_fixture_source_and_units",
       "real_data_evidence": true,
@@ -579,10 +677,10 @@
     {
       "rule_id": "saxs_profile",
       "semantic_family": "saxs_profile",
-      "contract_sha256": "b1dd390cdb1f844f987bf5b67d74c62321db82288f06833aa6c5cb94917e4427",
-      "semantic_contract_sha256": "1ebbc3bfe64e429ce681af6c832012412f34f03579692726e294e49128bd0db2",
-      "accepted_manifest_sha256": "40e67052d35013977f80d43aec6e9a874549cb9f749509115991fa8735d2c736",
-      "acceptance_generated_at": "2026-08-09T12:35:54.982608+00:00",
+      "contract_sha256": "c989dd39149d4bf81bfbeef8cad9a4fd25c63f8fdabc40d7d7bada4fdae24f8e",
+      "semantic_contract_sha256": "78380dbfb90e517b19740094d8b025981b8b275685bc5a8e5f018228dbc6a376",
+      "accepted_manifest_sha256": "a1b02efe7bd30efb165fd3aedcad2113efd1abbe18066718d9c0f63bc1cfc2a9",
+      "acceptance_generated_at": "2026-08-09T21:53:12.127077+00:00",
       "evidence_tier": "user_authorized_real_publication_supporting_data",
       "evidence_strength": "registered_fixture_source_and_units",
       "real_data_evidence": true,
@@ -743,10 +841,10 @@
     {
       "rule_id": "uvvis_spectrum",
       "semantic_family": "uvvis_spectrum",
-      "contract_sha256": "7372e7a6aa42c2fd59f0cc4cbea67d958d5c0b5a1d9d647abd9eb471c0287d5c",
-      "semantic_contract_sha256": "dc6eb9610d7428c3d50e6a5d265946fa21078e45c47807c33efac99dc7d84b5f",
-      "accepted_manifest_sha256": "ccc8bd2e8181c2b9e174b8a00c02c12197d0a16f1aa23c7f80ced695d83fb6c4",
-      "acceptance_generated_at": "2026-08-09T12:35:54.982608+00:00",
+      "contract_sha256": "4af33644d1aed817cb632db514403a82ee3635e6a5baa78dcde8fd03b3d62e0d",
+      "semantic_contract_sha256": "670805e0dfc0a883477b25a95d1a41122797a24ffb069ae4d0c7b022a4c2934e",
+      "accepted_manifest_sha256": "5feb28bf24266ded1b67b1f9844c66fd9674977675bb8a3941cf6e2ad26d3f56",
+      "acceptance_generated_at": "2026-08-09T21:25:22.028016+00:00",
       "evidence_tier": "public_source_excerpt",
       "evidence_strength": "registered_fixture_source_and_units",
       "real_data_evidence": true,
@@ -774,16 +872,16 @@
     {
       "rule_id": "xrd_pattern",
       "semantic_family": "xrd_pattern",
-      "contract_sha256": "7b89d508f122f95664403371147fdb0fb41c07d95ed64e251f579851fe17789c",
-      "semantic_contract_sha256": "8a88ef89d57287babfaf11033e637b33dc5b6fcebfb5d8a15fe72d3a7acdcf84",
-      "accepted_manifest_sha256": "0aea829244cc75bcad13c2a09e50a10f142e54468a82195f3bae212204ce95ab",
-      "acceptance_generated_at": "2026-08-09T12:35:54.982608+00:00",
+      "contract_sha256": "64c53a96096c8876d41c095e06987f39c24a6b8123f6e3666ceb27417197cc86",
+      "semantic_contract_sha256": "cb42261cb5828511a9be0a652d6daf1d9a910929d67489f113c90b0f822047e9",
+      "accepted_manifest_sha256": "eaedd1134f6e65469a3bc895f234c2b5905b23c6a018a5a7e435d9a127184c99",
+      "acceptance_generated_at": "2026-08-09T21:25:22.028016+00:00",
       "evidence_tier": "public_source_excerpt",
       "evidence_strength": "registered_fixture_source_and_units",
       "real_data_evidence": true,
       "authorization_status": "license_verified",
       "fixture_hash_status": "verified",
-      "fixture_tree_sha256": "2aecf5206cfcca45318fc943c77abc64cfce9fc59b6850766320878997a973da",
+      "fixture_tree_sha256": "12afc71d79a07b65eb6b7908c96c08e967c142db2bd92ce68ad73a85cabc7d9c",
       "source_hash_status": "registered",
       "registered_source_hash_count": 6,
       "unit_status": "source_and_output_registered",

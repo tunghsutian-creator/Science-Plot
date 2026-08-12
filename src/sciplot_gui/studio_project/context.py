@@ -114,6 +114,7 @@ class ContextMixin:
                 "project": project,
                 "qa": qa,
                 "provenance": provenance,
+                "scientific_transform_review": None,
                 "results": results,
                 "document_context": {
                     "state": "document_context_changed",

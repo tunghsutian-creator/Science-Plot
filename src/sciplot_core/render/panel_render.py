@@ -57,6 +57,7 @@ def _render_veusz_panel(
     split_panel: dict[str, Any] | None = None,
     request_context: dict[str, Any] | None = None,
     _terminal_source_binding: MaterializedTerminalSourceBinding | None = None,
+    _terminal_source_prepared: bool = False,
 ) -> tuple[
     list[Path],
     list[dict[str, Any]],
@@ -81,8 +82,6 @@ def _render_veusz_panel(
         **terminal_request,
     }
     request_path = panel_dir / "plot_request.json"
-    if _terminal_source_binding is not None:
-        _terminal_source_binding.validate_request(request_path, request)
     request_path.write_text(
         json.dumps(json_safe(request), indent=2, ensure_ascii=False), encoding="utf-8"
     )
@@ -91,14 +90,11 @@ def _render_veusz_panel(
         if _terminal_source_binding is not None
         else None
     )
-    payload = (
-        _render_studio_exports(
-            request_path,
-            export_formats,
-            _terminal_source_binding=sealed_binding,
-        )
-        if sealed_binding is not None
-        else _render_studio_exports(request_path, export_formats)
+    payload = _render_studio_exports(
+        request_path,
+        export_formats,
+        _terminal_source_binding=sealed_binding,
+        _terminal_source_prepared=_terminal_source_prepared,
     )
     outputs, export_records = _copy_veusz_exports(
         payload, output_dir=output_dir, output_base=output_base
@@ -140,6 +136,7 @@ def _render_to_dir_veusz(
     split_policy: dict[str, Any] | None = None,
     request_context: dict[str, Any] | None = None,
     _terminal_source_binding: MaterializedTerminalSourceBinding | None = None,
+    _terminal_source_prepared: bool = False,
 ) -> dict[str, Any]:
     options = dict(options or {})
     normalized_exports = _normalize_export_formats(export_formats)
@@ -205,6 +202,7 @@ def _render_to_dir_veusz(
                 export_formats=normalized_exports,
                 split_panel=split_panel,
                 request_context=request_context,
+                _terminal_source_prepared=_terminal_source_prepared,
                 **panel_binding,
             )
             all_outputs.extend(outputs)

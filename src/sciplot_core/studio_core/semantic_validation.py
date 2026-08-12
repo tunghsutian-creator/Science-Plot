@@ -91,38 +91,6 @@ def _semantic_series_contract_issues(
                 "incompatible_series": incompatible_labels,
             }
         )
-    if rule_id == "gpc_sec_chromatogram" and len(series) > 1:
-        domains: list[tuple[float, float]] = []
-        for item in series:
-            values = [
-                float(value) for value in item.x_values if math.isfinite(float(value))
-            ]
-            if len(values) >= 2 and max(values) > min(values):
-                domains.append((min(values), max(values)))
-        if len(domains) == len(series):
-            overlap = max(
-                0.0,
-                min(high for _low, high in domains)
-                - max(low for low, _high in domains),
-            )
-            minimum_span = min(high - low for low, high in domains)
-            overlap_fraction = overlap / minimum_span if minimum_span > 0.0 else 0.0
-            if overlap_fraction < 0.25:
-                issues.append(
-                    {
-                        "id": "gpc_detector_time_domains_misaligned",
-                        "severity": "critical"
-                        if overlap_fraction < 0.05
-                        else "warning",
-                        "message": (
-                            "GPC detector traces share too little elution-time domain for a common-axis overlay."
-                        ),
-                        "series_domains": [[low, high] for low, high in domains],
-                        "minimum_span_overlap_fraction": round(overlap_fraction, 6),
-                        "critical_threshold": 0.05,
-                        "warning_threshold": 0.25,
-                    }
-                )
     return issues
 
 

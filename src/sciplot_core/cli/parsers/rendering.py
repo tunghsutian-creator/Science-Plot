@@ -70,6 +70,11 @@ def register_rendering_commands(subparsers: Any) -> None:
     )
 
     autoplot_parser.add_argument(
+        "--rule",
+        help="Explicit material rule selected by the user or an assistant. Pending rules remain non-ready and are never silently promoted.",
+    )
+
+    autoplot_parser.add_argument(
         "--template",
         help="Explicit supported presentation template. For categorical replicate data this can select bar, box, or box_strip without changing the detected scientific data type.",
     )

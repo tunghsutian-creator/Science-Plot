@@ -56,5 +56,9 @@ DMA_TEMPERATURE_RULES: tuple[SemanticRule, ...] = (
         ),
         fixture_status="ready",
         priority=30,
+        render_adapter="dma_temperature",
+        scientific_source_adapter="dma_temperature",
+        figure_plan_adapter="dma_temperature",
+        preparation_adapter="curve_family",
     ),
 )

@@ -77,6 +77,23 @@ def figure_queue_from_plan(
     return [figure_queue_item_from_task(task) for task in figure_plan.tasks]
 
 
+def generic_figure_queue_from_plan(
+    figure_plan: ResolvedFigurePlan | None,
+    *,
+    render_adapter: str | None,
+) -> list[dict[str, Any]]:
+    """Project one exact task only for a rule owned by the generic renderer."""
+
+    if figure_plan is None or render_adapter != "generic":
+        return []
+    if len(figure_plan.tasks) != 1:
+        raise ValueError(
+            "studio_generic_single_task_plan_mismatch: generic Studio rendering "
+            "requires exactly one selected task."
+        )
+    return figure_queue_from_plan(figure_plan, figure_plan.rule_id)
+
+
 def figure_registry_projection_from_task(task: FigureTask) -> dict[str, Any]:
     """Build the task-owned fields of one v2 figure-set registry entry."""
 
@@ -304,6 +321,7 @@ def validate_veusz_spec_figure_task(
 
 
 __all__ = [
+    "generic_figure_queue_from_plan",
     "figure_queue_from_plan",
     "figure_queue_item_from_task",
     "figure_registry_projection_from_task",

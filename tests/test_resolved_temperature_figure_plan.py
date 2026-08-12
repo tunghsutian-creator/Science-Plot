@@ -5,12 +5,13 @@ from pathlib import Path
 import pytest
 
 import sciplot_core.figure_plan.temperature_resolution as temperature_resolution
+import sciplot_core.semantic_sources.rheology_temperature_domain as temperature_domain
 from sciplot_core._paths import resolve_fixture_path
 from sciplot_core.figure_plan import (
     CartesianMetricBinding,
     FigurePlanResolutionError,
     ResolvedFigurePlan,
-    SUPPORTED_FIGURE_PLAN_RULE_IDS,
+    REQUIRED_FIGURE_PLAN_RULE_IDS,
     resolve_figure_plan,
     source_tree_sha256,
 )
@@ -18,6 +19,9 @@ from sciplot_core.figure_plan.temperature_resolution import (
     resolve_temperature_plan,
 )
 from sciplot_core.materials_rules import get_rule
+from sciplot_core.semantic_sources.rheology_temperature_domain import (
+    resolve_rheology_temperature_domain,
+)
 
 
 RULE_ID = "rheology_temperature_sweep"
@@ -84,10 +88,10 @@ def test_temperature_plan_honors_one_explicit_complete_sample_order() -> None:
     )
 
 
-def test_temperature_resolution_reads_source_facts_once(
+def test_temperature_domain_parses_once_and_plan_reuses_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    real_loader = temperature_resolution._read_rheology_temperature_comparison_samples
+    real_loader = temperature_domain._read_rheology_temperature_comparison_samples
     calls: list[Path] = []
 
     def counted_loader(source: Path):
@@ -95,14 +99,37 @@ def test_temperature_resolution_reads_source_facts_once(
         return real_loader(source)
 
     monkeypatch.setattr(
-        temperature_resolution,
+        temperature_domain,
         "_read_rheology_temperature_comparison_samples",
         counted_loader,
     )
 
-    _resolve()
+    source_resolution = resolve_rheology_temperature_domain(
+        _fixture(),
+        request={},
+    )
+    monkeypatch.setattr(
+        temperature_resolution,
+        "resolve_rheology_temperature_domain",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("FigurePlan reparsed the resolved temperature domain")
+        ),
+    )
+    plan = resolve_temperature_plan(
+        input_path=_fixture(),
+        request={},
+        source_resolution=source_resolution,
+    )
 
     assert calls == [_fixture()]
+    assert source_resolution.rule_id == RULE_ID
+    assert source_resolution.source == _fixture()
+    assert source_resolution.selected_sources == tuple(
+        dict.fromkeys(sample.source.resolve() for sample in source_resolution.raw_samples)
+    )
+    assert source_resolution.facts.sample_order == EXPECTED_SAMPLE_ORDER
+    assert plan.source_sha256 == source_resolution.source_sha256
+    assert all(task.sample_order == EXPECTED_SAMPLE_ORDER for task in plan.tasks)
 
 
 def test_temperature_resolution_rejects_source_drift_during_load(
@@ -112,7 +139,7 @@ def test_temperature_resolution_rejects_source_drift_during_load(
     assert stable_hash is not None
     fingerprints = iter((stable_hash, "b" * 64))
     monkeypatch.setattr(
-        temperature_resolution,
+        temperature_domain,
         "source_tree_sha256",
         lambda _source: next(fingerprints),
     )
@@ -137,7 +164,7 @@ def test_temperature_plan_rejects_missing_loss_factor(tmp_path: Path) -> None:
 
 
 def test_temperature_plan_is_registered_in_global_resolution() -> None:
-    assert RULE_ID in SUPPORTED_FIGURE_PLAN_RULE_IDS
+    assert RULE_ID in REQUIRED_FIGURE_PLAN_RULE_IDS
 
     plan = resolve_figure_plan(
         rule_id=RULE_ID,

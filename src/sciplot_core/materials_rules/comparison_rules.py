@@ -29,6 +29,8 @@ COMPARISON_RULES: tuple[SemanticRule, ...] = (
         ),
         presentation_data_shape="material_metric_long",
         supported_templates=("scatter", "polar_curve"),
+        render_adapter="performance",
+        figure_plan_adapter="performance",
         keywords=("scatteraxis", "radarorder", "materialperformance"),
         path_keywords=("performance_comparison", "material_performance"),
         column_aliases=(

@@ -82,11 +82,6 @@ FTIR_LAYOUT_POLICY = LayoutPolicy(
     max_blank_area_ratio=0.18,
     tick_policy={
         "reverse_x": True,
-        "x_min": 400.0,
-        "x_max": 4000.0,
-        "required_x_ticks": (4000.0, 400.0),
-        "preferred_x_ticks": (4000.0, 3000.0, 2000.0, 1000.0, 400.0),
-        "optional_x_ticks": (3500.0, 2500.0, 1500.0, 500.0),
     },
     stack_spacing_policy={
         "mode": "auto",

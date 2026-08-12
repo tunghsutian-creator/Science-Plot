@@ -63,6 +63,10 @@ RHEOLOGY_RULES: tuple[SemanticRule, ...] = (
         fixture_status="ready",
         priority=20,
         reason="Rheology frequency sweep with modulus/viscosity metrics.",
+        render_adapter="rheology",
+        scientific_source_adapter="rheology_frequency",
+        figure_plan_adapter="rheology_frequency",
+        preparation_adapter="rheology",
     ),
     _rule(
         "rheology_temperature_sweep",
@@ -111,6 +115,10 @@ RHEOLOGY_RULES: tuple[SemanticRule, ...] = (
         fixture_status="ready",
         priority=10,
         reason="Rheology/DMA temperature sweep with modulus priority G′, |G*|, then G″.",
+        render_adapter="rheology",
+        scientific_source_adapter="rheology_temperature",
+        figure_plan_adapter="rheology_temperature",
+        preparation_adapter="rheology",
     ),
     _rule(
         "rheology_time_sweep",
@@ -137,6 +145,7 @@ RHEOLOGY_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/rheology_time_sweep",
         fixture_status="ready",
         priority=28,
+        preparation_adapter="rheology",
     ),
     _rule(
         "rheology_strain_sweep",
@@ -171,6 +180,7 @@ RHEOLOGY_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/rheology_strain_sweep",
         fixture_status="ready",
         priority=28,
+        preparation_adapter="rheology",
     ),
     _rule(
         "rheology_stress_sweep",
@@ -208,6 +218,7 @@ RHEOLOGY_RULES: tuple[SemanticRule, ...] = (
         reason=(
             "Shared amplitude-sweep parser using the instrument-reported measured shear-stress axis; the evidence record does not claim a stress-controlled protocol."
         ),
+        preparation_adapter="rheology",
     ),
     _rule(
         "rheology_creep",
@@ -237,6 +248,7 @@ RHEOLOGY_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/rheology_creep",
         fixture_status="ready",
         priority=30,
+        preparation_adapter="rheology",
     ),
     _rule(
         "rheology_stress_relaxation",
@@ -284,5 +296,7 @@ RHEOLOGY_RULES: tuple[SemanticRule, ...] = (
         fixture_path="tests/fixtures/real_world/rheology_stress_relaxation",
         fixture_status="ready",
         priority=25,
+        scientific_source_adapter="stress_relaxation",
+        preparation_adapter="rheology",
     ),
 )

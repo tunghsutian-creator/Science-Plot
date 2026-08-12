@@ -193,17 +193,8 @@ def _veusz_axis_contract(
     if x_ticks and x_min is not None and x_max is not None:
         low = min(x_min, x_max)
         high = max(x_min, x_max)
-        tick_values = (
-            [x_min, *x_ticks, x_max]
-            if (
-                reverse_x
-                and _axis_scale(render_options, "x") != "log"
-                and not explicit_x_ticks
-            )
-            else list(x_ticks)
-        )
         deduped: list[float] = []
-        for value in tick_values:
+        for value in x_ticks:
             if value < low - 1e-9 or value > high + 1e-9:
                 continue
             if not any(math.isclose(value, existing) for existing in deduped):

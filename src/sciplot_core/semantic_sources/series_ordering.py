@@ -1,10 +1,8 @@
-"""Order curve series from explicit, material-pair, or shared-height evidence."""
+"""Order curve series from explicit or shared-height evidence."""
 
 from __future__ import annotations
 
 import math
-import re
-from typing import Any, Callable
 from sciplot_core.foundation.text_values import (
     clean_text as _clean_text,
 )
@@ -45,47 +43,6 @@ def _order_curve_series(
         return (rank, index)
 
     return [series for _index, series in sorted(enumerate(series_list), key=key)]
-
-
-def _recycled_pa_pair_rank(sample: object) -> int | None:
-    label = _clean_text(sample)
-    group_name = _intake_group_name(label) or label
-    compact = re.sub(r"[^a-z0-9]+", "", group_name.casefold())
-    if compact == "rpa":
-        return 0
-    if compact == "mrpa":
-        return 1
-    return None
-
-
-def _order_recycled_pa_pair_control_first(
-    values: list[Any],
-    *,
-    sample_of: Callable[[Any], object],
-) -> list[Any]:
-    """Keep the rPA control black and the modified m-rPA sample blue.
-
-    The shared ordinary palette is positional: the first sample is the
-    near-black control and the second is blue. Apply this semantic ordering
-    only to the exact two-condition recycled-PA comparison so unrelated
-    mechanical sample orders remain source- or user-controlled.
-    """
-
-    ranks = [_recycled_pa_pair_rank(sample_of(value)) for value in values]
-    if {rank for rank in ranks if rank is not None} != {0, 1}:
-        return values
-    if any(rank is None for rank in ranks):
-        return values
-    return [
-        value
-        for _index, value in sorted(
-            enumerate(values),
-            key=lambda item: (
-                int(ranks[item[0]]),
-                item[0],
-            ),
-        )
-    ]
 
 
 def _finite_series_points(series: CurveSeriesPayload) -> list[tuple[float, float]]:

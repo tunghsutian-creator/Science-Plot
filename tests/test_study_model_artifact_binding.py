@@ -2,13 +2,71 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sciplot_core._paths import resolve_fixture_path
 from sciplot_core.figure_plan import (
     FigureOutcome,
     FigureTask,
     ResolvedFigurePlan,
     merge_figure_outcomes,
+    resolve_figure_plan,
 )
-from sciplot_core.study_model import attach_run_artifacts_to_study_model
+from sciplot_core.materials_rules import get_rule
+from sciplot_core.study_model import (
+    attach_run_artifacts_to_study_model,
+    experiment_recommendation_payload,
+)
+
+
+def test_uvvis_recommendation_uses_the_resolved_plan_task_identity(
+    tmp_path: Path,
+) -> None:
+    rule = get_rule("uvvis_spectrum")
+    source = resolve_fixture_path(str(rule.fixture_path or ""))
+    recommendation = experiment_recommendation_payload(rule_id=rule.rule_id)
+    model = {
+        "kind": "sciplot_study_model",
+        "version": 2,
+        "samples": [],
+        "figure_queue": recommendation["figure_queue"],
+    }
+    plan = resolve_figure_plan(
+        rule_id=rule.rule_id,
+        template=rule.template,
+        study_model=model,
+        input_path=source,
+        request={"template": rule.template},
+    )
+    assert plan is not None
+    assert tuple(item["id"] for item in recommendation["figure_queue"]) == (
+        plan.selected_figure_ids
+    )
+
+    task = plan.tasks[0]
+    artifact = tmp_path / f"{task.artifact_stem}.pdf"
+    artifact.write_bytes(b"figure")
+    completed = merge_figure_outcomes(
+        plan,
+        (
+            FigureOutcome(
+                figure_id=task.figure_id,
+                status="ready",
+                artifacts=(str(artifact),),
+            ),
+        ),
+    )
+
+    updated = attach_run_artifacts_to_study_model(
+        model,
+        output_dir=tmp_path,
+        figures=[str(artifact)],
+        resolved_figure_plan=completed.to_payload(),
+    )
+
+    queue_item = updated["figure_queue"][0]
+    assert queue_item["id"] == task.figure_id
+    assert queue_item["status"] == "rendered"
+    assert [item["path"] for item in queue_item["artifacts"]] == [str(artifact)]
+    assert updated["run"]["unbound_figure_artifacts"] == []
 
 
 def test_artifact_binding_uses_shared_case_insensitive_dpi_stem(tmp_path: Path) -> None:

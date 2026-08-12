@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
-from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
+from sciplot_core.preparation_source_attestation import (
+    PreparationSourceAttestation,
+    requires_preparation_source_attestation,
+)
 from sciplot_core.studio_render.models import StudioPreparationBlocked
 from sciplot_core.studio_render.value_parsing import _string_list
 
-
-_SOURCE_ATTESTED_RULE_IDS = MECHANICAL_RULE_IDS | frozenset(
-    {"dma_temperature_sweep", "rheology_temperature_sweep"}
-)
+if TYPE_CHECKING:
+    from sciplot_core.semantic_sources.scientific_source import (
+        ResolvedScientificSource,
+    )
 
 
 def _studio_source_for_request(
@@ -21,6 +23,7 @@ def _studio_source_for_request(
     *,
     request: dict[str, Any],
     base_dir: Path,
+    resolved_scientific_source: ResolvedScientificSource | None = None,
 ) -> tuple[
     Path,
     list[dict[str, Any]],
@@ -49,6 +52,7 @@ def _studio_source_for_request(
         series_order=request.get("series_order"),
         column_confirmations=request.get("column_confirmations"),
         replicate_mode=request.get("replicate_mode"),
+        resolved_scientific_source=resolved_scientific_source,
     )
     prepared_source = prepared.get("source")
     source_attestation_value = prepared.get("source_attestation")
@@ -57,7 +61,7 @@ def _studio_source_for_request(
         if isinstance(source_attestation_value, PreparationSourceAttestation)
         else None
     )
-    if rule_id in _SOURCE_ATTESTED_RULE_IDS and source_attestation is None:
+    if requires_preparation_source_attestation(rule_id) and source_attestation is None:
         reason_prefix = _source_attestation_reason_prefix(rule_id)
         raise StudioPreparationBlocked(
             f"{reason_prefix}_preparation_attestation_missing",
@@ -70,7 +74,7 @@ def _studio_source_for_request(
     if terminal_series_order:
         current_order = _string_list(request.get("series_order"))
         if (
-            rule_id in _SOURCE_ATTESTED_RULE_IDS
+            requires_preparation_source_attestation(rule_id)
             and current_order
             and current_order != terminal_series_order
         ):
@@ -89,11 +93,6 @@ def _studio_source_for_request(
             }
     if isinstance(prepared_source, str) and prepared_source.strip():
         prepared_path = Path(prepared_source).expanduser()
-        if source_attestation is not None:
-            source_attestation.verify_current(
-                source_root=source,
-                prepared_source=prepared_path,
-            )
         return prepared_path, transform_steps, source_attestation
     return source, transform_steps, source_attestation
 

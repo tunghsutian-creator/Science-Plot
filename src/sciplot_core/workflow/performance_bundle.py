@@ -8,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from sciplot_core.figure_plan import (
+    ResolvedFigurePlan,
     finalize_figure_plan_result,
     outcomes_for_artifact_map,
     request_for_figure_task,
@@ -31,12 +32,15 @@ def _render_veusz_performance_bundle(
     options: dict[str, Any],
     export_formats: object,
     request: dict[str, Any],
+    _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> dict[str, Any] | None:
     """Render exactly the selected tasks; never select templates in the adapter."""
 
     if str(request.get("rule_id") or "").strip() != "performance_comparison":
         return None
-    plan = resolved_figure_plan_from_payload(request.get("resolved_figure_plan"))
+    plan = _resolved_figure_plan
+    if plan is None and request.get("resolved_figure_plan") is not None:
+        plan = resolved_figure_plan_from_payload(request["resolved_figure_plan"])
     if plan is None:
         raise ValueError(
             "performance_figure_plan_required: performance bundle execution "

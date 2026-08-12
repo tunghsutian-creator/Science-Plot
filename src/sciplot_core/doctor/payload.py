@@ -182,7 +182,12 @@ def doctor_payload() -> dict[str, Any]:
                 "drawing_frontend": False,
             },
             "developer_primitives": ["render", "recipe"],
-            "developer_validation_routes": ["smoke", "acceptance", "batch"],
+            "developer_validation_routes": [
+                "verify",
+                "smoke",
+                "acceptance",
+                "batch",
+            ],
             "internal_models": ["one_step"],
         },
         "vsz_lifecycle": {

@@ -27,6 +27,19 @@ from sciplot_core.style_contract import (
 from sciplot_core.study_model import sync_study_model_samples
 
 _RENDER_PARAMETER_NAMES = RENDER_OPTION_KEYS
+_TEMPLATE_GLOBAL_OPTION_KEYS = frozenset(
+    {
+        "fit_options",
+        "custom_theme_id",
+        "custom_theme_draft",
+        "visual_theme_id",
+        "x_minor_tick_count",
+        "y_minor_tick_count",
+        "x_minor_ticks",
+        "y_minor_ticks",
+        "show_y_ticks",
+    }
+)
 
 
 def _validate_legacy_hard_style_options(options: Mapping[str, Any]) -> None:
@@ -86,18 +99,7 @@ def _validate_template_render_option_keys(
         for key in keys
         if key not in spec.editable_options
         and key not in UNIFIED_HARD_OPTION_KEYS
-        and key
-        not in {
-            "fit_options",
-            "custom_theme_id",
-            "custom_theme_draft",
-            "visual_theme_id",
-            "x_minor_tick_count",
-            "y_minor_tick_count",
-            "x_minor_ticks",
-            "y_minor_ticks",
-            "show_y_ticks",
-        }
+        and key not in _TEMPLATE_GLOBAL_OPTION_KEYS
     )
     if unsupported:
         allowed = ", ".join(spec.editable_options)
@@ -156,6 +158,31 @@ def normalize_render_options(
 
     _validate_template_render_option_keys(set(selected), template=template)
     return selected
+
+
+def project_semantic_render_options(
+    render_options: object,
+    *,
+    template: str,
+) -> dict[str, Any]:
+    """Project renderer-owned rule defaults onto the editable request surface."""
+
+    if not isinstance(render_options, Mapping):
+        return normalize_render_options({}, template=template)
+    contract = load_plot_contract()
+    resolved_template = validate_veusz_template_id(template)
+    if resolved_template not in contract.templates:
+        raise RuntimeError(
+            f"Veusz template `{resolved_template}` is missing from the renderer contract."
+        )
+    editable = set(contract.templates[resolved_template].editable_options)
+    editable.update(_TEMPLATE_GLOBAL_OPTION_KEYS)
+    projected = {
+        str(key): value
+        for key, value in render_options.items()
+        if str(key) in editable
+    }
+    return normalize_render_options(projected, template=resolved_template)
 
 
 def normalize_clear_render_options(

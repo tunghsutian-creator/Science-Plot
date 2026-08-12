@@ -50,7 +50,7 @@ def _impact_metrics(processed_source: Path) -> list[dict[str, Any]]:
                 sample = f"Sample {column + 1}"
             unit = str(raw.iat[1, column]).strip()
             if not unit or unit.casefold() == "nan":
-                unit = "kJ/m2"
+                unit = ""
             values = (
                 pd.to_numeric(raw.iloc[3:, column], errors="coerce")
                 .dropna()
@@ -87,6 +87,30 @@ def _impact_metrics(processed_source: Path) -> list[dict[str, Any]]:
         )
         values = np.asarray(raw_values, dtype=float)
         rows.append(_metric(f"impact_group_n[{label}]", int(values.size), "count"))
+        if not unit:
+            reason = (
+                "Impact strength unit is missing; median and IQR are skipped "
+                "instead of assigning an unverified unit."
+            )
+            rows.append(
+                _metric(
+                    f"impact_group_median[{label}]",
+                    None,
+                    "",
+                    "skipped",
+                    reason,
+                )
+            )
+            rows.append(
+                _metric(
+                    f"impact_group_iqr[{label}]",
+                    None,
+                    "",
+                    "skipped",
+                    reason,
+                )
+            )
+            continue
         rows.append(
             _metric(
                 f"impact_group_median[{label}]", float(np.quantile(values, 0.5)), unit

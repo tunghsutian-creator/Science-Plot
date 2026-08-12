@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 from sciplot_core.policy import (
     CURVE_RENDER_OPTIONS,
     DEFAULT_RENDER_OPTIONS as _DEFAULT_RENDER_OPTIONS,
@@ -25,6 +25,41 @@ ELONGATION_AT_BREAK_IQR_METRIC = "elongation_at_break_iqr_percent"
 
 
 ELONGATION_AT_BREAK_LABEL = "Elongation at break (%)"
+
+
+RenderAdapterId = Literal[
+    "performance",
+    "impact",
+    "mechanical",
+    "dma_temperature",
+    "rheology",
+    "generic",
+]
+
+
+ScientificSourceAdapterId = Literal[
+    "stress_relaxation",
+    "dma_temperature",
+    "ftir",
+    "rheology_frequency",
+    "rheology_temperature",
+    "registered_paired_curve",
+    "gpc_sec",
+]
+
+
+FigurePlanAdapterId = Literal[
+    "dma_temperature",
+    "impact",
+    "mechanical",
+    "performance",
+    "registered_single_curve",
+    "rheology_frequency",
+    "rheology_temperature",
+]
+
+
+PreparationAdapterId = Literal["rheology", "curve_family", "mechanical"]
 
 
 @dataclass(frozen=True)
@@ -73,6 +108,10 @@ class SemanticRule:
     template: str
     x_axis: AxisSpec
     y_axis: AxisSpec
+    render_adapter: RenderAdapterId = "generic"
+    scientific_source_adapter: ScientificSourceAdapterId | None = None
+    figure_plan_adapter: FigurePlanAdapterId | None = None
+    preparation_adapter: PreparationAdapterId | None = None
     presentation_data_shape: str = "series"
     supported_templates: tuple[str, ...] = ()
     keywords: tuple[str, ...] = ()
@@ -102,6 +141,25 @@ class SemanticRule:
             "selection_policy": "explicit_supported_template_or_default",
         }
 
+    def invocation_contract_payload(self) -> dict[str, Any]:
+        """Project this rule into the existing plan/autoplot call surface."""
+
+        ready = self.fixture_status == "ready"
+        return {
+            "kind": "sciplot_rule_invocation",
+            "version": 1,
+            "availability": "ready" if ready else "needs_rule_repair",
+            "reason_codes": [] if ready else ["fixture_backed_rule_acceptance"],
+            "operations": {"preview": "plan", "render": "autoplot"},
+            "required_arguments": ["input", "template"],
+            "fixed_arguments": {"rule": self.rule_id},
+            "template": {
+                "argument": "template",
+                "default": self.template,
+                "choices": list(self.presentation_templates),
+            },
+        }
+
     def to_payload(self) -> dict[str, Any]:
         return {
             "rule_id": self.rule_id,
@@ -109,6 +167,7 @@ class SemanticRule:
             "recipe": self.recipe,
             "template": self.template,
             "presentation_contract": self.presentation_contract_payload(),
+            "invocation": self.invocation_contract_payload(),
             "axis_plan": {"x": self.x_axis.to_payload(), "y": self.y_axis.to_payload()},
             "unit_plan": {
                 "x": format_unit_label(self.x_axis.canonical_unit),
@@ -156,6 +215,10 @@ def _rule(
     reason: str = "",
     presentation_data_shape: str = "series",
     supported_templates: tuple[str, ...] = (),
+    render_adapter: RenderAdapterId = "generic",
+    scientific_source_adapter: ScientificSourceAdapterId | None = None,
+    figure_plan_adapter: FigurePlanAdapterId | None = None,
+    preparation_adapter: PreparationAdapterId | None = None,
 ) -> SemanticRule:
     normalized_templates = tuple(
         dict.fromkeys(
@@ -180,6 +243,10 @@ def _rule(
         template=template,
         x_axis=x,
         y_axis=y,
+        render_adapter=render_adapter,
+        scientific_source_adapter=scientific_source_adapter,
+        figure_plan_adapter=figure_plan_adapter,
+        preparation_adapter=preparation_adapter,
         presentation_data_shape=presentation_data_shape,
         supported_templates=normalized_templates,
         keywords=keywords,

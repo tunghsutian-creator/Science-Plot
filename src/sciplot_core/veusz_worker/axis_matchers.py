@@ -18,13 +18,14 @@ def _axis_record_matches_spec(
 ) -> bool:
     bindings = record["bindings"]
     hidden = axis_spec.get("hidden") is True
+    expected_mode = str(axis_spec.get("mode") or "numeric")
     expected_ticks = (
         axis_spec.get("ticks")
         if isinstance(axis_spec.get("ticks"), list)
-        and 1 < len(axis_spec["ticks"]) <= 12
+        and len(axis_spec["ticks"]) <= 12
+        and (len(axis_spec["ticks"]) > 1 or expected_mode == "labels")
         else []
     )
-    expected_mode = str(axis_spec.get("mode") or "numeric")
     expected_log = axis_spec.get("scale") == "log"
     expected_direction = "vertical" if axis_name == "y" else "horizontal"
     ticks_visible = axis_spec.get("show_ticks") is not False and not hidden
