@@ -22,6 +22,7 @@ from sciplot_core.semantic_sources.scientific_transform import (
     ResolvedScientificTransform,
     ScientificTransformContract,
 )
+from sciplot_core.semantic_sources.models import CurveSeriesPayload
 from sciplot_core.semantic_sources.scientific_source import (
     ScientificSourceResolutionError,
 )
@@ -491,7 +492,11 @@ def test_stress_plan_reuses_one_resolved_contract_and_forwards_order(
 ) -> None:
     source = tmp_path / "relaxation.csv"
     source.write_text("source", encoding="utf-8")
-    contract = _minimal_transform_contract()
+    rule = get_rule("rheology_stress_relaxation")
+    requested_order = [
+        f"{source.stem}_{position}" for position in ("second", "first")
+    ]
+    contract = _minimal_transform_contract(requested_order)
     calls: list[tuple[Path, object]] = []
     import sciplot_core.semantic_sources.stress_relaxation_transform as transform
 
@@ -505,12 +510,30 @@ def test_stress_plan_reuses_one_resolved_contract_and_forwards_order(
         },
     )
     monkeypatch.setattr(preview_module, "study_model_from_request", lambda **_kwargs: {})
-    monkeypatch.setattr(preview_module, "resolve_figure_plan", lambda **_kwargs: None)
+    monkeypatch.setattr(
+        preview_module,
+        "resolve_figure_plan",
+        lambda **_kwargs: pytest.fail(
+            "resolved stress source must supply its FigurePlan"
+        ),
+    )
 
     def fake_resolve(path: Path, *, series_order: object) -> ResolvedScientificTransform:
         calls.append((path, series_order))
+        assert isinstance(series_order, list)
+        series = tuple(
+            CurveSeriesPayload(
+                sample=sample,
+                x_label=rule.x_axis.canonical_label,
+                x_unit=rule.x_axis.canonical_unit,
+                y_label=rule.y_axis.canonical_label,
+                y_unit=rule.y_axis.canonical_unit,
+                points=((float(index), float(len(series_order) - index)),),
+            )
+            for index, sample in enumerate(series_order, start=1)
+        )
         return ResolvedScientificTransform(
-            series=(),
+            series=series,
             contract=contract,
             selected_sources=(path,),
         )
@@ -521,13 +544,17 @@ def test_stress_plan_reuses_one_resolved_contract_and_forwards_order(
         source,
         request={
             "rule_id": "rheology_stress_relaxation",
-            "series_order": ["E4", "E3"],
+            "series_order": requested_order,
         },
     )
 
-    assert calls == [(source.resolve(), ["E4", "E3"])]
+    assert calls == [(source.resolve(), requested_order)]
     assert payload["scientific_transform"] == contract.to_payload()
-    assert payload["status"] == "not_applicable"
+    assert payload["status"] == "planned"
+    plan = payload["resolved_figure_plan"]
+    assert plan is not None
+    assert plan["selection_policy"] == "registered_single_curve"
+    assert [task["sample_order"] for task in plan["tasks"]] == [requested_order]
 
 
 def test_stress_plan_blocks_before_figure_plan_when_transform_is_invalid(
@@ -606,7 +633,9 @@ def _two_task_plan() -> ResolvedFigurePlan:
     )
 
 
-def _minimal_transform_contract() -> ScientificTransformContract:
+def _minimal_transform_contract(
+    series_order: list[str],
+) -> ScientificTransformContract:
     return ScientificTransformContract(
         semantic_family="rheology_stress_relaxation",
         source_columns=(),
@@ -616,6 +645,10 @@ def _minimal_transform_contract() -> ScientificTransformContract:
         x_coordinate_policy={"operation": "identity"},
         retain_anchor=None,
         axis_compatibility={},
-        output={"series_order": []},
+        output={
+            "x_metric": "time",
+            "y_metric": "normalized_stress",
+            "series_order": list(series_order),
+        },
         selected_sources=(),
     )

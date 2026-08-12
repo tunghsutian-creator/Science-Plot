@@ -28,7 +28,7 @@ result owns source transformation, `ResolvedFigurePlan` owns selected tasks,
 figure-set/export path owns editable delivery. Do not add another capability
 catalog, request schema, renderer, editor, cache, receipt, or hash ledger.
 
-Stages 13–36 are complete and recorded in `DEVELOPMENT_LOG.md`. DSC, TGA, DTG,
+Stages 13–42 are complete and recorded in `DEVELOPMENT_LOG.md`. DSC, TGA, DTG,
 UV-Vis, XRD, SAXS, GPC/SEC, and FTIR now exercise the same typed-source,
 single-task FigurePlan, semantic-materialization, generic Veusz/QA, and
 exact-current delivery spine. The first six share the registered paired-table
@@ -39,22 +39,31 @@ source domain rather than reparsing or pretending it is a single-y transform.
 Scoped real-data acceptance can update the existing validated-envelope registry
 without rerunning unrelated rules.
 
-## Active Stage 37 — carry one typed FigurePlan through Workflow
+## Active Stage 43 — repair the shared paired-curve seam, then add DMA frequency
 
-`request_run` already owns one resolved immutable FigurePlan and persists its
-wire payload. Pass that same typed object through request rendering, auto-split,
-the selected bundle, and task-source materialization instead of reparsing the
-same request payload two to four times in one transaction.
+Before activating another rule, close three shared boundaries. Registered
+paired curves must derive machine metric ids from canonical quantity labels,
+not from presentation aliases such as `ω` or `G′`. Their selected numeric
+columns must share the existing decimal-separator evidence and preserve NA and
+nonfinite lexemes, so comma decimals are not silently multiplied and invalid
+values cannot disappear during table loading. A request that already owns a
+FigurePlan must also fail before writes when a named legacy recipe is supplied;
+the existing bounded DMA-temperature recipe remains the sole explicit
+exception.
 
-Public requests and persisted payloads remain unchanged. Low-level compatibility
-callers may parse once at the highest missing-object boundary, but downstream
-owners consume the passed object. Preserve rule/source/attestation/task-sequence
-checks, worker seal/consume verification, installation, reopen, publication, and
-delivery gates.
+Then register `dma_frequency_sweep` as another thin
+`registered_paired_curve` / `registered_single_curve` rule. Its initial public
+claim is only the source-declared storage modulus versus angular frequency;
+sample identity, units, values, order, and point counts come from the selected
+table. The same transform must bind one generic FigurePlan task, preparation,
+Workflow, Studio, and analysis without a DMA-frequency parser, plan, bundle,
+renderer, catalog, cache, receipt, or hash ledger.
 
-Do not add a unit registry, source cache, receipt, second seal, hash ledger,
-retry layer, schema, or renderer branch. Close the selected slice with one or two
-discriminating focused tests; no smoke or acceptance is needed.
+Close the stage with discriminating shared tests for canonical metric ids,
+comma-decimal and ambiguous-number handling, NA/nonfinite evidence, and the
+pre-write recipe gate, plus one real-fixture DMA-frequency snapshot that
+traverses plan, preparation, Workflow, and Studio. Do not encode the fixture's
+sample label, point count, frequency, or modulus values in production code.
 
 Stage verification follows changed ownership: one focused invocation while
 iterating, one final cross-boundary smoke only when a stage genuinely crosses the

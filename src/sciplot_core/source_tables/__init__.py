@@ -25,6 +25,7 @@ from sciplot_core.source_tables.text_normalization import (
     clean_source_text,
     normalize_label,
     normalize_unit,
+    slugify_canonical_label,
     slugify_label,
 )
 
@@ -44,5 +45,6 @@ __all__ = [
     "normalize_label",
     "normalize_unit",
     "read_raw_table",
+    "slugify_canonical_label",
     "slugify_label",
 ]

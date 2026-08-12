@@ -174,3 +174,77 @@ def test_dsc_rule_uses_the_shared_generic_studio_queue() -> None:
     assert queue[0]["resolved_figure_task"] == (
         resolved.figure_plan.tasks[0].to_payload()
     )
+
+
+def test_stress_plan_uses_shared_bundle_and_generic_studio_queue(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rule = get_rule("rheology_stress_relaxation")
+    source = resolve_fixture_path(str(rule.fixture_path or ""))
+    resolved = resolve_scientific_source(
+        source,
+        rule_id=rule.rule_id,
+        request={},
+        template=rule.template,
+    )
+
+    assert resolved is not None
+    transform = resolved.transform
+    assert transform is not None
+    samples = tuple(series.sample for series in transform.series)
+    assert samples
+    assert rule.x_axis.canonical_unit == "s"
+    assert all(
+        series.x_unit == rule.x_axis.canonical_unit
+        for series in transform.series
+    )
+    plan = resolved.figure_plan
+    assert plan is not None
+    assert len(plan.tasks) == 1
+    task = plan.tasks[0]
+    assert task.sample_order == samples
+    calls: list[dict[str, Any]] = []
+
+    def render_bundle(input_path: Path, **kwargs: Any) -> dict[str, Any]:
+        calls.append({"input_path": input_path, **kwargs})
+        return {"kind": "stress_single_task_result"}
+
+    monkeypatch.setattr(
+        auto_split,
+        "render_selected_single_task_bundle",
+        render_bundle,
+    )
+    monkeypatch.setattr(
+        auto_split,
+        "render_to_dir",
+        lambda *_args, **_kwargs: pytest.fail(
+            "stress FigurePlan fell back to render_to_dir"
+        ),
+    )
+
+    result = auto_split._render_with_auto_split(
+        source,
+        template=rule.template,
+        output_dir=tmp_path / "out",
+        options={},
+        export_formats=["pdf"],
+        request={
+            "rule_id": rule.rule_id,
+            "resolved_figure_plan": plan.to_payload(),
+        },
+        _terminal_source_prepared=True,
+    )
+
+    assert result == {"kind": "stress_single_task_result"}
+    assert len(calls) == 1
+    assert calls[0]["input_path"] == source
+    assert calls[0]["plan"] == plan
+    assert calls[0]["task"] == task
+    assert calls[0]["terminal_source_prepared"] is True
+    queue = generic_figure_queue_from_plan(
+        plan,
+        render_adapter=rule.render_adapter,
+    )
+    assert [item["id"] for item in queue] == [task.figure_id]
+    assert queue[0]["resolved_figure_task"] == task.to_payload()

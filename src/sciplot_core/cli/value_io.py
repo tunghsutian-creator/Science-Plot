@@ -35,6 +35,29 @@ _RECOGNITION_ERROR_MARKERS = (
 )
 
 
+def _cli_runtime_error_payload(
+    exc: Exception,
+    *,
+    recovery_hint: str | None = None,
+) -> dict[str, Any]:
+    """Return the single machine-readable contract for CLI runtime failures."""
+
+    expected = isinstance(exc, (OSError, ValueError))
+    category = "expected_runtime_failure" if expected else "internal_error"
+    payload: dict[str, Any] = {
+        "kind": "sciplot_cli_runtime_error",
+        "version": 1,
+        "status": "failed",
+        "category": category,
+        "reason_code": f"cli_{category}",
+        "exception_type": type(exc).__name__,
+        "message": str(exc) or type(exc).__name__,
+    }
+    if recovery_hint:
+        payload["recovery_hint"] = recovery_hint
+    return payload
+
+
 def _recovery_hint(input_path: Path | None) -> str:
     target = str(input_path) if input_path is not None else "<input>"
     return f"Hint: run `sciplot inspect {target} --json` to see how SciPlot read the table, reshape it as a 2-column curve / replicate / heatmap table, or prepare an editable Veusz project with `sciplot studio {target}`."

@@ -1,299 +1,321 @@
-"""Extract parallel swelling-ratio series from structured tabular sources."""
+"""Extract source-ordered swelling curves from one uniquely labeled table."""
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
-import pandas as pd
-from sciplot_core.foundation.text_values import (
-    clean_text as _clean_text,
-    token as _token,
+
+from sciplot_core.foundation.text_values import clean_text as _clean_text
+from sciplot_core.semantic_sources.models import CurveSeriesPayload
+from sciplot_core.semantic_sources.swelling_identity import (
+    long_swelling_identity,
+    parallel_swelling_identity,
 )
-
-
-from sciplot_core.semantic_sources.models import (
-    CurveSeriesPayload,
+from sciplot_core.semantic_sources.swelling_pair_run import (
+    finite_swelling_pair,
+    first_swelling_pair_run,
+    swelling_pair_row_kind,
 )
-
-from sciplot_core.semantic_sources.table_scanning import (
-    _float,
-    _read_candidate_tables,
-    _axis_match,
+from sciplot_core.semantic_sources.swelling_table_selection import (
+    _LabeledSwellingTable,
+    _matching_tables,
+    _swelling_response_unit_evidence,
+    _swelling_time_conversion,
 )
-
-_SWELLING_Y_ALIASES = ("swelling ratio", "ai/a0", "normalized projected area")
-
-
-def _swelling_time_conversion(
-    header: object,
-    adjacent_unit: object = None,
-) -> tuple[str, float]:
-    source_header = _clean_text(header)
-    for candidate in (source_header, _clean_text(adjacent_unit)):
-        text = candidate.casefold().replace("µ", "u")
-        if (
-            re.search(r"\b(?:s|sec|secs|second|seconds)\b", text)
-            or "(s)" in text
-            or "[s]" in text
-        ):
-            return "s", 1.0 / 3600.0
-        if (
-            re.search(r"\b(?:min|mins|minute|minutes)\b", text)
-            or "(min)" in text
-            or "[min]" in text
-        ):
-            return "min", 1.0 / 60.0
-        if (
-            re.search(r"\b(?:h|hr|hrs|hour|hours)\b", text)
-            or "(h)" in text
-            or "[h]" in text
-        ):
-            return "h", 1.0
-    raise ValueError(
-        "Swelling time unit is missing or unsupported in header "
-        f"`{source_header}`; expected s, min, or h."
-    )
+from sciplot_core.semantic_sources.table_source_files import resolve_single_table_source
 
 
-def _source_row_number(value: object) -> int | str:
-    try:
-        return int(value) + 1
-    except (TypeError, ValueError):
-        return str(value)
-
-
-def _labeled_table_stop(raw: pd.DataFrame, data_start: int) -> int:
-    """Stop only at the next explicit table header, never at whitespace."""
-
-    for row_position in range(data_start + 1, raw.shape[0]):
-        values = raw.iloc[row_position].tolist()
-        time_columns = {
-            column
-            for column, value in enumerate(values)
-            if _axis_match(value, ("time",))
-        }
-        if time_columns and any(
-            column not in time_columns
-            and bool(_clean_text(value))
-            and _float(value) is None
-            for column, value in enumerate(values)
-        ):
-            return row_position
-    return raw.shape[0]
-
-
-def _nearest_row_label(raw: pd.DataFrame, row_position: int, column: int) -> str:
-    if row_position < 0 or row_position >= raw.shape[0]:
-        return ""
-    for candidate_column in range(column, 0, -1):
-        label = _clean_text(raw.iat[row_position, candidate_column])
-        if label:
-            return label
-    return ""
-
-
-def _clean_swelling_condition(value: object, fallback: str) -> str:
-    label = _clean_text(value).replace("_", " ")
-    label = re.sub(
-        r"^\s*fig(?:ure)?\s*\d+\s*\([^)]+\)\s*:\s*", "", label, flags=re.IGNORECASE
-    )
-    label = re.sub(r"\s+", " ", label).strip(" :;,-")
-    return label or fallback or "Sample"
-
-
-def _replicate_label(value: object, fallback: int) -> str:
-    numeric = _float(value)
-    if numeric is not None and numeric.is_integer():
-        return str(int(numeric))
-    return _clean_text(value) or str(fallback)
-
-
-def _parallel_swelling_series(
-    sheet_name: str, raw: pd.DataFrame
+def _parallel_series(
+    source: Path,
+    table: _LabeledSwellingTable,
 ) -> list[CurveSeriesPayload]:
-    best: list[CurveSeriesPayload] = []
-    for header_index in range(min(raw.shape[0], 32)):
-        headers = raw.iloc[header_index].tolist()
-        pairs: list[tuple[int, int]] = []
-        for x_index, header in enumerate(headers[:-1]):
-            if not _axis_match(header, ("time",)):
-                continue
-            for y_index in range(x_index + 1, min(x_index + 4, raw.shape[1])):
-                if _axis_match(headers[y_index], _SWELLING_Y_ALIASES):
-                    pairs.append((x_index, y_index))
-                    break
-        if not pairs:
+    headers = table.raw.iloc[table.header_index].tolist()
+    series_list: list[CurveSeriesPayload] = []
+    for x_index, y_index in table.pairs:
+        adjacent = (
+            table.raw.iat[table.header_index + 1, x_index]
+            if table.header_index + 1 < table.raw.shape[0]
+            else None
+        )
+        source_unit, factor = _swelling_time_conversion(headers[x_index], adjacent)
+        points, source_block, decimal_comma = first_swelling_pair_run(
+            table,
+            x_index=x_index,
+            y_index=y_index,
+            factor=factor,
+        )
+        sample, source_identity = parallel_swelling_identity(
+            table.raw,
+            header_index=table.header_index,
+            x_index=x_index,
+        )
+        if int(source_block["excluded_nonfinite_pair_count"]):
+            raise ValueError(
+                f"Swelling series {sample!r} contains "
+                "nonfinite selected values."
+            )
+        series_list.append(
+            CurveSeriesPayload(
+                sample=sample,
+                x_label="Time",
+                x_unit="h",
+                y_label="Swelling ratio",
+                y_unit="1",
+                points=points,
+                diagnostics=_series_diagnostics(
+                    source,
+                    table,
+                    x_index=x_index,
+                    y_index=y_index,
+                    source_unit=source_unit,
+                    factor=factor,
+                    source_block=source_block,
+                    source_identity=source_identity,
+                    decimal_comma=decimal_comma,
+                ),
+            )
+        )
+    return series_list
+
+
+def _series_diagnostics(
+    source: Path,
+    table: _LabeledSwellingTable,
+    *,
+    x_index: int,
+    y_index: int,
+    source_unit: str,
+    factor: float,
+    source_block: dict[str, Any],
+    source_identity: dict[str, Any],
+    decimal_comma: bool,
+) -> dict[str, Any]:
+    headers = table.raw.iloc[table.header_index].tolist()
+    adjacent_y = (
+        table.raw.iat[table.header_index + 1, y_index]
+        if table.header_index + 1 < table.raw.shape[0]
+        and finite_swelling_pair(
+            table.raw,
+            table.header_index + 1,
+            x_index,
+            y_index,
+            decimal_comma=decimal_comma,
+        )
+        is None
+        else None
+    )
+    return {
+        "source_file": str(source),
+        "source_table": table.name,
+        "source_header_row_index": int(table.raw.index[table.header_index]),
+        "source_columns": {
+            "x": _clean_text(headers[x_index]),
+            "y": _clean_text(headers[y_index]),
+        },
+        "source_column_indices": {"x": x_index, "y": y_index},
+        "time_conversion": {
+            "source_unit": source_unit,
+            "canonical_unit": "h",
+            "factor": factor,
+        },
+        "response_unit_evidence": _swelling_response_unit_evidence(
+            headers[y_index], adjacent_y
+        ),
+        "numeric_separator_evidence": {
+            "selected_columns": [x_index, y_index],
+            "decimal_separator": "," if decimal_comma else ".",
+            "decimal_comma": decimal_comma,
+            "method": (
+                "selected_columns_lexical_evidence_with_native_numeric_passthrough"
+            ),
+        },
+        "source_identity": source_identity,
+        "source_block": source_block,
+    }
+
+
+def _long_table_series(
+    source: Path,
+    table: _LabeledSwellingTable,
+) -> list[CurveSeriesPayload]:
+    if len(table.pairs) != 1 or table.sample_column is None:
+        return _parallel_series(source, table)
+    x_index, y_index = table.pairs[0]
+    headers = table.raw.iloc[table.header_index].tolist()
+    source_unit, factor = _swelling_time_conversion(
+        headers[x_index],
+        table.raw.iat[table.header_index + 1, x_index]
+        if table.header_index + 1 < table.raw.shape[0]
+        else None,
+    )
+    _all_points, source_block, decimal_comma = first_swelling_pair_run(
+        table,
+        x_index=x_index,
+        y_index=y_index,
+        factor=factor,
+    )
+    retained_start = int(source_block["source_data_row_start"]) - 1
+    retained_end = int(source_block["source_data_row_end"]) - 1
+    grouped: dict[str, list[tuple[float, float]]] = {}
+    grouped_rows: dict[str, list[int]] = {}
+    for row in range(retained_start, retained_end + 1):
+        pair = finite_swelling_pair(
+            table.raw,
+            row,
+            x_index,
+            y_index,
+            decimal_comma=decimal_comma,
+        )
+        if pair is None:
             continue
-        data_start = header_index + 1
-        while data_start < raw.shape[0] and not any(
-            _float(raw.iat[data_start, x_index]) is not None
-            and _float(raw.iat[data_start, y_index]) is not None
-            for x_index, y_index in pairs
-        ):
-            data_start += 1
-        if data_start >= raw.shape[0]:
+        sample = _clean_text(table.raw.iat[row, table.sample_column])
+        if not sample:
+            raise ValueError(
+                f"Swelling long table {table.name!r} has a finite pair without "
+                "source sample identity."
+            )
+        grouped.setdefault(sample, []).append((pair[0] * factor, pair[1]))
+        grouped_rows.setdefault(sample, []).append(row)
+    _validate_long_disconnected_identities(
+        table,
+        global_block=source_block,
+        known_samples=frozenset(grouped),
+        sample_column=table.sample_column,
+        x_index=x_index,
+        y_index=y_index,
+    )
+    return [
+        CurveSeriesPayload(
+            sample=sample,
+            x_label="Time",
+            x_unit="h",
+            y_label="Swelling ratio",
+            y_unit="1",
+            points=tuple(sample_points),
+            diagnostics=_series_diagnostics(
+                source,
+                table,
+                x_index=x_index,
+                y_index=y_index,
+                source_unit=source_unit,
+                factor=factor,
+                source_block=_long_sample_source_block(
+                    table,
+                    global_block=source_block,
+                    sample=sample,
+                    sample_column=table.sample_column,
+                    retained_rows=grouped_rows[sample],
+                    x_index=x_index,
+                    y_index=y_index,
+                ),
+                source_identity=long_swelling_identity(
+                    table.raw,
+                    sample=sample,
+                    sample_column=table.sample_column,
+                    row_positions=grouped_rows[sample],
+                ),
+                decimal_comma=decimal_comma,
+            ),
+        )
+        for sample, sample_points in grouped.items()
+    ]
+
+
+def _long_sample_source_block(
+    table: _LabeledSwellingTable,
+    *,
+    global_block: dict[str, Any],
+    sample: str,
+    sample_column: int,
+    retained_rows: list[int],
+    x_index: int,
+    y_index: int,
+) -> dict[str, Any]:
+    stop = int(global_block["selection_stop_row_zero_based"])
+    exclusions = {key: 0 for key in ("finite", "partial", "nonnumeric", "nonfinite")}
+    excluded_rows: list[int] = []
+    for row in range(stop, table.raw.shape[0]):
+        kind = swelling_pair_row_kind(table.raw, row, x_index, y_index)
+        row_sample = _clean_text(table.raw.iat[row, sample_column])
+        if kind == "empty" and not row_sample:
             continue
-        data_stop = _labeled_table_stop(raw, data_start)
-        excluded_rows = raw.shape[0] - data_stop
-        block_diagnostics: dict[str, Any] = {
-            "selection_policy": "labeled_block_until_next_explicit_header",
-            "source_header_row": _source_row_number(raw.index[header_index]),
-            "source_data_row_start": _source_row_number(raw.index[data_start]),
-            "source_data_row_end": _source_row_number(raw.index[data_stop - 1]),
-            "excluded_disconnected_rows": excluded_rows,
-        }
-        if excluded_rows:
-            block_diagnostics["excluded_source_row_span"] = [
-                _source_row_number(raw.index[data_stop]),
-                _source_row_number(raw.index[-1]),
-            ]
-        candidate: list[CurveSeriesPayload] = []
-        for series_index, (x_index, y_index) in enumerate(pairs, start=1):
-            points: list[tuple[float, float]] = []
-            source_unit, factor = _swelling_time_conversion(
-                headers[x_index],
-                raw.iat[header_index + 1, x_index]
-                if header_index + 1 < raw.shape[0]
-                else None,
+        if not row_sample:
+            raise ValueError(
+                f"Swelling long table {table.name!r} has disconnected selected "
+                "content without source sample identity."
             )
-            for row_index in range(data_start, data_stop):
-                x_value = _float(raw.iat[row_index, x_index])
-                y_value = _float(raw.iat[row_index, y_index])
-                if x_value is not None and y_value is not None:
-                    points.append((x_value * factor, y_value))
-            if not points:
-                continue
-            condition = _clean_swelling_condition(
-                _nearest_row_label(raw, header_index - 2, x_index),
-                sheet_name,
+        if row_sample != sample:
+            continue
+        if kind == "empty":
+            kind = "partial"
+        exclusions[kind] += 1
+        excluded_rows.append(row)
+    return {
+        "selection_policy": global_block["selection_policy"],
+        "sample_filter": sample,
+        "source_header_row": global_block["source_header_row"],
+        "source_data_row_start": retained_rows[0] + 1,
+        "source_data_row_end": retained_rows[-1] + 1,
+        "retained_source_rows_zero_based": list(retained_rows),
+        "retained_point_count": len(retained_rows),
+        "isolated_blank_bridge_count": 0,
+        "global_isolated_blank_bridge_count": global_block[
+            "isolated_blank_bridge_count"
+        ],
+        "selection_stop_row_zero_based": stop,
+        "termination_reason": global_block["termination_reason"],
+        "candidate_pair_row_count": len(retained_rows) + sum(exclusions.values()),
+        "excluded_disconnected_point_count": exclusions["finite"],
+        "excluded_partial_pair_count": exclusions["partial"],
+        "excluded_nonnumeric_pair_count": exclusions["nonnumeric"],
+        "excluded_nonfinite_pair_count": exclusions["nonfinite"],
+        "excluded_disconnected_rows": len(excluded_rows),
+        **(
+            {
+                "excluded_disconnected_source_row_span": [
+                    excluded_rows[0] + 1,
+                    excluded_rows[-1] + 1,
+                ]
+            }
+            if excluded_rows
+            else {}
+        ),
+    }
+
+
+def _validate_long_disconnected_identities(
+    table: _LabeledSwellingTable,
+    *,
+    global_block: dict[str, Any],
+    known_samples: frozenset[str],
+    sample_column: int,
+    x_index: int,
+    y_index: int,
+) -> None:
+    stop = int(global_block["selection_stop_row_zero_based"])
+    for row in range(stop, table.raw.shape[0]):
+        kind = swelling_pair_row_kind(table.raw, row, x_index, y_index)
+        row_sample = _clean_text(table.raw.iat[row, sample_column])
+        if kind == "empty" and not row_sample:
+            continue
+        if not row_sample or row_sample not in known_samples:
+            raise ValueError(
+                f"Swelling long table {table.name!r} has disconnected selected "
+                "content without a retained source sample identity."
             )
-            replicate = _replicate_label(
-                raw.iat[header_index - 1, x_index] if header_index > 0 else None,
-                series_index,
-            )
-            candidate.append(
-                CurveSeriesPayload(
-                    sample=f"{condition} replicate {replicate}",
-                    x_label="Time",
-                    x_unit="h",
-                    y_label="Swelling ratio",
-                    y_unit="1",
-                    points=tuple(points),
-                    diagnostics={
-                        "source_table": sheet_name,
-                        "source_columns": {
-                            "x": _clean_text(headers[x_index]),
-                            "y": _clean_text(headers[y_index]),
-                        },
-                        "condition": condition,
-                        "replicate": replicate,
-                        "time_conversion": {
-                            "source_unit": source_unit,
-                            "canonical_unit": "h",
-                            "factor": factor,
-                        },
-                        "source_block": block_diagnostics,
-                    },
-                )
-            )
-        if sum(len(item.points) for item in candidate) > sum(
-            len(item.points) for item in best
-        ):
-            best = candidate
-    return best
 
 
 def _read_swelling_series_list(source: Path) -> list[CurveSeriesPayload]:
-    """Keep labeled swelling observations separate and normalize time to hours."""
+    """Resolve one labeled table and preserve each pair's first finite run."""
 
-    best: list[CurveSeriesPayload] = []
-    for sheet_name, raw in _read_candidate_tables(source):
-        parallel = _parallel_swelling_series(sheet_name, raw)
-        if sum(len(item.points) for item in parallel) > sum(
-            len(item.points) for item in best
-        ):
-            best = parallel
-        for header_index in range(min(raw.shape[0], 32)):
-            headers = raw.iloc[header_index].tolist()
-            sample_column = next(
-                (
-                    index
-                    for index, value in enumerate(headers)
-                    if _token(value) in {"sample", "samplename"}
-                ),
-                None,
-            )
-            time_column = next(
-                (
-                    index
-                    for index, value in enumerate(headers)
-                    if _axis_match(value, ("time",))
-                ),
-                None,
-            )
-            swelling_column = next(
-                (
-                    index
-                    for index, value in enumerate(headers)
-                    if _axis_match(value, _SWELLING_Y_ALIASES)
-                ),
-                None,
-            )
-            if time_column is None or swelling_column is None:
-                continue
-            data_start = header_index + 1
-            data_stop = _labeled_table_stop(raw, data_start)
-            source_unit, factor = _swelling_time_conversion(
-                headers[time_column],
-                raw.iat[header_index + 1, time_column]
-                if header_index + 1 < raw.shape[0]
-                else None,
-            )
-            grouped: dict[str, list[tuple[float, float]]] = {}
-            for row_index in range(data_start, data_stop):
-                x_value = _float(raw.iat[row_index, time_column])
-                y_value = _float(raw.iat[row_index, swelling_column])
-                if x_value is None or y_value is None:
-                    continue
-                sample = (
-                    (
-                        _clean_text(raw.iat[row_index, sample_column])
-                        if sample_column is not None
-                        else sheet_name
-                    )
-                    or sheet_name
-                    or "Sample"
-                )
-                grouped.setdefault(sample, []).append((x_value * factor, y_value))
-            candidate = [
-                CurveSeriesPayload(
-                    sample=sample,
-                    x_label="Time",
-                    x_unit="h",
-                    y_label="Swelling ratio",
-                    y_unit="1",
-                    points=tuple(points),
-                    diagnostics={
-                        "source_table": sheet_name,
-                        "source_columns": {
-                            "x": _clean_text(headers[time_column]),
-                            "y": _clean_text(headers[swelling_column]),
-                        },
-                        "time_conversion": {
-                            "source_unit": source_unit,
-                            "canonical_unit": "h",
-                            "factor": factor,
-                        },
-                    },
-                )
-                for sample, points in grouped.items()
-                if points
-            ]
-            if sum(len(item.points) for item in candidate) > sum(
-                len(item.points) for item in best
-            ):
-                best = candidate
-    if best:
-        return best
-    return []
+    resolved = resolve_single_table_source(source, context="swelling transform")
+    matches = _matching_tables(resolved)
+    if len(matches) != 1:
+        raise ValueError(
+            "Swelling transform requires exactly one matching labeled worksheet "
+            f"in {resolved}; found {len(matches)}."
+        )
+    return _long_table_series(resolved, matches[0])
+
+
+__all__ = ["_read_swelling_series_list"]

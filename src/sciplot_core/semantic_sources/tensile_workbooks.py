@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 import pandas as pd
@@ -93,13 +92,6 @@ def _read_tensile_workbook_directory(
                     "Representative_Curve has fewer than two numeric points."
                 )
             sample = workbook_path.stem
-            filename_sample_code = re.fullmatch(
-                r"e(\d+)",
-                sample.strip(),
-                flags=re.IGNORECASE,
-            )
-            if filename_sample_code is not None:
-                sample = f"E{filename_sample_code.group(1)}"
             try:
                 metadata = pd.read_excel(
                     workbook_path, sheet_name="DataStudio_Metadata", header=None
@@ -107,11 +99,7 @@ def _read_tensile_workbook_directory(
                 for row_index in range(metadata.shape[0]):
                     if _clean_text(metadata.iat[row_index, 0]).casefold() == "label":
                         metadata_sample = _clean_text(metadata.iat[row_index, 1])
-                        # A canonical E-number workbook filename is the stable
-                        # sample identity. Metadata may append specimen
-                        # conditions such as "2mm" or "solid"; those belong to
-                        # the enclosing project, not the plotted sample label.
-                        if filename_sample_code is None and metadata_sample:
+                        if metadata_sample:
                             sample = metadata_sample
                         break
             except (KeyError, ValueError, IndexError):

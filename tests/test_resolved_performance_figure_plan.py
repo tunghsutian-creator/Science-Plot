@@ -232,6 +232,7 @@ def test_performance_resolution_rejects_source_drift_during_load(
 def test_required_figure_plan_rules_match_the_rule_owned_adapters() -> None:
     expected = frozenset(
         {
+            "dma_frequency_sweep",
             "dma_temperature_sweep",
             "dsc_curve",
             "dtg_curve",
@@ -241,9 +242,11 @@ def test_required_figure_plan_rules_match_the_rule_owned_adapters() -> None:
             "compression_curve",
             "flexural_curve",
             "rheology_frequency_sweep",
+            "rheology_stress_relaxation",
             "rheology_temperature_sweep",
             "saxs_profile",
             "gpc_sec_chromatogram",
+            "swelling_curve",
             "tensile_curve",
             "tga_curve",
             "uvvis_spectrum",

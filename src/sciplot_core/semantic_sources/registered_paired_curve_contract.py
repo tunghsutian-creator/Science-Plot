@@ -11,7 +11,7 @@ from sciplot_core.semantic_sources.models import CurveSeriesPayload
 from sciplot_core.semantic_sources.scientific_transform import (
     ScientificTransformContract,
 )
-from sciplot_core.source_tables import slugify_label
+from sciplot_core.source_tables import slugify_canonical_label
 
 
 def validate_registered_paired_curve_row_evidence(
@@ -75,8 +75,8 @@ def build_registered_paired_curve_contract(
                 "last_point": list(series.points[-1]),
             }
         )
-    x_metric = slugify_label(rule.x_axis.canonical_label)
-    y_metric = slugify_label(rule.y_axis.canonical_label)
+    x_metric = slugify_canonical_label(rule.x_axis.canonical_label)
+    y_metric = slugify_canonical_label(rule.y_axis.canonical_label)
     x_values = [x for series in series_list for x, _y in series.points]
     y_values = [y for series in series_list for _x, y in series.points]
     return ScientificTransformContract(

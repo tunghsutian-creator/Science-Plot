@@ -5,32 +5,100 @@ from __future__ import annotations
 import math
 from pathlib import Path
 from typing import Any
+
 import pandas as pd
-from sciplot_core.foundation.text_values import (
-    clean_text as _clean_text,
-    token as _token,
+from sciplot_core.foundation.text_values import clean_text as _clean_text
+from sciplot_core.foundation.text_values import token as _token
+from sciplot_core.materials_rules.unit_formatting import format_unit_label
+from sciplot_core.semantic_sources.models import CurveSeriesPayload
+from sciplot_core.semantic_sources.paired_curve_table_metadata import (
+    explicit_header_unit as _explicit_header_unit,
+    looks_like_unit as _looks_like_unit,
 )
-
-
-from sciplot_core.semantic_sources.models import (
-    CurveSeriesPayload,
-)
-
+from sciplot_core.semantic_sources.rheology_sweep_sources import _sweep_source_files
+from sciplot_core.semantic_sources.series_labels import _source_display_sample
 from sciplot_core.semantic_sources.table_scanning import (
-    _sample_from_interval_metadata,
     _find_column,
-    _unit_for,
     _float,
     _read_raw_table_normalized,
+    _sample_from_interval_metadata,
 )
 
-from sciplot_core.semantic_sources.series_labels import (
-    _source_display_sample,
-)
 
-from sciplot_core.semantic_sources.rheology_sweep_sources import (
-    _sweep_source_files,
-)
+def _explicit_interval_units(
+    raw: pd.DataFrame,
+    *,
+    source: Path,
+    header_index: int,
+    headers: list[str],
+    columns: tuple[int, ...],
+    expected_units: dict[int, str],
+    stop: int,
+) -> dict[int, tuple[str, int]]:
+    """Resolve one unambiguous explicit unit per selected interval column."""
+
+    evidence: dict[int, list[tuple[str, int]]] = {column: [] for column in columns}
+    for column in columns:
+        header = headers[column]
+        unit = _explicit_header_unit(header) or _terminal_wrapped_unit(header)
+        if unit:
+            evidence[column].append((unit, header_index))
+    for row_index in range(header_index + 1, stop):
+        values = [_clean_text(value) for value in raw.iloc[row_index].tolist()]
+        numeric = [_float(raw.iat[row_index, column]) for column in columns]
+        if any(value is not None for value in numeric):
+            break
+        for column in columns:
+            unit = _whole_unit_cell(values[column], expected=expected_units[column])
+            if unit:
+                evidence[column].append((unit, row_index))
+
+    resolved: dict[int, tuple[str, int]] = {}
+    for column in columns:
+        declarations = {format_unit_label(unit): row for unit, row in evidence[column]}
+        if len(declarations) != 1:
+            state = "missing" if not declarations else "ambiguous"
+            raise ValueError(
+                f"Explicit rheology interval unit is {state} for {headers[column]} "
+                f"in {source}."
+            )
+        unit, row_index = next(iter(declarations.items()))
+        resolved[column] = (unit, row_index)
+    return resolved
+
+
+def _terminal_wrapped_unit(value: object) -> str:
+    text = _clean_text(value)
+    for left, right in (("[", "]"), ("(", ")")):
+        if text.endswith(right) and left in text:
+            candidate = text.rsplit(left, 1)[1][:-1].strip()
+            if candidate and _float(candidate) is None:
+                return candidate
+    return ""
+
+
+def _whole_unit_cell(value: object, *, expected: str) -> str:
+    text = _clean_text(value)
+    wrapped = _terminal_wrapped_unit(text)
+    if wrapped and text in {f"[{wrapped}]", f"({wrapped})"}:
+        return wrapped
+    if _float(text) is None and (
+        _looks_like_unit(text) or format_unit_label(text) == format_unit_label(expected)
+    ):
+        return text
+    return ""
+
+
+def _identity_interval_unit(
+    declared: str, expected: str, *, header: str, source: Path
+) -> str:
+    required = format_unit_label(expected)
+    if declared != required:
+        raise ValueError(
+            f"Unsupported rheology interval unit {declared!r} for {header} in {source}; "
+            f"expected identity-equivalent {required!r}."
+        )
+    return required
 
 
 def _read_rheology_interval_series(
@@ -84,10 +152,6 @@ def _read_rheology_interval_series(
         intervals: list[dict[str, Any]] = []
         for interval_index, header_index in enumerate(result_headers, start=1):
             headers = [_clean_text(value) for value in raw.iloc[header_index].tolist()]
-            units = [
-                _clean_text(value)
-                for value in raw.iloc[min(header_index + 2, raw.shape[0] - 1)].tolist()
-            ]
             x_index = _find_column(headers, ("time", "时间"))
             y_index = _find_column(headers, y_candidates)
             next_header = (
@@ -101,6 +165,27 @@ def _read_rheology_interval_series(
                 if _token(first_value) in {"intervalanddatapoints", "result"}:
                     interval_stop = row_index
                     break
+            units = _explicit_interval_units(
+                raw,
+                source=source,
+                header_index=header_index,
+                headers=headers,
+                columns=(x_index, y_index),
+                expected_units={x_index: "s", y_index: y_unit},
+                stop=interval_stop,
+            )
+            x_unit = _identity_interval_unit(
+                units[x_index][0],
+                "s",
+                header=headers[x_index],
+                source=source,
+            )
+            selected_y_unit = _identity_interval_unit(
+                units[y_index][0],
+                y_unit,
+                header=headers[y_index],
+                source=source,
+            )
             points: list[tuple[float, float]] = []
             numeric_x_rows = 0
             candidate_rows = 0
@@ -129,8 +214,10 @@ def _read_rheology_interval_series(
                         "x_column_header": headers[x_index],
                         "y_column_index": y_index,
                         "y_column_header": headers[y_index],
-                        "x_unit": _unit_for(units, x_index, "s"),
-                        "y_unit": _unit_for(units, y_index, y_unit),
+                        "x_unit_row_index": int(raw.index[units[x_index][1]]),
+                        "y_unit_row_index": int(raw.index[units[y_index][1]]),
+                        "x_unit": x_unit,
+                        "y_unit": selected_y_unit,
                         "points": tuple(points),
                         "numeric_x_rows": numeric_x_rows,
                         "candidate_rows": candidate_rows,
@@ -215,6 +302,8 @@ def _read_rheology_interval_series(
             {
                 "interval_index": int(interval["interval_index"]),
                 "header_row_index": int(interval["source_header_index"]),
+                "x_unit_row_index": int(interval["x_unit_row_index"]),
+                "y_unit_row_index": int(interval["y_unit_row_index"]),
                 "x": {
                     "header": str(interval["x_column_header"]),
                     "column_index_zero_based": int(interval["x_column_index"]),
@@ -302,5 +391,10 @@ def _read_rheology_interval_series_list(
         detail = "; ".join(errors[:3])
         raise ValueError(
             f"No {y_label.casefold()} exports found under {source}. {detail}".strip()
+        )
+    if errors:
+        raise ValueError(
+            "Rheology interval preparation rejected one or more in-scope "
+            f"source files; silent partial datasets are not allowed ({'; '.join(errors[:3])})."
         )
     return series_list

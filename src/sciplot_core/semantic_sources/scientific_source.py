@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.materials_rules import get_rule
+from sciplot_core.materials_rules.models import SemanticRule
 from sciplot_core.semantic_sources.scientific_source_models import (
     ResolvedScientificSource,
     ScientificSourceDomain,
@@ -37,8 +38,9 @@ def resolve_scientific_source(
     if adapter == "stress_relaxation":
         return _resolve_stress_relaxation_scientific_source(
             resolved_source,
-            rule_id=normalized_rule,
-            series_order=request.get("series_order"),
+            rule=rule,
+            request=request,
+            template=template,
         )
     if adapter == "dma_temperature":
         return _resolve_dma_temperature_scientific_source(
@@ -60,7 +62,7 @@ def resolve_scientific_source(
             rule_id=normalized_rule,
             request=request,
         )
-    if adapter in {"registered_paired_curve", "gpc_sec", "ftir"}:
+    if rule.figure_plan_adapter == "registered_single_curve":
         from sciplot_core.semantic_sources.scientific_source_single_curve import (
             resolve_single_curve_scientific_source,
         )
@@ -77,29 +79,36 @@ def resolve_scientific_source(
 def _resolve_stress_relaxation_scientific_source(
     source: Path,
     *,
-    rule_id: str,
-    series_order: object,
+    rule: SemanticRule,
+    request: dict[str, Any],
+    template: str,
 ) -> ResolvedScientificSource:
+    from sciplot_core.semantic_sources.scientific_source_single_curve import (
+        bind_single_curve_scientific_source,
+        require_single_curve_source_sha256,
+    )
     from sciplot_core.semantic_sources.stress_relaxation_transform import (
         resolve_stress_relaxation_transform,
     )
 
+    source_sha256_before = require_single_curve_source_sha256(source, rule=rule)
     try:
         transform = resolve_stress_relaxation_transform(
             source,
-            series_order=series_order,
+            series_order=request.get("series_order"),
         )
     except (OSError, ValueError) as exc:
         raise ScientificSourceResolutionError(
             "stress_relaxation_transform_invalid",
             str(exc),
         ) from exc
-    return ResolvedScientificSource(
-        rule_id=rule_id,
-        source=source,
-        domain=transform,
-        figure_plan=None,
-        source_sha256=None,
+    return bind_single_curve_scientific_source(
+        source,
+        rule=rule,
+        request=request,
+        template=template,
+        transform=transform,
+        source_sha256_before=source_sha256_before,
     )
 
 

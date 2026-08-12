@@ -11,7 +11,7 @@ from openpyxl import load_workbook
 import sciplot_core.figure_plan.source_binding as source_binding_hashes
 from sciplot_core import workflow
 from sciplot_core._paths import resolve_fixture_path
-from sciplot_core.figure_plan import FigurePlanResolutionError
+from sciplot_core.figure_plan import CartesianMetricBinding, FigurePlanResolutionError
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.readiness.rule_contract import rule_contract_hashes
 from sciplot_core.semantic import prepare_semantic_source
@@ -329,7 +329,11 @@ def test_scientific_source_resolution_uses_the_rule_adapter(
     monkeypatch.setattr(
         source_resolution,
         "get_rule",
-        lambda _rule_id: replace(rule, scientific_source_adapter=None),
+        lambda _rule_id: replace(
+            rule,
+            scientific_source_adapter=None,
+            figure_plan_adapter=None,
+        ),
     )
     assert (
         source_resolution.resolve_scientific_source(
@@ -348,6 +352,62 @@ def test_scientific_source_adapter_is_internal_execution_metadata() -> None:
 
     assert rerouted.to_payload() == original.to_payload()
     assert rule_contract_hashes(rerouted) == rule_contract_hashes(original)
+
+
+def test_stress_source_binds_one_transform_to_one_source_hashed_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "relaxation.csv"
+    _write_source(source)
+    rule = get_rule("rheology_stress_relaxation")
+    import sciplot_core.semantic_sources.stress_relaxation_transform as transform
+
+    original = transform.resolve_stress_relaxation_transform
+    calls: list[Path] = []
+    snapshots: list[object] = []
+
+    def counted(source_path: Path, *, series_order: object = None):
+        calls.append(source_path.expanduser().resolve())
+        snapshot = original(source_path, series_order=series_order)
+        snapshots.append(snapshot)
+        return snapshot
+
+    monkeypatch.setattr(transform, "resolve_stress_relaxation_transform", counted)
+
+    resolved = resolve_scientific_source(
+        source,
+        rule_id=rule.rule_id,
+        request={},
+        template=rule.template,
+    )
+
+    assert resolved is not None
+    assert resolved.transform is snapshots[0]
+    assert calls == [source.resolve()]
+    assert resolved.source_sha256 is not None
+    plan = resolved.figure_plan
+    assert plan is not None
+    assert plan.source_sha256 == resolved.source_sha256
+    assert plan.selection_policy == "registered_single_curve"
+    assert len(plan.tasks) == 1
+    task = plan.tasks[0]
+    output = resolved.transform.contract.output
+    binding = CartesianMetricBinding(
+        x_metric=str(output["x_metric"]),
+        y_metric=str(output["y_metric"]),
+    )
+    sample_order = tuple(series.sample for series in resolved.transform.series)
+    expected_stem = "rheology_stress_relaxation_normalized_stress_vs_time"
+    assert binding == CartesianMetricBinding(
+        x_metric="time",
+        y_metric="normalized_stress",
+    )
+    assert task.metric_binding == binding
+    assert task.sample_order == sample_order
+    assert task.artifact_stem == expected_stem
+    assert task.document_stem == expected_stem
+    assert plan.primary_figure_id == expected_stem
 
 
 def test_scientific_source_adapters_keep_stable_error_reasons(
@@ -408,10 +468,13 @@ def test_studio_and_workflow_each_resolve_one_scientific_source_snapshot(
 
     original = transform.resolve_stress_relaxation_transform
     calls: list[Path] = []
+    contracts: list[dict[str, object]] = []
 
     def counted(source_path: Path, *, series_order: object = None):
         calls.append(source_path.expanduser().resolve())
-        return original(source_path, series_order=series_order)
+        snapshot = original(source_path, series_order=series_order)
+        contracts.append(snapshot.contract.to_payload())
+        return snapshot
 
     monkeypatch.setattr(transform, "resolve_stress_relaxation_transform", counted)
     monkeypatch.setattr(
@@ -454,7 +517,7 @@ def test_studio_and_workflow_each_resolve_one_scientific_source_snapshot(
         for step in persisted_request["transform_ledger"]["steps"]
         if "scientific_transform" in step.get("parameters", {})
     )
-    assert studio_contract["anchor"]["selections"][0]["source_time"] == 0.13
+    assert studio_contract == contracts[0]
 
     workflow_request = tmp_path / "workflow_request.json"
     workflow_request.write_text(
@@ -464,7 +527,7 @@ def test_studio_and_workflow_each_resolve_one_scientific_source_snapshot(
                 "input": str(source),
                 "output": str(tmp_path / "workflow_output"),
                 "rule_id": "rheology_stress_relaxation",
-                "exports": ["pdf"],
+                "exports": ["pdf", "tiff_300"],
             }
         ),
         encoding="utf-8",
@@ -479,6 +542,7 @@ def test_studio_and_workflow_each_resolve_one_scientific_source_snapshot(
         if "scientific_transform" in step.get("parameters", {})
     )
     assert runtime_contract == studio_contract
+    assert runtime_contract == contracts[1]
     assert manifest["result"]["veusz_documents"]
     assert manifest["result"]["outputs"]
 
@@ -647,18 +711,14 @@ def test_rheology_frequency_snapshot_drives_plan_and_prepare_without_reparse(
     assert "Complex Modulus" in headers
 
 
-@pytest.mark.parametrize(
-    "render_request",
-    [
-        {"template": "curve", "rule_id": "rheology_stress_relaxation"},
-        {"recipe": "stress_relaxation", "rule_id": "rheology_stress_relaxation"},
-    ],
-)
-def test_scientific_direct_and_recipe_routes_use_semantic_materialization(
+def test_scientific_direct_route_uses_semantic_materialization(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    render_request: dict[str, str],
 ) -> None:
+    render_request = {
+        "template": "curve",
+        "rule_id": "rheology_stress_relaxation",
+    }
     source = tmp_path / "relaxation.csv"
     _write_source(source)
     resolved = resolve_scientific_source(
@@ -675,10 +735,15 @@ def test_scientific_direct_and_recipe_routes_use_semantic_materialization(
         result={"kind": "semantic_sentinel"},
         plotted_data_source=source,
     )
-    received: list[object] = []
+    received: list[tuple[object, object]] = []
 
     def fake_semantic(**kwargs: object) -> RequestRenderResult:
-        received.append(kwargs["resolved_scientific_source"])
+        received.append(
+            (
+                kwargs["resolved_scientific_source"],
+                kwargs["selected_figure_plan"],
+            )
+        )
         return sentinel
 
     monkeypatch.setattr(
@@ -708,8 +773,74 @@ def test_scientific_direct_and_recipe_routes_use_semantic_materialization(
         base_dir=tmp_path,
         transform_steps=[],
         resolved_scientific_source=resolved,
+        _resolved_figure_plan=resolved.figure_plan,
     )
 
     assert rendered is sentinel
     assert len(received) == 1
-    assert received[0] is resolved
+    assert received[0][0] is resolved
+    assert received[0][1] is resolved.figure_plan
+
+
+def test_scientific_named_recipe_with_plan_fails_before_materialization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "relaxation.csv"
+    _write_source(source)
+    request = {
+        "recipe": "stress_relaxation",
+        "rule_id": "rheology_stress_relaxation",
+    }
+    resolved = resolve_scientific_source(
+        source,
+        rule_id="rheology_stress_relaxation",
+        request=request,
+        template="curve",
+    )
+    assert resolved is not None
+    assert resolved.figure_plan is not None
+    route = resolve_workflow_route_intent(request)
+    unexpected_calls: list[str] = []
+
+    def unexpected(route_name: str) -> None:
+        unexpected_calls.append(route_name)
+        pytest.fail(f"unsupported named FigurePlan reached {route_name}")
+
+    monkeypatch.setattr(
+        request_rendering,
+        "_render_semantic_plan_request",
+        lambda **_kwargs: unexpected("semantic preparation"),
+    )
+    monkeypatch.setattr(
+        request_rendering,
+        "_render_legacy_recipe_request",
+        lambda **_kwargs: unexpected("legacy recipe execution"),
+    )
+    transform_steps: list[dict[str, object]] = []
+    output_dir = tmp_path / "must_not_exist"
+
+    with pytest.raises(
+        ValueError,
+        match="workflow_recipe_figure_plan_unsupported",
+    ):
+        request_rendering.execute_request_render(
+            request=request,
+            route_intent=route,
+            semantic={
+                "rule_id": "rheology_stress_relaxation",
+                "semantic_family": "rheology_stress_relaxation",
+                "template": "curve",
+            },
+            study_model={},
+            input_path=source,
+            output_dir=output_dir,
+            base_dir=tmp_path,
+            transform_steps=transform_steps,
+            resolved_scientific_source=resolved,
+            _resolved_figure_plan=resolved.figure_plan,
+        )
+
+    assert unexpected_calls == []
+    assert transform_steps == []
+    assert not output_dir.exists()

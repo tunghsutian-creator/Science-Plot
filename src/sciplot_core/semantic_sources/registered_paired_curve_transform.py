@@ -24,7 +24,7 @@ from sciplot_core.semantic_sources.table_scanning import _scan_curve_series_sour
 from sciplot_core.semantic_sources.table_source_files import (
     resolve_single_table_source,
 )
-from sciplot_core.source_tables import slugify_label
+from sciplot_core.source_tables import slugify_canonical_label
 
 
 _EXPLICIT_UNIT_DETECTIONS = frozenset(
@@ -56,8 +56,8 @@ def resolve_registered_paired_curve_transform(
         source,
         context=f"{rule.rule_id} paired-curve transform",
     )
-    x_metric = slugify_label(rule.x_axis.canonical_label)
-    y_metric = slugify_label(rule.y_axis.canonical_label)
+    x_metric = slugify_canonical_label(rule.x_axis.canonical_label)
+    y_metric = slugify_canonical_label(rule.y_axis.canonical_label)
     series_list = _scan_curve_series_source(
         resolved_source,
         x_aliases=_axis_aliases(
@@ -170,14 +170,14 @@ def _normalize_series(
     source_x_unit = _required_explicit_unit(
         diagnostics,
         prefix="x",
-        metric=slugify_label(rule.x_axis.canonical_label),
+        metric=slugify_canonical_label(rule.x_axis.canonical_label),
         sample=series.sample,
         rule_id=rule.rule_id,
     )
     source_y_unit = _required_explicit_unit(
         diagnostics,
         prefix="y",
-        metric=slugify_label(rule.y_axis.canonical_label),
+        metric=slugify_canonical_label(rule.y_axis.canonical_label),
         sample=series.sample,
         rule_id=rule.rule_id,
     )
@@ -272,6 +272,7 @@ def _resolve_output_unit(
 def _comparable_unit(value: str) -> str:
     normalized = value.replace("℃", "°C").replace("º", "°").replace("˚", "°")
     normalized = re.sub(r"(?<=[A-Za-z])-(?=\d)", "^-", normalized)
+    normalized = re.sub(r"[·⋅×*]", " ", normalized)
     return format_unit_label(normalized)
 
 

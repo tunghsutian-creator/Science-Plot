@@ -6,6 +6,7 @@ import math
 from pathlib import Path
 import pandas as pd
 
+from sciplot_core.foundation.text_values import token as _token
 
 from sciplot_core.semantic_sources.models import (
     CurveSeriesPayload,
@@ -194,6 +195,16 @@ def _read_stress_relaxation_source_series(source: Path) -> list[CurveSeriesPaylo
                 f"sections ({'; '.join(section_errors[:3])})."
             )
         return parsed
+
+    if any(
+        _token(raw.iat[row_index, 0]) == "intervaldata"
+        for row_index in range(raw.shape[0])
+        if raw.shape[1]
+    ):
+        raise ValueError(
+            "Stress-relaxation interval parsing failed closed: "
+            f"{'; '.join(section_errors[:3])}."
+        )
 
     try:
         series_list = _read_wide_stress_relaxation_series(source)

@@ -132,6 +132,22 @@ def _looks_like_unit_solidus_expression(value: object) -> bool:
     )
 
 
+def looks_like_unit_expression(value: object) -> bool:
+    """Return whether *value* is one recognized scientific unit expression."""
+
+    candidate = str(value or "").strip().strip("[]() ")
+    if not candidate:
+        return False
+    if candidate in _UNIT_WHOLE_ALIASES:
+        return True
+    if _is_known_unit_factor(candidate) or _looks_like_unit_solidus_expression(
+        candidate
+    ):
+        return True
+    factors = _denominator_unit_factors(candidate)
+    return len(factors) > 1 and all(_is_known_unit_factor(factor) for factor in factors)
+
+
 def format_unit_label(unit: str) -> str:
     """Return the global scientific display form for one unit expression.
 

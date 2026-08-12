@@ -365,6 +365,81 @@ def test_plan_cli_returns_blocked_json_for_source_inspection_failure(
     assert payload["blocker"]["reason_code"] == "plan_source_inspection_failed"
 
 
+def test_inspect_missing_source_json_is_one_expected_runtime_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "missing.csv"
+
+    exit_code = cli.main(["inspect", str(source), "--json"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.err == ""
+    assert json.loads(captured.out) == {
+        "kind": "sciplot_cli_runtime_error",
+        "version": 1,
+        "status": "failed",
+        "category": "expected_runtime_failure",
+        "reason_code": "cli_expected_runtime_failure",
+        "exception_type": "FileNotFoundError",
+        "message": f"Input not found: {source}",
+    }
+
+
+def test_doctor_json_classifies_programming_failure_as_internal_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    import sciplot_core.doctor as doctor_module
+
+    def fail_doctor() -> dict[str, object]:
+        raise AssertionError("doctor invariant failed")
+
+    monkeypatch.setattr(doctor_module, "doctor_payload", fail_doctor)
+
+    exit_code = cli.main(["doctor", "--json"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.err == ""
+    assert json.loads(captured.out) == {
+        "kind": "sciplot_cli_runtime_error",
+        "version": 1,
+        "status": "failed",
+        "category": "internal_error",
+        "reason_code": "cli_internal_error",
+        "exception_type": "AssertionError",
+        "message": "doctor invariant failed",
+    }
+
+
+def test_inspect_missing_source_without_json_keeps_human_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "missing.csv"
+
+    exit_code = cli.main(["inspect", str(source)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert captured.err == f"Error: Input not found: {source}\n"
+
+
+def test_json_flag_does_not_repackage_argparse_usage_errors(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(["inspect", "--json"])
+
+    captured = capsys.readouterr()
+    assert excinfo.value.code == 2
+    assert captured.out == ""
+    assert "usage:" in captured.err
+
+
 def test_plan_cli_explicit_performance_template_selects_the_same_single_task(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

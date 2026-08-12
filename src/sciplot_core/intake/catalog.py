@@ -5,10 +5,6 @@ from __future__ import annotations
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.materials_rules import get_rule
-from sciplot_core.policy import (
-    FTIR_SPECTRUM_RENDER_OPTIONS,
-    TORQUE_OFFSET_STACK_RENDER_OPTIONS,
-)
 
 from .config import (
     APPROVED_INTAKE_SIZE_PRESETS,
@@ -96,41 +92,26 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
                 "id": "tensile_curve",
                 "label": "拉伸（曲线与重复测量汇总）",
                 "rule_id": "tensile_curve",
-                "default_replicate_mode": "representative",
             },
             {
                 "id": "compression_curve",
                 "label": "压缩（曲线与重复测量汇总）",
                 "rule_id": "compression_curve",
-                "default_replicate_mode": "representative",
             },
             {
                 "id": "flexural_curve",
                 "label": "弯曲（曲线与重复测量汇总）",
                 "rule_id": "flexural_curve",
-                "default_replicate_mode": "representative",
             },
             {
                 "id": "torque_curve",
                 "label": "转矩曲线",
                 "rule_id": "torque_curve",
-                "chart": "curve",
-            },
-            {
-                "id": "torque_offset_stack",
-                "label": "转矩偏移堆积",
-                "rule_id": "torque_curve",
-                "chart": "stacked_curve",
-                "template": "stacked_curve",
-                "render_options": dict(TORQUE_OFFSET_STACK_RENDER_OPTIONS),
             },
             {
                 "id": "impact_metric",
                 "label": "冲击",
                 "rule_id": "impact_metric",
-                "chart": "box_strip",
-                "template": "box_strip",
-                "default_replicate_mode": "individual",
             },
             {"id": "unknown_mechanical", "label": "未知力学", "rule_id": None},
         ),
@@ -144,8 +125,6 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
                 "id": "dsc_curve",
                 "label": "DSC",
                 "rule_id": "dsc_curve",
-                "chart": "curve",
-                "template": "curve",
             },
             {"id": "tga_curve", "label": "TGA", "rule_id": "tga_curve"},
             {"id": "dtg_curve", "label": "DTG", "rule_id": "dtg_curve"},
@@ -161,9 +140,6 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
                 "id": "ftir_spectrum",
                 "label": "FTIR",
                 "rule_id": "ftir_spectrum",
-                "chart": "stacked_curve",
-                "template": "stacked_curve",
-                "render_options": dict(FTIR_SPECTRUM_RENDER_OPTIONS),
             },
             {"id": "uvvis_spectrum", "label": "UV-vis", "rule_id": "uvvis_spectrum"},
             {"id": "unknown_spectroscopy", "label": "未知光谱", "rule_id": None},
@@ -202,9 +178,6 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
                 "id": "performance_comparison",
                 "label": "材料性能对比",
                 "rule_id": "performance_comparison",
-                "chart": "scatter",
-                "template": "scatter",
-                "render_options": {"size": "120x55"},
             },
             {"id": "unknown_metrics", "label": "未知指标", "rule_id": None},
         ),
@@ -216,6 +189,66 @@ INTAKE_CATALOG: tuple[dict[str, Any], ...] = (
         "experiments": ({"id": "unknown", "label": "未知", "rule_id": None},),
     },
 )
+
+
+def _catalog_rule_items() -> dict[str, tuple[dict[str, Any], dict[str, Any]]]:
+    """Index navigation entries while rejecting ambiguous rule identities."""
+
+    indexed: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
+    for data_type in INTAKE_CATALOG:
+        for experiment in data_type["experiments"]:
+            rule_id = experiment.get("rule_id")
+            if not isinstance(rule_id, str) or not rule_id.strip():
+                continue
+            normalized = rule_id.strip()
+            if normalized in indexed:
+                first = indexed[normalized][1]
+                raise ValueError(
+                    "Intake catalog rule ids must be unique; "
+                    f"`{normalized}` is assigned to both `{first['id']}` and "
+                    f"`{experiment['id']}`."
+                )
+            indexed[normalized] = (data_type, experiment)
+    return indexed
+
+
+def _project_experiment(
+    experiment: dict[str, Any], *, include_render_options: bool
+) -> dict[str, Any]:
+    """Project canonical rule capabilities onto one navigation entry."""
+
+    projected = dict(experiment)
+    rule_id = experiment.get("rule_id")
+    if not isinstance(rule_id, str) or not rule_id.strip():
+        return projected
+    rule_payload = get_rule(rule_id.strip()).to_payload()
+    template = str(rule_payload["template"])
+    recommendation = rule_payload["experiment_recommendation"]
+    projected.update(
+        {
+            "template": template,
+            "chart": template,
+            "presentation_contract": dict(rule_payload["presentation_contract"]),
+            "default_replicate_mode": recommendation["default_replicate_mode"],
+        }
+    )
+    if include_render_options:
+        projected["render_options"] = dict(rule_payload["render_options"])
+    return projected
+
+
+def _project_data_type(
+    data_type: dict[str, Any], *, include_render_options: bool
+) -> dict[str, Any]:
+    return {
+        **data_type,
+        "experiments": tuple(
+            _project_experiment(
+                experiment, include_render_options=include_render_options
+            )
+            for experiment in data_type["experiments"]
+        ),
+    }
 
 
 def _rule_is_ready_for_public_catalog(rule_id: str | None) -> bool:
@@ -230,12 +263,16 @@ def _rule_is_ready_for_public_catalog(rule_id: str | None) -> bool:
 def _public_intake_catalog(
     *, include_pending: bool = False
 ) -> tuple[dict[str, Any], ...]:
+    _catalog_rule_items()
     if include_pending:
-        return INTAKE_CATALOG
+        return tuple(
+            _project_data_type(data_type, include_render_options=True)
+            for data_type in INTAKE_CATALOG
+        )
     data_types: list[dict[str, Any]] = []
     for data_type in INTAKE_CATALOG:
         experiments = [
-            experiment
+            _project_experiment(experiment, include_render_options=True)
             for experiment in data_type["experiments"]
             if _rule_is_ready_for_public_catalog(experiment.get("rule_id"))
         ]
@@ -265,12 +302,16 @@ def intake_catalog_payload(*, include_pending: bool = False) -> dict[str, Any]:
 def _catalog_item(
     data_type_id: str, experiment_type_id: str
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    _catalog_rule_items()
     for data_type in INTAKE_CATALOG:
         if data_type["id"] != data_type_id:
             continue
         for experiment in data_type["experiments"]:
             if experiment["id"] == experiment_type_id:
-                return data_type, experiment
+                return (
+                    _project_data_type(data_type, include_render_options=False),
+                    _project_experiment(experiment, include_render_options=False),
+                )
         raise ValueError(
             f"Unknown experiment type `{experiment_type_id}` for data type `{data_type_id}`."
         )
@@ -282,8 +323,11 @@ def _catalog_item_for_rule(
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
     if not rule_id:
         return None
-    for data_type in INTAKE_CATALOG:
-        for experiment in data_type["experiments"]:
-            if experiment.get("rule_id") == rule_id:
-                return data_type, experiment
-    return None
+    matched = _catalog_rule_items().get(rule_id)
+    if matched is None:
+        return None
+    data_type, experiment = matched
+    return (
+        _project_data_type(data_type, include_render_options=False),
+        _project_experiment(experiment, include_render_options=False),
+    )

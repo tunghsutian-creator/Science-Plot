@@ -558,9 +558,14 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         for metric in ("n", "median", "iqr")
     }
     impact_metric_names = {str(row.get("metric") or "") for row in impact_metric_rows}
+    expected_swelling_conditions = [
+        str(value).strip()
+        for value in swelling_rows[0]
+        if str(value).strip().casefold().startswith("fig ")
+    ]
     expected_swelling_order = [
         f"{condition} replicate {replicate}"
-        for condition in ("SH DI water", "SH 1000 mM NaCl", "SH 0.1 wt% PAA")
+        for condition in expected_swelling_conditions
         for replicate in range(1, 4)
     ]
     swelling_selections = swelling_parameters.get("source_selections") or []
@@ -589,8 +594,14 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         and swelling_parameters.get("series_order") == expected_swelling_order
         and swelling_parameters.get("source_point_counts") == [5] * 9
         and first_swelling_block.get("selection_policy")
-        == "contiguous_labeled_swelling_block"
-        and first_swelling_block.get("excluded_disconnected_rows") == 2
+        == "first_labeled_pair_run_with_isolated_blank_bridge"
+        and first_swelling_block.get("candidate_pair_row_count")
+        == first_swelling_block.get("retained_point_count")
+        + first_swelling_block.get("excluded_disconnected_point_count")
+        + first_swelling_block.get("excluded_partial_pair_count")
+        + first_swelling_block.get("excluded_nonnumeric_pair_count")
+        + first_swelling_block.get("excluded_nonfinite_pair_count")
+        and first_swelling_block.get("excluded_nonfinite_pair_count") == 0
         and math.isclose(
             float(first_time_conversion.get("factor") or 0.0), 1.0 / 3600.0
         )

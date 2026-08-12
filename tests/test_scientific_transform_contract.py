@@ -10,6 +10,9 @@ from sciplot_core.semantic import prepare_semantic_source
 from sciplot_core.semantic_sources.scientific_source import (
     resolve_scientific_source,
 )
+from sciplot_core.semantic_sources.rheology_interval import (
+    _read_rheology_interval_series,
+)
 from sciplot_core.semantic_sources.stress_relaxation_transform import (
     resolve_stress_relaxation_transform,
 )
@@ -126,6 +129,26 @@ def _write_invalid_time_export(path: Path, time_cell: str) -> None:
     path.write_text("\n".join(rows) + "\n", encoding="utf-16")
 
 
+def _write_interval_unit_layout(path: Path, *, blank_before_units: bool) -> None:
+    rows = [
+        "Test:\tunit_layout",
+        "Result:\tStress Relaxation 1",
+        "Interval and data points:\t1\t3",
+        "Interval data:\tPoint No.\tTime\tShear Strain\tShear Stress",
+    ]
+    if blank_before_units:
+        rows.append("\t\t\t\t")
+    rows.extend(
+        [
+            "\t\t[s]\t[%]\t[Pa]",
+            "\t1\t0.01\t5\t100",
+            "\t2\t0.02\t5\t90",
+            "\t3\t0.03\t5\t80",
+        ]
+    )
+    path.write_text("\n".join(rows) + "\n", encoding="utf-16")
+
+
 def test_stress_transform_contract_is_shared_by_preview_and_materialization(
     tmp_path: Path,
 ) -> None:
@@ -232,8 +255,16 @@ def test_stress_transform_contract_is_shared_by_preview_and_materialization(
             "template": "curve",
         },
     )
-    assert preview["status"] == "not_applicable"
-    assert preview["resolved_figure_plan"] is None
+    assert preview["status"] == "planned"
+    plan = preview["resolved_figure_plan"]
+    assert plan is not None
+    assert plan["selection_policy"] == "registered_single_curve"
+    assert len(plan["tasks"]) == 1
+    assert plan["tasks"][0]["metric_binding"] == {
+        "kind": "cartesian_xy",
+        "x_metric": "time",
+        "y_metric": "normalized_stress",
+    }
     assert preview["scientific_transform"] == contract
 
     prepared = prepare_semantic_source(
@@ -340,7 +371,7 @@ def test_stress_transform_classifies_invalid_time_candidates(tmp_path: Path) -> 
         resolved = resolve_stress_relaxation_transform(source)
         evidence = resolved.contract.to_payload()["output"]["series"][0]
 
-        assert len(resolved.series[0].points) == 9
+        assert len(resolved.series[0].points) == 10
         assert evidence["candidate_point_counts"] == {
             "response": 11,
             "aligned": 10,
@@ -351,6 +382,141 @@ def test_stress_transform_classifies_invalid_time_candidates(tmp_path: Path) -> 
         assert evidence["source_point_count"] == evidence[
             "retained_point_count"
         ] + sum(evidence["excluded_by_reason"].values())
+
+
+@pytest.mark.parametrize("blank_before_units", [False, True])
+def test_interval_units_follow_explicit_evidence_across_export_layouts(
+    tmp_path: Path,
+    blank_before_units: bool,
+) -> None:
+    source = tmp_path / f"unit_layout_{blank_before_units}.csv"
+    _write_interval_unit_layout(source, blank_before_units=blank_before_units)
+
+    resolved = resolve_stress_relaxation_transform(source)
+    columns = resolved.contract.to_payload()["source_columns"][0]
+    diagnostics = dict(resolved.series[0].diagnostics or {})
+    interval = diagnostics["transform_source_columns"]["response"]
+
+    assert columns["x"]["unit"] == "s"
+    assert columns["response"]["unit"] == "Pa"
+    assert columns["control"]["unit"] == "%"
+    assert resolved.series[0].points[0] == (0.01, 1.0)
+    assert interval["x_unit_row_index"] == (5 if blank_before_units else 4)
+    assert interval["y_unit_row_index"] == (5 if blank_before_units else 4)
+
+
+@pytest.mark.parametrize("unit_rows", [[], ["\t\t[min]\t[%]\t[Pa]"]])
+def test_interval_units_fail_closed_when_missing_or_ambiguous(
+    tmp_path: Path,
+    unit_rows: list[str],
+) -> None:
+    source = tmp_path / f"invalid_units_{len(unit_rows)}.csv"
+    rows = [
+        "Test:\tinvalid_units",
+        "Result:\tStress Relaxation 1",
+        "Interval and data points:\t1\t3",
+        "Interval data:\tPoint No.\tTime\tShear Strain\tShear Stress",
+    ]
+    if unit_rows:
+        rows.append("\t\t[s]\t[%]\t[Pa]")
+        rows.extend(unit_rows)
+    rows.extend(
+        [
+            "\t1\t0.01\t5\t100",
+            "\t2\t0.02\t5\t90",
+            "\t3\t0.03\t5\t80",
+        ]
+    )
+    source.write_text("\n".join(rows) + "\n", encoding="utf-16")
+
+    expected = "missing" if not unit_rows else "ambiguous"
+    with pytest.raises(ValueError, match=expected):
+        resolve_stress_relaxation_transform(source)
+
+
+@pytest.mark.parametrize(
+    ("units", "unsupported", "expected"),
+    [
+        (("min", "%", "Pa"), "min", "s"),
+        (("s", "%", "kPa"), "kPa", "Pa"),
+    ],
+)
+def test_interval_units_reject_values_that_need_conversion(
+    tmp_path: Path,
+    units: tuple[str, str, str],
+    unsupported: str,
+    expected: str,
+) -> None:
+    source = tmp_path / f"unsupported_{unsupported}.csv"
+    time_unit, control_unit, response_unit = units
+    source.write_text(
+        "\n".join(
+            [
+                "Test:\tunsupported_unit",
+                "Result:\tStress Relaxation 1",
+                "Interval and data points:\t1\t3",
+                "Interval data:\tPoint No.\tTime\tShear Strain\tShear Stress",
+                f"\t\t[{time_unit}]\t[{control_unit}]\t[{response_unit}]",
+                "\t1\t0.01\t5\t100",
+                "\t2\t0.02\t5\t90",
+                "\t3\t0.03\t5\t80",
+            ]
+        )
+        + "\n",
+        encoding="utf-16",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=rf"{unsupported!r}.*identity-equivalent {expected!r}",
+    ):
+        resolve_stress_relaxation_transform(source)
+
+
+def test_creep_interval_accepts_identity_equivalent_solidus_unit(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "creep.csv"
+    source.write_text(
+        "\n".join(
+            [
+                "Test:\tcreep_sample",
+                "Result:\tCreep 1",
+                "Interval and data points:\t1\t2",
+                "Interval data:\tPoint No.\tTime\tCreep Compliance",
+                "\t\t[s]\t1/Pa",
+                "\t1\t0.01\t0.000001",
+                "\t2\t0.02\t0.000002",
+            ]
+        )
+        + "\n",
+        encoding="utf-16",
+    )
+
+    series = _read_rheology_interval_series(
+        source,
+        y_candidates=("creepcompliance",),
+        y_label="Creep compliance",
+        y_unit="1/Pa",
+    )
+
+    assert (series.x_unit, series.y_unit) == ("s", "Pa⁻¹")
+    assert series.points[0] == (0.01, 0.000001)
+
+
+def test_plain_wide_stress_source_retains_the_non_interval_fallback(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "wide_stress.csv"
+    source.write_text(
+        "Time,Shear Stress\ns,Pa\nwide,wide\n0.01,100\n0.02,90\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_stress_relaxation_transform(source)
+
+    assert resolved.series[0].points == ((0.01, 1.0), (0.02, 0.9))
+    assert resolved.series[0].x_unit == "s"
 
 
 def test_wide_transform_finds_a_retained_anchor_beyond_the_first_point(

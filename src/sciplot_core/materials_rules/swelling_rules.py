@@ -39,6 +39,9 @@ SWELLING_RULES: tuple[SemanticRule, ...] = (
         reason=(
             "Use explicit swelling-curve intent for labeled time/Ai-A0 observations; gel fraction alone is not treated as swelling kinetics."
         ),
+        render_adapter="generic",
+        scientific_source_adapter="swelling",
+        figure_plan_adapter="registered_single_curve",
         preparation_adapter="curve_family",
     ),
 )

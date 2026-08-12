@@ -825,7 +825,6 @@ const S = {
   figureSize: "60x55",
   figureSizeTouched: false,
   exports: ["pdf", "tiff_300"],
-  replicateMode: "mean",
   plotOutput: "runs/run_001",
   lastProject: null,
   projectStatus: null,
@@ -1527,7 +1526,6 @@ async function createAndRenderProject() {
       plot_output: S.plotOutput || "runs/run_001",
       exports: S.exports,
       render_options: { size: S.figureSize },
-      replicate_mode: S.replicateMode,
       column_confirmations: collectColumnConfirmations(),
       session_id: S.sessionId || undefined,
       run_after_create: true

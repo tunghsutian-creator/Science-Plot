@@ -15,6 +15,7 @@ FIGURE_OUTCOME_KIND: Final = "sciplot_figure_outcome"
 FIGURE_OUTCOME_VERSION: Final = 1
 REQUIRED_FIGURE_PLAN_RULE_IDS = frozenset(
     {
+        "dma_frequency_sweep",
         "dma_temperature_sweep",
         "dsc_curve",
         "dtg_curve",
@@ -24,9 +25,11 @@ REQUIRED_FIGURE_PLAN_RULE_IDS = frozenset(
         "compression_curve",
         "flexural_curve",
         "rheology_frequency_sweep",
+        "rheology_stress_relaxation",
         "rheology_temperature_sweep",
         "saxs_profile",
         "gpc_sec_chromatogram",
+        "swelling_curve",
         "tensile_curve",
         "tga_curve",
         "uvvis_spectrum",

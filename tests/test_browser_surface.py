@@ -19,6 +19,8 @@ def test_browser_surface_keeps_first_project_creation_and_read_only_review() -> 
     assert 'fetch("/api/projects",' in html
     assert "run_after_create: true" in html
     assert "render_options: { size: S.figureSize }" in html
+    assert "replicateMode" not in html
+    assert "replicate_mode" not in html
     assert "Result Review is read-only" in html
     assert "renderScientificTransformReview(scientificReview)" in html
     assert '<div class="section-title">Scientific Review</div>' in html

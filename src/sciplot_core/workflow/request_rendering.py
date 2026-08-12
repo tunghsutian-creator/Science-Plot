@@ -179,6 +179,11 @@ def execute_request_render(
                 named_recipe_binding=binding,
                 resolved_scientific_source=resolved_scientific_source,
             )
+        if selected_figure_plan is not None:
+            raise ValueError(
+                "workflow_recipe_figure_plan_unsupported: named recipes cannot "
+                "execute this selected FigurePlan without a bounded exact-task seam."
+            )
         if resolved_scientific_source is not None:
             return _render_semantic_plan_request(
                 request=request,
@@ -193,11 +198,6 @@ def execute_request_render(
                 final_recipe=final_recipe,
                 named_recipe_binding=None,
                 resolved_scientific_source=resolved_scientific_source,
-            )
-        if selected_figure_plan is not None:
-            raise ValueError(
-                "workflow_recipe_figure_plan_unsupported: named recipes cannot "
-                "execute this selected FigurePlan without a bounded exact-task seam."
             )
         return _render_legacy_recipe_request(
             route_intent=route_intent,

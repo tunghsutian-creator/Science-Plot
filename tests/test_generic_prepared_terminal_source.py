@@ -12,6 +12,7 @@ from sciplot_core.workflow.route_intent import resolve_workflow_route_intent
 
 
 RULE_ID = "rheology_stress_relaxation"
+UNPLANNED_RULE_ID = "rheology_strain_sweep"
 
 
 def test_semantic_workflow_marks_generic_terminal_source_prepared(
@@ -54,8 +55,8 @@ def test_semantic_workflow_marks_generic_terminal_source_prepared(
         request={},
         route_intent=resolve_workflow_route_intent({}),
         semantic={
-            "semantic_family": RULE_ID,
-            "rule_id": RULE_ID,
+            "semantic_family": UNPLANNED_RULE_ID,
+            "rule_id": UNPLANNED_RULE_ID,
             "template": "curve",
         },
         study_model={},
@@ -63,6 +64,7 @@ def test_semantic_workflow_marks_generic_terminal_source_prepared(
         output_dir=tmp_path / "out",
         base_dir=tmp_path,
         transform_steps=transform_steps,
+        resolved_scientific_source=None,
         selected_figure_plan=None,
         final_recipe=None,
         named_recipe_binding=None,

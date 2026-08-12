@@ -13,6 +13,7 @@ import pandas as pd
 import sciplot_core.figure_plan.single_curve_resolution as single_curve_resolution
 import sciplot_core.figure_plan.source_binding as source_binding
 import sciplot_core.semantic_sources.prepare_curve_families as prepare_curve_families
+import sciplot_core.workflow.auto_split as auto_split
 from sciplot_core.semantic_sources import (
     ftir_sources,
     gpc_sources,
@@ -37,6 +38,7 @@ from sciplot_core.semantic import prepare_semantic_source
 from sciplot_core.studio_core.figure_task_evidence import (
     generic_figure_queue_from_plan,
 )
+from sciplot_core.source_tables import slugify_canonical_label, slugify_label
 
 
 RULE_IDS = (
@@ -46,7 +48,16 @@ RULE_IDS = (
     "uvvis_spectrum",
     "xrd_pattern",
 )
-REGISTERED_RULE_IDS = (*RULE_IDS, "saxs_profile")
+REGISTERED_METRIC_IDS = {
+    "dsc_curve": ("temperature", "heat_flow"),
+    "tga_curve": ("temperature", "mass"),
+    "dtg_curve": ("temperature", "derivative_mass"),
+    "uvvis_spectrum": ("wavelength", "absorbance"),
+    "xrd_pattern": ("diffraction_angle", "intensity"),
+    "saxs_profile": ("q", "intensity"),
+    "dma_frequency_sweep": ("angular_frequency", "storage_modulus"),
+}
+REGISTERED_RULE_IDS = tuple(REGISTERED_METRIC_IDS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,6 +275,100 @@ def test_registered_paired_curve_keeps_zero_on_a_linear_x_axis(
     assert series.points == ((0.0, 5.0), (2.0, 4.0))
     assert "excluded_nonpositive_log_x_count" not in diagnostics
     assert diagnostics["excluded_nonpositive_log_y_count"] == 1
+
+
+def test_registered_paired_curve_rejects_a_disconnected_later_numeric_block(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "disconnected.csv"
+    source.write_text(
+        "Wavelength (nm),Absorbance (a.u.)\n"
+        "400,1\n"
+        "\n"
+        "500,2\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError) as error:
+        paired_curve_transform.resolve_registered_paired_curve_transform(
+            source,
+            rule=get_rule("uvvis_spectrum"),
+        )
+
+    assert str(error.value) == "Selected paired-curve data block is disconnected."
+
+
+def test_registered_paired_curve_uses_only_main_block_for_decimal_evidence(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "comma_block.csv"
+    source.write_text(
+        "Wavelength (nm);Absorbance (a.u.)\n"
+        "400,0;1,2\n"
+        "500,0;2,4\n"
+        ";\n"
+        "footer;1.2\n"
+        "footer;1,2,3\n",
+        encoding="utf-8",
+    )
+
+    resolved = paired_curve_transform.resolve_registered_paired_curve_transform(
+        source,
+        rule=get_rule("uvvis_spectrum"),
+    )
+
+    assert resolved.series[0].points == ((400.0, 1.2), (500.0, 2.4))
+    evidence = resolved.contract.to_payload()["output"]["series"][0]
+    assert evidence["candidate_row_count"] == 2
+    assert evidence["excluded_by_reason"] == {
+        "empty_pair": 0,
+        "partial_or_nonnumeric": 0,
+        "nonfinite": 0,
+    }
+
+
+def test_registered_paired_curve_keeps_in_block_nonfinite_evidence_for_validation(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "nonfinite.csv"
+    source.write_text(
+        "Wavelength (nm),Absorbance (a.u.)\n"
+        "400,1\n"
+        "500,nan\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="source contains nonfinite values"):
+        paired_curve_transform.resolve_registered_paired_curve_transform(
+            source,
+            rule=get_rule("uvvis_spectrum"),
+        )
+
+
+def test_registered_paired_curve_keeps_scanning_when_another_pair_is_active(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "shorter_pair.csv"
+    source.write_text(
+        "Wavelength (nm),Absorbance (a.u.),Wavelength (nm),Absorbance (a.u.)\n"
+        "400,1,400,10\n"
+        "500,2,500,11\n"
+        ",,600,12\n",
+        encoding="utf-8",
+    )
+
+    resolved = paired_curve_transform.resolve_registered_paired_curve_transform(
+        source,
+        rule=get_rule("uvvis_spectrum"),
+    )
+
+    assert tuple(series.points for series in resolved.series) == (
+        ((400.0, 1.0), (500.0, 2.0)),
+        ((400.0, 10.0), (500.0, 11.0), (600.0, 12.0)),
+    )
+    first_evidence = resolved.contract.to_payload()["output"]["series"][0]
+    assert first_evidence["candidate_row_count"] == 3
+    assert first_evidence["excluded_by_reason"]["empty_pair"] == 1
 
 
 def test_registered_paired_curve_log_projection_uses_mutually_exclusive_axis_reasons(
@@ -534,7 +639,7 @@ def test_registered_paired_curve_transform_and_plan_share_one_source_snapshot(
     assert resolved is not None
     transform = resolved.require_domain(ResolvedScientificTransform)
     assert transform_calls == [(fixture, rule_id)]
-    assert hash_calls == [fixture]
+    assert hash_calls == [fixture, fixture]
     assert len(plan_snapshots) == 1
     assert plan_snapshots[0] is transform
     assert transform.selected_sources == (fixture,)
@@ -587,6 +692,136 @@ def test_registered_paired_curve_uses_the_shared_plan_adapter(rule_id: str) -> N
     assert plan is not None
     assert plan.rule_id == rule_id
     assert len(plan.tasks) == 1
+    x_metric, y_metric = REGISTERED_METRIC_IDS[rule_id]
+    task = plan.tasks[0]
+    assert task.metric_binding == CartesianMetricBinding(
+        x_metric=x_metric,
+        y_metric=y_metric,
+    )
+    family_stem = rule_id.removesuffix("_curve")
+    assert task.figure_id == f"{family_stem}_{y_metric}_vs_{x_metric}"
+
+
+def test_canonical_metric_ids_do_not_change_presentation_slug_aliases() -> None:
+    assert slugify_label("Angular frequency") == "omega"
+    assert slugify_label("Storage modulus") == "g"
+    assert slugify_canonical_label("Angular frequency") == "angular_frequency"
+    assert slugify_canonical_label("Storage modulus") == "storage_modulus"
+
+
+def test_dma_frequency_real_source_reuses_one_generic_single_curve_spine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rule = get_rule("dma_frequency_sweep")
+    fixture = _fixture(rule.rule_id)
+    expected_series = _fixture_series(rule.rule_id)
+    assert expected_series
+
+    resolved = resolve_scientific_source(
+        fixture,
+        rule_id=rule.rule_id,
+        request={},
+        template=rule.template,
+    )
+
+    assert resolved is not None
+    transform = resolved.require_domain(ResolvedScientificTransform)
+    assert rule.scientific_source_adapter == "registered_paired_curve"
+    assert rule.figure_plan_adapter == "registered_single_curve"
+    assert rule.preparation_adapter == "curve_family"
+    assert rule.render_adapter == "generic"
+    assert transform.selected_sources == (fixture,)
+    assert transform.contract.output["x_metric"] == "angular_frequency"
+    assert transform.contract.output["y_metric"] == "storage_modulus"
+    assert transform.contract.output["series_order"] == [
+        series.sample for series in expected_series
+    ]
+    assert tuple(series.points for series in transform.series) == tuple(
+        series.points for series in expected_series
+    )
+
+    plan = resolved.figure_plan
+    assert plan is not None
+    assert plan.source_sha256 == resolved.source_sha256
+    assert plan.selection_policy == "registered_single_curve"
+    assert len(plan.tasks) == 1
+    task = plan.tasks[0]
+    assert task.figure_id == (
+        "dma_frequency_sweep_storage_modulus_vs_angular_frequency"
+    )
+    assert task.metric_binding == CartesianMetricBinding(
+        x_metric="angular_frequency",
+        y_metric="storage_modulus",
+    )
+    assert task.sample_order == tuple(
+        series.sample for series in expected_series
+    )
+
+    monkeypatch.setattr(
+        prepare_curve_families,
+        "resolve_single_curve_transform",
+        lambda *_args, **_kwargs: pytest.fail(
+            "DMA frequency preparation resolved its source snapshot twice"
+        ),
+    )
+    prepared = prepare_semantic_source(
+        fixture,
+        output_dir=tmp_path / "prepared",
+        semantic={"rule_id": rule.rule_id, "semantic_family": rule.semantic_family},
+        resolved_scientific_source=resolved,
+    )
+    step = prepared["transform_steps"][0]
+    assert step["operation"] == (
+        "extract_angular_frequency_storage_modulus_curve"
+    )
+    assert step["parameters"]["scientific_transform"] == (
+        transform.contract.to_payload()
+    )
+
+    bundle_calls: list[dict[str, Any]] = []
+
+    def render_bundle(input_path: Path, **kwargs: Any) -> dict[str, Any]:
+        bundle_calls.append({"input_path": input_path, **kwargs})
+        return {"kind": "generic_single_task_result"}
+
+    monkeypatch.setattr(
+        auto_split,
+        "render_selected_single_task_bundle",
+        render_bundle,
+    )
+    monkeypatch.setattr(
+        auto_split,
+        "render_to_dir",
+        lambda *_args, **_kwargs: pytest.fail(
+            "DMA frequency FigurePlan fell back to unplanned rendering"
+        ),
+    )
+    prepared_source = Path(str(prepared["source"]))
+    result = auto_split._render_with_auto_split(
+        prepared_source,
+        template=rule.template,
+        output_dir=tmp_path / "workflow",
+        options={},
+        export_formats=("pdf",),
+        request={"rule_id": rule.rule_id},
+        _terminal_source_prepared=True,
+        _resolved_scientific_source=resolved,
+        _resolved_figure_plan=plan,
+    )
+    assert result == {"kind": "generic_single_task_result"}
+    assert len(bundle_calls) == 1
+    assert bundle_calls[0]["input_path"] == prepared_source
+    assert bundle_calls[0]["plan"] is plan
+    assert bundle_calls[0]["task"] is task
+    assert bundle_calls[0]["terminal_source_prepared"] is True
+
+    queue = generic_figure_queue_from_plan(
+        plan,
+        render_adapter=rule.render_adapter,
+    )
+    assert [item["id"] for item in queue] == [task.figure_id]
+    assert queue[0]["resolved_figure_task"] == task.to_payload()
 
 
 @pytest.mark.parametrize("file_kind", ("csv", "xlsx"))
@@ -631,6 +866,129 @@ def test_dsc_registered_source_accepts_arbitrary_paired_tables_without_provenanc
         "First",
         "Later source series",
     )
+
+
+@pytest.mark.parametrize("sample", ("A", "Pa", "s"))
+@pytest.mark.parametrize("metadata_order", ("unit_then_sample", "sample_then_unit"))
+def test_registered_pair_roles_preserve_unit_shaped_adjacent_sample_identity(
+    tmp_path: Path,
+    sample: str,
+    metadata_order: str,
+) -> None:
+    source = tmp_path / f"{metadata_order}_{sample}.csv"
+    unit_row = ["°C", "W/g"]
+    sample_row = [sample, sample]
+    metadata_rows = (
+        [unit_row, sample_row]
+        if metadata_order == "unit_then_sample"
+        else [sample_row, unit_row]
+    )
+    with source.open("w", newline="", encoding="utf-8") as handle:
+        csv.writer(handle).writerows(
+            [
+                ["Temperature", "Heat flow"],
+                *metadata_rows,
+                [20.0, 0.1],
+                [21.0, 0.2],
+            ]
+        )
+
+    resolved = resolve_scientific_source(
+        source,
+        rule_id="dsc_curve",
+        request={},
+        template="curve",
+    )
+
+    assert resolved is not None
+    transform = resolved.require_domain(ResolvedScientificTransform)
+    assert tuple(series.sample for series in transform.series) == (sample,)
+    assert transform.series[0].diagnostics["source_sample_detection"] == (
+        "detected_from_adjacent_sample_row"
+    )
+    assert resolved.figure_plan is not None
+    assert resolved.figure_plan.tasks[0].sample_order == (sample,)
+
+
+def test_registered_pair_roles_preserve_unit_shaped_preceding_sample_identity(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "preceding_sample.csv"
+    source.write_text(
+        "Pa,\n"
+        "Temperature (°C),Heat flow (W/g)\n"
+        "20,0.1\n"
+        "21,0.2\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_scientific_source(
+        source,
+        rule_id="dsc_curve",
+        request={},
+        template="curve",
+    )
+
+    assert resolved is not None
+    transform = resolved.require_domain(ResolvedScientificTransform)
+    assert tuple(series.sample for series in transform.series) == ("Pa",)
+    assert transform.series[0].diagnostics["source_sample_detection"] == (
+        "detected_from_preceding_sample_row"
+    )
+    assert resolved.figure_plan is not None
+    assert resolved.figure_plan.tasks[0].sample_order == ("Pa",)
+
+
+def test_registered_pair_roles_fall_back_only_without_structural_sample_evidence(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "no_declared_sample.csv"
+    source.write_text(
+        "Temperature,Heat flow\n"
+        "°C,W/g\n"
+        "20,0.1\n"
+        "21,0.2\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_scientific_source(
+        source,
+        rule_id="dsc_curve",
+        request={},
+        template="curve",
+    )
+
+    assert resolved is not None
+    transform = resolved.require_domain(ResolvedScientificTransform)
+    assert tuple(series.sample for series in transform.series) == (source.stem,)
+    assert transform.series[0].diagnostics["source_sample_detection"] == (
+        "fallback_from_source_table"
+    )
+    assert resolved.figure_plan is not None
+    assert resolved.figure_plan.tasks[0].sample_order == (source.stem,)
+
+
+def test_registered_pair_roles_reject_ambiguous_unit_shaped_rows(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "ambiguous_roles.csv"
+    source.write_text(
+        "Temperature,Heat flow\n"
+        "A,A\n"
+        "Pa,Pa\n"
+        "20,0.1\n"
+        "21,0.2\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Ambiguous adjacent paired-curve unit/sample row roles",
+    ):
+        paired_curve_transform.resolve_registered_paired_curve_transform(
+            source,
+            rule=get_rule("dsc_curve"),
+        )
 
 
 def test_dsc_registered_source_rejects_ambiguous_workbook_sheets(

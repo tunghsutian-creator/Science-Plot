@@ -34,14 +34,6 @@ from sciplot_core.semantic_sources.preparation_support import (
     _semantic_preparation_result,
 )
 
-from sciplot_core.semantic_sources.series_ordering import (
-    _order_curve_series,
-)
-
-from sciplot_core.semantic_sources.swelling_sources import (
-    _read_swelling_series_list,
-)
-
 from sciplot_core.semantic_sources.rheology_sweep_sources import (
     _sweep_source_files,
 )
@@ -125,30 +117,6 @@ def prepare_curve_family_source(
             source_attestation_rule_id=context.rule_id or family,
             source_tree_sha256_before=context.source_tree_sha256_before,
             selected_sources=tuple(_sweep_source_files(source)),
-        )
-
-    if family == "swelling_curve":
-        processed_source = processed_dir / f"{source.stem}_swelling_curve.csv"
-        series_list = _order_curve_series(
-            _read_swelling_series_list(source), series_order
-        )
-        if not series_list:
-            raise ValueError(f"No sample/time/swelling-ratio curves found in {source}.")
-        _write_curve_table(series_list, processed_source)
-        return _semantic_preparation_result(
-            source,
-            processed_source=processed_source,
-            operation="extract_swelling_ratio_by_sample",
-            parameters={
-                "series_order": [series.sample for series in series_list],
-                "selected_axis_columns": {"x": "time", "y": "swelling ratio"},
-                "excluded_same_table_metrics": ["gel fraction"],
-                "source_point_counts": [len(series.points) for series in series_list],
-                "source_selections": [
-                    {"sample": series.sample, **(series.diagnostics or {})}
-                    for series in series_list
-                ],
-            },
         )
 
     if rule.figure_plan_adapter == "registered_single_curve":

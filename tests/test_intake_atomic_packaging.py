@@ -18,6 +18,7 @@ from sciplot_core.intake import IncomingFile, IntakeGroupInput
 from sciplot_core.intake import packaging
 from sciplot_core.intake import session
 from sciplot_core.intake.project import project_builder
+from sciplot_core.materials_rules import get_rule
 from sciplot_core import project_manifest
 from sciplot_core.studio_core import registry_writes
 from sciplot_core.workflow import project_state
@@ -125,6 +126,134 @@ def test_inferred_intake_group_order_does_not_override_source_order(
 
     assert "series_order" not in captured
     assert "series_order" not in captured.get("render_options", {})
+
+
+@pytest.mark.parametrize(
+    ("replicate_mode", "expected_mode"),
+    ((None, "representative"), ("individual", "individual")),
+)
+def test_mechanical_intake_uses_rule_default_unless_explicitly_overridden(
+    tmp_path: Path,
+    replicate_mode: str | None,
+    expected_mode: str,
+) -> None:
+    created = project_builder.create_intake_project(
+        project_name=f"mechanical {expected_mode}",
+        data_type_id="mechanical",
+        experiment_type_id="tensile_curve",
+        groups=_group(b"Strain,Stress\n1,Pa\n0,0\n1,1\n"),
+        output_root=tmp_path / "projects",
+        replicate_mode=replicate_mode,
+        studio_preparer=lambda _project_dir: {},
+    )
+    request = json.loads(
+        (Path(str(created["project_dir"])) / "plot_request.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert request["replicate_mode"] == expected_mode
+    assert request["study_model"]["replicate_policy"] == {
+        "mode": expected_mode,
+        "default_mode": "representative",
+        "available_modes": request["study_model"]["replicate_policy"][
+            "available_modes"
+        ],
+    }
+    assert {
+        sample["replicate_mode"] for sample in request["study_model"]["samples"]
+    } == {expected_mode}
+
+
+def test_selected_rule_overrides_stale_recognition_authority(
+    tmp_path: Path,
+) -> None:
+    created = project_builder.create_intake_project(
+        project_name="canonical tensile",
+        data_type_id="mechanical",
+        experiment_type_id="tensile_curve",
+        groups=_group(b"Strain,Stress\n1,Pa\n0,0\n1,1\n"),
+        output_root=tmp_path / "projects",
+        recognition={
+            "rule_id": "torque_curve",
+            "semantic_family": "rheology_dma",
+            "fixture_status": "wrong",
+            "template": "stacked_curve",
+            "render_options": {
+                "log_x": True,
+                "log_y": True,
+                "stack_offset": 12.5,
+            },
+            "axis_plan": {
+                "x": {"display_label": "WRONG time"},
+                "y": {"display_label": "WRONG torque"},
+            },
+            "reason": "Retained historical recognizer evidence.",
+            "vendor": "legacy-vendor",
+        },
+        studio_preparer=lambda _project_dir: {},
+    )
+    project_dir = Path(str(created["project_dir"]))
+    request = json.loads(
+        (project_dir / "plot_request.json").read_text(encoding="utf-8")
+    )
+    manifest = json.loads(
+        (project_dir / "intake_manifest.json").read_text(encoding="utf-8")
+    )
+    rule_payload = get_rule("tensile_curve").to_payload()
+
+    assert request["rule_id"] == "tensile_curve"
+    assert request["template"] == "curve"
+    assert {
+        key: request["render_options"][key]
+        for key in rule_payload["render_options"]
+    } == rule_payload["render_options"]
+    assert request["render_options"]["x_label_override"] == "Strain (%)"
+    assert request["render_options"]["y_label_override"] == "Tensile stress (MPa)"
+    assert not {
+        "log_x",
+        "log_y",
+        "stack_offset",
+    }.intersection(request["render_options"])
+    assert manifest["experiment"] == {
+        "id": "tensile_curve",
+        "label": "拉伸（曲线与重复测量汇总）",
+        "rule_id": "tensile_curve",
+        "chart": "curve",
+        "template": "curve",
+    }
+    assert manifest["recognition"]["rule_id"] == "tensile_curve"
+    assert manifest["recognition"]["semantic_family"] == "tensile_curve"
+    assert manifest["recognition"]["fixture_status"] == "ready"
+    assert manifest["recognition"]["template"] == "curve"
+    assert manifest["recognition"]["render_options"] == rule_payload["render_options"]
+    assert manifest["recognition"]["axis_plan"] == rule_payload["axis_plan"]
+    assert "log_x" not in manifest["recognition"]["render_options"]
+    assert "log_y" not in manifest["recognition"]["render_options"]
+    assert "stack_offset" not in manifest["recognition"]["render_options"]
+    assert manifest["recognition"]["reason"] == (
+        "Retained historical recognizer evidence."
+    )
+    assert manifest["recognition"]["vendor"] == "legacy-vendor"
+
+
+def test_intake_rejects_an_invalid_explicit_replicate_mode_before_persisting(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "projects"
+
+    with pytest.raises(ValueError, match="Unknown replicate mode `mystery`"):
+        project_builder.create_intake_project(
+            project_name="invalid replicate mode",
+            data_type_id="mechanical",
+            experiment_type_id="tensile_curve",
+            groups=_group(b"Strain,Stress\n1,Pa\n0,0\n1,1\n"),
+            output_root=output_root,
+            replicate_mode="mystery",
+            studio_preparer=lambda _project_dir: {},
+        )
+
+    assert not tuple(output_root.glob("*"))
 
 
 def test_explicit_frequency_intake_skips_competing_sweep_detectors(

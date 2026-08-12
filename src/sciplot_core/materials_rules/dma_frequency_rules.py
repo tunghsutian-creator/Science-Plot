@@ -65,6 +65,12 @@ DMA_FREQUENCY_RULES: tuple[SemanticRule, ...] = (
         ),
         fixture_status="ready",
         priority=30,
-        reason="DMA frequency sweep (isothermal) with E′, E″, tanδ vs angular frequency.",
+        reason=(
+            "DMA frequency sweep (isothermal) with source-identified storage "
+            "modulus E′ vs angular frequency."
+        ),
+        scientific_source_adapter="registered_paired_curve",
+        figure_plan_adapter="registered_single_curve",
+        preparation_adapter="curve_family",
     ),
 )

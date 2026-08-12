@@ -6,23 +6,27 @@ import math
 from pathlib import Path
 import pandas as pd
 from sciplot_core.foundation.text_values import clean_text as _clean_text, token as _token
-from sciplot_core.ingest import normalized_source
 from sciplot_core.materials_rules.unit_formatting import format_unit_label
-from sciplot_core.source_tables import read_raw_table
 from sciplot_core.semantic_sources.models import CurveSeriesPayload
+from sciplot_core.semantic_sources.paired_curve_data_block import (
+    first_paired_curve_data_block,
+)
 from sciplot_core.semantic_sources.paired_curve_table_metadata import (
     axis_match as _axis_match,
     curve_axis_unit as _curve_axis_unit,
     looks_like_unit as _looks_like_unit,
     preceding_pair_sample as _preceding_pair_sample,
+    resolve_adjacent_pair_row_roles,
 )
 from sciplot_core.semantic_sources.panalytical_scan_metadata import (
     resolve_panalytical_scan_metadata,
 )
-from sciplot_core.semantic_sources.table_source_files import (
-    is_workbook_source,
-    table_source_files,
+from sciplot_core.semantic_sources.table_candidate_sources import (
+    read_candidate_tables as _read_candidate_tables,
+    read_raw_table_normalized,
 )
+
+_read_raw_table_normalized = read_raw_table_normalized
 
 
 def _sample_from_interval_metadata(raw: pd.DataFrame, fallback: str) -> str:
@@ -95,58 +99,12 @@ def _float(value: object, *, decimal_comma: bool = False) -> float | None:
         return None
 
 
-def _read_raw_table_normalized(path: Path) -> pd.DataFrame:
-    with normalized_source(path) as normalized:
-        return read_raw_table(normalized)
-
-
-def _read_candidate_tables(source: Path) -> list[tuple[str, pd.DataFrame]]:
-    tables: list[tuple[str, pd.DataFrame]] = []
-    for path in table_source_files(source):
-        if is_workbook_source(path):
-            workbook = pd.ExcelFile(path)
-            tables.extend(
-                (
-                    f"{path.stem}:{sheet_name}",
-                    pd.read_excel(path, sheet_name=sheet_name, header=None).dropna(
-                        axis=1, how="all"
-                    ),
-                )
-                for sheet_name in workbook.sheet_names
-            )
-        else:
-            tables.append(
-                (path.stem, _read_raw_table_normalized(path).dropna(axis=1, how="all"))
-            )
-    return [
-        (name, table.dropna(how="all"))
-        for name, table in tables
-        if not table.dropna(how="all").empty
-    ]
-
-
 def _unit_row_score(raw: pd.DataFrame, row_index: int, columns: tuple[int, ...]) -> int:
     if row_index >= raw.shape[0]:
         return -1
     if columns and all(_float(raw.iat[row_index, column]) is not None for column in columns):
         return -1
     return sum(1 for column in columns if _looks_like_unit(raw.iat[row_index, column]))
-
-
-def _sample_from_row(
-    raw: pd.DataFrame, row_index: int | None, *, start: int, stop: int, fallback: str
-) -> str:
-    if row_index is None or row_index >= raw.shape[0]:
-        return fallback
-    for column in range(start, min(stop, raw.shape[1])):
-        value = _clean_text(raw.iat[row_index, column])
-        if (
-            value
-            and (not _looks_like_unit(value) or len(_token(value)) > 5)
-            and not _axis_match(value, ("time", "strain", "stress", "σ"))
-        ):
-            return value
-    return fallback
 
 
 def _scan_curve_series_table(
@@ -174,21 +132,17 @@ def _scan_curve_series_table(
                     break
         if not pairs:
             continue
-        columns = tuple(column for pair in pairs for column in pair)
         first_extra = header_index + 1
         second_extra = header_index + 2
-        first_unit_score = _unit_row_score(raw, first_extra, columns)
-        second_unit_score = _unit_row_score(raw, second_extra, columns)
-        unit_index = first_extra if first_unit_score >= second_unit_score else second_extra
-        sample_index = second_extra if unit_index == first_extra else first_extra
         preceding_sample_index = header_index - 1
         preceding_samples = (
             {
                 x_index: _preceding_pair_sample(
                     raw.iat[preceding_sample_index, x_index],
+                    raw.iat[preceding_sample_index, y_index],
                     axis_aliases=(*x_aliases, *y_aliases),
                 )
-                for x_index, _y_index in pairs
+                for x_index, y_index in pairs
             }
             if header_index > 0
             else {}
@@ -196,44 +150,54 @@ def _scan_curve_series_table(
         preceding_row_has_samples = bool(preceding_samples) and all(
             preceding_samples.values()
         )
-        if max(first_unit_score, second_unit_score) <= 0:
-            unit_index = -1
+        adjacent_rows = tuple(
+            (row_index, tuple(raw.iloc[row_index].tolist()))
+            for row_index in (first_extra, second_extra)
+            if row_index < raw.shape[0]
+        )
+        unit_row, sample_row, adjacent_samples = resolve_adjacent_pair_row_roles(
+            adjacent_rows,
+            pairs=tuple(pairs),
+            axis_aliases=(*x_aliases, *y_aliases),
+        )
+        unit_index = unit_row if unit_row is not None else -1
+        sample_index = sample_row
+        if sample_index is None and preceding_row_has_samples:
+            sample_index = preceding_sample_index
+        adjacent_metadata_rows = tuple(
+            row_index
+            for row_index in (unit_row, sample_row)
+            if row_index is not None
+        )
+        if adjacent_metadata_rows:
+            data_start = max(adjacent_metadata_rows) + 1
+        else:
             first_row_is_numeric_data = any(
                 _float(raw.iat[first_extra, x_index]) is not None
                 and _float(raw.iat[first_extra, y_index]) is not None
                 for x_index, y_index in pairs
                 if first_extra < raw.shape[0]
             )
-            if first_row_is_numeric_data:
-                sample_index = (
-                    preceding_sample_index if preceding_row_has_samples else None
-                )
-            else:
-                sample_index = header_index + 1
             data_start = header_index + (1 if first_row_is_numeric_data else 2)
-        else:
-            sample_row_is_numeric_data = sample_index < raw.shape[0] and any(
-                _float(raw.iat[sample_index, x_index]) is not None
-                or _float(raw.iat[sample_index, y_index]) is not None
-                for x_index, y_index in pairs
-            )
-            data_start = sample_index if sample_row_is_numeric_data else max(header_index + 1, unit_index + 1, sample_index + 1)
-            if sample_row_is_numeric_data:
-                sample_index = None
+        data_block = first_paired_curve_data_block(
+            raw,
+            data_start=data_start,
+            pairs=tuple(pairs),
+        )
         candidate_series: list[CurveSeriesPayload] = []
         for series_index, (x_index, y_index) in enumerate(pairs, start=1):
             points: list[tuple[float, float]] = []
             excluded_empty_pair_count = 0
             excluded_partial_or_nonnumeric_pair_count = 0
             excluded_nonfinite_pair_count = 0
-            for row_index in range(data_start, raw.shape[0]):
+            for row_index in data_block.rows:
                 x_cell = raw.iat[row_index, x_index]
                 y_cell = raw.iat[row_index, y_index]
                 if not _clean_text(x_cell) and not _clean_text(y_cell):
                     excluded_empty_pair_count += 1
                     continue
-                x_value = _float(x_cell)
-                y_value = _float(y_cell)
+                x_value = _float(x_cell, decimal_comma=data_block.decimal_comma)
+                y_value = _float(y_cell, decimal_comma=data_block.decimal_comma)
                 if x_value is None or y_value is None:
                     excluded_partial_or_nonnumeric_pair_count += 1
                     continue
@@ -284,21 +248,14 @@ def _scan_curve_series_table(
                 sample = preceding_samples[x_index]
                 sample_detection = "detected_from_preceding_sample_row"
                 sample_row_index: int | None = preceding_sample_index
+            elif sample_index is not None:
+                sample = adjacent_samples[x_index]
+                sample_detection = "detected_from_adjacent_sample_row"
+                sample_row_index = sample_index
             else:
-                sample = _sample_from_row(
-                    raw,
-                    sample_index,
-                    start=x_index,
-                    stop=min(y_index + 3, raw.shape[1]),
-                    fallback=fallback_sample,
-                )
-                sample_detected = sample_index is not None and sample != fallback_sample
-                sample_detection = (
-                    "detected_from_adjacent_sample_row"
-                    if sample_detected
-                    else "fallback_from_source_table"
-                )
-                sample_row_index = sample_index if sample_detected else None
+                sample = fallback_sample
+                sample_detection = "fallback_from_source_table"
+                sample_row_index = None
             instrument_diagnostics = (
                 instrument_metadata.diagnostics() if instrument_metadata else {}
             )
@@ -327,7 +284,7 @@ def _scan_curve_series_table(
                         "source_sample_detection": sample_detection,
                         "source_sample_row_index": sample_row_index,
                         "source_sample_value": sample,
-                        "candidate_row_count": raw.shape[0] - data_start,
+                        "candidate_row_count": len(data_block.rows),
                         "retained_point_count": len(points),
                         "excluded_empty_pair_count": excluded_empty_pair_count,
                         "excluded_partial_or_nonnumeric_pair_count": excluded_partial_or_nonnumeric_pair_count,

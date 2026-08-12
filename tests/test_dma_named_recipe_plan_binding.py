@@ -25,6 +25,9 @@ from sciplot_core.readiness.render_request_contract import (
     validated_render_request_policy_payload,
 )
 from sciplot_core.semantic import classify_source
+from sciplot_core.semantic_sources.scientific_source import (
+    resolve_scientific_source,
+)
 from sciplot_core.workflow import request_rendering
 from sciplot_core.workflow.route_intent import resolve_workflow_route_intent
 
@@ -136,6 +139,68 @@ def test_dma_named_recipe_preflight_binds_the_exact_plan() -> None:
     }
     assert binding["template"] == "point_line"
     assert binding["selection_authority"] == "resolved_figure_plan"
+
+
+def test_exact_dma_named_recipe_plan_reaches_only_the_bounded_seam(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _fixture()
+    resolved = resolve_scientific_source(
+        source,
+        rule_id=DMA_TEMPERATURE_RULE_ID,
+        request={},
+        template="point_line",
+    )
+    assert resolved is not None
+    assert resolved.figure_plan is not None
+    request = _named_request(resolved.figure_plan)
+    route = resolve_workflow_route_intent(request)
+    sentinel = request_rendering.RequestRenderResult(
+        route_intent=route,
+        final_recipe=DMA_TEMPERATURE_RECIPE,
+        result={"kind": "bounded_dma_named_recipe_sentinel"},
+        plotted_data_source=source,
+    )
+    calls: list[dict[str, Any]] = []
+
+    def capture_semantic_plan(**kwargs: Any) -> request_rendering.RequestRenderResult:
+        calls.append(kwargs)
+        return sentinel
+
+    monkeypatch.setattr(
+        request_rendering,
+        "_render_semantic_plan_request",
+        capture_semantic_plan,
+    )
+    monkeypatch.setattr(
+        request_rendering,
+        "_render_legacy_recipe_request",
+        lambda **_kwargs: pytest.fail("bounded DMA plan reached legacy recipe"),
+    )
+    output_dir = tmp_path / "must_not_exist"
+
+    rendered = request_rendering.execute_request_render(
+        request=request,
+        route_intent=route,
+        semantic=_semantic(),
+        study_model={},
+        input_path=source,
+        output_dir=output_dir,
+        base_dir=tmp_path,
+        transform_steps=[],
+        resolved_scientific_source=resolved,
+        _resolved_figure_plan=resolved.figure_plan,
+    )
+
+    assert rendered is sentinel
+    assert len(calls) == 1
+    assert calls[0]["selected_figure_plan"] is resolved.figure_plan
+    assert calls[0]["resolved_scientific_source"] is resolved
+    binding = calls[0]["named_recipe_binding"]
+    assert binding is not None
+    assert binding.plan_sha256 == resolved.figure_plan.plan_sha256
+    assert not output_dir.exists()
 
 
 @pytest.mark.parametrize(

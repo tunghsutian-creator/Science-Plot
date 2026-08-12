@@ -297,6 +297,7 @@ RHEOLOGY_RULES: tuple[SemanticRule, ...] = (
         fixture_status="ready",
         priority=25,
         scientific_source_adapter="stress_relaxation",
+        figure_plan_adapter="registered_single_curve",
         preparation_adapter="rheology",
     ),
 )

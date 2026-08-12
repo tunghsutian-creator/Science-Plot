@@ -303,7 +303,9 @@ def _selected_column_confirmations(
 
 
 def _selected_replicate_mode(replicate_mode: object) -> str:
-    value = str(replicate_mode or "mean").strip().casefold()
+    if replicate_mode is None:
+        return "mean"
+    value = str(replicate_mode).strip().casefold()
     aliases = {
         "average": "mean",
         "avg": "mean",
@@ -311,4 +313,9 @@ def _selected_replicate_mode(replicate_mode: object) -> str:
         "all": "individual",
     }
     value = aliases.get(value, value)
-    return value if value in _REPLICATE_MODES else "mean"
+    if value not in _REPLICATE_MODES:
+        allowed = ", ".join(sorted(_REPLICATE_MODES))
+        raise ValueError(
+            f"Unknown replicate mode `{replicate_mode}`; expected one of: {allowed}."
+        )
+    return value

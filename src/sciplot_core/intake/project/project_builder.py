@@ -136,13 +136,13 @@ def _create_intake_project_in_reserved_directory(
     if isinstance(rule_id, str) and rule_id.strip():
         rule_payload = get_rule(rule_id).to_payload()
         recognition_payload = {
+            **recognition_payload,
             "semantic_family": rule_payload.get("semantic_family"),
             "rule_id": rule_payload.get("rule_id"),
             "fixture_status": rule_payload.get("fixture_status"),
             "template": rule_payload.get("template"),
             "render_options": dict(rule_payload.get("render_options") or {}),
             "axis_plan": dict(rule_payload.get("axis_plan") or {}),
-            **recognition_payload,
         }
     recognition_payload.setdefault("semantic_family", experiment_type_id)
     recognition_payload.setdefault("rule_id", rule_id)

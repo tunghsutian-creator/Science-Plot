@@ -197,9 +197,11 @@ stale 时，`rules list/show`、`plan` 与 `autoplot` 返回同一组既有 repa
 只在 runner 前做一次路径存在性检查，不会先写出半个项目。
 
 对 `rheology_frequency_sweep`、`rheology_temperature_sweep`、
-`dma_temperature_sweep`、`tensile_curve`、`compression_curve`、`flexural_curve`、
+`rheology_stress_relaxation`、`dma_temperature_sweep`、`tensile_curve`、
+`compression_curve`、`flexural_curve`、
 `impact_metric`、`performance_comparison`、`dsc_curve`、`tga_curve`、`dtg_curve`、
-`uvvis_spectrum`、`xrd_pattern`、`saxs_profile` 和 `gpc_sec_chromatogram`，Studio 与
+`uvvis_spectrum`、`xrd_pattern`、`saxs_profile`、`gpc_sec_chromatogram` 和
+`swelling_curve`，Studio 与
 Autoplot 在渲染前共同解析
 一份 `ResolvedFigurePlan`。它固定本次选中的
 逻辑图 ID、顺序、指标、模板、条件/样品轴、兼容输出文件名和准备时的源内容指纹；
@@ -489,6 +491,12 @@ Intake recognition 只保留与规范 `rule_id` 相符的历史解释和轴契�
 失败。显式改选规则或模板会先使旧 binding 失效，只有随后成功重新生成才会写入新
 binding；仅改项目名保留原证据。以上操作都不能绕过阻断。
 
+浏览器 Intake catalog 只维护分组、标签、图标和唯一 `rule_id` 等导航信息；模板、支持的
+呈现选项、渲染默认值和重复模式均由当前 `SemanticRule` payload 投影。同一非空规则不能
+出现在两个可选入口中，不支持的 `torque_offset_stack` 不再作为独立能力公开。浏览器没有
+隐藏的 `replicate_mode=mean` 开关：未显式提交时使用规则推荐（例如力学曲线的
+`representative`），显式 API 选择原样保留，未知选择会在写项目之前失败而不是静默回退。
+
 Studio 每次准备或发布还会从规范请求和当前规则的 presentation contract 解析一份版本化
 `presentation_identity`，由 `rule_id` 和本次选中的 `template` 组成。显式支持的模板优先
 于同规则 recognition 保存的历史默认；未指定时才采用当前规则默认并写回规范请求。
@@ -559,6 +567,14 @@ skill/scripts/sciplot plan PATH --rule RULE_ID --template TEMPLATE_ID --json
 `status=blocked` 机器 payload 与非零退出码；不会改成散落的 stderr 文本，也不会吞掉
 真正的程序错误。
 
+对其他显式带 `--json` 的公开命令，参数解析成功后的运行期失败也会
+在 stdout 返回唯一 `sciplot_cli_runtime_error` v1 payload 并以 1 退出，
+不会途中切换成 stderr 的 `Error:` 文本。路径、编码、JSON、I/O 与明确值错误
+标记为 `expected_runtime_failure`；断言、类型、键错误及其他意外异常标记为
+`internal_error`，不会伪装成科学源输入有误。未带 `--json` 时保留原有人类文本与
+恢复提示；argparse usage 仍为 usage 文本和退出码 2，`plan` 仍使用上述专用
+blocked v1 合同。
+
 `planned` 返回完整 FigurePlan 任务集；`not_applicable` 只表示该源不使用 FigurePlan，
 不表示科学变换不可用。应力松弛会在同一 v1 payload 的 `scientific_transform` 中预览
 实际 Time / Shear Stress / Shear Strain 列、单位、每组锚点与 σ₀、归一化、真实时间策略、
@@ -567,7 +583,10 @@ transform 写表，并把同一合同放入既有 `semantic_preparation` step。
 来自当前源或显式用户选择；程序没有固定 onset 时间，`0.077` 也不是任何默认值或算法常量。
 带 result/interval 身份的应力松弛源以最终共同 interval 的第一个实际对齐点作为源边界，
 不会再用尾部百分比、固定点数、漂移容差或“平台”经验门槛挑 onset；有限值、时间身份、
-非零归一化基线和 log-time 正域等通用不变量仍会严格检查。
+非零归一化基线和 log-time 正域等通用不变量仍会严格检查。当前 interval 的单位只从
+表头到首个数值行之间、所选 Time/response/control 列的显式证据读取；时间必须等价于
+`s`，响应与控制必须等价于已支持的规则单位。缺失、冲突或需要尚未实现换算的 `min`、
+`kPa` 等单位会在变换前阻断，不会靠固定行偏移、首个数值或默认标签伪造单位。
 DMA temperature 在
 同一字段中预览每组 Temperature / Storage Modulus 列、MPa→Pa→MPa 单位路径、原始行序、
 候选/保留/空尾行以及线性登记轴与数学 log 兼容性的区别；它明确报告 anchor 和 scientific
@@ -597,8 +616,15 @@ headerless 两列数据保留全部有限点、零值、源坐标和源行序，
 补猜。显式 Transmittance 只报告观测最小值位置，显式 Absorbance 只报告观测最大值位置，
 未知响应跳过该分析。程序没有 `%T` 数值阈值、固定 400–4000 输入域、固定峰位、FTIR 专用
 renderer 或第二 request/schema；坐标反向仅是可编辑显示策略，不改变源点顺序。
-其他专用准备器也遵守同一证据原则：swelling 的时间只接受表头或相邻单位行明确声明的
-秒、分钟或小时并统一换算到小时，裸 `Time` 不会被猜成小时，格式空行也不会截断测量点；
+swelling 也进入同一个单任务下游。它要求唯一受支持文件和唯一匹配的有标签表；每组
+Time/ratio 列只保留其首个有标签数值段；只有整行不含结构文本的孤立格式空行可以桥接，
+长断段或非数值结构
+会终止该段，后续无标签数值只记录为排除证据而不会重新拼回曲线。时间只接受表头或相邻
+单位行明确且不冲突地声明的秒、分钟或小时并统一换算到小时，裸 `Time` 不会被猜成小时；
+数值分隔符只由已选中的首段判断，断开数据不能反向解释保留值；condition、replicate、
+样品顺序和每个保留点都保留当前源身份。该 transform、单任务 FigurePlan、prepared
+CSV、Workflow bundle 与 Studio queue 复用同一 snapshot，不另设 swelling renderer 或 schema。
+其他专用准备器也遵守同一证据原则：
 torque 在没有显式 curation 时保留完整源曲线和绝对时间，自动 peak/drop 只作为用户主动
 `curate torque` 的建议，而且时间必须显式声明为秒、分钟或小时、响应必须明确为等价的
 `N·m`；Index、裸 Time 或缺失扭矩单位不能进入终端表。Impact 缺少明确单位时在写表前

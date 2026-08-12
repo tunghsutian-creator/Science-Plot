@@ -4,6 +4,7 @@ import csv
 from dataclasses import replace
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from sciplot_core._paths import resolve_fixture_path
@@ -14,6 +15,9 @@ from sciplot_core.semantic_sources.registered_paired_curve_transform import (
 )
 from sciplot_core.semantic_sources.table_scanning import (
     _scan_curve_series_source,
+)
+from sciplot_core.semantic_sources.table_candidate_sources import (
+    read_candidate_tables,
 )
 from sciplot_core.semantic_sources.tga_transform import resolve_tga_transform
 
@@ -218,6 +222,218 @@ def test_tga_scan_accounts_for_partial_and_nonfinite_rows(
     assert diagnostics["excluded_nonfinite_pair_count"] == 1
     with pytest.raises(ValueError, match="nonfinite"):
         resolve_tga_transform(source)
+
+
+def test_registered_paired_curve_parses_two_point_comma_decimal_source(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "comma_decimal.csv"
+    source.write_text(
+        "Temperature;Mass;Unselected note\n"
+        "C;%;text\n"
+        "comma sample;comma sample;source text\n"
+        "25,5;100,0;12.5\n"
+        "50,25;95,5;13.5\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_tga_transform(source)
+
+    assert resolved.series[0].points == ((25.5, 100.0), (50.25, 95.5))
+
+
+def test_registered_paired_curve_uses_separator_evidence_in_last_selected_cell(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "last_separator.csv"
+    source.write_text(
+        "Temperature;Mass\n"
+        "C;%\n"
+        "last evidence;last evidence\n"
+        "25;100\n"
+        "50;95,5\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_tga_transform(source)
+
+    assert resolved.series[0].points == ((25.0, 100.0), (50.0, 95.5))
+
+
+@pytest.mark.parametrize(
+    ("rows", "message"),
+    [
+        (
+            "25.5;100,0\n50.0;95,5\n",
+            "mix point-decimal and comma-decimal",
+        ),
+        (
+            "12,345;100\n13,456;95\n",
+            "ambiguous `12,345`-shaped values",
+        ),
+    ],
+)
+def test_registered_paired_curve_rejects_mixed_or_ambiguous_separator_evidence(
+    tmp_path: Path,
+    rows: str,
+    message: str,
+) -> None:
+    source = tmp_path / "invalid_separator.csv"
+    source.write_text(
+        "Temperature;Mass\nC;%\nsample;sample\n" + rows,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        resolve_tga_transform(source)
+
+
+def test_registered_paired_curve_preserves_na_and_nan_row_evidence(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "na_lexemes.csv"
+    source.write_text(
+        "Temperature;Mass\n"
+        "C;%\n"
+        "sample;sample\n"
+        "25;100\n"
+        "40;NA\n"
+        "50;NaN\n",
+        encoding="utf-8",
+    )
+
+    series = _scan_curve_series_source(
+        source,
+        x_aliases=("temperature", "temp"),
+        y_aliases=("weight", "mass"),
+        x_label="Temperature",
+        y_label="Mass",
+        default_x_unit="C",
+        default_y_unit="%",
+        sample_prefix=source.stem,
+    )[0]
+    diagnostics = dict(series.diagnostics or {})
+
+    assert diagnostics["candidate_row_count"] == 3
+    assert diagnostics["retained_point_count"] == 1
+    assert diagnostics["excluded_empty_pair_count"] == 0
+    assert diagnostics["excluded_partial_or_nonnumeric_pair_count"] == 1
+    assert diagnostics["excluded_nonfinite_pair_count"] == 1
+    with pytest.raises(ValueError, match="nonfinite"):
+        resolve_tga_transform(source)
+
+
+def test_registered_paired_workbook_reader_preserves_na_shaped_text(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "na_lexemes.xlsx"
+    pd.DataFrame(
+        [
+            ["Temperature", "Mass"],
+            ["C", "%"],
+            ["sample", "sample"],
+            [25, 100],
+            [40, "NA"],
+            [50, "NaN"],
+        ]
+    ).to_excel(source, index=False, header=False)
+
+    _table_name, raw = read_candidate_tables(source)[0]
+
+    assert raw.iat[4, 1] == "NA"
+    assert raw.iat[5, 1] == "NaN"
+    with pytest.raises(ValueError, match="nonfinite"):
+        resolve_tga_transform(source)
+
+
+@pytest.mark.parametrize(
+    "source_rows",
+    [
+        (
+            "Angular frequency (rad/s);Storage modulus (Pa)\n"
+            "DMA sample;DMA sample\n"
+            "0.1;1000\n1;2000\n"
+        ),
+        (
+            "Angular frequency;Storage modulus\n"
+            "rad/s;Pa\n"
+            "DMA sample;DMA sample\n"
+            "0.1;1000\n1;2000\n"
+        ),
+    ],
+)
+def test_registered_paired_curve_recognizes_registered_solidus_units(
+    tmp_path: Path,
+    source_rows: str,
+) -> None:
+    source = tmp_path / "solidus_units.csv"
+    source.write_text(source_rows, encoding="utf-8")
+    rule = replace(
+        get_rule(RULE_ID),
+        x_axis=AxisSpec(
+            "Angular frequency",
+            "rad/s",
+            "Angular frequency (rad s⁻¹)",
+        ),
+        y_axis=AxisSpec(
+            "Storage modulus",
+            "Pa",
+            "Storage modulus (Pa)",
+        ),
+    )
+
+    resolved = resolve_registered_paired_curve_transform(source, rule=rule)
+
+    assert resolved.series[0].points == ((0.1, 1000.0), (1.0, 2000.0))
+    assert (resolved.series[0].x_unit, resolved.series[0].y_unit) == (
+        "rad/s",
+        "Pa",
+    )
+
+
+@pytest.mark.parametrize("source_x_unit", ["rad s^-1", "rad s⁻¹", "rad·s^-1"])
+def test_registered_paired_dma_table_accepts_identity_equivalent_product_units(
+    tmp_path: Path,
+    source_x_unit: str,
+) -> None:
+    source = tmp_path / "dma_product_unit.csv"
+    source.write_text(
+        "Angular frequency;Storage modulus\n"
+        f"{source_x_unit};Pa\n"
+        "DMA sample;DMA sample\n"
+        "0.1;1000\n1;2000\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_registered_paired_curve_transform(
+        source,
+        rule=get_rule("dma_frequency_sweep"),
+    )
+
+    assert (resolved.series[0].x_unit, resolved.series[0].y_unit) == ("rad/s", "Pa")
+
+
+def test_registered_paired_dma_table_rejects_hertz_for_angular_frequency(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "dma_hertz.csv"
+    source.write_text(
+        "Angular frequency;Storage modulus\n"
+        "Hz;Pa\n"
+        "DMA sample;DMA sample\n"
+        "0.1;1000\n1;2000\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Unsupported dma_frequency_sweep x unit 'Hz'; expected an "
+        "identity-equivalent 'rad/s' unit.",
+    ):
+        resolve_registered_paired_curve_transform(
+            source,
+            rule=get_rule("dma_frequency_sweep"),
+        )
 
 
 def test_tga_scan_distinguishes_sample_row_from_first_numeric_point(

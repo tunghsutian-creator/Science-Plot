@@ -228,19 +228,6 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
             },
         ),
     },
-    "torque_offset_stack": {
-        "default_replicate_mode": "individual",
-        "figure_queue": (
-            {
-                "id": "screw_torque_offset_stack",
-                "title": "Screw torque offset stack",
-                "metric": "screw_torque",
-                "x_metric": "time",
-                "y_metric": "screw_torque",
-                "default_template": "stacked_curve",
-            },
-        ),
-    },
     "ftir_spectrum": {
         "default_replicate_mode": "individual",
         "figure_queue": (

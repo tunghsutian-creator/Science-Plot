@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from sciplot_core.materials_rules import tensile_curve_metric_values
 from sciplot_core.semantic import _read_tensile_workbook_directory
@@ -40,6 +41,47 @@ def test_tensile_workbook_directory_uses_representative_and_specimen_sheets(
     assert {row["strength_MPa"] for row in summary_rows} == {10.0, 12.0}
     assert {row["elongation_at_break_percent"] for row in summary_rows} == {20.0, 22.0}
     assert all("strain_at_break_percent" not in row for row in summary_rows)
+
+
+@pytest.mark.parametrize(
+    ("workbook_stem", "metadata_mode"),
+    (("e7", "blank"), ("m-rPA-7", "missing")),
+)
+def test_tensile_workbook_directory_falls_back_to_exact_workbook_stem(
+    tmp_path,
+    workbook_stem: str,
+    metadata_mode: str,
+) -> None:
+    workbook = tmp_path / f"{workbook_stem}.xlsx"
+    with pd.ExcelWriter(workbook) as writer:
+        pd.DataFrame(
+            [
+                ["Strain", "Stress"],
+                ["%", "MPa"],
+                ["representative", "representative"],
+                [0.0, 0.1],
+                [1.0, 10.0],
+            ]
+        ).to_excel(writer, sheet_name="Representative_Curve", header=False, index=False)
+        pd.DataFrame(
+            [
+                ["Filename", "Strength (MPa)"],
+                ["specimen-1.csv", 10.0],
+                ["specimen-2.csv", 12.0],
+            ]
+        ).to_excel(writer, sheet_name="All_Specimens", header=False, index=False)
+        if metadata_mode == "blank":
+            pd.DataFrame([["label", ""]]).to_excel(
+                writer,
+                sheet_name="DataStudio_Metadata",
+                header=False,
+                index=False,
+            )
+
+    curves, summary_rows = _read_tensile_workbook_directory(tmp_path)
+
+    assert [curve.sample for curve in curves] == [workbook_stem]
+    assert {row["sample"] for row in summary_rows} == {workbook_stem}
 
 
 def test_tensile_break_metric_is_publicly_elongation_with_legacy_input_alias() -> None:

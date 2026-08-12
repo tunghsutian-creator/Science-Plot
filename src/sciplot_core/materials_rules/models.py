@@ -45,6 +45,7 @@ ScientificSourceAdapterId = Literal[
     "rheology_temperature",
     "registered_paired_curve",
     "gpc_sec",
+    "swelling",
 ]
 
 

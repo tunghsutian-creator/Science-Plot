@@ -219,10 +219,8 @@ def normalize_unit(text: object) -> str:
     return _format_generic_unit(cleaned)
 
 
-def slugify_label(text: object) -> str:
-    """Convert a normalized scientific label to a stable filename token."""
-
-    canonical = canonicalize_token(normalize_label(text))
+def _slugify_token(text: object) -> str:
+    canonical = canonicalize_token(text)
     replacements = {
         r"\sigma": "sigma",
         r"\eta": "eta",
@@ -245,6 +243,18 @@ def slugify_label(text: object) -> str:
     return re.sub(r"_+", "_", canonical).strip("_") or "value"
 
 
+def slugify_label(text: object) -> str:
+    """Convert a presentation-normalized label to a stable filename token."""
+
+    return _slugify_token(normalize_label(text))
+
+
+def slugify_canonical_label(text: object) -> str:
+    """Build an identifier from canonical source meaning, without display aliases."""
+
+    return _slugify_token(clean_source_text(text))
+
+
 __all__ = [
     "LABEL_ALIASES",
     "UNIT_ALIASES",
@@ -252,5 +262,6 @@ __all__ = [
     "clean_source_text",
     "normalize_label",
     "normalize_unit",
+    "slugify_canonical_label",
     "slugify_label",
 ]

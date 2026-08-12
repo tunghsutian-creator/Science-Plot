@@ -23,6 +23,7 @@ ENCODINGS_TO_TRY = (
 
 def _read_delimited(path: Path, **kwargs: Any) -> pd.DataFrame:
     last_error: Exception | None = None
+    kwargs.setdefault("skip_blank_lines", False)
     for encoding in ENCODINGS_TO_TRY:
         try:
             return pd.read_csv(path, encoding=encoding, **kwargs)

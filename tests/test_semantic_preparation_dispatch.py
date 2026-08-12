@@ -20,7 +20,7 @@ EXPECTED_PREPARATION_ADAPTERS = {
     "rheology_strain_sweep": "rheology",
     "rheology_stress_sweep": "rheology",
     "rheology_time_sweep": "rheology",
-    "dma_frequency_sweep": None,
+    "dma_frequency_sweep": "curve_family",
     "dma_temperature_sweep": "curve_family",
     "rheology_creep": "rheology",
     "dtg_curve": "curve_family",
@@ -39,6 +39,7 @@ EXPECTED_PREPARATION_ADAPTERS = {
 
 
 EXPECTED_SCIENTIFIC_SOURCE_ADAPTERS = {
+    "dma_frequency_sweep": "registered_paired_curve",
     "dma_temperature_sweep": "dma_temperature",
     "dsc_curve": "registered_paired_curve",
     "dtg_curve": "registered_paired_curve",
@@ -51,6 +52,7 @@ EXPECTED_SCIENTIFIC_SOURCE_ADAPTERS = {
     "xrd_pattern": "registered_paired_curve",
     "saxs_profile": "registered_paired_curve",
     "gpc_sec_chromatogram": "gpc_sec",
+    "swelling_curve": "swelling",
 }
 
 

@@ -1,12 +1,16 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from sciplot_core.semantic import (
     _read_rheology_temperature_comparison_samples,
     _read_stress_relaxation_series_list,
     _read_tensile_workbook_directory,
     classify_source,
+)
+from sciplot_core.semantic_sources.rheology_interval import (
+    _read_rheology_interval_series_list,
 )
 
 
@@ -101,7 +105,55 @@ def test_stress_relaxation_uses_internal_test_labels_and_deduplicates_exports(
     )
 
 
-def test_tensile_workbook_filename_sample_code_outranks_condition_metadata(
+def test_creep_directory_rejects_a_partial_interval_dataset(tmp_path: Path) -> None:
+    source_dir = tmp_path / "creep"
+    source_dir.mkdir()
+    _write_utf16(
+        source_dir / "valid.csv",
+        "\n".join(
+            [
+                "Test:\tvalid",
+                "Result:\tCreep 1",
+                "Interval and data points:\t1\t2",
+                "Interval data:\tPoint No.\tTime\tCreep Compliance",
+                "\t\t[s]\t1/Pa",
+                "\t1\t0.1\t0.000001",
+                "\t2\t0.2\t0.000002",
+            ]
+        ),
+    )
+    _write_utf16(
+        source_dir / "invalid.csv",
+        "\n".join(
+            [
+                "Test:\tinvalid",
+                "Result:\tCreep 1",
+                "Interval and data points:\t1\t2",
+                "Interval data:\tPoint No.\tTime\tCreep Compliance",
+                "\t\t[s]\t",
+                "\t1\t0.1\t0.000003",
+                "\t2\t0.2\t0.000004",
+            ]
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "silent partial datasets are not allowed.*invalid\\.csv.*"
+            "unit is missing"
+        ),
+    ):
+        _read_rheology_interval_series_list(
+            source_dir,
+            y_candidates=("creepcompliance",),
+            y_label="Creep compliance",
+            y_unit="1/Pa",
+            preferred_result_tokens=("creep",),
+        )
+
+
+def test_tensile_workbook_metadata_label_outranks_filename_sample_code(
     tmp_path: Path,
 ) -> None:
     source_dir = tmp_path / "2mm"
@@ -140,5 +192,5 @@ def test_tensile_workbook_filename_sample_code_outranks_condition_metadata(
 
     series, summary_rows = _read_tensile_workbook_directory(source_dir)
 
-    assert [item.sample for item in series] == ["E2"]
-    assert {row["sample"] for row in summary_rows} == {"E2"}
+    assert [item.sample for item in series] == ["e2 2mm"]
+    assert {row["sample"] for row in summary_rows} == {"e2 2mm"}
