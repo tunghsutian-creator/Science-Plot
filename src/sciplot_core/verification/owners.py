@@ -198,7 +198,7 @@ CHANGED_OWNERS = (
     ),
     ChangedOwner(
         owner_id="scientific_transform",
-        path_prefixes=("src/sciplot_core/semantic_sources/ftir_", "src/sciplot_core/semantic_sources/gpc_", "src/sciplot_core/semantic_sources/scientific_source"),
+        path_prefixes=("src/sciplot_core/semantic_sources/ftir_", "src/sciplot_core/semantic_sources/gpc_", "src/sciplot_core/semantic_sources/panalytical_", "src/sciplot_core/semantic_sources/scientific_source"),
         exact_paths=frozenset(
             {
                 "src/sciplot_core/plan_preview.py",

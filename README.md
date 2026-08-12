@@ -578,7 +578,11 @@ paired-curve transform/FigurePlan 骨架：一个受支持表文件中的一组�
 转换的单位会阻断，不会靠默认单位改标签。TGA 生成 `temperature → mass`；DTG 生成
 `temperature → derivative_mass` 并原样保留响应正负号，绝不从 TGA 重新求导；UV-Vis
 生成 `wavelength → absorbance`，保留每个样品独立且可降序的波长坐标；XRD 生成
-`diffraction_angle → intensity`，保留各序列独立网格，其最大观测强度位置只作描述；SAXS
+`diffraction_angle → intensity`，保留各序列独立网格，其最大观测强度位置只作描述。
+PANalytical Data Collector 的混合宽度 CSV 由 `[Measurement conditions]` 和 `[Scan points]`
+结构提供角度、原始 detector counts 与声明点数证据；程序逐点保留原始强度数值、不做
+归一化，并按登记的 `Intensity (a.u.)` 轴展示。声明点数与扫描行或有限点不一致时会阻断。
+SAXS
 生成 `q → intensity`，保留线性 q 坐标与源中正的 log-y 显示域，仅排除 log-y 不允许的
 非正响应，不额外执行 log10/ln、排序、插值或结构归属。DSC 生成
 `temperature → heat_flow`，同样不从数值推断热转变身份。semantic preparation 只物化同一个

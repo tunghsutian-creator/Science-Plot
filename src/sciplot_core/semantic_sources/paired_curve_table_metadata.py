@@ -49,6 +49,7 @@ def looks_like_unit(value: object) -> bool:
         "abs",
         "degree",
         "count",
+        "counts",
         "百分比",
         "kjm2",
         "kjm²",

@@ -16,6 +16,9 @@ from sciplot_core.semantic_sources.paired_curve_table_metadata import (
     looks_like_unit as _looks_like_unit,
     preceding_pair_sample as _preceding_pair_sample,
 )
+from sciplot_core.semantic_sources.panalytical_scan_metadata import (
+    resolve_panalytical_scan_metadata,
+)
 from sciplot_core.semantic_sources.table_source_files import (
     is_workbook_source,
     table_source_files,
@@ -240,32 +243,44 @@ def _scan_curve_series_table(
                 points.append((x_value, y_value))
             if not points:
                 continue
-            (
-                x_unit,
-                x_unit_detection,
-                x_unit_row_index,
-                x_unit_value,
-            ) = _curve_axis_unit(
-                row_values[x_index],
-                raw.iat[unit_index, x_index] if unit_index >= 0 else "",
+            instrument_metadata = resolve_panalytical_scan_metadata(
+                raw,
                 header_index=header_index,
-                unit_index=unit_index,
-                default=default_x_unit,
+                x_index=x_index,
+                y_index=y_index,
+                data_start=data_start,
+                finite_point_count=len(points),
             )
-            (
-                y_unit,
-                y_unit_detection,
-                y_unit_row_index,
-                y_unit_value,
-            ) = _curve_axis_unit(
-                row_values[y_index],
-                raw.iat[unit_index, y_index] if unit_index >= 0 else "",
-                header_index=header_index,
-                unit_index=unit_index,
-                default=default_y_unit,
+            if instrument_metadata is None:
+                x_unit_evidence = _curve_axis_unit(
+                    row_values[x_index],
+                    raw.iat[unit_index, x_index] if unit_index >= 0 else "",
+                    header_index=header_index,
+                    unit_index=unit_index,
+                    default=default_x_unit,
+                )
+                y_unit_evidence = _curve_axis_unit(
+                    row_values[y_index],
+                    raw.iat[unit_index, y_index] if unit_index >= 0 else "",
+                    header_index=header_index,
+                    unit_index=unit_index,
+                    default=default_y_unit,
+                )
+            else:
+                x_unit_evidence = instrument_metadata.x_unit_evidence
+                y_unit_evidence = instrument_metadata.y_unit_evidence
+            x_unit, x_unit_detection, x_unit_row_index, x_unit_value = (
+                x_unit_evidence
+            )
+            y_unit, y_unit_detection, y_unit_row_index, y_unit_value = (
+                y_unit_evidence
             )
             fallback_sample = sample_prefix if len(pairs) == 1 else f"{sample_prefix} {series_index}"
-            if sample_index == preceding_sample_index and preceding_row_has_samples:
+            if instrument_metadata is not None:
+                sample, sample_detection, sample_row_index = (
+                    instrument_metadata.sample_evidence(fallback_sample)
+                )
+            elif sample_index == preceding_sample_index and preceding_row_has_samples:
                 sample = preceding_samples[x_index]
                 sample_detection = "detected_from_preceding_sample_row"
                 sample_row_index: int | None = preceding_sample_index
@@ -284,6 +299,9 @@ def _scan_curve_series_table(
                     else "fallback_from_source_table"
                 )
                 sample_row_index = sample_index if sample_detected else None
+            instrument_diagnostics = (
+                instrument_metadata.diagnostics() if instrument_metadata else {}
+            )
             candidate_series.append(
                 CurveSeriesPayload(
                     sample=sample,
@@ -314,6 +332,7 @@ def _scan_curve_series_table(
                         "excluded_empty_pair_count": excluded_empty_pair_count,
                         "excluded_partial_or_nonnumeric_pair_count": excluded_partial_or_nonnumeric_pair_count,
                         "excluded_nonfinite_pair_count": excluded_nonfinite_pair_count,
+                        **instrument_diagnostics,
                     },
                 )
             )
@@ -337,6 +356,11 @@ def _scan_curve_series_source(
 ) -> list[CurveSeriesPayload]:
     matches: list[tuple[str, list[CurveSeriesPayload]]] = []
     for sheet_name, raw in _read_candidate_tables(source):
+        table_sample_prefix = sheet_name or sample_prefix
+        if "__" in table_sample_prefix:
+            left, right = table_sample_prefix.rsplit("__", maxsplit=1)
+            if left == right:
+                table_sample_prefix = right
         series = _scan_curve_series_table(
             raw,
             x_aliases=x_aliases,
@@ -345,7 +369,7 @@ def _scan_curve_series_source(
             y_label=y_label,
             default_x_unit=default_x_unit,
             default_y_unit=default_y_unit,
-            sample_prefix=sheet_name or sample_prefix,
+            sample_prefix=table_sample_prefix,
         )
         if series:
             matches.append((sheet_name, series))

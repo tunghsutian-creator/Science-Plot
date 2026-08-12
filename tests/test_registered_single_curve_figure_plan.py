@@ -377,6 +377,97 @@ def test_xrd_output_identity_is_bound_to_the_official_si_axes() -> None:
     }
 
 
+def _write_panalytical_xrd_export(
+    path: Path,
+    *,
+    declared_point_count: int = 3,
+) -> Path:
+    path.write_text(
+        "[Measurement conditions]\n"
+        "Sample identification,\n"
+        'Comment - 2,"Goniometer=Theta/Theta; Minimum step size '
+        '2Theta:0.0001, detector=PIXcel"\n'
+        "Scan axis,Gonio\n"
+        "Scan range,5.0,6.0\n"
+        "Scan step size,0.5\n"
+        f"No. of points,{declared_point_count}\n"
+        "Scan type,CONTINUOUS\n"
+        "[Scan points]\n"
+        "Angle, TimePerStep, Intensity, ESD\n"
+        "5.0, 35.190, 4.0, 2.0\n"
+        "5.5, 35.190, 9.0, 3.0\n"
+        "6.0, 35.190, 1.0, 1.0\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_xrd_reads_panalytical_scan_points_with_schema_units_and_counts(
+    tmp_path: Path,
+) -> None:
+    source = _write_panalytical_xrd_export(tmp_path / "PEBA__PEBA.csv")
+    rule = get_rule("xrd_pattern")
+
+    resolved = paired_curve_transform.resolve_registered_paired_curve_transform(
+        source,
+        rule=rule,
+    )
+    series = resolved.series[0]
+    diagnostics = dict(series.diagnostics or {})
+    contract = resolved.contract.to_payload()
+
+    assert series.sample == "PEBA"
+    assert series.points == ((5.0, 4.0), (5.5, 9.0), (6.0, 1.0))
+    assert (series.x_unit, series.y_unit) == ("degree", "a.u.")
+    assert diagnostics["source_instrument_format"] == (
+        "panalytical_data_collector_scan_points"
+    )
+    assert diagnostics["source_declared_point_count"] == 3
+    assert diagnostics["source_point_count_match"] is True
+    assert diagnostics["source_x_unit_detection"] == (
+        "detected_from_instrument_export_schema"
+    )
+    assert diagnostics["source_y_unit_detection_value"] == "counts"
+    assert diagnostics["source_y_display_policy"] == (
+        "raw_detector_counts_presented_as_arbitrary_intensity"
+    )
+    assert diagnostics["source_y_numeric_scaling_applied"] is False
+    assert diagnostics["source_y_values_preserved"] is True
+    assert contract["output"]["x_unit"] == "degree"
+    assert contract["output"]["y_unit"] == "a.u."
+    assert contract["normalizer"] == {
+        "scope": "none",
+        "operation": "none",
+        "output_metric": "intensity",
+        "output_unit": "a.u.",
+    }
+    assert contract["unit_conversions"][1]["source_unit"] == "counts"
+    assert contract["unit_conversions"][1]["canonical_unit"] == "a.u."
+
+    scientific_source = resolve_scientific_source(
+        source,
+        rule_id=rule.rule_id,
+        request={"template": "curve"},
+        template="curve",
+    )
+    assert scientific_source is not None
+    assert scientific_source.transform is not None
+    assert scientific_source.transform.contract.output["y_unit"] == "a.u."
+
+
+def test_xrd_rejects_panalytical_scan_point_count_mismatch(tmp_path: Path) -> None:
+    source = _write_panalytical_xrd_export(
+        tmp_path / "mismatch.csv",
+        declared_point_count=4,
+    )
+
+    with pytest.raises(ValueError, match="declared 4, found 3 rows and 3 finite pairs"):
+        paired_curve_transform.resolve_registered_paired_curve_transform(
+            source,
+            rule=get_rule("xrd_pattern"),
+        )
+
+
 @pytest.mark.parametrize("rule_id", RULE_IDS)
 def test_registered_paired_curve_transform_and_plan_share_one_source_snapshot(
     rule_id: str,

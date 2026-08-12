@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -45,10 +46,40 @@ def _decode_text(path: Path) -> str:
 
 
 def _read_ragged_delimited(path: Path, *, delimiter: str) -> pd.DataFrame:
-    rows = [line.split(delimiter) for line in _decode_text(path).splitlines()]
+    rows = list(csv.reader(StringIO(_decode_text(path)), delimiter=delimiter))
     width = max((len(row) for row in rows), default=0)
     padded = [row + [None] * (width - len(row)) for row in rows]
     return pd.DataFrame(padded)
+
+
+def _read_csv(path: Path, *, preserve_na_tokens: bool) -> pd.DataFrame:
+    """Read ordinary or ragged CSV without trusting one misleading prefix row.
+
+    Instrument exports may prepend variable-width metadata before a regular
+    comma-delimited measurement table.  ``sep=None`` can then infer a delimiter
+    from the metadata and return the entire source as one text column without
+    raising. Quote-aware ragged comma and tab parses are deterministic fallbacks
+    when that happens; genuinely one-column CSV files remain one column.
+    """
+
+    try:
+        inferred = _read_delimited(
+            path,
+            header=None,
+            sep=None,
+            engine="python",
+            keep_default_na=not preserve_na_tokens,
+        )
+    except (ValueError, csv.Error):
+        inferred = None
+    if inferred is not None and inferred.shape[1] != 1:
+        return inferred
+    comma = _read_ragged_delimited(path, delimiter=",")
+    tab = _read_ragged_delimited(path, delimiter="\t")
+    ragged = max((comma, tab), key=lambda frame: frame.shape[1])
+    if ragged.shape[1] > 1:
+        return ragged
+    return inferred if inferred is not None else ragged
 
 
 def read_raw_table(
@@ -69,16 +100,7 @@ def read_raw_table(
             keep_default_na=not preserve_na_tokens,
         )
     if suffix == ".csv":
-        try:
-            return _read_delimited(
-                table_path,
-                header=None,
-                sep=None,
-                engine="python",
-                keep_default_na=not preserve_na_tokens,
-            )
-        except (ValueError, csv.Error):
-            return _read_ragged_delimited(table_path, delimiter="\t")
+        return _read_csv(table_path, preserve_na_tokens=preserve_na_tokens)
     if suffix in {".tsv", ".txt"}:
         return _read_delimited(
             table_path,

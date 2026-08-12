@@ -28,11 +28,16 @@ from sciplot_core.source_tables import slugify_label
 
 
 _EXPLICIT_UNIT_DETECTIONS = frozenset(
-    {"detected_from_adjacent_unit_row", "detected_from_header"}
+    {
+        "detected_from_adjacent_unit_row",
+        "detected_from_header",
+        "detected_from_instrument_export_schema",
+    }
 )
 _SOURCE_SAMPLE_DETECTIONS = frozenset(
     {
         "detected_from_adjacent_sample_row",
+        "detected_from_instrument_metadata",
         "detected_from_preceding_sample_row",
         "fallback_from_source_table",
     }
@@ -176,17 +181,30 @@ def _normalize_series(
         sample=series.sample,
         rule_id=rule.rule_id,
     )
-    _require_identity_unit(
+    output_x_unit = _resolve_output_unit(
         source_x_unit,
         canonical_unit=rule.x_axis.canonical_unit,
         axis="x",
         rule_id=rule.rule_id,
     )
-    _require_identity_unit(
+    output_y_unit = _resolve_output_unit(
         source_y_unit,
         canonical_unit=rule.y_axis.canonical_unit,
         axis="y",
         rule_id=rule.rule_id,
+    )
+    source_display_policy = (
+        {
+            "source_y_display_policy": (
+                "raw_detector_counts_presented_as_arbitrary_intensity"
+            ),
+            "source_y_numeric_scaling_applied": False,
+            "source_y_values_preserved": True,
+        }
+        if rule.rule_id == "xrd_pattern"
+        and _comparable_unit(source_y_unit) in {"count", "counts"}
+        and _comparable_unit(output_y_unit) == "a.u."
+        else {}
     )
     validate_registered_paired_curve_row_evidence(
         series,
@@ -196,15 +214,18 @@ def _normalize_series(
     return CurveSeriesPayload(
         sample=series.sample,
         x_label=rule.x_axis.canonical_label,
-        x_unit=rule.x_axis.canonical_unit,
+        x_unit=output_x_unit,
         y_label=rule.y_axis.canonical_label,
-        y_unit=rule.y_axis.canonical_unit,
+        y_unit=output_y_unit,
         points=series.points,
         diagnostics={
             **diagnostics,
             "source_file": str(source),
-            "canonical_x_unit": rule.x_axis.canonical_unit,
-            "canonical_y_unit": rule.y_axis.canonical_unit,
+            "canonical_x_unit": output_x_unit,
+            "canonical_y_unit": output_y_unit,
+            "registered_default_x_unit": rule.x_axis.canonical_unit,
+            "registered_default_y_unit": rule.y_axis.canonical_unit,
+            **source_display_policy,
         },
     )
 
@@ -227,18 +248,25 @@ def _required_explicit_unit(
     return value
 
 
-def _require_identity_unit(
+def _resolve_output_unit(
     source_unit: str,
     *,
     canonical_unit: str,
     axis: str,
     rule_id: str,
-) -> None:
+) -> str:
     if _comparable_unit(source_unit) != _comparable_unit(canonical_unit):
+        if rule_id == "xrd_pattern" and axis == "y" and _comparable_unit(
+            source_unit
+        ) in {"count", "counts"}:
+            # Raw detector counts may be presented on the registered XRD
+            # arbitrary-intensity axis without changing any numeric values.
+            return canonical_unit
         raise ValueError(
             f"Unsupported {rule_id} {axis} unit {source_unit!r}; expected an "
             f"identity-equivalent {canonical_unit!r} unit."
         )
+    return canonical_unit
 
 
 def _comparable_unit(value: str) -> str:
