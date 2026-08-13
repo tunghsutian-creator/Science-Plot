@@ -168,7 +168,7 @@ def _data_mapping_studio_lifecycle_probe(
         and operations[:2]
         == [
             "execute_confirmed_data_mapping_proposal",
-            "reformat_and_order_ftir_spectra",
+            "extract_wavenumber_spectral_response_curve",
         ]
         and manifest.get("ready_to_use") is True
         and (manifest.get("qa") or {}).get("status") == "passed"

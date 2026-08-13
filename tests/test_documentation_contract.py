@@ -71,4 +71,4 @@ def test_active_documents_declare_distinct_responsibilities() -> None:
     assert "本文是用户工作流和产品边界的唯一说明" in readme
     assert "This skill owns agent routing and verification." in skill
     assert "current module-ownership and dependency reference" in architecture
-    assert "unfinished product and maintenance priorities only" in roadmap
+    assert "maintenance mode; no active implementation stage" in roadmap

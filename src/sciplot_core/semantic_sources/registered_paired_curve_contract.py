@@ -11,6 +11,10 @@ from sciplot_core.semantic_sources.models import CurveSeriesPayload
 from sciplot_core.semantic_sources.scientific_transform import (
     ScientificTransformContract,
 )
+from sciplot_core.semantic_sources.transform_contract_values import (
+    transform_axis_compatibility,
+    transform_exclusion_counts,
+)
 from sciplot_core.source_tables import slugify_canonical_label
 
 
@@ -100,8 +104,8 @@ def build_registered_paired_curve_contract(
         },
         retain_anchor=None,
         axis_compatibility={
-            "x": _axis_compatibility(x_values, scale=rule.x_axis.scale),
-            "y": _axis_compatibility(y_values, scale=rule.y_axis.scale),
+            "x": transform_axis_compatibility(x_values, scale=rule.x_axis.scale),
+            "y": transform_axis_compatibility(y_values, scale=rule.y_axis.scale),
         },
         output={
             "x_metric": x_metric,
@@ -193,13 +197,7 @@ def _identity_conversion(
 
 
 def _exclusions(diagnostics: dict[str, Any]) -> dict[str, int]:
-    exclusions = {
-        "empty_pair": int(diagnostics.get("excluded_empty_pair_count") or 0),
-        "partial_or_nonnumeric": int(
-            diagnostics.get("excluded_partial_or_nonnumeric_pair_count") or 0
-        ),
-        "nonfinite": int(diagnostics.get("excluded_nonfinite_pair_count") or 0),
-    }
+    exclusions = transform_exclusion_counts(diagnostics)
     for reason, key in (
         ("nonpositive_log_x", "excluded_nonpositive_log_x_count"),
         ("nonpositive_log_y", "excluded_nonpositive_log_y_count"),
@@ -207,19 +205,6 @@ def _exclusions(diagnostics: dict[str, Any]) -> dict[str, int]:
         if key in diagnostics:
             exclusions[reason] = int(diagnostics.get(key) or 0)
     return exclusions
-
-
-def _axis_compatibility(values: list[float], *, scale: str) -> dict[str, Any]:
-    finite = all(math.isfinite(value) for value in values)
-    nonpositive = sum(value <= 0.0 for value in values if math.isfinite(value))
-    return {
-        "registered_scale": scale,
-        "finite_compatible": finite,
-        "log_compatible": finite and nonpositive == 0,
-        "nonpositive_count": nonpositive,
-    }
-
-
 __all__ = [
     "build_registered_paired_curve_contract",
     "validate_registered_paired_curve_row_evidence",

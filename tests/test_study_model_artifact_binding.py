@@ -4,6 +4,7 @@ from pathlib import Path
 
 from sciplot_core._paths import resolve_fixture_path
 from sciplot_core.figure_plan import (
+    CartesianMetricBinding,
     FigureOutcome,
     FigureTask,
     ResolvedFigurePlan,
@@ -66,6 +67,75 @@ def test_uvvis_recommendation_uses_the_resolved_plan_task_identity(
     assert queue_item["id"] == task.figure_id
     assert queue_item["status"] == "rendered"
     assert [item["path"] for item in queue_item["artifacts"]] == [str(artifact)]
+    assert updated["run"]["unbound_figure_artifacts"] == []
+
+
+def test_registered_single_curve_plan_replaces_the_generic_study_queue(
+    tmp_path: Path,
+) -> None:
+    rule = get_rule("dma_frequency_sweep")
+    source = resolve_fixture_path(str(rule.fixture_path or ""))
+    recommendation = experiment_recommendation_payload(rule_id=rule.rule_id)
+    assert [item["id"] for item in recommendation["figure_queue"]] == [
+        "primary_curve"
+    ]
+    model = {
+        "kind": "sciplot_study_model",
+        "version": 2,
+        "samples": [],
+        "figure_queue": recommendation["figure_queue"],
+    }
+    plan = resolve_figure_plan(
+        rule_id=rule.rule_id,
+        template=rule.template,
+        study_model=model,
+        input_path=source,
+        request={"template": rule.template},
+    )
+    assert plan is not None
+    task = plan.tasks[0]
+    binding = task.metric_binding
+    assert isinstance(binding, CartesianMetricBinding)
+    artifact = tmp_path / f"{task.artifact_stem}.pdf"
+    artifact.write_bytes(b"figure")
+    completed = merge_figure_outcomes(
+        plan,
+        (
+            FigureOutcome(
+                figure_id=task.figure_id,
+                status="ready",
+                artifacts=(str(artifact),),
+            ),
+        ),
+    )
+
+    updated = attach_run_artifacts_to_study_model(
+        model,
+        output_dir=tmp_path,
+        figures=[str(artifact)],
+        resolved_figure_plan=completed.to_payload(),
+    )
+
+    assert updated["figure_queue"] == [
+        {
+            "id": task.figure_id,
+            "order": task.order,
+            "status": "rendered",
+            "title": task.title,
+            "metric": binding.y_metric,
+            "x_metric": binding.x_metric,
+            "y_metric": binding.y_metric,
+            "default_template": task.template,
+            "resolved_from_figure_plan": True,
+            "artifacts": [
+                {
+                    "path": str(artifact),
+                    "name": artifact.name,
+                    "format": "pdf",
+                }
+            ],
+        }
+    ]
     assert updated["run"]["unbound_figure_artifacts"] == []
 
 

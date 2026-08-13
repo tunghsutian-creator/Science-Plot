@@ -596,7 +596,7 @@ def test_impact_point_line_autoplot_ledger_includes_terminal_selection(
 
 
 @pytest.mark.comprehensive
-def test_impact_workflow_rejects_source_change_after_render(
+def test_impact_workflow_uses_its_bound_snapshot_after_render(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -642,11 +642,11 @@ def test_impact_workflow_rejects_source_change_after_render(
         render_then_mutate,
     )
 
-    with pytest.raises(RuntimeError, match="Workflow source changed"):
-        workflow.run_request(request_path)
+    manifest = workflow.run_request(request_path)
 
-    assert not (output_dir / "manifest.json").exists()
-    assert not (output_dir / "delivery").exists()
+    assert ResolvedFigurePlan.from_payload(manifest["resolved_figure_plan"]).complete
+    assert source.read_bytes().endswith(b"\nsource-drift")
+    assert (output_dir / "manifest.json").is_file()
 
 
 def test_impact_point_line_ignores_stale_default_figure_set(

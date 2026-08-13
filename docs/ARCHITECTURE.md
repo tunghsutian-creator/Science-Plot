@@ -448,7 +448,10 @@ project directory.
     until the planned prepare/task seam exists. A terminal worker executes its
     exact incoming task as a single render and never expands it back into the
     enclosing performance plan; legacy taskless low-level renders likewise
-    retain their one-template behavior.
+    retain their one-template behavior. At publication, a registered
+    single-curve plan replaces any pre-source generic Study Model queue with
+    its exact task before outcomes and artifacts are attached; `primary_curve`
+    cannot survive as an unbound parallel identity.
 28. Studio queue items and task-aware figure-set entries re-parse and re-emit
     the exact nested v1/v2 `FigureTask`. V1 and v2 Cartesian tasks may expose
     matching compatibility x/y fields; ordered tasks expose only `metric_ids`
@@ -539,8 +542,11 @@ project directory.
 34. `semantic_sources/scientific_source_single_curve.py` is the only binder
     from a rule-owned single-curve source adapter into the generic FigurePlan.
     `registered_paired_curve_transform.py` is shared by DSC, TGA, DTG, UV-Vis,
-    XRD, and SAXS; `tga_transform.py` is only its compatibility wrapper. It accepts a
-    file or a directory containing exactly one supported table, requires
+    XRD, and SAXS; `tga_transform.py` is only its compatibility wrapper.
+    `transform_contract_values.py` owns the common exclusion-count and
+    axis-compatibility projections used by transform-contract leaves. The
+    registered reader accepts a file or a directory containing exactly one
+    supported table, requires
     explicit units identity-equivalent to the selected rule except for XRD raw
     counts presented unchanged as registered arbitrary intensity, and derives
     adjacent/header/schema unit evidence plus preceding/adjacent/instrument/

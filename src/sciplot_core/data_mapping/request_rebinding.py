@@ -194,6 +194,7 @@ def _candidate_request(
 ) -> dict[str, Any]:
     request = deepcopy(base_request)
     request.update(deepcopy(proposal.request_patch))
+    request.pop("resolved_figure_plan", None)
     request["data_mapping_execution"] = str(execution_path)
     request["data_mapping_proposal_id"] = proposal.proposal_id
     request["output"] = str(output_root / "run")

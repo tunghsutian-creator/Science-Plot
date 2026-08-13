@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +9,10 @@ from sciplot_core.materials_rules.models import SemanticRule
 from sciplot_core.semantic_sources.models import CurveSeriesPayload
 from sciplot_core.semantic_sources.scientific_transform import (
     ScientificTransformContract,
+)
+from sciplot_core.semantic_sources.transform_contract_values import (
+    transform_axis_compatibility,
+    transform_exclusion_counts,
 )
 from sciplot_core.source_tables import slugify_label
 
@@ -87,8 +90,8 @@ def build_gpc_transform_contract(
         },
         retain_anchor=None,
         axis_compatibility={
-            "x": _axis_compatibility(x_values, scale=rule.x_axis.scale),
-            "y": _axis_compatibility(y_values, scale=rule.y_axis.scale),
+            "x": transform_axis_compatibility(x_values, scale=rule.x_axis.scale),
+            "y": transform_axis_compatibility(y_values, scale=rule.y_axis.scale),
         },
         output={
             "x_metric": x_metric,
@@ -147,24 +150,7 @@ def _column(
 
 
 def gpc_exclusions(diagnostics: dict[str, Any]) -> dict[str, int]:
-    return {
-        "empty_pair": int(diagnostics.get("excluded_empty_pair_count") or 0),
-        "partial_or_nonnumeric": int(
-            diagnostics.get("excluded_partial_or_nonnumeric_pair_count") or 0
-        ),
-        "nonfinite": int(diagnostics.get("excluded_nonfinite_pair_count") or 0),
-    }
-
-
-def _axis_compatibility(values: list[float], *, scale: str) -> dict[str, Any]:
-    finite = all(math.isfinite(value) for value in values)
-    nonpositive = sum(value <= 0.0 for value in values if math.isfinite(value))
-    return {
-        "registered_scale": scale,
-        "finite_compatible": finite,
-        "log_compatible": finite and nonpositive == 0,
-        "nonpositive_count": nonpositive,
-    }
+    return transform_exclusion_counts(diagnostics)
 
 
 __all__ = ["build_gpc_transform_contract", "gpc_exclusions"]

@@ -18,7 +18,7 @@ from sciplot_core.materials_rules import get_rule
 from sciplot_core.studio_core.export_execution import export_studio_document
 from sciplot_core.studio_core.prepare_generated import generate_studio_document
 from sciplot_core.studio_core.publish_run import publish_studio_export_run
-import sciplot_core.studio_core.prepare_generated as prepare_generated_module
+import sciplot_core.studio_core.prepare_generated_transaction as prepare_transaction_module
 import sciplot_core.workflow.single_task_bundle as single_task_bundle_module
 import sciplot_core.workflow.request_run as request_run_module
 
@@ -153,11 +153,7 @@ def test_dsc_studio_render_failure_rolls_back_request_and_documents(
     def reject_render(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("synthetic DSC Studio render failure")
 
-    monkeypatch.setattr(
-        prepare_generated_module,
-        "_write_veusz_document",
-        reject_render,
-    )
+    monkeypatch.setattr(prepare_transaction_module, "_write_veusz_document", reject_render)
 
     with pytest.raises(RuntimeError, match="DSC Studio render failure"):
         generate_studio_document(
@@ -258,7 +254,7 @@ def test_dsc_workflow_render_failure_restores_existing_managed_output(
 
 
 @pytest.mark.comprehensive
-def test_dsc_workflow_source_drift_after_render_cannot_publish(
+def test_dsc_workflow_uses_its_bound_snapshot_after_render(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -290,11 +286,11 @@ def test_dsc_workflow_source_drift_after_render_cannot_publish(
         render_then_mutate,
     )
 
-    with pytest.raises(RuntimeError, match="Workflow source changed"):
-        workflow.run_request(request_path)
+    manifest = workflow.run_request(request_path)
 
-    assert not (output_dir / "manifest.json").exists()
-    assert not (output_dir / "delivery").exists()
+    assert ResolvedFigurePlan.from_payload(manifest["resolved_figure_plan"]).complete
+    assert source.read_bytes().endswith(b"\nsource-drift")
+    assert (output_dir / "manifest.json").is_file()
 
 
 def test_dsc_curve_rejects_cycle_workbooks_before_workflow_writes(

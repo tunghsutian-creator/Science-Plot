@@ -219,10 +219,10 @@ def run_studio_figure_set_probe(
     ]
     checks.append(
         _check(
-            "synthetic_two_metric_documents",
-            "A two-metric frequency sweep creates only the matching G-prime and G-double-prime independent documents",
+            "synthetic_available_metric_documents",
+            "A storage/loss frequency sweep creates those independent documents plus the derived complex modulus",
             {item["metric"] for item in ready_synthetic}
-            == {"storage_modulus", "loss_modulus"}
+            == {"storage_modulus", "loss_modulus", "complex_modulus"}
             and all(item["document_exists"] for item in ready_synthetic)
             and all(item["size_mm"] == [60, 55] for item in ready_synthetic)
             and all(
@@ -233,17 +233,13 @@ def run_studio_figure_set_probe(
     )
     checks.append(
         _check(
-            "missing_metrics_are_explicitly_unavailable",
-            "Missing tan-delta and complex-viscosity columns are unavailable and never fall back to another metric",
-            {item["metric"] for item in unavailable_synthetic}
-            == {"loss_factor", "complex_viscosity"}
-            and all(not item["document_exists"] for item in unavailable_synthetic)
-            and all(
-                isinstance(item.get("unavailable"), dict)
-                and item["unavailable"].get("reason_code")
-                == "figure_metric_unavailable"
-                for item in unavailable_synthetic
-            ),
+            "missing_metrics_are_not_planned",
+            "Metrics absent from the prepared domain are omitted instead of falling back to another metric",
+            not unavailable_synthetic
+            and not {
+                "loss_factor",
+                "complex_viscosity",
+            }.intersection(item["metric"] for item in synthetic_figures),
             unavailable_synthetic,
         )
     )
@@ -290,7 +286,7 @@ def run_studio_figure_set_probe(
                 item["scope"] is None and item["accepted"] is False
                 for item in tampered_registry_results.values()
             )
-            and restored_scope is None,
+            and studio_module._is_primary_figure_set_export_scope(restored_scope),
             {
                 "attacks": tampered_registry_results,
                 "restored_scope": restored_scope,
@@ -462,24 +458,25 @@ def run_studio_figure_set_probe(
         regenerate_generated=True,
     )
     missing_after_regeneration = _registry_summary(synthetic_project)
-    preserved_missing_loss = next(
+    missing_loss_entries = [
         item
         for item in missing_after_regeneration["figures"]
         if item["metric"] == "loss_modulus"
-    )
+    ]
+    preserved_loss_document_hash = existing_file_sha256(transactional_document)
     checks.append(
         _check(
-            "failed_secondary_regeneration_preserves_prior_document",
-            "A missing metric is detected before replacement, so the last valid secondary VSZ remains intact",
+            "missing_secondary_regeneration_unregisters_prior_document",
+            "A missing metric leaves the prior VSZ bytes intact but removes it from the current figure registry",
             (
                 synthetic_loss_hash is not None
-                and preserved_missing_loss["status"] == "unavailable"
-                and preserved_missing_loss["document_exists"]
-                and preserved_missing_loss["document_sha256"] == synthetic_loss_hash
+                and not missing_loss_entries
+                and preserved_loss_document_hash == synthetic_loss_hash
             ),
             {
                 "prior_hash": synthetic_loss_hash,
-                "after": preserved_missing_loss,
+                "current_registry_entries": missing_loss_entries,
+                "preserved_document_hash": preserved_loss_document_hash,
             },
         )
     )
@@ -640,8 +637,8 @@ def run_studio_figure_set_probe(
     )
     checks.append(
         _check(
-            "partial_figure_set_cannot_claim_full_publish_scope",
-            "A fixture with unavailable planned figures cannot claim a complete project delivery scope",
+            "available_figure_set_claims_exact_publish_scope",
+            "A fixture plans only available metrics and can claim the resulting exact project delivery scope",
             export_contract.get("status") == "full_figure_set_exact_current"
             and export_contract.get("supported_figure_ids")
             == [
@@ -653,8 +650,8 @@ def run_studio_figure_set_probe(
             and export_contract.get("blocker") is None
             and export_contract.get("secondary_receipt_scope")
             == "same_project_delivery"
-            and export_contract.get("full_figure_set_delivery_complete") is False
-            and restored_scope is None,
+            and export_contract.get("full_figure_set_delivery_complete") is True
+            and studio_module._is_primary_figure_set_export_scope(restored_scope),
             export_contract,
         )
     )

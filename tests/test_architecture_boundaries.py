@@ -543,7 +543,7 @@ def test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint() -> None
             owned_files.update(target.rglob("*.py"))
         else:
             owned_files.add(target)
-    assert len(owned_files) == 42
+    assert len(owned_files) == 43
     dev_dependencies = project["project"]["optional-dependencies"]["dev"]
     assert "mypy==2.3.0" in dev_dependencies
     assert "pandas-stubs==3.0.3.260530" in dev_dependencies

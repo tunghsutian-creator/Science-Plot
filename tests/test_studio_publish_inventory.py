@@ -31,8 +31,11 @@ from sciplot_core.studio_core.rule_contract_binding import (
 )
 
 
-def _current_binding() -> dict[str, Any]:
-    rule = get_rule("swelling_curve")
+UNPLANNED_RULE_ID = "rheology_strain_sweep"
+
+
+def _current_binding(rule_id: str = "swelling_curve") -> dict[str, Any]:
+    rule = get_rule(rule_id)
     return StudioRuleContractBinding.from_snapshot(
         current_certified_rule_contract_snapshot(
             rule=rule,
@@ -578,9 +581,9 @@ def test_publish_inventory_revalidates_a_currently_downgraded_rule_once(
     project_dir, request_path, document_path, document_hash = _minimal_project(
         tmp_path,
         {
-            "rule_id": "swelling_curve",
+            "rule_id": UNPLANNED_RULE_ID,
             "template": "point_line",
-            "studio_rule_contract_binding": _current_binding(),
+            "studio_rule_contract_binding": _current_binding(UNPLANNED_RULE_ID),
         },
     )
     collected = _stub_inventory_ports(
@@ -588,7 +591,7 @@ def test_publish_inventory_revalidates_a_currently_downgraded_rule_once(
         document_path=document_path,
         document_hash=document_hash,
     )
-    pending_rule = replace(get_rule("swelling_curve"), fixture_status="pending")
+    pending_rule = replace(get_rule(UNPLANNED_RULE_ID), fixture_status="pending")
     calls: list[str] = []
 
     def lookup(rule_id: str) -> Any:
@@ -605,7 +608,7 @@ def test_publish_inventory_revalidates_a_currently_downgraded_rule_once(
         export_document_sha256=document_hash,
     )
 
-    assert calls == ["swelling_curve"]
+    assert calls == [UNPLANNED_RULE_ID]
     assert inventory.rule_readiness.current_rule is pending_rule
     assert inventory.rule_readiness.persisted_pending_rule_review is False
     assert inventory.pending_rule_review is True
@@ -687,7 +690,7 @@ def test_publish_inventory_revalidates_a_currently_downgraded_rule_once(
     assert payload["ready_to_use"] is False
     assert payload["failure_stage"] == "rule_readiness_gate"
     assert payload["failure_reason"] == (
-        "Material rule `swelling_curve` is currently `pending` and is not ready "
+        f"Material rule `{UNPLANNED_RULE_ID}` is currently `pending` and is not ready "
         "for production publication. Repair and revalidate the central rule, "
         "then reprepare this Studio project before handoff."
     )
@@ -760,7 +763,7 @@ def test_invalid_rule_state_fails_before_collecting_figures_or_allocating_a_run(
 @pytest.mark.parametrize(
     "request_payload",
     [
-        {"rule_id": "swelling_curve", "template": "point_line"},
+        {"rule_id": UNPLANNED_RULE_ID, "template": "point_line"},
         {"rule_id": "   ", "template": "curve"},
     ],
 )
@@ -797,6 +800,8 @@ def test_ready_and_blank_rule_inventory_controls_remain_publishable(
 
     assert inventory.pending_rule_review is False
     assert calls == (
-        ["swelling_curve"] if str(request_payload.get("rule_id") or "").strip() else []
+        [UNPLANNED_RULE_ID]
+        if str(request_payload.get("rule_id") or "").strip()
+        else []
     )
     assert inventory.output_dir.is_dir()

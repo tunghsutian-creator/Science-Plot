@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Any
 
 from sciplot_core.semantic_sources.models import CurveSeriesPayload
 from sciplot_core.semantic_sources.scientific_transform import (
     ScientificTransformContract,
+)
+from sciplot_core.semantic_sources.transform_contract_values import (
+    transform_axis_compatibility,
 )
 
 
@@ -58,8 +60,12 @@ def build_ftir_transform_contract(
         },
         retain_anchor=None,
         axis_compatibility={
-            "x": _axis_compatibility(x_values),
-            "y": _axis_compatibility(y_values),
+            "x": transform_axis_compatibility(
+                x_values, scale="linear", require_values=True
+            ),
+            "y": transform_axis_compatibility(
+                y_values, scale="linear", require_values=True
+            ),
         },
         output={
             "x_metric": FTIR_X_METRIC,
@@ -164,17 +170,6 @@ def _series_evidence(series: CurveSeriesPayload) -> dict[str, Any]:
         "excluded_by_reason": exclusions,
         "first_point": list(series.points[0]),
         "last_point": list(series.points[-1]),
-    }
-
-
-def _axis_compatibility(values: list[float]) -> dict[str, Any]:
-    finite = bool(values) and all(math.isfinite(value) for value in values)
-    nonpositive = sum(value <= 0.0 for value in values if math.isfinite(value))
-    return {
-        "registered_scale": "linear",
-        "finite_compatible": finite,
-        "log_compatible": finite and nonpositive == 0,
-        "nonpositive_count": nonpositive,
     }
 
 

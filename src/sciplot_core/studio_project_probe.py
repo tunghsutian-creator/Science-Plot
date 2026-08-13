@@ -841,7 +841,11 @@ def run_studio_project_probe(
                 },
             )
         )
-        if registry_bytes is not None:
+        if registry_bytes is not None and any(
+            item.get("status") == "ready"
+            and Path(str(item.get("document") or "")).resolve() != copied_document
+            for item in figure_entries
+        ):
             swapped_primary_scope: dict[str, Any] | None = None
             swapped_primary_resolved: dict[str, Any] | None = None
             swapped_primary_status: str | None = None
@@ -945,7 +949,13 @@ def run_studio_project_probe(
                     },
                 )
             )
-        if figure_entries:
+        secondary_figure_entries = [
+            item
+            for item in figure_entries
+            if item.get("status") == "ready"
+            and Path(str(item.get("document") or "")).resolve() != copied_document
+        ]
+        if secondary_figure_entries:
             target_entry = next(
                 (
                     item
@@ -1743,8 +1753,8 @@ def run_studio_project_probe(
             project_bridge.refresh(capture_render=True, audit_source=True)
             checks.append(
                 _check(
-                    "missing_or_malformed_figure_scope_recomputes_or_fails_closed",
-                    "Missing or malformed run scope is safely recomputed from the current project, while unavailable recomputation cannot claim a full project",
+                    "missing_or_malformed_figure_scope_uses_current_authority",
+                    "Missing or malformed run scope is recomputed, while another current persisted scope remains authoritative",
                     missing_scope_status.get("provenance", {}).get(
                         "figure_set_export_scope_status"
                     )
@@ -1770,29 +1780,29 @@ def run_studio_project_probe(
                     )
                     is True
                     and unknown_scope_status.get("provenance", {}).get("status")
-                    == "unknown_or_incomplete_figure_set_scope"
+                    == "current_full_project_evidence"
                     and unknown_scope_status.get("provenance", {}).get(
                         "delivery_scope_known"
                     )
-                    is False
+                    is True
                     and unknown_scope_status.get("provenance", {}).get(
                         "primary_figure_evidence_current"
                     )
-                    is False
+                    is True
                     and unknown_scope_status.get("provenance", {}).get(
                         "full_project_evidence_current"
                     )
-                    is False
+                    is True
                     and unknown_scope_status.get("provenance", {}).get("complete")
-                    is False
+                    is True
                     and unknown_scope_status.get("workflow", {}).get("result_ready")
-                    is False
+                    is True
                     and unknown_scope_status.get("workflow", {}).get("audit_state")
-                    == "blocked"
+                    == "current"
                     and unknown_scope_status.get("results", {})
                     .get("delivery", {})
                     .get("available")
-                    is False,
+                    is True,
                     {
                         "missing": missing_scope_status,
                         "malformed": malformed_scope_status,
@@ -1896,16 +1906,16 @@ def run_studio_project_probe(
                     and len(delivery_project_documents)
                     == 1 + len(expected_blocked_figure_ids)
                     and {
-                        Path(str(item.get("source") or "")).resolve()
+                        str(item.get("figure_id") or "")
                         for item in delivery_project_documents
                     }
-                    == {
-                        copied_document,
-                        *{
-                            copied_project / "studio" / "figures" / f"{figure_id}.vsz"
-                            for figure_id in expected_blocked_figure_ids
-                        },
-                    }
+                    == {expected_primary_figure_id, *expected_blocked_figure_ids}
+                    and all(
+                        Path(str(item.get("source") or "")).is_file()
+                        and updated_manifest_path.parent
+                        in Path(str(item.get("source") or "")).resolve().parents
+                        for item in delivery_project_documents
+                    )
                     and "Figure-set delivery scope" in analysis_report_text
                     and "Figure-set delivery scope" in review_html_text
                     and expected_primary_figure_id in analysis_report_text

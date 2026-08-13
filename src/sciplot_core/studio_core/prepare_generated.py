@@ -157,7 +157,10 @@ def generate_studio_document(
         request[STUDIO_RULE_CONTRACT_BINDING_KEY] = rule_binding.to_payload()
     else:
         request.pop(STUDIO_RULE_CONTRACT_BINDING_KEY, None)
-    source_input = _resolve_request_input(request, base_dir=request_path.parent)
+    source_input = _resolve_request_input(
+        effective_request,
+        base_dir=request_path.parent,
+    )
     planning_study_model = initial_studio_study_model(
         request,
         current_rule=current_rule,

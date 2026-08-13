@@ -37,6 +37,7 @@ PERFORMANCE_FIXTURE = (
     / "performance_comparison"
     / "material_performance_long.csv"
 )
+EXISTING_RULE_ID = "rheology_strain_sweep"
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -92,7 +93,7 @@ def _existing_rule_project(
     source.write_text("x,y\n0,1\n1,2\n", encoding="utf-8")
     request: dict[str, Any] = {
         "input": str(source),
-        "rule_id": "swelling_curve",
+        "rule_id": EXISTING_RULE_ID,
         "template": "point_line",
     }
     if binding is not None:
@@ -162,7 +163,7 @@ def test_generated_ruleless_request_removes_stale_contract_binding(
 def test_reusing_existing_document_preserves_contract_binding_exactly(
     tmp_path: Path,
 ) -> None:
-    expected_binding = _current_binding("swelling_curve")
+    expected_binding = _current_binding(EXISTING_RULE_ID)
     project_dir, request_path, document_path = _existing_rule_project(
         tmp_path,
         binding=expected_binding,

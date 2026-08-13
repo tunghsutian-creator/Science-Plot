@@ -107,6 +107,10 @@ def prepare_studio_export_inventory(
         exports=exports,
     )
     request = _read_json(request_path)
+    effective_request, mapping_application = resolve_data_mapping_request(
+        request,
+        base_dir=request_path.parent,
+    )
     rule_readiness = resolve_studio_rule_publication_readiness(request)
     request_rule_id = rule_readiness.rule_id or ""
     current_rule = rule_readiness.current_rule
@@ -139,15 +143,15 @@ def prepare_studio_export_inventory(
                 rule_id=request_rule_id,
                 template=presentation_identity.template,
                 study_model=(
-                    request.get("study_model")
-                    if isinstance(request.get("study_model"), dict)
+                    effective_request.get("study_model")
+                    if isinstance(effective_request.get("study_model"), dict)
                     else {}
                 ),
                 input_path=_resolve_request_input(
-                    request,
+                    effective_request,
                     base_dir=request_path.parent,
                 ),
-                request=request,
+                request=effective_request,
             )
             if request_rule_id or persisted_plan is not None
             else None
@@ -176,10 +180,6 @@ def prepare_studio_export_inventory(
         )
         for item in figure_documents
     }
-    effective_request, mapping_application = resolve_data_mapping_request(
-        request,
-        base_dir=request_path.parent,
-    )
     document_state = _studio_document_state(
         document_path,
         generated_hash=_registered_generated_hash(project_dir),

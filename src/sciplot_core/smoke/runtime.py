@@ -393,9 +393,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
                 and overridden_request.get("template") == "curve"
                 and overridden_request.get("explicit_render_option_keys") == ["size"]
                 and overridden_options.get("size") == "180x55"
-                and overridden_options.get("x_label_override") == r"q (nm$^{-1}$)"
-                and overridden_options.get("y_label_override") == "Intensity (a.u.)"
-                and overridden_options.get("xscale") == "log"
+                and "x_label_override" not in overridden_options
+                and "y_label_override" not in overridden_options
+                and overridden_options.get("xscale") == "linear"
                 and overridden_options.get("yscale") == "log"
                 and "marker_sequence" not in overridden_options,
                 detail=overridden_request,

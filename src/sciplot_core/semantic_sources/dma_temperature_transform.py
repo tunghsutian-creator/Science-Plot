@@ -25,6 +25,10 @@ from sciplot_core.semantic_sources.series_ordering import (
     _order_curve_series,
     _series_order_map,
 )
+from sciplot_core.semantic_sources.transform_contract_values import (
+    transform_axis_compatibility,
+    transform_exclusion_counts,
+)
 
 
 def resolve_dma_temperature_transform(
@@ -76,7 +80,7 @@ def _validate_dma_series(series_list: list[CurveSeriesPayload]) -> None:
             )
         candidate = int(diagnostics.get("candidate_row_count") or 0)
         retained = int(diagnostics.get("retained_point_count") or 0)
-        exclusions = _exclusions(diagnostics)
+        exclusions = transform_exclusion_counts(diagnostics)
         if retained != len(points) or candidate != retained + sum(exclusions.values()):
             raise ValueError(
                 f"DMA temperature row evidence is incomplete for {series.sample!r}."
@@ -116,7 +120,7 @@ def _dma_temperature_contract(
         diagnostics = dict(series.diagnostics or {})
         source_columns.append(_source_columns(series, diagnostics))
         unit_conversions.extend(_unit_conversions(series, diagnostics))
-        exclusions = _exclusions(diagnostics)
+        exclusions = transform_exclusion_counts(diagnostics)
         candidate = int(diagnostics["candidate_row_count"])
         output_series.append(
             {
@@ -155,8 +159,8 @@ def _dma_temperature_contract(
         },
         retain_anchor=None,
         axis_compatibility={
-            "x": _axis_compatibility(x_values),
-            "y": _axis_compatibility(y_values),
+            "x": transform_axis_compatibility(x_values, scale="linear"),
+            "y": transform_axis_compatibility(y_values, scale="linear"),
         },
         output={
             "x_metric": DMA_TEMPERATURE_X_METRIC,
@@ -240,27 +244,6 @@ def _unit_conversions(
             },
         },
     )
-
-
-def _exclusions(diagnostics: dict[str, Any]) -> dict[str, int]:
-    return {
-        "empty_pair": int(diagnostics.get("excluded_empty_pair_count") or 0),
-        "partial_or_nonnumeric": int(
-            diagnostics.get("excluded_partial_or_nonnumeric_pair_count") or 0
-        ),
-        "nonfinite": int(diagnostics.get("excluded_nonfinite_pair_count") or 0),
-    }
-
-
-def _axis_compatibility(values: list[float]) -> dict[str, Any]:
-    finite = all(math.isfinite(value) for value in values)
-    nonpositive = sum(value <= 0.0 for value in values if math.isfinite(value))
-    return {
-        "registered_scale": "linear",
-        "finite_compatible": finite,
-        "log_compatible": finite and nonpositive == 0,
-        "nonpositive_count": nonpositive,
-    }
 
 
 __all__ = ["resolve_dma_temperature_transform"]

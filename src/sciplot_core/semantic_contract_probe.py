@@ -1108,36 +1108,22 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         ),
         _check(
             "saxs_positive_log_domain",
-            "SAXS removes non-positive log-domain points per series without changing the source",
+            "SAXS removes only non-positive log-y points per series without changing the source",
             (
                 saxs_before == saxs_after
                 and len(saxs_diagnostics) == 2
                 and all(
-                    item.get("selected_point_count", 0) >= 2
-                    for item in saxs_diagnostics
-                )
-                and any(
-                    item.get("excluded_nonpositive_q_count", 0) > 0
+                    item.get("retained_point_count", 0) >= 2
                     for item in saxs_diagnostics
                 )
                 and all(
-                    item.get("excluded_nonpositive_intensity_count", 0) > 0
+                    item.get("excluded_nonpositive_log_y_count", 0) > 0
                     for item in saxs_diagnostics
                 )
                 and all(
-                    "do not infer or remove offsets"
-                    in str(item.get("intensity_offset_policy"))
-                    for item in saxs_diagnostics
-                )
-                and all(
-                    item.get("retained_positive_values_preserved_without_scaling")
+                    item.get("retained_values_preserved_without_numeric_transform")
                     is True
-                    and item.get("sciplot_intensity_scale_factor") == 1.0
-                    and item.get("sciplot_intensity_offset") == 0.0
-                    and item.get("source_series_scaling_status")
-                    == "not_validated_from_source_metadata"
-                    and item.get("absolute_cross_series_intensity_comparison_validated")
-                    is False
+                    and item.get("render_domain_projection_axes") == ["y"]
                     for item in saxs_diagnostics
                 )
             ),
@@ -1149,14 +1135,14 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         ),
         _check(
             "ftir_measurement_modes",
-            "FTIR preserves percent-transmittance and absorbance measurement identities",
+            "FTIR preserves explicit response identities and keeps headerless responses neutral",
             (
                 transmittance.y_label == "Transmittance"
                 and transmittance.y_unit == "%"
                 and absorbance.y_label == "Absorbance"
                 and absorbance.y_unit == "a.u."
-                and headerless.y_label == "Transmittance"
-                and headerless.y_unit == "%"
+                and headerless.y_label == "Spectral response"
+                and headerless.y_unit == ""
             ),
             {
                 "structured_percent_t": {
@@ -1176,7 +1162,7 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
         _check(
             "ftir_mixed_measurement_modes_blocked",
             "Transmittance and absorbance are not combined on one response axis",
-            mixed_ftir_blocked and "separate figures" in mixed_ftir_error,
+            mixed_ftir_blocked and "cannot share one figure" in mixed_ftir_error,
             {"error": mixed_ftir_error},
         ),
         _check(
@@ -1242,9 +1228,9 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             "Confirmed rheology columns preserve mPa-s values in the canonical workbook",
             (
                 confirmed_viscosity_before == confirmed_viscosity_after
-                and confirmed_viscosity_processed.iat[2, 4] == "mPa·s"
+                and confirmed_viscosity_processed.iat[2, 2] == "mPa·s"
                 and [
-                    float(confirmed_viscosity_processed.iat[row_index, 4])
+                    float(confirmed_viscosity_processed.iat[row_index, 2])
                     for row_index in (3, 4)
                 ]
                 == [500_000.0, 50_000.0]
@@ -1256,9 +1242,9 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             {
                 "source_sha256_before": confirmed_viscosity_before,
                 "source_sha256_after": confirmed_viscosity_after,
-                "processed_output_unit": confirmed_viscosity_processed.iat[2, 4],
+                "processed_output_unit": confirmed_viscosity_processed.iat[2, 2],
                 "processed_output_values": [
-                    float(confirmed_viscosity_processed.iat[row_index, 4])
+                    float(confirmed_viscosity_processed.iat[row_index, 2])
                     for row_index in (3, 4)
                 ],
                 "transform_unit_conversions": confirmed_viscosity_inventory,
@@ -1364,7 +1350,7 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
             "source_selections"
         ]
         excluded_counts = [
-            int(item.get("excluded_nonpositive_intensity_count", 0))
+            int(item.get("excluded_nonpositive_log_y_count", 0))
             for item in real_diagnostics
         ]
         checks.append(
@@ -1374,18 +1360,17 @@ def run_semantic_contract_probe(output_dir: str | Path) -> dict[str, Any]:
                 bool(excluded_counts)
                 and excluded_counts == source_nonpositive_counts
                 and all(
-                    item.get("retained_positive_values_preserved_without_scaling")
+                    item.get("retained_values_preserved_without_numeric_transform")
                     is True
-                    and item.get("absolute_cross_series_intensity_comparison_validated")
-                    is False
+                    and item.get("render_domain_projection_axes") == ["y"]
                     for item in real_diagnostics
                 ),
                 {
                     "source": str(real_saxs),
                     "excluded_nonpositive_intensity_counts": excluded_counts,
                     "source_nonpositive_intensity_counts": source_nonpositive_counts,
-                    "source_scaling_status": [
-                        item.get("source_series_scaling_status")
+                    "render_domain_projection_axes": [
+                        item.get("render_domain_projection_axes")
                         for item in real_diagnostics
                     ],
                 },

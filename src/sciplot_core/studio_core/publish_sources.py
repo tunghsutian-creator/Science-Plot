@@ -70,7 +70,10 @@ def prepare_studio_run_sources(
         json.dumps(json_safe(request), indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    input_path = _resolve_request_input(request, base_dir=request_path.parent)
+    input_path = _resolve_request_input(
+        effective_request,
+        base_dir=request_path.parent,
+    )
     raw_archive = (
         _archive_studio_input(input_path, output_dir) if input_path is not None else {}
     )

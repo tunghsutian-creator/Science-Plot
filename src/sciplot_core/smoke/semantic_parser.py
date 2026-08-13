@@ -580,7 +580,7 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         == "linear"
         and (saxs_semantic.get("axis_plan") or {}).get("y", {}).get("scale") == "log"
         and gpc_semantic.get("rule_id") == "gpc_sec_chromatogram"
-        and gpc_parameters.get("series_order") == ["Sample 8"]
+        and gpc_parameters.get("series_order") == ["8"]
         and gpc_parameters.get("source_point_counts") == [4]
         and (gpc_parameters.get("source_selections") or [{}])[0].get("detector_unit")
         == "mV"
@@ -646,7 +646,7 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
             (gpc_effective_semantic.get("registered_axis_plan") or {})
             .get("y", {})
             .get("canonical_unit")
-            == "a.u."
+            == "mV"
         )
         and (
             (ftir_exact_semantic.get("axis_plan") or {})

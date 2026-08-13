@@ -6,7 +6,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.figure_plan.metric_binding import CartesianMetricBinding
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
+from sciplot_core.figure_plan.task import FigureTask
 from sciplot_core.policy import canonical_figure_stem
 
 from sciplot_core.study_model.normalization import (
@@ -51,6 +53,8 @@ def attach_run_artifacts_to_study_model(
     queue = list(updated.get("figure_queue", []))
     figure_plan = resolved_figure_plan_from_payload(resolved_figure_plan)
     if figure_plan is not None:
+        if figure_plan.selection_policy == "registered_single_curve":
+            queue = [_queue_item_from_task(task) for task in figure_plan.tasks]
         outcome_by_id = {outcome.figure_id: outcome for outcome in figure_plan.outcomes}
         plan_task_ids = set(figure_plan.selected_figure_ids)
         impact_expansion = figure_plan.rule_id == "impact_metric" and not any(
@@ -176,6 +180,31 @@ def attach_run_artifacts_to_study_model(
         "qa": qa or {},
     }
     return updated
+
+
+def _queue_item_from_task(task: FigureTask) -> dict[str, Any]:
+    binding = task.metric_binding
+    if isinstance(binding, CartesianMetricBinding):
+        x_metric = binding.x_metric
+        y_metric = binding.y_metric
+    else:
+        x_metric = task.x_metric
+        y_metric = task.y_metric
+    if not isinstance(x_metric, str) or not isinstance(y_metric, str):
+        raise ValueError(
+            "Registered single-curve FigurePlan tasks require Cartesian metrics."
+        )
+    return {
+        "id": task.figure_id,
+        "order": task.order,
+        "status": "planned",
+        "title": task.title,
+        "metric": y_metric,
+        "x_metric": x_metric,
+        "y_metric": y_metric,
+        "default_template": task.template,
+        "resolved_from_figure_plan": True,
+    }
 
 
 def _artifact_records(paths: tuple[str, ...]) -> list[dict[str, Any]]:

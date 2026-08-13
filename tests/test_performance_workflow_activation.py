@@ -133,7 +133,7 @@ def test_explicit_performance_workflow_delivers_only_selected_task(
 
 
 @pytest.mark.comprehensive
-def test_performance_workflow_rejects_source_change_after_render(
+def test_performance_workflow_uses_its_bound_snapshot_after_render(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -151,11 +151,11 @@ def test_performance_workflow_rejects_source_change_after_render(
         render_then_mutate,
     )
 
-    with pytest.raises(RuntimeError, match="Workflow source changed"):
-        workflow.run_request(request_path)
+    manifest = workflow.run_request(request_path)
 
-    assert not (output / "manifest.json").exists()
-    assert not (output / "delivery").exists()
+    assert ResolvedFigurePlan.from_payload(manifest["resolved_figure_plan"]).complete
+    assert source.read_bytes().endswith(b"\nsource-drift")
+    assert (output / "manifest.json").is_file()
 
 
 @pytest.mark.comprehensive

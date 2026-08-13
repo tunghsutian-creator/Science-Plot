@@ -1,76 +1,29 @@
 # SciPlot Development Roadmap
 
-Status: unfinished product and maintenance priorities only.
+Status: maintenance mode; no active implementation stage.
 
 Current behavior belongs to `README.md`, agent execution to `skill/SKILL.md`,
 and code and module boundaries to `docs/ARCHITECTURE.md`. Completed work and
 superseded designs belong to the compact `DEVELOPMENT_LOG.md` summary and Git
 history.
 
-## Active big goal — one AI-callable plotting kernel
+## No active development target
 
-Make SciPlot callable by an ordinary external AI through one small, explicit,
-machine-readable workflow while keeping native Veusz as the editable visual
-authority. DSC, DMA, rheology, mechanics, spectra, and future figure families
-must be thin domain additions to the same pipeline, not parallel applications.
+The current AI-callable plotting-kernel goal is closed. New inputs continue to
+use the documented `rules` -> `plan` -> `studio` / `autoplot` workflow, while
+native Veusz remains the editable visual authority. Unknown scientific meaning,
+missing unit evidence, and unsupported source layouts must still fail closed;
+completion is not permission to guess arbitrary file semantics.
 
-The common pipeline is:
+Future work starts only from an explicit user request or a reproduced defect in
+the current workflow. A new figure family must remain a thin addition to the
+existing rule, typed-source, FigurePlan, Studio, QA, and exact-current delivery
+spine. It must not introduce another capability catalog, request schema,
+renderer, editor, cache, receipt, or hash ledger.
 
-```text
-discover rule -> inspect source -> resolve scientific source -> FigurePlan
--> shared StudioSeries/spec -> native Veusz document -> exact-current export
-```
-
-One existing authority owns each layer: `materials_rules` describes public
-capability, `plot_request.json` carries invocation, the typed scientific-source
-result owns source transformation, `ResolvedFigurePlan` owns selected tasks,
-`studio_render` owns reusable plot construction, and the existing Studio
-figure-set/export path owns editable delivery. Do not add another capability
-catalog, request schema, renderer, editor, cache, receipt, or hash ledger.
-
-Stages 13–42 are complete and recorded in `DEVELOPMENT_LOG.md`. DSC, TGA, DTG,
-UV-Vis, XRD, SAXS, GPC/SEC, and FTIR now exercise the same typed-source,
-single-task FigurePlan, semantic-materialization, generic Veusz/QA, and
-exact-current delivery spine. The first six share the registered paired-table
-reader; GPC and FTIR contribute only source readers and transform-contract
-leaves before joining the same single-curve binder. Rheology-temperature and
-raw-export-directory frequency planning/preparation share one typed multi-metric
-source domain rather than reparsing or pretending it is a single-y transform.
-Scoped real-data acceptance can update the existing validated-envelope registry
-without rerunning unrelated rules.
-
-## Active Stage 43 — repair the shared paired-curve seam, then add DMA frequency
-
-Before activating another rule, close three shared boundaries. Registered
-paired curves must derive machine metric ids from canonical quantity labels,
-not from presentation aliases such as `ω` or `G′`. Their selected numeric
-columns must share the existing decimal-separator evidence and preserve NA and
-nonfinite lexemes, so comma decimals are not silently multiplied and invalid
-values cannot disappear during table loading. A request that already owns a
-FigurePlan must also fail before writes when a named legacy recipe is supplied;
-the existing bounded DMA-temperature recipe remains the sole explicit
-exception.
-
-Then register `dma_frequency_sweep` as another thin
-`registered_paired_curve` / `registered_single_curve` rule. Its initial public
-claim is only the source-declared storage modulus versus angular frequency;
-sample identity, units, values, order, and point counts come from the selected
-table. The same transform must bind one generic FigurePlan task, preparation,
-Workflow, Studio, and analysis without a DMA-frequency parser, plan, bundle,
-renderer, catalog, cache, receipt, or hash ledger.
-
-Close the stage with discriminating shared tests for canonical metric ids,
-comma-decimal and ambiguous-number handling, NA/nonfinite evidence, and the
-pre-write recipe gate, plus one real-fixture DMA-frequency snapshot that
-traverses plan, preparation, Workflow, and Studio. Do not encode the fixture's
-sample label, point count, frequency, or modulus values in production code.
-
-Stage verification follows changed ownership: one focused invocation while
-iterating, one final cross-boundary smoke only when a stage genuinely crosses the
-runtime, and Doctor once at handoff. Acceptance and full pytest remain release
-gates. Real measured values, sample labels, onset coordinates, repeats, and order
-must always come from the current source or explicit user request; they are never
-framework defaults.
+The existing local browser `app` is an optional initial-intake compatibility
+surface, not a separately developed website product. Do not expand or redesign
+it unless the user explicitly reopens that scope.
 
 ## Deferred
 

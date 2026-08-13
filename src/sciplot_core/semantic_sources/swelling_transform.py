@@ -21,6 +21,9 @@ from sciplot_core.semantic_sources.swelling_sources import (
 from sciplot_core.semantic_sources.table_source_files import (
     resolve_single_table_source,
 )
+from sciplot_core.semantic_sources.transform_contract_values import (
+    transform_axis_compatibility,
+)
 
 
 def resolve_swelling_scientific_transform(
@@ -147,8 +150,12 @@ def _build_swelling_contract(
         },
         retain_anchor=None,
         axis_compatibility={
-            "x": _axis_compatibility(x_values),
-            "y": _axis_compatibility(y_values),
+            "x": transform_axis_compatibility(
+                x_values, scale="linear", require_values=True
+            ),
+            "y": transform_axis_compatibility(
+                y_values, scale="linear", require_values=True
+            ),
         },
         output={
             "x_metric": "time",
@@ -232,17 +239,6 @@ def _series_evidence(series: CurveSeriesPayload) -> dict[str, Any]:
         "first_point": list(series.points[0]),
         "last_point": list(series.points[-1]),
         "source_selection": block,
-    }
-
-
-def _axis_compatibility(values: list[float]) -> dict[str, Any]:
-    finite = bool(values) and all(math.isfinite(value) for value in values)
-    nonpositive = sum(value <= 0.0 for value in values if math.isfinite(value))
-    return {
-        "registered_scale": "linear",
-        "finite_compatible": finite,
-        "log_compatible": finite and nonpositive == 0,
-        "nonpositive_count": nonpositive,
     }
 
 
