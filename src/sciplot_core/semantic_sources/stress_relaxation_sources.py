@@ -245,7 +245,7 @@ def _read_stress_relaxation_series_list(source: Path) -> list[CurveSeriesPayload
             series_list.extend(_read_stress_relaxation_source_series(candidate))
         except _StressRelaxationHoldError as exc:
             raise ValueError(f"{candidate.name}: {exc}") from exc
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             errors.append(f"{candidate.name}: {exc}")
     if not series_list:
         detail = "; ".join(errors[:3])

@@ -275,7 +275,7 @@ def _read_confirmed_rheology_sweep_samples(
                     metrics=metrics,
                 )
             )
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             errors.append(f"{candidate.name}: {exc}")
     for confirmation in confirmations:
         if id(confirmation) in matched_confirmation_ids:

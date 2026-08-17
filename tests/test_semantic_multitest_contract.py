@@ -3,6 +3,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+import sciplot_core.semantic_sources.rheology_confirmation as rheology_confirmation
+import sciplot_core.semantic_sources.rheology_interval as rheology_interval
+import sciplot_core.semantic_sources.rheology_sweep_sources as rheology_sweep_sources
+import sciplot_core.semantic_sources.stress_relaxation_sources as stress_sources
 from sciplot_core.semantic import (
     _read_rheology_temperature_comparison_samples,
     _read_stress_relaxation_series_list,
@@ -103,6 +107,63 @@ def test_stress_relaxation_uses_internal_test_labels_and_deduplicates_exports(
         and (item.diagnostics or {})["time_reset_applied"] is False
         for item in series
     )
+
+
+@pytest.mark.parametrize(
+    ("module", "attribute", "invoke"),
+    (
+        (
+            rheology_sweep_sources,
+            "_read_raw_table_normalized",
+            lambda source: _read_rheology_temperature_comparison_samples(source),
+        ),
+        (
+            rheology_confirmation,
+            "_confirmed_rheology_sweep_sample",
+            lambda source: rheology_confirmation._read_confirmed_rheology_sweep_samples(
+                source,
+                [{"file_name": "source.csv"}],
+                x_label="Angular Frequency",
+                default_x_unit="rad/s",
+                metrics=(),
+            ),
+        ),
+        (
+            rheology_interval,
+            "_read_rheology_interval_series",
+            lambda source: _read_rheology_interval_series_list(
+                source,
+                y_candidates=("creepcompliance",),
+                y_label="Creep compliance",
+                y_unit="1/Pa",
+            ),
+        ),
+        (
+            stress_sources,
+            "_read_stress_relaxation_source_series",
+            lambda source: _read_stress_relaxation_series_list(source),
+        ),
+    ),
+    ids=("automatic_sweep", "confirmed_sweep", "interval", "stress_relaxation"),
+)
+def test_directory_readers_do_not_relabel_programming_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    module,
+    attribute: str,
+    invoke,
+) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    (source_dir / "source.csv").touch()
+
+    def fail_reader(*_args, **_kwargs):
+        raise RuntimeError("reader invariant failed")
+
+    monkeypatch.setattr(module, attribute, fail_reader)
+
+    with pytest.raises(RuntimeError, match="reader invariant failed"):
+        invoke(source_dir)
 
 
 def test_creep_directory_rejects_a_partial_interval_dataset(tmp_path: Path) -> None:

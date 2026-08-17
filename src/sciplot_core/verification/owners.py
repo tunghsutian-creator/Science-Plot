@@ -218,7 +218,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/semantic_sources/paired_curve_data_block.py",
                 "src/sciplot_core/semantic_sources/paired_curve_table_metadata.py",
                 "src/sciplot_core/semantic_sources/registered_paired_curve_contract.py",
-                "src/sciplot_core/semantic_sources/rheology_interval.py", "src/sciplot_core/semantic_sources/rheology_sweep_domain.py",
+                "src/sciplot_core/semantic_sources/rheology_confirmation.py", "src/sciplot_core/semantic_sources/rheology_interval.py", "src/sciplot_core/semantic_sources/rheology_sweep_domain.py",
                 "src/sciplot_core/semantic_sources/rheology_sweep_sources.py", "src/sciplot_core/semantic_sources/rheology_temperature_domain.py",
                 "src/sciplot_core/semantic_sources/registered_paired_curve_transform.py",
                 "src/sciplot_core/semantic_sources/scientific_transform.py", "src/sciplot_core/semantic_sources/transform_contract_values.py",

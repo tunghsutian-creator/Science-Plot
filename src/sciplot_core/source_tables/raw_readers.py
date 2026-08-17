@@ -8,46 +8,19 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-
-
-ENCODINGS_TO_TRY = (
-    "utf-8",
-    "utf-8-sig",
-    "utf-16",
-    "utf-16-le",
-    "utf-16-be",
-    "gb18030",
-    "latin-1",
-)
+from sciplot_core.foundation.text_decoding import decode_text_file
 
 
 def _read_delimited(path: Path, **kwargs: Any) -> pd.DataFrame:
-    last_error: Exception | None = None
     kwargs.setdefault("skip_blank_lines", False)
-    for encoding in ENCODINGS_TO_TRY:
-        try:
-            return pd.read_csv(path, encoding=encoding, **kwargs)
-        except (UnicodeError, pd.errors.ParserError) as exc:
-            last_error = exc
-    raise ValueError(f"Failed to decode or parse {path}") from last_error
-
-
-def _decode_text(path: Path) -> str:
-    last_error: Exception | None = None
-    payload = path.read_bytes()
-    for encoding in ENCODINGS_TO_TRY:
-        try:
-            text = payload.decode(encoding)
-        except UnicodeError as exc:
-            last_error = exc
-            continue
-        if not text.startswith("\ufffe"):
-            return text
-    raise ValueError(f"Failed to decode {path}") from last_error
+    try:
+        return pd.read_csv(StringIO(decode_text_file(path)), **kwargs)
+    except (csv.Error, pd.errors.ParserError) as exc:
+        raise ValueError(f"Failed to parse {path}") from exc
 
 
 def _read_ragged_delimited(path: Path, *, delimiter: str) -> pd.DataFrame:
-    rows = list(csv.reader(StringIO(_decode_text(path)), delimiter=delimiter))
+    rows = list(csv.reader(StringIO(decode_text_file(path)), delimiter=delimiter))
     width = max((len(row) for row in rows), default=0)
     padded = [row + [None] * (width - len(row)) for row in rows]
     return pd.DataFrame(padded)
@@ -100,17 +73,16 @@ def read_raw_table(
             sheet_name=sheet_name,
             keep_default_na=not preserve_na_tokens,
         )
-    if suffix == ".csv":
+    if suffix in {".csv", ".txt"}:
         return _read_csv(table_path, preserve_na_tokens=preserve_na_tokens)
-    if suffix in {".tsv", ".txt"}:
+    if suffix == ".tsv":
         return _read_delimited(
             table_path,
             header=None,
-            sep=None,
-            engine="python",
+            sep="\t",
             keep_default_na=not preserve_na_tokens,
         )
     raise ValueError(f"Unsupported file format: {suffix}")
 
 
-__all__ = ["ENCODINGS_TO_TRY", "read_raw_table"]
+__all__ = ["read_raw_table"]

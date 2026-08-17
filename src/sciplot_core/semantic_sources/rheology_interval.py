@@ -385,7 +385,7 @@ def _read_rheology_interval_series_list(
                     diagnostics=series.diagnostics,
                 )
             )
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             errors.append(f"{candidate.name}: {exc}")
     if not series_list:
         detail = "; ".join(errors[:3])

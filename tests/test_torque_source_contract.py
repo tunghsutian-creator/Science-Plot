@@ -5,6 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+import sciplot_core.semantic_sources.torque_sources as torque_sources
 from sciplot_core.semantic import prepare_semantic_source
 from sciplot_core.semantic_sources.models import CurveSeriesPayload
 from sciplot_core.semantic_sources.torque_event_selection import (
@@ -52,6 +53,37 @@ def _write_torque_source(
         + "".join(f"{time},{torque}\n" for time, torque in points),
         encoding="utf-8",
     )
+
+
+def test_torque_reader_uses_shared_utf16_text_fallback(tmp_path: Path) -> None:
+    source = tmp_path / "utf16_tab.txt"
+    source.write_text(
+        "Time\tScrew Torque\tComment\n"
+        "s\tN.m\t\n"
+        "metadata only\n"
+        "0\t1\n"
+        "1\t2\n",
+        encoding="utf-16",
+    )
+
+    series = _read_torque_full_series(source)
+
+    assert series.points == ((0.0, 1.0), (1.0, 2.0))
+
+
+def test_torque_reader_does_not_retry_programming_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.csv"
+
+    def fail_reader(_source: Path) -> pd.DataFrame:
+        raise RuntimeError("reader invariant failed")
+
+    monkeypatch.setattr(torque_sources, "read_raw_table", fail_reader)
+
+    with pytest.raises(RuntimeError, match="reader invariant failed"):
+        _read_torque_full_series(source)
 
 
 def test_prepare_without_curation_preserves_full_absolute_torque_source(

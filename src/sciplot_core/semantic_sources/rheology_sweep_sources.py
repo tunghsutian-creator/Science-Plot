@@ -335,7 +335,7 @@ def _read_rheology_sweep_comparison_samples(
                         sample=sample,
                     )
                 )
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             errors.append(f"{candidate.name}: {exc}")
     if errors and strict_scope:
         detail = "; ".join(errors[:3])
