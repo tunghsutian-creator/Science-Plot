@@ -296,16 +296,15 @@ def detect_source_intent(
             "curve_table",
             "curve",
             (
-                "Detected chromatography/GPC detector traces against elution "
-                "time or volume."
+                "Detected a calibrated GPC/SEC molar-mass distribution."
             ),
             (
-                {"time", "retention time", "elution volume", "volume"},
-                {"rayleigh ratio", "dri", "ri", "uv", "detector", "signal"},
+                {"molar mass", "molecular weight", "mw"},
+                {"dwdlogm", "differential weight fraction", "weight distribution"},
             ),
-            {"time", "retention time", "elution volume", "volume"},
-            {"rayleigh ratio", "dri", "ri", "uv", "detector", "signal"},
-            "linear",
+            {"molar mass", "molecular weight", "mw"},
+            {"dwdlogm", "differential weight fraction", "weight distribution"},
+            "log",
             "linear",
             False,
             None,

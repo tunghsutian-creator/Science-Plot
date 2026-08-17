@@ -237,6 +237,32 @@ def test_selected_rule_overrides_stale_recognition_authority(
     assert manifest["recognition"]["vendor"] == "legacy-vendor"
 
 
+def test_intake_projects_registered_gpc_log_scale_from_rule_axis(
+    tmp_path: Path,
+) -> None:
+    created = project_builder.create_intake_project(
+        project_name="calibrated gpc distribution",
+        data_type_id="chromatography",
+        experiment_type_id="gpc_sec_chromatogram",
+        groups=_group(
+            b"Molar mass,Differential weight fraction\ng/mol,\n10000,0.2\n"
+        ),
+        output_root=tmp_path / "projects",
+        studio_preparer=lambda _project_dir: {},
+    )
+    project_dir = Path(str(created["project_dir"]))
+    request = json.loads(
+        (project_dir / "plot_request.json").read_text(encoding="utf-8")
+    )
+    manifest = json.loads(
+        (project_dir / "intake_manifest.json").read_text(encoding="utf-8")
+    )
+
+    assert request["render_options"]["xscale"] == "log"
+    assert request["study_model"]["render_defaults"]["xscale"] == "log"
+    assert manifest["recognition"]["render_options"]["xscale"] == "log"
+
+
 def test_intake_rejects_an_invalid_explicit_replicate_mode_before_persisting(
     tmp_path: Path,
 ) -> None:

@@ -1,7 +1,7 @@
 {
   "kind": "sciplot_validated_envelope_registry",
   "version": 2,
-  "generated_at": "2026-08-09T23:57:57.473487+00:00",
+  "generated_at": "2026-08-13T14:25:07.691360+00:00",
   "source_acceptance": {
     "kind": "sciplot_validated_envelope_acceptance_lineage",
     "version": 1,
@@ -72,21 +72,6 @@
       {
         "kind": "sciplot_ready_rule_acceptance",
         "version": 3,
-        "generated_at": "2026-08-09T22:23:20.879008+00:00",
-        "summary_sha256": "e387034cad073503bdf3fc159b49f06f3539d2f04546f35b606a562c834df601",
-        "rule_ids": [
-          "gpc_sec_chromatogram"
-        ],
-        "limitations": [
-          "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
-          "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and real-data breadth rather than journal compliance.",
-          "Final PDF/TIFF dimensions are machine-checked. Contact sheets are uncalibrated overview previews whose explicit manual or agent decision does not prove final-physical-size readability.",
-          "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. This rule matrix does not infer composition from independent figures, and SciPlot has no standalone composition UI."
-        ]
-      },
-      {
-        "kind": "sciplot_ready_rule_acceptance",
-        "version": 3,
         "generated_at": "2026-08-09T23:20:06.700339+00:00",
         "summary_sha256": "931fdb0bc2c0079a182d50e547f75c1b92985fa33a97ffb08f67155d87f93684",
         "rule_ids": [
@@ -106,6 +91,21 @@
         "summary_sha256": "7834fad8e27c274dd8bc9074b249a10922cf964bff8beaf00b99cf6cd95649b2",
         "rule_ids": [
           "ftir_spectrum"
+        ],
+        "limitations": [
+          "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
+          "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and real-data breadth rather than journal compliance.",
+          "Final PDF/TIFF dimensions are machine-checked. Contact sheets are uncalibrated overview previews whose explicit manual or agent decision does not prove final-physical-size readability.",
+          "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. This rule matrix does not infer composition from independent figures, and SciPlot has no standalone composition UI."
+        ]
+      },
+      {
+        "kind": "sciplot_ready_rule_acceptance",
+        "version": 3,
+        "generated_at": "2026-08-13T14:24:50.666467+00:00",
+        "summary_sha256": "3938c8ad9bcd4ae0e4e4621b468b1ec6435737edaeb9630e3d1e32af3afe300a",
+        "rule_ids": [
+          "gpc_sec_chromatogram"
         ],
         "limitations": [
           "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
@@ -349,10 +349,10 @@
     {
       "rule_id": "gpc_sec_chromatogram",
       "semantic_family": "gpc_sec_chromatogram",
-      "contract_sha256": "643ace54f2a7deeb423987230962b4d8333e0f5f5344364af4d9053bbb2b3b04",
-      "semantic_contract_sha256": "663d1dd9b133bc7fa4b34c6d89cde7178d72cddaaefcea7ce4181aa8c7a1a55c",
-      "accepted_manifest_sha256": "2b7065b379e71f12ac8b5039a2606fc114f0ae9a0584c8da0bcd53873f542f04",
-      "acceptance_generated_at": "2026-08-09T22:23:20.879008+00:00",
+      "contract_sha256": "f17459a35ccbb08acd954168c99c77856eb31a65c7ac0a1b9861606aacf9e60d",
+      "semantic_contract_sha256": "cd186347cfc85f3bae7a67a7dac7435cf8c4f04d5bb82c59959afda07188f104",
+      "accepted_manifest_sha256": "ce86a00d4298fb8856a2f834010222cbb9fa07423c65f1c766f5022c6413cb55",
+      "acceptance_generated_at": "2026-08-13T14:24:50.666467+00:00",
       "evidence_tier": "user_authorized_real_instrument_export",
       "evidence_strength": "registered_fixture_source_and_units",
       "real_data_evidence": true,

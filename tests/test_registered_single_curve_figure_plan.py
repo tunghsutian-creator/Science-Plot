@@ -34,10 +34,13 @@ from sciplot_core.semantic_sources.scientific_source import (
 from sciplot_core.semantic_sources.scientific_transform import (
     ResolvedScientificTransform,
 )
+from sciplot_core.semantic_sources.table_scanning import _float as table_float
 from sciplot_core.semantic import prepare_semantic_source
 from sciplot_core.studio_core.figure_task_evidence import (
     generic_figure_queue_from_plan,
 )
+from sciplot_core.studio_render.frame_series import _series_from_frame_records
+from sciplot_core.studio_render.table_io import _read_source_frame_records
 from sciplot_core.source_tables import slugify_canonical_label, slugify_label
 
 
@@ -1347,6 +1350,28 @@ def test_gpc_plan_and_preparation_share_source_identity_and_one_parse(
     expected_counts = tuple(
         int(record["retained_point_count"]) for record in expected_records
     )
+    expected_points: list[tuple[tuple[float, float], ...]] = []
+    for source_path in expected_sources:
+        source_points: tuple[tuple[float, float], ...] | None = None
+        for _table_name, raw in gpc_sources._read_candidate_tables(source_path):
+            for header_index in range(raw.shape[0]):
+                headers = [str(value).strip() for value in raw.iloc[header_index]]
+                if not {"Mw (g/mol)", "LogM", "dW/dLogM"}.issubset(headers):
+                    continue
+                x_index = headers.index("Mw (g/mol)")
+                y_index = headers.index("dW/dLogM")
+                points: list[tuple[float, float]] = []
+                for row_index in range(header_index + 1, raw.shape[0]):
+                    x_value = table_float(raw.iat[row_index, x_index])
+                    y_value = table_float(raw.iat[row_index, y_index])
+                    if x_value is not None and y_value is not None:
+                        points.append((x_value, y_value))
+                source_points = tuple(points)
+                break
+            if source_points is not None:
+                break
+        assert source_points is not None
+        expected_points.append(source_points)
     read_calls: list[Path] = []
     real_read = gpc_sources._read_candidate_tables
 
@@ -1368,11 +1393,12 @@ def test_gpc_plan_and_preparation_share_source_identity_and_one_parse(
     assert transform.selected_sources == expected_sources
     assert tuple(series.sample for series in transform.series) == expected_samples
     assert tuple(len(series.points) for series in transform.series) == expected_counts
+    assert tuple(series.points for series in transform.series) == tuple(expected_points)
     assert all(
         (series.x_unit, series.y_unit)
         == (
-            provenance["output_units"]["elution_time"],
-            provenance["output_units"]["detector_response"],
+            provenance["output_units"]["molar_mass"],
+            provenance["output_units"]["differential_weight_fraction"],
         )
         for series in transform.series
     )
@@ -1382,12 +1408,18 @@ def test_gpc_plan_and_preparation_share_source_identity_and_one_parse(
     assert all(
         columns["source_table"].endswith(":Slice Table")
         and columns["x"]["header"] == record["selected_columns"][0]
-        and columns["response"]["header"] == record["selected_columns"][1]
-        and columns["response"]["unit_detection"]["method"]
-        == "detected_from_detector_metadata"
+        and columns["distribution"]["header"] == record["selected_columns"][2]
+        and columns["distribution"]["unit_detection"]["method"]
+        == "detected_dimensionless_distribution_header"
         for columns, record in zip(
             contract["source_columns"], expected_records, strict=True
         )
+    )
+    assert contract["axis_compatibility"]["x"]["registered_scale"] == "log"
+    assert contract["axis_compatibility"]["x"]["log_compatible"] is True
+    assert contract["normalizer"]["operation"] == "none"
+    assert contract["normalizer"]["source_distribution"] == (
+        "instrument_exported_dW_dLogM"
     )
     assert resolved.figure_plan is not None
     assert resolved.figure_plan.tasks[0].sample_order == expected_samples
@@ -1409,13 +1441,13 @@ def test_gpc_plan_and_preparation_share_source_identity_and_one_parse(
     assert step["parameters"]["series_order"] == list(expected_samples)
 
 
-def test_gpc_source_requires_an_explicit_detector_unit(tmp_path: Path) -> None:
+def test_gpc_source_requires_an_explicit_molar_mass_unit(tmp_path: Path) -> None:
     source = tmp_path / "gpc.csv"
     source.write_text(
-        "Elution time,Detector response\n"
-        "min,\n"
+        "Molar mass,Differential weight fraction\n"
+        ",\n"
         "Series A,Series A\n"
-        "1,2\n",
+        "10000,0.2\n",
         encoding="utf-8",
     )
     rule = get_rule("gpc_sec_chromatogram")
@@ -1429,4 +1461,44 @@ def test_gpc_source_requires_an_explicit_detector_unit(tmp_path: Path) -> None:
         )
 
     assert error.value.reason_code == "gpc_sec_chromatogram_transform_invalid"
-    assert "GPC y unit must be explicit" in str(error.value)
+    assert "GPC x unit must be explicit" in str(error.value)
+
+
+def test_gpc_materialized_table_preserves_numeric_sample_labels_and_log_axis(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "gpc_distribution.csv"
+    with source.open("w", newline="", encoding="utf-8") as handle:
+        csv.writer(handle).writerows(
+            [
+                [
+                    "Molar mass",
+                    "Differential weight fraction",
+                    "Molar mass",
+                    "Differential weight fraction",
+                ],
+                ["g/mol", "", "g/mol", ""],
+                ["8", "8", "9", "9"],
+                [100_000.0, 0.2, 200_000.0, 0.1],
+                [50_000.0, 0.5, 100_000.0, 0.4],
+            ]
+        )
+
+    frames = _read_source_frame_records(source)
+    series, _axis_info = _series_from_frame_records(
+        {
+            "rule_id": "gpc_sec_chromatogram",
+            "template": "curve",
+            "x_metric": "molar_mass",
+            "y_metric": "differential_weight_fraction",
+            "render_options": {"xscale": "log"},
+        },
+        frames=frames,
+    )
+
+    assert tuple(item.label for item in series) == ("8", "9")
+    assert tuple(item.x_values for item in series) == (
+        (100_000.0, 50_000.0),
+        (200_000.0, 100_000.0),
+    )
+    assert tuple(item.y_values for item in series) == ((0.2, 0.5), (0.1, 0.4))

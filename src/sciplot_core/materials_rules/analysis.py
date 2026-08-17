@@ -260,11 +260,22 @@ def compute_analysis_metrics(
     elif rule_id == "gpc_sec_chromatogram":
         rows = _paired_extreme_position_metrics(
             canonical_source,
-            metric_name=_analysis_metric_name(semantic, "peak_elution_time_min"),
+            metric_name=_analysis_metric_name(
+                semantic,
+                "peak_molar_mass_g_mol",
+            ),
             x_unit=semantic["axis_plan"]["x"]["canonical_unit"],
             extreme="maximum",
-            x_tokens=("elution time", "retention time"),
-            y_tokens=("detector response", "response", "dri", "ri", "rayleigh"),
+            x_tokens=("molar mass", "molecular weight", "mw"),
+            y_tokens=(
+                "differential weight fraction",
+                "dwdlogm",
+                "weight distribution",
+            ),
+            reason=(
+                "Molar mass at the maximum finite instrument-exported dW/dlog M "
+                "value; no molecular-weight calibration is inferred from RI."
+            ),
         )
     else:
         rows = [

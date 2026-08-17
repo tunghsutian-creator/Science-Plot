@@ -61,13 +61,12 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
     pd.DataFrame(
         [
             ["SampleName", "8"],
-            ["DetectorType", "DetectorUnits"],
-            ["RI", "mV"],
-            ["RT (mins)", "RI"],
-            [1.0, 10.0],
-            [1.5, 25.0],
-            [2.0, 12.0],
-            [2.5, 4.0],
+            ["Number of Data Points", 4],
+            ["Mw (g/mol)", "LogM", "dW/dLogM", "Outside Calib"],
+            [1_000_000.0, 6.0, 0.0, "Yes"],
+            [100_000.0, 5.0, 0.4, "No"],
+            [10_000.0, 4.0, 0.6, "No"],
+            [1_000.0, 3.0, 0.0, "Yes"],
         ]
     ).to_excel(gpc_source, sheet_name="Slice Table", header=False, index=False)
     gpc_semantic = classify_source(gpc_dir)
@@ -452,16 +451,16 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
             {
                 "axes": {
                     "x": {
-                        "label": "Elution time (min)",
-                        "scale": "linear",
-                        "min": 1.0,
-                        "max": 3.0,
+                        "label": "Molar mass (g mol⁻¹)",
+                        "scale": "log",
+                        "min": 1_000.0,
+                        "max": 1_000_000.0,
                     },
                     "y": {
-                        "label": "Detector response (mV)",
+                        "label": "dW/dlog M",
                         "scale": "linear",
                         "min": 0.0,
-                        "max": 30.0,
+                        "max": 0.75,
                     },
                 }
             }
@@ -572,6 +571,7 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
     first_swelling_selection = swelling_selections[0] if swelling_selections else {}
     first_swelling_block = first_swelling_selection.get("source_block") or {}
     first_time_conversion = first_swelling_selection.get("time_conversion") or {}
+    gpc_selection = (gpc_parameters.get("source_selections") or [{}])[0]
     passed = (
         saxs_semantic.get("rule_id") == "saxs_profile"
         and saxs_parameters.get("series_order") == expected_saxs_order
@@ -582,8 +582,15 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         and gpc_semantic.get("rule_id") == "gpc_sec_chromatogram"
         and gpc_parameters.get("series_order") == ["8"]
         and gpc_parameters.get("source_point_counts") == [4]
-        and (gpc_parameters.get("source_selections") or [{}])[0].get("detector_unit")
-        == "mV"
+        and gpc_selection.get("source_x_header") == "Mw (g/mol)"
+        and gpc_selection.get("source_y_header") == "dW/dLogM"
+        and gpc_selection.get("source_x_unit_detection_value") == "g/mol"
+        and gpc_selection.get("source_y_unit_detection")
+        == "detected_dimensionless_distribution_header"
+        and math.isclose(
+            float(gpc_selection.get("source_distribution_integral_dlogm") or 0.0),
+            1.0,
+        )
         and impact_semantic.get("rule_id") == "impact_metric"
         and impact_parameters.get("sample_order") == expected_impact_order
         and impact_parameters.get("replicate_count_total") == 12
@@ -638,16 +645,32 @@ def _semantic_parser_probe(run_root: Path) -> dict[str, Any]:
         and (manual_order_rejection or {}).get("reason_code") == "unknown_series_order"
         and (
             (gpc_effective_semantic.get("axis_plan") or {})
-            .get("y", {})
+            .get("x", {})
             .get("canonical_unit")
-            == "mV"
+            == "g/mol"
         )
         and (
             (gpc_effective_semantic.get("registered_axis_plan") or {})
-            .get("y", {})
+            .get("x", {})
             .get("canonical_unit")
-            == "mV"
+            == "g/mol"
         )
+        and (gpc_effective_semantic.get("axis_plan") or {}).get("x", {}).get(
+            "scale"
+        )
+        == "log"
+        and (gpc_effective_semantic.get("registered_axis_plan") or {}).get(
+            "x", {}
+        ).get("scale")
+        == "log"
+        and (gpc_effective_semantic.get("axis_plan") or {}).get("y", {}).get(
+            "canonical_unit"
+        )
+        == ""
+        and (gpc_effective_semantic.get("registered_axis_plan") or {}).get(
+            "y", {}
+        ).get("canonical_unit")
+        == ""
         and (
             (ftir_exact_semantic.get("axis_plan") or {})
             .get("y", {})

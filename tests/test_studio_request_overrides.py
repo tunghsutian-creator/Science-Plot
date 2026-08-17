@@ -113,3 +113,22 @@ def test_registered_single_curve_override_leaves_axis_labels_source_bound(
     options = request["render_options"]
     assert "x_label_override" not in options
     assert "y_label_override" not in options
+
+
+def test_registered_single_curve_override_preserves_registered_log_scale(
+    tmp_path: Path,
+) -> None:
+    project_dir, request_path = _pending_project(tmp_path)
+
+    _apply_studio_request_overrides(
+        project_dir,
+        request_path=request_path,
+        rule_id="gpc_sec_chromatogram",
+        template="curve",
+    )
+
+    request = json.loads(request_path.read_text(encoding="utf-8"))
+    options = request["render_options"]
+    assert options["xscale"] == "log"
+    assert "x_label_override" not in options
+    assert "y_label_override" not in options

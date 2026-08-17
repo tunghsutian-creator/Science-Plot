@@ -610,9 +610,11 @@ SAXS
 `temperature → heat_flow`，同样不从数值推断热转变身份。semantic preparation 只物化同一个
 snapshot，Workflow 与 Studio 再复用通用单任务、Veusz、QA 和交付生命周期。该共享 owner
 不拥有固定样品名、固定点数、固定首末值、峰位、锚点、onset 时间或归一化常量。GPC/SEC
-也使用同一个通用单任务下游，但只增加薄的 Agilent RT/RI 源适配：样品名保持工作簿原文，
-洗脱时间和 RI detector response 的 `min`/`mV` 单位来自当前工作簿，Slice Table 行序和值原样
-保留；程序不会添加 `Sample` 前缀、改成 `a.u.`、归一化，或从 RI 曲线推断 Mn、Mw、Đ。
+也使用同一个通用单任务下游，但只增加薄的 Agilent 校准分布源适配：样品名保持工作簿原文，
+横轴直接读取 Slice Table 的 `Mw (g/mol)`，纵轴直接读取 `dW/dLogM`，并用同表 `LogM`
+逐点核对分子量坐标；源行序和值原样保留，横轴按登记合同作对数显示。程序不会添加
+`Sample` 前缀、改成 `a.u.`、重新归一化，或从 RT/RI 原始色谱自行推断分子量、Mn、Mw、Đ；
+缺少显式校准分布列时会停止。
 FTIR 也进入同一个单任务下游，但使用薄的 FTIR source adapter：每个实际文件只读一次，
 headerless 两列数据保留全部有限点、零值、源坐标和源行序，响应身份保持中性的
 `Spectral response`；只有源表头明确声明时才使用 Transmittance 或 Absorbance，单位缺失不会

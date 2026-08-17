@@ -127,6 +127,12 @@ def _apply_studio_request_overrides(
             current_options = dict(
                 (selected_rule_payload or {}).get("render_options") or {}
             )
+            if selected_rule.x_axis.scale != "linear":
+                current_options.setdefault("xscale", selected_rule.x_axis.scale)
+            if selected_rule.y_axis.scale != "linear":
+                current_options.setdefault("yscale", selected_rule.y_axis.scale)
+            if selected_rule.x_axis.reverse:
+                current_options.setdefault("reverse_x", True)
             if selected_rule.figure_plan_adapter != "registered_single_curve":
                 current_options.setdefault(
                     "x_label_override", selected_rule.x_axis.display_label

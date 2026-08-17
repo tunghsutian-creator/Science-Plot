@@ -1,4 +1,4 @@
-"""Build the source-bound transform contract for GPC/SEC RI traces."""
+"""Build the source-bound contract for calibrated GPC/SEC distributions."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def build_gpc_transform_contract(
         )
         for role, source_unit, canonical_unit in (
             ("x", source_x_unit, rule.x_axis.canonical_unit),
-            ("response", source_y_unit, rule.y_axis.canonical_unit),
+            ("distribution", source_y_unit, rule.y_axis.canonical_unit),
         ):
             conversions.append(
                 {
@@ -65,6 +65,12 @@ def build_gpc_transform_contract(
                 "excluded_by_reason": exclusions,
                 "first_point": list(series.points[0]),
                 "last_point": list(series.points[-1]),
+                "source_distribution_integral_dlogm": diagnostics.get(
+                    "source_distribution_integral_dlogm"
+                ),
+                "source_outside_calibration_counts": diagnostics.get(
+                    "source_outside_calibration_counts"
+                ),
             }
         )
     x_values = [x for series in series_list for x, _y in series.points]
@@ -77,11 +83,13 @@ def build_gpc_transform_contract(
         normalizer={
             "scope": "none",
             "operation": "none",
+            "source_distribution": "instrument_exported_dW_dLogM",
             "output_metric": y_metric,
             "output_unit": rule.y_axis.canonical_unit,
         },
         x_coordinate_policy={
             "operation": "preserve_source_coordinate_and_order",
+            "source_coordinate": "instrument_exported_calibrated_molar_mass",
             "metric": x_metric,
             "unit": rule.x_axis.canonical_unit,
             "source_row_order_preserved": True,
@@ -96,8 +104,10 @@ def build_gpc_transform_contract(
         output={
             "x_metric": x_metric,
             "x_unit": rule.x_axis.canonical_unit,
+            "x_label": rule.x_axis.canonical_label,
             "y_metric": y_metric,
             "y_unit": rule.y_axis.canonical_unit,
+            "y_label": rule.y_axis.canonical_label,
             "series_order": [series.sample for series in series_list],
             "explicit_series_order_applied": explicit_series_order_applied,
             "series": output_series,
@@ -119,7 +129,7 @@ def _source_columns(
             "source_collection_point_count"
         ),
         "x": _column("coordinate", "x", diagnostics),
-        "response": _column("response", "y", diagnostics),
+        "distribution": _column("distribution", "y", diagnostics),
     }
 
 

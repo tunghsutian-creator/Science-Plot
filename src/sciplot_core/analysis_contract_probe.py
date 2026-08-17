@@ -87,14 +87,14 @@ def _optional_real_fixture_checks(
         gpc_rows = _row_map(
             _paired_extreme_position_metrics(
                 gpc_processed,
-                metric_name="peak_elution_time_min",
-                x_unit="min",
+                metric_name="peak_molar_mass_g_mol",
+                x_unit="g/mol",
                 extreme="maximum",
-                y_tokens=("detector response",),
+                y_tokens=("differential weight fraction", "dwdlogm"),
             )
         )
         expected_gpc = {
-            f"peak_elution_time_min[{series.sample}]": max(
+            f"peak_molar_mass_g_mol[{series.sample}]": max(
                 series.points,
                 key=lambda point: point[1],
             )[0]
@@ -102,7 +102,7 @@ def _optional_real_fixture_checks(
         }
         checks.append(
             _check(
-                "local_gpc_peak_times",
+                "local_gpc_peak_molar_masses",
                 all(
                     _value_matches(gpc_rows, metric, value)
                     for metric, value in expected_gpc.items()
@@ -269,35 +269,35 @@ def run_analysis_contract_probe(
     _write_paired_table(
         gpc_path,
         headers=[
-            "Elution time",
-            "Detector response",
-            "Elution time",
-            "Detector response",
+            "Molar mass",
+            "Differential weight fraction",
+            "Molar mass",
+            "Differential weight fraction",
         ],
-        units=["min", "mV", "min", "mV"],
+        units=["g/mol", "", "g/mol", ""],
         samples=["Sample 8", "Sample 8", "Sample 9", "Sample 9"],
         rows=[
-            [10.0, 0.0, 20.0, 0.0],
-            [11.0, 5.0, 21.0, 1.0],
-            [12.0, 1.0, 22.0, 9.0],
+            [10_000.0, 0.0, 20_000.0, 0.0],
+            [11_000.0, 5.0, 21_000.0, 1.0],
+            [12_000.0, 1.0, 22_000.0, 9.0],
         ],
     )
     gpc_rows = _row_map(
         _paired_extreme_position_metrics(
             gpc_path,
-            metric_name="peak_elution_time_min",
-            x_unit="min",
+            metric_name="peak_molar_mass_g_mol",
+            x_unit="g/mol",
             extreme="maximum",
-            y_tokens=("detector response",),
+            y_tokens=("differential weight fraction", "dwdlogm"),
         )
     )
     gpc_expected = {
-        "peak_elution_time_min[Sample 8]": 11.0,
-        "peak_elution_time_min[Sample 9]": 22.0,
+        "peak_molar_mass_g_mol[Sample 8]": 11_000.0,
+        "peak_molar_mass_g_mol[Sample 9]": 22_000.0,
     }
     checks.append(
         _check(
-            "gpc_response_strict_pairs",
+            "gpc_distribution_strict_pairs",
             set(gpc_rows) == set(gpc_expected)
             and all(
                 _value_matches(gpc_rows, metric, value)

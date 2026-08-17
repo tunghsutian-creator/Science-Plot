@@ -12,7 +12,11 @@ from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.foundation.path_names import reserve_unique_directory, slug
 from sciplot_core.figure_plan import sync_figure_plan_projection
-from sciplot_core.materials_rules import get_rule, resolve_rule_template
+from sciplot_core.materials_rules import (
+    get_rule,
+    resolve_rule_template,
+    semantic_payload_from_rule,
+)
 from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY
 from sciplot_core.publication import (
     build_publication_intent,
@@ -134,15 +138,22 @@ def _create_intake_project_in_reserved_directory(
     rule_id = experiment.get("rule_id")
     recognition_payload = dict(recognition) if isinstance(recognition, dict) else {}
     if isinstance(rule_id, str) and rule_id.strip():
-        rule_payload = get_rule(rule_id).to_payload()
+        selected_rule = get_rule(rule_id)
+        rule_payload = selected_rule.to_payload()
+        semantic_rule_payload = semantic_payload_from_rule(
+            selected_rule,
+            confidence=100.0,
+        )
         recognition_payload = {
             **recognition_payload,
             "semantic_family": rule_payload.get("semantic_family"),
             "rule_id": rule_payload.get("rule_id"),
             "fixture_status": rule_payload.get("fixture_status"),
             "template": rule_payload.get("template"),
-            "render_options": dict(rule_payload.get("render_options") or {}),
-            "axis_plan": dict(rule_payload.get("axis_plan") or {}),
+            "render_options": dict(
+                semantic_rule_payload.get("render_options") or {}
+            ),
+            "axis_plan": dict(semantic_rule_payload.get("axis_plan") or {}),
         }
     recognition_payload.setdefault("semantic_family", experiment_type_id)
     recognition_payload.setdefault("rule_id", rule_id)

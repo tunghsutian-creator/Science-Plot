@@ -159,7 +159,7 @@ def _apply_readability_render_defaults(
                 updated.update(
                     {"x_min": x_min, "x_max": x_max, "x_ticks": list(x_ticks)}
                 )
-                autofixes.append("gpc_elution_axis_compacted")
+                autofixes.append("gpc_molar_mass_axis_compacted")
         if (
             _axis_scale(updated, "y") == "linear"
             and not {"y_min", "y_max", "y_ticks"} & explicit_options.keys()
@@ -172,10 +172,18 @@ def _apply_readability_render_defaults(
             )
             if compact_axis is not None:
                 y_min, y_max, y_ticks = compact_axis
+                if all(
+                    value >= 0.0
+                    for item in series
+                    for value in item.y_values
+                    if math.isfinite(value)
+                ):
+                    y_min = 0.0
+                    y_ticks = tuple(value for value in y_ticks if value >= 0.0)
                 updated.update(
                     {"y_min": y_min, "y_max": y_max, "y_ticks": list(y_ticks)}
                 )
-                autofixes.append("gpc_response_axis_compacted")
+                autofixes.append("gpc_distribution_axis_compacted")
     if is_removed_outside_legend_position(raw_legend_position):
         updated["legend_position"] = "auto"
         for key in (

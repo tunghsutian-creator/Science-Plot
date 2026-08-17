@@ -247,7 +247,8 @@ def _series_label_from_column(
     metadata_order: str | None = None,
 ) -> str:
     metadata = [
-        None if pd.isna(value) else str(value).strip() for value in values.tolist()[:2]
+        None if pd.isna(value) else _metadata_label(value)
+        for value in values.tolist()[:2]
     ]
     if metadata_order == "unit_then_sample" and len(metadata) >= 2 and metadata[1]:
         return metadata[1]
@@ -294,6 +295,16 @@ def _series_label_from_column(
     return fallback
 
 
+def _metadata_label(value: Any) -> str:
+    """Preserve integer-valued numeric sample IDs without a pandas ``.0`` suffix."""
+
+    if isinstance(value, int | float):
+        numeric = float(value)
+        if numeric.is_integer():
+            return str(int(numeric))
+    return str(value).strip()
+
+
 def _is_numeric_text(value: str) -> bool:
     try:
         float(value)
@@ -318,6 +329,8 @@ def _is_unit_label(label: str) -> bool:
         "degree",
         "degc",
         "hz",
+        "g/mol",
+        "g mol⁻¹",
         "kj/m2",
         "kj m⁻²",
         "min",
