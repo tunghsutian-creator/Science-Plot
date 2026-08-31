@@ -11,9 +11,9 @@ from sciplot_core.figure_plan import (
     FigurePlanResolutionError,
     resolve_current_figure_plan,
 )
+from sciplot_core.figure_plan.constants import REQUIRED_FIGURE_PLAN_RULE_IDS
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.mechanical_figure_contract import MECHANICAL_RULE_IDS
 from sciplot_core.operation_modes import normal_mode_payload
 from sciplot_core.presentation_identity import (
     project_selected_presentation_to_request,
@@ -31,13 +31,15 @@ from sciplot_core.studio_core.figure_requests import (
 from sciplot_core.studio_core.figure_set_prepare import (
     _prepare_studio_figure_set,
 )
-from sciplot_core.studio_core.figure_set_state import _read_studio_figure_set
+from sciplot_core.studio_core.figure_set_state import (
+    _figure_set_primary_generated_hash,
+    _read_studio_figure_set,
+)
 from sciplot_core.studio_core.figure_set_storage import (
     _commit_studio_figure_set_transaction,
 )
 from sciplot_core.studio_core.figure_task_evidence import (
     generic_figure_queue_from_plan,
-    validate_figure_registry_against_plan,
 )
 from sciplot_core.studio_core.json_files import _read_json
 from sciplot_core.studio_core.launchers import (
@@ -82,33 +84,52 @@ def reuse_existing_studio_document(
         or request_changed
     )
     try:
-        figure_plan = (
-            resolve_current_figure_plan(
+        if request_rule_id or request.get("resolved_figure_plan") is not None:
+            study_model_value = request.get("study_model")
+            study_model = (
+                study_model_value if isinstance(study_model_value, dict) else {}
+            )
+            figure_plan = resolve_current_figure_plan(
                 persisted=request.get("resolved_figure_plan"),
                 rule_id=request_rule_id,
                 template=presentation_identity.template,
-                study_model=(
-                    request.get("study_model")
-                    if isinstance(request.get("study_model"), dict)
-                    else {}
-                ),
+                study_model=study_model,
                 input_path=_resolve_request_input(
                     request,
                     base_dir=request_path.parent,
                 ),
                 request=request,
             )
-            if request_rule_id or request.get("resolved_figure_plan") is not None
-            else None
-        )
+        else:
+            figure_plan = None
     except FigurePlanResolutionError as exc:
         raise StudioPreparationBlocked(exc.reason_code, str(exc)) from exc
+    required_figure_set = (
+        figure_plan is not None and figure_plan.rule_id in REQUIRED_FIGURE_PLAN_RULE_IDS
+    )
+    figure_set_snapshot = (
+        _read_studio_figure_set(
+            project_dir,
+            expected_plan=figure_plan,
+            require_ready_artifacts=True,
+        )
+        if required_figure_set
+        else None
+    )
     validate_prepared_studio_presentation(
         project_dir=project_dir,
         document_path=document_path,
         identity=presentation_identity,
         figure_plan=figure_plan,
+        figure_set=figure_set_snapshot,
+        figure_set_loaded=required_figure_set,
     )
+    if required_figure_set and figure_set_snapshot is None:
+        raise StudioPreparationBlocked(
+            "studio_figure_set_mismatch",
+            "Exact-current reuse requires one complete task-aware v2 Studio "
+            "figure-set registry matching the current FigurePlan.",
+        )
     if (
         figure_plan is not None
         and request.get("resolved_figure_plan") != figure_plan.to_payload()
@@ -132,6 +153,7 @@ def reuse_existing_studio_document(
         if request_changed
         else None
     )
+    figure_set: dict[str, Any] | None
     try:
         if staged_request is not None:
             staged_request.write_text(
@@ -139,21 +161,13 @@ def reuse_existing_studio_document(
                 encoding="utf-8",
             )
             _read_json(staged_request)
-        if figure_plan is not None and figure_plan.rule_id in MECHANICAL_RULE_IDS:
-            figure_set = _read_studio_figure_set(project_dir)
-            if figure_set is None:
+        if required_figure_set:
+            if figure_set_snapshot is None:
                 raise StudioPreparationBlocked(
-                    "mechanical_figure_set_mismatch",
-                    "Mechanical exact-current reuse requires its complete "
-                    "registered figure set.",
+                    "studio_figure_set_mismatch",
+                    "Required Studio figure-set validation did not close.",
                 )
-            try:
-                validate_figure_registry_against_plan(figure_set, figure_plan)
-            except (TypeError, ValueError) as exc:
-                raise StudioPreparationBlocked(
-                    "mechanical_figure_set_mismatch",
-                    str(exc),
-                ) from exc
+            figure_set = figure_set_snapshot
             replacements: list[dict[str, Any]] = []
             if staged_request is not None:
                 staged_hash = existing_file_sha256(staged_request)
@@ -190,6 +204,11 @@ def reuse_existing_studio_document(
     launcher = _write_studio_launcher(project_dir)
     veusz_launcher = _write_veusz_launcher(project_dir, document_path)
     export_edited_launcher = _write_export_edited_launcher(project_dir)
+    registered_generated_hash = (
+        _figure_set_primary_generated_hash(figure_set)
+        if required_figure_set
+        else _registered_generated_hash(project_dir)
+    )
     studio_block = _studio_block(
         document_path=document_path,
         spec_path=_veusz_spec_path(document_path),
@@ -198,7 +217,7 @@ def reuse_existing_studio_document(
         export_edited_launcher=export_edited_launcher,
         request_path=request_path,
         series_count=_count_veusz_series(document_path),
-        generated_hash=_registered_generated_hash(project_dir),
+        generated_hash=registered_generated_hash,
         figure_set=figure_set,
         rule_contract_binding=(
             rule_readiness.prepared_binding.to_payload()

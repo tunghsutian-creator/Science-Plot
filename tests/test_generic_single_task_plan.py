@@ -71,7 +71,7 @@ def test_generic_selected_plan_uses_shared_bundle_with_prepared_marker(
         template="curve",
         output_dir=tmp_path / "out",
         options={},
-        export_formats=["pdf"],
+        export_formats=["tiff", "pdf"],
         request={
             "rule_id": plan.rule_id,
             "resolved_figure_plan": plan.to_payload(),
@@ -84,7 +84,36 @@ def test_generic_selected_plan_uses_shared_bundle_with_prepared_marker(
     assert calls[0]["input_path"] == prepared
     assert calls[0]["plan"] == plan
     assert calls[0]["task"] == plan.tasks[0]
+    assert calls[0]["export_formats"] == ("tiff_300", "pdf")
     assert calls[0]["terminal_source_prepared"] is True
+
+
+def test_generic_plan_identity_fails_before_export_format_validation(
+    tmp_path: Path,
+) -> None:
+    plan = _generic_plan()
+    foreign_plan = ResolvedFigurePlan.planned(
+        rule_id="dsc_curve",
+        selection_policy=plan.selection_policy,
+        primary_figure_id=plan.primary_figure_id,
+        tasks=plan.tasks,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="workflow_generic_single_task_plan_mismatch",
+    ):
+        auto_split._render_with_auto_split(
+            tmp_path / "prepared.csv",
+            template="curve",
+            output_dir=tmp_path / "out",
+            options={},
+            export_formats=["gif"],
+            request={"rule_id": plan.rule_id},
+            _resolved_figure_plan=foreign_plan,
+        )
+
+    assert not (tmp_path / "out").exists()
 
 
 def test_shared_single_task_bundle_forwards_prepared_marker(
@@ -168,9 +197,7 @@ def test_dsc_rule_uses_the_shared_generic_studio_queue() -> None:
         resolved.figure_plan,
         render_adapter=rule.render_adapter,
     )
-    assert [item["id"] for item in queue] == [
-        resolved.figure_plan.primary_figure_id
-    ]
+    assert [item["id"] for item in queue] == [resolved.figure_plan.primary_figure_id]
     assert queue[0]["resolved_figure_task"] == (
         resolved.figure_plan.tasks[0].to_payload()
     )
@@ -196,8 +223,7 @@ def test_stress_plan_uses_shared_bundle_and_generic_studio_queue(
     assert samples
     assert rule.x_axis.canonical_unit == "s"
     assert all(
-        series.x_unit == rule.x_axis.canonical_unit
-        for series in transform.series
+        series.x_unit == rule.x_axis.canonical_unit for series in transform.series
     )
     plan = resolved.figure_plan
     assert plan is not None

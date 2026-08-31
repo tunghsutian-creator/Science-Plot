@@ -6,9 +6,11 @@ from typing import Any
 
 import pytest
 
+import sciplot_core.workflow as workflow_facade
 import sciplot_core.workflow.auto_split as auto_split
 import sciplot_core.workflow.impact_bundle as impact_bundle
 from sciplot_core.materials_rules import get_rule
+from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY
 
 
 _BUNDLE_ATTRIBUTES = {
@@ -163,6 +165,102 @@ def test_render_dispatch_calls_only_the_resolved_family(
     assert not (tmp_path / "out").exists()
 
 
+@pytest.mark.parametrize(
+    ("rule_id", "requested", "expected"),
+    [
+        ("tga_curve", None, DEFAULT_EXPORT_FORMATS_POLICY),
+        ("tga_curve", [], DEFAULT_EXPORT_FORMATS_POLICY),
+        ("tga_curve", "pdf", DEFAULT_EXPORT_FORMATS_POLICY),
+        ("performance_comparison", None, DEFAULT_EXPORT_FORMATS_POLICY),
+        ("performance_comparison", [], DEFAULT_EXPORT_FORMATS_POLICY),
+        ("performance_comparison", "pdf", DEFAULT_EXPORT_FORMATS_POLICY),
+        ("tga_curve", ["tiff", "pdf"], ("tiff_300", "pdf")),
+        (
+            "performance_comparison",
+            ["png", "tif_300"],
+            ("png_300", "tiff_300"),
+        ),
+    ],
+)
+def test_dispatch_normalizes_export_formats_once_before_selected_renderer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    rule_id: str,
+    requested: object,
+    expected: tuple[str, ...],
+) -> None:
+    calls: list[tuple[str, tuple[str, ...]]] = []
+
+    def render_performance(
+        *_args: object,
+        export_formats: tuple[str, ...],
+        **_kwargs: object,
+    ) -> dict[str, Any]:
+        calls.append(("performance", export_formats))
+        return {"family": "performance"}
+
+    def render_generic(
+        *_args: object,
+        export_formats: tuple[str, ...],
+        **_kwargs: object,
+    ) -> dict[str, Any]:
+        calls.append(("generic", export_formats))
+        return {"family": "generic"}
+
+    monkeypatch.setattr(
+        auto_split,
+        "_render_veusz_performance_bundle",
+        render_performance,
+    )
+    monkeypatch.setattr(auto_split, "render_to_dir", render_generic)
+
+    result = auto_split._render_with_auto_split(
+        tmp_path / "prepared.csv",
+        template="curve",
+        output_dir=tmp_path / "out",
+        options={},
+        export_formats=requested,
+        request={"rule_id": rule_id},
+    )
+
+    expected_family = (
+        "performance" if rule_id == "performance_comparison" else "generic"
+    )
+    assert result == {"family": expected_family}
+    assert calls == [(expected_family, expected)]
+
+
+@pytest.mark.parametrize(
+    ("requested", "message"),
+    [
+        (["gif"], "Unsupported export format"),
+        (["tiff", "tiff_300"], "same output artifact"),
+    ],
+)
+@pytest.mark.parametrize("rule_id", ["tga_curve", "performance_comparison"])
+def test_invalid_export_formats_fail_before_adapter_or_renderer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    rule_id: str,
+    requested: list[str],
+    message: str,
+) -> None:
+    calls = _install_render_spies(monkeypatch)
+
+    with pytest.raises(ValueError, match=message):
+        auto_split._render_with_auto_split(
+            tmp_path / "prepared.csv",
+            template="curve",
+            output_dir=tmp_path / "out",
+            options={},
+            export_formats=requested,
+            request={"rule_id": rule_id},
+        )
+
+    assert calls == []
+    assert not (tmp_path / "out").exists()
+
+
 def test_selected_bundle_can_fall_back_only_to_generic_renderer(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -285,7 +383,7 @@ def test_impact_bundle_checks_rule_before_resolving_impact_template(
             tmp_path / "prepared.csv",
             output_dir=tmp_path / "out",
             options={},
-            export_formats=["pdf"],
+            export_formats=["gif"],
             request={
                 "rule_id": "tensile_curve",
                 "template": "curve",
@@ -293,6 +391,25 @@ def test_impact_bundle_checks_rule_before_resolving_impact_template(
         )
         is None
     )
+    assert not (tmp_path / "out").exists()
+
+
+def test_impact_facade_checks_persisted_plan_before_export_formats(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="ResolvedFigurePlan payload"):
+        workflow_facade._render_veusz_impact_bundle(
+            tmp_path / "prepared.csv",
+            output_dir=tmp_path / "out",
+            options={},
+            export_formats=["gif"],
+            request={
+                "rule_id": "impact_metric",
+                "template": "box_strip",
+                "resolved_figure_plan": {},
+            },
+        )
+
     assert not (tmp_path / "out").exists()
 
 

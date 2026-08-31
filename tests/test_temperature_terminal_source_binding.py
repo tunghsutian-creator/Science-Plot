@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 import sciplot_core.terminal_source_binding as terminal_source_binding_module
+import sciplot_core.terminal_source_binding_wire as terminal_source_binding_wire_module
 from sciplot_core.render import panel_render, render_to_dir
 from sciplot_core.studio_core import export_execution, prepare_generated
 from sciplot_core.terminal_request import authoritative_terminal_render_request
@@ -135,6 +136,17 @@ def _assert_no_published_artifacts(output_dir: Path) -> None:
     )
 
 
+def _forbid_materialized_binding_construction(
+    *_args: object,
+    **_kwargs: object,
+) -> None:
+    raise AssertionError("invalid wire data reached the materialized dataclass")
+
+
+class _VersionInt(int):
+    pass
+
+
 @pytest.mark.parametrize(
     ("reserved_key", "reserved_value"),
     [
@@ -175,6 +187,142 @@ def test_sealed_binding_payload_rejects_noncanonical_shape(
 
     with pytest.raises(TerminalSourceBindingError) as exc_info:
         sealed_terminal_source_binding_from_payload(payload)
+
+    assert exc_info.value.reason_code == "terminal_source_binding_contract_mismatch"
+
+
+@pytest.mark.parametrize(
+    ("field", "malformed_value"),
+    [
+        ("task_key", 1),
+        ("rule_id", True),
+        ("template", None),
+        ("x_metric", ["temperature"]),
+        ("y_metric", {"metric": "loss_factor"}),
+    ],
+)
+def test_wire_rejects_malformed_scalar_before_materialized_construction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    malformed_value: object,
+) -> None:
+    sealed, _request_path, _request = _sealed_binding_fixture(tmp_path)
+    payload = sealed.to_payload()
+    payload[field] = malformed_value
+    monkeypatch.setattr(
+        terminal_source_binding_wire_module,
+        "MaterializedTerminalSourceBinding",
+        _forbid_materialized_binding_construction,
+    )
+
+    with pytest.raises(TerminalSourceBindingError) as exc_info:
+        sealed_terminal_source_binding_from_payload(payload)
+
+    assert exc_info.value.reason_code == "terminal_source_binding_contract_mismatch"
+
+
+def test_wire_version_requires_a_builtin_integer_before_construction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sealed, _request_path, _request = _sealed_binding_fixture(tmp_path)
+    payload = sealed.to_payload()
+    payload["version"] = _VersionInt(1)
+    monkeypatch.setattr(
+        terminal_source_binding_wire_module,
+        "MaterializedTerminalSourceBinding",
+        _forbid_materialized_binding_construction,
+    )
+
+    with pytest.raises(TerminalSourceBindingError) as exc_info:
+        sealed_terminal_source_binding_from_payload(payload)
+
+    assert exc_info.value.reason_code == "terminal_source_binding_contract_mismatch"
+    assert str(exc_info.value) == (
+        "Internal terminal-source binding kind or version is unsupported."
+    )
+
+
+@pytest.mark.parametrize("malformed_sample", [1, None, " "])
+def test_wire_rejects_malformed_point_count_sample_before_construction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    malformed_sample: object,
+) -> None:
+    sealed, _request_path, _request = _sealed_binding_fixture(tmp_path)
+    payload = sealed.to_payload()
+    payload["point_counts"][0]["sample"] = malformed_sample
+    monkeypatch.setattr(
+        terminal_source_binding_wire_module,
+        "MaterializedTerminalSourceBinding",
+        _forbid_materialized_binding_construction,
+    )
+
+    with pytest.raises(TerminalSourceBindingError) as exc_info:
+        sealed_terminal_source_binding_from_payload(payload)
+
+    assert exc_info.value.reason_code == "terminal_source_binding_contract_mismatch"
+    assert str(exc_info.value) == (
+        "Terminal point_counts must follow the complete sample_order."
+    )
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra"])
+def test_wire_rejects_incomplete_point_counts_before_materialized_construction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    sealed, _request_path, _request = _sealed_binding_fixture(tmp_path)
+    payload = sealed.to_payload()
+    if mutation == "missing":
+        payload["point_counts"].pop()
+    else:
+        payload["point_counts"].append({"sample": "unexpected", "count": 3})
+    monkeypatch.setattr(
+        terminal_source_binding_wire_module,
+        "MaterializedTerminalSourceBinding",
+        _forbid_materialized_binding_construction,
+    )
+
+    with pytest.raises(TerminalSourceBindingError) as exc_info:
+        sealed_terminal_source_binding_from_payload(payload)
+
+    assert exc_info.value.reason_code == "terminal_source_binding_contract_mismatch"
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra"])
+def test_create_rejects_incomplete_point_counts_before_dataclass_construction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    binding, _source, _expected = _binding_fixture(tmp_path)
+    point_counts = {sample: 3 for sample in EXPECTED_SAMPLE_ORDER}
+    if mutation == "missing":
+        point_counts.pop(EXPECTED_SAMPLE_ORDER[-1])
+    else:
+        point_counts["unexpected"] = 3
+    monkeypatch.setattr(
+        MaterializedTerminalSourceBinding,
+        "__init__",
+        _forbid_materialized_binding_construction,
+    )
+
+    with pytest.raises(TerminalSourceBindingError) as exc_info:
+        MaterializedTerminalSourceBinding.create(
+            task_key=binding.task_key,
+            rule_id=binding.rule_id,
+            template=binding.template,
+            x_metric=binding.x_metric,
+            y_metric=binding.y_metric,
+            raw_sources=(Path(item.path) for item in binding.raw_sources),
+            prepared_source=Path(binding.prepared_source.path),
+            terminal_source=Path(binding.terminal_source.path),
+            sample_order=binding.sample_order,
+            point_counts=point_counts,
+        )
 
     assert exc_info.value.reason_code == "terminal_source_binding_contract_mismatch"
 

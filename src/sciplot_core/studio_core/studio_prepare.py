@@ -73,7 +73,10 @@ def prepare_studio_document(
                 "terminal_source_binding_request_mismatch",
                 "A materialized terminal source cannot enter raw-source intake.",
             )
-        return target_info["prepared"]
+        prepared = target_info["prepared"]
+        if not isinstance(prepared, dict):
+            raise RuntimeError("Studio source preparation returned an invalid payload.")
+        return prepared
 
     request_path = target_info["request"]
     project_dir = target_info["project_dir"]
@@ -230,8 +233,9 @@ def _qt_first_project_from_source(
         raise RuntimeError(
             f"Studio preparation did not return a document for intake project: {project_dir}"
         )
+    project_studio_value = project.get("studio")
     project_studio = (
-        project.get("studio") if isinstance(project.get("studio"), dict) else {}
+        project_studio_value if isinstance(project_studio_value, dict) else {}
     )
     prepared_project = Path(str(prepared.get("project_dir") or "")).expanduser()
     prepared_request = Path(str(prepared.get("request") or "")).expanduser()

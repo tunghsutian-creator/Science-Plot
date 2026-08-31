@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+import sciplot_core.studio_core.presentation_evidence as presentation_evidence
 from sciplot_core.figure_plan import (
     CartesianMetricBinding,
     FigureTask,
@@ -15,6 +17,7 @@ from sciplot_core.figure_plan import (
     editable_figure_plan,
     request_for_figure_task,
 )
+from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.presentation_identity import SelectedPresentationIdentity
 from sciplot_core.studio_core.figure_set_state import (
     _figure_registry_entry,
@@ -23,6 +26,9 @@ from sciplot_core.studio_core.figure_set_state import (
 from sciplot_core.studio_core.figure_set_prepare import _prepare_studio_figure_set
 from sciplot_core.studio_core.figure_set_storage import (
     _commit_studio_figure_set_transaction,
+)
+from sciplot_core.studio_core.figure_registry_geometry import (
+    registry_figure_size_mm,
 )
 from sciplot_core.studio_core.figure_task_evidence import (
     figure_queue_item_from_task,
@@ -34,6 +40,7 @@ from sciplot_core.studio_core.figure_task_evidence import (
 from sciplot_core.studio_core.presentation_evidence import (
     validate_prepared_studio_presentation,
 )
+from sciplot_core.studio_core.registry_state import _veusz_spec_path
 
 
 def _v1_task(*, order: int = 1) -> FigureTask:
@@ -47,6 +54,71 @@ def _v1_task(*, order: int = 1) -> FigureTask:
         artifact_stem="legacy_curve",
         document_stem="legacy_curve",
     )
+
+
+@pytest.mark.focused
+def test_registry_geometry_legacy_fallback_requires_an_absent_spec(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "legacy.vsz"
+
+    assert registry_figure_size_mm(
+        document,
+        state_document_path=None,
+    ) == [60, 55]
+
+
+@pytest.mark.focused
+@pytest.mark.parametrize(
+    "spec_text",
+    [
+        "{",
+        json.dumps({"kind": "sciplot_veusz_plot_spec"}),
+        json.dumps({"size_mm": [float("inf"), 55.0]}),
+        json.dumps({"size_mm": [0.0, 55.0]}),
+        json.dumps({"size_mm": [60.0]}),
+        json.dumps({"size_mm": [60.0, 55.0, 1.0]}),
+        json.dumps({"size_mm": [True, 55.0]}),
+        json.dumps({"size_mm": ["60", 55.0]}),
+        json.dumps({"size_mm": [10**400, 55.0]}),
+    ],
+)
+def test_registry_geometry_rejects_an_existing_malformed_spec(
+    tmp_path: Path,
+    spec_text: str,
+) -> None:
+    document = tmp_path / "figure.vsz"
+    spec = _veusz_spec_path(document)
+    spec.write_text(spec_text, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="studio_figure_geometry_mismatch"):
+        registry_figure_size_mm(
+            document,
+            state_document_path=None,
+        )
+
+
+@pytest.mark.focused
+@pytest.mark.parametrize("target_exists", [True, False])
+def test_registry_geometry_rejects_a_spec_symlink(
+    tmp_path: Path,
+    target_exists: bool,
+) -> None:
+    document = tmp_path / "figure.vsz"
+    spec = _veusz_spec_path(document)
+    target = tmp_path / "external-spec.json"
+    if target_exists:
+        target.write_text(json.dumps({"size_mm": [123.0, 45.0]}), encoding="utf-8")
+    try:
+        spec.symlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+
+    with pytest.raises(ValueError, match="studio_figure_geometry_mismatch"):
+        registry_figure_size_mm(
+            document,
+            state_document_path=None,
+        )
 
 
 def _scatter_task(*, order: int = 1) -> FigureTask:
@@ -100,6 +172,7 @@ def _spec_for_task(
         "kind": "sciplot_veusz_plot_spec",
         "version": 1,
         "template": task.template,
+        "size_mm": [60.0, 55.0],
         "source_request": request_for_figure_task(
             request
             or {
@@ -139,7 +212,7 @@ def _registry_entry(
     return _figure_registry_entry(
         figure=figure_queue_item_from_task(task),
         document_path=document,
-        generated_hash=None,
+        generated_hash=existing_file_sha256(document),
         series_count=1,
     )
 
@@ -162,17 +235,22 @@ def _write_mixed_project(project_dir: Path) -> ResolvedFigurePlan:
             "resolved_figure_plan": plan.to_payload(),
         },
     )
+    registry_plan = editable_figure_plan(plan, entries)
     _write_json(
         project_dir / "studio" / "figure_set.json",
         {
             "kind": "sciplot_studio_figure_set",
             "version": 2,
             "rule_id": plan.rule_id,
+            "status": "ready",
             "primary_figure_id": plan.primary_figure_id,
+            "primary_document": str(project_dir / "studio" / "document.vsz"),
             "figures": entries,
-            "resolved_figure_plan": plan.to_payload(),
+            "resolved_figure_plan": registry_plan.to_payload(),
             "plan_id": plan.plan_id,
             "plan_sha256": plan.plan_sha256,
+            "generated_from": str(project_dir / "plot_request.json"),
+            "registry_path": str(project_dir / "studio" / "figure_set.json"),
         },
     )
     return plan
@@ -311,6 +389,135 @@ def test_registry_rejects_stale_ordered_axes_and_task_tamper(
     assert _read_studio_figure_set(project_dir) is None
 
 
+@pytest.mark.parametrize("path_field", ["document", "spec"])
+def test_required_v2_registry_rejects_forged_persisted_figure_path(
+    tmp_path: Path,
+    path_field: str,
+) -> None:
+    project_dir = tmp_path / "project"
+    plan = _write_mixed_project(project_dir)
+    registry_path = project_dir / "studio" / "figure_set.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry["figures"][1][path_field] = str(
+        tmp_path / "forged" / Path(registry["figures"][1][path_field]).name
+    )
+    _write_json(registry_path, registry)
+
+    assert (
+        _read_studio_figure_set(
+            project_dir,
+            expected_plan=plan,
+            require_ready_artifacts=True,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("path_field", ["document", "spec"])
+def test_required_v2_registry_rejects_missing_ready_artifact(
+    tmp_path: Path,
+    path_field: str,
+) -> None:
+    project_dir = tmp_path / "project"
+    plan = _write_mixed_project(project_dir)
+    registry = json.loads(
+        (project_dir / "studio" / "figure_set.json").read_text(encoding="utf-8")
+    )
+    Path(registry["figures"][1][path_field]).unlink()
+
+    assert (
+        _read_studio_figure_set(
+            project_dir,
+            expected_plan=plan,
+            require_ready_artifacts=True,
+        )
+        is None
+    )
+
+
+def test_required_v2_registry_rejects_ready_spec_task_tamper(
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "project"
+    plan = _write_mixed_project(project_dir)
+    spec_path = project_dir / "studio" / "figures" / "performance_polar.spec.json"
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    spec["source_request"]["resolved_figure_task"] = _scatter_task().to_payload()
+    _write_json(spec_path, spec)
+
+    assert (
+        _read_studio_figure_set(
+            project_dir,
+            expected_plan=plan,
+            require_ready_artifacts=True,
+        )
+        is None
+    )
+
+
+def test_required_v2_registry_relocates_only_canonical_persisted_paths(
+    tmp_path: Path,
+) -> None:
+    original = tmp_path / "original" / "project"
+    plan = _write_mixed_project(original)
+    relocated = tmp_path / "relocated" / "project"
+    relocated.parent.mkdir()
+    shutil.move(str(original), str(relocated))
+
+    registry = _read_studio_figure_set(
+        relocated,
+        expected_plan=plan,
+        require_ready_artifacts=True,
+    )
+
+    assert registry is not None
+    assert registry["primary_document"] == str(
+        (relocated / "studio" / "document.vsz").resolve()
+    )
+    assert [Path(item["document"]) for item in registry["figures"]] == [
+        (relocated / "studio" / "document.vsz").resolve(),
+        (relocated / "studio" / "figures" / "performance_polar.vsz").resolve(),
+    ]
+    registry_plan = ResolvedFigurePlan.from_payload(registry["resolved_figure_plan"])
+    assert all(
+        Path(artifact).is_file()
+        for outcome in registry_plan.outcomes
+        for artifact in outcome.artifacts
+    )
+
+
+@pytest.mark.parametrize(
+    ("entry_status", "outcome_status"),
+    [("unexpected", "editable"), ("ready", "unavailable")],
+)
+def test_required_v2_registry_rejects_entry_outcome_status_split(
+    tmp_path: Path,
+    entry_status: str,
+    outcome_status: str,
+) -> None:
+    project_dir = tmp_path / "project"
+    plan = _write_mixed_project(project_dir)
+    registry_path = project_dir / "studio" / "figure_set.json"
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry["figures"][0]["status"] = entry_status
+    outcome = registry["resolved_figure_plan"]["outcomes"][0]
+    outcome["status"] = outcome_status
+    if outcome_status == "unavailable":
+        outcome["reason_code"] = "synthetic_unavailable"
+        outcome["message"] = "synthetic unavailable"
+        registry["resolved_figure_plan"]["status"] = "incomplete"
+    _write_json(registry_path, registry)
+
+    assert (
+        _read_studio_figure_set(
+            project_dir,
+            expected_plan=plan,
+            require_ready_artifacts=True,
+        )
+        is None
+    )
+
+
 def test_legacy_v1_registry_remains_readable_without_becoming_task_evidence(
     tmp_path: Path,
 ) -> None:
@@ -369,6 +576,55 @@ def test_presentation_identity_binds_primary_while_secondary_uses_own_task(
         ),
         figure_plan=plan,
     )
+
+
+def test_presentation_validation_uses_injected_snapshot_without_reread(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_dir = tmp_path / "project"
+    plan = _write_mixed_project(project_dir)
+    snapshot = _read_studio_figure_set(
+        project_dir,
+        expected_plan=plan,
+        require_ready_artifacts=True,
+    )
+    assert snapshot is not None
+
+    def unexpected_registry_read(_project_dir: Path) -> dict[str, Any] | None:
+        raise AssertionError("the injected registry snapshot must be reused")
+
+    monkeypatch.setattr(
+        presentation_evidence,
+        "_read_studio_figure_set",
+        unexpected_registry_read,
+    )
+    identity = SelectedPresentationIdentity(
+        rule_id=plan.rule_id,
+        template="scatter",
+    )
+    presentation_evidence.validate_prepared_studio_presentation(
+        project_dir=project_dir,
+        document_path=project_dir / "studio" / "document.vsz",
+        identity=identity,
+        figure_plan=plan,
+        figure_set=snapshot,
+        figure_set_loaded=True,
+    )
+
+    tampered_snapshot = deepcopy(snapshot)
+    tampered_snapshot["figures"][1]["resolved_figure_task"] = (
+        _scatter_task().to_payload()
+    )
+    with pytest.raises(RuntimeError, match="studio_figure_task_mismatch"):
+        presentation_evidence.validate_prepared_studio_presentation(
+            project_dir=project_dir,
+            document_path=project_dir / "studio" / "document.vsz",
+            identity=identity,
+            figure_plan=plan,
+            figure_set=tampered_snapshot,
+            figure_set_loaded=True,
+        )
 
 
 def test_primary_task_template_must_match_selected_presentation(
@@ -609,6 +865,133 @@ def test_spec_task_mismatch_rolls_back_document_spec_and_registry(
         path: path.read_bytes()
         for path in (target_document, target_spec, target_registry)
     } == before
+    assert not list(studio_dir.glob(".sciplot-figure-set-transaction-*"))
+
+
+@pytest.mark.parametrize("prior_exists", [True, False])
+def test_post_replace_failure_restores_prior_figure_set_member(
+    tmp_path: Path,
+    prior_exists: bool,
+) -> None:
+    project_dir = tmp_path / "project"
+    studio_dir = project_dir / "studio"
+    studio_dir.mkdir(parents=True)
+    target = studio_dir / "document.vsz"
+    staged = studio_dir / ".staged-document.vsz"
+    prior_bytes = b"prior-document"
+    if prior_exists:
+        target.write_bytes(prior_bytes)
+    staged.write_bytes(b"replacement-document")
+    staged_hash = _sha256(staged)
+
+    def replace_then_fail(source: Path, destination: Path) -> None:
+        source.replace(destination)
+        raise OSError("failure after replacement")
+
+    with pytest.raises(OSError, match="failure after replacement"):
+        _commit_studio_figure_set_transaction(
+            project_dir=project_dir,
+            replacements=[
+                {
+                    "staged": staged,
+                    "target": target,
+                    "expected_hash": staged_hash,
+                    "kind": "document",
+                }
+            ],
+            manual_archive_requests=[],
+            registry=None,
+            path_replacer=replace_then_fail,
+        )
+
+    if prior_exists:
+        assert target.read_bytes() == prior_bytes
+    else:
+        assert not target.exists()
+    assert not staged.exists()
+    assert not list(studio_dir.glob(".sciplot-figure-set-transaction-*"))
+
+
+def test_post_registry_replace_failure_restores_prior_registry(
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "project"
+    studio_dir = project_dir / "studio"
+    registry_path = studio_dir / "figure_set.json"
+    studio_dir.mkdir(parents=True)
+    _write_json(
+        registry_path,
+        {
+            "kind": "sciplot_studio_figure_set",
+            "version": 1,
+            "figures": [],
+            "generation": "prior",
+        },
+    )
+    prior_bytes = registry_path.read_bytes()
+
+    def replace_then_fail(source: Path, destination: Path) -> None:
+        assert destination == registry_path
+        source.replace(destination)
+        raise OSError("failure after registry replacement")
+
+    with pytest.raises(OSError, match="failure after registry replacement"):
+        _commit_studio_figure_set_transaction(
+            project_dir=project_dir,
+            replacements=[],
+            manual_archive_requests=[],
+            registry={
+                "kind": "sciplot_studio_figure_set",
+                "version": 1,
+                "figures": [],
+                "generation": "replacement",
+            },
+            path_replacer=replace_then_fail,
+        )
+
+    assert registry_path.read_bytes() == prior_bytes
+    assert not list(studio_dir.glob(".sciplot-figure-set-transaction-*"))
+
+
+def test_transaction_rejects_symlink_target_before_first_replacement(
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "project"
+    studio_dir = project_dir / "studio"
+    studio_dir.mkdir(parents=True)
+    external = tmp_path / "external-document.vsz"
+    external.write_bytes(b"external-prior-document")
+    target = studio_dir / "document.vsz"
+    target.symlink_to(external)
+    staged = studio_dir / ".staged-document.vsz"
+    staged.write_bytes(b"replacement-document")
+    replacement_calls: list[tuple[Path, Path]] = []
+
+    def replace_path(source: Path, destination: Path) -> None:
+        replacement_calls.append((source, destination))
+        source.replace(destination)
+
+    with pytest.raises(RuntimeError, match="symbolic link"):
+        _commit_studio_figure_set_transaction(
+            project_dir=project_dir,
+            replacements=[
+                {
+                    "staged": staged,
+                    "target": target,
+                    "expected_hash": _sha256(staged),
+                    "kind": "document",
+                }
+            ],
+            manual_archive_requests=[],
+            registry=None,
+            path_replacer=replace_path,
+        )
+
+    assert replacement_calls == []
+    assert target.is_symlink()
+    assert target.resolve() == external.resolve()
+    assert external.read_bytes() == b"external-prior-document"
+    assert not staged.exists()
     assert not list(studio_dir.glob(".sciplot-figure-set-transaction-*"))
 
 

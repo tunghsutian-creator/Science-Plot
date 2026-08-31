@@ -97,7 +97,20 @@ def _commit_studio_figure_set_transaction(
             )
         for item in pending:
             target = Path(item["target"])
+            record = {
+                **item,
+                "target": target,
+                "prior_hash": None,
+                "backup": None,
+                "replacement_attempted": False,
+            }
+            records.append(record)
+            if target.is_symlink():
+                raise RuntimeError(
+                    f"Cannot transactionally replace symbolic link {target}."
+                )
             prior_hash = existing_file_sha256(target)
+            record["prior_hash"] = prior_hash
             backup = None
             if target.exists():
                 if not target.is_file() or not prior_hash:
@@ -107,14 +120,7 @@ def _commit_studio_figure_set_transaction(
                 backup = target.with_name(
                     f".sciplot-figure-set-transaction-{uuid4().hex}.backup"
                 )
-            record = {
-                **item,
-                "target": target,
-                "prior_hash": prior_hash,
-                "backup": backup,
-                "installed": False,
-            }
-            records.append(record)
+            record["backup"] = backup
             if backup is not None:
                 shutil.copy2(target, backup)
                 if existing_file_sha256(backup) != prior_hash:
@@ -125,8 +131,8 @@ def _commit_studio_figure_set_transaction(
         by_target = {record["target"]: record for record in records}
         file_records = records[:-1] if registry is not None else records
         for record in file_records:
+            record["replacement_attempted"] = True
             replace_path(record["staged"], record["target"])
-            record["installed"] = True
             if existing_file_sha256(record["target"]) != record["expected_hash"]:
                 raise RuntimeError(
                     f"Installed figure-set {record['kind']} failed validation."
@@ -172,8 +178,8 @@ def _commit_studio_figure_set_transaction(
 
         if registry is not None:
             registry_record = records[-1]
+            registry_record["replacement_attempted"] = True
             replace_path(registry_record["staged"], registry_record["target"])
-            registry_record["installed"] = True
             if existing_file_sha256(registry_path) != registry_record[
                 "expected_hash"
             ] or _read_json(registry_path) != json_safe(registry):
@@ -210,20 +216,25 @@ def _commit_studio_figure_set_transaction(
             path.unlink(missing_ok=True)
         rollback_errors: list[str] = []
         for record in reversed(records):
-            if not record["installed"]:
+            if not record["replacement_attempted"]:
                 continue
             target = record["target"]
             backup = record["backup"]
             try:
                 if backup is None:
                     target.unlink(missing_ok=True)
+                    if target.exists() or target.is_symlink():
+                        raise RuntimeError("restored absence mismatch")
                 else:
                     # Keep the verified backup until restoration itself has
                     # been hash-checked. If the copy fails, the original bytes
                     # remain beside the target for recovery instead of being
                     # consumed by the rollback attempt.
                     shutil.copy2(backup, target)
-                if existing_file_sha256(target) != record["prior_hash"]:
+                if (
+                    backup is not None
+                    and existing_file_sha256(target) != record["prior_hash"]
+                ):
                     raise RuntimeError("restored hash mismatch")
             except Exception as rollback_exc:
                 rollback_errors.append(f"{target}: {rollback_exc}")

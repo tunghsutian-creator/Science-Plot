@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import shutil
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
+
 import pandas as pd
+
 from sciplot_core.figure_plan import (
     ResolvedFigurePlan,
     finalize_figure_plan_result,
@@ -15,17 +17,12 @@ from sciplot_core.figure_plan import (
     resolve_figure_plan,
     resolved_figure_plan_from_payload,
 )
-from sciplot_core.materials_rules import (
-    resolve_rule_template,
-)
-from sciplot_core.policy import (
-    DEFAULT_EXPORT_FORMATS_POLICY,
-)
+from sciplot_core.materials_rules.catalog import resolve_rule_template
+from sciplot_core.policy import normalize_export_formats
 from sciplot_core.render import render_to_dir
-from sciplot_core.semantic import (
+from sciplot_core.semantic_sources.impact_sources import (
     read_impact_condition_payloads,
 )
-
 from sciplot_core.workflow.bundle_exports import (
     _rename_metric_exports,
 )
@@ -67,10 +64,12 @@ def _impact_condition_sources(
     conditions = read_impact_condition_payloads(source)
     figure_plan = _resolved_figure_plan
     if figure_plan is None and request.get("resolved_figure_plan") is not None:
-        figure_plan = resolved_figure_plan_from_payload(
-            request["resolved_figure_plan"]
-        )
+        figure_plan = resolved_figure_plan_from_payload(request["resolved_figure_plan"])
     if figure_plan is None:
+        study_model_payload = request.get("study_model")
+        study_model = (
+            study_model_payload if isinstance(study_model_payload, dict) else {}
+        )
         figure_plan = resolve_figure_plan(
             rule_id="impact_metric",
             template=resolve_rule_template(
@@ -81,11 +80,7 @@ def _impact_condition_sources(
                     else None
                 ),
             ),
-            study_model=(
-                request.get("study_model")
-                if isinstance(request.get("study_model"), dict)
-                else {}
-            ),
+            study_model=study_model,
             input_path=source,
             request=request,
         )
@@ -120,6 +115,21 @@ def _impact_condition_sources(
     return condition_sources
 
 
+def _resolve_impact_bundle_context(
+    request: dict[str, Any],
+    figure_plan: ResolvedFigurePlan | None,
+) -> tuple[str, ResolvedFigurePlan | None] | None:
+    if str(request.get("rule_id") or "").strip() != "impact_metric":
+        return None
+    impact_template = resolve_rule_template(
+        "impact_metric",
+        request.get("template") if isinstance(request.get("template"), str) else None,
+    )
+    if figure_plan is None and request.get("resolved_figure_plan") is not None:
+        figure_plan = resolved_figure_plan_from_payload(request["resolved_figure_plan"])
+    return impact_template, figure_plan
+
+
 def _render_veusz_impact_bundle(
     source_input: Path,
     *,
@@ -133,24 +143,68 @@ def _render_veusz_impact_bundle(
     _renderer: Callable[..., dict[str, Any]] = render_to_dir,
     _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> dict[str, Any] | None:
-    if str(request.get("rule_id") or "").strip() != "impact_metric":
+    context = _resolve_impact_bundle_context(request, _resolved_figure_plan)
+    if context is None:
         return None
-    impact_template = resolve_rule_template(
-        "impact_metric",
-        request.get("template") if isinstance(request.get("template"), str) else None,
+    impact_template, figure_plan = context
+    return _render_resolved_impact_bundle(
+        source_input,
+        output_dir=output_dir,
+        options=options,
+        export_formats=normalize_export_formats(export_formats),
+        request=request,
+        impact_template=impact_template,
+        figure_plan=figure_plan,
+        source_builder=_source_builder,
+        renderer=_renderer,
     )
-    figure_plan = _resolved_figure_plan
-    if figure_plan is None and request.get("resolved_figure_plan") is not None:
-        figure_plan = resolved_figure_plan_from_payload(
-            request["resolved_figure_plan"]
-        )
+
+
+def _render_canonical_veusz_impact_bundle(
+    source_input: Path,
+    *,
+    output_dir: Path,
+    options: dict[str, Any],
+    export_formats: tuple[str, ...],
+    request: dict[str, Any],
+    _resolved_figure_plan: ResolvedFigurePlan | None = None,
+) -> dict[str, Any] | None:
+    context = _resolve_impact_bundle_context(request, _resolved_figure_plan)
+    if context is None:
+        return None
+    impact_template, figure_plan = context
+    return _render_resolved_impact_bundle(
+        source_input,
+        output_dir=output_dir,
+        options=options,
+        export_formats=export_formats,
+        request=request,
+        impact_template=impact_template,
+        figure_plan=figure_plan,
+        source_builder=_impact_condition_sources,
+        renderer=render_to_dir,
+    )
+
+
+def _render_resolved_impact_bundle(
+    source_input: Path,
+    *,
+    output_dir: Path,
+    options: dict[str, Any],
+    export_formats: tuple[str, ...],
+    request: dict[str, Any],
+    impact_template: str,
+    figure_plan: ResolvedFigurePlan | None,
+    source_builder: Callable[..., list[tuple[str, Path, dict[str, Any]]]],
+    renderer: Callable[..., dict[str, Any]],
+) -> dict[str, Any] | None:
     if impact_template == "point_line":
         task_request = (
             request_for_figure_task(request, figure_plan.tasks[0])
             if figure_plan is not None
             else request
         )
-        result = _renderer(
+        result = renderer(
             source_input,
             template=impact_template,
             output_dir=output_dir / "figures",
@@ -166,7 +220,7 @@ def _render_veusz_impact_bundle(
         )
         finalize_figure_plan_result(figure_plan, result)
         return result
-    condition_sources = _source_builder(
+    condition_sources = source_builder(
         source_input,
         request=request,
         output_dir=output_dir,
@@ -189,7 +243,7 @@ def _render_veusz_impact_bundle(
         if figure_plan is not None
         else {}
     )
-    artifacts_by_id = (
+    artifacts_by_id: dict[str, list[str]] = (
         {task.figure_id: [] for task in figure_plan.tasks}
         if figure_plan is not None
         else {}
@@ -200,7 +254,7 @@ def _render_veusz_impact_bundle(
         task_request = (
             request_for_figure_task(request, task) if task is not None else request
         )
-        payload = _renderer(
+        payload = renderer(
             metric_source,
             template=impact_template,
             output_dir=metric_dir,
@@ -280,7 +334,7 @@ def _render_veusz_impact_bundle(
         "sheet": None,
         "render_engine": "veusz",
         "qa_target": "veusz_export",
-        "export_formats": list(export_formats or DEFAULT_EXPORT_FORMATS_POLICY),
+        "export_formats": list(export_formats),
         "exports": combined_exports,
         "outputs": combined_outputs,
         "qa_reports": combined_reports,
@@ -295,6 +349,10 @@ def _render_veusz_impact_bundle(
         },
     }
     if figure_plan is not None:
+        outcome_artifacts: dict[str, list[str] | tuple[str, ...]] = {
+            figure_id: list(artifacts)
+            for figure_id, artifacts in artifacts_by_id.items()
+        }
         result["multi_metric_bundle"]["figure_ids"] = list(
             figure_plan.selected_figure_ids
         )
@@ -302,7 +360,7 @@ def _render_veusz_impact_bundle(
             outcome.to_payload()
             for outcome in outcomes_for_artifact_map(
                 figure_plan,
-                artifacts_by_id,
+                outcome_artifacts,
                 missing_reason_code="impact_condition_source_unavailable",
             )
         ]

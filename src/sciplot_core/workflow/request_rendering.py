@@ -51,6 +51,10 @@ if TYPE_CHECKING:
     )
 
 
+def _dict_payload(value: object) -> dict[Any, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
 @dataclass(frozen=True)
 class RequestRenderResult:
     """Route identity, renderer result, and source actually plotted."""
@@ -212,12 +216,9 @@ def execute_request_render(
     template = route_intent.requested_template
     if template is None:
         raise AssertionError("Direct-render route lost its captured template identity.")
-    if (
-        resolved_scientific_source is not None
-        or (
-            selected_figure_plan is not None
-            and selected_figure_plan.rule_id in MECHANICAL_RULE_IDS
-        )
+    if resolved_scientific_source is not None or (
+        selected_figure_plan is not None
+        and selected_figure_plan.rule_id in MECHANICAL_RULE_IDS
     ):
         return _render_semantic_plan_request(
             request=request,
@@ -298,11 +299,7 @@ def _render_semantic_plan_request(
 ) -> RequestRenderResult:
     """Prepare semantic data once and execute the already-selected plan."""
 
-    replicate_policy = (
-        study_model.get("replicate_policy")
-        if isinstance(study_model.get("replicate_policy"), dict)
-        else {}
-    )
+    replicate_policy = _dict_payload(study_model.get("replicate_policy"))
     effective_replicate_mode = request.get("replicate_mode") or replicate_policy.get(
         "mode"
     )
@@ -322,7 +319,7 @@ def _render_semantic_plan_request(
     transform_steps.extend(
         step for step in prepared.get("transform_steps", []) if isinstance(step, dict)
     )
-    render_options = dict(semantic.get("render_options") or {})
+    render_options = _dict_payload(semantic.get("render_options"))
     request_render_options = request.get("render_options")
     if isinstance(request_render_options, dict):
         render_options.update(request_render_options)

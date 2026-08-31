@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any
-from sciplot_core.figure_plan import resolved_figure_plan_from_payload
+from sciplot_core.figure_plan import (
+    ResolvedFigurePlan,
+    resolved_figure_plan_from_payload,
+)
 from sciplot_core.figure_plan.constants import REQUIRED_FIGURE_PLAN_RULE_IDS
+from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.studio_figure_set_contract import (
     STUDIO_FIGURE_SET_KIND,
@@ -25,17 +28,24 @@ from sciplot_core.studio_core.figure_requests import (
 from sciplot_core.studio_core.figure_task_evidence import (
     validate_figure_registry_against_plan,
 )
+from sciplot_core.studio_core.figure_set_snapshot import (
+    normalize_studio_figure_set_snapshot,
+)
 from sciplot_core.studio_core.figure_registry_entry import (
     _figure_registry_entry as _figure_registry_entry,
 )
 
 from sciplot_core.studio_core.registry_state import (
     _studio_figure_set_path,
-    _veusz_spec_path,
 )
 
 
-def _read_studio_figure_set(project_dir: Path) -> dict[str, Any] | None:
+def _read_studio_figure_set(
+    project_dir: Path,
+    *,
+    expected_plan: ResolvedFigurePlan | None = None,
+    require_ready_artifacts: bool = False,
+) -> dict[str, Any] | None:
     path = _studio_figure_set_path(project_dir)
     if not path.is_file():
         return None
@@ -51,76 +61,89 @@ def _read_studio_figure_set(project_dir: Path) -> dict[str, Any] | None:
         STUDIO_FIGURE_SET_TASK_VERSION,
     }:
         return None
+    figures_value = payload.get("figures")
+    figures = figures_value if isinstance(figures_value, list) else []
     try:
         registry_plan = resolved_figure_plan_from_payload(
             payload.get("resolved_figure_plan")
         )
         if version == STUDIO_FIGURE_SET_LEGACY_VERSION:
+            if expected_plan is not None or require_ready_artifacts:
+                return None
             if registry_plan is not None or any(
                 isinstance(value, dict) and "resolved_figure_task" in value
-                for value in (
-                    payload.get("figures")
-                    if isinstance(payload.get("figures"), list)
-                    else []
-                )
+                for value in figures
             ):
                 return None
         else:
             if registry_plan is None:
                 return None
             validate_figure_registry_against_plan(payload, registry_plan)
-    except (TypeError, ValueError):
+            if expected_plan is not None:
+                validate_figure_registry_against_plan(payload, expected_plan)
+        return normalize_studio_figure_set_snapshot(
+            payload,
+            figures=figures,
+            project_dir=project_dir,
+            registry_path=path,
+            version=version,
+            registry_plan=registry_plan,
+            require_ready_artifacts=require_ready_artifacts,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError):
         return None
-    primary_id = str(payload.get("primary_figure_id") or "").strip()
-    figures = payload.get("figures") if isinstance(payload.get("figures"), list) else []
-    normalized_figures: list[dict[str, Any]] = []
-    for value in figures:
-        if not isinstance(value, dict):
-            if version == STUDIO_FIGURE_SET_TASK_VERSION:
-                return None
+
+
+def _figure_set_primary_generated_hash(
+    registry: dict[str, Any] | None,
+) -> str | None:
+    if registry is None:
+        return None
+    primary_id = str(registry.get("primary_figure_id") or "").strip()
+    figures = registry.get("figures")
+    if not isinstance(figures, list):
+        return None
+    for figure in figures:
+        if not isinstance(figure, dict) or figure.get("figure_id") != primary_id:
             continue
-        figure_id = str(value.get("figure_id") or "").strip()
-        if not re.fullmatch(r"[a-z0-9][a-z0-9_]*", figure_id):
-            if version == STUDIO_FIGURE_SET_TASK_VERSION:
-                return None
+        value = figure.get("generated_hash")
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+def _figure_set_ready_spec_hashes(
+    registry: dict[str, Any] | None,
+) -> tuple[tuple[str, str], ...]:
+    """Bind ready spec bytes after strict registry validation."""
+
+    if registry is None:
+        return ()
+    hashes: list[tuple[str, str]] = []
+    figures = registry.get("figures")
+    for figure in figures if isinstance(figures, list) else []:
+        if not isinstance(figure, dict) or figure.get("status") != "ready":
             continue
-        document_stem = str(value.get("document_stem") or figure_id).strip()
-        if not re.fullmatch(
-            r"[A-Za-z0-9\u4e00-\u9fff][A-Za-z0-9._\-\u4e00-\u9fff]*",
-            document_stem,
-        ):
-            if version == STUDIO_FIGURE_SET_TASK_VERSION:
-                return None
-            continue
-        document = (
-            project_dir / "studio" / "document.vsz"
-            if figure_id == primary_id
-            else project_dir / "studio" / "figures" / f"{document_stem}.vsz"
-        )
-        normalized_figures.append(
-            {
-                **value,
-                "document": str(document.resolve()),
-                "spec": str(_veusz_spec_path(document).resolve()),
-            }
-        )
-    payload["figures"] = normalized_figures
-    payload["primary_document"] = str(
-        (project_dir / "studio" / "document.vsz").resolve()
-    )
-    payload["generated_from"] = str((project_dir / "plot_request.json").resolve())
-    payload["registry_path"] = str(path.resolve())
-    return payload
+        spec = Path(str(figure.get("spec") or "")).expanduser()
+        if spec.is_symlink() or spec.resolve() != spec:
+            raise ValueError(f"A ready Studio figure spec is not canonical: {spec}")
+        digest = existing_file_sha256(spec)
+        if digest is None:
+            raise ValueError(f"A ready Studio figure spec disappeared: {spec}")
+        hashes.append((str(spec), digest))
+    return tuple(hashes)
 
 
 def _studio_figure_set_export_scope(
     project_dir: Path,
     *,
     request: dict[str, Any],
+    figure_set: dict[str, Any] | None = None,
+    figure_set_loaded: bool = False,
 ) -> dict[str, Any] | None:
     """Return the all-or-nothing project scope for an independent figure set."""
 
-    registry = _read_studio_figure_set(project_dir)
+    registry = figure_set if figure_set_loaded else _read_studio_figure_set(project_dir)
     try:
         request_plan = resolved_figure_plan_from_payload(
             request.get("resolved_figure_plan")

@@ -14,7 +14,6 @@ from sciplot_core.figure_plan import (
     outcomes_for_artifact_map,
     request_for_figure_task,
 )
-from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY
 from sciplot_core.render import render_to_dir
 from sciplot_core.terminal_source_binding import MaterializedTerminalSourceBinding
 from sciplot_core.workflow.bundle_exports import _rename_metric_exports
@@ -31,7 +30,7 @@ def render_selected_single_task_bundle(
     task: FigureTask,
     output_dir: Path,
     options: dict[str, Any],
-    export_formats: object,
+    export_formats: tuple[str, ...],
     request: dict[str, Any],
     metric_id: str,
     bundle_kind: str,
@@ -80,7 +79,7 @@ def render_selected_single_task_bundle(
             "sheet": None,
             "render_engine": "veusz",
             "qa_target": "veusz_export",
-            "export_formats": list(export_formats or DEFAULT_EXPORT_FORMATS_POLICY),
+            "export_formats": list(export_formats),
             "outputs": outputs,
             "exports": exports,
             "qa_reports": task_qa_reports(

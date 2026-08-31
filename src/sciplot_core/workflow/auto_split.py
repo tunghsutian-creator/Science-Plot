@@ -13,6 +13,7 @@ from sciplot_core.figure_plan import (
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.materials_rules.models import RenderAdapterId
+from sciplot_core.policy import normalize_export_formats
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.render import render_to_dir
 from sciplot_core.split import (
@@ -35,7 +36,7 @@ from sciplot_core.workflow.mechanical_bundle import (
 )
 
 from sciplot_core.workflow.impact_bundle import (
-    _render_veusz_impact_bundle,
+    _render_canonical_veusz_impact_bundle as _render_veusz_impact_bundle,
 )
 
 from sciplot_core.workflow.dma_temperature_bundle import (
@@ -82,11 +83,8 @@ def _auto_split_policy_for_result(
         return None
     if template not in SUPPORTED_SPLIT_TEMPLATES:
         return None
-    issue_ids = (
-        layout_quality.get("issue_ids")
-        if isinstance(layout_quality.get("issue_ids"), list)
-        else []
-    )
+    issue_ids_payload = layout_quality.get("issue_ids")
+    issue_ids = issue_ids_payload if isinstance(issue_ids_payload, list) else []
     if "stack_peak_too_small" not in {str(item) for item in issue_ids}:
         return None
     height_mm = _layout_summary_height_mm(layout_quality)
@@ -114,6 +112,16 @@ def _render_with_auto_split(
     plan = _resolved_figure_plan
     if plan is None and request.get("resolved_figure_plan") is not None:
         plan = resolved_figure_plan_from_payload(request["resolved_figure_plan"])
+    if (
+        family == "generic"
+        and plan is not None
+        and (plan.rule_id != request.get("rule_id") or len(plan.tasks) != 1)
+    ):
+        raise ValueError(
+            "workflow_generic_single_task_plan_mismatch: generic rendering "
+            "requires one task owned by the requested rule."
+        )
+    normalized_export_formats = normalize_export_formats(export_formats)
     bundle = _render_resolved_bundle(
         family,
         input_path=input_path,
@@ -121,7 +129,7 @@ def _render_with_auto_split(
         source_attestation=source_attestation,
         output_dir=output_dir,
         options=options,
-        export_formats=export_formats,
+        export_formats=normalized_export_formats,
         request=request,
         resolved_scientific_source=_resolved_scientific_source,
         resolved_figure_plan=plan,
@@ -129,11 +137,6 @@ def _render_with_auto_split(
     if bundle is not None:
         return bundle
     if family == "generic" and plan is not None:
-        if plan.rule_id != request.get("rule_id") or len(plan.tasks) != 1:
-            raise ValueError(
-                "workflow_generic_single_task_plan_mismatch: generic rendering "
-                "requires one task owned by the requested rule."
-            )
         task = plan.tasks[0]
         return render_selected_single_task_bundle(
             input_path,
@@ -141,7 +144,7 @@ def _render_with_auto_split(
             task=task,
             output_dir=output_dir,
             options=options,
-            export_formats=export_formats,
+            export_formats=normalized_export_formats,
             request=request,
             metric_id=task.artifact_stem,
             bundle_kind="generic_single_task_figure_set",
@@ -158,7 +161,7 @@ def _render_with_auto_split(
         template=template,
         output_dir=figures_dir,
         options=options,
-        export_formats=export_formats,
+        export_formats=normalized_export_formats,
         split_policy=request.get("split_policy"),
         request_context={
             **request,
@@ -183,7 +186,7 @@ def _render_with_auto_split(
         template=template,
         output_dir=figures_dir,
         options=split_options,
-        export_formats=export_formats,
+        export_formats=normalized_export_formats,
         split_policy=policy,
         request_context={
             **request,
@@ -211,7 +214,7 @@ def _render_resolved_bundle(
     source_attestation: PreparationSourceAttestation | None,
     output_dir: Path,
     options: dict[str, Any],
-    export_formats: object,
+    export_formats: tuple[str, ...],
     request: dict[str, Any],
     resolved_scientific_source: ResolvedScientificSource | None,
     resolved_figure_plan: ResolvedFigurePlan | None,

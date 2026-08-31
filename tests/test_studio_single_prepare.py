@@ -11,6 +11,7 @@ import pytest
 from sciplot_core.output_contract import REQUEST_DELIVERY_ROOT_KEY
 from sciplot_core.project_manifest import read_intake_project_manifest
 from sciplot_core.intake import session as intake_session
+from sciplot_core.intake import project as intake_project
 from sciplot_core.intake.project import project_builder
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.studio_core import prepare_generated, studio_prepare
@@ -482,3 +483,100 @@ def test_existing_request_and_vsz_control_paths_keep_generation_counts(
     standalone.write_text("# standalone\n", encoding="utf-8")
     studio_prepare.prepare_studio_document(standalone)
     assert calls == {"generate": 1, "reuse": 1}
+
+
+def test_source_target_rejects_non_object_prepared_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.csv"
+    source.write_text("x,y\n0,1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        studio_prepare,
+        "_resolve_studio_target",
+        lambda *_args, **_kwargs: {
+            "mode": "source",
+            "prepared": ["not", "an", "object"],
+        },
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Studio source preparation returned an invalid payload",
+    ):
+        studio_prepare.prepare_studio_document(source)
+
+
+def test_raw_source_reads_finalized_project_studio_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class AlternatingStudioProject(dict[str, Any]):
+        def __init__(self, payload: dict[str, Any], ready_studio: dict[str, Any]):
+            super().__init__(payload)
+            self._studio_values: tuple[object, ...] = (ready_studio, None)
+            self._studio_reads = 0
+
+        def get(self, key: str, default: Any = None) -> Any:
+            if key != "studio":
+                return super().get(key, default)
+            index = min(self._studio_reads, len(self._studio_values) - 1)
+            self._studio_reads += 1
+            return self._studio_values[index]
+
+    source = tmp_path / "source.csv"
+    source.write_text("x,y\n0,1\n", encoding="utf-8")
+    project_dir = tmp_path / "projects" / "source"
+    request_path = project_dir / "plot_request.json"
+
+    monkeypatch.setattr(
+        intake_session,
+        "prepare_intake_session",
+        lambda *_args, **_kwargs: {"session_path": str(tmp_path / "session.json")},
+    )
+
+    def create_project(
+        _session: dict[str, Any],
+        *,
+        studio_preparer: Any,
+        **_kwargs: Any,
+    ) -> dict[str, Any]:
+        project_dir.mkdir(parents=True)
+        request_path.write_text("{}\n", encoding="utf-8")
+        ready = studio_preparer(project_dir)
+        ready_studio = ready["studio"]
+        assert isinstance(ready_studio, dict)
+        return AlternatingStudioProject(
+            {
+                "project_dir": str(project_dir),
+                "zip_path": str(project_dir.with_suffix(".zip")),
+                "studio": ready_studio,
+            },
+            ready_studio,
+        )
+
+    def generate(
+        *,
+        project_dir: Path,
+        request_path: Path,
+        **_kwargs: Any,
+    ) -> dict[str, Any]:
+        return _ready_prepare_payload(
+            project_dir=project_dir,
+            request_path=request_path,
+        )
+
+    monkeypatch.setattr(
+        intake_project,
+        "create_intake_project_from_session",
+        create_project,
+    )
+    monkeypatch.setattr(studio_prepare, "generate_studio_document", generate)
+
+    prepared = studio_prepare.prepare_studio_document(
+        source,
+        output_root=tmp_path / "projects",
+    )
+
+    assert prepared["studio"]["status"] == "ready"
+    assert Path(prepared["document"]).is_file()

@@ -42,20 +42,47 @@ def _require(condition: bool, message: str, *, reason_code: str) -> None:
 
 
 def _identifier(value: object, *, label: str) -> str:
-    _require(
-        isinstance(value, str) and _IDENTIFIER.fullmatch(value) is not None,
-        f"{label} must be one canonical lowercase identifier.",
-        reason_code=_CONTRACT_MISMATCH,
-    )
+    if not isinstance(value, str) or _IDENTIFIER.fullmatch(value) is None:
+        _fail(
+            _CONTRACT_MISMATCH,
+            f"{label} must be one canonical lowercase identifier.",
+        )
     return value
 
 
 def _metric_identifier(value: object, *, label: str) -> str:
-    _require(
-        isinstance(value, str) and _METRIC_IDENTIFIER.fullmatch(value) is not None,
-        f"{label} must be one canonical metric identifier.",
-        reason_code=_CONTRACT_MISMATCH,
-    )
+    if not isinstance(value, str) or _METRIC_IDENTIFIER.fullmatch(value) is None:
+        _fail(
+            _CONTRACT_MISMATCH,
+            f"{label} must be one canonical metric identifier.",
+        )
+    return value
+
+
+def _artifact_payload(value: object, *, label: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        _fail(_CONTRACT_MISMATCH, f"{label} must contain only path and sha256.")
+    payload: dict[str, object] = {}
+    for key, item in value.items():
+        if not isinstance(key, str):
+            _fail(_CONTRACT_MISMATCH, f"{label} must contain only path and sha256.")
+        payload[key] = item
+    if set(payload) != {"path", "sha256"}:
+        _fail(_CONTRACT_MISMATCH, f"{label} must contain only path and sha256.")
+    return payload
+
+
+def _artifact_path(value: object, *, label: str) -> str:
+    if not isinstance(value, str) or not value or not Path(value).is_absolute():
+        _fail(_CONTRACT_MISMATCH, f"{label} path must be absolute text.")
+    if str(Path(value).expanduser().resolve()) != value:
+        _fail(_CONTRACT_MISMATCH, f"{label} path is not canonical.")
+    return value
+
+
+def _artifact_digest(value: object, *, label: str) -> str:
+    if not isinstance(value, str) or _HASH.fullmatch(value) is None:
+        _fail(_CONTRACT_MISMATCH, f"{label} sha256 is invalid.")
     return value
 
 
@@ -76,25 +103,9 @@ class SourceArtifactBinding:
 
     @classmethod
     def from_payload(cls, value: object, *, label: str) -> SourceArtifactBinding:
-        if not isinstance(value, dict) or set(value) != {"path", "sha256"}:
-            _fail(_CONTRACT_MISMATCH, f"{label} must contain only path and sha256.")
-        path = value.get("path")
-        digest = value.get("sha256")
-        _require(
-            isinstance(path, str) and bool(path) and Path(path).is_absolute(),
-            f"{label} path must be absolute text.",
-            reason_code=_CONTRACT_MISMATCH,
-        )
-        _require(
-            str(Path(path).expanduser().resolve()) == path,
-            f"{label} path is not canonical.",
-            reason_code=_CONTRACT_MISMATCH,
-        )
-        _require(
-            isinstance(digest, str) and _HASH.fullmatch(digest) is not None,
-            f"{label} sha256 is invalid.",
-            reason_code=_CONTRACT_MISMATCH,
-        )
+        payload = _artifact_payload(value, label=label)
+        path = _artifact_path(payload["path"], label=label)
+        digest = _artifact_digest(payload["sha256"], label=label)
         return cls(path=path, sha256=digest)
 
     def to_payload(self) -> dict[str, str]:
@@ -201,6 +212,20 @@ class MaterializedTerminalSourceBinding:
         point_counts: Mapping[str, int],
     ) -> MaterializedTerminalSourceBinding:
         samples = tuple(sample_order)
+        labels_valid = all(
+            isinstance(sample, str) and bool(sample) and sample.strip() == sample
+            for sample in samples
+        )
+        _require(
+            labels_valid and bool(samples) and len(set(samples)) == len(samples),
+            "Terminal sample_order must contain unique canonical labels.",
+            reason_code=_CONTRACT_MISMATCH,
+        )
+        _require(
+            set(point_counts) == set(samples),
+            "Terminal point_counts must exactly cover sample_order.",
+            reason_code=_CONTRACT_MISMATCH,
+        )
         binding = cls(
             task_key=task_key,
             rule_id=rule_id,
@@ -213,14 +238,7 @@ class MaterializedTerminalSourceBinding:
             prepared_source=SourceArtifactBinding.create(prepared_source),
             terminal_source=SourceArtifactBinding.create(terminal_source),
             sample_order=samples,
-            point_counts=tuple(
-                (sample, point_counts.get(sample)) for sample in samples
-            ),
-        )
-        _require(
-            set(point_counts) == set(samples),
-            "Terminal point_counts must exactly cover sample_order.",
-            reason_code=_CONTRACT_MISMATCH,
+            point_counts=tuple((sample, point_counts[sample]) for sample in samples),
         )
         return binding
 
@@ -250,11 +268,8 @@ class MaterializedTerminalSourceBinding:
             reason_code=_REQUEST_MISMATCH,
         )
         input_value = request.get("input")
-        _require(
-            isinstance(input_value, str) and bool(input_value.strip()),
-            "Terminal request has no bound input path.",
-            reason_code=_REQUEST_MISMATCH,
-        )
+        if not isinstance(input_value, str) or not input_value.strip():
+            _fail(_REQUEST_MISMATCH, "Terminal request has no bound input path.")
         input_path = Path(input_value).expanduser()
         if not input_path.is_absolute():
             input_path = request_path.parent / input_path

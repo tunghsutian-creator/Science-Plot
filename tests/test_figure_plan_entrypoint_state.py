@@ -128,16 +128,20 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
         exports=[],
         veusz_documents=[document],
         output_dir=output_dir,
+        figure_set={"version": 2, "primary_figure_id": plan.primary_figure_id},
+        figure_set_spec_hashes=((str(tmp_path / "studio" / "spec.json"), "a" * 64),),
     )
     publication_events: list[str] = []
     binding_calls: list[tuple[object, object]] = []
+    snapshot_calls: list[dict[str, Any]] = []
 
     def record_source_binding(bound_plan: object, bound_sources: object) -> None:
         publication_events.append("binding")
         binding_calls.append((bound_plan, bound_sources))
 
-    def record_studio_snapshot(**_kwargs: Any) -> None:
+    def record_studio_snapshot(**kwargs: Any) -> None:
         publication_events.append("snapshot")
+        snapshot_calls.append(kwargs)
 
     monkeypatch.setattr(
         evidence_module,
@@ -268,6 +272,9 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
     assert len(binding_calls) == 1
     assert binding_calls[0][0] is plan
     assert binding_calls[0][1] is sources
+    assert len(snapshot_calls) == 1
+    assert snapshot_calls[0]["figure_set"] is inventory.figure_set
+    assert snapshot_calls[0]["verified_spec_hashes"] == inventory.figure_set_spec_hashes
 
 
 def test_workflow_projects_completed_plan_into_intake_top_level_and_last_run(

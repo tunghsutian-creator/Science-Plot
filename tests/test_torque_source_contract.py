@@ -34,8 +34,7 @@ def _confident_detector_points() -> tuple[tuple[float, float], ...]:
         + [1.0] * 8
     )
     return tuple(
-        (100.0 + 10.0 * index, response)
-        for index, response in enumerate(responses)
+        (100.0 + 10.0 * index, response) for index, response in enumerate(responses)
     )
 
 
@@ -58,11 +57,7 @@ def _write_torque_source(
 def test_torque_reader_uses_shared_utf16_text_fallback(tmp_path: Path) -> None:
     source = tmp_path / "utf16_tab.txt"
     source.write_text(
-        "Time\tScrew Torque\tComment\n"
-        "s\tN.m\t\n"
-        "metadata only\n"
-        "0\t1\n"
-        "1\t2\n",
+        "Time\tScrew Torque\tComment\ns\tN.m\t\nmetadata only\n0\t1\n1\t2\n",
         encoding="utf-16",
     )
 
@@ -84,6 +79,45 @@ def test_torque_reader_does_not_retry_programming_failures(
 
     with pytest.raises(RuntimeError, match="reader invariant failed"):
         _read_torque_full_series(source)
+
+
+@pytest.mark.parametrize(
+    ("cadence", "unit", "expected_factor", "expected_method"),
+    [
+        (1.0, "s", 1.0, "index_cadence_identity"),
+        (2.0, "min", 120.0, "index_cadence_minute_to_second"),
+    ],
+)
+def test_torque_reader_uses_explicit_vendor_index_cadence(
+    tmp_path: Path,
+    cadence: float,
+    unit: str,
+    expected_factor: float,
+    expected_method: str,
+) -> None:
+    source = tmp_path / "instrument_index.txt"
+    _write_torque_source(
+        source,
+        ((0.0, 1.0), (1.0, 2.0), (2.0, 3.0)),
+        x_header="Index",
+        x_unit=f"Index counts every {cadence:g} {unit}",
+    )
+
+    series = _read_torque_full_series(source)
+
+    assert series.points == (
+        (0.0, 1.0),
+        (expected_factor, 2.0),
+        (2.0 * expected_factor, 3.0),
+    )
+    assert series.x_unit == "s"
+    assert (series.diagnostics or {})["x_unit_conversion"] == {
+        "source_unit": f"{cadence:g} {unit} per index",
+        "canonical_unit": "s",
+        "factor": expected_factor,
+        "method": expected_method,
+        "unit_detection": "detected_from_index_cadence",
+    }
 
 
 def test_prepare_without_curation_preserves_full_absolute_torque_source(
@@ -131,12 +165,14 @@ def test_prepare_without_curation_preserves_full_absolute_torque_source(
     assert parameters["automatic_event_selection_applied"] is False
     assert parameters["event_selection_policy"] == "explicit_curation_or_full_source"
     assert parameters["event_selections"][0]["source"] == "full_curve"
-    assert parameters["event_selections"][0]["x_unit_conversion"] == diagnostics[
-        "x_unit_conversion"
-    ]
-    assert parameters["event_selections"][0]["y_unit_conversion"] == diagnostics[
-        "y_unit_conversion"
-    ]
+    assert (
+        parameters["event_selections"][0]["x_unit_conversion"]
+        == diagnostics["x_unit_conversion"]
+    )
+    assert (
+        parameters["event_selections"][0]["y_unit_conversion"]
+        == diagnostics["y_unit_conversion"]
+    )
 
     table = pd.read_csv(prepared["processed_source"], header=None)
     output_points = tuple(
@@ -181,15 +217,45 @@ def test_torque_minutes_are_converted_before_second_based_curation(
         },
     )
     assert curated.points == ((60.0, 18.0), (120.0, 12.0))
-    assert (curated.diagnostics or {})["event_selection"][
-        "x_unit_conversion"
-    ]["factor"] == 60.0
+    assert (curated.diagnostics or {})["event_selection"]["x_unit_conversion"][
+        "factor"
+    ] == 60.0
 
 
 @pytest.mark.parametrize(
     ("x_header", "x_unit", "y_unit", "error"),
     (
         ("Index", "count", "N.m", "Index alone is not time evidence"),
+        (
+            "Index",
+            "Index counts every 0 s",
+            "N.m",
+            "Index cadence must be positive",
+        ),
+        (
+            "Index",
+            "Index counts every -1 s",
+            "N.m",
+            "Index cadence must be positive",
+        ),
+        (
+            "Index",
+            f"Index counts every {'1' + ('0' * 400)} s",
+            "N.m",
+            "Index cadence must be positive and finite",
+        ),
+        (
+            "Index",
+            f"Index counts every {'1' + ('0' * 307)} h",
+            "N.m",
+            "Index cadence must convert to finite seconds",
+        ),
+        (
+            "Index",
+            "Index counts every 1 fortnight",
+            "N.m",
+            "Unsupported torque time unit",
+        ),
         ("Time", "", "N.m", "Torque time unit is missing"),
         ("Time", "day", "N.m", "Unsupported torque time unit"),
         ("Time", "s", "", "Torque response unit is missing"),

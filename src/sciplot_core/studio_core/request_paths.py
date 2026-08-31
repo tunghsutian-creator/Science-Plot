@@ -7,6 +7,32 @@ from pathlib import Path
 from typing import Any
 
 
+def _canonical_publish_paths(
+    *,
+    project_dir: Path,
+    request_path: Path,
+    document_path: Path,
+) -> tuple[Path, Path, Path]:
+    """Bind publication to one project's canonical request and primary VSZ."""
+
+    project = project_dir.expanduser().resolve()
+    request = request_path.expanduser().resolve()
+    document = document_path.expanduser().resolve()
+    if request != (project / "plot_request.json").resolve():
+        raise RuntimeError(
+            "A project delivery receipt can use only the canonical "
+            "project/plot_request.json. A foreign or relocated request cannot "
+            "publish into this project."
+        )
+    if document != (project / "studio" / "document.vsz").resolve():
+        raise RuntimeError(
+            "A project delivery receipt can be published only from the "
+            "canonical project/studio/document.vsz. Registered secondary "
+            "figures are exported automatically into the same project receipt."
+        )
+    return project, request, document
+
+
 def _next_studio_run_dir(project_dir: Path) -> Path:
     runs_dir = project_dir / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)

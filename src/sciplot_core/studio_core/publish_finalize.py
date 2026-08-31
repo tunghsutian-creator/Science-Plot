@@ -8,6 +8,7 @@ from typing import Any
 
 from sciplot_core.automation_states import RULE_REPAIR_STATE
 from sciplot_core.delivery import build_delivery_package
+from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.presentation_identity import (
     require_selected_presentation_payload,
@@ -254,11 +255,36 @@ def _validate_presentation_projections(
     )
 
 
-def _snapshot_studio_directory(*, source: Path, destination: Path) -> None:
+def _snapshot_studio_directory(
+    *,
+    source: Path,
+    destination: Path,
+    figure_set: dict[str, Any] | None = None,
+    verified_spec_hashes: tuple[tuple[str, str], ...] = (),
+) -> None:
+    source_root = source.expanduser().resolve()
+    verified_specs: list[tuple[Path, str, Path]] = []
+    for spec_value, expected_hash in verified_spec_hashes:
+        spec = Path(spec_value).expanduser()
+        if spec.is_symlink() or spec.resolve() != spec:
+            raise RuntimeError(f"A verified Studio spec is not canonical: {spec}")
+        try:
+            relative_spec = spec.relative_to(source_root)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"A verified Studio spec is outside its snapshot root: {spec}"
+            ) from exc
+        verified_specs.append((relative_spec, expected_hash, spec))
     if destination.exists():
         shutil.rmtree(destination)
     if source.exists():
         shutil.copytree(source, destination)
+    if figure_set is not None:
+        _write_json_atomic(destination / "figure_set.json", json_safe(figure_set))
+    for relative_spec, expected_hash, spec in verified_specs:
+        if existing_file_sha256(destination / relative_spec) != expected_hash:
+            shutil.rmtree(destination, ignore_errors=True)
+            raise RuntimeError(f"A Studio spec changed before its run snapshot: {spec}")
 
 
 def _finalize_delivery_contracts(

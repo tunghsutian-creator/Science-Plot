@@ -15,7 +15,6 @@ from sciplot_core.figure_plan import (
     request_for_figure_task,
     resolved_figure_plan_from_payload,
 )
-from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.render import render_to_dir
 
@@ -65,7 +64,7 @@ def _render_veusz_sweep_bundle(
     source_attestation: PreparationSourceAttestation | None = None,
     output_dir: Path,
     options: dict[str, Any],
-    export_formats: object,
+    export_formats: tuple[str, ...],
     request: dict[str, Any],
     _source_builder: Callable[
         ..., list[RheologyTaskSource]
@@ -77,9 +76,7 @@ def _render_veusz_sweep_bundle(
     prefix = _sweep_prefix_for_request(request)
     figure_plan = _resolved_figure_plan
     if figure_plan is None and request.get("resolved_figure_plan") is not None:
-        figure_plan = resolved_figure_plan_from_payload(
-            request["resolved_figure_plan"]
-        )
+        figure_plan = resolved_figure_plan_from_payload(request["resolved_figure_plan"])
     if prefix == "temp" and figure_plan is None:
         raise ValueError(
             "temperature_figure_plan_required: temperature Workflow rendering "
@@ -125,12 +122,12 @@ def _render_veusz_sweep_bundle(
         if figure_plan is not None
         else {}
     )
-    artifacts_by_id = (
+    artifacts_by_id: dict[str, list[str]] = (
         {task.figure_id: [] for task in figure_plan.tasks}
         if figure_plan is not None
         else {}
     )
-    staged_artifacts_by_id = (
+    staged_artifacts_by_id: dict[str, list[str]] = (
         {task.figure_id: [] for task in figure_plan.tasks}
         if figure_plan is not None
         else {}
@@ -269,7 +266,7 @@ def _render_veusz_sweep_bundle(
             "sheet": 0,
             "render_engine": "veusz",
             "qa_target": "veusz_export",
-            "export_formats": list(export_formats or DEFAULT_EXPORT_FORMATS_POLICY),
+            "export_formats": list(export_formats),
             "exports": combined_exports,
             "outputs": combined_outputs,
             "qa_reports": combined_reports,
@@ -282,12 +279,16 @@ def _render_veusz_sweep_bundle(
             },
         }
         if figure_plan is not None:
+            staged_outcome_artifacts: dict[str, list[str] | tuple[str, ...]] = {
+                figure_id: list(artifacts)
+                for figure_id, artifacts in staged_artifacts_by_id.items()
+            }
             result["multi_metric_bundle"]["figure_ids"] = list(
                 figure_plan.selected_figure_ids
             )
             staged_outcomes = outcomes_for_artifact_map(
                 figure_plan,
-                staged_artifacts_by_id,
+                staged_outcome_artifacts,
                 missing_reason_code=(
                     "temperature_metric_source_unavailable"
                     if prefix == "temp"

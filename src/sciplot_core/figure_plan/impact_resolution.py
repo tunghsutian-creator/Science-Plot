@@ -9,6 +9,7 @@ from typing import Any
 
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.path_names import slug
+from sciplot_core.semantic_sources.models import ImpactReplicatePayload
 
 from sciplot_core.figure_plan.errors import FigurePlanResolutionError
 from sciplot_core.figure_plan.plan import ResolvedFigurePlan
@@ -38,6 +39,21 @@ def resolve_impact_plan(
     )
 
     available = read_impact_condition_payloads(workbook)
+    return resolve_impact_plan_from_payloads(
+        available,
+        template=template,
+        request=request,
+        source_sha256=source_sha256,
+    )
+
+
+def resolve_impact_plan_from_payloads(
+    available: list[tuple[str, ImpactReplicatePayload]],
+    *,
+    template: str,
+    request: dict[str, Any],
+    source_sha256: str | None,
+) -> ResolvedFigurePlan:
     if not available:
         return _with_source_sha256(
             _generic_impact_plan(template),
@@ -380,4 +396,5 @@ def _condition_order(request: dict[str, Any]) -> list[str]:
     return [str(item).strip() for item in value if str(item).strip()]
 
 
-__all__ = ["resolve_impact_plan", "stable_impact_figure_id"]
+__all__ = ["resolve_impact_plan", "resolve_impact_plan_from_payloads"]
+__all__.append("stable_impact_figure_id")

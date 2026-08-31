@@ -19,7 +19,8 @@ from sciplot_core.figure_plan import (
 )
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.materials_rules import get_rule, resolve_rule_template
+from sciplot_core.materials_rules import get_rule
+from sciplot_core.materials_rules.catalog import resolve_rule_template
 from sciplot_core.one_step import build_one_step_project
 from sciplot_core.policy import layout_policy_for_semantic
 from sciplot_core.publication import (

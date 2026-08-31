@@ -5,18 +5,14 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
-import pandas as pd
 from sciplot_core.figure_plan import (
-    FigurePlanResolutionError,
     FigureTask,
     ResolvedFigurePlan,
     request_for_figure_task,
     resolve_figure_plan,
     resolved_figure_plan_from_payload,
 )
-from sciplot_core.materials_rules import (
-    resolve_rule_template,
-)
+from sciplot_core.materials_rules.catalog import resolve_rule_template
 from sciplot_core.policy import (
     rheology_metric_axis_label,
 )
@@ -29,13 +25,17 @@ from sciplot_core.studio_render.template_resolution import (
 from sciplot_core.studio_render.value_parsing import (
     _string_list,
 )
-
 from sciplot_core.studio_core.request_paths import (
     _resolve_request_input,
 )
 from sciplot_core.studio_core.figure_task_evidence import (
     figure_queue_item_from_task,
     figure_task_from_queue_item,
+)
+from sciplot_core.studio_core.impact_task_sources import (
+    materialize_impact_condition_sources,
+    materialize_impact_point_line_source,
+    validated_impact_plan_snapshot,
 )
 
 
@@ -55,11 +55,7 @@ def _rheology_frequency_figure_queue(
         plan = resolve_figure_plan(
             rule_id="rheology_frequency_sweep",
             template="point_line",
-            study_model=(
-                request.get("study_model")
-                if isinstance(request.get("study_model"), dict)
-                else {}
-            ),
+            study_model=_request_study_model(request),
             input_path=None,
             request=request,
         )
@@ -89,20 +85,19 @@ def _rheology_frequency_figure_request(
             "Cartesian y metric."
         )
     y_metric = y_metric_value.strip()
+    render_options_value: object = figure_request.get("render_options")
     render_options = (
-        dict(figure_request.get("render_options"))
-        if isinstance(figure_request.get("render_options"), dict)
-        else {}
+        dict(render_options_value) if isinstance(render_options_value, dict) else {}
     )
     render_options["size"] = "60x55"
+    explicit_render_option_keys: object = figure_request.get(
+        "explicit_render_option_keys"
+    )
     explicit_render_keys = {
         str(value)
         for value in (
-            figure_request.get("explicit_render_option_keys")
-            if isinstance(
-                figure_request.get("explicit_render_option_keys"),
-                list,
-            )
+            explicit_render_option_keys
+            if isinstance(explicit_render_option_keys, list)
             else []
         )
     }
@@ -169,13 +164,14 @@ def _impact_condition_figure_queue(
         # A terminal worker executes its one bound task; it never reconstructs
         # the enclosing Studio figure-set queue.
         return []
-    source = _resolve_request_input(request, base_dir=base_dir)
-    if source is None:
+    source_root = _resolve_request_input(request, base_dir=base_dir)
+    if source_root is None:
         return []
-    if source.is_dir():
+    source = source_root
+    if source_root.is_dir():
         workbooks = sorted(
             path
-            for path in source.rglob("*")
+            for path in source_root.rglob("*")
             if path.is_file() and path.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}
         )
         if len(workbooks) != 1:
@@ -190,60 +186,49 @@ def _impact_condition_figure_queue(
         plan = resolve_figure_plan(
             rule_id="impact_metric",
             template=_request_template(request),
-            study_model=(
-                request.get("study_model")
-                if isinstance(request.get("study_model"), dict)
-                else {}
-            ),
-            input_path=source,
+            study_model=_request_study_model(request),
+            input_path=source_root,
             request=request,
         )
     if plan is None or plan.rule_id != "impact_metric":
         return []
     if _request_template(request) == "point_line":
-        if len(plan.tasks) != 1 or plan.tasks[0].template != "point_line":
-            return []
+        _payloads, workbook_hash = validated_impact_plan_snapshot(
+            plan,
+            template="point_line",
+            request=request,
+            source_root=source_root,
+            workbook=source,
+        )
+        condition_source = materialize_impact_point_line_source(
+            plan,
+            source_root=source_root,
+            workbook=source,
+            workbook_hash=workbook_hash,
+            project_dir=project_dir,
+        )
         return [
             {
                 **_queue_item_from_task(plan.tasks[0]),
-                "condition_source": str(source),
+                "condition_source": str(condition_source),
                 "supported_templates": ["point_line"],
                 "presentation_data_shape": "condition_overlay_replicates",
             }
         ]
     if plan.selection_policy != "all_workbook_conditions":
         return []
-    from sciplot_core.semantic import read_impact_condition_payloads
-
-    conditions = dict(read_impact_condition_payloads(source))
-    output_dir = project_dir / "studio" / "processed" / "impact_conditions"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    queue: list[dict[str, Any]] = []
-    for task in plan.tasks:
-        condition = task.conditions[0]
-        payload = conditions.get(condition)
-        if payload is None:
-            raise FigurePlanResolutionError(
-                "impact_condition_source_changed",
-                f"Resolved impact condition is no longer available: {condition}",
-            )
-        condition_source = output_dir / f"{task.document_stem}.csv"
-        pd.DataFrame(payload.rows).to_csv(
-            condition_source,
-            header=False,
-            index=False,
-        )
-        queue.append(
-            {
-                **_queue_item_from_task(task),
-                "condition": str(condition),
-                "condition_source": str(condition_source),
-                "replicate_counts": dict(task.replicate_counts),
-                "supported_templates": ["bar", "box", "box_strip", "point_line"],
-                "presentation_data_shape": "categorical_replicates",
-            }
-        )
-    return queue
+    condition_payloads, _workbook_hash = validated_impact_plan_snapshot(
+        plan,
+        template=_request_template(request),
+        request=request,
+        source_root=source_root,
+        workbook=source,
+    )
+    return materialize_impact_condition_sources(
+        plan,
+        condition_payloads=condition_payloads,
+        project_dir=project_dir,
+    )
 
 
 def _impact_condition_figure_request(
@@ -281,14 +266,18 @@ def _task_from_queue_item(figure: dict[str, Any]) -> FigureTask | None:
 def _impact_point_line_condition_order(
     request: dict[str, Any],
 ) -> list[str]:
+    render_options_value: object = request.get("render_options")
     render_options = (
-        request.get("render_options")
-        if isinstance(request.get("render_options"), dict)
-        else {}
+        render_options_value if isinstance(render_options_value, dict) else {}
     )
     return _string_list(
         request.get("condition_order") or render_options.get("condition_order")
     )
+
+
+def _request_study_model(request: dict[str, Any]) -> dict[str, Any]:
+    value: object = request.get("study_model")
+    return value if isinstance(value, dict) else {}
 
 
 def _impact_point_line_source(

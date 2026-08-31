@@ -43,7 +43,7 @@ def _render_veusz_dma_temperature_bundle(
     source_attestation: PreparationSourceAttestation | None,
     output_dir: Path,
     options: dict[str, Any],
-    export_formats: object,
+    export_formats: tuple[str, ...],
     request: dict[str, Any],
     resolved_scientific_source: ResolvedScientificSource | None = None,
     _resolved_figure_plan: ResolvedFigurePlan | None = None,
@@ -76,7 +76,8 @@ def _render_veusz_dma_temperature_bundle(
             )
         if (
             source_attestation.rule_id != DMA_TEMPERATURE_RULE_ID
-            or Path(source_attestation.source_root) != source_input.expanduser().resolve()
+            or Path(source_attestation.source_root)
+            != source_input.expanduser().resolve()
             or source_attestation.prepared_source.path
             != str(input_path.expanduser().resolve())
             or source_attestation.source_tree_sha256_after != plan.source_sha256

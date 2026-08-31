@@ -1,10 +1,18 @@
+from dataclasses import replace
 import json
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from sciplot_core.figure_plan import FigureTask, ResolvedFigurePlan
+import sciplot_core.semantic_sources.impact_sources as impact_sources
+import sciplot_core.studio_core.impact_task_sources as impact_task_sources
+from sciplot_core.figure_plan import (
+    FigurePlanResolutionError,
+    FigureTask,
+    ResolvedFigurePlan,
+    resolve_figure_plan,
+)
 from sciplot_core.materials_rules import get_rule, resolve_rule_template
 from sciplot_core.readiness import (
     render_request_contract_payload,
@@ -29,6 +37,41 @@ from sciplot_core.workflow import (
     _impact_condition_sources,
     _render_veusz_impact_bundle,
 )
+
+
+def _write_two_condition_impact_source(
+    path: Path,
+    *,
+    samples: tuple[str, str] = ("E0", "E2"),
+) -> None:
+    with pd.ExcelWriter(path) as writer:
+        for condition, offset in (("2mm", 0.0), ("4mm", 10.0)):
+            pd.DataFrame(
+                [
+                    ["Re", "Re"],
+                    ["kJ/m²", "kJ/m²"],
+                    list(samples),
+                    [offset + 1.0, offset + 2.0],
+                    [offset + 1.1, offset + 2.1],
+                ]
+            ).to_excel(writer, sheet_name=condition, header=False, index=False)
+
+
+def _resolved_two_condition_impact_plan(source: Path) -> ResolvedFigurePlan:
+    plan = resolve_figure_plan(
+        rule_id="impact_metric",
+        template="box_strip",
+        study_model={},
+        input_path=source,
+        request={"rule_id": "impact_metric", "template": "box_strip"},
+    )
+    assert plan is not None
+    assert plan.selection_policy == "all_workbook_conditions"
+    return plan
+
+
+def _impact_processed_root(project_dir: Path) -> Path:
+    return project_dir / "studio" / "processed"
 
 
 def test_impact_workbook_sheets_are_independent_figure_conditions(
@@ -79,6 +122,403 @@ def test_impact_workbook_sheets_are_independent_figure_conditions(
         "impact_6mm",
     ]
     assert all(item[1].is_file() for item in autoplot_sources)
+
+
+@pytest.mark.parametrize("source_state", ["missing_plan_hash", "pre_read_drift"])
+def test_impact_condition_execution_rejects_unbound_source_before_reader_or_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source_state: str,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    _write_two_condition_impact_source(source)
+    plan = _resolved_two_condition_impact_plan(source)
+    if source_state == "missing_plan_hash":
+        plan = replace(plan, source_sha256=None)
+    else:
+        source.write_bytes(source.read_bytes() + b"source-drift")
+    reader_calls = 0
+    real_reader = impact_sources.read_impact_condition_payloads
+
+    def counted_reader(path: Path) -> object:
+        nonlocal reader_calls
+        reader_calls += 1
+        return real_reader(path)
+
+    monkeypatch.setattr(
+        impact_sources,
+        "read_impact_condition_payloads",
+        counted_reader,
+    )
+    project_dir = tmp_path / "project"
+
+    with pytest.raises(FigurePlanResolutionError) as exc_info:
+        _impact_condition_figure_queue(
+            {
+                "rule_id": "impact_metric",
+                "template": "box_strip",
+                "input": str(source),
+            },
+            base_dir=tmp_path,
+            project_dir=project_dir,
+            figure_plan=plan,
+        )
+
+    assert exc_info.value.reason_code == "impact_condition_source_changed"
+    assert reader_calls == 0
+    assert not _impact_processed_root(project_dir).exists()
+
+
+@pytest.mark.parametrize(
+    "task_split",
+    [
+        "empty_conditions",
+        "multiple_conditions",
+        "sample_order",
+        "replicate_counts",
+        "y_metric",
+    ],
+)
+def test_impact_condition_execution_rejects_task_payload_split_before_writes(
+    tmp_path: Path,
+    task_split: str,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    _write_two_condition_impact_source(source)
+    plan = _resolved_two_condition_impact_plan(source)
+    task = plan.tasks[0]
+    if task_split == "empty_conditions":
+        changed_task = replace(task, conditions=(), condition_labels=())
+    elif task_split == "multiple_conditions":
+        changed_task = replace(
+            task,
+            conditions=(task.conditions[0], "4mm"),
+            condition_labels=(task.condition_labels[0], "4mm"),
+        )
+    elif task_split == "sample_order":
+        changed_task = replace(
+            task,
+            sample_order=tuple(reversed(task.sample_order)),
+            replicate_counts=tuple(reversed(task.replicate_counts)),
+        )
+    elif task_split == "replicate_counts":
+        first_sample, first_count = task.replicate_counts[0]
+        changed_task = replace(
+            task,
+            replicate_counts=(
+                (first_sample, first_count + 1),
+                *task.replicate_counts[1:],
+            ),
+        )
+    else:
+        changed_task = replace(task, y_metric="forged_metric")
+    changed_plan = replace(
+        plan,
+        tasks=(changed_task, *plan.tasks[1:]),
+    )
+    project_dir = tmp_path / "project"
+
+    with pytest.raises(FigurePlanResolutionError) as exc_info:
+        _impact_condition_figure_queue(
+            {
+                "rule_id": "impact_metric",
+                "template": "box_strip",
+                "input": str(source),
+            },
+            base_dir=tmp_path,
+            project_dir=project_dir,
+            figure_plan=changed_plan,
+        )
+
+    assert exc_info.value.reason_code == "impact_condition_source_changed"
+    assert not _impact_processed_root(project_dir).exists()
+
+
+def test_impact_condition_execution_rejects_payload_order_split_before_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    _write_two_condition_impact_source(source)
+    plan = _resolved_two_condition_impact_plan(source)
+    real_reader = impact_sources.read_impact_condition_payloads
+    reader_calls = 0
+
+    def reversed_reader(path: Path) -> object:
+        nonlocal reader_calls
+        reader_calls += 1
+        return list(reversed(real_reader(path)))
+
+    monkeypatch.setattr(
+        impact_sources,
+        "read_impact_condition_payloads",
+        reversed_reader,
+    )
+    project_dir = tmp_path / "project"
+
+    with pytest.raises(FigurePlanResolutionError) as exc_info:
+        _impact_condition_figure_queue(
+            {
+                "rule_id": "impact_metric",
+                "template": "box_strip",
+                "input": str(source),
+            },
+            base_dir=tmp_path,
+            project_dir=project_dir,
+            figure_plan=plan,
+        )
+
+    assert exc_info.value.reason_code == "impact_condition_source_changed"
+    assert reader_calls == 1
+    assert not _impact_processed_root(project_dir).exists()
+
+
+def test_impact_condition_execution_rejects_source_drift_after_single_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    _write_two_condition_impact_source(source)
+    plan = _resolved_two_condition_impact_plan(source)
+    real_reader = impact_sources.read_impact_condition_payloads
+    reader_calls = 0
+
+    def drifting_reader(path: Path) -> object:
+        nonlocal reader_calls
+        reader_calls += 1
+        payloads = real_reader(path)
+        path.write_bytes(path.read_bytes() + b"source-drift")
+        return payloads
+
+    monkeypatch.setattr(
+        impact_sources,
+        "read_impact_condition_payloads",
+        drifting_reader,
+    )
+    project_dir = tmp_path / "project"
+
+    with pytest.raises(FigurePlanResolutionError) as exc_info:
+        _impact_condition_figure_queue(
+            {
+                "rule_id": "impact_metric",
+                "template": "box_strip",
+                "input": str(source),
+            },
+            base_dir=tmp_path,
+            project_dir=project_dir,
+            figure_plan=plan,
+        )
+
+    assert exc_info.value.reason_code == "impact_condition_source_changed"
+    assert reader_calls == 1
+    assert not _impact_processed_root(project_dir).exists()
+
+
+def test_impact_condition_execution_reads_payloads_once_before_materialization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    _write_two_condition_impact_source(source)
+    plan = _resolved_two_condition_impact_plan(source)
+    real_reader = impact_sources.read_impact_condition_payloads
+    reader_calls = 0
+
+    def counted_reader(path: Path) -> object:
+        nonlocal reader_calls
+        reader_calls += 1
+        return real_reader(path)
+
+    monkeypatch.setattr(
+        impact_sources,
+        "read_impact_condition_payloads",
+        counted_reader,
+    )
+    project_dir = tmp_path / "project"
+
+    queue = _impact_condition_figure_queue(
+        {
+            "rule_id": "impact_metric",
+            "template": "box_strip",
+            "input": str(source),
+        },
+        base_dir=tmp_path,
+        project_dir=project_dir,
+        figure_plan=plan,
+    )
+
+    assert reader_calls == 1
+    assert [item["condition"] for item in queue] == ["2mm", "4mm"]
+    assert all(Path(item["condition_source"]).is_file() for item in queue)
+
+
+def test_impact_point_line_execution_rejects_source_drift_before_snapshot(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    _write_two_condition_impact_source(source)
+    request = {
+        "rule_id": "impact_metric",
+        "template": "point_line",
+        "input": str(source),
+    }
+    plan = resolve_figure_plan(
+        rule_id="impact_metric",
+        template="point_line",
+        study_model={},
+        input_path=source,
+        request=request,
+    )
+    assert plan is not None
+    _write_two_condition_impact_source(source, samples=("E0", "E3"))
+    project_dir = tmp_path / "project"
+
+    with pytest.raises(FigurePlanResolutionError) as exc_info:
+        _impact_condition_figure_queue(
+            request,
+            base_dir=tmp_path,
+            project_dir=project_dir,
+            figure_plan=plan,
+        )
+
+    assert exc_info.value.reason_code == "impact_condition_source_changed"
+    assert not _impact_processed_root(project_dir).exists()
+
+
+def test_impact_point_line_renders_from_private_verified_snapshot(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    _write_two_condition_impact_source(source)
+    request = {
+        "rule_id": "impact_metric",
+        "template": "point_line",
+        "input": str(source),
+    }
+    plan = resolve_figure_plan(
+        rule_id="impact_metric",
+        template="point_line",
+        study_model={},
+        input_path=source,
+        request=request,
+    )
+    assert plan is not None
+    queue = _impact_condition_figure_queue(
+        request,
+        base_dir=tmp_path,
+        project_dir=tmp_path / "project",
+        figure_plan=plan,
+    )
+    private_source = Path(queue[0]["condition_source"])
+    _write_two_condition_impact_source(source, samples=("E0", "E3"))
+
+    _series, axis_info, _steps = _impact_point_line_series_from_source(
+        private_source,
+        request={"resolved_figure_plan": plan.to_payload()},
+    )
+
+    assert axis_info["category_labels"] == ["E0", "E2"]
+    assert private_source.read_bytes() != source.read_bytes()
+
+
+def test_impact_condition_csv_failure_removes_only_new_private_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    _write_two_condition_impact_source(source)
+    plan = _resolved_two_condition_impact_plan(source)
+    project_dir = tmp_path / "project"
+    root = _impact_processed_root(project_dir) / "impact_conditions"
+    prior = root / f"{plan.plan_id}_{'0' * 32}"
+    prior.mkdir(parents=True)
+    prior_source = prior / "impact_2mm.csv"
+    prior_source.write_bytes(b"prior-authoritative-source")
+    real_to_csv = pd.DataFrame.to_csv
+    writes = 0
+
+    def fail_second_write(
+        frame: pd.DataFrame,
+        path: object,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        nonlocal writes
+        writes += 1
+        if writes == 2:
+            Path(str(path)).write_bytes(b"partial-new-source")
+            raise OSError("synthetic second CSV failure")
+        real_to_csv(frame, path, *args, **kwargs)
+
+    monkeypatch.setattr(impact_task_sources.pd.DataFrame, "to_csv", fail_second_write)
+
+    with pytest.raises(OSError, match="synthetic second CSV failure"):
+        _impact_condition_figure_queue(
+            {
+                "rule_id": "impact_metric",
+                "template": "box_strip",
+                "input": str(source),
+            },
+            base_dir=tmp_path,
+            project_dir=project_dir,
+            figure_plan=plan,
+        )
+
+    assert prior_source.read_bytes() == b"prior-authoritative-source"
+    assert list(root.iterdir()) == [prior]
+
+
+@pytest.mark.focused
+@pytest.mark.parametrize("template", ["box_strip", "point_line"])
+@pytest.mark.parametrize(
+    "symlink_component",
+    ["studio", "processed", "impact_conditions"],
+)
+def test_impact_private_source_rejects_project_path_symlink_before_writes(
+    tmp_path: Path,
+    template: str,
+    symlink_component: str,
+) -> None:
+    source = tmp_path / "impact.xlsx"
+    _write_two_condition_impact_source(source)
+    request = {
+        "rule_id": "impact_metric",
+        "template": template,
+        "input": str(source),
+    }
+    plan = resolve_figure_plan(
+        rule_id="impact_metric",
+        template=template,
+        study_model={},
+        input_path=source,
+        request=request,
+    )
+    assert plan is not None
+    project_dir = tmp_path / "project"
+    external = tmp_path / "external"
+    external.mkdir()
+    if symlink_component == "studio":
+        project_dir.mkdir()
+        unsafe = project_dir / "studio"
+    elif symlink_component == "processed":
+        (project_dir / "studio").mkdir(parents=True)
+        unsafe = project_dir / "studio" / "processed"
+    else:
+        (project_dir / "studio" / "processed").mkdir(parents=True)
+        unsafe = project_dir / "studio" / "processed" / "impact_conditions"
+    unsafe.symlink_to(external, target_is_directory=True)
+
+    with pytest.raises(FigurePlanResolutionError) as exc_info:
+        _impact_condition_figure_queue(
+            request,
+            base_dir=tmp_path,
+            project_dir=project_dir,
+            figure_plan=plan,
+        )
+
+    assert exc_info.value.reason_code == "impact_condition_source_changed"
+    assert unsafe.is_symlink()
+    assert list(external.iterdir()) == []
 
 
 def test_impact_semantics_expose_an_independent_presentation_contract() -> None:
@@ -203,6 +643,7 @@ def test_impact_bundle_renders_the_same_semantic_source_with_selected_template(
     metric_source = tmp_path / "impact_2mm.csv"
     metric_source.write_text("sample,E0,E2\nvalue,1,2\n", encoding="utf-8")
     rendered_templates: list[str] = []
+    rendered_formats: list[tuple[str, ...]] = []
 
     monkeypatch.setattr(
         workflow,
@@ -217,12 +658,15 @@ def test_impact_bundle_renders_the_same_semantic_source_with_selected_template(
         *,
         template: str,
         output_dir: Path,
+        export_formats: tuple[str, ...],
         **_kwargs: object,
     ) -> dict[str, object]:
         rendered_templates.append(template)
+        rendered_formats.append(export_formats)
         output_dir.mkdir(parents=True, exist_ok=True)
         return {
             "template": template,
+            "export_formats": list(export_formats),
             "outputs": [],
             "exports": [],
             "qa_reports": [],
@@ -237,13 +681,15 @@ def test_impact_bundle_renders_the_same_semantic_source_with_selected_template(
         tmp_path,
         output_dir=tmp_path / "out",
         options={},
-        export_formats=["pdf", "tiff_300"],
+        export_formats="pdf",
         request={"rule_id": "impact_metric", "template": template},
     )
 
     assert result is not None
     assert result["template"] == template
+    assert result["export_formats"] == ["pdf", "tiff_300"]
     assert rendered_templates == [template]
+    assert rendered_formats == [("pdf", "tiff_300")]
 
 
 def test_impact_point_line_compares_compatible_conditions_and_preserves_raw_points(
@@ -434,7 +880,12 @@ def test_impact_point_line_uses_one_combined_document(tmp_path: Path) -> None:
 
     assert len(queue) == 1
     assert queue[0]["id"] == "impact_strength_by_sample"
-    assert queue[0]["condition_source"] == str(source)
+    condition_source = Path(queue[0]["condition_source"])
+    assert condition_source != source
+    assert condition_source.is_relative_to(
+        tmp_path / "project" / "studio" / "processed" / "impact_conditions"
+    )
+    assert condition_source.read_bytes() == source.read_bytes()
     assert queue[0]["resolved_figure_task"]["template"] == "point_line"
 
 

@@ -7,6 +7,7 @@ import sys
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 from threading import Event
 
@@ -205,8 +206,7 @@ def test_selected_rule_overrides_stale_recognition_authority(
     assert request["rule_id"] == "tensile_curve"
     assert request["template"] == "curve"
     assert {
-        key: request["render_options"][key]
-        for key in rule_payload["render_options"]
+        key: request["render_options"][key] for key in rule_payload["render_options"]
     } == rule_payload["render_options"]
     assert request["render_options"]["x_label_override"] == "Strain (%)"
     assert request["render_options"]["y_label_override"] == "Tensile stress (MPa)"
@@ -244,9 +244,7 @@ def test_intake_projects_registered_gpc_log_scale_from_rule_axis(
         project_name="calibrated gpc distribution",
         data_type_id="chromatography",
         experiment_type_id="gpc_sec_chromatogram",
-        groups=_group(
-            b"Molar mass,Differential weight fraction\ng/mol,\n10000,0.2\n"
-        ),
+        groups=_group(b"Molar mass,Differential weight fraction\ng/mol,\n10000,0.2\n"),
         output_root=tmp_path / "projects",
         studio_preparer=lambda _project_dir: {},
     )
@@ -466,6 +464,131 @@ def test_studio_run_registration_propagates_zip_refresh_failure(
     assert (project_dir / "intake_manifest.json").read_bytes() == prior_manifest
     assert (project_dir / "project.sciplot.json").read_bytes() == prior_mirror
     assert zip_path.read_bytes() == prior_zip
+
+
+def test_studio_run_reads_existing_studio_mapping_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SingleReadManifest(dict[str, object]):
+        studio_reads = 0
+
+        def get(self, key: str, default: object = None) -> object:
+            if key == "studio":
+                self.studio_reads += 1
+                if self.studio_reads > 1:
+                    raise AssertionError("Studio manifest payload was read twice.")
+            return super().get(key, default)
+
+    payload = SingleReadManifest({"studio": {}})
+
+    @contextmanager
+    def edit_manifest(
+        _project_dir: Path,
+        *,
+        snapshot_writer: object,
+    ):
+        assert callable(snapshot_writer)
+        yield payload
+
+    monkeypatch.setattr(
+        registry_writes,
+        "edit_intake_project_manifest_with_snapshot",
+        edit_manifest,
+    )
+
+    registry_writes._register_studio_run(
+        tmp_path,
+        {"created_at": "2026-08-20T00:00:00Z"},
+        studio_run={"exports": [{"path": "figure.pdf"}]},
+    )
+
+    assert payload.studio_reads == 1
+    assert payload["studio"] == {
+        "exports": [{"path": "figure.pdf"}],
+        "last_export_run": {"exports": [{"path": "figure.pdf"}]},
+    }
+
+
+@pytest.mark.parametrize("malformed_studio", [None, [], "not-an-object"])
+def test_studio_run_replaces_malformed_studio_registry_payload(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    malformed_studio: object,
+) -> None:
+    payload: dict[str, object] = {"studio": malformed_studio}
+
+    @contextmanager
+    def edit_manifest(
+        _project_dir: Path,
+        *,
+        snapshot_writer: object,
+    ):
+        assert callable(snapshot_writer)
+        yield payload
+
+    monkeypatch.setattr(
+        registry_writes,
+        "edit_intake_project_manifest_with_snapshot",
+        edit_manifest,
+    )
+
+    registry_writes._register_studio_run(
+        tmp_path,
+        {"created_at": "2026-08-20T00:00:00Z"},
+        studio_run={"exports": []},
+    )
+
+    assert payload["studio"] == {
+        "exports": [],
+        "last_export_run": {"exports": []},
+    }
+
+
+def test_studio_run_adapts_snapshot_path_result_to_none(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload: dict[str, object] = {"studio": {}}
+    snapshot_calls: list[tuple[Path, dict[str, object]]] = []
+    callback_results: list[object] = []
+
+    def refresh_snapshot(
+        project_dir: Path,
+        manifest: dict[str, object],
+    ) -> Path:
+        snapshot_calls.append((project_dir, manifest))
+        return project_dir.with_suffix(".zip")
+
+    @contextmanager
+    def edit_manifest(
+        project_dir: Path,
+        *,
+        snapshot_writer: object,
+    ):
+        assert callable(snapshot_writer)
+        yield payload
+        callback_results.append(snapshot_writer(project_dir, payload))
+
+    monkeypatch.setattr(
+        packaging,
+        "_refresh_intake_project_zip_unlocked",
+        refresh_snapshot,
+    )
+    monkeypatch.setattr(
+        registry_writes,
+        "edit_intake_project_manifest_with_snapshot",
+        edit_manifest,
+    )
+
+    registry_writes._register_studio_run(
+        tmp_path,
+        {"created_at": "2026-08-20T00:00:00Z"},
+        studio_run={"exports": []},
+    )
+
+    assert snapshot_calls == [(tmp_path, payload)]
+    assert callback_results == [None]
 
 
 def test_standalone_studio_run_without_intake_manifest_skips_registry_and_zip(

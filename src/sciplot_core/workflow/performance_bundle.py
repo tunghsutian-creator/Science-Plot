@@ -16,7 +16,6 @@ from sciplot_core.figure_plan import (
 )
 from sciplot_core.figure_plan.source_binding import source_tree_sha256
 from sciplot_core.figure_plan.task import FigureTask
-from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY
 from sciplot_core.render import render_to_dir
 from sciplot_core.workflow.bundle_exports import _rename_metric_exports
 from sciplot_core.workflow.task_artifacts import (
@@ -30,7 +29,7 @@ def _render_veusz_performance_bundle(
     *,
     output_dir: Path,
     options: dict[str, Any],
-    export_formats: object,
+    export_formats: tuple[str, ...],
     request: dict[str, Any],
     _resolved_figure_plan: ResolvedFigurePlan | None = None,
 ) -> dict[str, Any] | None:
@@ -90,7 +89,7 @@ def _render_veusz_performance_bundle(
         "terminal_render_requests": [],
         "transform_steps": [],
     }
-    artifacts_by_id = {task.figure_id: [] for task in plan.tasks}
+    artifacts_by_id: dict[str, list[str]] = {task.figure_id: [] for task in plan.tasks}
     try:
         for task, payload in rendered:
             outputs, exports = _rename_metric_exports(
@@ -129,6 +128,9 @@ def _render_veusz_performance_bundle(
     finally:
         shutil.rmtree(transaction_dir, ignore_errors=True)
 
+    outcome_artifacts: dict[str, list[str] | tuple[str, ...]] = {
+        figure_id: tuple(paths) for figure_id, paths in artifacts_by_id.items()
+    }
     result: dict[str, Any] = {
         "kind": "sciplot_render_result",
         "template": "performance_comparison_figure_set",
@@ -136,7 +138,7 @@ def _render_veusz_performance_bundle(
         "sheet": None,
         "render_engine": "veusz",
         "qa_target": "veusz_export",
-        "export_formats": list(export_formats or DEFAULT_EXPORT_FORMATS_POLICY),
+        "export_formats": list(export_formats),
         **combined,
         "multi_metric_bundle": {
             "kind": "performance_comparison_figure_set",
@@ -148,7 +150,7 @@ def _render_veusz_performance_bundle(
             outcome.to_payload()
             for outcome in outcomes_for_artifact_map(
                 plan,
-                artifacts_by_id,
+                outcome_artifacts,
                 missing_reason_code="performance_task_artifacts_incomplete",
             )
         ],

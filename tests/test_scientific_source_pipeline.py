@@ -46,12 +46,7 @@ from sciplot_core.workflow.source_binding import (
 
 def _write_source(path: Path) -> None:
     path.write_text(
-        "Time,Shear Stress\n"
-        "s,Pa\n"
-        "sample A,sample A\n"
-        "0.13,10\n"
-        "0.29,8\n"
-        "0.47,6\n",
+        "Time,Shear Stress\ns,Pa\nsample A,sample A\n0.13,10\n0.29,8\n0.47,6\n",
         encoding="utf-8",
     )
 
@@ -135,6 +130,72 @@ def test_workflow_single_curve_labels_come_from_the_resolved_source() -> None:
 
     assert bound["render_options"]["x_label_override"] == "Wavenumber (cm⁻¹)"
     assert bound["render_options"]["y_label_override"] == "Transmittance (%)"
+
+
+def test_workflow_render_contract_ignores_non_object_option_payloads() -> None:
+    bound = bind_workflow_semantic_render_options(
+        request={"render_options": ["size", "60x55"]},
+        semantic={
+            "template": "curve",
+            "render_options": "not-an-object",
+            "axis_plan": {
+                "x": ["display_label", "Not an axis object"],
+                "y": "not-an-axis-object",
+            },
+        },
+        figure_plan=SimpleNamespace(selection_policy="registered_single_curve"),
+    )
+
+    assert bound["render_options"] == {}
+
+
+def test_semantic_render_ignores_non_object_rule_and_replicate_payloads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.csv"
+    source.write_text("x,y\n0,1\n", encoding="utf-8")
+    request: dict[str, object] = {}
+    captured: dict[str, object] = {}
+
+    def fake_prepare(_source: Path, **kwargs: object) -> dict[str, object]:
+        captured["replicate_mode"] = kwargs["replicate_mode"]
+        return {
+            "source": source,
+            "processed": False,
+            "processed_source": None,
+            "transform_steps": [],
+        }
+
+    def fake_render(_source: Path, **kwargs: object) -> dict[str, object]:
+        captured["options"] = kwargs["options"]
+        return {"kind": "render_sentinel"}
+
+    monkeypatch.setattr(request_rendering, "prepare_semantic_source", fake_prepare)
+    monkeypatch.setattr(request_rendering, "_render_with_auto_split", fake_render)
+    monkeypatch.setattr(
+        request_rendering,
+        "compute_analysis_metrics",
+        lambda **_kwargs: {},
+    )
+    monkeypatch.setattr(request_rendering, "_write_auto_report", lambda *_a, **_k: None)
+
+    request_rendering.execute_request_render(
+        request=request,
+        route_intent=resolve_workflow_route_intent(request),
+        semantic={
+            "semantic_family": "test_family",
+            "template": "curve",
+            "render_options": "not-an-object",
+        },
+        study_model={"replicate_policy": ["mode", "individual"]},
+        input_path=source,
+        output_dir=tmp_path / "output",
+        base_dir=tmp_path,
+        transform_steps=[],
+    )
+
+    assert captured == {"replicate_mode": None, "options": {}}
 
 
 def _frequency_study_model() -> dict[str, object]:

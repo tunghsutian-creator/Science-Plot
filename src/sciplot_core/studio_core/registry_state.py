@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+
+from sciplot_core.figure_plan.payload_types import ResolvedFigurePlanPayload
 from sciplot_core.foundation.file_hashing import (
     existing_file_sha256,
 )
@@ -82,9 +84,8 @@ def _registered_generated_hash(project_dir: Path) -> str | None:
             payload = _read_json(manifest_path)
         except Exception:
             continue
-        studio = (
-            payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
-        )
+        studio_payload = payload.get("studio")
+        studio = studio_payload if isinstance(studio_payload, dict) else {}
         value = studio.get("generated_hash")
         if isinstance(value, str) and value.strip():
             return value
@@ -103,7 +104,7 @@ def _studio_block(
     generated_hash: str | None,
     figure_set: dict[str, Any] | None = None,
     rule_contract_binding: dict[str, Any] | None = None,
-    resolved_figure_plan: dict[str, Any] | None = None,
+    resolved_figure_plan: ResolvedFigurePlanPayload | None = None,
     presentation_identity: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     document_state = _studio_document_state(

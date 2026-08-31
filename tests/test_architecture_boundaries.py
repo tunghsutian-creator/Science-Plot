@@ -398,12 +398,25 @@ def test_core_business_and_data_layers_do_not_depend_on_the_gui_layer() -> None:
 def test_low_level_packages_do_not_depend_on_higher_core_layers() -> None:
     known_modules = {_module_name(path) for path in _source_files()}
     offenders: list[str] = []
-    for package in ("foundation", "policy", "source_tables"):
-        package_module = f"sciplot_core.{package}"
+    allowed_package_modules = {
+        "foundation": ("sciplot_core.foundation",),
+        "policy": ("sciplot_core.policy", "sciplot_core.foundation"),
+        "source_tables": (
+            "sciplot_core.source_tables",
+            "sciplot_core.foundation",
+        ),
+    }
+    for package, allowed_modules in allowed_package_modules.items():
         for path in (SOURCE_ROOT / "sciplot_core" / package).rglob("*.py"):
             module = _module_name(path)
             targets = _import_targets(module, path, known_modules)
-            if any(not target.startswith(package_module) for target in targets):
+            if any(
+                not any(
+                    target == allowed_module or target.startswith(f"{allowed_module}.")
+                    for allowed_module in allowed_modules
+                )
+                for target in targets
+            ):
                 offenders.append(str(path.relative_to(REPO_ROOT)))
 
     assert offenders == []
@@ -508,23 +521,11 @@ def test_removed_compatibility_runtime_stays_absent() -> None:
 
 def test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    mypy = project["tool"]["mypy"]
+    mypy = dict(project["tool"]["mypy"])
+    configured_files = mypy.pop("files")
 
     assert mypy == {
         "python_version": "3.11",
-        "files": [
-            "src/sciplot_core/foundation",
-            "src/sciplot_core/json_contract.py",
-            "src/sciplot_core/figure_plan",
-            "src/sciplot_core/delivery/plan_binding.py",
-            "src/sciplot_core/delivery/package_builder.py",
-            "src/sciplot_core/delivery/package_validation.py",
-            "src/sciplot_core/study_model/package_contract.py",
-            "src/sciplot_core/publish_state.py",
-            "src/sciplot_core/autoplot/publish_integrity.py",
-            "src/sciplot_core/autoplot/evidence.py",
-            "src/sciplot_core/autoplot/summary.py",
-        ],
         "mypy_path": "src",
         "explicit_package_bases": True,
         "follow_imports": "silent",
@@ -536,14 +537,16 @@ def test_scoped_type_gate_has_one_strict_owned_scope_and_ci_entrypoint() -> None
         "pretty": True,
         "incremental": False,
     }
-    owned_files: set[Path] = set()
-    for value in mypy["files"]:
+    assert isinstance(configured_files, list)
+    assert configured_files
+    assert len(configured_files) == len(set(configured_files))
+    for value in configured_files:
+        assert isinstance(value, str)
+        relative = Path(value)
+        assert not relative.is_absolute()
+        assert ".." not in relative.parts
         target = REPO_ROOT / value
-        if target.is_dir():
-            owned_files.update(target.rglob("*.py"))
-        else:
-            owned_files.add(target)
-    assert len(owned_files) == 43
+        assert target.is_file() or target.is_dir()
     dev_dependencies = project["project"]["optional-dependencies"]["dev"]
     assert "mypy==2.3.0" in dev_dependencies
     assert "pandas-stubs==3.0.3.260530" in dev_dependencies

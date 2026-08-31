@@ -631,8 +631,9 @@ Time/ratio 列只保留其首个有标签数值段；只有整行不含结构文
 CSV、Workflow bundle 与 Studio queue 复用同一 snapshot，不另设 swelling renderer 或 schema。
 其他专用准备器也遵守同一证据原则：
 torque 在没有显式 curation 时保留完整源曲线和绝对时间，自动 peak/drop 只作为用户主动
-`curate torque` 的建议，而且时间必须显式声明为秒、分钟或小时、响应必须明确为等价的
-`N·m`；Index、裸 Time 或缺失扭矩单位不能进入终端表。Impact 缺少明确单位时在写表前
+`curate torque` 的建议，而且时间必须显式声明为秒、分钟或小时；vendor `Index` 仅在相邻
+元数据明确声明正数采样 cadence（如 `Index counts every 1 s`）时换算为秒。响应必须明确为
+等价的 `N·m`；裸 Index、裸 Time 或缺失扭矩单位不能进入终端表。Impact 缺少明确单位时在写表前
 阻断，不能默认成 `kJ m⁻²`。
 其他尚未接入声明式变换的规则返回
 `scientific_transform: null`。`blocked` 返回稳定阻断原因并使用非零退出码。
@@ -707,12 +708,9 @@ smoke 或 acceptance，也不生成或修改 VSZ。
 .venv/bin/python -m mypy
 ```
 
-`mypy` 当前只对 `pyproject.toml` 明确列出的 `foundation/`、
-`json_contract.py`、`figure_plan/`、`delivery/plan_binding.py`、
-`delivery/package_builder.py`、`delivery/package_validation.py`、
-`study_model/package_contract.py`、`publish_state.py` 和
-`autoplot/publish_integrity.py`、`autoplot/evidence.py`、
-`autoplot/summary.py` 42 个文件执行严格基线检查，不表示全仓已经完成静态类型覆盖。
+`mypy` 只对 `pyproject.toml` 的 `[tool.mypy]` 中声明的路径执行严格基线检查。
+该配置是精确范围、文件数量和严格选项的唯一权威；被导入但未列入的模块只提供类型信息，
+不进入当前诊断声明，也不表示全仓已经完成静态类型覆盖。
 
 完整 `pytest` 和 acceptance 是 release/merge gate，不是未知 owner 的自动兜底。
 具体 owner 选择与升级规则由 `skill/SKILL.md` 和 source-controlled 验证合同统一定义。

@@ -72,3 +72,18 @@ def test_active_documents_declare_distinct_responsibilities() -> None:
     assert "This skill owns agent routing and verification." in skill
     assert "current module-ownership and dependency reference" in architecture
     assert "maintenance mode; no active implementation stage" in roadmap
+
+
+def test_skill_defers_the_exact_mypy_scope_to_pyproject() -> None:
+    readme = _read(REPO_ROOT / "README.md")
+    skill = _read(REPO_ROOT / "skill" / "SKILL.md")
+    architecture = _read(REPO_ROOT / "docs" / "ARCHITECTURE.md")
+
+    assert "`[tool.mypy]` 中声明的路径" in readme
+    assert "精确范围、文件数量和严格选项的唯一权威" in readme
+    assert "42 个文件" not in readme
+    assert "declared under `[tool.mypy]` in `pyproject.toml`" in skill
+    assert "Its exact scope and strictness belong to `pyproject.toml`." in skill
+    assert "configured files" not in skill
+    assert "The exact strict Python diagnostic scope" in architecture
+    assert "Strict Python 3.11 baseline for `foundation/`" not in architecture

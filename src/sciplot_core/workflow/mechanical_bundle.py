@@ -23,7 +23,6 @@ from sciplot_core.mechanical_task_sources import (
     MechanicalTaskSource,
     build_mechanical_task_sources,
 )
-from sciplot_core.policy import DEFAULT_EXPORT_FORMATS_POLICY, normalize_export_formats
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.render import render_to_dir
 from sciplot_core.workflow.bundle_exports import _rename_metric_exports
@@ -52,7 +51,7 @@ def _render_veusz_mechanical_bundle(
     source_attestation: PreparationSourceAttestation | None = None,
     output_dir: Path,
     options: dict[str, Any],
-    export_formats: object,
+    export_formats: tuple[str, ...],
     request: dict[str, Any],
     _source_builder: Callable[..., list[MechanicalTaskSource]] = (
         build_mechanical_task_sources
@@ -87,8 +86,7 @@ def _render_veusz_mechanical_bundle(
             "mechanical_preparation_attestation_missing: mechanical Workflow "
             "requires its raw source and typed prepare-time attestation."
         )
-    requested_formats = normalize_export_formats(export_formats)
-    if not {"pdf", "tiff_300"}.issubset(requested_formats):
+    if not {"pdf", "tiff_300"}.issubset(export_formats):
         raise ValueError(
             "mechanical_export_contract_mismatch: every selected task requires "
             "PDF and 300-dpi TIFF exports."
@@ -136,8 +134,12 @@ def _render_veusz_mechanical_bundle(
             "terminal_render_requests": [],
             "transform_steps": [],
         }
-        staged_artifacts = {task.figure_id: [] for task in plan.tasks}
-        final_artifacts = {task.figure_id: [] for task in plan.tasks}
+        staged_artifacts: dict[str, list[str]] = {
+            task.figure_id: [] for task in plan.tasks
+        }
+        final_artifacts: dict[str, list[str]] = {
+            task.figure_id: [] for task in plan.tasks
+        }
         staged_specs: dict[str, Path] = {}
         figures_dir = output / "figures"
         for record in records:
@@ -145,7 +147,7 @@ def _render_veusz_mechanical_bundle(
                 record,
                 request=request,
                 render_root=render_root,
-                export_formats=requested_formats,
+                export_formats=export_formats,
                 renderer=_renderer,
             )
             metric_dir = render_root / record.task.artifact_stem
@@ -153,7 +155,7 @@ def _render_veusz_mechanical_bundle(
                 payload,
                 record=record,
                 metric_dir=metric_dir,
-                export_formats=requested_formats,
+                export_formats=export_formats,
             )
             staged_outputs, staged_exports = _rename_metric_exports(
                 payload,
@@ -232,7 +234,7 @@ def _render_veusz_mechanical_bundle(
             input_path=input_path,
             plan=plan,
             records=records,
-            export_formats=requested_formats,
+            export_formats=export_formats,
             combined=combined,
             evidence=evidence,
             staged_artifacts=staged_artifacts,
@@ -294,9 +296,12 @@ def _result_payload(
     staged_artifacts: dict[str, list[str]],
     final_artifacts: dict[str, list[str]],
 ) -> dict[str, Any]:
+    outcome_artifacts: dict[str, list[str] | tuple[str, ...]] = {
+        figure_id: list(artifacts) for figure_id, artifacts in staged_artifacts.items()
+    }
     staged_outcomes = outcomes_for_artifact_map(
         plan,
-        staged_artifacts,
+        outcome_artifacts,
         missing_reason_code="mechanical_task_artifacts_incomplete",
     )
     return {
@@ -306,7 +311,7 @@ def _result_payload(
         "sheet": None,
         "render_engine": "veusz",
         "qa_target": "veusz_export",
-        "export_formats": list(export_formats or DEFAULT_EXPORT_FORMATS_POLICY),
+        "export_formats": list(export_formats),
         **combined,
         "multi_metric_bundle": {
             "kind": "mechanical_curve_and_descriptive_summary_figure_set",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,11 @@ from sciplot_core.semantic_sources.torque_event_selection import (
 
 
 _HEADER_UNIT_RE = re.compile(r"(?:\(([^()]*)\)|\[([^\[\]]*)\])\s*$")
+_INDEX_CADENCE_RE = re.compile(
+    r"^index\s+counts\s+every\s+"
+    r"([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s+([a-z]+)$",
+    re.IGNORECASE,
+)
 
 
 def _header_unit(value: object) -> str:
@@ -91,6 +97,37 @@ def _torque_time_conversion(
     return conversion
 
 
+def _explicit_index_time_axis(
+    value: object,
+    *,
+    source: Path,
+) -> tuple[str, float, str, str] | None:
+    evidence = _clean_text(value).strip()
+    match = _INDEX_CADENCE_RE.fullmatch(evidence)
+    if match is None:
+        return None
+    cadence = float(match.group(1))
+    if not math.isfinite(cadence) or cadence <= 0.0:
+        raise ValueError(
+            f"Torque Index cadence must be positive and finite in {source}; "
+            f"got {evidence!r}."
+        )
+    cadence_unit = match.group(2)
+    unit_factor, unit_method = _torque_time_conversion(cadence_unit, source=source)
+    canonical_cadence = cadence * unit_factor
+    if not math.isfinite(canonical_cadence):
+        raise ValueError(
+            f"Torque Index cadence must convert to finite seconds in {source}; "
+            f"got {evidence!r}."
+        )
+    return (
+        f"{cadence:g} {cadence_unit} per index",
+        canonical_cadence,
+        f"index_cadence_{unit_method}",
+        "detected_from_index_cadence",
+    )
+
+
 def _torque_unit_conversion(
     source_unit: str,
     *,
@@ -142,6 +179,7 @@ def _read_torque_full_series(source: Path) -> CurveSeriesPayload:
     y_index: int | None = None
     x_header = ""
     y_header = ""
+    index_time_axis: tuple[str, float, str, str] | None = None
     header_candidates: list[tuple[int, list[object]]] = [(-1, raw.columns.tolist())]
     header_candidates.extend(
         (index, raw.iloc[index].tolist()) for index in range(min(8, raw.shape[0]))
@@ -160,6 +198,39 @@ def _read_torque_full_series(source: Path) -> CurveSeriesPayload:
         y_header = headers[y_index]
         break
     if x_index is None or y_index is None:
+        for candidate_index, candidate_values in header_candidates:
+            if candidate_index < 0 or candidate_index + 1 >= raw.shape[0]:
+                continue
+            headers = [_clean_text(value) for value in candidate_values]
+            index_columns = [
+                index
+                for index, header in enumerate(headers)
+                if header.casefold() == "index"
+            ]
+            if len(index_columns) != 1:
+                continue
+            try:
+                candidate_y = _find_column(
+                    headers,
+                    ("screwtorque", "torque", "转矩"),
+                )
+            except ValueError:
+                continue
+            candidate_x = index_columns[0]
+            candidate_axis = _explicit_index_time_axis(
+                raw.iat[candidate_index + 1, candidate_x],
+                source=source,
+            )
+            if candidate_axis is None:
+                continue
+            header_index = candidate_index
+            x_index = candidate_x
+            y_index = candidate_y
+            x_header = headers[x_index]
+            y_header = headers[y_index]
+            index_time_axis = candidate_axis
+            break
+    if x_index is None or y_index is None:
         raise ValueError(
             f"Could not find explicit Time and Screw Torque columns in {source}; "
             "Index alone is not time evidence."
@@ -172,13 +243,16 @@ def _read_torque_full_series(source: Path) -> CurveSeriesPayload:
     )
     adjacent_x_unit = units[x_index] if x_index < len(units) else ""
     adjacent_y_unit = units[y_index] if y_index < len(units) else ""
-    source_x_unit, x_unit_detection = _required_torque_unit(
-        header=x_header,
-        adjacent=adjacent_x_unit,
-        axis="time",
-        source=source,
-    )
-    x_factor, x_method = _torque_time_conversion(source_x_unit, source=source)
+    if index_time_axis is None:
+        source_x_unit, x_unit_detection = _required_torque_unit(
+            header=x_header,
+            adjacent=adjacent_x_unit,
+            axis="time",
+            source=source,
+        )
+        x_factor, x_method = _torque_time_conversion(source_x_unit, source=source)
+    else:
+        source_x_unit, x_factor, x_method, x_unit_detection = index_time_axis
     source_y_unit, y_unit_detection = _required_torque_unit(
         header=y_header,
         adjacent=adjacent_y_unit,

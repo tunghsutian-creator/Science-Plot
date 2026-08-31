@@ -65,6 +65,8 @@ def publish_studio_export_run(
     _snapshot_studio_directory(
         source=inventory.document_path.parent,
         destination=inventory.output_dir / "studio",
+        figure_set=inventory.figure_set,
+        verified_spec_hashes=inventory.figure_set_spec_hashes,
     )
     snapshot_documents, _snapshot_hashes = _studio_snapshot_documents(inventory)
     snapshot_map = _studio_snapshot_document_map(

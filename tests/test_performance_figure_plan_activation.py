@@ -8,17 +8,21 @@ from typing import Any
 import pytest
 
 import sciplot_core.workflow.performance_bundle as performance_bundle
+import sciplot_core.studio_core.figure_set_state as figure_set_state
+import sciplot_core.studio_core.prepare_existing as prepare_existing
 from sciplot_core.figure_plan import (
     ResolvedFigurePlan,
     resolved_figure_plan_from_payload,
 )
 from sciplot_core.figure_plan.performance_resolution import resolve_performance_plan
 from sciplot_core.figure_plan.terminal_binding import bind_terminal_figure_evidence
-from sciplot_core.studio import read_studio_figure_set
+from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.studio import prepare_studio_document, read_studio_figure_set
 from sciplot_core.studio_core.export_execution import export_studio_document
 from sciplot_core.studio_core.prepare_generated import generate_studio_document
 from sciplot_core.studio_core.publish_run import publish_studio_export_run
 from sciplot_core.studio_core.registry_state import _veusz_spec_path
+from sciplot_core.studio_render.models import StudioPreparationBlocked
 from sciplot_core.terminal_request import project_terminal_render_request
 
 
@@ -118,6 +122,130 @@ def test_default_studio_performance_plan_installs_mixed_task_registry(
     assert all(outcome.status == "pending" for outcome in plan.outcomes)
     registry_plan = ResolvedFigurePlan.from_payload(registry["resolved_figure_plan"])
     assert all(outcome.status == "editable" for outcome in registry_plan.outcomes)
+
+
+def test_exact_current_performance_reuses_one_validated_registry_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project_dir, _request_path, generated = _prepare_performance_project(tmp_path)
+    registry_path = (project_dir / "studio" / "figure_set.json").resolve()
+    registry_reads = 0
+    read_json = figure_set_state._read_json
+
+    def count_registry_read(path: Path) -> dict[str, Any]:
+        nonlocal registry_reads
+        if path.resolve() == registry_path:
+            registry_reads += 1
+        return read_json(path)
+
+    monkeypatch.setattr(figure_set_state, "_read_json", count_registry_read)
+
+    prepared = prepare_studio_document(project_dir)
+
+    assert registry_reads == 1
+    assert prepared["figure_set"] is not None
+    assert prepared["figure_set"] == prepared["studio"]["figure_set"]
+    assert [item["figure_id"] for item in prepared["figure_set"]["figures"]] == [
+        "performance_scatter",
+        "performance_polar_curve",
+    ]
+    primary = next(
+        item
+        for item in prepared["figure_set"]["figures"]
+        if item["figure_id"] == prepared["figure_set"]["primary_figure_id"]
+    )
+    assert prepared["document_state"]["generated_hash"] == primary["generated_hash"]
+    assert prepared["document_state"]["authority"] == "sciplot_generated"
+    assert prepared["document"] == generated["document"]
+
+
+def test_exact_current_performance_registry_hash_detects_manual_primary_edit(
+    tmp_path: Path,
+) -> None:
+    project_dir, _request_path, generated = _prepare_performance_project(tmp_path)
+    document = Path(generated["document"])
+    registry = _read_json(project_dir / "studio" / "figure_set.json")
+    primary = next(
+        item
+        for item in registry["figures"]
+        if item["figure_id"] == registry["primary_figure_id"]
+    )
+    document.write_bytes(document.read_bytes() + b"\n# manual edit\n")
+
+    prepared = prepare_studio_document(project_dir)
+
+    assert prepared["document_state"]["generated_hash"] == primary["generated_hash"]
+    assert prepared["document_state"]["authority"] == "veusz_manual"
+    assert prepared["document_state"]["manual_edit_detected"] is True
+
+
+def test_exact_current_performance_rejects_split_generated_hash_projection(
+    tmp_path: Path,
+) -> None:
+    project_dir, _request_path, generated = _prepare_performance_project(tmp_path)
+    document = Path(generated["document"])
+    document.write_bytes(document.read_bytes() + b"\n# manual edit\n")
+    edited_hash = existing_file_sha256(document)
+    assert edited_hash is not None
+    registry_path = project_dir / "studio" / "figure_set.json"
+    registry = _read_json(registry_path)
+    primary = next(
+        item
+        for item in registry["figures"]
+        if item["figure_id"] == registry["primary_figure_id"]
+    )
+    assert primary["document_state"]["generated_hash"] != edited_hash
+    primary["generated_hash"] = edited_hash
+    _write_json(registry_path, registry)
+
+    with pytest.raises(StudioPreparationBlocked) as exc_info:
+        prepare_studio_document(project_dir)
+
+    assert exc_info.value.reason_code == "studio_figure_set_mismatch"
+
+
+@pytest.mark.parametrize("registry_state", ["missing", "malformed"])
+def test_required_plan_registry_failure_blocks_before_metadata_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    registry_state: str,
+) -> None:
+    project_dir, request_path, _generated = _prepare_performance_project(tmp_path)
+    registry_path = project_dir / "studio" / "figure_set.json"
+    if registry_state == "missing":
+        registry_path.unlink()
+    else:
+        registry_path.write_text("{not-json", encoding="utf-8")
+    request_before = request_path.read_bytes()
+    metadata_writes: list[str] = []
+
+    def record_launcher(*_args: object, **_kwargs: object) -> Path:
+        metadata_writes.append("launcher")
+        return project_dir / "unexpected-launcher"
+
+    def record_registration(*_args: object, **_kwargs: object) -> None:
+        metadata_writes.append("registration")
+
+    monkeypatch.setattr(prepare_existing, "_write_studio_launcher", record_launcher)
+    monkeypatch.setattr(prepare_existing, "_write_veusz_launcher", record_launcher)
+    monkeypatch.setattr(
+        prepare_existing,
+        "_write_export_edited_launcher",
+        record_launcher,
+    )
+    monkeypatch.setattr(
+        prepare_existing,
+        "_register_studio_block",
+        record_registration,
+    )
+
+    with pytest.raises(StudioPreparationBlocked) as exc_info:
+        prepare_studio_document(project_dir)
+
+    assert exc_info.value.reason_code == "studio_figure_set_mismatch"
+    assert metadata_writes == []
+    assert request_path.read_bytes() == request_before
 
 
 @pytest.mark.comprehensive

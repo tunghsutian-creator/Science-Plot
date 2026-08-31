@@ -12,12 +12,7 @@ from sciplot_core.preparation_source_attestation import (
 )
 
 from sciplot_core.semantic_sources.classification import (
-    TENSILE_EXPORT_DIR_SUFFIX,
     classify_source,
-    has_tensile_export_parent,
-    is_tensile_export_dir,
-    tensile_export_csv_files,
-    tensile_export_sample_name,
 )
 from sciplot_core.semantic_sources.curve_output import _write_curve_table  # noqa: F401
 from sciplot_core.semantic_sources.dma_sources import (  # noqa: F401
@@ -69,6 +64,13 @@ from sciplot_core.semantic_sources.stress_relaxation_sources import (  # noqa: F
     _read_stress_relaxation_series_list,
     _read_stress_relaxation_source_series,
 )
+from sciplot_core.semantic_sources.tensile_export_identity import (
+    TENSILE_EXPORT_DIR_SUFFIX,
+    has_tensile_export_parent,
+    is_tensile_export_dir,
+    tensile_export_csv_files,
+    tensile_export_sample_name,
+)
 from sciplot_core.semantic_sources.tensile_workbooks import (  # noqa: F401
     _read_tensile_workbook_directory,
 )
@@ -115,13 +117,10 @@ def prepare_semantic_source(
         else None
     )
     attestation_rule_id = rule_id or family
-    if (
-        resolved_scientific_source is not None
-        and (
-            resolved_scientific_source.source != source
-            or resolved_scientific_source.rule_id != (rule_id or family)
-            or resolved_scientific_source.semantic_family != family
-        )
+    if resolved_scientific_source is not None and (
+        resolved_scientific_source.source != source
+        or resolved_scientific_source.rule_id != (rule_id or family)
+        or resolved_scientific_source.semantic_family != family
     ):
         raise ValueError(
             "Resolved scientific domain does not match the selected semantic family."

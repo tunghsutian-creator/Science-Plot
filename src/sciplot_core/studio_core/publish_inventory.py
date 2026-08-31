@@ -11,7 +11,6 @@ from sciplot_core.figure_plan import (
     FigurePlanResolutionError,
     ResolvedFigurePlan,
     resolve_current_figure_plan,
-    resolved_figure_plan_from_payload,
 )
 from sciplot_core.figure_plan.constants import REQUIRED_FIGURE_PLAN_RULE_IDS
 from sciplot_core.foundation.file_hashing import existing_file_sha256
@@ -21,20 +20,17 @@ from sciplot_core.presentation_identity import (
     require_selected_template,
     resolve_selected_presentation_identity,
 )
-from sciplot_core.studio_figure_set_contract import (
-    is_full_figure_set_export_scope as _is_full_figure_set_export_scope,
-)
-
 from sciplot_core.studio_core.export_execution import export_studio_document
 from sciplot_core.studio_core.export_verification import (
     _verify_exact_current_export_binding,
 )
-from sciplot_core.studio_core.figure_requests import (
-    _rheology_frequency_figure_queue,
-)
 from sciplot_core.studio_core.figure_set_state import (
+    _figure_set_primary_generated_hash,
+    _figure_set_ready_spec_hashes,
     _read_studio_figure_set,
-    _studio_figure_set_export_scope,
+)
+from sciplot_core.studio_core.figure_set_publication_scope import (
+    validated_figure_set_scope as _validated_figure_set_scope,
 )
 from sciplot_core.studio_core.json_files import _read_json
 from sciplot_core.studio_core.presentation_evidence import (
@@ -47,6 +43,7 @@ from sciplot_core.studio_core.registry_state import (
     _veusz_spec_path,
 )
 from sciplot_core.studio_core.request_paths import (
+    _canonical_publish_paths,
     _next_studio_run_dir,
     _resolve_request_input,
 )
@@ -76,6 +73,8 @@ class StudioExportInventory:
     document_state: dict[str, Any]
     export_document_sha256: str
     output_dir: Path
+    figure_set: dict[str, Any] | None = None
+    figure_set_spec_hashes: tuple[tuple[str, str], ...] = ()
 
     @property
     def pending_rule_review(self) -> bool:
@@ -96,7 +95,7 @@ def prepare_studio_export_inventory(
 ) -> StudioExportInventory:
     """Validate project authority and export every registered secondary figure."""
 
-    project_dir, request_path, document_path = _canonical_project_paths(
+    project_dir, request_path, document_path = _canonical_publish_paths(
         project_dir=project_dir,
         request_path=request_path,
         document_path=document_path,
@@ -136,17 +135,14 @@ def prepare_studio_export_inventory(
             "prepared_resolved_figure_plan_required: Reprepare this Studio "
             "project before publishing a rule that requires a figure plan."
         )
+    study_model = effective_request.get("study_model")
     try:
         resolved_figure_plan = (
             resolve_current_figure_plan(
                 persisted=persisted_plan,
                 rule_id=request_rule_id,
                 template=presentation_identity.template,
-                study_model=(
-                    effective_request.get("study_model")
-                    if isinstance(effective_request.get("study_model"), dict)
-                    else {}
-                ),
+                study_model=study_model if isinstance(study_model, dict) else {},
                 input_path=_resolve_request_input(
                     effective_request,
                     base_dir=request_path.parent,
@@ -158,20 +154,84 @@ def prepare_studio_export_inventory(
         )
     except FigurePlanResolutionError as exc:
         raise RuntimeError(f"{exc.reason_code}: {exc}") from exc
+    figure_set_required = request_rule_id in REQUIRED_FIGURE_PLAN_RULE_IDS
+    figure_set = (
+        _read_studio_figure_set(
+            project_dir,
+            expected_plan=resolved_figure_plan if figure_set_required else None,
+            require_ready_artifacts=figure_set_required,
+        )
+        if resolved_figure_plan is not None or not figure_set_required
+        else None
+    )
+    if figure_set_required and figure_set is None:
+        raise RuntimeError(
+            "A selected required FigurePlan needs a matching task-aware v2 "
+            "Studio figure-set registry before export. No project delivery "
+            "receipt was published."
+        )
+    spec_hashes = (
+        _figure_set_ready_spec_hashes(figure_set) if figure_set_required else ()
+    )
     validate_prepared_studio_presentation(
         project_dir=project_dir,
         document_path=document_path,
         identity=presentation_identity,
         figure_plan=resolved_figure_plan,
+        figure_set=figure_set,
+        figure_set_loaded=True,
     )
-    scope = _validated_figure_set_scope(project_dir, request=request)
+    scope = _validated_figure_set_scope(
+        project_dir,
+        request=request,
+        figure_plan=resolved_figure_plan,
+        figure_set=figure_set,
+        figure_set_loaded=True,
+    )
+    document_state = _studio_document_state(
+        document_path,
+        generated_hash=(
+            _figure_set_primary_generated_hash(figure_set)
+            if figure_set_required
+            else _registered_generated_hash(project_dir)
+        ),
+    )
+    if document_state.get("current_hash") != export_document_sha256:
+        raise RuntimeError(
+            "The Veusz document changed before the project run could bind "
+            "its exact-current document state."
+        )
     figure_documents = _collect_figure_documents(
         project_dir=project_dir,
         document_path=document_path,
         exports=exports,
         export_document_sha256=export_document_sha256,
         figure_set_export_scope=scope,
+        figure_set=figure_set,
+        figure_set_loaded=True,
     )
+    if (
+        document_path.is_symlink()
+        or document_path.resolve() != document_path
+        or existing_file_sha256(document_path) != export_document_sha256
+    ):
+        raise RuntimeError(
+            "The Veusz document changed before the project run could bind its "
+            "post-export exact-current state. No project run was allocated."
+        )
+    if figure_set_required:
+        try:
+            current_spec_hashes = _figure_set_ready_spec_hashes(figure_set)
+        except ValueError as exc:
+            raise RuntimeError(
+                "A Studio figure spec disappeared while the complete figure set "
+                "was being exported. No project run was allocated."
+            ) from exc
+        if current_spec_hashes != spec_hashes:
+            raise RuntimeError(
+                "A Studio figure spec changed while the complete figure set was "
+                "being exported. No project run was allocated."
+            )
     all_exports = [item for figure in figure_documents for item in figure["exports"]]
     veusz_documents = [Path(str(item["document"])) for item in figure_documents]
     document_hashes = {
@@ -180,15 +240,6 @@ def prepare_studio_export_inventory(
         )
         for item in figure_documents
     }
-    document_state = _studio_document_state(
-        document_path,
-        generated_hash=_registered_generated_hash(project_dir),
-    )
-    if document_state.get("current_hash") != export_document_sha256:
-        raise RuntimeError(
-            "The Veusz document changed before the project run could bind "
-            "its exact-current document state."
-        )
     output_dir = _next_studio_run_dir(project_dir)
     return StudioExportInventory(
         project_dir=project_dir,
@@ -207,73 +258,9 @@ def prepare_studio_export_inventory(
         document_state=document_state,
         export_document_sha256=export_document_sha256,
         output_dir=output_dir,
+        figure_set=figure_set,
+        figure_set_spec_hashes=spec_hashes,
     )
-
-
-def _canonical_project_paths(
-    *,
-    project_dir: Path,
-    request_path: Path,
-    document_path: Path,
-) -> tuple[Path, Path, Path]:
-    resolved_project = project_dir.expanduser().resolve()
-    resolved_request = request_path.expanduser().resolve()
-    resolved_document = document_path.expanduser().resolve()
-    if resolved_request != (resolved_project / "plot_request.json").resolve():
-        raise RuntimeError(
-            "A project delivery receipt can use only the canonical "
-            "project/plot_request.json. A foreign or relocated request cannot "
-            "publish into this project."
-        )
-    if resolved_document != (resolved_project / "studio" / "document.vsz").resolve():
-        raise RuntimeError(
-            "A project delivery receipt can be published only from the "
-            "canonical project/studio/document.vsz. Registered secondary "
-            "figures are exported automatically into the same project receipt."
-        )
-    return resolved_project, resolved_request, resolved_document
-
-
-def _validated_figure_set_scope(
-    project_dir: Path,
-    *,
-    request: dict[str, Any],
-) -> dict[str, Any] | None:
-    try:
-        request_plan = resolved_figure_plan_from_payload(
-            request.get("resolved_figure_plan")
-        )
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError(
-            "invalid_resolved_figure_plan: Studio cannot establish an export "
-            "scope from the persisted FigurePlan."
-        ) from exc
-    selected_supported_plan = (
-        request_plan
-        if request_plan is not None
-        and request_plan.rule_id in REQUIRED_FIGURE_PLAN_RULE_IDS
-        else None
-    )
-    scope = _studio_figure_set_export_scope(project_dir, request=request)
-    scope_expected = bool(
-        selected_supported_plan is not None
-        or _read_studio_figure_set(project_dir) is not None
-        or _rheology_frequency_figure_queue(request)
-    )
-    if selected_supported_plan is not None and not _is_full_figure_set_export_scope(
-        scope
-    ):
-        raise RuntimeError(
-            "A selected required FigurePlan needs a matching task-aware v2 "
-            "Studio figure-set registry before export. No project delivery "
-            "receipt was published."
-        )
-    if scope_expected and not _is_full_figure_set_export_scope(scope):
-        raise RuntimeError(
-            "SciPlot could not establish the complete all-figures figure-set "
-            "export scope. No project delivery receipt was published."
-        )
-    return scope
 
 
 def _collect_figure_documents(
@@ -283,6 +270,8 @@ def _collect_figure_documents(
     exports: list[dict[str, Any]],
     export_document_sha256: str,
     figure_set_export_scope: dict[str, Any] | None,
+    figure_set: dict[str, Any] | None = None,
+    figure_set_loaded: bool = False,
 ) -> list[dict[str, Any]]:
     primary_id = (
         str(figure_set_export_scope.get("primary_figure_id") or "primary")
@@ -307,7 +296,7 @@ def _collect_figure_documents(
     ]
     if not isinstance(figure_set_export_scope, dict):
         return documents
-    registry = _read_studio_figure_set(project_dir)
+    registry = figure_set if figure_set_loaded else _read_studio_figure_set(project_dir)
     if registry is None:
         raise RuntimeError(
             "The complete figure-set registry disappeared before export."

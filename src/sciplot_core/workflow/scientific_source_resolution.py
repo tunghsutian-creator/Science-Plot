@@ -64,9 +64,10 @@ def bind_workflow_semantic_render_options(
     """Bind rule defaults while preserving only declared user overrides."""
 
     effective = dict(request)
+    request_options_payload = request.get("render_options")
     request_options = (
-        dict(request.get("render_options"))
-        if isinstance(request.get("render_options"), dict)
+        dict(request_options_payload)
+        if isinstance(request_options_payload, dict)
         else {}
     )
     template = str(request.get("template") or semantic.get("template") or "curve")
@@ -79,33 +80,21 @@ def bind_workflow_semantic_render_options(
         figure_plan is not None
         and figure_plan.selection_policy == "registered_single_curve"
     ):
-        source_labels = _single_curve_source_axis_labels(
-            resolved_scientific_source
-        )
-        axis_plan = (
-            semantic.get("axis_plan")
-            if isinstance(semantic.get("axis_plan"), dict)
-            else {}
-        )
+        source_labels = _single_curve_source_axis_labels(resolved_scientific_source)
+        axis_plan_payload = semantic.get("axis_plan")
+        axis_plan = axis_plan_payload if isinstance(axis_plan_payload, dict) else {}
         for axis_name, option_name in (
             ("x", "x_label_override"),
             ("y", "y_label_override"),
         ):
-            axis = (
-                axis_plan.get(axis_name)
-                if isinstance(axis_plan.get(axis_name), dict)
-                else {}
-            )
+            axis_payload = axis_plan.get(axis_name)
+            axis = axis_payload if isinstance(axis_payload, dict) else {}
             display_label = source_labels.get(axis_name) or axis.get("display_label")
             if isinstance(display_label, str) and display_label.strip():
                 merged[option_name] = display_label.strip()
     explicit_payload = request.get("explicit_render_option_keys")
     explicit_keys = (
-        {
-            str(key)
-            for key in explicit_payload
-            if str(key) in request_options
-        }
+        {str(key) for key in explicit_payload if str(key) in request_options}
         if isinstance(explicit_payload, list | tuple | set)
         else set(request_options)
     )

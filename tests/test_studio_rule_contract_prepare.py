@@ -16,6 +16,7 @@ from sciplot_core.readiness.rule_certification import (
 from sciplot_core.studio_core.figure_set_state import (
     _replace_studio_figure_set_path,
 )
+from sciplot_core.studio_core import prepare_existing
 from sciplot_core.studio_core.prepare_existing import (
     reuse_existing_studio_document,
 )
@@ -203,6 +204,87 @@ def test_reusing_legacy_rule_bearing_document_does_not_mint_binding(
     assert STUDIO_RULE_CONTRACT_BINDING_KEY not in request
     assert "rule_contract_binding" not in prepared["studio"]
     assert prepared["publication_rule_blocked"] is True
+
+
+def test_reusing_existing_document_reads_study_model_once_for_figure_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class AlternatingStudyModelRequest(dict[str, Any]):
+        def __init__(
+            self,
+            payload: dict[str, Any],
+            study_model: dict[str, Any],
+        ) -> None:
+            super().__init__(payload)
+            self._study_model_values: tuple[object, ...] = (
+                study_model,
+                study_model,
+                "not-a-study-model",
+            )
+            self._study_model_reads = 0
+
+        def get(self, key: str, default: Any = None) -> Any:
+            if key != "study_model":
+                return super().get(key, default)
+            index = min(
+                self._study_model_reads,
+                len(self._study_model_values) - 1,
+            )
+            self._study_model_reads += 1
+            return self._study_model_values[index]
+
+    expected_study_model = {
+        "experiment": {
+            "template": "point_line",
+            "chart": "point_line",
+        }
+    }
+    project_dir, request_path, document_path = _existing_rule_project(
+        tmp_path,
+        binding=_current_binding(EXISTING_RULE_ID),
+    )
+    request_payload = json.loads(request_path.read_text(encoding="utf-8"))
+    request_payload["study_model"] = expected_study_model
+    request = AlternatingStudyModelRequest(
+        request_payload,
+        expected_study_model,
+    )
+    observed_study_models: list[object] = []
+
+    def resolve_figure_plan(**kwargs: Any) -> None:
+        observed_study_models.append(kwargs["study_model"])
+        return None
+
+    class StopAfterResolution(Exception):
+        pass
+
+    def stop_after_resolution(**_kwargs: Any) -> None:
+        raise StopAfterResolution
+
+    monkeypatch.setattr(prepare_existing, "_read_json", lambda _path: request)
+    monkeypatch.setattr(
+        prepare_existing,
+        "resolve_current_figure_plan",
+        resolve_figure_plan,
+    )
+    monkeypatch.setattr(
+        prepare_existing,
+        "validate_prepared_studio_presentation",
+        stop_after_resolution,
+    )
+
+    with pytest.raises(StopAfterResolution):
+        reuse_existing_studio_document(
+            project_dir=project_dir,
+            request_path=request_path,
+            document_path=document_path,
+        )
+
+    assert observed_study_models == [expected_study_model]
+    # One read synchronizes the presentation identity; the figure-plan
+    # boundary must consume exactly one additional, already-narrowed value.
+    assert request._study_model_reads == 2
 
 
 @pytest.mark.parametrize(

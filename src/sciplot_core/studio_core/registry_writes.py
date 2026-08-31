@@ -4,12 +4,24 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+
 from sciplot_core.figure_plan import sync_figure_plan_projection
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.project_manifest import (
     edit_intake_project_manifest,
     edit_intake_project_manifest_with_snapshot,
 )
+
+
+def _refresh_intake_project_snapshot(
+    project_dir: Path,
+    manifest: dict[str, Any],
+) -> None:
+    from sciplot_core.intake.packaging import (
+        _refresh_intake_project_zip_unlocked,
+    )
+
+    _refresh_intake_project_zip_unlocked(project_dir, manifest)
 
 
 def _register_studio_block(project_dir: Path, studio_block: dict[str, Any]) -> None:
@@ -32,9 +44,10 @@ def _register_studio_run(
     *,
     studio_run: dict[str, Any],
 ) -> None:
+    figure_set_export_scope_payload = manifest.get("figure_set_export_scope")
     figure_set_export_scope = (
-        manifest.get("figure_set_export_scope")
-        if isinstance(manifest.get("figure_set_export_scope"), dict)
+        figure_set_export_scope_payload
+        if isinstance(figure_set_export_scope_payload, dict)
         else None
     )
     last_run = {
@@ -61,13 +74,9 @@ def _register_studio_run(
     if figure_set_export_scope is not None:
         last_run["figure_set_export_scope"] = json_safe(figure_set_export_scope)
     sync_figure_plan_projection(last_run, manifest)
-    from sciplot_core.intake.packaging import (
-        _refresh_intake_project_zip_unlocked,
-    )
-
     with edit_intake_project_manifest_with_snapshot(
         project_dir,
-        snapshot_writer=_refresh_intake_project_zip_unlocked,
+        snapshot_writer=_refresh_intake_project_snapshot,
     ) as payload:
         if payload is not None:
             payload["last_run"] = last_run
@@ -79,14 +88,10 @@ def _register_studio_run(
             else:
                 payload.pop("figure_set_export_scope", None)
             sync_figure_plan_projection(payload, manifest)
-            studio = (
-                payload.get("studio") if isinstance(payload.get("studio"), dict) else {}
-            )
-            exports = (
-                studio_run.get("exports")
-                if isinstance(studio_run.get("exports"), list)
-                else []
-            )
+            studio_payload = payload.get("studio")
+            studio = studio_payload if isinstance(studio_payload, dict) else {}
+            exports_payload = studio_run.get("exports")
+            exports = exports_payload if isinstance(exports_payload, list) else []
             studio["exports"] = json_safe(exports)
             presentation_identity = studio_run.get("presentation_identity")
             if isinstance(presentation_identity, dict):

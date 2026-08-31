@@ -50,6 +50,8 @@ def validate_prepared_studio_presentation(
     document_path: Path,
     identity: SelectedPresentationIdentity,
     figure_plan: ResolvedFigurePlan | None,
+    figure_set: dict[str, Any] | None = None,
+    figure_set_loaded: bool = False,
 ) -> None:
     """Reject request/plan/spec splits before export or run allocation."""
 
@@ -78,7 +80,7 @@ def validate_prepared_studio_presentation(
         checked=checked_specs,
     )
 
-    registry = _read_studio_figure_set(project_dir)
+    registry = figure_set if figure_set_loaded else _read_studio_figure_set(project_dir)
     if registry is None:
         return
     registry_rule_id = str(registry.get("rule_id") or "").strip() or None
