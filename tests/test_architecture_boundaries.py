@@ -19,6 +19,7 @@ MAX_SOURCE_LINES = 400
 # them would obscure the scenario rather than create a reusable responsibility.
 OVERSIZED_VALIDATION_HARNESSES = {
     "src/sciplot_core/analysis_contract_probe.py",
+    "src/sciplot_core/automation_baseline_probe.py",
     "src/sciplot_core/data_mapping_probe.py",
     "src/sciplot_core/openai_provider_probe.py",
     "src/sciplot_core/readiness_probe.py",

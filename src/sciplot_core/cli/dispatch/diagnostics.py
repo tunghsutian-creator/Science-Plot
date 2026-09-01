@@ -236,4 +236,24 @@ def dispatch_diagnostics(args: Any, argv: list[str] | None) -> int | None:
             print(f"SciPlot data mapping probe: {payload['status']}")
             print(payload["artifacts"]["summary"])
         return 0 if payload["status"] == "passed" else 1
+
+    if args.command == "automation-baseline":
+        from sciplot_core.studio import maybe_reexec_with_qt_runtime
+
+        original_argv = list(sys.argv[1:] if argv is None else argv)
+        maybe_reexec_with_qt_runtime(original_argv)
+        from sciplot_core.automation_baseline_probe import (
+            run_automation_baseline_probe,
+        )
+
+        payload = run_automation_baseline_probe(
+            output_root=args.out,
+            repetitions=args.repetitions,
+        )
+        if args.json:
+            _print_json(payload)
+        else:
+            print(f"SciPlot R0 automation baseline: {payload['status']}")
+            print(payload["artifacts"]["markdown"])
+        return 0 if payload["status"] == "passed" else 1
     return None

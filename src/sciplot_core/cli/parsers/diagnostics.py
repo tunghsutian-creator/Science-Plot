@@ -153,3 +153,17 @@ def register_diagnostics_commands(subparsers: Any) -> None:
     )
 
     data_mapping_probe_parser.add_argument("--json", action="store_true")
+
+    automation_baseline_parser = subparsers.add_parser(
+        "automation-baseline", help=argparse.SUPPRESS
+    )
+
+    automation_baseline_parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path(".tmp_verify") / "r0_automation_baseline",
+    )
+
+    automation_baseline_parser.add_argument("--repetitions", type=int, default=3)
+
+    automation_baseline_parser.add_argument("--json", action="store_true")

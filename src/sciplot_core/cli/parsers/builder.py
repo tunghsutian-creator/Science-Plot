@@ -35,6 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
         "readiness-probe",
         "openai-provider-probe",
         "data-mapping-probe",
+        "automation-baseline",
         "batch",
     }
 

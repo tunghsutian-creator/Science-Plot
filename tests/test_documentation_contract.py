@@ -14,6 +14,7 @@ RETIRED_AGENT_GUIDE = REPO_ROOT / "agent.md"
 REMOVED_ARCHITECTURE_SNAPSHOT = (
     REPO_ROOT / "docs" / "ARCHITECTURE_REFACTOR_AUDIT_2026-07-28.md"
 )
+AUTOMATION_CONTROL_CONTRACT = REPO_ROOT / "docs" / "AUTOMATION_CONTROL_CONTRACT.md"
 
 
 def _read(path: Path) -> str:
@@ -42,6 +43,8 @@ def test_current_documents_do_not_restore_the_dated_architecture_snapshot() -> N
 
     assert not REMOVED_ARCHITECTURE_SNAPSHOT.exists()
     assert "!/docs/ARCHITECTURE_REFACTOR_AUDIT_2026-07-28.md" not in gitignore
+    assert "!/docs/AUTOMATION_CONTROL_CONTRACT.md" in gitignore
+    assert AUTOMATION_CONTROL_CONTRACT.is_file()
 
 
 def test_tracked_guidance_does_not_keep_a_duplicate_agent_file() -> None:
@@ -67,11 +70,17 @@ def test_active_documents_declare_distinct_responsibilities() -> None:
     skill = _read(REPO_ROOT / "skill" / "SKILL.md")
     architecture = _read(REPO_ROOT / "docs" / "ARCHITECTURE.md")
     roadmap = _read(REPO_ROOT / "DEVELOPMENT_ROADMAP.md")
+    automation_contract = _normalized(AUTOMATION_CONTROL_CONTRACT)
 
     assert "本文是用户工作流和产品边界的唯一说明" in readme
     assert "This skill owns agent routing and verification." in skill
     assert "current module-ownership and dependency reference" in architecture
-    assert "maintenance mode; no active implementation stage" in roadmap
+    assert "R0 complete; paused before R1 authorization" in roadmap
+    assert "当前唯一候选下一步是 R1，尚未授权" in roadmap
+    assert "docs/AUTOMATION_CONTROL_CONTRACT.md" in roadmap
+    assert "R0 frozen design draft; not current runtime behavior" in automation_contract
+    assert "does not add a conductor" in automation_contract
+    assert "R0 automation baseline evidence" in architecture
 
 
 def test_skill_defers_the_exact_mypy_scope_to_pyproject() -> None:

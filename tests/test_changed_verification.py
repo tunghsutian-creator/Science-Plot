@@ -139,6 +139,64 @@ def test_changed_owners_build_one_deduplicated_focused_pass() -> None:
     assert "comprehensive" not in generated
 
 
+def test_automation_baseline_has_one_focused_evidence_owner() -> None:
+    payload = build_changed_verification_plan(
+        [
+            "src/sciplot_core/automation_baseline.py",
+            "src/sciplot_core/automation_baseline_identity_validation.py",
+            "src/sciplot_core/automation_baseline_probe.py",
+            "src/sciplot_core/automation_baseline_schema.py",
+            "src/sciplot_core/automation_baseline_validation.py",
+            "src/sciplot_core/automation_baseline_validation_utils.py",
+            "tests/test_automation_baseline.py",
+        ],
+        repo_root=REPO_ROOT,
+    )
+
+    assert payload["owners"] == [
+        {
+            "owner_id": "automation_baseline_evidence",
+            "changed_paths": [
+                "src/sciplot_core/automation_baseline.py",
+                "src/sciplot_core/automation_baseline_identity_validation.py",
+                "src/sciplot_core/automation_baseline_probe.py",
+                "src/sciplot_core/automation_baseline_schema.py",
+                "src/sciplot_core/automation_baseline_validation.py",
+                "src/sciplot_core/automation_baseline_validation_utils.py",
+                "tests/test_automation_baseline.py",
+            ],
+            "pytest_targets": [
+                "tests/test_automation_baseline.py",
+                "tests/test_automation_states.py",
+                "tests/test_rule_invocation_contract.py::test_rules_plan_and_autoplot_share_one_stale_rule_decision",
+                "tests/test_plan_preview.py::test_plan_preview_blocks_uncertified_rule_before_source_inspection",
+                "tests/test_autoplot_run.py::test_run_autoplot_returns_v2_rule_repair_without_project_or_write",
+                "tests/test_publish_state.py::test_publish_state_preserves_a_scientific_confirmation_blocker",
+                "tests/test_frontend_topology.py::test_package_has_one_cli_and_no_standalone_frontend_entrypoint",
+                *ARCHITECTURE_CORE_TARGETS,
+            ],
+        }
+    ]
+    assert payload["unowned_paths"] == []
+    assert payload["required_later"] == {
+        "handoff": ["doctor"],
+        "final_milestone": ["smoke"],
+        "release": ["full_pytest"],
+    }
+
+
+def test_cli_parser_builder_is_owned_with_the_diagnostics_surface() -> None:
+    payload = build_changed_verification_plan(
+        ["src/sciplot_core/cli/parsers/builder.py"],
+        repo_root=REPO_ROOT,
+    )
+
+    assert [owner["owner_id"] for owner in payload["owners"]] == [
+        "changed_verification"
+    ]
+    assert payload["unowned_paths"] == []
+
+
 def test_skill_wrapper_defers_runtime_gates_without_selecting_comprehensive() -> None:
     payload = build_changed_verification_plan(
         ["skill/scripts/sciplot"],

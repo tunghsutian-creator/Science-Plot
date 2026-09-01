@@ -61,6 +61,64 @@ def test_help_exposes_one_studio_family_and_hides_internal_probes() -> None:
     assert "--qt-smoke" not in studio_help
 
 
+def test_automation_baseline_is_parseable_but_hidden_from_public_help() -> None:
+    args = cli._build_parser().parse_args(
+        ["automation-baseline", "--out", ".tmp_verify/r0", "--repetitions", "2"]
+    )
+
+    assert args.command == "automation-baseline"
+    assert args.out == Path(".tmp_verify/r0")
+    assert args.repetitions == 2
+    assert "automation-baseline" not in _visible_command_choices()
+    assert "automation-baseline" not in cli._build_parser().format_help()
+
+
+def test_automation_baseline_cli_dispatches_the_development_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = tmp_path / "r0"
+    payload = {
+        "status": "passed",
+        "artifacts": {"markdown": str(output / "baseline.md")},
+    }
+    captured: dict[str, object] = {}
+    import sciplot_core.automation_baseline_probe as baseline_module
+    import sciplot_core.studio as studio_module
+
+    def fake_reexec(argv: list[str]) -> None:
+        captured["argv"] = argv
+
+    def fake_probe(*, output_root: Path, repetitions: int) -> dict[str, object]:
+        captured["output_root"] = output_root
+        captured["repetitions"] = repetitions
+        return payload
+
+    monkeypatch.setattr(studio_module, "maybe_reexec_with_qt_runtime", fake_reexec)
+    monkeypatch.setattr(
+        baseline_module,
+        "run_automation_baseline_probe",
+        fake_probe,
+    )
+    argv = [
+        "automation-baseline",
+        "--out",
+        str(output),
+        "--repetitions",
+        "2",
+        "--json",
+    ]
+
+    assert cli.main(argv) == 0
+    assert captured == {
+        "argv": argv,
+        "output_root": output,
+        "repetitions": 2,
+    }
+    assert json.loads(capsys.readouterr().out) == payload
+
+
 def test_specialized_figure_route_is_not_a_cli_command() -> None:
     assert "figure" not in _command_choices()
     assert "figure" not in _visible_command_choices()

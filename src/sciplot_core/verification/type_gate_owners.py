@@ -19,6 +19,7 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
     exact_paths=frozenset(
         {
             "src/sciplot_core/cli/parsers/diagnostics.py",
+            "src/sciplot_core/cli/parsers/builder.py",
             "src/sciplot_core/cli/dispatch/diagnostics.py",
             "src/sciplot_core/doctor/payload.py",
         }

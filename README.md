@@ -9,7 +9,7 @@ SciPlot 是面向材料科研日常出图的本地工作流：读取原始数据
 - 本文是用户工作流和产品边界的唯一说明；
 - `skill/SKILL.md` 是自动化代理的操作合同，不另定义产品；
 - `docs/ARCHITECTURE.md` 只定义代码结构、模块所有权和依赖边界；
-- `DEVELOPMENT_ROADMAP.md` 只记录尚未完成的维护优先级；
+- `DEVELOPMENT_ROADMAP.md` 只记录尚未完成的开发优先级和阶段退出条件；
 - `AGENTS.md` 是本机开发约束的薄覆盖；
 - `DEVELOPMENT_LOG.md` 和 Git 只保存历史与验证记录，不覆盖当前产品真相。
 
@@ -766,5 +766,5 @@ skill/scripts/sciplot doctor --json
 这里描述的是当前源码开发环境；安装版和分发工作只是暂缓，不是对 SciPlot 长期产品形态
 的重新定义。
 
-当前维护优先级见 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)，代码和模块边界见
+当前开发优先级见 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)，代码和模块边界见
 `docs/ARCHITECTURE.md`，第三方许可见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。
