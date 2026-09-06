@@ -143,6 +143,14 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
         publication_events.append("snapshot")
         snapshot_calls.append(kwargs)
 
+    def record_scientific_verification(
+        result: dict[str, Any], **kwargs: Any
+    ) -> dict[str, Any]:
+        publication_events.append("science")
+        assert result["resolved_figure_plan"] == plan.to_payload()
+        assert kwargs["mapping_application"] is None
+        return {"status": "passed"}
+
     monkeypatch.setattr(
         evidence_module,
         "build_publication_intent",
@@ -225,6 +233,11 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
     )
     monkeypatch.setattr(
         publish_run_module,
+        "verify_managed_document_sources",
+        record_scientific_verification,
+    )
+    monkeypatch.setattr(
+        publish_run_module,
         "_studio_snapshot_documents",
         lambda _inventory: ([document], {str(document.resolve()): "test-hash"}),
     )
@@ -268,7 +281,7 @@ def test_studio_publication_evidence_binds_completed_plan_to_study_model(
     assert "resolved_figure_plan_id" not in run
     assert "resolved_figure_plan_sha256" not in run
     assert "figure_outcomes" not in run
-    assert publication_events == ["binding", "snapshot"]
+    assert publication_events == ["binding", "snapshot", "science"]
     assert len(binding_calls) == 1
     assert binding_calls[0][0] is plan
     assert binding_calls[0][1] is sources

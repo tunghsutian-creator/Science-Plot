@@ -27,6 +27,7 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
     owned_test_paths=frozenset(
         {
             "tests/test_changed_verification.py",
+            "tests/test_external_ai_verification.py",
             "tests/test_architecture_boundaries.py",
             "tests/test_cli_surface.py",
             "tests/test_doctor_contract_topology.py",
@@ -34,6 +35,7 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
     ),
     pytest_targets=(
         "tests/test_changed_verification.py",
+        "tests/test_external_ai_verification.py",
         "tests/test_cli_surface.py",
         "tests/test_doctor_contract_topology.py",
         "tests/test_architecture_boundaries.py::test_non_probe_source_has_no_exact_duplicate_function_implementations",

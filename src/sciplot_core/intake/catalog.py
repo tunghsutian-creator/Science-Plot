@@ -221,7 +221,8 @@ def _project_experiment(
     rule_id = experiment.get("rule_id")
     if not isinstance(rule_id, str) or not rule_id.strip():
         return projected
-    rule_payload = get_rule(rule_id.strip()).to_payload()
+    rule = get_rule(rule_id.strip())
+    rule_payload = rule.to_payload()
     template = str(rule_payload["template"])
     recommendation = rule_payload["experiment_recommendation"]
     projected.update(
@@ -230,6 +231,7 @@ def _project_experiment(
             "chart": template,
             "presentation_contract": dict(rule_payload["presentation_contract"]),
             "default_replicate_mode": recommendation["default_replicate_mode"],
+            "worksheet_selection": rule.scientific_source_adapter == "registered_paired_curve",
         }
     )
     if include_render_options:

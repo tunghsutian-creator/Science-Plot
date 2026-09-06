@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-import fitz
+import pymupdf as fitz
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.qa.artifacts import (
     _raster_visual_qa,

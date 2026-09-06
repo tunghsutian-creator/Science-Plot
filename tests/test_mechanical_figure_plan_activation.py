@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any
@@ -185,6 +186,31 @@ def test_tensile_studio_publishes_the_complete_source_bound_figure_plan(
     )
     assert len(delivery["figures"]) == 2 * len(plan.tasks)
     assert len(delivery["project_documents"]) == len(plan.tasks)
+    manifest = json.loads(Path(studio_run["manifest"]).read_text(encoding="utf-8"))
+    verification = manifest["result"]["scientific_data_verification"]
+    assert verification["status"] == "passed"
+    assert verification["document_count"] == len(plan.tasks)
+    snapshots = {
+        Path(value).name for value in manifest["result"]["data_snapshot_sources"]
+    }
+    assert {f"{task.artifact_stem}.csv" for task in plan.tasks} <= snapshots
+    assert len(delivery["data_csvs"]) == len(plan.tasks)
+    for record, task in zip(delivery["data_csvs"], plan.tasks, strict=True):
+        spec = json.loads(Path(record["source"]).read_text())
+        assert spec["source_request"]["resolved_figure_task"] == task.to_payload()
+        with Path(record["path"]).open(newline="") as handle:
+            rows = list(csv.reader(handle))
+        assert rows[0][1] in spec["axes"]["y"]["label"]
+        assert rows[1][1] in spec["axes"]["y"]["label"]
+        for index, series in enumerate(spec["series"]):
+            assert rows[2][2 * index : 2 * index + 2] == [series["label"]] * 2
+            for offset, key in ((0, "x_values"), (1, "y_values")):
+                actual = [
+                    float(row[2 * index + offset])
+                    for row in rows[3:]
+                    if row[2 * index + offset]
+                ]
+                assert actual == pytest.approx(series[key])
 
 
 @pytest.mark.comprehensive

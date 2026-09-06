@@ -11,6 +11,37 @@ from sciplot_core.source_coverage.artifacts import (
 )
 
 
+def render_data_unit_signature(unit: dict[str, Any]) -> str:
+    """Hash the same generated source-data contract in every publication route."""
+
+    from sciplot_core.source_coverage.file_snapshots import _canonical_sha256
+
+    fields = (
+        "kind",
+        "name",
+        "label",
+        "x_name",
+        "y_name",
+        "data_name",
+        "x_values",
+        "y_values",
+        "z_values",
+        "z_label",
+        "scalar_visual",
+        "axes",
+        "reference_guides",
+        "direct_labels",
+        "presentation_kind",
+        "category_position",
+        "plot_line_hide",
+        "raw_points_visible",
+        "boxplot_eligible",
+        "categorical_contract",
+        "source_artifacts",
+    )
+    return _canonical_sha256({field: unit[field] for field in fields if field in unit})
+
+
 def _spec_render_data_units(
     spec: dict[str, Any],
     *,
@@ -76,6 +107,7 @@ def _spec_render_data_units(
                     if isinstance(group, dict)
                     else False
                 ),
+                "categorical_contract": json_safe(categorical),
                 "axes": axis_contract,
                 "reference_guides": json_safe(reference_guides),
                 "direct_labels": json_safe(direct_labels),

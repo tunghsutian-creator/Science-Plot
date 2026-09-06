@@ -270,6 +270,7 @@ class SeriesRevisionMixin:
             self._series_revision_available
             and self.series_revision_group.isVisible()
             and not getattr(self, "_exporting", False)
+            and not getattr(self, "_project_change_busy", False)
         )
         target = self._series_revision_target() if active else ()
         self.series_revision_list.setEnabled(active)

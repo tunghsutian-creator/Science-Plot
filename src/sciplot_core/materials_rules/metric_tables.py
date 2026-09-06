@@ -145,10 +145,10 @@ def tensile_curve_metric_values(
 ) -> dict[str, float | str]:
     """Return publication-safe tensile metrics from one engineering curve.
 
-    Instrument-reported strength, break strain, and the programmed low-strain
-    modulus take precedence when present.  Derived modulus values convert
-    percent strain to a unitless fraction, and toughness is reported as
-    MJ/m3 rather than the intermediate MPa-percent integral.
+    Finite instrument reports take precedence. A curve endpoint alone does not
+    establish fracture, and a modulus fit needs the declared 0.05--0.25 percent
+    strain interval. Missing evidence remains a non-finite metric with a reason.
+    Descriptive endpoint and available-curve integral values remain separate.
     """
 
     data = pd.DataFrame(points, columns=["strain", "stress"])
@@ -157,31 +157,38 @@ def tensile_curve_metric_values(
         raise ValueError(
             "A tensile metric calculation needs at least one finite stress-strain point."
         )
+    terminal_strain = float(data["strain"].iloc[-1])
     data = data.sort_values("strain", kind="stable").drop_duplicates(
         subset="strain", keep="last"
     )
     reported = reported or {}
 
-    reported_strength = reported.get("strength_MPa")
+    def finite_report(metric: str) -> float | None:
+        value = reported.get(metric)
+        return float(value) if value is not None and np.isfinite(float(value)) else None
+
+    reported_strength = finite_report("strength_MPa")
     strength = (
         float(reported_strength)
-        if reported_strength is not None and np.isfinite(float(reported_strength))
+        if reported_strength is not None
         else float(data["stress"].max())
     )
     strength_source = (
         "instrument_report" if reported_strength is not None else "curve_maximum"
     )
 
-    reported_break = reported.get(ELONGATION_AT_BREAK_METRIC)
+    reported_break = finite_report(ELONGATION_AT_BREAK_METRIC)
     if reported_break is None:
-        reported_break = reported.get(LEGACY_STRAIN_AT_BREAK_METRIC)
+        reported_break = finite_report(LEGACY_STRAIN_AT_BREAK_METRIC)
     elongation_at_break = (
-        float(reported_break)
-        if reported_break is not None and np.isfinite(float(reported_break))
-        else float(data["strain"].iloc[-1])
+        float(reported_break) if reported_break is not None else float("nan")
     )
-    break_source = (
-        "instrument_report" if reported_break is not None else "curve_terminal_point"
+    break_source = "instrument_report" if reported_break is not None else "unavailable"
+    break_reason = (
+        ""
+        if reported_break is not None
+        else "No finite instrument-reported elongation at break or verified fracture "
+        "event is available; the recorded curve endpoint does not prove fracture."
     )
 
     unit_token = str(x_unit or "%").strip().casefold()
@@ -189,12 +196,12 @@ def tensile_curve_metric_values(
     strain_fraction_factor = 0.01 if strain_is_percent else 1.0
     fit_low, fit_high = (0.05, 0.25) if strain_is_percent else (0.0005, 0.0025)
     fit = data[(data["strain"] >= fit_low) & (data["strain"] <= fit_high)]
-    if len(fit) < 2 or fit["strain"].nunique() < 2:
-        fit = data[(data["strain"] >= 0.0) & (data["strain"] <= fit_high)]
-    if len(fit) < 2 or fit["strain"].nunique() < 2:
-        fit = data.iloc[: min(25, len(data))]
     derived_modulus = float("nan")
-    if len(fit) >= 2 and fit["strain"].nunique() >= 2:
+    covers_fit_interval = (
+        float(data["strain"].iloc[0]) <= fit_low
+        and float(data["strain"].iloc[-1]) >= fit_high
+    )
+    if covers_fit_interval and len(fit) >= 2 and fit["strain"].nunique() >= 2:
         try:
             slope = float(
                 np.polyfit(
@@ -206,39 +213,53 @@ def tensile_curve_metric_values(
             derived_modulus = slope / strain_fraction_factor
         except (ValueError, np.linalg.LinAlgError):
             derived_modulus = float("nan")
-    reported_modulus = reported.get("modulus_MPa")
+    reported_modulus = finite_report("modulus_MPa")
     modulus = (
-        float(reported_modulus)
-        if reported_modulus is not None and np.isfinite(float(reported_modulus))
-        else derived_modulus
+        float(reported_modulus) if reported_modulus is not None else derived_modulus
     )
     modulus_source = (
-        "instrument_report_0.05_to_0.25_percent"
+        "instrument_report"
         if reported_modulus is not None
-        else "curve_fit"
+        else "curve_fit_0.05_to_0.25_percent"
+        if np.isfinite(derived_modulus)
+        else "unavailable"
+    )
+    modulus_reason = (
+        ""
+        if np.isfinite(modulus)
+        else "No finite instrument-reported modulus; the curve must cover "
+        "0.05--0.25 percent strain with at least two distinct finite fit points."
     )
 
-    clipped = data[data["strain"] <= elongation_at_break].copy()
-    after_break = data[data["strain"] > elongation_at_break]
+    break_coordinate = (
+        elongation_at_break if strain_is_percent else elongation_at_break / 100.0
+    )
+    clipped = data[data["strain"] <= break_coordinate].copy()
+    after_break = data[data["strain"] > break_coordinate]
     if (
         not clipped.empty
         and not after_break.empty
-        and float(clipped["strain"].iloc[-1]) < elongation_at_break
+        and float(clipped["strain"].iloc[-1]) < break_coordinate
     ):
         left = clipped.iloc[-1]
         right = after_break.iloc[0]
         x0, y0 = float(left["strain"]), float(left["stress"])
         x1, y1 = float(right["strain"]), float(right["stress"])
         if x1 > x0:
-            y_break = y0 + (elongation_at_break - x0) * (y1 - y0) / (x1 - x0)
+            y_break = y0 + (break_coordinate - x0) * (y1 - y0) / (x1 - x0)
             clipped = pd.concat(
                 [
                     clipped,
-                    pd.DataFrame([{"strain": elongation_at_break, "stress": y_break}]),
+                    pd.DataFrame([{"strain": break_coordinate, "stress": y_break}]),
                 ],
                 ignore_index=True,
             )
-    if len(clipped) >= 2:
+    complete_to_break = (
+        reported_break is not None
+        and float(data["strain"].iloc[0]) <= 0.0
+        and float(data["strain"].iloc[-1]) >= break_coordinate
+    )
+    if complete_to_break and len(clipped) >= 2:
         toughness = float(
             np.trapezoid(
                 clipped["stress"].to_numpy(dtype=float),
@@ -248,23 +269,40 @@ def tensile_curve_metric_values(
     else:
         toughness = float("nan")
 
-    if (
-        reported_break is not None
-        and float(data["strain"].iloc[-1]) >= elongation_at_break
-    ):
-        toughness_source = "curve_integral_to_reported_break"
-    elif reported_break is not None:
-        toughness_source = "curve_integral_over_available_excerpt_before_reported_break"
-    else:
-        toughness_source = "curve_integral"
+    toughness_source = (
+        "curve_integral_to_reported_break" if np.isfinite(toughness) else "unavailable"
+    )
+    toughness_reason = (
+        ""
+        if np.isfinite(toughness)
+        else "Toughness requires a verified break and at least two curve points "
+        "covering zero strain through that break; an excerpt integral is incomplete."
+    )
+    available_integral = (
+        float(
+            np.trapezoid(
+                data["stress"].to_numpy(dtype=float),
+                data["strain"].to_numpy(dtype=float) * strain_fraction_factor,
+            )
+        )
+        if len(data) >= 2
+        else float("nan")
+    )
 
     return {
         "strength_MPa": strength,
         "strength_source": strength_source,
         ELONGATION_AT_BREAK_METRIC: elongation_at_break,
         "elongation_at_break_source": break_source,
+        "elongation_at_break_reason": break_reason,
         "modulus_MPa": modulus,
         "modulus_source": modulus_source,
+        "modulus_reason": modulus_reason,
         "toughness_MJ_m3": toughness,
         "toughness_source": toughness_source,
+        "toughness_reason": toughness_reason,
+        "curve_terminal_strain_percent": terminal_strain
+        if strain_is_percent
+        else terminal_strain * 100.0,
+        "available_curve_integral_MJ_m3": available_integral,
     }

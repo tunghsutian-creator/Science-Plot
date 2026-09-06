@@ -8,9 +8,6 @@ import numpy as np
 import pandas as pd
 
 from sciplot_core.source_tables import read_raw_table
-from sciplot_core.materials_rules.tokens import (
-    normalize_token,
-)
 from sciplot_core.materials_rules.metric_tables import (
     _metric,
     _read_labeled_paired_curve_table,
@@ -22,57 +19,59 @@ def _raw_table(path: Path) -> pd.DataFrame:
 
 
 def _tga_metrics(source_path: Path) -> list[dict[str, Any]]:
-    raw = _raw_table(source_path)
-    tokens = [
-        [normalize_token(value) for value in row]
-        for row in raw.astype(str).values.tolist()
-    ]
-    temp_col: int | None = None
-    mass_col: int | None = None
-    for row in tokens:
-        for index, token in enumerate(row):
-            if temp_col is None and "temp" in token:
-                temp_col = index
-            if mass_col is None and ("weight" in token or "mass" in token):
-                mass_col = index
-    if temp_col is None or mass_col is None:
-        return [
-            _metric(
-                "residual_mass_percent",
-                None,
-                "%",
-                "skipped",
-                "Temperature/mass columns not found.",
-            )
-        ]
-    data = (
-        raw.iloc[:, [temp_col, mass_col]].apply(pd.to_numeric, errors="coerce").dropna()
+    """Compute each sample's metrics from the normalized paired-curve table."""
+
+    series = _read_labeled_paired_curve_table(
+        source_path,
+        x_tokens=("temperature",),
+        y_tokens=("mass", "weight"),
     )
-    if data.empty:
-        return [
-            _metric(
-                "residual_mass_percent",
-                None,
-                "%",
-                "skipped",
-                "No numeric TGA data found.",
+    rows: list[dict[str, Any]] = []
+    for sample, frame in series:
+        data = frame.replace([np.inf, -np.inf], np.nan).dropna()
+        suffix = "" if len(series) == 1 else f"[{sample}]"
+        if data.empty:
+            rows.append(
+                _metric(
+                    f"residual_mass_percent{suffix}",
+                    None,
+                    "%",
+                    "skipped",
+                    "No finite paired TGA data found.",
+                )
             )
-        ]
-    data.columns = ["temperature", "mass"]
-    initial = float(data["mass"].iloc[0])
-    residual = float(data["mass"].iloc[-1])
-    rows = [_metric("residual_mass_percent", residual, "%")]
+            continue
+        rows.extend(_tga_series_metrics(data, suffix=suffix))
+    return rows or [
+        _metric(
+            "residual_mass_percent",
+            None,
+            "%",
+            "skipped",
+            "No canonical Temperature/Mass paired curve found.",
+        )
+    ]
+
+
+def _tga_series_metrics(data: pd.DataFrame, *, suffix: str) -> list[dict[str, Any]]:
+    initial = float(data["y"].iloc[0])
+    residual = float(data["y"].iloc[-1])
+    rows = [_metric(f"residual_mass_percent{suffix}", residual, "%")]
     for loss, metric in ((5, "t5_temperature_C"), (10, "t10_temperature_C")):
         threshold = initial - loss
-        below = data[data["mass"] <= threshold]
+        below = data[data["y"] <= threshold]
         if below.empty:
             rows.append(
                 _metric(
-                    metric, None, "C", "skipped", f"Mass never reached {threshold:g} %."
+                    f"{metric}{suffix}",
+                    None,
+                    "C",
+                    "skipped",
+                    f"Mass never reached {threshold:g} %.",
                 )
             )
         else:
-            rows.append(_metric(metric, float(below["temperature"].iloc[0]), "C"))
+            rows.append(_metric(f"{metric}{suffix}", float(below["x"].iloc[0]), "C"))
     return rows
 
 

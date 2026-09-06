@@ -348,6 +348,11 @@ a { color: inherit; text-decoration: none; }
 }
 
 .preview-row { padding: 12px; display: grid; gap: 8px; }
+.raw-table-scroll { overflow: auto; max-height: 310px; border: 1px solid var(--line); border-radius: 8px; }
+.raw-table-scroll table { border-collapse: collapse; min-width: 100%; font-size: 11px; }
+.raw-table-scroll th, .raw-table-scroll td { padding: 6px 10px; border: 1px solid var(--line); white-space: nowrap; text-align: left; }
+.raw-table-scroll thead th { position: sticky; top: 0; background: var(--surface); }
+.import-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .preview-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .preview-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 720; }
 .preview-meta { color: var(--muted); font-size: 11px; }
@@ -605,6 +610,10 @@ a { color: inherit; text-decoration: none; }
   font-size: 11px;
 }
 .artifact-link.ready { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.inspector .artifact-links { display: grid; min-width: 0; }
+.inspector .artifact-link { min-width: 0; max-width: 100%; border-radius: 6px; padding: 5px 8px; align-items: baseline; }
+.inspector .artifact-link span { flex-shrink: 0; }
+.inspector .artifact-link b { min-width: 0; overflow-wrap: anywhere; }
 .quality-actions {
   display: grid;
   gap: 8px;
@@ -700,21 +709,26 @@ a { color: inherit; text-decoration: none; }
   50% { opacity: 1; transform: scale(1); }
 }
 
-@media (max-width: 1080px) {
-  .topbar { grid-template-columns: 210px minmax(0, 1fr) auto; }
+@media (max-width: 1240px) {
+  .topbar { grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 0 20px; }
+  .main { overflow: auto; }
+  .screen { height: auto; min-height: 100%; }
+  .flow-screen { padding: 20px; }
+  .flow-shell { height: auto; grid-template-columns: 180px minmax(0, 1fr); gap: 20px; }
+  .flow-main { min-height: 560px; }
+  .flow-panel { min-height: 260px; }
+  .flow-panel .sample-row { grid-template-columns: 16px minmax(0, 1fr) 32px; }
+  .flow-panel .sample-count { grid-column: 2; grid-row: 2; }
+  .flow-panel .sample-row .icon-button { grid-column: 3; grid-row: 1 / 3; }
+  .panel-head { flex-wrap: wrap; }
+  .panel-head .select { min-width: 0; max-width: 100% !important; }
   .review-screen { grid-template-columns: 160px minmax(0, 1fr); }
   .inspector {
-    position: fixed;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    height: min(52vh, 420px);
-    z-index: 30;
-    transform: translateY(calc(100% - 52px));
-    transition: transform var(--motion) var(--ease);
+    position: static;
+    grid-column: 1 / -1;
+    height: auto;
+    transform: none;
   }
-  .inspector:focus-within,
-  .inspector.open { transform: translateY(0); }
 }
 
 @media (max-width: 760px) {
@@ -724,7 +738,7 @@ a { color: inherit; text-decoration: none; }
   .actions { width: 100%; gap: 6px; overflow: visible; padding-bottom: 2px; }
   .actions .button { flex: 1 1 0; min-width: 0; padding: 0 8px; font-size: 14px; }
   .flow-screen { padding: 10px; place-items: stretch; }
-  .flow-shell { height: 100%; min-height: 0; grid-template-columns: 1fr; }
+  .flow-shell { height: auto; min-height: 0; grid-template-columns: 1fr; }
   .inspect-grid { grid-template-columns: 1fr; }
   .review-screen { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); padding: 8px; }
   .review-screen > .figure-rail { min-height: 0; max-height: 136px; }
@@ -821,6 +835,7 @@ const S = {
   activeGroup: 0,
   previewKey: "",
   tablePreviews: {},
+  selectedSheets: {},
   columnRoles: {},
   figureSize: "60x55",
   figureSizeTouched: false,
@@ -879,7 +894,10 @@ function canInspect() {
   return visibleGroups().length > 0;
 }
 function canRender() {
-  return canInspect() && S.exports.length > 0 && !S.busy;
+  return canInspect() && S.exports.length > 0 && !S.busy && allFiles().every(item => {
+    const preview = S.tablePreviews[item.key];
+    return preview && !preview.loading && !preview.error && preview.columns?.length;
+  });
 }
 function resultFigures() {
   const figures = (S.projectStatus?.figures || S.lastProject?.last_run?.figures?.map(path => ({
@@ -914,13 +932,24 @@ function hasRenderedArtifacts() {
 function oneStepStatus() {
   return S.projectStatus?.last_run?.one_step || S.projectStatus?.manifest?.one_step || {};
 }
-function oneStepStateLabel() {
-  const state = String(oneStepStatus()?.state || "").replace(/_/g, " ");
-  return state ? titleCase(state) : "";
+function reviewStatus() {
+  if (S.busy) return { label: S.busy, tone: "busy", message: "" };
+  const run = S.projectStatus?.last_run || S.lastProject?.last_run || {};
+  const manifest = S.projectStatus?.manifest || S.lastProject || {};
+  const failure = S.error || run.failure || run.failure_reason || manifest.failure;
+  const state = run.state || oneStepStatus().state || "";
+  if (failure || manifest.run_failed || ["failed", "blocked", "needs_fix", "needs_rule_repair"].includes(state)) {
+    return { label: "Needs attention", tone: "warn", message: failure || "The project has not completed successfully. Review the diagnostic details before retrying." };
+  }
+  if (state === "needs_human_confirmation") return { label: "Needs confirmation", tone: "warn", message: "Return to Inspect to resolve the source selection." };
+  if (run.ready_to_use === true && (!state || state === "ready")) return { label: "Ready", tone: "ok", message: "" };
+  return { label: "Review required", tone: "", message: "A complete delivery has not been confirmed." };
 }
 function exportInkLabel() {
   const reports = oneStepStatus()?.figure_qa_report?.export_visual_qa || [];
-  const first = Array.isArray(reports) ? reports.find(item => item?.visual_qa?.ink_fraction !== undefined) : null;
+  const run = S.projectStatus?.last_run || S.lastProject?.last_run || {};
+  const pages = (run.qa?.pdfs || []).flatMap(pdf => pdf.pages || []);
+  const first = [...(Array.isArray(reports) ? reports : []), ...pages].find(item => item?.visual_qa?.ink_fraction !== undefined);
   const value = Number(first?.visual_qa?.ink_fraction);
   return Number.isFinite(value) ? `${(value * 100).toFixed(2)}%` : "n/a";
 }
@@ -932,24 +961,15 @@ function stageLabel() {
   if (S.busy) return S.busy;
   if (S.error) return S.error;
   if (S.stage === "source") return `${allFiles().length} file(s)`;
-  if (S.stage === "inspect") return "Ready to render with SciPlot";
-  const oneStep = oneStepStateLabel();
-  if (oneStep) return `Review · ${oneStep}`;
-  const qa = S.projectStatus?.last_run?.qa?.status || "";
-  if (qa) return `Review · QA ${qa}`;
-  return "Review";
+  if (S.stage === "inspect") return canRender() ? "Ready to render with SciPlot" : "Inspect source previews before rendering";
+  return `Review · ${reviewStatus().label}`;
 }
 function topbarStateLabel() {
   if (S.busy) return `${titleCase(S.stage)}  •  ${S.busy}`;
   if (S.error) return `${titleCase(S.stage)}  •  Needs attention`;
   if (S.stage === "source") return `Source  •  ${allFiles().length} file(s)`;
   if (S.stage === "inspect") return "Inspect  •  Confirm columns";
-  const oneStep = oneStepStateLabel();
-  if (oneStep) return `Review  •  ${oneStep}`;
-  const qa = String(S.projectStatus?.last_run?.qa?.status || "").toLowerCase();
-  if (qa === "passed") return "Review  •  QA ready";
-  if (qa) return `Review  •  QA ${qa}`;
-  return "Review  •  Ready";
+  return `Review  •  ${reviewStatus().label}`;
 }
 function titleCase(value) {
   const text = String(value || "");
@@ -971,6 +991,7 @@ function setStage(stage) {
   if (stage === "inspect" && !canInspect()) return;
   if (stage === "review" && !S.lastProject) return;
   S.stage = stage;
+  if (stage === "inspect") allFiles().forEach(item => ensureTablePreview(item));
   render();
 }
 
@@ -1124,7 +1145,6 @@ function renderInspectFlow() {
           </div>
           <div class="section">
             <div class="section-title">Output</div>
-            <input class="input" id="plotOutputInput" value="${esc(S.plotOutput)}">
             <div class="segmented">${figureSizeOptions.map(item => `<button class="segment${S.figureSize === item.v ? " active" : ""}" data-size="${esc(item.v)}">${esc(item.l)}</button>`).join("")}</div>
             <div class="segmented">${exportOptions.map(item => `<button class="segment${S.exports.includes(item.v) ? " active" : ""}" data-export="${esc(item.v)}">${esc(item.l)}</button>`).join("")}</div>
           </div>
@@ -1171,8 +1191,8 @@ function renderSampleRows() {
 function renderTablePreview(selected) {
   if (!selected) return `<div class="empty-state"><b>No file selected</b></div>`;
   const preview = S.tablePreviews[selected.key];
-  if (!preview) {
-    ensureTablePreview(selected);
+  if (!preview || preview.loading) {
+    if (!preview) ensureTablePreview(selected);
     return `<div class="preview-row"><div class="preview-head"><div class="preview-name">${esc(selected.file.name)}</div><span class="preview-meta">Loading</span></div><div class="empty-state"><b>Reading columns</b></div></div>`;
   }
   if (preview.error) {
@@ -1184,10 +1204,19 @@ function renderTablePreview(selected) {
         <div class="preview-name">${esc(preview.name || selected.file.name)}</div>
         <span class="preview-meta">${esc(preview.encoding || "")} ${preview.preview_rows ? ` · ${preview.preview_rows} rows` : ""}</span>
       </div>
+      ${preview.sheets?.length ? `<div class="import-controls"><label for="previewSheetSelect">Worksheet</label><select class="select" id="previewSheetSelect" style="max-width:280px">
+        <option value="">Automatic · preview ${esc(preview.sheets[0])}</option>
+        ${preview.sheets.map(sheet => `<option value="${esc(sheet)}"${S.selectedSheets[selected.key] === sheet ? " selected" : ""}>${esc(sheet)}</option>`).join("")}
+      </select><span class="preview-meta">${currentExperiment()?.worksheet_selection ? "An explicit selection uses only this worksheet." : "Preview only; this experiment keeps its own source selection."}</span></div>` : ""}
+      <div class="import-controls"><button class="button subtle" id="saveImportSettingsBtn">Save import settings</button><button class="button subtle" id="reuseImportSettingsBtn">Reuse import settings</button></div>
+      <div class="raw-table-scroll"><table aria-label="Source data preview"><thead><tr><th>Row</th>${preview.columns.map(column => `<th>${column.index + 1}</th>`).join("")}</tr></thead><tbody>
+        ${(preview.rows || []).map(row => `<tr><th>${row.index}</th>${row.values.map(value => `<td>${esc(value)}</td>`).join("")}</tr>`).join("")}
+      </tbody></table></div>
+      <p class="preview-meta">Preview: ${preview.preview_rows} rows, ${preview.preview_columns} of ${preview.source_column_count || preview.preview_columns} columns. Original files remain unchanged.</p>
       <table class="column-table">
         <thead><tr><th style="width:42%">Column</th><th>Type</th><th>Role</th></tr></thead>
         <tbody>
-          ${(preview.columns || []).slice(0, 12).map(column => {
+          ${(preview.columns || []).map(column => {
             const roleKey = `${selected.key}:${column.index}`;
             const role = S.columnRoles[roleKey] ?? column.suggested_role ?? "auto";
             return `<tr>
@@ -1213,6 +1242,7 @@ function figureSurfaceInfo() {
 
 function renderReview() {
   const screen = document.getElementById("reviewScreen");
+  const status = reviewStatus();
   screen.innerHTML = `
     <aside class="figure-rail">
       <div class="panel-head"><div class="panel-title">Figures</div><span class="preview-meta">${resultFigures().length}</span></div>
@@ -1221,9 +1251,10 @@ function renderReview() {
     <section class="result-shell">
       <div class="result-top">
         <div class="result-title">${esc(currentFigure()?.stem || currentFigure()?.name || "SciPlot figure")}</div>
-        <div class="result-meta"><span class="status-dot ${S.busy ? "busy" : S.error ? "warn" : hasRenderedArtifacts() ? "ok" : ""}"></span><span>${esc(S.busy || "Ready")}</span></div>
+        <div class="result-meta"><span class="status-dot ${status.tone}"></span><span>${esc(status.label)}</span></div>
       </div>
       <div class="result-body">
+        ${status.message ? `<div class="preview-row" role="alert"><b>${esc(status.label)}</b><p>${esc(status.message)}</p><button class="button" data-stage-button="inspect">Return to Inspect</button></div>` : ""}
         <div class="figure-stage${S.busy ? " busy" : ""}">${renderFigureSurface()}</div>
       </div>
     </section>
@@ -1269,7 +1300,8 @@ function renderReviewPanel() {
   const veuszLauncher = studio.veusz_launcher;
   const exportLauncher = studio.export_edited_launcher;
   const oneStep = oneStepStatus();
-  const figureQA = oneStep.figure_qa_report || {};
+  const run = S.projectStatus?.last_run || S.lastProject?.last_run || {};
+  const figureQA = oneStep.figure_qa_report || run.layout_quality || {};
   const issues = Array.isArray(figureQA.issue_ids) ? figureQA.issue_ids : [];
   const actions = qualityActions();
   const scientificReview = S.projectStatus?.scientific_transform_review;
@@ -1278,8 +1310,8 @@ function renderReviewPanel() {
     <div class="section">
       <div class="section-title">QA</div>
       <div class="artifact-links">
-        <div class="artifact-link"><span>State</span><b>${esc(oneStepStateLabel() || "Review")}</b></div>
-        <div class="artifact-link"><span>Layout</span><b>${esc(figureQA.status || "unknown")}</b></div>
+        <div class="artifact-link"><span>State</span><b>${esc(reviewStatus().label)}</b></div>
+        <div class="artifact-link"><span>Artifact QA</span><b>${esc(run.qa?.status || figureQA.status || "unknown")}</b></div>
         <div class="artifact-link"><span>Ink</span><b>${esc(exportInkLabel())}</b></div>
         <div class="artifact-link"><span>Issues</span><b>${esc(issues.length ? issues.join(", ") : "none")}</b></div>
       </div>
@@ -1426,6 +1458,10 @@ function selectFamily(id) {
   const firstExperiment = currentDataType()?.experiments?.[0];
   S.experimentTypeId = firstExperiment?.id || "";
   S.experimentTouched = true;
+  S.selectedSheets = {};
+  S.tablePreviews = {};
+  S.columnRoles = {};
+  if (S.stage === "inspect") allFiles().forEach(ensureTablePreview);
   applyCurrentExperimentDefaults({ forceSize: !S.figureSizeTouched });
   render();
 }
@@ -1473,6 +1509,8 @@ function collectColumnConfirmations() {
       file_name: item.file.name,
       source_path: item.file.source_path || "",
       sheet: preview.sheet || null,
+      sheet_selected: Boolean(currentExperiment()?.worksheet_selection && S.selectedSheets[item.key]),
+      source_sha256: preview.source_sha256,
       columns: preview.columns.map(column => {
         const role = S.columnRoles[`${item.key}:${column.index}`] ?? column.suggested_role ?? "auto";
         return {
@@ -1488,11 +1526,63 @@ function collectColumnConfirmations() {
   return confirmations;
 }
 
+function importSettingsContext() {
+  const item = allFiles().find(value => value.key === S.previewKey) || allFiles()[0];
+  if (!item) return null;
+  const preview = S.tablePreviews[item.key];
+  if (!preview?.columns?.length || preview.error || preview.loading) return null;
+  const extension = item.file.name.split(".").pop().toLowerCase();
+  return { item, preview, key: `sciplot.import.v1:${S.experimentTypeId}:${extension}` };
+}
+function saveImportSettings() {
+  const context = importSettingsContext();
+  if (!context) return;
+  const { item, preview, key } = context;
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      sheet: S.selectedSheets[item.key] || "",
+      columns: preview.columns.map(column => ({
+        name: column.name,
+        role: S.columnRoles[`${item.key}:${column.index}`] ?? column.suggested_role ?? "auto"
+      }))
+    }));
+    showToast("Import settings saved for this experiment and file type.");
+  } catch (error) { showToast(`Could not save import settings: ${error.message}`); }
+}
+async function reuseImportSettings() {
+  const context = importSettingsContext();
+  if (!context) return;
+  const { item, preview, key } = context;
+  const previousSheet = S.selectedSheets[item.key] || "";
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || "null");
+    if (!saved || !Array.isArray(saved.columns)) throw new Error("No saved settings for this experiment and file type.");
+    if (saved.sheet && !preview.sheets?.includes(saved.sheet)) throw new Error("The saved worksheet is absent. Select a current worksheet.");
+    S.selectedSheets[item.key] = saved.sheet || "";
+    delete S.tablePreviews[item.key];
+    await ensureTablePreview(item);
+    const current = S.tablePreviews[item.key];
+    if (!current?.columns || current.columns.length !== saved.columns.length || current.columns.some((column, index) => column.name !== saved.columns[index]?.name)) {
+      S.selectedSheets[item.key] = previousSheet;
+      S.tablePreviews[item.key] = preview;
+      throw new Error("Column names differ; inspect this file before saving new settings.");
+    }
+    current.columns.forEach((column, index) => {
+      const role = saved.columns[index].role;
+      S.columnRoles[`${item.key}:${column.index}`] = roleOptions.includes(role) ? role : "auto";
+    });
+    showToast("Saved settings applied. Review the current source values before rendering.");
+  } catch (error) { showToast(error.message); }
+  render();
+}
+
 async function ensureTablePreview(item) {
   if (!item || S.tablePreviews[item.key]) return;
-  S.tablePreviews = { ...S.tablePreviews, [item.key]: { loading: true } };
+  const pending = { loading: true };
+  S.tablePreviews = { ...S.tablePreviews, [item.key]: pending };
   try {
     const payload = { name: item.file.name };
+    if (S.selectedSheets[item.key]) payload.selected_sheet = S.selectedSheets[item.key];
     if (item.file.source_path) {
       payload.source_path = item.file.source_path;
       if (S.sessionId) payload.session_id = S.sessionId;
@@ -1505,8 +1595,10 @@ async function ensureTablePreview(item) {
     });
     const json = await response.json();
     if (!response.ok) throw new Error(json.error || "Preview failed");
+    if (S.tablePreviews[item.key] !== pending) return;
     S.tablePreviews = { ...S.tablePreviews, [item.key]: json };
   } catch (error) {
+    if (S.tablePreviews[item.key] !== pending) return;
     S.tablePreviews = { ...S.tablePreviews, [item.key]: { error: error.message } };
   }
   render();
@@ -1541,7 +1633,8 @@ async function createAndRenderProject() {
     await refreshStatus();
     S.stage = "review";
     S.busy = "";
-    showToast(json.run_failed ? "Render needs attention" : "SciPlot artifacts ready");
+    if (json.run_failed) S.error = json.failure || json.last_run?.failure || "Render needs attention";
+    showToast(reviewStatus().label);
   } catch (error) {
     S.error = error.message;
     S.busy = "";
@@ -1570,9 +1663,23 @@ function applyManifest(manifest) {
         name: file.original_name || String(file.source_path || "").split("/").pop() || "data",
         source_path: file.source_path,
         size: file.size_bytes,
+        sha256: file.sha256,
         key: `file-${++S.fileSequence}`
       }))
     }));
+    S.tablePreviews = {};
+    S.selectedSheets = {};
+    S.columnRoles = {};
+    allFiles().forEach(item => {
+      const confirmation = (manifest.column_confirmations || []).find(value =>
+        value.sample === item.group.sample && value.file_name === item.file.name &&
+        value.source_sha256 === item.file.sha256);
+      if (!confirmation) return;
+      if (confirmation.sheet_selected && currentExperiment()?.worksheet_selection) S.selectedSheets[item.key] = confirmation.sheet;
+      (confirmation.columns || []).forEach(column => {
+        if (roleOptions.includes(column.role)) S.columnRoles[`${item.key}:${column.index}`] = column.role;
+      });
+    });
   }
   const plotOptions = manifest.plot_options || {};
   if (plotOptions.output) S.plotOutput = plotOptions.output;
@@ -1582,6 +1689,7 @@ function applyManifest(manifest) {
 
 async function loadProject(slug) {
   try {
+    S.error = "";
     S.sessionId = "";
     const response = await fetch(`/api/projects/${encodeURIComponent(slug)}/status`);
     const json = await response.json();
@@ -1596,7 +1704,8 @@ async function loadProject(slug) {
       download_name: `${json.project_slug}.zip`
     };
     if (json.manifest) applyManifest(json.manifest);
-    S.stage = hasRenderedArtifacts() ? "review" : "inspect";
+    S.stage = hasRenderedArtifacts() || json.manifest?.run_failed || ["failed", "blocked"].includes(json.last_run?.state) ? "review" : "inspect";
+    if (S.stage === "inspect") allFiles().forEach(ensureTablePreview);
     showToast("Project opened");
   } catch (error) {
     showToast(error.message);
@@ -1690,6 +1799,8 @@ document.addEventListener("click", event => {
       ensureTablePreview(selected);
     }
   }
+  if (target.id === "saveImportSettingsBtn") saveImportSettings();
+  if (target.id === "reuseImportSettingsBtn") reuseImportSettings();
   if (target.dataset.family) selectFamily(target.dataset.family);
   if (target.dataset.size) setSize(target.dataset.size);
   if (target.dataset.export) toggleExport(target.dataset.export);
@@ -1720,12 +1831,26 @@ document.addEventListener("change", event => {
   if (target.id === "experimentSelect") {
     S.experimentTypeId = target.value;
     S.experimentTouched = true;
+    S.selectedSheets = {};
+    S.tablePreviews = {};
+    S.columnRoles = {};
+    allFiles().forEach(item => ensureTablePreview(item));
     applyCurrentExperimentDefaults({ forceSize: true });
     render();
   }
   if (target.id === "previewFileSelect") {
     S.previewKey = target.value;
     render();
+  }
+  if (target.id === "previewSheetSelect") {
+    const item = allFiles().find(value => value.key === S.previewKey) || allFiles()[0];
+    if (item) {
+      S.selectedSheets[item.key] = target.value;
+      Object.keys(S.columnRoles).filter(key => key.startsWith(`${item.key}:`)).forEach(key => delete S.columnRoles[key]);
+      delete S.tablePreviews[item.key];
+      ensureTablePreview(item);
+      render();
+    }
   }
   if (target.dataset.columnRole) S.columnRoles[target.dataset.columnRole] = target.value;
 });

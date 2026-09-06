@@ -220,7 +220,13 @@ def _representative_series(
             _decimal_metric(item, metric_id) for item in observations
         )
         secondary_metric = (
-            ELONGATION_AT_BREAK_METRIC if rule_id == "tensile_curve" else None
+            ELONGATION_AT_BREAK_METRIC
+            if rule_id == "tensile_curve"
+            and all(
+                item.metric_value(ELONGATION_AT_BREAK_METRIC) is not None
+                for item in observations
+            )
+            else None
         )
         median_secondary = (
             statistics.median(

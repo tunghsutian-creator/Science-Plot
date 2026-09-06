@@ -248,6 +248,7 @@ def doctor_payload() -> dict[str, Any]:
             )
             or {},
             "claims": envelope_payload.get("claims") or {},
+            "evidence_scope": envelope_payload.get("evidence_scope") or {},
         },
         "checks": checks,
         "next_actions": _next_actions(required_failures),

@@ -5,7 +5,10 @@ from __future__ import annotations
 import math
 from pathlib import Path
 import pandas as pd
-from sciplot_core.foundation.text_values import clean_text as _clean_text, token as _token
+from sciplot_core.foundation.text_values import (
+    clean_text as _clean_text,
+    token as _token,
+)
 from sciplot_core.materials_rules.unit_formatting import format_unit_label
 from sciplot_core.semantic_sources.models import CurveSeriesPayload
 from sciplot_core.semantic_sources.paired_curve_data_block import (
@@ -102,7 +105,9 @@ def _float(value: object, *, decimal_comma: bool = False) -> float | None:
 def _unit_row_score(raw: pd.DataFrame, row_index: int, columns: tuple[int, ...]) -> int:
     if row_index >= raw.shape[0]:
         return -1
-    if columns and all(_float(raw.iat[row_index, column]) is not None for column in columns):
+    if columns and all(
+        _float(raw.iat[row_index, column]) is not None for column in columns
+    ):
         return -1
     return sum(1 for column in columns if _looks_like_unit(raw.iat[row_index, column]))
 
@@ -165,9 +170,7 @@ def _scan_curve_series_table(
         if sample_index is None and preceding_row_has_samples:
             sample_index = preceding_sample_index
         adjacent_metadata_rows = tuple(
-            row_index
-            for row_index in (unit_row, sample_row)
-            if row_index is not None
+            row_index for row_index in (unit_row, sample_row) if row_index is not None
         )
         if adjacent_metadata_rows:
             data_start = max(adjacent_metadata_rows) + 1
@@ -206,6 +209,23 @@ def _scan_curve_series_table(
                     continue
                 points.append((x_value, y_value))
             if not points:
+                if sample_index is not None or data_block.rows:
+                    declared_sample = (
+                        preceding_samples.get(x_index)
+                        if sample_index == preceding_sample_index
+                        and preceding_row_has_samples
+                        else adjacent_samples.get(x_index)
+                    ) or (
+                        sample_prefix
+                        if len(pairs) == 1
+                        else f"{sample_prefix} {series_index}"
+                    )
+                    raise ValueError(
+                        f"Declared curve sample {declared_sample!r} has no finite "
+                        f"paired readings in columns {x_index + 1}/{y_index + 1}. "
+                        "Empty, unreadable, or nonfinite measurements cannot be "
+                        "treated as removal of the sample."
+                    )
                 continue
             instrument_metadata = resolve_panalytical_scan_metadata(
                 raw,
@@ -233,13 +253,11 @@ def _scan_curve_series_table(
             else:
                 x_unit_evidence = instrument_metadata.x_unit_evidence
                 y_unit_evidence = instrument_metadata.y_unit_evidence
-            x_unit, x_unit_detection, x_unit_row_index, x_unit_value = (
-                x_unit_evidence
+            x_unit, x_unit_detection, x_unit_row_index, x_unit_value = x_unit_evidence
+            y_unit, y_unit_detection, y_unit_row_index, y_unit_value = y_unit_evidence
+            fallback_sample = (
+                sample_prefix if len(pairs) == 1 else f"{sample_prefix} {series_index}"
             )
-            y_unit, y_unit_detection, y_unit_row_index, y_unit_value = (
-                y_unit_evidence
-            )
-            fallback_sample = sample_prefix if len(pairs) == 1 else f"{sample_prefix} {series_index}"
             if instrument_metadata is not None:
                 sample, sample_detection, sample_row_index = (
                     instrument_metadata.sample_evidence(fallback_sample)
@@ -310,9 +328,15 @@ def _scan_curve_series_source(
     default_x_unit: str,
     default_y_unit: str,
     sample_prefix: str,
+    selected_sheet: str | None = None,
 ) -> list[CurveSeriesPayload]:
     matches: list[tuple[str, list[CurveSeriesPayload]]] = []
-    for sheet_name, raw in _read_candidate_tables(source):
+    tables = (
+        _read_candidate_tables(source, selected_sheet=selected_sheet)
+        if selected_sheet is not None
+        else _read_candidate_tables(source)
+    )
+    for sheet_name, raw in tables:
         table_sample_prefix = sheet_name or sample_prefix
         if "__" in table_sample_prefix:
             left, right = table_sample_prefix.rsplit("__", maxsplit=1)

@@ -333,6 +333,7 @@ def build_studio_project_status(
                 provenance.get("project_delivery_current") is True
                 and provenance.get("delivery_scope_known") is True
             ),
+            delivery_verification=provenance.get("delivery_verification"),
         ),
     }
     return _finalize_status(status)

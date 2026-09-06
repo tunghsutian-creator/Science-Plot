@@ -40,8 +40,11 @@ def build_plot_data_exports(
     destination.mkdir(parents=True, exist_ok=True)
     project_name = _project_name(manifest)
 
+    specs = _spec_paths(manifest)
     source = _data_source(manifest)
-    source_table = _load_source_table(source) if source is not None else None
+    # A project-wide prepared table may describe only the primary plot. Each
+    # saved figure supplies its own values and axes for a multi-figure export.
+    source_table = _load_source_table(source) if len(specs) <= 1 else None
     if source_table is not None and not source_table.empty:
         output = destination / f"{project_name}_plot_data.csv"
         _write_four_row_csv(
@@ -50,7 +53,7 @@ def build_plot_data_exports(
         return [_data_record(output, source=source, source_kind="processed_source")]
 
     records: list[dict[str, Any]] = []
-    for index, spec_path in enumerate(_spec_paths(manifest), start=1):
+    for index, spec_path in enumerate(specs, start=1):
         spec = _read_json(spec_path)
         table = _spec_to_table(spec, manifest=manifest, spec_path=spec_path)
         if table is None or table.empty:

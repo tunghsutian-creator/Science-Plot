@@ -286,7 +286,7 @@ class RefreshMixin:
         self.refresh(capture_render=True, audit_source=True)
 
     def _document_modified(self, _modified: int) -> None:
-        if self._exporting:
+        if self._exporting or getattr(self, "_project_change_busy", False):
             return
         try:
             self._refresh_document_state()
@@ -295,6 +295,6 @@ class RefreshMixin:
             self._audit_failure_status(exc)
 
     def _dock_visibility_changed(self, visible: bool) -> None:
-        if visible and not self._exporting:
+        if visible and not self._exporting and not getattr(self, "_project_change_busy", False):
             self._refresh_document_state()
             self._refresh_series_revision()

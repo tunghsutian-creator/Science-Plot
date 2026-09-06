@@ -10,12 +10,17 @@ from sciplot_core.veusz_worker.visual_matchers import (
     _rect_record_matches_contract,
 )
 from sciplot_core.veusz_worker.widget_bindings import _visible_data_bindings
+from sciplot_core.veusz_worker.spec_audit.scientific_geometry import (
+    shape_matches_science,
+)
 
 
 def audit_overlay_inventory(
     loaded_document: Any,
     spec: dict[str, Any],
     visual: dict[str, Any] | None,
+    *,
+    check_presentation: bool = True,
 ) -> set[str]:
     from sciplot_core.performance_veusz import (
         performance_line_contracts,
@@ -66,6 +71,10 @@ def audit_overlay_inventory(
             "border_hide": True,
         }
     ]
+    if isinstance(spec.get("performance_comparison"), dict):
+        # The performance builder paints native page Background; it does not
+        # create the ordinary builder's page_export_background rectangle.
+        expected_rects = []
 
     expected_rects.extend(
         (
@@ -122,8 +131,14 @@ def audit_overlay_inventory(
         or set(actual_rects_by_path) != set(expected_rects_by_path)
         or any(
             (
-                not _rect_record_matches_contract(
-                    actual_rects_by_path[path], expected=expected
+                not (
+                    _rect_record_matches_contract(
+                        actual_rects_by_path[path], expected=expected
+                    )
+                    if check_presentation
+                    else shape_matches_science(
+                        actual_rects_by_path[path], expected, kind="rect"
+                    )
                 )
                 for path, expected in expected_rects_by_path.items()
             )
@@ -177,8 +192,14 @@ def audit_overlay_inventory(
         or set(actual_polygons_by_path) != set(expected_polygons_by_path)
         or any(
             (
-                not _polygon_record_matches_contract(
-                    actual_polygons_by_path[path], expected=expected
+                not (
+                    _polygon_record_matches_contract(
+                        actual_polygons_by_path[path], expected=expected
+                    )
+                    if check_presentation
+                    else shape_matches_science(
+                        actual_polygons_by_path[path], expected, kind="polygon"
+                    )
                 )
                 for path, expected in expected_polygons_by_path.items()
             )
@@ -232,8 +253,14 @@ def audit_overlay_inventory(
         or set(actual_lines_by_path) != set(expected_lines_by_path)
         or any(
             (
-                not _line_record_matches_contract(
-                    actual_lines_by_path[path], expected=expected
+                not (
+                    _line_record_matches_contract(
+                        actual_lines_by_path[path], expected=expected
+                    )
+                    if check_presentation
+                    else shape_matches_science(
+                        actual_lines_by_path[path], expected, kind="line"
+                    )
                 )
                 for path, expected in expected_lines_by_path.items()
             )

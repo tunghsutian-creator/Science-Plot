@@ -63,6 +63,32 @@ def register_interfaces_commands(subparsers: Any) -> None:
         "--name", help="Preselect the SciPlot project/figure name."
     )
 
+    revision = studio_parser.add_mutually_exclusive_group()
+    revision.add_argument(
+        "--recover-delivery",
+        action="store_true",
+        help="Preview recovery of a changed visible VSZ into its bound project.",
+    )
+    revision.add_argument(
+        "--update-source",
+        type=Path,
+        help="Preview new source data and compatible styling in the existing project.",
+    )
+    revision.add_argument(
+        "--apply-revision",
+        type=Path,
+        help="Apply a reviewed recovery or source-update preview JSON; rejects changed inputs.",
+    )
+    studio_parser.add_argument(
+        "--preview-out",
+        type=Path,
+        help="Save the recovery or source-update preview for review before applying.",
+    )
+    studio_parser.add_argument(
+        "--worksheet",
+        help="Explicit Excel worksheet for a source-update preview when the rule requires a selection.",
+    )
+
     studio_parser.add_argument(
         "--new", action="store_true", help="Open an empty native Veusz MainWindow."
     )

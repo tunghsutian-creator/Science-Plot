@@ -126,6 +126,7 @@ def run_autoplot(
     delivery_root: Path | None = None,
     rule_id: str | None = None,
     template: str | None = None,
+    expected_plan: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if rule_id is not None:
         rule = get_rule(rule_id)
@@ -144,6 +145,13 @@ def run_autoplot(
         if not input_path.exists():
             raise ValueError(f"Input not found: {input_path}")
 
+    if expected_plan is not None:
+        from sciplot_core.plan_preview import verify_expected_plan
+
+        verified = verify_expected_plan(
+            input_path, expected_plan, rule_id=rule_id, template=template
+        )
+        rule_id, template = verified["rule_id"], verified["template"]
     result = run_one_step(
         input_path,
         output_root=output_root,

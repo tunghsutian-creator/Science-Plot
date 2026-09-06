@@ -305,6 +305,7 @@ class _IntakeHandler(BaseHTTPRequestHandler):
                     name=str(payload.get("name") or Path(source_path).name or "table"),
                     content=content,
                     source_path=str(authorized_path) if authorized_path else None,
+                    selected_sheet=payload.get("selected_sheet"),
                 )
             except Exception as exc:
                 self._respond_error(exc)

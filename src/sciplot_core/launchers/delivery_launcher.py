@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from sciplot_core.policy import DELIVERY_LAUNCHER
+from sciplot_core.launchers.delivery_binding import DeliveryBinding
 
 from sciplot_core.launchers.portable_shell import (
     portable_sciplot_prelude,
@@ -14,8 +15,12 @@ from sciplot_core.launchers.content_hashing import (
 )
 
 
-def _delivery_launcher_lines() -> list[str]:
-    return [
+def _delivery_launcher_lines(
+    binding: DeliveryBinding | None = None,
+    *,
+    bound: bool = False,
+) -> list[str]:
+    lines = [
         *portable_sciplot_prelude(directory_var="DELIVERY_DIR"),
         "",
         'documents=("${DELIVERY_DIR}"/project/*.vsz(N))',
@@ -28,6 +33,19 @@ def _delivery_launcher_lines() -> list[str]:
         "  done",
         "  exit 0",
         "fi",
+        *(
+            [
+                "if (( $# == 0 )); then",
+                '  if [[ "${SCIPLOT_LAUNCH_DRY_RUN:-0}" == "1" ]]; then',
+                '    print -r -- "${DELIVERY_DIR}/Open_in_Veusz.command"',
+                "    exit 0",
+                "  fi",
+                '  exec "${SCIPLOT_CMD}" studio "${DELIVERY_DIR}/Open_in_Veusz.command"',
+                "fi",
+            ]
+            if binding is not None or bound
+            else []
+        ),
         "if (( $# > 0 )); then",
         '  DOCUMENT="$1"',
         '  [[ "${DOCUMENT}" = /* ]] || DOCUMENT="${DELIVERY_DIR}/project/${DOCUMENT}"',
@@ -55,23 +73,37 @@ def _delivery_launcher_lines() -> list[str]:
         '  print -r -- "${DOCUMENT}"',
         "  exit 0",
         "fi",
+        *(
+            [
+                'print -u2 -r -- "Opening portable Veusz copy: ${DOCUMENT}. This copy does not update the original SciPlot project."'
+            ]
+            if binding is not None or bound
+            else []
+        ),
         'exec "${SCIPLOT_CMD}" studio "${DOCUMENT}"',
     ]
+    if binding is not None:
+        lines.append(binding.to_line())
+    return lines
 
 
-def write_delivery_launcher(delivery_dir: str | Path) -> Path:
+def write_delivery_launcher(
+    delivery_dir: str | Path,
+    *,
+    binding: DeliveryBinding | None = None,
+) -> Path:
     """Write the canonical portable launcher for one minimal delivery."""
 
     root = Path(delivery_dir).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     launcher = root / DELIVERY_LAUNCHER
     launcher.write_text(
-        "\n".join(_delivery_launcher_lines()) + "\n",
+        "\n".join(_delivery_launcher_lines(binding)) + "\n",
         encoding="utf-8",
     )
     launcher.chmod(0o755)
     return launcher
 
 
-def _canonical_delivery_launcher_lines() -> list[str]:
-    return _mask_portable_assignments(_delivery_launcher_lines())
+def _canonical_delivery_launcher_lines(*, bound: bool = False) -> list[str]:
+    return _mask_portable_assignments(_delivery_launcher_lines(bound=bound))

@@ -130,6 +130,7 @@ def _result_targets(
     evidence_path: Path | None,
     delivery: object = None,
     delivery_current: bool = False,
+    delivery_verification: object = None,
 ) -> dict[str, dict[str, Any]]:
     pdf_path: Path | None = None
     pdf_sha256: str | None = None
@@ -171,15 +172,25 @@ def _result_targets(
             break
 
     delivery_root: Path | None = None
+    delivery_evidence_root = evidence_root
+    if isinstance(delivery_verification, dict):
+        verified_root = delivery_verification.get("expected_root")
+        delivery_evidence_root = (
+            Path(verified_root).expanduser().resolve()
+            if delivery_verification.get("passed") is True
+            and isinstance(verified_root, str)
+            and verified_root.strip()
+            else None
+        )
     if (
         delivery_current
         and qa.get("artifact_qa_current") is True
         and isinstance(delivery, dict)
-        and evidence_root is not None
+        and delivery_evidence_root is not None
     ):
         candidate = _evidence_path(
             delivery.get("delivery_root") or delivery.get("path"),
-            evidence_root=evidence_root,
+            evidence_root=delivery_evidence_root,
         )
         if candidate is not None and candidate.is_dir():
             delivery_root = candidate
@@ -205,7 +216,7 @@ def _result_targets(
         "delivery": {
             "path": (str(delivery_root) if delivery_root is not None else None),
             "evidence_root": (
-                str(evidence_root) if evidence_root is not None else None
+                str(delivery_evidence_root) if delivery_evidence_root is not None else None
             ),
             "current": delivery_root is not None,
             "available": False,

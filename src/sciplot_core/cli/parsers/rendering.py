@@ -80,5 +80,11 @@ def register_rendering_commands(subparsers: Any) -> None:
     )
 
     autoplot_parser.add_argument(
+        "--expected-plan",
+        type=Path,
+        help="Require this successful plan JSON to match the current source bytes and scientific choices before creating a project.",
+    )
+
+    autoplot_parser.add_argument(
         "--json", action="store_true", help="Emit machine-readable JSON."
     )

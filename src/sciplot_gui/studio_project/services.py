@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 from sciplot_gui.studio_project_services import StudioProjectServices
 
@@ -22,6 +23,27 @@ def _require_project_services() -> StudioProjectServices:
             "SciPlot Project services were not configured by the Studio entrypoint."
         )
     return _project_services
+
+
+def project_change_service(
+    operation: str, *, apply: bool = False
+) -> Callable[..., dict[str, Any]] | None:
+    """Resolve an optional injected operation, preserving older integrations."""
+    if _project_services is None:
+        return None
+    if operation == "delivery_recovery":
+        return (
+            _project_services.apply_delivery_recovery
+            if apply
+            else _project_services.preview_delivery_recovery
+        )
+    if operation == "source_update":
+        return (
+            _project_services.apply_source_update
+            if apply
+            else _project_services.preview_source_update
+        )
+    raise ValueError(f"Unknown project operation: {operation}")
 
 
 def atomic_save_veusz_document(document: Any, target: Path) -> dict[str, Any]:

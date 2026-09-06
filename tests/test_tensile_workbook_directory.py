@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pandas as pd
 import pytest
 
@@ -102,3 +104,58 @@ def test_tensile_break_metric_is_publicly_elongation_with_legacy_input_alias() -
     )
     assert break_figure["title"] == "Elongation at break by sample"
     assert break_figure["metric"] == "elongation_at_break_percent"
+
+
+def test_high_strain_excerpt_does_not_invent_modulus_fracture_or_toughness() -> None:
+    metrics = tensile_curve_metric_values([(10.0, 1.0), (20.0, 2.0), (30.0, 3.0)])
+
+    for metric in ("modulus_MPa", "elongation_at_break_percent", "toughness_MJ_m3"):
+        assert math.isnan(float(metrics[metric]))
+    assert metrics["strength_MPa"] == 3.0
+    assert metrics["curve_terminal_strain_percent"] == 30.0
+    assert metrics["available_curve_integral_MJ_m3"] == pytest.approx(0.4)
+    assert "0.05--0.25" in str(metrics["modulus_reason"])
+    assert "does not prove fracture" in str(metrics["elongation_at_break_reason"])
+
+
+@pytest.mark.parametrize("x_unit,factor", [("%", 1.0), ("1", 0.01)])
+def test_tensile_covered_low_strain_fit_preserves_units_without_inventing_break(
+    x_unit: str,
+    factor: float,
+) -> None:
+    metrics = tensile_curve_metric_values(
+        [(x * factor, x * 10.0) for x in (0.0, 0.05, 0.15, 0.25, 0.5)],
+        x_unit=x_unit,
+    )
+
+    assert metrics["modulus_MPa"] == pytest.approx(1000.0)
+    assert math.isnan(float(metrics["elongation_at_break_percent"]))
+    assert metrics["curve_terminal_strain_percent"] == 0.5
+
+
+def test_tensile_finite_reports_win_but_excerpt_integral_stays_descriptive() -> None:
+    metrics = tensile_curve_metric_values(
+        [(10.0, 1.0), (20.0, 2.0), (30.0, 3.0)],
+        reported={"modulus_MPa": 800.0, "elongation_at_break_percent": 40.0},
+    )
+
+    assert metrics["modulus_MPa"] == 800.0
+    assert metrics["elongation_at_break_percent"] == 40.0
+    assert math.isnan(float(metrics["toughness_MJ_m3"]))
+    assert metrics["toughness_source"] == "unavailable"
+
+
+def test_nonfinite_instrument_reports_do_not_claim_instrument_provenance() -> None:
+    metrics = tensile_curve_metric_values(
+        [(10.0, 1.0), (20.0, 2.0)],
+        reported={
+            "strength_MPa": float("nan"),
+            "modulus_MPa": float("inf"),
+            "elongation_at_break_percent": float("nan"),
+        },
+    )
+
+    assert metrics["strength_MPa"] == 2.0
+    assert metrics["strength_source"] == "curve_maximum"
+    assert metrics["modulus_source"] == "unavailable"
+    assert metrics["elongation_at_break_source"] == "unavailable"

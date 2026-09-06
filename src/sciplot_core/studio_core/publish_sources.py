@@ -14,6 +14,9 @@ from sciplot_core.figure_plan import (
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.materials_rules import compute_analysis_metrics
 from sciplot_core.presentation_identity import SelectedPresentationIdentity
+from sciplot_core.source_coverage.managed_task_sources import (
+    registered_task_snapshot_sources,
+)
 
 from sciplot_core.studio_core.json_files import _read_json
 from sciplot_core.studio_core.rule_readiness import (
@@ -62,6 +65,7 @@ def prepare_studio_run_sources(
     project_dir: Path,
     document_path: Path,
     output_dir: Path,
+    veusz_documents: list[Path] | None = None,
 ) -> StudioRunSources:
     """Snapshot request/input lineage and derive metrics without mutating source."""
 
@@ -90,6 +94,13 @@ def prepare_studio_run_sources(
         project_dir=project_dir,
         transform_ledger=existing_ledger,
     )
+    if veusz_documents is not None:
+        snapshot_sources = registered_task_snapshot_sources(
+            request=request,
+            project_dir=project_dir,
+            documents=veusz_documents,
+            existing_sources=snapshot_sources,
+        )
     snapshot_source = snapshot_sources[0] if snapshot_sources else None
     processed_source = (
         _write_studio_data_snapshots(snapshot_sources, output_dir)

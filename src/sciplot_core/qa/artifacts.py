@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-import fitz
+import pymupdf as fitz
 import numpy as np
 
 

@@ -83,6 +83,44 @@ def test_active_documents_declare_distinct_responsibilities() -> None:
     assert "R0 automation baseline evidence" in architecture
 
 
+def test_human_confirmation_is_a_real_operation_gate_not_a_generic_runtime() -> None:
+    roadmap = _normalized(REPO_ROOT / "DEVELOPMENT_ROADMAP.md")
+    automation_contract = _normalized(AUTOMATION_CONTROL_CONTRACT)
+
+    assert "2026-09-01 人工确认范围决定" in roadmap
+    assert "不预建通用问题生成器" in roadmap
+    assert "`decision.question`" in roadmap
+    assert "显式为 `null`" in roadmap
+    assert "真实一问一答不作为 R2 退出门" in roadmap
+    assert "R5 的首个试点限定为真实且可由 rule identity selection 解除的歧义" in roadmap
+    assert "显式 `--rule`" in roadmap
+    assert "fresh `plan`" in roadmap
+    assert "同一显式 rule" in roadmap
+    assert "原始源 hash 未变" in roadmap
+    assert "一次真实 `needs_human_confirmation`" not in roadmap
+    assert (
+        "A bounded question payload is no longer an R1/R2 exit requirement"
+        in automation_contract
+    )
+    assert "generic question generator is explicitly out of scope" in automation_contract
+    assert (
+        "`decision.question` is a closed, explicitly nullable pass-through field"
+        in automation_contract
+    )
+    assert (
+        "R5 owns one real ambiguity that can be resolved by rule-identity"
+        in automation_contract
+    )
+    assert "scientific facts must not be encoded into `--rule`" in automation_contract
+    assert "not manufactured as a pilot exit gate" in automation_contract
+    assert "DataMapping receipts and rheology" in automation_contract
+    assert "complete zero-write confirmation handoff" in automation_contract
+    assert (
+        "R1/R2 must add and test exactly one bounded question"
+        not in automation_contract
+    )
+
+
 def test_skill_defers_the_exact_mypy_scope_to_pyproject() -> None:
     readme = _read(REPO_ROOT / "README.md")
     skill = _read(REPO_ROOT / "skill" / "SKILL.md")

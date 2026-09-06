@@ -244,7 +244,7 @@ def intake_project_status(project_dir: str | Path) -> dict[str, Any]:
         cleanup_result and cleanup_result.get("ready_for_normal_mode") is True
     )
     has_cleanup_blocker = bool(
-        last_run.get("failure")
+        last_run.get("needs_assisted_cleanup") is True
         or artifacts["intervention_request"]["exists"]
         or artifacts["assisted_cleanup_request"]["exists"]
     )

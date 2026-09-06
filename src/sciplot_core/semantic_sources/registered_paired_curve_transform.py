@@ -49,6 +49,7 @@ def resolve_registered_paired_curve_transform(
     *,
     rule: SemanticRule,
     series_order: object = None,
+    selected_sheet: str | None = None,
 ) -> ResolvedScientificTransform:
     """Resolve one finite paired curve using only its registered rule contract."""
 
@@ -73,6 +74,7 @@ def resolve_registered_paired_curve_transform(
         default_x_unit=rule.x_axis.canonical_unit,
         default_y_unit=rule.y_axis.canonical_unit,
         sample_prefix=resolved_source.stem,
+        selected_sheet=selected_sheet,
     )
     if not series_list:
         raise ValueError(

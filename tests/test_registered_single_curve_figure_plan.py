@@ -158,7 +158,9 @@ def test_registered_paired_curve_directory_requires_exactly_one_supported_file(
     )
 
 
-def test_registered_paired_curve_reads_real_saxs_header_metadata_and_projects_log_y() -> None:
+def test_registered_paired_curve_reads_real_saxs_header_metadata_and_projects_log_y() -> (
+    None
+):
     rule = get_rule("saxs_profile")
     assert (rule.x_axis.scale, rule.y_axis.scale) == ("linear", "log")
     source = resolve_fixture_path(str(rule.fixture_path or ""))
@@ -177,8 +179,7 @@ def test_registered_paired_curve_reads_real_saxs_header_metadata_and_projects_lo
         for x_index in column_pairs
     )
     expected_excluded_y = tuple(
-        sum(y_value <= 0.0 for _x_value, y_value in points)
-        for points in source_points
+        sum(y_value <= 0.0 for _x_value, y_value in points) for points in source_points
     )
     expected_retained = tuple(
         tuple(point for point in points if point[1] > 0.0) for points in source_points
@@ -249,8 +250,7 @@ def test_registered_paired_curve_reads_real_saxs_header_metadata_and_projects_lo
     assert contract["x_coordinate_policy"]["interpolation_applied"] is False
     assert all(
         conversion["source_to_canonical"] == {"factor": 1.0, "offset": 0.0}
-        and conversion["canonical_to_display"]
-        == {"factor": 1.0, "offset": 0.0}
+        and conversion["canonical_to_display"] == {"factor": 1.0, "offset": 0.0}
         for conversion in contract["unit_conversions"]
     )
 
@@ -260,11 +260,7 @@ def test_registered_paired_curve_keeps_zero_on_a_linear_x_axis(
 ) -> None:
     source = tmp_path / "linear_x_log_y.csv"
     source.write_text(
-        "Series A,\n"
-        "q (nm-1),Log intensity (a.u.)\n"
-        "0,5\n"
-        "1,0\n"
-        "2,4\n",
+        "Series A,\nq (nm-1),Log intensity (a.u.)\n0,5\n1,0\n2,4\n",
         encoding="utf-8",
     )
 
@@ -285,10 +281,7 @@ def test_registered_paired_curve_rejects_a_disconnected_later_numeric_block(
 ) -> None:
     source = tmp_path / "disconnected.csv"
     source.write_text(
-        "Wavelength (nm),Absorbance (a.u.)\n"
-        "400,1\n"
-        "\n"
-        "500,2\n",
+        "Wavelength (nm),Absorbance (a.u.)\n400,1\n\n500,2\n",
         encoding="utf-8",
     )
 
@@ -335,9 +328,7 @@ def test_registered_paired_curve_keeps_in_block_nonfinite_evidence_for_validatio
 ) -> None:
     source = tmp_path / "nonfinite.csv"
     source.write_text(
-        "Wavelength (nm),Absorbance (a.u.)\n"
-        "400,1\n"
-        "500,nan\n",
+        "Wavelength (nm),Absorbance (a.u.)\n400,1\n500,nan\n",
         encoding="utf-8",
     )
 
@@ -415,9 +406,9 @@ def test_registered_paired_curve_log_projection_uses_mutually_exclusive_axis_rea
         "nonpositive_log_x": 3,
         "nonpositive_log_y": 2,
     }
-    assert evidence["candidate_row_count"] == evidence[
-        "retained_point_count"
-    ] + sum(evidence["excluded_by_reason"].values())
+    assert evidence["candidate_row_count"] == evidence["retained_point_count"] + sum(
+        evidence["excluded_by_reason"].values()
+    )
 
 
 def test_uvvis_response_identity_is_bound_to_source_evidence() -> None:
@@ -430,9 +421,10 @@ def test_uvvis_response_identity_is_bound_to_source_evidence() -> None:
     response_identity = provenance["response_identity"]
 
     assert response_identity["quantity"] == rule.y_axis.canonical_label
-    assert response_identity["source_header"] == provenance["source_columns"]["y"][
-        "header"
-    ]
+    assert (
+        response_identity["source_header"]
+        == provenance["source_columns"]["y"]["header"]
+    )
     assert response_identity["not_inferred_from_unit"] is True
     assert {item["kind"] for item in response_identity["evidence"]} == {
         "associated_publication_figure_axis",
@@ -470,9 +462,7 @@ def test_xrd_output_identity_is_bound_to_the_official_si_axes() -> None:
     assert provenance["coordinate_identity"]["quantity"] == (
         rule.x_axis.canonical_label
     )
-    assert provenance["response_identity"]["quantity"] == (
-        rule.y_axis.canonical_label
-    )
+    assert provenance["response_identity"]["quantity"] == (rule.y_axis.canonical_label)
     assert provenance["unit_identity"]["x"]["evidence"]["axis_label"] == (
         rule.x_axis.display_label
     )
@@ -757,9 +747,7 @@ def test_dma_frequency_real_source_reuses_one_generic_single_curve_spine(
         x_metric="angular_frequency",
         y_metric="storage_modulus",
     )
-    assert task.sample_order == tuple(
-        series.sample for series in expected_series
-    )
+    assert task.sample_order == tuple(series.sample for series in expected_series)
 
     monkeypatch.setattr(
         prepare_curve_families,
@@ -775,9 +763,7 @@ def test_dma_frequency_real_source_reuses_one_generic_single_curve_spine(
         resolved_scientific_source=resolved,
     )
     step = prepared["transform_steps"][0]
-    assert step["operation"] == (
-        "extract_angular_frequency_storage_modulus_curve"
-    )
+    assert step["operation"] == ("extract_angular_frequency_storage_modulus_curve")
     assert step["parameters"]["scientific_transform"] == (
         transform.contract.to_payload()
     )
@@ -918,10 +904,7 @@ def test_registered_pair_roles_preserve_unit_shaped_preceding_sample_identity(
 ) -> None:
     source = tmp_path / "preceding_sample.csv"
     source.write_text(
-        "Pa,\n"
-        "Temperature (°C),Heat flow (W/g)\n"
-        "20,0.1\n"
-        "21,0.2\n",
+        "Pa,\nTemperature (°C),Heat flow (W/g)\n20,0.1\n21,0.2\n",
         encoding="utf-8",
     )
 
@@ -947,10 +930,7 @@ def test_registered_pair_roles_fall_back_only_without_structural_sample_evidence
 ) -> None:
     source = tmp_path / "no_declared_sample.csv"
     source.write_text(
-        "Temperature,Heat flow\n"
-        "°C,W/g\n"
-        "20,0.1\n"
-        "21,0.2\n",
+        "Temperature,Heat flow\n°C,W/g\n20,0.1\n21,0.2\n",
         encoding="utf-8",
     )
 
@@ -976,11 +956,7 @@ def test_registered_pair_roles_reject_ambiguous_unit_shaped_rows(
 ) -> None:
     source = tmp_path / "ambiguous_roles.csv"
     source.write_text(
-        "Temperature,Heat flow\n"
-        "A,A\n"
-        "Pa,Pa\n"
-        "20,0.1\n"
-        "21,0.2\n",
+        "Temperature,Heat flow\nA,A\nPa,Pa\n20,0.1\n21,0.2\n",
         encoding="utf-8",
     )
 
@@ -1247,11 +1223,14 @@ def test_registered_paired_curve_preparation_materializes_resolved_snapshot_once
     for series_index, expected in enumerate(expected_series):
         x_index = series_index * 2
         y_index = x_index + 1
-        assert tuple(
-            (float(row[x_index]), float(row[y_index]))
-            for row in prepared_rows[3:]
-            if row[x_index] and row[y_index]
-        ) == expected.points
+        assert (
+            tuple(
+                (float(row[x_index]), float(row[y_index]))
+                for row in prepared_rows[3:]
+                if row[x_index] and row[y_index]
+            )
+            == expected.points
+        )
 
 
 def test_saxs_plan_and_preparation_share_the_same_source_snapshot(
@@ -1268,9 +1247,7 @@ def test_saxs_plan_and_preparation_share_the_same_source_snapshot(
         tuple(
             (float(row[index]), float(row[index + 1]))
             for row in rows[2:]
-            if row[index]
-            and row[index + 1]
-            and float(row[index + 1]) > 0.0
+            if row[index] and row[index + 1] and float(row[index + 1]) > 0.0
         )
         for index in x_indices
     )
@@ -1306,9 +1283,7 @@ def test_saxs_plan_and_preparation_share_the_same_source_snapshot(
     assert step["parameters"]["scientific_transform"] == (
         transform.contract.to_payload()
     )
-    with Path(str(prepared["source"])).open(
-        newline="", encoding="utf-8"
-    ) as handle:
+    with Path(str(prepared["source"])).open(newline="", encoding="utf-8") as handle:
         prepared_rows = list(csv.reader(handle))
     assert prepared_rows[0] == [
         value
@@ -1325,11 +1300,14 @@ def test_saxs_plan_and_preparation_share_the_same_source_snapshot(
     ]
     for series_index, points in enumerate(expected_points):
         x_index = series_index * 2
-        assert tuple(
-            (float(row[x_index]), float(row[x_index + 1]))
-            for row in prepared_rows[3:]
-            if row[x_index] and row[x_index + 1]
-        ) == points
+        assert (
+            tuple(
+                (float(row[x_index]), float(row[x_index + 1]))
+                for row in prepared_rows[3:]
+                if row[x_index] and row[x_index + 1]
+            )
+            == points
+        )
 
 
 def test_gpc_plan_and_preparation_share_source_identity_and_one_parse(
@@ -1343,8 +1321,7 @@ def test_gpc_plan_and_preparation_share_source_identity_and_one_parse(
     )
     expected_records = provenance["source_files"]
     expected_sources = tuple(
-        (source / str(record["fixture_file"])).resolve()
-        for record in expected_records
+        (source / str(record["fixture_file"])).resolve() for record in expected_records
     )
     expected_samples = tuple(str(record["sample"]) for record in expected_records)
     expected_counts = tuple(
@@ -1444,10 +1421,7 @@ def test_gpc_plan_and_preparation_share_source_identity_and_one_parse(
 def test_gpc_source_requires_an_explicit_molar_mass_unit(tmp_path: Path) -> None:
     source = tmp_path / "gpc.csv"
     source.write_text(
-        "Molar mass,Differential weight fraction\n"
-        ",\n"
-        "Series A,Series A\n"
-        "10000,0.2\n",
+        "Molar mass,Differential weight fraction\n,\nSeries A,Series A\n10000,0.2\n",
         encoding="utf-8",
     )
     rule = get_rule("gpc_sec_chromatogram")
@@ -1502,3 +1476,42 @@ def test_gpc_materialized_table_preserves_numeric_sample_labels_and_log_axis(
         (200_000.0, 100_000.0),
     )
     assert tuple(item.y_values for item in series) == ((0.2, 0.5), (0.1, 0.4))
+
+
+@pytest.mark.parametrize("suffix", [".csv", ".xlsx"])
+@pytest.mark.parametrize("unreadable", ["unreadable", "", "nan"])
+def test_declared_paired_sample_without_readings_cannot_disappear(
+    tmp_path: Path, suffix: str, unreadable: str
+) -> None:
+    source = tmp_path / f"declared_samples{suffix}"
+    rows = [
+        ["Wavelength", "Absorbance", "Wavelength", "Absorbance"],
+        ["nm", "a.u.", "nm", "a.u."],
+        ["PDA-I", "PDA-I", "PDA-Br", "PDA-Br"],
+        [400, unreadable, 400, 0.1],
+        [450, unreadable, 450, 0.2],
+    ]
+    if suffix == ".xlsx":
+        pd.DataFrame(rows).to_excel(source, header=False, index=False)
+    else:
+        with source.open("w", newline="") as handle:
+            csv.writer(handle).writerows(rows)
+    with pytest.raises(ValueError, match="PDA-I.*no finite paired readings"):
+        paired_curve_transform.resolve_registered_paired_curve_transform(
+            source, rule=get_rule("uvvis_spectrum")
+        )
+
+
+def test_removing_a_declared_pair_remains_an_explicit_single_sample_source(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "one_sample.csv"
+    source.write_text(
+        "Wavelength,Absorbance\nnm,a.u.\nPDA-Br,PDA-Br\n400,0.1\n450,0.2\n"
+    )
+    resolved = paired_curve_transform.resolve_registered_paired_curve_transform(
+        source, rule=get_rule("uvvis_spectrum")
+    )
+    assert [(item.sample, item.points) for item in resolved.series] == [
+        ("PDA-Br", ((400.0, 0.1), (450.0, 0.2)))
+    ]

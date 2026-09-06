@@ -82,26 +82,13 @@ def audit_documents(document_paths: list[Path]) -> dict[str, Any]:
 
 
 def inspect_document_state(document_path: Path) -> dict[str, Any]:
-    """Reopen one VSZ and materialize its widget setting state."""
-
-    from PyQt6 import QtWidgets
-
-    from sciplot_core.studio_core.qt_compat import ensure_veusz_loader_compat
-    from sciplot_core.studio_core.runtime import ensure_veusz_runtime_path
+    """Reopen exact saved state and advertise the shared safe setting subset."""
+    from sciplot_core.native_settings import editable_fields
+    from sciplot_core.veusz_worker.document_edit import loaded_native_document
 
     resolved_document = document_path.expanduser().resolve()
-    if not resolved_document.is_file():
-        raise FileNotFoundError(f"Veusz document not found: {resolved_document}")
-    ensure_veusz_runtime_path()
-    existing_app = QtWidgets.QApplication.instance()
-    app = existing_app or QtWidgets.QApplication([])
-    try:
-        ensure_veusz_loader_compat()
-        from veusz import dataimport, document, widgets
-
-        _ = dataimport, widgets
-        loaded_document = document.Document()
-        loaded_document.load(str(resolved_document))
+    before = file_sha256(resolved_document)
+    with loaded_native_document(resolved_document) as loaded_document:
         materialized_widgets: dict[str, dict[str, Any]] = {}
 
         def collect(path: str, node: Any) -> None:
@@ -109,23 +96,17 @@ def inspect_document_state(document_path: Path) -> dict[str, Any]:
                 "name": str(getattr(node, "name", "")),
                 "type": str(getattr(node, "typename", "")),
                 "settings": _settings_snapshot(getattr(node, "settings", None)),
+                "editable_fields": editable_fields(loaded_document, node, safe_only=True),
             }
 
         loaded_document.walkNodes(collect, nodetypes=("widget",))
-        return {
-            "kind": "sciplot_veusz_document_state",
-            "version": 1,
-            "status": "passed",
-            "document": {
-                "path": str(resolved_document),
-                "sha256": file_sha256(resolved_document),
-            },
-            "widgets": materialized_widgets,
-            "widget_count": len(materialized_widgets),
-        }
-    finally:
-        if existing_app is None:
-            app.quit()
+    if file_sha256(resolved_document) != before:
+        raise ValueError("The source document changed during native inspection.")
+    return {
+        "kind": "sciplot_veusz_document_state", "version": 1, "status": "passed",
+        "document": {"path": str(resolved_document), "sha256": before},
+        "widgets": materialized_widgets, "widget_count": len(materialized_widgets),
+    }
 
 
 def migrate_unit_labels(document_path: Path) -> dict[str, Any]:

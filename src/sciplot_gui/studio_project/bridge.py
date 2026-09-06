@@ -17,9 +17,11 @@ from sciplot_gui.studio_project.export_helpers import ExportHelpersMixin
 from sciplot_gui.studio_project.export_action import ExportActionMixin
 from sciplot_gui.studio_project.series_revision import SeriesRevisionMixin
 from sciplot_gui.studio_project.services import atomic_save_veusz_document
+from sciplot_gui.studio_project.project_changes import ProjectChangesMixin
 
 
 class StudioProjectBridge(
+    ProjectChangesMixin,
     SeriesRevisionMixin,
     ExportActionMixin,
     ExportHelpersMixin,
@@ -29,10 +31,12 @@ class StudioProjectBridge(
     ContextMixin,
     QtCore.QObject,
 ):
-    """Read-only SciPlot status and exact-current export on one Veusz window."""
+    """SciPlot status, reviewed project changes and export on one Veusz window."""
 
     statusChanged = QtCore.pyqtSignal(object)
     exportFinished = QtCore.pyqtSignal(object)
+    projectChangePreviewed = QtCore.pyqtSignal(object)
+    projectChangeFinished = QtCore.pyqtSignal(object)
 
     def __init__(
         self,
@@ -83,6 +87,7 @@ class StudioProjectBridge(
         self.show_delivery_button.clicked.connect(self.show_current_delivery)
         self.reveal_vsz_button.clicked.connect(self.reveal_current_vsz)
         self._initialize_series_revision()
+        self._initialize_project_changes()
         self.refresh()
 
 

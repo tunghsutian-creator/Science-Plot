@@ -44,7 +44,7 @@ def _write_image_preview(source_path: Path, preview_path: Path) -> None:
 
 
 def _write_pdf_preview(source_path: Path, preview_path: Path) -> None:
-    import fitz
+    import pymupdf as fitz
 
     with fitz.open(source_path) as document:
         if document.page_count < 1:

@@ -15,6 +15,10 @@ class StudioProjectServices:
     publish_project_export: Callable[..., dict[str, Any]]
     build_figure_set_scope: Callable[..., dict[str, Any] | None]
     is_complete_figure_set_scope: Callable[[object], bool]
+    preview_delivery_recovery: Callable[..., dict[str, Any]] | None = None
+    apply_delivery_recovery: Callable[..., dict[str, Any]] | None = None
+    preview_source_update: Callable[..., dict[str, Any]] | None = None
+    apply_source_update: Callable[..., dict[str, Any]] | None = None
 
 
 __all__ = ["StudioProjectServices"]

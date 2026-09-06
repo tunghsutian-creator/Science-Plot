@@ -14,10 +14,10 @@ from sciplot_core.launchers import (
     write_delivery_launcher,
 )
 from sciplot_core.output_contract import requested_delivery_root
+from sciplot_core.launchers.delivery_binding import make_delivery_binding
 from sciplot_core.plot_data import build_plot_data_exports
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
-    DELIVERY_LAUNCHER,
     DELIVERY_PDF_DIR,
     DELIVERY_PROJECT_DIR,
     DELIVERY_TIFF_DIR,
@@ -47,6 +47,7 @@ from sciplot_core.delivery.package_validation import (
     verify_delivery_package,
 )
 from sciplot_core.delivery.plan_binding import plan_source_figure_ids
+from sciplot_core.delivery.package_transaction import publish_delivery_transaction
 
 
 def build_delivery_package(
@@ -62,30 +63,27 @@ def build_delivery_package(
     """
 
     output_dir = output_dir.expanduser().resolve()
-    delivery_dir = requested_delivery_root(manifest, run_output=output_dir)
-    if delivery_dir.exists():
-        if not delivery_dir.is_dir() or delivery_dir.is_symlink():
-            raise ValueError(
-                "The visible SciPlot output must be a dedicated real directory."
-            )
-        managed_names = {
-            DELIVERY_DATA_DIR,
-            DELIVERY_PDF_DIR,
-            DELIVERY_TIFF_DIR,
-            DELIVERY_PROJECT_DIR,
-            DELIVERY_LAUNCHER,
-        }
-        unknown = {path.name for path in delivery_dir.iterdir()} - managed_names
-        if unknown:
-            raise ValueError(
-                "Refusing to replace a non-dedicated SciPlot output directory; "
-                f"unexpected entries: {', '.join(sorted(unknown))}."
-            )
-        for path in delivery_dir.iterdir():
-            if path.is_dir() and not path.is_symlink():
-                shutil.rmtree(path)
-            else:
-                path.unlink()
+    root = requested_delivery_root(manifest, run_output=output_dir)
+    return publish_delivery_transaction(
+        root=root,
+        output_dir=output_dir,
+        manifest=manifest,
+        build=lambda stage: _build_staged_delivery(
+            output_dir,
+            manifest=manifest,
+            delivery_dir=stage,
+            final_root=root,
+        ),
+    )
+
+
+def _build_staged_delivery(
+    output_dir: Path,
+    *,
+    manifest: dict[str, Any],
+    delivery_dir: Path,
+    final_root: Path,
+) -> dict[str, Any]:
     data_dir = delivery_dir / DELIVERY_DATA_DIR
     pdf_dir = delivery_dir / DELIVERY_PDF_DIR
     tiff_dir = delivery_dir / DELIVERY_TIFF_DIR
@@ -127,7 +125,12 @@ def build_delivery_package(
     project_records = _copy_project_documents(
         manifest, output_dir=output_dir, project_dir=project_dir
     )
-    launcher = write_delivery_launcher(delivery_dir)
+    launcher = write_delivery_launcher(
+        delivery_dir,
+        binding=make_delivery_binding(
+            root=final_root, manifest=manifest, documents=project_records
+        ),
+    )
     launcher_contract = inspect_delivery_launcher_contract(delivery_dir)
     figure_pairing = _delivery_figure_pairing(figure_records)
     qa_hash_evidence = _qa_hash_evidence(manifest, figure_records)

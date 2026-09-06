@@ -25,7 +25,9 @@ from sciplot_core.veusz_worker.spec_audit.scalar_field import audit_scalar_field
 from sciplot_core.veusz_worker.spec_audit.series import audit_axes_and_series
 
 
-def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
+def audit_spec_data(
+    document_path: Path, spec_path: Path, *, check_presentation: bool = True
+) -> dict[str, Any]:
     """Prove that an exact-current VSZ still consumes its rendered data spec."""
 
     from PyQt6 import QtWidgets
@@ -54,6 +56,7 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
         loaded_document.load(str(resolved_document))
         visible_spec = effective_series_presentation(spec)
         inventory = build_spec_audit_inventory(loaded_document, visible_spec)
+        inventory.check_presentation = check_presentation
         series = audit_axes_and_series(inventory, visible_spec)
         audit_legends_and_labels(inventory, visible_spec, series)
         audit_categorical_axis(inventory, visible_spec)
@@ -62,6 +65,7 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             loaded_document,
             visible_spec,
             visual,
+            check_presentation=check_presentation,
         )
         audit_closed_document_inventory(
             inventory,
@@ -72,6 +76,9 @@ def audit_spec_data(document_path: Path, spec_path: Path) -> dict[str, Any]:
             "kind": "sciplot_veusz_spec_data_audit",
             "version": 1,
             "status": "passed",
+            "audit_scope": "generated_contract"
+            if check_presentation
+            else "current_scientific_data",
             "document": {
                 "path": str(resolved_document),
                 "sha256": file_sha256(resolved_document),

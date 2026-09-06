@@ -297,6 +297,7 @@ def test_status_facade_projects_one_version_two_lineage_schema() -> None:
         "source_acceptance",
         "human_daily_use_validation",
         "evidence_strength_counts",
+        "evidence_scope",
         "records",
         "claims",
         "limitations",

@@ -142,14 +142,7 @@ def _tensile_summary_metrics(summary_source: Path) -> list[dict[str, Any]]:
         and LEGACY_STRAIN_AT_BREAK_METRIC in summary.columns
     ):
         summary[ELONGATION_AT_BREAK_METRIC] = summary[LEGACY_STRAIN_AT_BREAK_METRIC]
-    required = {
-        "sample",
-        "strength_MPa",
-        ELONGATION_AT_BREAK_METRIC,
-        "modulus_MPa",
-        "toughness_MJ_m3",
-    }
-    if not required <= set(summary.columns):
+    if "sample" not in summary.columns:
         return []
     samples = [
         str(value) for value in summary["sample"].dropna().drop_duplicates().tolist()
@@ -167,18 +160,31 @@ def _tensile_summary_metrics(summary_source: Path) -> list[dict[str, Any]]:
         rows.append(_metric(f"replicate_count{suffix}", int(len(group)), "count"))
         for metric_name, unit, iqr_name in metric_contract:
             values = (
-                pd.to_numeric(group[metric_name], errors="coerce")
+                pd.to_numeric(
+                    group.get(metric_name, pd.Series(dtype=float)), errors="coerce"
+                )
+                .replace([np.inf, -np.inf], np.nan)
                 .dropna()
                 .to_numpy(dtype=float)
             )
             if values.size == 0:
+                reason_field = {
+                    ELONGATION_AT_BREAK_METRIC: "elongation_at_break_reason",
+                    "modulus_MPa": "modulus_reason",
+                    "toughness_MJ_m3": "toughness_reason",
+                }.get(metric_name, "")
+                reasons = group.get(reason_field, pd.Series(dtype=str)).dropna()
+                reason = "; ".join(
+                    dict.fromkeys(str(value) for value in reasons if str(value))
+                )
+                reason = reason or "No finite replicate metric."
                 rows.append(
                     _metric(
                         f"{metric_name}{suffix}",
                         None,
                         unit,
                         "skipped",
-                        "No finite replicate metric.",
+                        reason,
                     )
                 )
                 rows.append(
@@ -187,7 +193,7 @@ def _tensile_summary_metrics(summary_source: Path) -> list[dict[str, Any]]:
                         None,
                         unit,
                         "skipped",
-                        "No finite replicate metric.",
+                        reason,
                     )
                 )
                 continue
@@ -296,20 +302,19 @@ def _tensile_metrics(processed_source: Path) -> list[dict[str, Any]]:
         x_unit="%",
     )
     modulus = float(values["modulus_MPa"])
+    elongation = float(values[ELONGATION_AT_BREAK_METRIC])
     toughness = float(values["toughness_MJ_m3"])
     modulus_status = "ok" if np.isfinite(modulus) else "skipped"
-    modulus_reason = (
-        ""
-        if modulus_status == "ok"
-        else "Low-strain fit did not have enough distinct finite points."
-    )
+    modulus_reason = "" if modulus_status == "ok" else str(values["modulus_reason"])
     rows.extend(
         [
             _metric("strength_MPa", float(values["strength_MPa"]), "MPa"),
             _metric(
                 ELONGATION_AT_BREAK_METRIC,
-                float(values[ELONGATION_AT_BREAK_METRIC]),
+                elongation if np.isfinite(elongation) else None,
                 "%",
+                "ok" if np.isfinite(elongation) else "skipped",
+                str(values["elongation_at_break_reason"]),
             ),
             _metric(
                 "modulus_MPa",
@@ -323,9 +328,7 @@ def _tensile_metrics(processed_source: Path) -> list[dict[str, Any]]:
                 toughness if np.isfinite(toughness) else None,
                 "MJ/m3",
                 "ok" if np.isfinite(toughness) else "skipped",
-                ""
-                if np.isfinite(toughness)
-                else "Curve did not contain two points before break.",
+                "" if np.isfinite(toughness) else str(values["toughness_reason"]),
             ),
         ]
     )

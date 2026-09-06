@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from sciplot_core.verification.axis_owners import GENERIC_AXIS_OWNERS
+from sciplot_core.verification.external_ai_owners import EXTERNAL_AI_OWNERS
 from sciplot_core.verification.owner_model import ChangedOwner
-from sciplot_core.verification.terminal_owners import (
-    GENERIC_TERMINAL_PREPARATION_OWNER,
-)
+from sciplot_core.verification.project_integrity_owners import PROJECT_INTEGRITY_OWNERS
+from sciplot_core.verification.project_revision_owners import PROJECT_REVISION_OWNERS
+from sciplot_core.verification.terminal_owners import GENERIC_TERMINAL_PREPARATION_OWNER
 from sciplot_core.verification.type_gate_owners import (
     ARCHITECTURE_CORE_TARGETS,
     CHANGED_VERIFICATION_OWNER,
@@ -59,6 +60,7 @@ CHANGED_OWNERS = (
                 "DEVELOPMENT_LOG.md",
                 "DEVELOPMENT_ROADMAP.md",
                 "README.md",
+                "skill/references/external-control.md",
             }
         ),
         owned_test_paths=frozenset({"tests/test_documentation_contract.py"}),
@@ -68,9 +70,16 @@ CHANGED_OWNERS = (
         owner_id="validated_readiness_registry",
         path_prefixes=("src/sciplot_core/readiness/",),
         exact_paths=frozenset({"src/sciplot_core/validated_envelopes.json"}),
-        owned_test_paths=frozenset({"tests/test_readiness_registry_merge.py"}),
+        owned_test_paths=frozenset(
+            {
+                "tests/test_readiness_registry_merge.py",
+                "tests/test_rule_certification.py",
+                "tests/test_human_daily_use_validation.py",
+            }
+        ),
         pytest_targets=(
             "tests/test_readiness_registry_merge.py",
+            "tests/test_human_daily_use_validation.py",
             "tests/test_rule_certification.py",
             "tests/test_cli_surface.py::test_readiness_merge_parser_accepts_base_summary_and_output",
             "tests/test_cli_surface.py::test_readiness_merge_cli_writes_the_same_registry_and_reports_selection",
@@ -225,6 +234,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/semantic_sources/stress_relaxation_transform.py",
                 "src/sciplot_core/semantic_sources/table_candidate_sources.py",
                 "src/sciplot_core/semantic_sources/table_scanning.py",
+                "src/sciplot_core/semantic_sources/table_selection.py",
                 "src/sciplot_core/semantic_sources/table_source_files.py",
                 "src/sciplot_core/semantic_sources/tga_transform.py",
                 "src/sciplot_core/semantic_sources/tensile_export_identity.py",
@@ -307,6 +317,7 @@ CHANGED_OWNERS = (
             "tests/test_swelling_single_snapshot.py",
             "tests/test_swelling_source_contract.py",
             "tests/test_tga_scientific_transform.py",
+            "tests/test_intake_review_recovery.py",
             "tests/test_torque_source_contract.py",
             *ARCHITECTURE_CORE_TARGETS,
         ),
@@ -315,11 +326,12 @@ CHANGED_OWNERS = (
     ),
     ChangedOwner(
         owner_id="intake_project",
-        path_prefixes=("src/sciplot_core/intake/",),
+        path_prefixes=("src/sciplot_core/intake/", "src/sciplot_core/intake_server/"),
         owned_test_paths=frozenset(
             {
                 "tests/test_browser_surface.py",
                 "tests/test_intake_atomic_packaging.py",
+                "tests/test_intake_review_recovery.py",
                 "tests/test_mechanical_intake_contract.py",
                 "tests/test_maintenance_integrity.py",
                 "tests/test_source_recognition_contract.py",
@@ -328,6 +340,7 @@ CHANGED_OWNERS = (
         pytest_targets=(
             "tests/test_browser_surface.py",
             "tests/test_intake_atomic_packaging.py",
+            "tests/test_intake_review_recovery.py",
             "tests/test_mechanical_intake_contract.py",
             "tests/test_source_recognition_contract.py",
         ),
@@ -378,6 +391,9 @@ CHANGED_OWNERS = (
         final_milestone_gates=("smoke",),
         release_gates=("full_pytest",),
     ),
+    *PROJECT_INTEGRITY_OWNERS,
+    *PROJECT_REVISION_OWNERS,
+    *EXTERNAL_AI_OWNERS,
 )
 
 IGNORED_CHANGED_PATHS = frozenset({"DEVELOPMENT_LOG.md"})

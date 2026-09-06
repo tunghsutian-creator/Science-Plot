@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import tempfile
+from xml.etree import ElementTree
+from zipfile import BadZipFile, ZipFile
+
 import pandas as pd
 
 
@@ -85,6 +90,66 @@ def _write_rheology_sweep_comparison_workbook(
     source_replicates: list[RheologySweepSample] | None = None,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(
+        prefix=f".{output_path.stem}-", suffix=".xlsx", dir=output_path.parent
+    )
+    os.close(descriptor)
+    candidate = Path(name)
+    try:
+        _write_sweep_workbook(
+            samples,
+            candidate,
+            comparison_sheet=comparison_sheet,
+            metrics=metrics,
+            source_replicates=source_replicates,
+        )
+        # Several figure tasks read this shared table. Excel ZIP timestamps and
+        # core-property dates can change on each save even when every data and
+        # presentation entry is identical. Keep the bytes already bound by the
+        # earlier figures; the scientific source hash itself is never relaxed.
+        if output_path.is_file() and _same_workbook_content(output_path, candidate):
+            return
+        if output_path.is_file():
+            candidate.chmod(output_path.stat().st_mode & 0o777)
+        with candidate.open("rb") as handle:
+            os.fsync(handle.fileno())
+        os.replace(candidate, output_path)
+    finally:
+        candidate.unlink(missing_ok=True)
+
+
+def _workbook_content(path: Path) -> tuple[tuple[str, bytes], ...]:
+    parts: list[tuple[str, bytes]] = []
+    with ZipFile(path) as archive:
+        for member in archive.infolist():
+            content = archive.read(member)
+            if member.filename == "docProps/core.xml":
+                properties = ElementTree.fromstring(content)
+                for field in ("created", "modified"):
+                    for timestamp in properties.findall(
+                        f"{{http://purl.org/dc/terms/}}{field}"
+                    ):
+                        properties.remove(timestamp)
+                content = ElementTree.tostring(properties)
+            parts.append((member.filename, content))
+    return tuple(sorted(parts))
+
+
+def _same_workbook_content(previous: Path, current: Path) -> bool:
+    try:
+        return _workbook_content(previous) == _workbook_content(current)
+    except (BadZipFile, ElementTree.ParseError):
+        return False
+
+
+def _write_sweep_workbook(
+    samples: list[RheologySweepSample],
+    output_path: Path,
+    *,
+    comparison_sheet: str,
+    metrics: tuple[tuple[str, str, tuple[str, ...], str], ...],
+    source_replicates: list[RheologySweepSample] | None,
+) -> None:
     used_sheet_names: set[str] = set()
     with pd.ExcelWriter(output_path) as writer:
         _sweep_comparison_frame_for_metrics(samples, metrics=metrics).to_excel(

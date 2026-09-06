@@ -38,13 +38,21 @@ MECHANICAL_RULES: tuple[SemanticRule, ...] = (
         vendor_models=("tensile_curve",),
         analysis=(
             AnalysisSpec(
-                "modulus_MPa", "low-strain linear slope", ("strain", "stress"), "MPa"
+                "modulus_MPa",
+                "reported modulus or slope within a covered 0.05%-0.25% strain interval",
+                ("strain", "stress"),
+                "MPa",
             ),
             AnalysisSpec("strength_MPa", "maximum tensile stress", ("stress",), "MPa"),
-            AnalysisSpec(ELONGATION_AT_BREAK_METRIC, "last strain", ("strain",), "%"),
+            AnalysisSpec(
+                ELONGATION_AT_BREAK_METRIC,
+                "finite instrument-reported elongation at break; curve endpoint alone is insufficient",
+                ("strain",),
+                "%",
+            ),
             AnalysisSpec(
                 "toughness_MJ_m3",
-                "area under stress-strain curve using engineering strain as a fraction",
+                "area under stress-strain curve from zero through a reported break, using engineering strain as a fraction",
                 ("strain", "stress"),
                 "MJ/m3",
             ),

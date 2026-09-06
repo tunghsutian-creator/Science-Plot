@@ -25,8 +25,8 @@ class DockMixin:
         layout.setSpacing(8)
 
         intro = QtWidgets.QLabel(
-            "Read-only project, source, mapping, and exact-current QA status. "
-            "All editing remains in Veusz."
+            "Project, source, mapping, and exact-current QA status. "
+            "Edit figures in Veusz; review project changes before applying them."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -90,6 +90,7 @@ class DockMixin:
         )
         self.status_view.setMinimumWidth(320)
         layout.addWidget(self.status_view, 1)
+        self._build_project_change_controls(layout)
 
         buttons = QtWidgets.QHBoxLayout()
         self.refresh_button = QtWidgets.QPushButton("Refresh Audit")
@@ -285,7 +286,7 @@ class DockMixin:
         workflow = (
             status.get("workflow") if isinstance(status.get("workflow"), dict) else {}
         )
-        exporting = bool(self._exporting or workflow.get("state") == "exporting")
+        exporting = bool(self._exporting or getattr(self, "_project_change_busy", False) or workflow.get("state") == "exporting")
         context_blocker = self._document_context_blocker()
         context_changed = context_blocker is not None
         self.refresh_button.setEnabled(not exporting and not context_changed)
@@ -325,13 +326,13 @@ class DockMixin:
                     export_tooltip_blocker
                     or "Export this independent secondary VSZ with its own "
                     "standalone exact-current PDF/TIFF receipt. It will not "
-                    "modify the primary G-prime project receipt."
+                    "modify the primary project receipt."
                 )
             else:
-                self.export_button.setText("Save && Export primary G′")
+                self.export_button.setText("Save && Export figure set")
                 self.export_button.setToolTip(
                     export_tooltip_blocker
-                    or "Export the primary G-prime document and publish the "
+                    or "Export the complete planned figure set and publish the "
                     "project delivery receipt."
                 )
         else:
@@ -358,3 +359,4 @@ class DockMixin:
                 )
             )
         self._update_series_revision_controls()
+        self._update_project_change_controls()

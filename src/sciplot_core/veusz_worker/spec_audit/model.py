@@ -26,3 +26,4 @@ class SpecAuditInventory:
     component_bar_datasets_by_y: dict[str, list[dict[str, Any]]]
     allowed_bar_paths: set[str]
     series_encoding_evidence: list[dict[str, Any]]
+    check_presentation: bool = True

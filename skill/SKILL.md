@@ -1,6 +1,6 @@
 ---
 name: sciplot-materials-analysis
-description: Deterministic materials-science plotting through editable Veusz VSZ projects, artifact QA, delivery, and optional selected-object AI.
+description: External AI control of deterministic scientific plotting, saved native Veusz projects, reviewed edits, QA, delivery and project continuation.
 ---
 
 # SciPlot Materials Analysis
@@ -23,19 +23,26 @@ repair the stale document. Never revive an older route from historical notes.
 
 ## Product boundary
 
-Veusz `MainWindow` is the only daily plotting frontend and
-`studio/document.vsz` is the visual authority. SciPlot-owned Qt modules attach
-Project and optional selected-object AI docks to the same live `Document`;
-they are not another frontend.
+External AI is the task interface and the sole direction for further product
+development. Use the public local CLI and existing shared services; SciPlot
+does not need to host the caller's model or start an internal AI provider.
+`studio/document.vsz` is the saved visual authority. Headless edits use the
+native Veusz API, never a second renderer, document model or GUI selection.
+
+Veusz `MainWindow`, Project/selected-object AI docks and browser Intake remain
+compatible tools. Their retention does not make GUI workflows the development
+priority. Do not delete these surfaces as part of ordinary external-control work.
 
 The browser `app` is limited to initial source, grouping, naming, order, size,
-and export confirmation plus read-only result review. All post-render editing
-belongs in native Veusz. Do not automate Veusz with mouse clicks or patch VSZ
-text.
+and export confirmation plus read-only result review. Post-render edits use
+native document operations through the external control services or the
+compatible Veusz editor. Do not automate Veusz with mouse clicks or patch VSZ text.
 
-AI is optional. Provider absence must not disable deterministic recognition,
-plotting, manual editing, QA, export, or delivery. AI may propose only validated
-operations for the currently selected supported object.
+Internal provider absence must not disable deterministic recognition, plotting,
+native editing, QA, export, or delivery. The external AI may use only the current
+advertised native editing capabilities. The retained in-app assistant remains
+limited to the selected object; that GUI-specific restriction does not apply to
+the explicit saved-figure/object references in the external API.
 
 ## Primary workflow
 
@@ -47,48 +54,72 @@ operations for the currently selected supported object.
 
    Require `status=ready`.
 
-2. Inspect unfamiliar input or rules when needed:
+2. Read the external-control contract. Follow
+   [references/external-control.md](references/external-control.md) for the
+   complete public CLI loop, examples and recovery behavior:
+
+   ```bash
+   skill/scripts/sciplot project capabilities --json
+   ```
+
+3. For new raw data, inspect the source and ready rule invocation, then preserve
+   a successful source-bound plan before execution:
 
    ```bash
    skill/scripts/sciplot inspect INPUT --json
-   skill/scripts/sciplot rules list --json
    skill/scripts/sciplot rules show RULE_ID --json
+   skill/scripts/sciplot plan INPUT --rule RULE_ID --template TEMPLATE_ID --json > PLAN_JSON
+   skill/scripts/sciplot project create INPUT --expected-plan PLAN_JSON --json
    ```
 
-3. Prepare raw input and open native Veusz:
+   Create consumes the exact plan's rule/template and current source bytes,
+   then runs ordinary Studio preparation/export once to produce a resumable
+   canonical project. Both visible output and hidden workspace must be new;
+   inspect an existing managed project instead of overwriting it. Report real scientific
+   ambiguity; do not remove `--expected-plan` to bypass a mismatch. Put plan
+   evidence outside raw-input directories, managed projects and visible deliveries.
+
+4. For existing work, resume the returned canonical project and inspect its
+   actual figure/object identities. Do not prepare the raw source again:
 
    ```bash
-   skill/scripts/sciplot studio INPUT
+   skill/scripts/sciplot project inspect PROJECT --json
+   skill/scripts/sciplot project inspect PROJECT --figure FIGURE_ID --json
    ```
 
-   When intent is already known:
+   Take FIGURE_ID from the query, including its `primary_figure_id`; do not use
+   the literal word `primary`. Bind operations to `document_sha256` and exact
+   absolute native paths/expected values from `editable_fields`. Use a new
+   dedicated directory for each current/candidate PNG preview.
+
+5. Preview and apply only the authorized advertised style edits. Read the
+   candidate image, actual changes and scientific audit before apply:
 
    ```bash
-   skill/scripts/sciplot studio INPUT \
-     --rule RULE_ID \
-     --template TEMPLATE_ID
+   skill/scripts/sciplot project edit-preview PROJECT --figure FIGURE_ID \
+     --expected-document DOCUMENT_SHA256 --changes CHANGES_JSON --out NEW_EDIT_DIR --json
+   skill/scripts/sciplot project edit-apply PROJECT --preview NEW_EDIT_DIR/edit-preview.json --json
+   skill/scripts/sciplot project operation PROJECT --operation-id OPERATION_ID --json
    ```
 
-4. Use the same lifecycle for headless export:
+   Close all writable native windows for the project, even clean ones, before
+   external apply. Existing user intent authorizes concrete style changes; ask
+   only for unresolved meaning or scope. Keep the preview unchanged. On a lost
+   reply, read the durable operation and use the bounded same-preview retry;
+   never assume an uncertain outcome succeeded.
+
+6. Export the exact current complete project without regeneration:
 
    ```bash
-   skill/scripts/sciplot studio INPUT \
-     --export pdf,tiff_300 \
-     --json
-   ```
-
-   `--json` does not open Veusz.
-
-5. Open or export the exact current document without regeneration:
-
-   ```bash
-   skill/scripts/sciplot studio FIGURE.vsz
    skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
+   skill/scripts/sciplot project inspect PROJECT --json
    ```
 
-6. Before handoff, inspect current VSZ identity, manifest, QA, figures, plotting
+   `--json` does not open Veusz. Apply alone does not export. Before handoff,
+   inspect current VSZ identity, manifest, QA, figures, plotting
    data, and delivery completeness. Require ready state, passed QA, and matching
-   current/exported/delivered VSZ hashes.
+   current/exported/delivered VSZ hashes. A new AI session resumes by inspecting
+   PROJECT and uses the current saved SHA rather than remembered chat state.
 
 ## Output placement
 
@@ -117,9 +148,13 @@ lineage remain in the hidden runtime workspace.
 
 ## Command routing
 
-- `studio`: primary interactive and exact-current command family.
-- `autoplot`: only public fully automated raw-path project/QA/delivery route;
-  it orchestrates the same renderer and is not another plotting system.
+- `project`: external-AI creation from an expected plan, saved-project inspection,
+  native preview/edit and durable operation queries. Creation alone prepares
+  the source through the existing Studio lifecycle; queries and edits do not.
+- `studio`: exact-current export and compatible native interactive command family.
+- `autoplot`: compatible one-time raw-path/QA/delivery route using the same
+  renderer. Its run-only project layout is not a canonical Studio project and
+  must not be advertised as directly resumable by `project inspect/edit`.
 - `run`: replay a confirmed `plot_request.json`.
 - `app`: optional first-time confirmation and read-only result review.
 - `render` and `recipe`: low-level development/testing primitives.
@@ -182,6 +217,12 @@ details here.
 Project state (`editing`, `exporting`, `ready`, `needs_fix`) is distinct from
 automation state (`ready`, `needs_human_confirmation`, `needs_rule_repair`) and
 source-audit state.
+
+`project inspect` returning `status=ok` proves only that the query succeeded.
+It deliberately reports `ready_to_use=null`, `readiness_evaluated=false`, and
+separates historical `last_run` evidence from source/QA/delivery byte-currentness.
+An edit preview or applied operation also does not certify publication. A saved
+document hash is its revision; a live GUI changeset is not a durable task version.
 
 - `ready`: inspect and hand off the reviewed delivery.
 - `needs_human_confirmation`: ask only for unresolved scientific meaning.

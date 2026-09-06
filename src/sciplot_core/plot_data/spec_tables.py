@@ -45,6 +45,19 @@ def spec_paths(manifest: dict[str, Any]) -> list[Path]:
         else []
     )
     values.extend([manifest.get("veusz_spec"), result.get("veusz_spec")])
+    for owner in (manifest, result):
+        documents = owner.get("veusz_documents")
+        if not isinstance(documents, list):
+            continue
+        for value in documents:
+            if not isinstance(value, str) or not value.strip():
+                continue
+            document = Path(value).expanduser().resolve()
+            values.append(
+                str(document.with_name("spec.json"))
+                if document.name == "document.vsz"
+                else str(document.with_suffix(".spec.json"))
+            )
     paths: list[Path] = []
     seen: set[Path] = set()
     for value in values:
@@ -150,6 +163,10 @@ def axis_descriptor(
     manifest: dict[str, Any],
     axis: str,
 ) -> tuple[str, str]:
+    axes = spec.get("axes") if isinstance(spec.get("axes"), dict) else {}
+    axis_spec = axes.get(axis) if isinstance(axes.get(axis), dict) else {}
+    if str(axis_spec.get("label") or "").strip():
+        return split_label_unit(axis_spec["label"], fallback=axis)
     semantic = (
         manifest.get("semantic") if isinstance(manifest.get("semantic"), dict) else {}
     )
@@ -166,8 +183,6 @@ def axis_descriptor(
     ).strip()
     if canonical_name:
         return canonical_name, display_unit(canonical_unit)
-    axes = spec.get("axes") if isinstance(spec.get("axes"), dict) else {}
-    axis_spec = axes.get(axis) if isinstance(axes.get(axis), dict) else {}
     return split_label_unit(axis_spec.get("label"), fallback=axis)
 
 

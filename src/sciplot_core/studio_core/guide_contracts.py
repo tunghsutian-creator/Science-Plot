@@ -61,9 +61,7 @@ def _axis_interval_geometry(
     return midpoint, occupied_fraction
 
 
-def _reference_guide_rect_contracts(
-    spec: dict[str, Any],
-) -> list[dict[str, Any]]:
+def _reference_guide_rect_contracts(spec: dict[str, Any]) -> list[dict[str, Any]]:
     """Derive the closed, non-occluding graph-local band inventory."""
 
     guides = spec.get("reference_guides")
@@ -132,9 +130,7 @@ def _reference_guide_rect_contracts(
     return contracts
 
 
-def _categorical_line_contracts(
-    spec: dict[str, Any],
-) -> list[dict[str, Any]]:
+def _categorical_line_contracts(spec: dict[str, Any]) -> list[dict[str, Any]]:
     """Derive the closed native line inventory for categorical summaries."""
 
     categorical = spec.get("categorical")
@@ -148,6 +144,14 @@ def _categorical_line_contracts(
     groups = [
         group for group in categorical.get("groups", []) if isinstance(group, dict)
     ]
+    bar_width = float(style.get("bar_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION))
+    bar_line_width = float(
+        style.get("bar_line_width_pt", CATEGORICAL_BAR_LINE_WIDTH_PT)
+    )
+    error_width = float(style.get("error_line_width_pt", UNIFIED_LINE_WIDTH_PT))
+    cap_ratio = float(
+        style.get("error_cap_to_bar_ratio", CATEGORICAL_ERROR_CAP_TO_BAR_RATIO)
+    )
     contracts: list[dict[str, Any]] = []
 
     def append(
@@ -184,6 +188,24 @@ def _categorical_line_contracts(
             }
         )
 
+    def append_segments(
+        name: str,
+        segments: tuple[tuple[float, float, float, float], ...],
+        *,
+        color: str,
+        width_pt: float,
+    ) -> None:
+        for index, (x1, y1, x2, y2) in enumerate(segments, start=1):
+            append(
+                name=f"{name}_{index}",
+                x_pos=x1,
+                y_pos=y1,
+                x_pos_2=x2,
+                y_pos_2=y2,
+                color=color,
+                width_pt=width_pt,
+            )
+
     if categorical.get("native_veusz_boxplot") is True:
         fill_fraction = float(
             style.get("box_fill_fraction", CATEGORICAL_BOX_FILL_FRACTION)
@@ -209,24 +231,36 @@ def _categorical_line_contracts(
                 width_pt=UNIFIED_LINE_WIDTH_PT,
             )
 
+    if categorical.get("presentation_kind") == "point_line_raw_overlay":
+        half_cap = (
+            float(
+                style.get(
+                    "error_cap_reference_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION
+                )
+            )
+            * cap_ratio
+            / 2.0
+        )
+        for index, error in enumerate(categorical.get("error_bars", []), start=1):
+            position, low, high = (
+                float(error[key]) for key in ("position", "low", "high")
+            )
+            append_segments(
+                f"impact_point_line_error_{index}",
+                (
+                    (position, low, position, high),
+                    (position - half_cap, high, position + half_cap, high),
+                    (position - half_cap, low, position + half_cap, low),
+                ),
+                color=str(error["color"]),
+                width_pt=error_width,
+            )
+
     if categorical.get("presentation_kind") in {
         "bar_error",
         "grouped_bar_error",
     }:
-        bar_width = float(
-            style.get("bar_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION)
-        )
-        error_cap_half_width = (
-            bar_width
-            * float(
-                style.get("error_cap_to_bar_ratio", CATEGORICAL_ERROR_CAP_TO_BAR_RATIO)
-            )
-            / 2.0
-        )
-        error_width = float(style.get("error_line_width_pt", UNIFIED_LINE_WIDTH_PT))
-        bar_line_width = float(
-            style.get("bar_line_width_pt", CATEGORICAL_BAR_LINE_WIDTH_PT)
-        )
+        error_cap_half_width = bar_width * cap_ratio / 2.0
         for bar_index, group in enumerate(groups, start=1):
             position = float(group["position"])
             mean = float(group["bar_mean"])
@@ -235,7 +269,8 @@ def _categorical_line_contracts(
                 continue
             low = mean - error
             high = mean + error
-            for line_index, (x_pos, y_pos, x_pos_2, y_pos_2) in enumerate(
+            append_segments(
+                f"categorical_bar_error_{bar_index}",
                 (
                     (position, low, position, high),
                     (
@@ -251,47 +286,26 @@ def _categorical_line_contracts(
                         low,
                     ),
                 ),
-                start=1,
-            ):
-                append(
-                    name=f"categorical_bar_error_{bar_index}_{line_index}",
-                    x_pos=x_pos,
-                    y_pos=y_pos,
-                    x_pos_2=x_pos_2,
-                    y_pos_2=y_pos_2,
-                    color=UNIFIED_FOREGROUND_COLOR,
-                    width_pt=error_width,
-                )
+                color=UNIFIED_FOREGROUND_COLOR,
+                width_pt=error_width,
+            )
             left = position - bar_width / 2.0
             right = position + bar_width / 2.0
             keyline_color = str(
                 group.get("keyline_color")
                 or categorical_keyline_color(group.get("color"))
             )
-            for outline_index, (x_pos, y_pos, x_pos_2, y_pos_2) in enumerate(
+            append_segments(
+                f"categorical_bar_outline_{bar_index}",
                 (
                     (left, 0.0, left, mean),
                     (right, 0.0, right, mean),
                     (left, mean, right, mean),
                 ),
-                start=1,
-            ):
-                append(
-                    name=f"categorical_bar_outline_{bar_index}_{outline_index}",
-                    x_pos=x_pos,
-                    y_pos=y_pos,
-                    x_pos_2=x_pos_2,
-                    y_pos_2=y_pos_2,
-                    color=keyline_color,
-                    width_pt=bar_line_width,
-                )
+                color=keyline_color,
+                width_pt=bar_line_width,
+            )
     elif categorical.get("presentation_kind") == "stacked_components":
-        bar_width = float(
-            style.get("bar_width_fraction", CATEGORICAL_BAR_WIDTH_FRACTION)
-        )
-        bar_line_width = float(
-            style.get("bar_line_width_pt", CATEGORICAL_BAR_LINE_WIDTH_PT)
-        )
         for group_index, group in enumerate(groups, start=1):
             position = float(group["position"])
             left = position - bar_width / 2.0
@@ -303,37 +317,20 @@ def _categorical_line_contracts(
                 lower = float(component["stack_bottom"])
                 upper = float(component["stack_top"])
                 color = str(component["keyline_color"])
-                for outline_index, (
-                    x_pos,
-                    y_pos,
-                    x_pos_2,
-                    y_pos_2,
-                ) in enumerate(
+                append_segments(
+                    f"categorical_stack_outline_{group_index}_{component_index}",
                     (
                         (left, lower, left, upper),
                         (right, lower, right, upper),
                         (left, upper, right, upper),
                     ),
-                    start=1,
-                ):
-                    append(
-                        name=(
-                            "categorical_stack_outline_"
-                            f"{group_index}_{component_index}_{outline_index}"
-                        ),
-                        x_pos=x_pos,
-                        y_pos=y_pos,
-                        x_pos_2=x_pos_2,
-                        y_pos_2=y_pos_2,
-                        color=color,
-                        width_pt=bar_line_width,
-                    )
+                    color=color,
+                    width_pt=bar_line_width,
+                )
     return contracts
 
 
-def _reference_guide_line_contracts(
-    spec: dict[str, Any],
-) -> list[dict[str, Any]]:
+def _reference_guide_line_contracts(spec: dict[str, Any]) -> list[dict[str, Any]]:
     """Derive the closed native point-to-point reference-line inventory."""
 
     guides = spec.get("reference_guides")

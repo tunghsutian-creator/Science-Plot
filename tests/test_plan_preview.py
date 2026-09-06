@@ -43,12 +43,8 @@ def test_plan_preview_activates_registered_real_tensile_plan() -> None:
     plan = payload["resolved_figure_plan"]
     assert plan is not None
     assert plan["rule_id"] == rule_id
-    assert plan["selection_policy"] == mechanical_selection_policy(
-        "representative"
-    )
-    assert plan["selected_figure_ids"] == [
-        task.figure_id for task in contract.tasks
-    ]
+    assert plan["selection_policy"] == mechanical_selection_policy("representative")
+    assert plan["selected_figure_ids"] == [task.figure_id for task in contract.tasks]
     assert [task["sample_order"] for task in plan["tasks"]] == [
         ["E0 2MM"] for _task in contract.tasks
     ]
@@ -82,6 +78,7 @@ def test_temperature_preview_keeps_plan_shape_without_fabricating_transform() ->
         "resolved_figure_plan",
         "scientific_transform",
         "blocker",
+        "preview_identity",
     }
     assert payload["status"] == "planned"
     assert payload["scientific_transform"] is None
@@ -168,7 +165,14 @@ def test_plan_preview_returns_one_complete_planned_payload_without_mutation(
         "resolved_figure_plan": plan.to_payload(),
         "scientific_transform": None,
         "blocker": None,
+        "preview_identity": payload["preview_identity"],
     }
+    identity = payload["preview_identity"]
+    assert identity is not None
+    assert identity["kind"] == "sciplot_plan_preview_identity"
+    assert (
+        len(identity["source_tree_sha256"]) == len(identity["selection_sha256"]) == 64
+    )
 
 
 def test_plan_preview_marks_non_figure_plan_source_not_applicable(
@@ -493,9 +497,7 @@ def test_stress_plan_reuses_one_resolved_contract_and_forwards_order(
     source = tmp_path / "relaxation.csv"
     source.write_text("source", encoding="utf-8")
     rule = get_rule("rheology_stress_relaxation")
-    requested_order = [
-        f"{source.stem}_{position}" for position in ("second", "first")
-    ]
+    requested_order = [f"{source.stem}_{position}" for position in ("second", "first")]
     contract = _minimal_transform_contract(requested_order)
     calls: list[tuple[Path, object]] = []
     import sciplot_core.semantic_sources.stress_relaxation_transform as transform
@@ -509,7 +511,9 @@ def test_stress_plan_reuses_one_resolved_contract_and_forwards_order(
             "template": "curve",
         },
     )
-    monkeypatch.setattr(preview_module, "study_model_from_request", lambda **_kwargs: {})
+    monkeypatch.setattr(
+        preview_module, "study_model_from_request", lambda **_kwargs: {}
+    )
     monkeypatch.setattr(
         preview_module,
         "resolve_figure_plan",
@@ -518,7 +522,9 @@ def test_stress_plan_reuses_one_resolved_contract_and_forwards_order(
         ),
     )
 
-    def fake_resolve(path: Path, *, series_order: object) -> ResolvedScientificTransform:
+    def fake_resolve(
+        path: Path, *, series_order: object
+    ) -> ResolvedScientificTransform:
         calls.append((path, series_order))
         assert isinstance(series_order, list)
         series = tuple(
@@ -575,7 +581,9 @@ def test_stress_plan_blocks_before_figure_plan_when_transform_is_invalid(
             "template": "curve",
         },
     )
-    monkeypatch.setattr(preview_module, "study_model_from_request", lambda **_kwargs: {})
+    monkeypatch.setattr(
+        preview_module, "study_model_from_request", lambda **_kwargs: {}
+    )
 
     def invalid_transform(*_args: object, **_kwargs: object) -> None:
         raise ValueError("anchor missing")
@@ -584,7 +592,9 @@ def test_stress_plan_blocks_before_figure_plan_when_transform_is_invalid(
         nonlocal figure_plan_calls
         figure_plan_calls += 1
 
-    monkeypatch.setattr(transform, "resolve_stress_relaxation_transform", invalid_transform)
+    monkeypatch.setattr(
+        transform, "resolve_stress_relaxation_transform", invalid_transform
+    )
     monkeypatch.setattr(preview_module, "resolve_figure_plan", figure_plan_sentinel)
 
     payload = preview_module.build_plan_preview(

@@ -6,7 +6,9 @@ import pandas as pd
 import pytest
 
 from sciplot_core._paths import resolve_fixture_path
+from sciplot_core.figure_plan import FigurePlanResolutionError, resolve_figure_plan
 from sciplot_core.materials_rules import get_rule, semantic_payload_from_rule
+from sciplot_core.materials_rules.mechanical_metrics import _tensile_summary_metrics
 from sciplot_core.semantic import prepare_semantic_source
 from sciplot_core.semantic_sources.mechanical_fact_models import (
     MechanicalSourceFactsError,
@@ -15,10 +17,62 @@ from sciplot_core.semantic_sources.mechanical_fact_models import (
 from sciplot_core.semantic_sources.mechanical_facts import (
     load_mechanical_source_facts,
 )
+from sciplot_core.study_model import experiment_recommendation_payload
 
 
 def _fixture(rule_id: str) -> Path:
     return resolve_fixture_path(str(get_rule(rule_id).fixture_path or ""))
+
+
+def test_excerpt_metrics_remain_missing_with_actionable_complete_plan_blocker(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tensile_excerpt.xlsx"
+    pd.DataFrame(
+        [
+            ["Tensile strain", "Tensile stress"],
+            ["%", "MPa"],
+            ["A", "A"],
+            [10.0, 1.0],
+            [20.0, 2.0],
+            [30.0, 3.0],
+        ]
+    ).to_excel(source, header=False, index=False)
+
+    facts = load_mechanical_source_facts(source, rule_id="tensile_curve")
+    observation = facts.summary_rows[0]
+    assert observation.metric_value("strength_MPa") == 3.0
+    assert observation.metric_value("modulus_MPa") is None
+    assert observation.metric_value("elongation_at_break_percent") is None
+    assert observation.metric_value("toughness_MJ_m3") is None
+    assert facts.representative_curve_series[0].points == (
+        (10.0, 1.0),
+        (20.0, 2.0),
+        (30.0, 3.0),
+    )
+
+    summary_source = tmp_path / "summary.csv"
+    pd.DataFrame(facts.summary_records()).to_csv(summary_source, index=False)
+    metrics = {row["metric"]: row for row in _tensile_summary_metrics(summary_source)}
+    assert metrics["strength_MPa"]["value"] == 3.0
+    for metric in ("modulus_MPa", "elongation_at_break_percent", "toughness_MJ_m3"):
+        assert metrics[metric]["value"] == ""
+        assert metrics[metric]["status"] == "skipped"
+    assert "fracture" in metrics["elongation_at_break_percent"]["reason"]
+
+    with pytest.raises(FigurePlanResolutionError) as exc_info:
+        resolve_figure_plan(
+            input_path=source,
+            rule_id="tensile_curve",
+            template="curve",
+            study_model=experiment_recommendation_payload(rule_id="tensile_curve"),
+            request={"template": "curve"},
+        )
+    assert exc_info.value.reason_code == "mechanical_summary_metric_missing"
+    assert "A/A" in str(exc_info.value)
+    assert "modulus_MPa" in str(exc_info.value)
+    assert "0.05--0.25" in str(exc_info.value)
+    assert "fracture" in str(exc_info.value)
 
 
 def _write_curves(

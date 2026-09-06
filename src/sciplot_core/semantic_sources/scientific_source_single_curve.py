@@ -9,6 +9,7 @@ from sciplot_core.materials_rules.models import SemanticRule
 from sciplot_core.semantic_sources.scientific_transform import (
     ResolvedScientificTransform,
 )
+from sciplot_core.semantic_sources.table_selection import confirmed_source_sheet
 
 if TYPE_CHECKING:
     from sciplot_core.semantic_sources.scientific_source_models import (
@@ -91,8 +92,21 @@ def resolve_single_curve_transform(
     *,
     rule: SemanticRule,
     series_order: object = None,
+    column_confirmations: object = None,
 ) -> ResolvedScientificTransform:
     adapter = rule.scientific_source_adapter
+    if (
+        adapter != "registered_paired_curve"
+        and isinstance(column_confirmations, list | tuple)
+        and any(
+            isinstance(item, dict) and item.get("sheet_selected") is True
+            for item in column_confirmations
+        )
+    ):
+        raise ValueError(
+            f"Explicit worksheet selection is not supported for {rule.rule_id}; "
+            "the selected worksheet cannot be ignored."
+        )
     if adapter == "ftir":
         from sciplot_core.semantic_sources.ftir_sources import (
             resolve_ftir_scientific_transform,
@@ -107,10 +121,14 @@ def resolve_single_curve_transform(
             resolve_registered_paired_curve_transform,
         )
 
+        selected_sheet = confirmed_source_sheet(source, column_confirmations)
         return resolve_registered_paired_curve_transform(
             source,
             rule=rule,
             series_order=series_order,
+            **(
+                {"selected_sheet": selected_sheet} if selected_sheet is not None else {}
+            ),
         )
     if adapter == "gpc_sec":
         from sciplot_core.semantic_sources.gpc_sources import (
@@ -153,6 +171,7 @@ def resolve_single_curve_scientific_source(
             source,
             rule=rule,
             series_order=request.get("series_order"),
+            column_confirmations=request.get("column_confirmations"),
         )
     except (OSError, ValueError) as exc:
         raise ScientificSourceResolutionError(

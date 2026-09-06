@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import sys
+from contextlib import nullcontext
+from pathlib import Path
 from typing import Any
 
 from sciplot_core.cli.value_io import (
@@ -14,6 +16,11 @@ from sciplot_core.cli.value_io import (
 def dispatch_interfaces(
     args: Any, argv: list[str] | None, *, serve_intake
 ) -> int | None:
+    if args.command == "project":
+        from sciplot_core.cli.dispatch.project import dispatch_project_control
+
+        return dispatch_project_control(args)
+
     if args.command == "app":
         serve_kwargs: dict[str, Any] = {
             "input_path": args.input.expanduser() if args.input else None,
@@ -28,14 +35,29 @@ def dispatch_interfaces(
         return 0
 
     if args.command == "studio":
-        from sciplot_core.studio import run_studio_command
-        from sciplot_gui.main_window_menu import (
-            install_studio_window_presentation,
-        )
+        from sciplot_core.cli.dispatch.project_revision import dispatch_project_revision
 
-        install_studio_window_presentation()
+        revision_result = dispatch_project_revision(args)
+        if revision_result is not None:
+            return revision_result
+        from sciplot_core.studio import run_studio_command
+
+        if not (args.json or args.export or args.prepare_only):
+            from sciplot_gui.main_window_menu import install_studio_window_presentation
+
+            install_studio_window_presentation()
         original_argv = list(sys.argv[1:] if argv is None else argv)
         studio_target = args.target.expanduser() if args.target else None
+        if studio_target is not None:
+            from sciplot_core.studio_core.delivery_target import resolve_delivery_target
+
+            delivery_target = resolve_delivery_target(studio_target.resolve())
+            if delivery_target is not None:
+                studio_target = Path(
+                    delivery_target["project_dir"]
+                    if delivery_target["mode"] == "project"
+                    else delivery_target["document"]
+                )
         studio_output_root = args.out.expanduser() if args.out else None
         studio_delivery_root = None
         if studio_target is not None:
@@ -60,20 +82,42 @@ def dispatch_interfaces(
                     )
                     studio_delivery_root = layout.delivery_root
                     studio_output_root = layout.workspace_root / "projects"
-        return run_studio_command(
-            target=studio_target,
-            output_root=studio_output_root,
-            delivery_root=studio_delivery_root,
-            rule_id=args.rule,
-            template=args.template,
-            project_name=args.name,
-            new=args.new,
-            export=args.export,
-            json_output=args.json,
-            prepare_only=args.prepare_only,
-            qt_smoke=args.qt_smoke,
-            original_argv=original_argv,
+        from sciplot_core.studio_core.project_session import external_project_session
+        from sciplot_core.studio_core.context import resolve_studio_project_context
+
+        existing_project = None
+        if studio_target is not None:
+            if (
+                studio_target.is_dir()
+                and (studio_target / "plot_request.json").is_file()
+            ):
+                existing_project = studio_target
+            elif studio_target.name == "plot_request.json":
+                existing_project = studio_target.parent
+            elif studio_target.suffix == ".vsz":
+                context = resolve_studio_project_context(studio_target)
+                existing_project = context["project_dir"] if context else None
+        session = (
+            external_project_session(existing_project)
+            if (args.json or args.export or args.prepare_only)
+            and existing_project is not None
+            else nullcontext()
         )
+        with session:
+            return run_studio_command(
+                target=studio_target,
+                output_root=studio_output_root,
+                delivery_root=studio_delivery_root,
+                rule_id=args.rule,
+                template=args.template,
+                project_name=args.name,
+                new=args.new,
+                export=args.export,
+                json_output=args.json,
+                prepare_only=args.prepare_only,
+                qt_smoke=args.qt_smoke,
+                original_argv=original_argv,
+            )
 
     if args.command == "publication":
         from sciplot_core.publication import (

@@ -12,6 +12,10 @@ from sciplot_core.studio_core.persistence import (
 from sciplot_core.studio_core.context import (
     _project_context_for_document,
 )
+from sciplot_core.studio_core.project_session import (
+    close_window_session,
+    window_document_session,
+)
 
 from sciplot_core.studio_core.qt_compat import (
     ensure_veusz_qsettings_compat,
@@ -144,11 +148,13 @@ def _ensure_veusz_mainwindow_compat(main_window_type: type[Any]) -> None:
                 "save_or_commit_current_document",
                 None,
             )
-            receipt = (
-                project_save(target)
-                if callable(project_save)
-                else atomic_save_veusz_document(window.document, target)
-            )
+            with window_document_session(window, target):
+                receipt = (
+                    project_save(target)
+                    if callable(project_save)
+                    else atomic_save_veusz_document(window.document, target)
+                )
+                window.filename = str(receipt["target"])
         except Exception as exc:
             window.filename = old_window_filename
             record_save_error(window, target=target, exc=exc)
@@ -231,6 +237,8 @@ def _ensure_veusz_mainwindow_compat(main_window_type: type[Any]) -> None:
         finally:
             if discard_requested and not event.isAccepted():
                 window.document.setModified(True)
+            if event.isAccepted():
+                close_window_session(window)
 
     def update_titlebar(window: Any) -> None:
         original_update_titlebar(window)
@@ -247,7 +255,8 @@ def _ensure_veusz_mainwindow_compat(main_window_type: type[Any]) -> None:
                 handler()
 
     def open_file_in_window(window: Any, filename: str) -> Any:
-        result = original_open_file_in_window(window, filename)
+        with window_document_session(window, Path(filename)):
+            result = original_open_file_in_window(window, filename)
         loaded_filename = str(getattr(window, "filename", "") or "").strip()
         if loaded_filename:
             _configure_sciplot_window(

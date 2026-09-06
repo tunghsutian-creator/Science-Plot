@@ -2,7 +2,7 @@
 
 Status: R0 complete; paused before R1 authorization.
 
-Planning baseline: 2026-08-31.
+Planning baseline: 2026-08-31; human-confirmation scope decision: 2026-09-01.
 
 本文只记录尚未完成的目标、依赖、阶段交付物和退出条件。它不改变
 `README.md` 中的当前产品行为，不替代 `docs/ARCHITECTURE.md` 的模块边界。R0 的测量与
@@ -38,7 +38,8 @@ Planning baseline: 2026-08-31.
 ### 产品承诺
 
 - 对受支持且语义唯一的输入，完成路径应为零次 AI 调用；
-- 对不唯一的科学含义，只问一个能解除阻断的最小问题，不让模型猜单位、样品身份或实验含义；
+- 对不唯一的科学含义，保留 owner 的精确阻断原因，在真实实操中只问一个能解除阻断的
+  问题；不让模型猜单位、样品身份或实验含义，也不预建通用问题生成器；
 - 对视觉编辑，AI 只能提出当前选中对象、当前 revision 下目录允许的 `set_setting`；
 - 所有写入都经过现有请求、Studio、Veusz、QA 和 delivery 边界；
 - provider 缺失、超时、取消或输出非法时，本地绘图和人工编辑仍完整可用；
@@ -88,6 +89,30 @@ receipt 或 hash ledger，也不复活已经删除的浏览器精修/Canvas/Comp
 4. selected-object 安全闭环已有 R0 单事务基线，但还没有持续的产品级效率与拒绝率观测；
 5. provider 数据边界和一致性政策已冻结为设计，尚未成为可执行的 text/visual 路由合同。
 
+### 2026-09-01 人工确认范围决定
+
+R0 的受控 75-confidence 回放证明当前科学确认 owner 能返回
+`needs_human_confirmation` 和精确原因，但它不是当前公开 CLI 会稳定自然触发的真实任务路径，
+也没有通用的最小问题 payload。根据真实实操优先的决定，这不是一个需要在 R1/R2 预先建设
+的独立产品功能：
+
+- R1 只投影状态和精确 `owner_reason_refs`；闭字段 `decision.question` 在当前 owner 未提供
+  问题时显式为 `null`，projector 和 conductor 都不得根据 reason code 或源数据合成科学问题；
+- R2 遇到该状态时以 0 AI、0 写入停止并交给操作者；操作者在实操中核对原始来源和实验含义；
+- R5 的首个试点限定为真实且可由 rule identity selection 解除的歧义，使用当前 `plan`
+  已能消费的显式 `--rule` 作为回答承接入口，验证“一次操作者问题/回答 → 显式 `--rule`
+  → fresh plan → 同一显式 rule 的
+  `autoplot`/`studio` → ready 交付”并记录证据；若 canonical `needs_human_confirmation`
+  自然出现就一并记录，但不把人为制造该状态作为试点退出门；
+  DataMapping receipt 和流变 `column_confirmations` 属于各自 owner 的独立流程，在证明自己的
+  重新验证链之前不视为同一入口；
+- 若试点所选 owner 没有现成字段或回执可以承接回答，R5 必须失败并打开一个窄的
+  owner-specific 修复项；这份证据才授权相应开发，不能据此预建通用问答 UI、回答存储或
+  确认系统。
+
+这项范围决定不改变 R0 的历史测量事实，也不授权 R1 或任何运行时实现；当前公开 CLI 尚无
+完整的零写入 confirmation handoff，那个 seam 仍是 R2 工作，不是新的 confirmation 子系统。
+
 ## 三、采用的总体架构
 
 ### 唯一闭环
@@ -99,7 +124,7 @@ receipt 或 hash ledger，也不复活已经删除的浏览器精修/Canvas/Comp
   -> 本地决策路由
        ready + 唯一意图 ----------> 0 次 AI -> plan -> autoplot / studio
        可由既有 catalog 选择意图 -> 最多 1 次 AI -> 本地 plan 复核
-       科学含义不唯一 -----------> 1 个最小人工确认问题 -> 重新 plan
+       科学含义不唯一 -----------> 本地阻断/可得 owner 原因 -> 实操中一次人工确认 -> 重新 plan
        规则或合同缺陷 ------------> needs_rule_repair -> 独立维护工作
        当前对象视觉微调 ----------> 最多 1 次 AI -> typed proposal -> 人工确认
   -> 本地执行、revision/hash/QA 校验
@@ -124,7 +149,7 @@ Brief 是完整本地 payload 的窄投影，计划包含以下信息：
 - 当前自动化状态及一个明确 `next_action`；
 - 已认证的 `rule_id`、template 选项和现有 invocation 参数；
 - 适用时的 plan/request/revision/hash 身份，而非数据数组；
-- 封闭 reason codes、一个最小确认问题或一个维护 handoff；
+- 封闭 reason codes、owner 已提供时原样透传的可空问题，或一个维护 handoff；
 - 完成后必要的 artifact/QA 摘要和本地 evidence references。
 
 它必须由现有 owner 的同一个内存结果派生，不二次读取源、不二次分类、不复制业务规则，
@@ -164,7 +189,9 @@ Brief 是完整本地 payload 的窄投影，计划包含以下信息：
 ### 失败与恢复
 
 - 本地证据不完整：返回结构化 blocker，保持源和既有项目不变；
-- 科学含义不唯一：停止并问人，回答后从 plan 重新验证；
+- 科学含义不唯一：停止并保留精确 owner 原因；只有 rule identity selection 才通过显式
+  `--rule` 提交并从 fresh `plan` 重新验证；样品、列、单位或锚点等事实不得编码进
+  `--rule`，只走相应 owner 已验证的重新验证/执行入口；
 - provider 不可用：保留零 AI 主干和原生 Veusz 手工路径；
 - proposal 越权或 revision 过期：整体拒绝，零部分写入；
 - 已接受视觉提案：一个 Veusz 原生 Undo 步骤，保存前仍可撤销；
@@ -195,7 +222,8 @@ Brief 是完整本地 payload 的窄投影，计划包含以下信息：
 
 ### 人工负担与可恢复性
 
-- 每个 `needs_human_confirmation` 只提出一个能解除当前阻断的问题；
+- 每次真实人工确认交互只提出一个能解除当前阻断的问题；R1/R2 遇到
+  `needs_human_confirmation` 时只负责保留状态、原因和停止交接，不以生成问题作为阶段退出门；
 - stale/越权 proposal 拒绝率必须为 100%；
 - 已应用视觉提案必须 100% 对应一个原生 Undo 单元；
 - provider 离线时，当前 24 个 ready rule 的确定性 readiness 不得下降；
@@ -226,12 +254,15 @@ R0 已于 2026-08-31 关闭。四类基线、测量定义、威胁模型、Brief
 - 一个纯函数式、版本化 Brief projector，复用现有 rules/plan/result 对象；
 - 在现有 JSON 命令族中提供同一紧凑投影选择，不增加第二条绘图入口；
 - payload 大小、闭集字段、reason-code/state 等价和无 raw arrays gate；
+- confirmation Brief 保留精确 `owner_reason_refs`，`decision.question` 在 owner 未提供问题时
+  为 `null`；projector 不合成问题；
 - full payload 与 Brief 的差分/等价测试及四类基准报告。
 
 退出条件：
 
 - ready、科学确认和视觉达到至少 70% 缩减，repair 达到至少 55% 且不超过 1,280 bytes；
 - full 与 compact 对所有基准作出完全相同的允许/停止决定；
+- confirmation 基准在 `question=null` 时也可关闭，只要状态、动作和精确原因无损；
 - projector 不读取源、不解析规则、不写项目、不建立 cache 或 receipt；
 - provider 仍为可选依赖。
 
@@ -242,6 +273,8 @@ R0 已于 2026-08-31 关闭。四类基线、测量定义、威胁模型、Brief
 交付物：
 
 - 纯决策状态机：`ready`、`needs_human_confirmation`、`needs_rule_repair`；
+- confirmation 状态只以 0 AI、0 写入停止并交给操作者，保留精确 owner 原因和可空的
+  owner-provided question；不新增通用问题生成器、问答 UI 或回答存储；
 - 复用 `plan` 后原样调用 `autoplot`/`studio` 的薄 orchestration seam；
 - 终端只接受 `state=ready`，其它状态保留结构化原因；
 - 取消、重复调用、部分失败和现有 manifest 恢复测试；
@@ -250,6 +283,7 @@ R0 已于 2026-08-31 关闭。四类基线、测量定义、威胁模型、Brief
 退出条件：
 
 - 所有 ready/唯一意图基准为零 AI；
+- table-driven 测试证明 confirmation 状态和原因无损交接；真实一问一答不作为 R2 退出门；
 - 不存在隐式规则切换、二次源解析或新 renderer；
 - 同源同意图的制品与直接 Autoplot 路线一致；
 - provider failure 不影响确定性结果。
@@ -299,7 +333,10 @@ R0 已于 2026-08-31 关闭。四类基线、测量定义、威胁模型、Brief
 
 - 单曲线仪器数据；
 - 多样品/重复测量 FigurePlan；
-- 一次真实 `needs_human_confirmation`；
+- 一次真实且可由 rule identity selection 解除的歧义确认：原始 owner/source evidence →
+  一个操作者问题/回答 → 显式 `--rule` → fresh `plan` → 同一显式 rule 的
+  `autoplot`/`studio` → ready 交付；canonical
+  `needs_human_confirmation` 若自然出现就记录，但不为满足试点而构造；
 - 一次真实 `needs_rule_repair` 维护 handoff；
 - 轴、图例或 series 的 selected-object 视觉微调；
 - provider 离线、取消和 stale revision。
@@ -309,6 +346,10 @@ R0 已于 2026-08-31 关闭。四类基线、测量定义、威胁模型、Brief
 - false-ready、静默科学身份改变和 raw-array 外发均为 0；
 - 支持且唯一的任务 100% 零 AI 完成；
 - mixed pilot 的 first-pass ready、人工确认轮数、AI 调用数、总耗时和撤销率达到 R0 冻结目标；
+- 人工确认试点记录真实 rule-identity 歧义证据、问题、回答、显式 `--rule`、fresh-plan 结果和同一 rule 的
+  ready 交付，并证明 0 AI、原始源 hash 未变和 exact-current hashes 完整；DataMapping receipt 或
+  `column_confirmations` 只有在各自 owner 的重新验证链被单独证明后才能替代该入口；若选定
+  owner 无法接收回答，则保持未关闭并打开窄的 owner-specific 开发项；
 - source-adjacent VSZ/PDF/TIFF/CSV/launcher 与 exact-current hashes 完整；
 - 用户日用复核通过后，核心 initiative 才可标记完成。
 
@@ -335,6 +376,8 @@ R0 baseline (complete)
 - 不跳过 R0 直接实现模型路由；
 - 不在 R1 完成前让模型消费更多完整 payload；
 - 不在 R2 证明零 AI 路线前扩展 provider；
+- 不把通用问题生成器、问答 UI 或回答存储列为 R1/R2 前置开发；人工确认交互由 R5 实操
+  验证，只有缺少 owner-specific 回答入口的证据才能打开相应修复；
 - 不在真实 friction 证明需要前扩展 operation kind；
 - 每个阶段关闭后停止，下一阶段需明确授权；
 - documentation-only 规划不自动升级为实现授权。
@@ -347,7 +390,7 @@ R0 baseline (complete)
 | --- | --- |
 | AI 读取完整诊断导致 token 膨胀 | Brief projector、大小门、full/compact 等价测试 |
 | AI 发明规则、单位或对象 path | 闭集 catalog、typed proposal、本地二次验证 |
-| “自动成功”掩盖科学歧义 | `needs_human_confirmation` 单独状态和零写入停止 |
+| “自动成功”掩盖科学歧义 | `needs_human_confirmation` 单独状态、零写入停止，以及 R5 的显式确认与 fresh-plan 证据 |
 | rule repair 与日用助手混合 | 运行时只生成维护 handoff，修复进入独立开发 gate |
 | 新 conductor 变成第二套产品 | 只编排现有 plan/autoplot/studio，不拥有 renderer/request/receipt |
 | provider 失败影响日用能力 | 无 provider 是持续测试的正常模式 |

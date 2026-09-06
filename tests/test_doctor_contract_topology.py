@@ -19,3 +19,15 @@ def test_doctor_lists_changed_owner_verification_before_broad_gates() -> None:
     routes = doctor_payload()["command_surface"]["developer_validation_routes"]
 
     assert routes == ["verify", "smoke", "acceptance", "batch"]
+
+
+def test_doctor_exposes_readiness_evidence_scope() -> None:
+    envelopes = doctor_payload()["validated_envelopes"]
+
+    assert envelopes["evidence_scope"] == {
+        "contract_freshness": "rule_declarations_and_render_request_policy",
+        "implementation_freshness": "not_tracked_by_this_registry",
+        "human_validation": "historical_owner_confirmation_without_build_binding",
+    }
+    assert envelopes["claims"]["current_implementation_certified"] is False
+    assert envelopes["claims"]["human_validation_bound_to_current_build"] is False

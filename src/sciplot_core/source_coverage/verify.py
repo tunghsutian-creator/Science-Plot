@@ -39,6 +39,7 @@ def verify_rendered_mapping_source_coverage(
     *,
     mapping_application: dict[str, Any],
     request: dict[str, Any],
+    check_presentation: bool = True,
 ) -> dict[str, Any]:
     if not isinstance(request, dict):
         raise ValueError(
@@ -95,6 +96,7 @@ def verify_rendered_mapping_source_coverage(
         document_audit, spec = _audit_exact_document_data(
             document_path=document_path,
             spec_path=spec_path,
+            **({} if check_presentation else {"check_presentation": False}),
         )
         template = str(spec.get("template") or result.get("template") or "")
         templates.add(template)

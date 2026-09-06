@@ -130,6 +130,11 @@ def prepare_curve_family_source(
                 source,
                 rule=rule,
                 series_order=series_order,
+                **(
+                    {"column_confirmations": context.column_confirmations}
+                    if context.column_confirmations
+                    else {}
+                ),
             )
         )
         series_list = list(resolved_transform.series)

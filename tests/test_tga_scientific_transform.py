@@ -8,7 +8,13 @@ import pandas as pd
 import pytest
 
 from sciplot_core._paths import resolve_fixture_path
-from sciplot_core.materials_rules import get_rule
+from sciplot_core.materials_rules import (
+    get_rule,
+    compute_analysis_metrics,
+    semantic_payload_from_rule,
+)
+from sciplot_core.materials_rules.curve_extrema_metrics import _tga_metrics
+from sciplot_core.semantic import prepare_semantic_source
 from sciplot_core.materials_rules.models import AxisSpec
 from sciplot_core.semantic_sources.registered_paired_curve_transform import (
     resolve_registered_paired_curve_transform,
@@ -34,6 +40,50 @@ def _fixture() -> Path:
 def _fixture_rows() -> list[list[str]]:
     with _fixture().open(encoding="utf-8", newline="") as handle:
         return list(csv.reader(handle))
+
+
+def test_tga_metrics_keep_every_resolved_sample_and_its_own_temperature_grid(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "two_sample_tga.csv"
+    source.write_text(
+        "Temperature,Mass,Temperature,Mass\nC,%,C,%\nA,A,B,B\n"
+        "100,100,120,100\n200,94,240,99\n400,20,360,80\n",
+        encoding="utf-8",
+    )
+    semantic = semantic_payload_from_rule(get_rule(RULE_ID), confidence=1.0)
+    prepared = prepare_semantic_source(
+        source, output_dir=tmp_path / "prepared", semantic=semantic
+    )
+    processed = Path(str(prepared["processed_source"]))
+    rows = compute_analysis_metrics(
+        source_path=source,
+        processed_source=processed,
+        semantic=semantic,
+        output_dir=tmp_path / "analysis",
+    )
+    values = {row["metric"]: row["value"] for row in rows}
+    assert values == {
+        "residual_mass_percent[A]": 20.0,
+        "t5_temperature_C[A]": 200.0,
+        "t10_temperature_C[A]": 400.0,
+        "residual_mass_percent[B]": 80.0,
+        "t5_temperature_C[B]": 360.0,
+        "t10_temperature_C[B]": 360.0,
+    }
+    assert all(row["status"] == "ok" for row in rows)
+    stored = pd.read_csv(tmp_path / "analysis" / "tables" / "analysis_metrics.csv")
+    assert dict(zip(stored["metric"], stored["value"], strict=True)) == values
+
+
+def test_real_single_tga_metrics_keep_legacy_names_and_measured_values() -> None:
+    series = resolve_tga_transform(_fixture()).series[0]
+    points = series.points
+    values = {row["metric"]: row["value"] for row in _tga_metrics(_fixture())}
+    assert values["residual_mass_percent"] == points[-1][1]
+    for loss, metric in ((5, "t5_temperature_C"), (10, "t10_temperature_C")):
+        crossings = [x for x, mass in points if mass <= points[0][1] - loss]
+        assert values[metric] == (crossings[0] if crossings else "")
 
 
 def test_real_tga_transform_binds_source_columns_units_sample_and_points() -> None:

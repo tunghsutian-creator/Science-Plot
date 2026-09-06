@@ -20,6 +20,9 @@ from sciplot_core.veusz_worker.visual_matchers import (
     _colorbar_record_matches_contract,
 )
 from sciplot_core.veusz_worker.widget_bindings import _visible_data_bindings
+from sciplot_core.veusz_worker.spec_audit.scientific_geometry import (
+    colorbar_matches_science,
+)
 
 
 def audit_scalar_field(
@@ -189,8 +192,14 @@ def audit_scalar_field(
     if len(colorbar_records) != expected_colorbar_count or (
         visual is not None
         and (
-            not _colorbar_record_matches_contract(
-                colorbar_records[0], scalar=scalar, visual=visual
+            not (
+                _colorbar_record_matches_contract(
+                    colorbar_records[0], scalar=scalar, visual=visual
+                )
+                if inventory.check_presentation
+                else colorbar_matches_science(
+                    colorbar_records[0], scalar=scalar, visual=visual
+                )
             )
         )
     ):

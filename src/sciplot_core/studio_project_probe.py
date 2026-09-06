@@ -165,7 +165,69 @@ def _rebase_project_paths(
     )
 
 
-def _copy_project_fixture(source_project: Path, run_root: Path) -> Path:
+def _rebase_copied_render_metadata(
+    source_project: Path,
+    copied_project: Path,
+    *,
+    preserve_stale_registry_paths: bool,
+) -> None:
+    from sciplot_core.foundation.source_tree import source_tree_sha256
+    from sciplot_core.source_coverage.managed_documents import _source_records
+
+    for name in ("raw", "source"):
+        original = source_project / name
+        if original.exists() and source_tree_sha256(original) != source_tree_sha256(
+            copied_project / name
+        ):
+            raise ValueError(f"Copied fixture {name} tree differs from its source.")
+    for document in (copied_project / "studio").rglob("*.vsz"):
+        original = source_project / document.relative_to(copied_project)
+        if file_sha256(document) != file_sha256(original):
+            raise ValueError("Copied fixture must preserve exact-current VSZ bytes.")
+    for path in sorted((copied_project / "studio").rglob("*.json")):
+        payload = _read_json_object(path)
+        if payload.get("kind") == "sciplot_veusz_plot_spec":
+            for original, digest in _source_records(payload).items():
+                try:
+                    relative = original.relative_to(source_project)
+                except ValueError as exc:
+                    raise ValueError(
+                        "Fixture specification cites a source outside its project."
+                    ) from exc
+                copied_source = copied_project / relative
+                if (
+                    file_sha256(original) != digest
+                    or file_sha256(copied_source) != digest
+                ):
+                    raise ValueError(
+                        "Copied fixture source does not match its specification hash."
+                    )
+        rebound = _rebase_project_paths(
+            payload, source_project=source_project, copied_project=copied_project
+        )
+        if not isinstance(rebound, dict):
+            raise ValueError("Copied fixture render metadata must remain an object.")
+        if (
+            preserve_stale_registry_paths
+            and path == copied_project / "studio" / "figure_set.json"
+        ):
+            # Keep every persisted projection, including outcome artifacts, in
+            # one coherent old registry. The independent reader probe checks
+            # path relocation; export probes use fully rebound metadata.
+            rebound = payload
+        path.write_text(
+            json.dumps(json_safe(rebound), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+
+def _copy_project_fixture(
+    source_project: Path,
+    run_root: Path,
+    *,
+    preserve_stale_registry_paths: bool = False,
+) -> Path:
+    source_project = source_project.expanduser().resolve()
     copied_project = run_root / "project"
     shutil.copytree(
         source_project,
@@ -176,6 +238,11 @@ def _copy_project_fixture(source_project: Path, run_root: Path) -> Path:
             "exports",
             "*.zip",
         ),
+    )
+    _rebase_copied_render_metadata(
+        source_project,
+        copied_project.resolve(),
+        preserve_stale_registry_paths=preserve_stale_registry_paths,
     )
     request_path = copied_project / "plot_request.json"
     request = json.loads(request_path.read_text(encoding="utf-8"))
@@ -1577,14 +1644,14 @@ def run_studio_project_probe(
             )
         )
 
-        axis, label_setting = _axis_label_setting(project_window.document)
-        original_label = str(label_setting.get())
-        manual_label = f"{original_label} · project probe"
+        axis, _ = _axis_label_setting(project_window.document)
+        label_size = axis.settings.get("Label").get("size")
+        manual_size = "8pt" if str(label_size.get()) != "8pt" else "9pt"
         saved_hash_before_edit = file_sha256(copied_document)
         project_window.document.applyOperation(
             OperationSettingSet(
-                f"{axis.path}/label",
-                label_setting.normalize(manual_label),
+                label_size,
+                label_size.normalize(manual_size),
             )
         )
         _wait(application)
@@ -2306,10 +2373,10 @@ def run_studio_project_probe(
             )
         )
 
-        save_as_fixture_root = run_root / "save_as_context"
         context_project = _copy_project_fixture(
             source_project,
-            save_as_fixture_root,
+            run_root / "registry_relocation",
+            preserve_stale_registry_paths=True,
         )
         context_document = _project_document(context_project)
         context_original_hash = file_sha256(context_document)
@@ -2352,11 +2419,48 @@ def run_studio_project_probe(
                 )
             )
         )
+        checks.append(
+            _check(
+                "copied_figure_registry_entries_relocate_for_reading",
+                "The Project dock resolves copied figure entries locally without rewriting the stale persisted registry",
+                context_figure_paths_relocated
+                and (
+                    not context_registry
+                    or _read_json_object(context_registry_path) == context_registry
+                ),
+                {
+                    "project": str(context_project),
+                    "registry_documents": context_registry_documents,
+                    "derived_figure_entries": context_figure_entries,
+                    "figure_paths_relocated": context_figure_paths_relocated,
+                },
+            )
+        )
+        _close_window(context_window)
+        context_window = None
+
+        # Save failures must reach the serializer with otherwise valid project
+        # metadata; the stale-registry reader behavior is checked independently.
+        context_project = _copy_project_fixture(
+            source_project,
+            run_root / "save_as_context",
+        )
+        context_document = _project_document(context_project)
+        context_original_hash = file_sha256(context_document)
+        context_provider = DeterministicStudioAssistantProvider()
+        with _injected_provider_resolution(context_provider):
+            context_window = _create_veusz_window(context_document)
+        context_window.resize(1200, 820)
+        context_window.show()
+        _wait(application)
+        context_project_bridge = context_window._sciplot_project_bridge
+        context_assistant_bridge = context_window._sciplot_assistant_bridge
         context_axis, context_label = _axis_label_setting(context_window.document)
+        context_size = context_axis.settings.get("Label").get("size")
         context_window.document.applyOperation(
             OperationSettingSet(
-                context_label,
-                f"{context_label.get()} · atomic save probe",
+                context_size,
+                "8pt" if str(context_size.get()) != "8pt" else "9pt",
             )
         )
         _wait(application)
@@ -2682,7 +2786,6 @@ def run_studio_project_probe(
                 == save_as_path.resolve()
                 and context_window.windowTitle() == "save_as_copy — SciPlot Studio"
                 and save_as_reopen_matches
-                and context_figure_paths_relocated
                 and file_sha256(context_document) == context_original_hash
                 and save_as_export.get("state") == "document_context_changed"
                 and save_as_export.get("ready_to_use") is False
@@ -2737,9 +2840,6 @@ def run_studio_project_probe(
                     "window_filename": str(context_window.filename),
                     "window_title": context_window.windowTitle(),
                     "save_as_reopen_matches": save_as_reopen_matches,
-                    "registry_documents": context_registry_documents,
-                    "derived_figure_entries": context_figure_entries,
-                    "figure_paths_relocated": context_figure_paths_relocated,
                     "old_document_hash": file_sha256(context_document),
                     "save_as_export": save_as_export,
                     "context_changed_status": context_changed_status,

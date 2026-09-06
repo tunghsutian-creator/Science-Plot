@@ -5,6 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.source_coverage.managed_documents import (
+    verify_managed_document_sources,
+)
+
 from sciplot_core.studio_core.publish_evidence import (
     build_studio_publication_evidence,
 )
@@ -60,6 +64,7 @@ def publish_studio_export_run(
         project_dir=inventory.project_dir,
         document_path=inventory.document_path,
         output_dir=inventory.output_dir,
+        veusz_documents=inventory.veusz_documents,
     )
     verify_studio_run_source_binding(inventory.resolved_figure_plan, sources)
     _snapshot_studio_directory(
@@ -80,6 +85,12 @@ def publish_studio_export_run(
         copied_exports=copied_exports,
         figures=figures,
     )
+    scientific = verify_managed_document_sources(
+        result, mapping_application=inventory.data_mapping_application
+    )
+    result["scientific_data_verification"] = scientific
+    if inventory.data_mapping_application is not None:
+        result["rendered_source_coverage"] = scientific["mapping_source_coverage"]
     evidence = build_studio_publication_evidence(
         request=inventory.request,
         document_path=snapshot_primary_document,

@@ -1,8 +1,9 @@
 # SciPlot
 
-SciPlot 是面向材料科研日常出图的本地工作流：读取原始数据，按确定性规则生成可编辑的
-`studio/document.vsz`，在 Veusz 中完成调整，并交付 PDF、300 dpi TIFF、绘图数据、QA
-和可追溯运行记录。
+SciPlot 是供外部 AI 控制的本地科研绘图工具。AI 理解研究任务，通过公开 CLI 读取原始
+数据与规则、审阅科学计划、查询和修改已保存的图，再交付 PDF、300 dpi TIFF、绘图数据、
+QA 和可追溯运行记录。确定性科学处理和原生 Veusz 文档操作由 SciPlot 执行；
+`studio/document.vsz` 保持可编辑的视觉权威。
 
 ## 文档与产品真相
 
@@ -17,26 +18,78 @@ SciPlot 是面向材料科研日常出图的本地工作流：读取原始数据
 
 ## 产品边界
 
-原生 Veusz `MainWindow` 是唯一日用绘图前端和高级编辑器。SciPlot 在同一个 Veusz
-`Document` 上增加两个默认隐藏、可关闭的 dock：
+项目后续开发唯一面向的任务入口是外部 AI：优先完善公开、可查询、可预览和可续办的
+本地操作合同。外部 AI 不需要配置 SciPlot 内置 provider，不依赖浏览器或 GUI 当前选择。
+当前接口是 CLI；尚未实现 MCP 服务或通用任务编排运行时。
+
+原生 Veusz `MainWindow` 保留为兼容的高级文档工具。SciPlot 在同一个 Veusz
+`Document` 上保留两个默认隐藏、可关闭的 dock：
 
 - `SciPlot Project`：来源、映射、当前制品、QA 和交付状态；
 - `SciPlot AI`：可选的当前选中对象助手。
 
 对象树、属性编辑器、Datasets、画布、菜单、快捷键、Save 和 Undo/Redo 都沿用 Veusz。
 SciPlot 不维护第二套前端、第二个文档模型、独立 Canvas、Composition Board 或 Veusz
-属性编辑器的复制品。手工和 AI 修改共享同一个文档和原生 Undo 历史；保存后的 `.vsz`
-是视觉权威。
+属性编辑器的复制品。GUI 内修改使用原生 Undo 历史；外部 AI 通过无界面的原生操作修改
+保存后的 VSZ，并留下可查询的操作结果与旧文档归档。外部 apply 前须关闭同项目所有可写
+原生窗口，已保存且无待修改的窗口也需关闭，避免稍后的 GUI 保存覆盖外部结果。
 
-AI 不是日用必需依赖。没有 provider 或 API key 时，受支持输入的识别、绘图、人工编辑、
-保存、QA、导出和交付仍应完整工作。
+本地确定性功能不依赖内置模型 provider 或 API key。外部 AI 使用自己的模型环境；
+SciPlot 负责校验和执行明确操作，不在运行中自行配置模型或补猜科学含义。
 
 浏览器 `app` 只是可选的首次确认面，用于 source、grouping、命名、顺序、尺寸和导出格式，并可
 只读查看已经生成的结果。它不是精修前端，不应在渲染后提供样式、坐标轴或 series 编辑；
-所有视觉精修都在 Veusz 中完成。`app` 只允许 loopback 访问；浏览器传入的本地路径必须
+视觉精修通过原生 Veusz 文档操作完成。`app` 只允许 loopback 访问；浏览器传入的本地路径必须
 来自当前 CLI session 或 SciPlot 输出根目录。
 
-## 交互与 exact-current 主命令族：Studio
+首次浏览器导入会显示原始表格的前 24 行、前 24 列，并要求预览成功后才能提交。
+DSC、TGA/DTG、UV-vis、XRD、SAXS 等规范配对曲线支持显式选择 Excel 工作表；
+选择与当前文件字节绑定，文件变化后必须重新检查。其他专用解析器的工作表切换仅用于
+预览，界面会注明。导入设置可由用户保存到本机浏览器，复用时校验实验类型、文件类型、
+工作表和列名；它只复用导入配置，不复用旧文件的数值或确认凭据。
+
+结果页只有完整交付成功才显示 Ready；失败会保留诊断并提供返回 Inspect 的入口。
+运行环境或导出故障不会自动被解释成需要修改科研数据。
+
+## 外部 AI 的日常入口
+
+首次调用读取 `project capabilities --json`；从原始数据建项使用
+`rules list/show → plan → project create --expected-plan`。已有受管项目从 `project inspect` 继续，
+无需重新准备原始数据。完整操作与恢复说明见
+[外部 AI 操作指南](skill/references/external-control.md)。
+
+```bash
+skill/scripts/sciplot project capabilities --json
+skill/scripts/sciplot plan SOURCE --rule RULE_ID --template TEMPLATE_ID --json > PLAN_JSON
+skill/scripts/sciplot project create SOURCE --expected-plan PLAN_JSON --json
+skill/scripts/sciplot project inspect PROJECT --json
+skill/scripts/sciplot project inspect PROJECT --figure FIGURE_ID --json
+skill/scripts/sciplot project preview PROJECT --figure FIGURE_ID --out NEW_PREVIEW_DIR --json
+```
+
+`project create` 从完整预览读取规则/模板，执行一次原生 Studio 准备与导出，并返回
+可继续编辑的 `project_dir`。创建要求可见目录和对应隐藏工作目录均不存在；已有受管项目
+应直接查询，不能通过重新创建覆盖。创建成功检查 `studio_run.ready_to_use=true`。
+
+从查询结果读取真实 `figure_id`、原生对象路径、`editable_fields` 和已保存文档的
+SHA-256。将用户已授权的修改写成显式 JSON 操作，再执行：
+
+```bash
+skill/scripts/sciplot project edit-preview PROJECT --figure FIGURE_ID \
+  --expected-document DOCUMENT_SHA256 --changes CHANGES_JSON --out NEW_EDIT_DIR --json
+skill/scripts/sciplot project edit-apply PROJECT --preview NEW_EDIT_DIR/edit-preview.json --json
+skill/scripts/sciplot project operation PROJECT --operation-id OPERATION_ID --json
+skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
+```
+
+占位符必须替换为当前结果中的值；每次预览输出使用源、项目和可见交付之外的新目录。
+当前可编辑范围是查询实际列出的坐标轴字体、普通曲线颜色/线宽、图例字体/位置字段。
+不通过这条样式接口修改科学数值、单位、样品身份、数据绑定或坐标轴尺度。
+apply 会复核当前项目、来源和交付版本，保留旧 VSZ 并事务替换；它不自动导出。
+新会话重新查询同一 PROJECT 即可续办。查询和编辑成功均不表示交付 ready，最终以
+完整项目导出结果、当前 QA 与实际制品检查为准。
+
+## 原生兼容入口与 exact-current 导出：Studio
 
 首次使用或交付前：
 
@@ -50,7 +103,7 @@ skill/scripts/sciplot doctor --json
 `--out`，让 SciPlot 在原数据旁创建 `SOURCE_SciPlot/`；确需自定义目录时，也应把
 `--out` 指向原数据所在位置附近的专用交付目录。仓库内的 `.tmp_verify/` 只用于开发验证。
 
-交互式日常入口会准备项目并打开原生 Veusz：
+需要手工使用兼容的原生文档工具时，以下入口会准备项目并打开 Veusz：
 
 ```bash
 skill/scripts/sciplot studio PATH
@@ -81,17 +134,18 @@ Model、VSZ/spec、项目清单和初始 ZIP 属于同一代结果。若这次�
 但可以保留一个明确标记为 `blocked` 的 Intake 项目及诊断 ZIP；它用于排错，不能当作
 `ready` 交付。
 
-日常流程是：
+外部 AI 的日常流程是：
 
 ```text
 原始数据
   -> 确定性检查与科学语义映射
   -> 只确认无法唯一确定的含义
+  -> source-bound plan / expected-plan
   -> studio/document.vsz
-  -> 原生 Veusz MainWindow
-  -> 人工微调 / 可选 AI
-  -> 保存 exact-current VSZ
+  -> project inspect / native edit-preview / edit-apply
+  -> 保存的 exact-current VSZ
   -> PDF/TIFF + QA + delivery
+  -> 新会话读取同一项目继续
 ```
 
 对 task-aware 的普通 `curve`/`box_strip` 图集，Project dock 的 `Samples`
@@ -104,6 +158,34 @@ figure-set registry。完整 `spec.series`、FigurePlan、原始数值与既有�
 这条窄修订路径内。
 
 ## 打开和精确导出
+
+已有项目需要继续处理时，Project dock 提供两项先预览、再明确 Apply 的操作：
+
+- `Recover visible edits…`：把仍与项目关联的单图交付副本中的合法手改恢复到项目。程序比较
+  上次交付、当前项目和副本；仅副本变化且科学数据通过审计时才允许采纳。双边分叉、
+  数值改写、来源变化、多图恢复和搬移后的独立副本均会阻断，并保留双方文件。
+- `Update source`：选择当前文件或数据目录，预览图组、样品、重复次数、数值和轴含义变化。
+  支持选择工作表的规则可以显式填写工作表名。Apply 会从当前源重新准备并审计完整图组，
+  按样品和任务身份保留兼容的字号、普通曲线颜色、线宽及手动图例布局。含科学编码的颜色、
+  轴界限和不兼容的几何样式由新数据重建；未迁移项会列出。需要新 DataMapping 的来源须
+  先重新确认映射，不会照搬旧文件的列绑定。
+
+操作前先保存并完成或撤销待处理的 AI/样品修订，关闭同项目的其他窗口。预览后任何
+源文件、项目或交付变化都会使确认失效。旧项目文件保存在内部归档中；失败会回滚。
+采纳后重开当前 VSZ，状态仍需正常 `Save && Export` 完成 QA 后才可交付。
+刚恢复的副本应先再次导出，再进行源更新。
+
+Headless 使用同样的预览和确认接口，预览 JSON 要保存到项目和源文件之外的新路径：
+
+```bash
+skill/scripts/sciplot studio PROJECT --recover-delivery --preview-out recovery.json --json
+skill/scripts/sciplot studio PROJECT --apply-revision recovery.json --json
+skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
+
+skill/scripts/sciplot studio PROJECT --update-source NEW_SOURCE --preview-out source-update.json --json
+skill/scripts/sciplot studio PROJECT --apply-revision source-update.json --json
+skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
+```
 
 打开已有 VSZ 直接使用 Studio；不需要另一个“高级编辑器”入口：
 
@@ -130,15 +212,28 @@ skill/scripts/sciplot studio FIGURE.vsz \
 transform lineage 或完整 SciPlot 项目交付。显式重新生成前必须归档人工保存的 VSZ；
 打开和导出项目不得静默覆盖人工修改。
 
+原交付目录中的 `Open_in_Veusz.command` 会回到对应的受管工作项目，多图项目可在
+Project dock 中选择图稿。复制或移动后的交付包则打开包内独立 VSZ，作为可移交快照；
+它不会根据旧路径偷偷写回原项目。受管导出始终检查当前 VSZ 的数据、系列绑定、科学
+标签和单位是否仍对应交付数据，字号、线宽等正常排版调整可以保留。改变数据或科学
+含义后必须回到明确的数据处理流程，不会只凭制品文件存在就给出 Ready。
+
+交付先在临时目录完整构建并验证，再替换可见制品；构建失败或安装失败会保留或恢复
+已有交付。若交付副本存在尚未合回工作项目的独有 VSZ 修改，覆盖会停止并指出路径。
+无法核实基线的旧包也按此保守处理，避免把旧的人工精修当成可丢弃文件。
+
 ## 其它命令的角色
 
+- `project`：外部 AI 通过已验证计划创建受管项目，以及后续查询、预览、受控原生编辑
+  和操作结果查询的入口。仅 `create` 准备新源，后续读写不重新生成；导出复用 `studio`。
 - `plan`：只读解析当前源的有效规则、模板、完整 FigurePlan，以及适用时的
   source-bound `scientific_transform`，供人或本机助手在执行前查看；它不渲染、
   不建项目、不写交付物。
 - `app`：仅在需要首次浏览器确认时使用；不是绘图或精修前端。
-- `autoplot`：唯一公开的程序化全自动项目入口。它内部复用
+- `autoplot`：保留兼容的一次性交付入口。它内部复用
   `one-step`/`run_request`，并负责稳定 summary、QA 和 delivery；它不是第三个
-  renderer。
+  renderer。该路线的 `project_dir` 可能只有运行制品，没有规范 `studio/document.vsz`；
+  不能当作可直接进入 `project inspect/edit` 的受管项目。需要 AI 续办的新任务使用 `project create`。
 - `run`：重放已经确认的 `plot_request.json`。
 - `render`、`recipe`：供开发、测试和已知低层合同使用的原语。
 - `verify --changed`：公开的开发变更验证入口；按 source-controlled owner 映射选择
@@ -227,6 +322,11 @@ identity。SciPlot 不再按固定顺序调用三个 handler 来猜谁接管；`
 冲突都使整组失败并回滚，而不是留下部分图。当前登记数据为拉伸 `E0 2MM` n=9、压缩
 `Conventional PU foam` n=6、弯曲 `A_HA56` n=6；这些 n 来自明确试样身份，不从普通
 数字标签猜测重复关系。
+
+模量必须来自有限的仪器报告，或足够覆盖明确低应变区间的数据；不会用曲线前若干点
+兜底拟合。断裂伸长率需要报告或明确断裂证据，曲线终点另行记录；完整韧性也要求完整
+测量依据，可用区间积分不会冒充完整韧性。缺少证据的指标留空并记录原因，完整五图所需
+指标缺失时会指出具体试样与指标并停止交付。TGA 指标逐样品使用各自温度网格计算。
 
 温度流变扫描固定生成两张 `point_line` 图：先生成
 `storage_modulus_vs_temperature`，再生成稳定身份为
@@ -453,9 +553,10 @@ Python 默认、`plot_contract.json`、样式、模板和 ready rule 是否一�
 无量纲变量比值不是单位，`σ/σ₀`、`G′/G′ₘ` 等数学表达保留除号。exact-current
 VSZ 的 publication QA 会把违反这一规则的可见单位文字作为阻塞问题。
 
-## 可选 AI
+## 保留兼容的内置 AI
 
-AI dock 只处理当前选中的受支持对象。模型只能提出经过验证的 `set_setting` 操作；过期
+内置 AI dock 保留原有能力，不是外部 AI 的入口或后续开发主线。它只处理当前选中的
+受支持对象。模型只能提出经过验证的 `set_setting` 操作；过期
 revision、越权目标、未知 setting、错误类型或超范围值必须整体拒绝。提案默认由用户确认，
 接受后形成一个 Veusz 原生 Undo 步骤。它不能修改原始科学数据、执行任意 Python/VSZ
 代码或替代 Veusz 属性编辑器。
@@ -507,8 +608,9 @@ Studio 每次准备或发布还会从规范请求和当前规则的 presentation
 模板的副图，每份 VSZ spec 都必须携带并匹配自己的完整 `FigureTask`。新生成的多图项目
 使用严格的 figure-set registry v2，按计划顺序绑定每个任务、最终文档路径和 spec；
 旧 registry v1 仍可读取，但不作为精确任务证据。任务、模板或路径分裂会在第一次文件
-替换或 run 分配前失败。手工或旧版 exact-current VSZ 可以没有 spec，发布证据会把主图
-身份与 VSZ 当前哈希并列绑定，而不从 VSZ 内容反推模板。exported semantic、result、
+替换或 run 分配前失败。独立 exact-current VSZ 可以没有 spec，但不获得受管项目的来源
+保证；受管项目发布必须同时具备可审计的 spec 和来源证据。发布证据把主图身份与 VSZ
+当前哈希并列绑定，而不从 VSZ 内容反推模板。exported semantic、result、
 manifest、最终 payload 和项目 registry 携带同一主图身份；semantic 普通字段中的
 `template` 仍描述认证规则默认，不会因本次呈现选择而改写科学合同。
 
@@ -553,10 +655,13 @@ validated-envelope certification。它声明当前规则是否可生产调用、
 外部 AI 应只执行 `availability=ready` 的规则，并把同一组 rule/template 先交给 preview、
 再交给 render；不能从样品名、文件名或提示词自行发明另一套调用参数。
 
-普通外部 AI 的稳定调用闭环只有一条：从 `rules list/show` 读取一个
+外部 AI 从原始数据建项时：从 `rules list/show` 读取一个
 `availability=ready` 的 `invocation`，把其中同一组 `rule_id` 和 `template` 交给
-`plan`，仅在预览未阻断时再原样交给 `autoplot`。最终只接受机器结果中的
-`state=ready`；`blocked`、`needs_human_confirmation` 或 `needs_rule_repair` 应直接报告
+`plan`，保存成功预览 JSON；仅在预览未阻断时交给
+`project create SOURCE --expected-plan PLAN_JSON`，将源字节与科学选择绑定到执行前检查。
+已有受管项目使用上述 `project` 读写闭环。新建项目交付检查
+`studio_run.ready_to_use=true`；兼容的一次性 `autoplot` 仍使用 `state=ready`。
+`blocked`、`needs_human_confirmation` 或 `needs_rule_repair` 应直接报告
 其结构化原因，不能换规则、猜单位、改样品身份或绕过认证。
 
 查看程序在真正执行前会选择哪些图、以及 source-bound 科学变换，不创建项目或交付物：
@@ -753,18 +858,28 @@ skill/scripts/sciplot readiness status --registry CANDIDATE_REGISTRY --json
 runtime smoke 是 synthetic 变化门，不是真实数据证据；生命周期、artifact QA、
 provenance、人工日用验证和期刊合规仍是不同声明。
 
+readiness 的 current 只表示规则声明和渲染请求策略与登记的验收合同一致，不证明当前
+全部实现代码、解析器或运行环境已经重新验收。状态中的 `evidence_scope` 明示这一范围；
+历史人工确认也没有绑定当前 build。实现变更仍需要本次代码对应的测试、生命周期与
+实际制品证据，不能用旧的认证哈希替代。
+
 ## 当前本机开发环境与代码入口
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e '.[studio,dev]'
+(cd third_party/veusz && ../../.venv/bin/python setup.py build_ext --inplace)
 skill/scripts/sciplot doctor --json
 ```
 
 已有 `.venv/bin/python` 时统一使用它；缺失时只探测一次 `python3` 并按上面创建。
+编译内置 Veusz 的原生 helpers 还需要 C/C++ 编译器和 Qt 6 开发环境（含 qmake）；
+如 qmake 不在 PATH，可用 `QMAKE_EXE` 指定。单独安装 Python extras 不会编译这些
+扩展，也不足以保证 Studio 可用；以 doctor 的 Qt/Veusz 检查结果为准。
 环境故障和重复问题的记录规则见 `skill/SKILL.md`。
-这里描述的是当前源码开发环境；安装版和分发工作只是暂缓，不是对 SciPlot 长期产品形态
-的重新定义。
+该源码安装流程已在 macOS 的独立 Python 虚拟环境验证，包括重新编译 Veusz 原生 helpers、
+doctor、真实 DSC 建项、重开及导出。它不等同于已提供独立安装包，也不代表 Windows/Linux
+已经完成安装验收。
 
 当前开发优先级见 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)，代码和模块边界见
 `docs/ARCHITECTURE.md`，第三方许可见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。

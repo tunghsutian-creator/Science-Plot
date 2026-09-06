@@ -31,14 +31,15 @@ _SUMMARY_DEFINITIONS = {
             "instrument-reported maximum tensile stress, else curve maximum"
         ),
         ELONGATION_AT_BREAK_METRIC: (
-            "instrument-reported elongation at break, else curve terminal strain"
+            "finite instrument-reported elongation at break; otherwise unavailable"
         ),
         "modulus_MPa": (
-            "instrument-reported 0.05%-0.25% program-segment modulus, else "
-            "curve fit with percent strain converted to a fraction"
+            "finite instrument-reported modulus, else a curve fit within the "
+            "fully covered 0.05%-0.25% strain interval; otherwise unavailable"
         ),
         "toughness_MJ_m3": (
-            "stress integral over engineering-strain fraction up to break"
+            "stress integral over engineering-strain fraction from zero through "
+            "a reported break; unavailable when either curve boundary is missing"
         ),
     },
     "compression_curve": {

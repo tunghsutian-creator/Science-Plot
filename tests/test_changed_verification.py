@@ -34,6 +34,120 @@ from sciplot_core.verification.type_gate_owners import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_rheology_workbook_materialization_selects_shared_source_stability() -> None:
+    for path in (
+        "src/sciplot_core/semantic_sources/rheology_workbooks.py",
+        "tests/test_rheology_workbook_stability.py",
+    ):
+        plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+        assert plan["unowned_paths"] == []
+        check = next(
+            item for item in plan["checks"]
+            if item["check_id"] == "pytest_changed_owners"
+        )
+        assert "tests/test_rheology_workbook_stability.py" in check["command"]
+        assert "acceptance_rules" in plan["required_later"]["release"]
+
+
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [
+        (
+            "src/sciplot_core/delivery/package_transaction.py",
+            "tests/test_delivery_project_documents.py",
+        ),
+        (
+            "src/sciplot_core/launchers/delivery_binding.py",
+            "tests/test_delivery_project_continuation.py",
+        ),
+        (
+            "src/sciplot_core/studio_core/delivery_target.py",
+            "tests/test_delivery_project_continuation.py",
+        ),
+        (
+            "src/sciplot_core/studio_core/project_export.py",
+            "tests/test_project_export_use_case.py",
+        ),
+        (
+            "src/sciplot_core/semantic_sources/table_selection.py",
+            "tests/test_intake_review_recovery.py",
+        ),
+        (
+            "src/sciplot_core/source_coverage/managed_documents.py",
+            "tests/test_managed_document_science.py",
+        ),
+        (
+            "src/sciplot_core/source_coverage/managed_task_sources.py",
+            "tests/test_managed_document_science.py",
+        ),
+        (
+            "src/sciplot_core/veusz_worker/spec_audit/scientific_geometry.py",
+            "tests/test_managed_document_science.py",
+        ),
+        (
+            "src/sciplot_core/veusz_worker/spec_audit/bar_error.py",
+            "tests/test_managed_document_science.py",
+        ),
+        (
+            "src/sciplot_core/studio_render/terminal_contract.py",
+            "tests/test_impact_terminal_data_contract.py",
+        ),
+    ],
+)
+def test_integrity_modules_select_behavior_regressions_and_strict_type_gate(
+    source: str,
+    target: str,
+) -> None:
+    plan = build_changed_verification_plan([source], repo_root=REPO_ROOT)
+    assert plan["unowned_paths"] == []
+    checks = {check["check_id"]: check["command"] for check in plan["checks"]}
+    assert target in checks["pytest_changed_owners"]
+    assert checks["mypy_owned_scope"] == [sys.executable, "-m", "mypy"]
+    assert checks["pytest_changed_owners"].count("focused") == 1
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "tests/test_delivery_project_documents.py",
+        "tests/test_delivery_project_continuation.py",
+        "tests/test_delivery_studio_lifecycle.py",
+        "tests/test_project_export_use_case.py",
+        "tests/test_intake_review_recovery.py",
+        "tests/test_managed_document_science.py",
+        "tests/test_mechanical_source_facts.py",
+        "tests/test_impact_terminal_data_contract.py",
+        "tests/test_mechanical_figure_plan_activation.py",
+        "tests/test_human_daily_use_validation.py",
+    ],
+)
+def test_integrity_regression_files_have_owners_and_are_selected(path: str) -> None:
+    plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+    assert plan["unowned_paths"] == []
+    checks = {check["check_id"]: check["command"] for check in plan["checks"]}
+    assert path in checks["pytest_changed_owners"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/sciplot_core/plot_data/exports.py",
+        "src/sciplot_core/plot_data/spec_tables.py",
+    ],
+)
+def test_plot_data_exports_select_complete_figure_plan_delivery_regression(
+    path: str,
+) -> None:
+    plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+    assert plan["unowned_paths"] == []
+    checks = {check["check_id"]: check["command"] for check in plan["checks"]}
+    assert (
+        "tests/test_mechanical_figure_plan_activation.py"
+        in checks["pytest_changed_owners"]
+    )
+    assert "tests/test_managed_document_science.py" in checks["pytest_changed_owners"]
+
+
 def _completed(
     command: Sequence[str],
     *,
@@ -192,7 +306,7 @@ def test_cli_parser_builder_is_owned_with_the_diagnostics_surface() -> None:
     )
 
     assert [owner["owner_id"] for owner in payload["owners"]] == [
-        "changed_verification"
+        "changed_verification", "external_project_control_cli",
     ]
     assert payload["unowned_paths"] == []
 
@@ -244,7 +358,7 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
     )
 
     assert SCIENTIFIC_TRANSACTION_TYPE_PATHS
-    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 14
+    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 53
     assert SCIENTIFIC_TRANSACTION_TYPE_PATHS == frozenset(
         path
         for path in configured_files
@@ -597,7 +711,7 @@ def test_explicit_type_gate_scopes_are_pairwise_disjoint() -> None:
         STUDIO_FIGURE_SET_EXECUTION_TYPE_PATHS,
     )
 
-    assert tuple(map(len, scopes)) == (14, 4, 7, 10, 5, 5)
+    assert tuple(map(len, scopes)) == (53, 4, 7, 10, 5, 5)
     assert all(
         scope.isdisjoint(other)
         for index, scope in enumerate(scopes)

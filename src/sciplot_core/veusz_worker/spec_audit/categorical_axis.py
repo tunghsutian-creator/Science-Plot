@@ -68,7 +68,11 @@ def audit_categorical_axis(
                 float(value)
                 for value in x_axis_records[0]["bindings"]["MajorTicks/manualTicks"]
             ]
-            != category_positions
+            not in (
+                [category_positions, []]
+                if len(category_positions) == 1
+                else [category_positions]
+            )
         ):
             raise ValueError(
                 "Exact-current Veusz categorical axis does not expose the ordered label positions."

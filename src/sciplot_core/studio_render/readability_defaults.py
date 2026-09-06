@@ -40,7 +40,6 @@ from sciplot_core.studio_render.categorical_layout import (
 
 from sciplot_core.studio_render.template_resolution import (
     _looks_like_wavenumber_axis,
-    _looks_like_torque_axis,
     _looks_like_tensile_axis,
 )
 
@@ -278,64 +277,56 @@ def _apply_readability_render_defaults(
         if _legend_is_dense(series) and "size" not in explicit_options:
             updated["size"] = _wide_size_for_dense_legend(series)
             autofixes.append("legend_auto_widened_inside")
-        if (
-            _looks_like_torque_axis(axis_info)
-            or str(request.get("rule_id") or "").strip() == "torque_curve"
-        ):
-            updated["legend_position"] = "upper_right"
-            updated["series_label_mode"] = "legend"
-            autofixes.append("legend_auto_upper_right")
-        else:
-            placement = _auto_inside_legend_placement(
-                series, updated, template_id=template_id
+        placement = _auto_inside_legend_placement(
+            series, updated, template_id=template_id
+        )
+        updated, placement = _reserve_vertical_legend_clearance(
+            updated,
+            request=request,
+            series=series,
+            template_id=template_id,
+            placement=placement,
+        )
+        position = str(placement["position"])
+        updated["legend_position"] = position
+        updated["series_label_mode"] = "legend"
+        updated["_legend_placement_diagnostics"] = placement
+        if isinstance(placement.get("axis_reserve"), dict):
+            autofixes.append(
+                f"legend_axis_reserve_{placement['axis_reserve']['side']}"
             )
-            updated, placement = _reserve_vertical_legend_clearance(
-                updated,
-                request=request,
-                series=series,
-                template_id=template_id,
-                placement=placement,
-            )
-            position = str(placement["position"])
-            updated["legend_position"] = position
-            updated["series_label_mode"] = "legend"
-            updated["_legend_placement_diagnostics"] = placement
-            if isinstance(placement.get("axis_reserve"), dict):
-                autofixes.append(
-                    f"legend_axis_reserve_{placement['axis_reserve']['side']}"
-                )
-            footprint = placement["footprint"]
-            graph_width_mm = max(float(footprint["graph_width_mm"]), 1.0)
-            graph_height_mm = max(float(footprint["graph_height_mm"]), 1.0)
-            box_width_mm = min(float(footprint["box_width_mm"]), graph_width_mm)
-            box_height_mm = min(float(footprint["box_height_mm"]), graph_height_mm)
-            edge_padding_mm = max(float(placement.get("edge_padding_mm") or 0.0), 0.0)
-            horizontal_pad = min(
-                edge_padding_mm / graph_width_mm,
-                max(0.0, 1.0 - box_width_mm / graph_width_mm),
-            )
-            vertical_pad = min(
-                edge_padding_mm / graph_height_mm,
-                max(0.0, 1.0 - box_height_mm / graph_height_mm),
-            )
-            updated["legend_horz_position"] = "manual"
-            updated["legend_vert_position"] = "manual"
-            updated["legend_horz_manual"] = (
-                horizontal_pad
-                if position.endswith("left")
-                else max(0.0, 1.0 - horizontal_pad - box_width_mm / graph_width_mm)
-            )
-            updated["legend_vert_manual"] = (
-                vertical_pad
-                if position.startswith("lower")
-                else max(0.0, 1.0 - vertical_pad - box_height_mm / graph_height_mm)
-            )
-            placement["manual_anchor_fraction"] = {
-                "x": round(float(updated["legend_horz_manual"]), 6),
-                "y": round(float(updated["legend_vert_manual"]), 6),
-            }
-            autofixes.append("legend_corner_edge_reclaimed")
-            autofixes.append(f"legend_auto_{position}")
+        footprint = placement["footprint"]
+        graph_width_mm = max(float(footprint["graph_width_mm"]), 1.0)
+        graph_height_mm = max(float(footprint["graph_height_mm"]), 1.0)
+        box_width_mm = min(float(footprint["box_width_mm"]), graph_width_mm)
+        box_height_mm = min(float(footprint["box_height_mm"]), graph_height_mm)
+        edge_padding_mm = max(float(placement.get("edge_padding_mm") or 0.0), 0.0)
+        horizontal_pad = min(
+            edge_padding_mm / graph_width_mm,
+            max(0.0, 1.0 - box_width_mm / graph_width_mm),
+        )
+        vertical_pad = min(
+            edge_padding_mm / graph_height_mm,
+            max(0.0, 1.0 - box_height_mm / graph_height_mm),
+        )
+        updated["legend_horz_position"] = "manual"
+        updated["legend_vert_position"] = "manual"
+        updated["legend_horz_manual"] = (
+            horizontal_pad
+            if position.endswith("left")
+            else max(0.0, 1.0 - horizontal_pad - box_width_mm / graph_width_mm)
+        )
+        updated["legend_vert_manual"] = (
+            vertical_pad
+            if position.startswith("lower")
+            else max(0.0, 1.0 - vertical_pad - box_height_mm / graph_height_mm)
+        )
+        placement["manual_anchor_fraction"] = {
+            "x": round(float(updated["legend_horz_manual"]), 6),
+            "y": round(float(updated["legend_vert_manual"]), 6),
+        }
+        autofixes.append("legend_corner_edge_reclaimed")
+        autofixes.append(f"legend_auto_{position}")
 
     if autofixes:
         updated["_autofixes_applied"] = sorted(set(autofixes))

@@ -13,7 +13,6 @@ from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.operation_modes import normal_mode_payload
-from sciplot_core.source_coverage import verify_rendered_mapping_source_coverage
 from sciplot_core.studio_figure_set_contract import (
     is_full_figure_set_export_scope as _is_full_figure_set_export_scope,
 )
@@ -103,12 +102,6 @@ def build_studio_export_result(
         finalize_figure_plan_result(inventory.resolved_figure_plan, result)
     if len(sources.snapshot_sources) == 1:
         result["data_snapshot_source"] = str(sources.snapshot_sources[0])
-    if inventory.data_mapping_application is not None:
-        result["rendered_source_coverage"] = verify_rendered_mapping_source_coverage(
-            result,
-            mapping_application=inventory.data_mapping_application,
-            request=request,
-        )
     return result
 
 

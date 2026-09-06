@@ -20,6 +20,9 @@ def test_owner_validation_drives_daily_use_readiness_claims() -> None:
     assert status["claims"]["human_daily_use_cutover_established"] is True
     assert status["claims"]["human_daily_use_validation_established"] is True
     assert status["claims"]["journal_compliance_established"] is False
+    assert status["claims"]["current_implementation_certified"] is False
+    assert status["claims"]["human_validation_bound_to_current_build"] is False
+    assert status["evidence_scope"]["implementation_freshness"] == "not_tracked_by_this_registry"
 
 
 def test_daily_use_validation_requires_complete_owner_scope(tmp_path) -> None:

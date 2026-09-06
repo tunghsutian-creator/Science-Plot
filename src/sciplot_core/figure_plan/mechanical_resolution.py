@@ -294,10 +294,27 @@ def _validate_source_facts(
             "specimen counts.",
         )
     expected_metrics = {task.y_metric for task in contract.summary_tasks}
-    if any(not expected_metrics <= set(record) for record in records):
+    missing = [
+        (record, sorted(expected_metrics - set(record)))
+        for record in records
+        if not expected_metrics <= set(record)
+    ]
+    if missing:
+        reason_fields = {
+            "modulus_MPa": "modulus_reason",
+            "elongation_at_break_percent": "elongation_at_break_reason",
+            "toughness_MJ_m3": "toughness_reason",
+        }
+        details = "; ".join(
+            f"{record.get('sample')}/{record.get('replicate')}: {metric} "
+            f"({record.get(reason_fields.get(metric, '')) or 'no finite reported or derivable metric'})"
+            for record, metrics in missing
+            for metric in metrics
+        )
         _fail(
             "mechanical_summary_metric_missing",
-            "A retained mechanical specimen is missing a required summary metric.",
+            "The complete mechanical figure set needs unavailable specimen metrics. "
+            "Preserved curve endpoints do not establish fracture. " + details,
         )
 
 

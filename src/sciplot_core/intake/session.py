@@ -288,7 +288,7 @@ def _selected_column_confirmations(
                     "role": role if role in _COLUMN_ROLES else "auto",
                 }
             )
-        if not columns:
+        if not columns and item.get("sheet_selected") is not True:
             continue
         selected.append(
             {
@@ -296,6 +296,10 @@ def _selected_column_confirmations(
                 "file_name": str(item.get("file_name") or item.get("name") or ""),
                 "source_path": str(item.get("source_path") or ""),
                 "sheet": str(item.get("sheet") or "") or None,
+                **({
+                    "sheet_selected": True,
+                    "source_sha256": str(item.get("source_sha256") or ""),
+                } if item.get("sheet_selected") is True else {}),
                 "columns": columns,
             }
         )

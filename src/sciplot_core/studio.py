@@ -79,6 +79,17 @@ from sciplot_core.studio_core.runtime import (
     maybe_reexec_with_qt_runtime as maybe_reexec_with_qt_runtime,
     upstream_status as upstream_status,
 )
+from sciplot_core.studio_core.project_export import (
+    export_project_document as export_project_document,
+)
+from sciplot_core.studio_core.delivery_recovery import (
+    preview_delivery_recovery as preview_delivery_recovery,
+    apply_delivery_recovery as apply_delivery_recovery,
+)
+from sciplot_core.studio_core.source_update import (
+    preview_project_source_update as preview_project_source_update,
+    apply_project_source_update as apply_project_source_update,
+)
 from sciplot_core.studio_render.axis_extent import (
     _expand_axis_for_visual_extents as _expand_axis_for_visual_extents,
 )
@@ -238,6 +249,11 @@ def read_studio_figure_set(project_dir: Path) -> dict[str, Any] | None:
 
 
 __all__ = [
+    "preview_delivery_recovery",
+    "apply_delivery_recovery",
+    "preview_project_source_update",
+    "apply_project_source_update",
+    "export_project_document",
     "atomic_save_veusz_document",
     "apply_veusz_series_revision",
     "build_studio_figure_set_export_scope",

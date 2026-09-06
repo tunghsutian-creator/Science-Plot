@@ -18,6 +18,7 @@ from sciplot_core.terminal_source_binding import (
 from sciplot_core.studio_core.context import (
     _normalize_optional_string,
 )
+from sciplot_core.studio_core.delivery_target import resolve_delivery_target
 from sciplot_core.studio_core.export_execution import (
     _project_studio_document,
 )
@@ -128,6 +129,9 @@ def _resolve_studio_target(
     project_name: str | None = None,
     figure_set_path_replacer: Callable[[Path, Path], None] | None = None,
 ) -> dict[str, Any]:
+    delivery_target = resolve_delivery_target(path)
+    if delivery_target is not None:
+        return delivery_target
     if path.suffix.lower() == ".vsz":
         if not path.exists():
             raise FileNotFoundError(f"Veusz document not found: {path}")

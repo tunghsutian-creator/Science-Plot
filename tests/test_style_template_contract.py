@@ -1497,3 +1497,77 @@ def test_auto_log_axis_preserves_internal_legend_clearance_reserve() -> None:
     )
 
     assert axis.y_min == pytest.approx(1.885997683632129e-05)
+
+
+@pytest.mark.parametrize("rule_id", ["torque_curve", None])
+@pytest.mark.parametrize("explicit_bounds", [False, True])
+def test_torque_auto_legend_measures_overlap_and_respects_explicit_bounds(
+    rule_id: str | None, explicit_bounds: bool
+) -> None:
+    from sciplot_core.studio_core.veusz_spec_layout import build_veusz_layout_issues
+
+    trace = (2, 43, 20, 8, 38, 20, 2, 41, 20, 2, 35, 5)
+    series = [
+        StudioSeries(
+            label=f"A{index}ZN{index}",
+            x_name=f"x_{index}",
+            y_name=f"y_{index}",
+            x_values=tuple(float(point * 500) for point in range(len(trace))),
+            y_values=tuple(value + index * 0.1 for value in trace),
+            color="#222222",
+        )
+        for index in range(6)
+    ]
+    original_points = [(item.x_values, item.y_values) for item in series]
+    options = {
+        "legend_position": "auto",
+        "series_label_mode": "legend",
+        "size": "60x55",
+        **({"y_min": 0.0, "y_max": 50.0} if explicit_bounds else {}),
+    }
+    request = {
+        "rule_id": rule_id,
+        "render_options": options,
+        "explicit_render_option_keys": ["y_min", "y_max"] if explicit_bounds else [],
+    }
+    axis_info = {"x_label": "Time (s)", "y_label": "Screw torque (N·m)"}
+
+    resolved = _apply_readability_render_defaults(
+        options,
+        request=request,
+        axis_info=axis_info,
+        series=series,
+        template_id="curve",
+    )
+    placement = resolved["_legend_placement_diagnostics"]
+    issues = build_veusz_layout_issues(
+        request=request,
+        render_options=resolved,
+        template_id="curve",
+        series=series,
+        axis_info=axis_info,
+        axis_contract=_veusz_axis_contract(
+            resolved, template_id="curve", series=series
+        ),
+        categorical_contract=None,
+        factor_legend=None,
+        show_key=True,
+    )
+    legend_issues = [item for item in issues if item["id"].startswith("legend_")]
+
+    assert resolved["size"] == "60x55"
+    assert [(item.x_values, item.y_values) for item in series] == original_points
+    if explicit_bounds:
+        assert (resolved["y_min"], resolved["y_max"]) == (0.0, 50.0)
+        assert placement["minimum_curve_clearance_mm"] == 0.0
+        assert "axis_reserve" not in placement
+        assert any(
+            item["id"] == "legend_curve_clearance_below_target"
+            and item["severity"] == "critical"
+            for item in legend_issues
+        )
+    else:
+        assert placement["clearance_status"] == "safe"
+        assert placement["minimum_curve_clearance_mm"] >= 2.0
+        assert placement["axis_reserve"]["side"] == "top"
+        assert legend_issues == []

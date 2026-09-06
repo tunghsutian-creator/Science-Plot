@@ -86,6 +86,11 @@ def dispatch_rendering(
         layout = resolve_user_output_layout(
             source, requested_delivery_root=args.out, project_name=args.name
         )
+        expected = None
+        if args.expected_plan is not None:
+            expected = _load_options("@" + str(args.expected_plan))
+            if not isinstance(expected, dict):
+                raise ValueError("--expected-plan must contain one plan JSON object.")
         payload = run_autoplot(
             source,
             output_root=layout.workspace_root / "autoplot_projects",
@@ -93,6 +98,7 @@ def dispatch_rendering(
             delivery_root=layout.delivery_root,
             rule_id=args.rule,
             template=args.template,
+            **({"expected_plan": expected} if expected is not None else {}),
         )
         if args.json:
             _print_json(payload)

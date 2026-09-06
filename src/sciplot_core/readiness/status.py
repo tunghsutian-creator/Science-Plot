@@ -102,6 +102,8 @@ def validated_envelope_status(
         },
         "records": records,
         "claims": {
+            "current_implementation_certified": False,
+            "human_validation_bound_to_current_build": False,
             "current_rule_contracts_match_acceptance": ready,
             "real_data_lifecycle_certified": ready
             and len(resolved.entries) == len(current_rules)
@@ -113,6 +115,11 @@ def validated_envelope_status(
             "human_daily_use_validation_established": (
                 human_validation["status"] == "passed"
             ),
+        },
+        "evidence_scope": {
+            "contract_freshness": "rule_declarations_and_render_request_policy",
+            "implementation_freshness": "not_tracked_by_this_registry",
+            "human_validation": "historical_owner_confirmation_without_build_binding",
         },
         "limitations": list(resolved.limitations),
     }

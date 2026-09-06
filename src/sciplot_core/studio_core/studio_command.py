@@ -38,6 +38,7 @@ from sciplot_core.studio_core.standalone_receipt import (
 from sciplot_core.studio_core.publish_run import (
     publish_studio_export_run,
 )
+from sciplot_core.studio_core.project_export import export_project_document
 
 
 from sciplot_core.studio_core.studio_prepare import (
@@ -137,20 +138,17 @@ def run_studio_command(
             )
             else None
         )
-        export_payload = export_studio_document(
-            document_path,
-            formats=requested_formats,
-            output_dir=export_dir,
-        )
-        payload["exports"] = export_payload["exports"]
         if payload.get("project_dir"):
-            studio_run = publish_studio_export_run(
+            published = export_project_document(
                 project_dir=Path(payload["project_dir"]),
                 request_path=Path(payload["request"]),
                 document_path=document_path,
-                exports=payload["exports"],
-                export_document_sha256=str(export_payload["document_sha256"]),
+                formats=requested_formats,
+                export_document=export_studio_document,
+                publish_export=publish_studio_export_run,
             )
+            studio_run = published.run_payload
+            payload["exports"] = published.exports
             payload["studio_run"] = studio_run
             if isinstance(studio_run.get("exports"), list):
                 payload["exports"] = json_safe(studio_run["exports"])
@@ -158,7 +156,14 @@ def run_studio_command(
             if isinstance(figure_set_export_scope, dict):
                 payload["figure_set_export_scope"] = json_safe(figure_set_export_scope)
             payload["scope"] = str(studio_run.get("scope") or "project_delivery")
-        elif standalone_export:
+        else:
+            export_payload = export_studio_document(
+                document_path,
+                formats=requested_formats,
+                output_dir=export_dir,
+            )
+            payload["exports"] = export_payload["exports"]
+        if not payload.get("project_dir") and standalone_export:
             receipt = publish_standalone_export_receipt(
                 document_path=document_path,
                 requested_formats=requested_formats,

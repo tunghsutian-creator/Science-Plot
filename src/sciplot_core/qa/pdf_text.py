@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
-import fitz
+import pymupdf as fitz
 
 
 def _font_resource_info(document: fitz.Document) -> list[dict[str, Any]]:

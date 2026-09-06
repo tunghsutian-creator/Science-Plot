@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 from sciplot_core._paths import REPO_ROOT
@@ -32,9 +33,9 @@ def veusz_worker_environment() -> dict[str, str]:
 
 
 def needs_veusz_worker_process() -> bool:
-    """Return true when macOS must load the Homebrew Qt runtime at process start."""
+    """Keep Qt work on a process main thread and load macOS Qt at startup."""
 
-    return (
+    return threading.current_thread() is not threading.main_thread() or (
         sys.platform == "darwin" and os.environ.get("SCIPLOT_STUDIO_QT_RUNTIME") != "1"
     )
 

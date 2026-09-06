@@ -10,6 +10,9 @@ from sciplot_core.veusz_worker.visual_matchers import (
     _direct_label_record_matches_contract,
 )
 from sciplot_core.veusz_worker.widget_bindings import _visible_data_bindings
+from sciplot_core.veusz_worker.spec_audit.scientific_geometry import (
+    label_matches_science,
+)
 
 
 def audit_legends_and_labels(
@@ -175,7 +178,11 @@ def audit_legends_and_labels(
 
     if len(visible_direct_labels) != len(expected_direct_labels) or any(
         (
-            not _direct_label_record_matches_contract(record, expected=expected)
+            not (
+                _direct_label_record_matches_contract(record, expected=expected)
+                if inventory.check_presentation
+                else label_matches_science(record, expected)
+            )
             for record, expected in zip(
                 visible_direct_labels, expected_direct_labels, strict=True
             )

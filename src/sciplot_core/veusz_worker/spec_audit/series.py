@@ -10,14 +10,21 @@ from sciplot_core.studio_core.series_encoding_contract import (
 from sciplot_core.studio_core.axis_data_visibility import (
     validate_axis_data_visibility,
 )
-from sciplot_core.studio_render.models import CATEGORICAL_POINT_LINE_KIND
+from sciplot_core.studio_render.models import (
+    CATEGORICAL_POINT_LINE_KIND,
+    IMPACT_POINT_LINE_SUMMARY_KIND,
+)
 from sciplot_core.veusz_worker.axis_matchers import _axis_record_matches_spec
 from sciplot_core.veusz_worker.numeric_evidence import _dataset_evidence
 from sciplot_core.veusz_worker.spec_audit.model import SpecAuditInventory
+from sciplot_core.veusz_worker.spec_audit.bar_error import audit_bar_error_consumer
 from sciplot_core.veusz_worker.spec_audit.series_encoding import (
     audit_series_encoding,
 )
 from sciplot_core.veusz_worker.widget_bindings import _visible_data_bindings
+from sciplot_core.veusz_worker.spec_audit.scientific_geometry import (
+    axis_matches_science,
+)
 
 
 def audit_axes_and_series(
@@ -87,10 +94,13 @@ def audit_axes_and_series(
         ),
     )
 
-    if (
-        len(axis_records) != 2
-        or not _axis_record_matches_spec(axis_records[0], axes["x"], axis_name="x")
-        or (not _axis_record_matches_spec(axis_records[1], axes["y"], axis_name="y"))
+    if len(axis_records) != 2 or any(
+        not (
+            _axis_record_matches_spec(record, axes[name], axis_name=name)
+            if inventory.check_presentation
+            else axis_matches_science(record, axes[name], name=name, spec=spec)
+        )
+        for record, name in zip(axis_records, ("x", "y"), strict=True)
     ):
         raise ValueError(
             "Exact-current Veusz x/y axis labels, scales, bounds, ticks, visibility, or order differ from the rendered specification."
@@ -138,6 +148,23 @@ def audit_axes_and_series(
                 "Categorical point-line labels do not match the source-bound "
                 "numeric positions."
             )
+    elif inventory.categorical_kind == "point_line_raw_overlay":
+        summaries = [
+            item
+            for item in series
+            if item.get("presentation_kind") == IMPACT_POINT_LINE_SUMMARY_KIND
+        ]
+        labels = list(categorical.get("sample_labels") or [])
+        if (
+            list(axes["x"].get("category_labels") or []) != labels
+            or [str(item.get("label") or "") for item in summaries]
+            != list(categorical.get("condition_labels") or [])
+            or any(
+                list(item.get("component_labels") or []) != labels for item in summaries
+            )
+            or not summaries
+        ):
+            raise ValueError("Impact overlay sample/condition labels changed.")
     elif isinstance(categorical, dict):
         categorical_labels: list[str] = []
         for y_name, group in categorical_groups.items():
@@ -148,7 +175,15 @@ def audit_axes_and_series(
                 raise ValueError(
                     "Categorical group labels do not match their rendered series identities."
                 )
-            categorical_labels.append(str(group.get("label") or ""))
+            categorical_labels.append(
+                str(
+                    group.get("sample_label")
+                    if inventory.categorical_kind == "grouped_bar_error"
+                    else group.get("label") or ""
+                )
+            )
+        if inventory.categorical_kind == "grouped_bar_error":
+            categorical_labels = list(dict.fromkeys(categorical_labels))
         x_axis = (
             spec.get("axes", {}).get("x")
             if isinstance(spec.get("axes"), dict)
@@ -214,6 +249,9 @@ def audit_axes_and_series(
             raise ValueError(
                 f"Exact-current Veusz document does not contain exactly one bound xy widget for series {name!r}."
             )
+        bindings = matching_xy[0]["bindings"]
+        if bindings.get("xAxis") != "x" or bindings.get("yAxis") != "y":
+            raise ValueError(f"Exact-current Veusz series {name!r} has different axis bindings.")
         audit_series_encoding(
             inventory,
             raw_series=raw_series,
@@ -231,8 +269,18 @@ def audit_axes_and_series(
         presentation_kind = str(raw_series.get("presentation_kind") or "curve")
         group = categorical_groups.get(y_name)
         raw_points_required = raw_series.get("raw_points_visible") is not False
+        if (
+            raw_points_required
+            and presentation_kind in {
+                "categorical_replicates", "categorical_grouped_replicates",
+                "impact_point_line_raw_points",
+            }
+            and bindings.get("thinfactor") != 1
+        ):
+            raise ValueError(f"Exact-current Veusz series {name!r} must retain every raw-point marker.")
         if presentation_kind not in {
             "categorical_replicates",
+            "categorical_grouped_replicates",
             "categorical_components",
         }:
             if not matching_xy[0]["mark_channels"]:
@@ -240,7 +288,10 @@ def audit_axes_and_series(
                     f"Exact-current Veusz series {name!r} has no visible line, marker, or fill channel."
                 )
             consumers.append(str(matching_xy[0]["path"]))
-        elif presentation_kind == "categorical_replicates":
+        elif presentation_kind in {
+            "categorical_replicates",
+            "categorical_grouped_replicates",
+        }:
             if not isinstance(group, dict):
                 raise ValueError(f"Categorical series {name!r} has no group contract.")
             if raw_points_required:
@@ -249,7 +300,13 @@ def audit_axes_and_series(
                         f"Categorical series {name!r} requires visible raw-point markers."
                     )
                 consumers.append(str(matching_xy[0]["path"]))
-            if group.get("boxplot_eligible") is True:
+            if inventory.categorical_kind in {"bar_error", "grouped_bar_error"}:
+                bar_datasets, bar_path = audit_bar_error_consumer(
+                    inventory, y_name=y_name
+                )
+                datasets.extend(bar_datasets)
+                consumers.append(bar_path)
+            elif group.get("boxplot_eligible") is True:
                 expected_box_name = expected_box_name_by_y[y_name]
                 expected_position = (float(group["position"]),)
                 expected_values = (y_name,)

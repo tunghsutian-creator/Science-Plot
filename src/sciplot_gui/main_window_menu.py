@@ -16,6 +16,10 @@ from sciplot_core.studio import (
     publish_standalone_export_receipt,
     publish_studio_export_run,
     resolve_studio_project_context,
+    preview_delivery_recovery,
+    apply_delivery_recovery,
+    preview_project_source_update,
+    apply_project_source_update,
 )
 
 
@@ -48,6 +52,10 @@ def _attach_sciplot_menu(window: Any, document_path: Path | None) -> None:
                 publish_project_export=publish_studio_export_run,
                 build_figure_set_scope=build_studio_figure_set_export_scope,
                 is_complete_figure_set_scope=is_primary_figure_set_export_scope,
+                preview_delivery_recovery=preview_delivery_recovery,
+                apply_delivery_recovery=apply_delivery_recovery,
+                preview_source_update=preview_project_source_update,
+                apply_source_update=apply_project_source_update,
             )
         )
 

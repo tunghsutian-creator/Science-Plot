@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 import shutil
+import pytest
 
 from sciplot_core.delivery import DELIVERY_PACKAGE_CONTRACT_VERSION
 from sciplot_core.delivery.contracts import (
@@ -16,6 +17,8 @@ from sciplot_core.delivery.package_builder import (
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.delivery.plan_binding import plan_source_figure_ids
 from sciplot_core.delivery.project_documents import _copy_project_documents
+import sciplot_core.delivery.package_builder as package_builder
+import sciplot_core.delivery.package_transaction as package_transaction
 from sciplot_core.figure_plan import (
     FigureOutcome,
     FigureTask,
@@ -315,6 +318,8 @@ def test_package_builder_consumes_typed_gate_and_nullable_json_objects(
         ]
         is False
     )
+
+
 def test_package_builder_distinguishes_legacy_and_required_plan_gates(
     tmp_path: Path,
 ) -> None:
@@ -860,3 +865,161 @@ def test_primary_document_fallback_must_be_the_run_local_studio_document(
         assert "VSZ path does not match" in str(exc)
     else:
         raise AssertionError("An unrelated primary document.vsz was accepted.")
+
+
+def _package_bytes(root: Path) -> dict[str, bytes]:
+    return {
+        str(path.relative_to(root)): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+
+
+def test_delivery_copy_failure_keeps_previous_visible_package(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    before = _package_bytes(root)
+    original = shutil.copy2
+
+    def fail_copy(source, target, *args, **kwargs):
+        if Path(target).suffix == ".pdf":
+            raise OSError("simulated copy failure")
+        return original(source, target, *args, **kwargs)
+
+    monkeypatch.setattr(package_builder.shutil, "copy2", fail_copy)
+    with pytest.raises(OSError, match="simulated copy failure"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+    assert not list(root.parent.glob(f".{root.name}.sciplot-stage-*"))
+
+
+def test_delivery_replacement_failure_restores_previous_package(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    before = _package_bytes(root)
+    original = Path.replace
+
+    def fail_stage(self, target):
+        if (
+            self.name.startswith(f".{root.name}.sciplot-stage-")
+            and Path(target) == root
+        ):
+            raise OSError("simulated replacement failure")
+        return original(self, target)
+
+    monkeypatch.setattr(Path, "replace", fail_stage)
+    with pytest.raises(OSError, match="simulated replacement failure"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+    assert not list(root.parent.glob(f".{root.name}.sciplot-previous-*"))
+
+
+def test_delivery_post_install_failure_rolls_back(tmp_path: Path, monkeypatch) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    before = _package_bytes(root)
+    monkeypatch.setattr(
+        package_transaction,
+        "verify_delivery_package",
+        lambda *args, **kwargs: {"passed": False},
+    )
+    with pytest.raises(RuntimeError, match="previous package was restored"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+
+
+def test_incomplete_delivery_is_diagnostic_and_does_not_replace_visible_package(
+    tmp_path: Path,
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    before = _package_bytes(root)
+    invalid = deepcopy(manifest)
+    invalid["qa"] = None
+    rejected = build_delivery_package(run, manifest=invalid)
+    assert rejected["complete"] is False
+    assert Path(rejected["path"]).is_relative_to(run / "failed_delivery")
+    assert Path(rejected["path"]).is_dir()
+    assert _package_bytes(root) == before
+
+
+def test_delivery_preserves_user_edited_visible_vsz(tmp_path: Path) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    edited = Path(first["project_documents"][0]["path"])
+    edited.write_text("unique user edits", encoding="utf-8")
+    before = _package_bytes(root)
+    with pytest.raises(ValueError, match="edited or unverified") as error:
+        build_delivery_package(run, manifest=manifest)
+    assert str(edited) in str(error.value)
+    assert _package_bytes(root) == before
+
+
+def test_delivery_second_publication_accepts_new_canonical_revision(
+    tmp_path: Path,
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    for value in manifest["veusz_documents"]:
+        document = Path(value)
+        document.write_bytes(document.read_bytes() + b"\ncanonical edit")
+        manifest["veusz_document_hashes"][value] = existing_file_sha256(document)
+    second = build_delivery_package(run, manifest=manifest)
+    assert first["path"] == second["path"]
+    assert second["complete"] is True
+    assert second["verification"]["passed"] is True
+    assert all(
+        Path(item["path"]).read_bytes().endswith(b"canonical edit")
+        for item in second["project_documents"]
+    )
+    assert not list(Path(second["path"]).parent.glob(".*.sciplot-previous-*"))
+
+
+def test_delivery_malformed_plan_preserves_previous_package(tmp_path: Path) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    before = _package_bytes(root)
+    invalid = deepcopy(manifest)
+    invalid["resolved_figure_plan"] = {"invalid": True}
+    with pytest.raises(ValueError, match="unsupported fields"):
+        build_delivery_package(run, manifest=invalid)
+    assert _package_bytes(root) == before
+
+
+def test_delivery_accepts_visible_edits_after_exact_reconciliation(
+    tmp_path: Path,
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    item = first["project_documents"][0]
+    Path(item["path"]).write_bytes(b"reconciled user edit")
+    Path(item["source"]).write_bytes(b"reconciled user edit")
+    manifest["veusz_document_hashes"][item["source"]] = existing_file_sha256(
+        Path(item["source"])
+    )
+    second = build_delivery_package(run, manifest=manifest)
+    assert second["complete"] is True
+    assert Path(item["path"]).read_bytes() == b"reconciled user edit"
+
+
+def test_delivery_preserves_unrecorded_nested_editable_copy(tmp_path: Path) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    manual = root / "project" / "my_revision" / "saved.VSZ"
+    manual.parent.mkdir()
+    manual.write_bytes(b"only copy of an alternate edit")
+    before = _package_bytes(root)
+    with pytest.raises(ValueError, match="edited or unverified"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before

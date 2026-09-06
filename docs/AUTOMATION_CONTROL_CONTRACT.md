@@ -115,6 +115,32 @@ Measurement definitions are fixed as follows:
 The current scientific-confirmation owner exposes a state and reason codes but
 does not expose one minimal question payload. R0 records that as a baseline gap;
 it does not claim that the future human-confirmation interaction already exists.
+
+Post-R0 scope decision (2026-09-01): the historical measurement above remains
+unchanged. Its controlled 75-confidence replay is not evidence that the public
+CLI naturally produces this state for a real task. A bounded question payload
+is no longer an R1/R2 exit requirement, and a generic question generator is
+explicitly out of scope.
+R1 preserves the state and exact owner reason references; `decision.question`
+is explicit `null` unless the current owner already supplies one bounded
+question. R2 stops with zero AI and zero writes and hands those facts to the
+operator. R5 owns one real ambiguity that can be resolved by rule-identity
+selection, one operator question/answer, submission through an explicit
+`--rule`, a fresh `plan`, execution with that same explicit rule through
+Autoplot or Studio, and a ready delivery. It must also prove zero AI, unchanged
+source bytes, and exact-current hashes. Sample, column, unit, anchor, and other
+scientific facts must not be encoded into `--rule`. A
+canonical `needs_human_confirmation` is recorded if it occurs naturally but is
+not manufactured as a pilot exit gate. DataMapping receipts and rheology
+`column_confirmations` remain distinct owner workflows and do not count as the
+same binding unless their own revalidation path is separately proven.
+Only evidence that the selected owner has no supported way to accept the answer
+may open a narrow owner-specific implementation task; it does not authorize a
+generic question UI, answer store, or confirmation system. This decision does
+not authorize R1 or any runtime implementation. The public CLI does not yet
+provide the complete zero-write confirmation handoff; that seam remains R2
+work, not a new confirmation subsystem.
+
 The session gate requires Doctor `status=ready` and at least the frozen 24 ready
 rules, so a contracted-rule inventory regression cannot produce passing R0
 evidence.
@@ -168,6 +194,11 @@ The nested v1 fields and vocabularies are closed:
 - `provider`: `mode`, `outcome`, `call_budget`, `calls_used`.
 - `completion`: `ready_to_use`, `qa_status`, `delivery_complete`,
   `artifact_count`.
+
+`decision.question` is a closed, explicitly nullable pass-through field. It is
+`null` when the current owner has not supplied a question. The projector and
+conductor must not synthesize scientific wording from reason codes, reason
+details, source data, or provider output.
 
 `next_action` is one of:
 
@@ -239,7 +270,8 @@ and must not infer meaning from prefixes or parameterized reason strings.
   frozen gate is mathematically reachable. They are design evidence, not an
   implemented R1 projector.
 - Candidate count is at most 32, templates per candidate at most 8, owner reason
-  references at most 8, and the one human question at most 320 UTF-8 bytes.
+  references at most 8, and any non-null owner-supplied human question is at
+  most 320 UTF-8 bytes.
 - A new field or vocabulary value requires a version bump; v1 has no extension
   bag.
 
@@ -251,7 +283,7 @@ The first matching row wins:
 | ---: | --- | --- |
 | 1 | Invalid payload/identity or contradictory evidence | `stop` or owner repair; 0 AI, 0 writes |
 | 2 | Owner state is `needs_rule_repair` | `handoff_rule_repair`; preserve exact owner reason references |
-| 3 | Owner state is `needs_human_confirmation` | `ask_human`; exactly one question, 0 AI |
+| 3 | Owner state is `needs_human_confirmation` | `ask_human`; preserve exact owner reasons, pass through one owner-supplied question or `null`, then stop with 0 AI and 0 writes |
 | 4 | Explicit rule/template or one deterministic local match | `plan -> execute`; 0 AI |
 | 5 | Scientific facts are unique and only ready-catalog intent selection is missing | At most one text call; accept only an allowed rule/template, then run local `plan` |
 | 6 | User explicitly requests a current-object visual change | At most one visual call under current revision/capability/confirmation/Undo gates |
@@ -318,11 +350,12 @@ These are planned owners, not current architecture modules:
 | Stage | Proposed unique owner | Minimum focused evidence |
 | --- | --- | --- |
 | R1 Brief contract/projection | `automation_brief/contracts.py`, `model.py`, `projector.py` | closed fields/version/byte cap; canonical round-trip; all path/raw-array/secret canaries absent; injected owner object with source/classifier/network/write patched to fail |
-| R2 pure decision | `conductor/decision.py` | table-driven priority coverage; zero-call ready; one question; repair stop; provider outcome never changes automation state |
+| R2 pure decision | `conductor/decision.py` | table-driven priority coverage; zero-call ready; confirmation stop/handoff with exact reasons and nullable owner-provided question; repair stop; provider outcome never changes automation state |
 | R2 execution seam | `conductor/run.py` | direct/conductor request, plan, task, artifact, and terminal evidence identity; cancellation and partial-failure recovery |
 | R3 intent proposal | provider-neutral `intent_selection` contract | allowlisted rule/template/stop only; one-call hard budget; invalid/unavailable/cancelled output causes zero writes and no retry |
 | R3/R4 outbound policy | `assistant_provider/outbound_policy.py` | text has no PNG/path/raw arrays; visual requires explicit user intent; loopback and remote outputs use identical validation |
 | R4 host-side operation validation | current capability/operation owner | wrong type/range, no-op, duplicate, stale, and out-of-scope values all reject before `OperationMultiple` |
+| R5 human-confirmation pilot | existing scientific owner plus operator | real rule-identity ambiguity and owner/source evidence; one operator question/answer; explicit `--rule`; fresh plan; same-rule Autoplot/Studio ready delivery; zero AI, unchanged source hash, and exact-current hashes; record a canonical confirmation state only if naturally produced; other scientific facts stay in their owner flows; missing answer binding opens only an owner-specific task |
 
 The existing CLI parser/dispatch family remains the only CLI composition path.
 The existing Autoplot, Studio, Veusz, request, catalog, renderer, document,
@@ -334,8 +367,19 @@ cache, and evidence owners remain unique.
    Autoplot classifies/resolves again. R2 needs an in-process typed snapshot
    seam. Reconstructing one from plan JSON or adding a cross-command cache is
    forbidden.
-2. Current confirmation evidence has no minimal-question payload. R1/R2 must add
-   and test exactly one bounded question before claiming that interaction.
+2. Current confirmation evidence has no minimal-question payload. Under the
+   2026-09-01 post-R0 scope decision, R1/R2 preserve the state and exact reasons,
+   keep `question=null` unless the owner supplies it, and do not synthesize a
+   question. R5 must test a real rule-identity ambiguity and operator exchange,
+   bind only that rule identity through an explicit `--rule`, and rerun a fresh
+   `plan`, then execute through Autoplot or Studio with that same explicit rule
+   to a ready delivery. It must prove zero AI, unchanged source bytes, and
+   exact-current hashes. It records a canonical confirmation state when
+   naturally produced but does not manufacture one as an exit gate. DataMapping
+   receipts and rheology `column_confirmations` remain separate owner flows
+   unless their own revalidation path is proven. A missing binding is an
+   owner-specific development gap, not permission to prebuild a generic
+   confirmation system.
 3. Current selected-object adapter validation is stricter than the
    provider-neutral host apply path for range and no-op checks. R4 must move the
    shared validation into the host authority before expanding operations.

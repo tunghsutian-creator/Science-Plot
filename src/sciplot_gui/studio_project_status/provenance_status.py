@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.delivery import verify_delivery_package
-from sciplot_core.policy import DELIVERY_DIR
+from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.studio_figure_set_contract import (
     is_primary_figure_set_export_scope as _is_primary_figure_set_export_scope,
 )
@@ -70,7 +70,7 @@ def _provenance_status(
     delivery_verification = (
         verify_delivery_package(
             delivery,
-            expected_root=evidence_root / DELIVERY_DIR,
+            expected_root=requested_delivery_root(latest_run, run_output=evidence_root),
             expected_manifest=latest_run,
         )
         if evidence_root is not None

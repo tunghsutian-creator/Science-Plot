@@ -23,13 +23,17 @@ def read_raw_table_normalized(path: Path) -> pd.DataFrame:
         )
 
 
-def read_candidate_tables(source: Path) -> list[tuple[str, pd.DataFrame]]:
+def read_candidate_tables(
+    source: Path, *, selected_sheet: str | None = None
+) -> list[tuple[str, pd.DataFrame]]:
     """Return non-empty candidate sheets/files without content ranking."""
 
     tables: list[tuple[str, pd.DataFrame]] = []
     for path in table_source_files(source):
         if is_workbook_source(path):
             with pd.ExcelFile(path) as workbook:
+                if selected_sheet is not None and selected_sheet not in workbook.sheet_names:
+                    raise ValueError(f"Confirmed worksheet {selected_sheet!r} is missing from {path.name}.")
                 tables.extend(
                     (
                         f"{path.stem}:{sheet_name}",
@@ -41,7 +45,9 @@ def read_candidate_tables(source: Path) -> list[tuple[str, pd.DataFrame]]:
                             )
                         ).dropna(axis=1, how="all"),
                     )
-                    for sheet_name in workbook.sheet_names
+                    for sheet_name in (
+                        [selected_sheet] if selected_sheet is not None else workbook.sheet_names
+                    )
                 )
         else:
             tables.append(

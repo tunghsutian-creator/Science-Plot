@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
@@ -11,6 +12,8 @@ from sciplot_core.scalar_visual import (
 
 from sciplot_core.studio_render.models import (
     CATEGORICAL_SERIES_KINDS,
+    IMPACT_POINT_LINE_MARKER_KIND,
+    IMPACT_POINT_LINE_RAW_KIND,
     StudioSourceFrame,
 )
 
@@ -104,8 +107,46 @@ def derive_terminal_render_data_contract(
     for source in resolved_sources:
         if not source.is_file():
             raise FileNotFoundError(f"Terminal plotted source is not a file: {source}")
-        frames.extend(_read_source_frame_records(source, request=request))
-    series, axis_info = _series_from_frame_records(request, frames=frames)
+    if (
+        request.get("rule_id") == "impact_metric"
+        and _request_template(request) == "point_line"
+    ):
+        from sciplot_core.studio_core.impact_series import (
+            _impact_point_line_series_from_source,
+        )
+        from sciplot_core.studio_render.series_options import resolve_series_encodings
+        from sciplot_core.studio_render.series_transforms import (
+            _apply_template_series_transforms,
+        )
+        from sciplot_core.studio_render.series_domain import _validate_log_domain_series
+
+        if len(resolved_sources) != 1:
+            raise ValueError(
+                "Impact point-line derivation requires one condition workbook."
+            )
+        request = deepcopy(request)
+        series, axis_info, _steps = _impact_point_line_series_from_source(
+            resolved_sources[0], request=request
+        )
+        # Condition/sample order owns this overlay; helper layers keep their
+        # native summary/mean/raw order, exactly as in Studio preparation.
+        request.pop("series_order", None)
+        if isinstance(request.get("render_options"), dict):
+            request["render_options"].pop("series_order", None)
+        overlay_options = _resolved_domain_render_options(
+            request, axis_info=axis_info, series=series
+        )
+        series = resolve_series_encodings(
+            series, render_options=overlay_options, request=request
+        )
+        series = _apply_template_series_transforms(
+            series, request=request, render_options=overlay_options
+        )
+        _validate_log_domain_series(series, render_options=overlay_options)
+    else:
+        for source in resolved_sources:
+            frames.extend(_read_source_frame_records(source, request=request))
+        series, axis_info = _series_from_frame_records(request, frames=frames)
     series, _legend_label_mapping = _compact_replicate_series_labels(series)
     render_options = _resolved_domain_render_options(
         request=request,
@@ -259,9 +300,13 @@ def derive_terminal_render_data_contract(
                     "y_values": list(item.y_values),
                     "presentation_kind": item.presentation_kind,
                     "category_position": item.category_position,
+                    "categorical_contract": json_safe(categorical),
                     "component_labels": list(item.component_labels),
                     "plot_line_hide": item.presentation_kind
-                    in CATEGORICAL_SERIES_KINDS,
+                    in (
+                        CATEGORICAL_SERIES_KINDS
+                        | {IMPACT_POINT_LINE_MARKER_KIND, IMPACT_POINT_LINE_RAW_KIND}
+                    ),
                     "raw_points_visible": (
                         bool(group["raw_points_visible"])
                         if isinstance(group, dict)
@@ -281,7 +326,11 @@ def derive_terminal_render_data_contract(
                     ],
                 }
             )
-    source_artifacts = sorted({(str(frame.path), frame.sha256) for frame in frames})
+    source_artifacts = sorted(
+        {(str(frame.path), frame.sha256) for frame in frames}
+        if frames
+        else {artifact for item in series for artifact in item.source_artifacts}
+    )
     return {
         "kind": "sciplot_terminal_render_data_contract",
         "version": 1,

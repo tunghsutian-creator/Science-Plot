@@ -21,6 +21,10 @@ from sciplot_core.launchers.content_hashing import (
 from sciplot_core.launchers.delivery_launcher import (
     _canonical_delivery_launcher_lines,
 )
+from sciplot_core.launchers.delivery_binding import (
+    DELIVERY_BINDING_PREFIX,
+    delivery_binding_from_content,
+)
 
 from sciplot_core.launchers.project_launcher import (
     _canonical_project_launcher_lines,
@@ -138,9 +142,29 @@ def _project_launcher_structure(
 
 
 def _delivery_launcher_structure(content: str) -> dict[str, object]:
-    return _launcher_structure(
-        content,
-        expected_lines=_canonical_delivery_launcher_lines(),
+    binding_error = None
+    try:
+        binding = delivery_binding_from_content(content)
+    except ValueError as exc:
+        binding = None
+        binding_error = str(exc)
+    script = "".join(
+        line
+        for line in content.splitlines(keepends=True)
+        if not line.startswith(DELIVERY_BINDING_PREFIX)
+    )
+    result = _launcher_structure(
+        script,
+        expected_lines=_canonical_delivery_launcher_lines(bound=binding is not None),
         required_command_line='exec "${SCIPLOT_CMD}" studio "${DOCUMENT}"',
         directory_var="DELIVERY_DIR",
     )
+    result["content_sha256"] = _sha256_text(content)
+    if binding_error is not None:
+        result["canonical_structure"] = False
+        errors = result["validation_errors"]
+        result["validation_errors"] = [
+            *(errors if isinstance(errors, list) else []),
+            binding_error,
+        ]
+    return result

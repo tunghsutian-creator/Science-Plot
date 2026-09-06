@@ -37,7 +37,7 @@ class DockMixin:
         layout.addWidget(self.intent_edit)
 
         self.auto_apply = QtWidgets.QCheckBox(
-            "Apply a safe, current proposal immediately"
+            "Auto-apply safe changes"
         )
         self.auto_apply.setChecked(False)
         self.auto_apply.setToolTip(
@@ -47,7 +47,7 @@ class DockMixin:
         layout.addWidget(self.auto_apply)
 
         request_row = QtWidgets.QHBoxLayout()
-        self.ask_button = QtWidgets.QPushButton("Suggest Changes for Selected Object")
+        self.ask_button = QtWidgets.QPushButton("Suggest Changes\nfor Selected Object")
         self.cancel_button = QtWidgets.QPushButton("Stop")
         self.cancel_button.setEnabled(False)
         request_row.addWidget(self.ask_button, 1)

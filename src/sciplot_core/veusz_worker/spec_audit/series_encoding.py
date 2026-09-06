@@ -59,7 +59,7 @@ def audit_series_encoding(
         expected = encoding[group][key]
         actual = matching_xy["bindings"].get(binding_name)
         actual_fields[field_name] = actual
-        if field_name not in request_bound_fields:
+        if field_name not in request_bound_fields or not inventory.check_presentation:
             continue
         if not _encoding_value_equal(actual, expected, kind=comparison_kind):
             name = str(raw_series.get("name") or "")

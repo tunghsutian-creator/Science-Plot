@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
-from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.native_settings import editable_fields
 from sciplot_core.setting_catalog import (
     SUPPORTED_INSPECTOR_TYPES,
-    specs_for_object_type,
 )
 from sciplot_core.assistant_provider import (
     AssistantRequest,
@@ -81,34 +80,10 @@ class SelectionMixin:
 
     def _editing_capabilities(self, widget: Any) -> dict[str, Any]:
         target_id = self._object_id(widget)
-        operations: list[dict[str, Any]] = []
-        for spec in specs_for_object_type(str(widget.typename)):
-            if spec.read_only:
-                continue
-            setting_path = f"{widget.path}/{spec.suffix}"
-            try:
-                setting = self.document.resolveSettingPath(None, setting_path)
-            except ValueError:
-                continue
-            operations.append(
-                {
-                    "operation_type": "set_setting",
-                    "target_id": target_id,
-                    "field_id": spec.field_id,
-                    "section": spec.section,
-                    "label": spec.label,
-                    "setting_path": setting_path,
-                    "editor": spec.editor,
-                    "current_value": json_safe(setting.get()),
-                    "choices": [
-                        str(choice) for choice in getattr(setting, "vallist", ())
-                    ],
-                    "minimum": spec.minimum,
-                    "maximum": spec.maximum,
-                    "help_text": spec.help_text
-                    or str(getattr(setting, "descr", "") or ""),
-                }
-            )
+        operations = [
+            {"operation_type": "set_setting", "target_id": target_id, **field}
+            for field in editable_fields(self.document, widget)
+        ]
         return {
             "scope": "selected_object",
             "target_object_id": target_id,

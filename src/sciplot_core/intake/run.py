@@ -5,8 +5,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
-from sciplot_core.operation_modes import assisted_cleanup_mode_payload
+from sciplot_core.foundation.json_io import atomic_write_json
+from sciplot_core.operation_modes import (
+    assisted_cleanup_mode_payload,
+    normal_mode_payload,
+)
+from sciplot_core.studio import export_project_document
 
 from .config import _DEFAULT_OUTPUT_ROOT
 from .models import IntakeGroupInput
@@ -31,8 +37,6 @@ def create_and_run_intake_project(
     column_confirmations: list[dict[str, Any]] | None = None,
     replicate_mode: str | None = None,
 ) -> dict[str, Any]:
-    from sciplot_core.workflow import run_request
-
     project = create_intake_project(
         project_name=project_name,
         data_type_id=data_type_id,
@@ -47,24 +51,47 @@ def create_and_run_intake_project(
     )
     project_dir = Path(str(project["project_dir"]))
     plot_request_path = Path(str(project["plot_request"]))
+    manifest: dict[str, Any] | None = None
+    request: dict[str, Any] = {}
     try:
-        manifest = run_request(plot_request_path)
+        studio = project.get("studio") or {}
+        if studio.get("status") == "blocked":
+            raise ValueError(studio.get("error") or "Studio preparation is blocked.")
+        request_payload = json.loads(plot_request_path.read_text(encoding="utf-8"))
+        if not isinstance(request_payload, dict):
+            raise ValueError("The current project request must be a JSON object.")
+        request = request_payload
+        published = export_project_document(
+            project_dir=project_dir,
+            formats=list(request.get("exports") or ["pdf", "tiff_300"]),
+        )
+        manifest = published.run_payload
+        if not published.ready_to_use:
+            raise RuntimeError(
+                manifest.get("failure_reason") or "Project export is incomplete."
+            )
     except Exception as exc:
         intake_manifest = read_intake_project_manifest(project_dir)
         if intake_manifest is None:
             raise RuntimeError(
                 f"Intake project manifest disappeared from {project_dir}."
             ) from exc
-        request = json.loads(plot_request_path.read_text(encoding="utf-8"))
-        run_output = Path(
-            str(request.get("output") or intake_manifest.get("outputs_dir"))
-        )
+        run_output, own_diagnostic = _failure_output(project_dir, manifest)
+        current_run = manifest or {}
         intervention = run_output / "intervention_request.json"
-        cleanup_request = _write_render_failure_cleanup_request(
-            run_output=run_output,
-            request=request,
-            request_path=plot_request_path,
-            intervention=intervention,
+        needs_cleanup = bool(
+            current_run.get("intervention_request") == str(intervention)
+            and intervention.is_file()
+        )
+        cleanup_request = (
+            _write_render_failure_cleanup_request(
+                run_output=run_output,
+                request=request,
+                request_path=plot_request_path,
+                intervention=intervention,
+            )
+            if needs_cleanup
+            else None
         )
         failed_run = {
             "failed_at": utc_now_iso(),
@@ -73,13 +100,23 @@ def create_and_run_intake_project(
             "analysis_metrics": [],
             "qa": {},
             "failure": str(exc),
-            "operation_mode": assisted_cleanup_mode_payload(reason="render_failure"),
-            "needs_assisted_cleanup": True,
-            "intervention_request": str(intervention)
-            if intervention.exists()
-            else None,
+            "document": str(project_dir / "studio" / "document.vsz"),
+            "state": "failed",
+            "ready_to_use": False,
+            "failure_kind": "source_intervention"
+            if needs_cleanup
+            else "execution_error",
+            "operation_mode": (
+                assisted_cleanup_mode_payload(reason="source_intervention")
+                if needs_cleanup
+                else normal_mode_payload(route="web")
+            ),
+            "needs_assisted_cleanup": needs_cleanup,
+            "intervention_request": str(intervention) if needs_cleanup else None,
             "assisted_cleanup_request": cleanup_request,
         }
+        if own_diagnostic:
+            atomic_write_json(run_output / "manifest.json", failed_run)
         with edit_intake_project_manifest(
             project_dir,
             require_existing=True,
@@ -110,3 +147,21 @@ def create_and_run_intake_project(
         "download_name": refreshed_zip.name,
         "last_run": intake_manifest.get("last_run", manifest),
     }
+
+
+def _failure_output(
+    project_dir: Path,
+    manifest: dict[str, Any] | None,
+) -> tuple[Path, bool]:
+    """Use this publication's returned evidence, never an obsolete request run."""
+    value = manifest.get("output") if manifest is not None else None
+    if isinstance(value, str) and value.strip():
+        candidate = Path(value).expanduser().resolve()
+        if candidate.is_relative_to(project_dir.resolve()) and candidate.is_dir():
+            return candidate, False
+    # An exception before a result has no bound publication output. Record that
+    # attempt separately instead of guessing the latest directory or reusing the
+    # old Workflow request.output and its possibly stale intervention artifacts.
+    diagnostic = project_dir / "runs" / f"intake_failed_{uuid4().hex}"
+    diagnostic.mkdir(parents=True)
+    return diagnostic, True

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.native_settings import validate_native_setting
 from sciplot_core.assistant_operations import VeuszSettingOperationBatch
 from sciplot_core.assistant_provider import (
     AssistantRequest,
@@ -39,12 +40,11 @@ class ProposalApplicationMixin:
             seen_paths.add(setting_path)
             if "expected_value" not in operation.arguments:
                 raise ValueError("proposal is missing expected_value")
-            setting = self.document.resolveSettingPath(None, setting_path)
-            current = json_safe(setting.get())
-            expected = json_safe(operation.arguments["expected_value"])
-            if current != expected or current != capability["current_value"]:
-                raise ValueError(f"{setting_path} no longer has its expected value")
-            normalized = setting.normalize(operation.arguments["value"])
+            current, normalized = validate_native_setting(
+                self.document, capability,
+                expected_value=operation.arguments["expected_value"],
+                value=operation.arguments["value"],
+            )
             native.append(OperationSettingSet(setting_path, normalized))
             prepared.append(
                 {

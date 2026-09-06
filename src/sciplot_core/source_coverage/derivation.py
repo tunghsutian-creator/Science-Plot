@@ -13,6 +13,8 @@ from sciplot_core.source_coverage.file_snapshots import (
     _write_private_snapshot,
 )
 
+from sciplot_core.source_coverage.spec_units import render_data_unit_signature
+
 from sciplot_core.source_coverage.terminal_requests import (
     _authoritative_terminal_render_requests,
 )
@@ -170,48 +172,10 @@ def _terminal_render_derivation(
                     private_to_original=private_to_original,
                     label=(f"terminal derivation {request_index} unit {unit_index}"),
                 )
-            signature_fields = (
-                "kind",
-                "name",
-                "label",
-                "x_name",
-                "y_name",
-                "data_name",
-                "x_values",
-                "y_values",
-                "z_values",
-                "z_label",
-                "scalar_visual",
-                "axes",
-                "reference_guides",
-                "direct_labels",
-                "presentation_kind",
-                "category_position",
-                "plot_line_hide",
-                "raw_points_visible",
-                "boxplot_eligible",
-                "source_artifacts",
-            )
             derived_signatures = [
-                _canonical_sha256(
-                    {
-                        field: unit.get(field)
-                        for field in signature_fields
-                        if field in unit
-                    }
-                )
-                for unit in derived_units
+                render_data_unit_signature(unit) for unit in derived_units
             ]
-            spec_signatures = [
-                _canonical_sha256(
-                    {
-                        field: unit.get(field)
-                        for field in signature_fields
-                        if field in unit
-                    }
-                )
-                for unit in spec_units
-            ]
+            spec_signatures = [render_data_unit_signature(unit) for unit in spec_units]
             if spec_signatures != derived_signatures:
                 raise ValueError(
                     "Rendered specification data, axes, or ordered series "

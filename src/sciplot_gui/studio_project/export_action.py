@@ -16,12 +16,12 @@ class ExportActionMixin:
         *,
         show_dialog: bool = True,
     ) -> dict[str, Any]:
-        if self._exporting:
+        if self._exporting or getattr(self, "_project_change_busy", False):
             return self._failed_export_payload(
                 state="export_in_progress",
                 message=(
-                    "An exact-current export is already in progress. Wait for "
-                    "it to finish before starting another export."
+                    "An export or project revision is already in progress. Wait for "
+                    "it to finish before starting an export."
                 ),
             )
         context_blocker = self._document_context_blocker()

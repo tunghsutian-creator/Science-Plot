@@ -4,14 +4,18 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Any, Final, Literal, TypedDict
 
 from sciplot_core.figure_plan import (
     FigurePlanResolutionError,
     ResolvedFigurePlanPayload,
     resolve_figure_plan,
 )
-from sciplot_core.materials_rules import SemanticRule, get_rule, resolve_rule_template
+from sciplot_core.materials_rules import SemanticRule, get_rule
+from sciplot_core.materials_rules.catalog import resolve_rule_template
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
+from sciplot_core.foundation.source_tree import source_tree_sha256
+from sciplot_core.plan_identity import preview_identity_for
 from sciplot_core.readiness.registry_io import load_validated_envelope_registry
 from sciplot_core.readiness.rule_certification import (
     current_rule_invocation_contract_payload,
@@ -24,8 +28,8 @@ from sciplot_core.semantic_sources.scientific_source import (
 from sciplot_core.study_model import study_model_from_request
 
 
-PLAN_PREVIEW_KIND = "sciplot_figure_plan_preview"
-PLAN_PREVIEW_VERSION = 1
+PLAN_PREVIEW_KIND: Final = "sciplot_figure_plan_preview"
+PLAN_PREVIEW_VERSION: Final = 1
 
 
 PlanPreviewStatus = Literal["planned", "not_applicable", "blocked"]
@@ -36,13 +40,17 @@ class PlanPreviewBlocker(TypedDict):
     message: str
 
 
-class PlanPreviewPayload(TypedDict):
+class PlanPreviewBase(TypedDict):
     kind: Literal["sciplot_figure_plan_preview"]
     version: Literal[1]
-    status: PlanPreviewStatus
     source: str
     rule_id: str | None
     template: str
+    preview_identity: dict[str, Any] | None
+
+
+class PlanPreviewPayload(PlanPreviewBase):
+    status: PlanPreviewStatus
     resolved_figure_plan: ResolvedFigurePlanPayload | None
     scientific_transform: dict[str, Any] | None
     blocker: PlanPreviewBlocker | None
@@ -60,9 +68,7 @@ def build_plan_preview(
     requested_rule_value = request_snapshot.get("rule_id")
     requested_template_value = request_snapshot.get("template")
     requested_template = (
-        requested_template_value
-        if isinstance(requested_template_value, str)
-        else None
+        requested_template_value if isinstance(requested_template_value, str) else None
     )
     preview_template = str(requested_template or "curve")
     explicit_rule: SemanticRule | None = None
@@ -134,6 +140,7 @@ def build_plan_preview(
         requested_rule_value if isinstance(requested_rule_value, str) else None
     )
     try:
+        source_hash = source_tree_sha256(source)
         semantic = classify_source(source, requested_rule_id=requested_rule_id)
     except (OSError, UnicodeError) as exc:
         return _blocked_preview(
@@ -227,13 +234,32 @@ def build_plan_preview(
             message=str(exc),
             scientific_transform=scientific_transform,
         )
-    return {
+    try:
+        source_still_current = (
+            source_hash is not None and source_tree_sha256(source) == source_hash
+        )
+    except OSError:
+        source_still_current = False
+    if not source_still_current:
+        return _blocked_preview(
+            source=source,
+            rule_id=rule_id,
+            template=template,
+            reason_code="plan_source_changed_during_preview",
+            message="Source changed while resolving the plan; inspect its current version again.",
+        )
+    payload: PlanPreviewPayload = {
         **_preview_base(source=source, rule_id=rule_id, template=template),
         "status": "planned" if plan is not None else "not_applicable",
         "resolved_figure_plan": plan.to_payload() if plan is not None else None,
         "scientific_transform": scientific_transform,
         "blocker": None,
     }
+    assert source_hash is not None
+    payload["preview_identity"] = preview_identity_for(
+        dict(payload), source_sha256=source_hash
+    )
+    return payload
 
 
 def _blocked_preview(
@@ -262,14 +288,79 @@ def _preview_base(
     source: Path,
     rule_id: str | None,
     template: str,
-) -> dict[str, Any]:
+) -> PlanPreviewBase:
     return {
         "kind": PLAN_PREVIEW_KIND,
         "version": PLAN_PREVIEW_VERSION,
         "source": str(source),
         "rule_id": rule_id,
         "template": template,
+        "preview_identity": None,
     }
+
+
+def verify_expected_plan(
+    source: Path,
+    expected: dict[str, Any],
+    *,
+    rule_id: str | None,
+    template: str | None,
+) -> dict[str, Any]:
+    """Rebuild a fresh preview before project creation; this is not a run lock."""
+    if (
+        not isinstance(expected, dict)
+        or expected.get("kind") != "sciplot_figure_plan_preview"
+        or type(expected.get("version")) is not int
+        or expected.get("version") != 1
+        or expected.get("status") not in ("planned", "not_applicable")
+        or expected.get("blocker") is not None
+    ):
+        raise ValueError("--expected-plan requires a successful current plan preview.")
+    identity = expected.get("preview_identity")
+    digest = identity.get("source_tree_sha256") if isinstance(identity, dict) else None
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise ValueError("Expected plan has no valid input identity; run plan again.")
+    if canonical_json_sha256(identity, allow_nan=False) != canonical_json_sha256(
+        preview_identity_for(expected, source_sha256=digest), allow_nan=False
+    ):
+        raise ValueError("Expected plan contents or identity changed; run plan again.")
+    if source_tree_sha256(source) != digest:
+        raise ValueError("Source changed since the expected plan; run plan again.")
+    selected = {
+        "rule_id": rule_id if rule_id is not None else expected.get("rule_id"),
+        "template": template if template is not None else expected.get("template"),
+    }
+    current = build_plan_preview(
+        source,
+        request={key: value for key, value in selected.items() if value is not None},
+    )
+    if current["status"] == "blocked":
+        blocker = current.get("blocker")
+        raise ValueError(
+            "Expected plan can no longer execute: "
+            + (
+                blocker["message"]
+                if blocker
+                else "the current scientific plan is blocked"
+            )
+        )
+    if canonical_json_sha256(current, allow_nan=False) != canonical_json_sha256(
+        expected, allow_nan=False
+    ):
+        raise ValueError(
+            "Expected plan is stale or its rule, template, or scientific selections changed; run plan again."
+        )
+    # Recheck as close as possible to run_one_step's source consumer. The normal
+    # workflow owns source snapshots and publication checks after this preflight.
+    if source_tree_sha256(source) != digest:
+        raise ValueError(
+            "Source changed during expected-plan validation; run plan again."
+        )
+    return dict(current)
 
 
 __all__ = [
@@ -279,4 +370,5 @@ __all__ = [
     "PlanPreviewPayload",
     "PlanPreviewStatus",
     "build_plan_preview",
+    "verify_expected_plan",
 ]

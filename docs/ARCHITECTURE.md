@@ -29,15 +29,23 @@ raw files + hashes
 Lifecycle success, provenance, artifact QA, human review, and journal
 compliance are separate evidence claims.
 
-## Frontend boundary
+## External control and native document boundary
 
-Veusz `MainWindow` is the only daily drawing frontend. It owns the object tree,
-property editor, Datasets, canvas, menus, Save, and Undo/Redo.
+External AI is the product task interface and the direction for further
+development. The public CLI is the reference adapter for source planning,
+saved-project queries, native edits, exact-current export and continuation.
+It calls existing local domain services without starting an internal provider.
+There is no MCP server, generic task conductor or additional document state store.
+
+Veusz `MainWindow` remains a compatible native document tool. It owns its object
+tree, property editor, Datasets, canvas, menus, Save and Undo/Redo. External
+operations load the saved VSZ in a separate native worker and do not depend on
+the live window or its selection.
 
 `src/sciplot_gui/` attaches Project and optional selected-object AI docks to the
 same Veusz `Document`; it does not own a second document model or renderer.
 
-The browser `app` is a loopback-only confirmation adapter. It may collect
+The retained browser `app` is a loopback-only confirmation adapter. It may collect
 initial data choices and show results read-only, but it must not own
 post-render visual editing.
 
@@ -73,6 +81,9 @@ research-plots/
       studio.py                stable Studio facade
       studio_render/           pure series, axis, layout, spec transforms
       studio_core/             VSZ lifecycle, export, publish, Qt ports
+        project_query*.py      saved project/figure identities and byte evidence
+        document_edit*.py      reviewed native edit transaction and durable outcomes
+        project_session.py     native/external process exclusion
         presentation_evidence.py selected plan/spec consistency gate
         rule_readiness.py      canonical request/current-rule publish evidence
       workflow/                confirmed-request orchestration
@@ -111,8 +122,11 @@ the local development log are not package source.
 
 ```text
 CLI composition root
-  -> GUI presentation installer
   -> Core public facades
+  -> GUI presentation installer (compatible interactive commands only)
+
+external project commands
+  -> saved-project query / native edit transaction / existing Studio export
 
 GUI presentation
   -> studio.py public integration API + pure status/evidence values
@@ -143,12 +157,25 @@ The CLI may assemble GUI presentation. Core business, data, rendering, QA, and
 delivery modules must not import `sciplot_gui`. GUI code may call Core service
 contracts but may not duplicate scientific calculations.
 
+External project queries resolve the existing request, figure-set registry and
+canonical document paths without preparation or project mutation. Explicit
+figure/object queries invoke native inspection in a subprocess; summary queries
+do not load Qt. Objects are addressed by figure ID, native object path and the
+saved document SHA-256. A live GUI changeset is neither a persisted version nor
+a cross-session identity.
+
 ## Ownership table
 
 | Concern | Owner | Boundary |
 | --- | --- | --- |
 | Low-level text, timestamp, hash, JSON and path primitives | `foundation/` | Leaf package; never imports ingestion, workflow, GUI, or rendering. |
 | Automation state vocabulary | `automation_states.py` | One closed owner for ready, confirmation, and repair states. Project editing/export states remain separate. |
+| External project command adapter | `cli/parsers/project.py`, `cli/dispatch/project.py`, `cli/dispatch/project_create.py` | Public create, capabilities, inspect, preview, edit-preview, edit-apply and operation commands call core services. Create validates a complete expected plan before allocating output, requires new visible/workspace paths and rechecks them under a workspace session lease, then invokes the ordinary Studio preparation/export lifecycle. Other commands address saved figures without preparation. No GUI selection, provider setup, alternative request model or renderer belongs here. |
+| Saved project queries | `studio_core/project_query.py`, `project_query_paths.py`, `project_query_evidence.py` | Resolve the current managed request, registered figures and still-bound delivery without preparing or mutating the project. Native settings are loaded only for explicit figure/object queries. Saved document hashes bind targets; historical run records and current source/QA/delivery byte indicators remain separate, with readiness explicitly unevaluated. |
+| Shared native editing capabilities | `native_settings.py`, `studio_core/document_edit_policy.py`, `veusz_worker/document_edit.py`, `veusz_worker/operations.py` | Read the existing setting catalog and native values, restrict external operations to the advertised scientific-safe subset, and check the entire batch before a native operation. Spec-aware policy excludes semantic curve-color encodings. The worker loads saved documents with unsafe commands/import recovery disabled, renders previews and saves candidates; it cannot install a managed project edit. |
+| Reviewed document edits | `studio_core/document_edit.py`, `document_edit_state.py`, `document_edit_commit.py` | Stage the native candidate and science audit outside the project, then re-execute and compare the reviewed operations under existing project/session locks. Preserve before/after VSZ and bounded operation outcomes, install one selected document with rollback, and query an interrupted or already-applied result. Source/request/spec and visible-package state participate in stale detection. Export remains a separate shared Studio use case. |
+| Native/external session exclusion | `studio_core/project_session.py`, native window integration | A writable native project window retains a shared process lease even when clean; an external commit requires an exclusive lease as well as the existing project lock. Open/Save As track the active project, close releases it, and process termination releases the OS lock. Read-only project queries do not acquire a nested project lock. |
+| Expected scientific plan | `plan_preview.py`, `cli/dispatch/project_create.py`, `autoplot/run.py` | `project create` requires a complete successful expected plan and rechecks current source bytes plus the same rule/template before creating a canonical resumable Studio project. Compatible one-time Autoplot also accepts the preflight but retains its run-only layout; its project directory does not imply a canonical editable Studio state. The existing FigurePlan and scientific transform remain the authorities; this is not a new planning schema or durable task store. |
 | R0 automation baseline evidence | `automation_baseline*.py`, hidden diagnostics CLI composition | Development-only schema, validation, metrics, and one linear black-box probe measure four existing owner paths under an explicit output root. The probe may count and compare existing payloads, hashes, calls, source opens, filesystem write opens, timings, and states; it cannot classify scientific facts, mint readiness, become a plotting route, persist a cache/receipt, or implement the proposed Brief/conductor/provider policy. |
 | Autoplot persisted evidence | `autoplot/evidence.py` | Typed aggregate over reported result, persisted one-step state, and manifest; public JSON remains unchanged. |
 | Autoplot user summary | `autoplot/summary.py` | One v2 result builder serves both the read-only projection of persisted evidence and a rule-repair preflight result. The normal projection reads publish integrity, delivery state, and the completed FigurePlan without reparsing or rehashing the plan; the preflight variant contains no invented run evidence and is never persisted. |
@@ -193,6 +220,10 @@ contracts but may not duplicate scientific calculations.
 | Studio FigureTask execution support | `studio_core/figure_requests.py`, `studio_core/impact_task_sources.py`, `studio_core/figure_source_request.py`, `studio_core/figure_registry_geometry.py`, `studio_core/mechanical_task_source_lifecycle.py` | Bind each already-selected task to its exact rheology, Impact, or private mechanical render request; read actual registry geometry; and keep materialized Impact and mechanical task sources inside the existing Studio rollback boundary. Impact execution reads one source snapshot, rebuilds the complete current plan from that same payload, then writes only into a versioned transaction-owned directory beneath ordinary non-symlink project ancestors; point-line rendering uses a verified private workbook copy rather than rereading mutable raw input. Dynamic request and queue values are narrowed once before typed owners consume them, and responsibility modules are imported directly. These helpers do not independently select a FigurePlan, invent a task or source, create a second request schema, or acquire publication authority. Malformed task, queue, source, or geometry evidence remains fail closed or follows the explicit bounded legacy geometry fallback. |
 | Studio FigureTask publication | `studio_core/request_paths.py`, `studio_core/figure_set_publication_scope.py`, `studio_core/publish_inventory.py`, `studio_core/publish_run.py`, `studio_core/publish_finalize.py` | Bind publication to the canonical project request and primary VSZ, then required-plan publication strictly loads and normalizes one figure-set registry snapshot before any secondary export or run allocation. Canonical registry members must remain ordinary in-project paths rather than symlinks, and the dedicated scope leaf validates the complete expected figure set. The same in-memory snapshot drives presentation evidence, secondary-document collection, and primary generated-document identity; primary and spec hashes are checked again after secondary collection and before run allocation. Inventory carries that normalized registry plus verified spec hashes through the run coordinator; finalization writes the exact registry into the run-local Studio receipt and rejects spec drift before accepting the snapshot. Missing or tampered ready documents, specs, or hash projections fail closed. Planless and legacy publication retain compatibility behavior without acquiring task authority. |
 | Native series revision and presentation persistence | `studio_core/veusz_series_revision.py`, `studio_core/series_presentation.py`, `studio_core/series_revision_persistence.py`, `sciplot_gui/studio_project/series_revision.py` | Revise source-authorized membership and order inside the live Veusz `Document` as one native Undo step. Persist only the presentation selection while retaining the complete source-bound spec, values, and encodings; derive the visible view only for exact-current document audit. Managed saves commit every ready VSZ, spec, the canonical request, and registry in one existing figure-set transaction. |
+| Visible document recovery | `studio_core/delivery_recovery.py`, `delivery_recovery_state.py` | Preview one still-bound primary delivery using last-good baseline, canonical and candidate identities plus current scientific source evidence. Apply recomputes the preview under the project lock, privately archives the previous canonical bytes and installs the candidate with rollback. It does not auto-export or merge a two-sided divergence. |
+| Source revision | `studio_core/source_update.py`, `source_update_staging.py`, `source_update_review.py`, `source_update_commit.py` | Use ordinary Intake and Studio preparation in an isolated sibling candidate. Review figure, sample, replicate and numerical changes; apply rebuilds and compares the exact logical preview. Recheck source/delivery/project identity before transactionally installing active source, VSZ/spec and metadata, preserving runs and archiving old active files. Metadata relocation never rewrites raw/source data bytes. Corrupt or incomplete registered figure sets cannot fall back to a single primary. |
+| Native compatible style transfer | `veusz_worker/style_transfer.py` | Pair unique sample and task identities through the native API. Allowlist fonts, strokes, ordinary series colors and compatible manual legend layout, excluding data bindings, hiding, scientific labels, bounds and semantic color encodings. Audit the candidate against its new specification before native atomic save. Report skipped styles explicitly. |
+| Revision presentation | `cli/dispatch/project_revision.py`, `sciplot_gui/studio_project/project_changes.py`, `change_dialogs.py`, `change_worker.py` | CLI and native Project dock call the same preview/apply services. GUI performs core work off the UI thread and reloads native Documents on the UI thread; it blocks unresolved local edits and concurrent project windows. These adapters do not derive science or edit VSZ text. |
 | Selected presentation identity | `presentation_identity.py`, `studio_core/presentation_evidence.py` | Resolve one closed versioned `rule_id`/template value from the canonical request plus the already-resolved current rule. It binds only the plan's declared primary task and primary spec; each secondary spec verifies its own task template without minting another identity. Exact-current VSZ stays hash-bound visual authority; recognition never selects presentation. |
 | Global visual contract | `policy/plot_contract.json`, `policy/`, `style_contract/` | Single hard-style and option authority. |
 | Request validation | `request_contract.py` | Reject unsupported templates/options before rendering and expose the single projection of rule-owned editable defaults onto the existing request surface. Internal renderer policy remains outside the request contract. |
@@ -207,15 +238,39 @@ contracts but may not duplicate scientific calculations.
 | Managed rule-readiness display evidence | `sciplot_gui/studio_project_status/rule_readiness_evidence.py` | Strictly parses untrusted v1/v2 managed receipts before native status may display a specific rule or contract repair reason. Standalone and secondary receipts remain isolated. |
 | Material performance data | `performance_comparison/` | Validate tidy values and declared bounds; never infer missing science. |
 | Material performance objects | `performance_veusz/` | Native editable scatter/radar objects and index geometry. |
-| Project state | `sciplot_gui/studio_project_status/` | Pure evidence-to-state logic; UI renders it. |
-| Optional selected-object AI | setting catalogue, assistant provider/operations, GUI bridge | Validated current-object operations only. |
+| Native compatibility status | `sciplot_gui/studio_project_status/` | Pure evidence-to-state logic for the retained live native window; external saved-project queries do not import this GUI package or claim knowledge of unsaved state. |
+| Retained selected-object AI | setting catalogue, assistant provider/operations, GUI bridge | The in-app assistant retains validated current-object operations. Its live-selection restriction is local to that adapter, not the explicit saved-object external API. |
 | QA and delivery | `qa/`, `readiness/`, `delivery/`, evidence packages | Inspect and package artifacts without changing content. |
+| Current managed export | `studio_core/project_export.py` | CLI, Intake, and Qt share one export-and-publish use case. It consumes the saved canonical document once and returns an immutable JSON snapshot with independent projections; Intake does not rerun Workflow after Studio preparation. |
+| Managed scientific audit | `source_coverage/managed_documents.py`, `veusz_worker/spec_audit/` | Every managed publication compares all current documents against source-derived scientific expectations before QA and delivery. Strict generated audits additionally enforce generated styling; current-document audits permit ordinary styling changes while retaining data, bindings, units, identities, and visible scientific geometry. |
+| Delivery replacement and continuation | `delivery/package_transaction.py`, `launchers/delivery_binding.py`, `studio_core/delivery_target.py`, CLI interface composition | Stage and validate candidates before replacing visible managed artifacts, retain backups through verification, and roll back ordinary failures. Launcher comments bind the original delivery location, canonical project, and VSZ baselines. Relocated copies resolve as portable documents; unmerged visible changes stop replacement. This is not a crash-atomic filesystem transaction. |
+| Explicit worksheet confirmation | `intake/table_preview.py`, `semantic_sources/table_selection.py`, paired-curve source readers | The preview retains original row/column indices. Explicit sheet selection is bound to current workbook bytes and consumed only by the registered paired-curve adapter. Preview-only metadata never silently narrows source coverage. Browser-local import settings contain configuration and must be checked against each current source. |
 | Runtime gates | `smoke/`, `acceptance/`, probes | Evidence only; never production rendering routes. |
 | Upstream Veusz | `third_party/veusz/` | Preserve upstream identity; SciPlot integration stays outside. |
 
 Compatibility facades may preserve a public import or documented monkeypatch
 seam. They must not acquire business logic or become forwarding layers without
 a real compatibility caller.
+
+Readiness registry freshness covers rule declarations and render-request policy,
+not current implementation bytes or environment identity. Historical owner
+validation has no build binding. The status projection states these limits;
+current implementation acceptance remains separate evidence. File-length and AST
+guards are regression aids, not proof that module responsibilities are cohesive.
+
+An external query's `status=ok` means that reading succeeded. It reports
+`ready_to_use=null` and `readiness_evaluated=false`; source hashes, artifact QA
+hashes and visible-package hashes do not substitute for a new scientific audit,
+build certification or visual review. Preview/apply likewise do not publish.
+The existing exact-current managed export remains the complete-figure-set
+scientific audit, export, QA and delivery boundary.
+
+Document edit history is a bounded transaction recovery record beneath the
+project's private runtime, not a second document model or a general exactly-once
+execution engine. Reapplying the same preview can return `already_applied` when
+the installed result and archived evidence still match; later edits invalidate
+that reuse. External commits preserve ordinary failure rollback, while a process
+interruption requires inspection of its durable outcome before claiming success.
 
 ## Presentation and style boundary
 
@@ -234,8 +289,10 @@ supported request choice wins over recognition history, while an omitted
 choice materializes the current rule default. Request, Study Model, FigurePlan,
 present VSZ spec, publication payloads, and registry must agree with that
 identity; they may not independently reselect it. A spec-less manual VSZ stays
-valid exact-current visual authority, with its hash bound beside the selected
-identity rather than serving as a source for reverse template inference.
+valid visual authority for standalone exact-current export. A managed,
+source-faithful delivery requires its scientific spec and source bindings;
+missing evidence blocks publication rather than inventing a spec from the
+current appearance or inferring a template in reverse.
 
 Workflow route is a separate fact from presentation and figure selection.
 `WorkflowRouteIntent` captures auto, named recipe, or direct render before a

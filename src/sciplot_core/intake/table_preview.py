@@ -151,18 +151,25 @@ def _preview_is_number(value: object) -> bool:
 
 
 def _preview_read_frame(
-    name: str, content: bytes
+    name: str, content: bytes, *, selected_sheet: str | None = None
 ) -> tuple[pd.DataFrame, str | None, str | None]:
     suffix = Path(name).suffix.lower()
     encoding: str | None = None
     sheet: str | None = None
     if suffix in {".xlsx", ".xls"}:
-        workbook = pd.ExcelFile(io.BytesIO(content))
-        sheet = str(workbook.sheet_names[0])
-        frame = pd.read_excel(
-            workbook, sheet_name=sheet, header=None, nrows=_PREVIEW_SCAN_ROWS
-        )
+        with pd.ExcelFile(io.BytesIO(content)) as workbook:
+            sheets = [str(value) for value in workbook.sheet_names]
+            sheet = selected_sheet if selected_sheet is not None else sheets[0]
+            if sheet not in sheets:
+                raise ValueError(f"Worksheet {sheet!r} was not found; choose an existing worksheet.")
+            frame = pd.read_excel(
+                workbook, sheet_name=sheet, header=None, nrows=_PREVIEW_SCAN_ROWS,
+                keep_default_na=False,
+            )
+            frame.attrs["sheets"] = sheets
     else:
+        if selected_sheet is not None:
+            raise ValueError("Worksheet selection requires an Excel workbook.")
         text, encoding = smart_decode(content)
         buffer = io.StringIO(text)
         try:
@@ -177,7 +184,7 @@ def _preview_read_frame(
             frame = pd.read_csv(
                 buffer, sep=delimiter, header=None, nrows=_PREVIEW_SCAN_ROWS
             )
-    frame = frame.dropna(axis=1, how="all")
+    frame.attrs["source_column_count"] = frame.shape[1]
     if frame.shape[1] > _PREVIEW_DISPLAY_COLUMNS:
         frame = frame.iloc[:, :_PREVIEW_DISPLAY_COLUMNS]
     return frame, sheet, encoding
@@ -270,6 +277,7 @@ def preview_table_payload(
     name: str,
     content: bytes | None = None,
     source_path: str | Path | None = None,
+    selected_sheet: str | None = None,
 ) -> dict[str, Any]:
     if content is None:
         if source_path is None:
@@ -277,7 +285,11 @@ def preview_table_payload(
         path = Path(source_path).expanduser()
         content = path.read_bytes()
         name = name or path.name
-    frame, sheet, encoding = _preview_read_frame(name, content)
+    if selected_sheet is not None and (
+        not isinstance(selected_sheet, str) or not selected_sheet
+    ):
+        raise ValueError("Worksheet selection must be a non-empty worksheet name.")
+    frame, sheet, encoding = _preview_read_frame(name, content, selected_sheet=selected_sheet)
     header_row = _preview_header_row(frame)
     columns: list[dict[str, Any]] = []
     rows: list[dict[str, Any]] = []
@@ -314,6 +326,9 @@ def preview_table_payload(
         "kind": "sciplot_table_preview",
         "name": name,
         "sheet": sheet,
+        "sheets": frame.attrs.get("sheets", []),
+        "source_sha256": hashlib.sha256(content).hexdigest(),
+        "source_column_count": frame.attrs.get("source_column_count", len(columns)),
         "encoding": encoding,
         "header_row": (header_row + 1) if header_row is not None else None,
         "preview_rows": len(rows),

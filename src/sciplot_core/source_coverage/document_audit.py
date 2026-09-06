@@ -22,6 +22,7 @@ def _audit_exact_document_data(
     *,
     document_path: Path,
     spec_path: Path,
+    check_presentation: bool = True,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     document_snapshot = _stable_file_snapshot(
         document_path,
@@ -58,6 +59,7 @@ def _audit_exact_document_data(
                 "audit-spec-data",
                 str(private_document),
                 str(private_spec),
+                *([] if check_presentation else ["--allow-presentation-edits"]),
             ],
             text=True,
             capture_output=True,

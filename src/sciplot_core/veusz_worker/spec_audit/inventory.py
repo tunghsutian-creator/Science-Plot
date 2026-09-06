@@ -64,6 +64,8 @@ def build_spec_audit_inventory(
         setting_names=(
             "xData",
             "yData",
+            "xAxis",
+            "yAxis",
             "labels",
             "key",
             "PlotLine/color",

@@ -50,6 +50,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     spec_data_audit_parser.add_argument("document", type=Path)
     spec_data_audit_parser.add_argument("spec", type=Path)
+    spec_data_audit_parser.add_argument(
+        "--allow-presentation-edits", action="store_true"
+    )
     save_spec_parser = subparsers.add_parser(
         "save-spec", help="Generate a VSZ from a SciPlot Veusz spec."
     )
@@ -60,11 +63,29 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Reopen a VSZ and materialize its widget settings.",
     )
     inspect_state_parser.add_argument("document", type=Path)
+    preview_parser = subparsers.add_parser(
+        "preview-document", help="Render the exact saved first page as a PNG."
+    )
+    preview_parser.add_argument("document", type=Path)
+    preview_parser.add_argument("--out", required=True, type=Path)
+    edit_parser = subparsers.add_parser(
+        "edit-document", help="Apply a safe native setting batch to a new candidate."
+    )
+    edit_parser.add_argument("document", type=Path)
+    edit_parser.add_argument("--changes", required=True, type=Path)
+    edit_parser.add_argument("--output-document", required=True, type=Path)
+    edit_parser.add_argument("--preview-png", required=True, type=Path)
     migrate_unit_labels_parser = subparsers.add_parser(
         "migrate-unit-labels",
         help="Normalize visible unit labels in an existing Veusz document.",
     )
     migrate_unit_labels_parser.add_argument("document", type=Path)
+    transfer_parser = subparsers.add_parser(
+        "transfer-styles",
+        help="Copy compatible native styles between source revisions.",
+    )
+    for name in ("previous", "current", "previous_spec", "current_spec"):
+        transfer_parser.add_argument(name, type=Path)
     return parser
 
 
@@ -81,11 +102,32 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "audit-documents":
         payload = audit_documents(args.documents)
     elif args.command == "audit-spec-data":
-        payload = audit_spec_data(args.document, args.spec)
+        payload = audit_spec_data(
+            args.document,
+            args.spec,
+            check_presentation=not args.allow_presentation_edits,
+        )
     elif args.command == "inspect-document-state":
         payload = inspect_document_state(args.document)
+    elif args.command == "preview-document":
+        from sciplot_core.veusz_worker.document_edit import preview_document
+
+        payload = preview_document(args.document, output_png=args.out)
+    elif args.command == "edit-document":
+        from sciplot_core.veusz_worker.document_edit import edit_document
+
+        payload = edit_document(
+            args.document, json.loads(args.changes.read_text(encoding="utf-8")),
+            output_document=args.output_document, preview_png=args.preview_png,
+        )
     elif args.command == "migrate-unit-labels":
         payload = migrate_unit_labels(args.document)
+    elif args.command == "transfer-styles":
+        from sciplot_core.veusz_worker.style_transfer import transfer_document_styles
+
+        payload = transfer_document_styles(
+            args.previous, args.current, args.previous_spec, args.current_spec
+        )
     else:
         payload = save_spec(args.document, args.spec)
     print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from PyQt6 import QtWidgets
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.studio import export_project_document
 from sciplot_gui.studio_project_status import (
     _read_json,
     export_result_message,
@@ -28,21 +29,17 @@ class ExportHelpersMixin:
                 "Only the canonical project/studio/document.vsz may publish "
                 "a project delivery receipt."
             )
-        export_payload = export_studio_document(
-            self.document_path,
-            formats=["pdf", "tiff_300"],
-        )
-        exports = list(export_payload.get("exports") or [])
-        export_document_sha256 = str(
-            export_payload.get("document_sha256") or ""
-        ).strip()
-        run = publish_studio_export_run(
+        published = export_project_document(
             project_dir=self.project_dir,
             request_path=self.request_path,
             document_path=self.document_path,
-            exports=exports,
-            export_document_sha256=export_document_sha256,
+            formats=["pdf", "tiff_300"],
+            export_document=export_studio_document,
+            publish_export=publish_studio_export_run,
         )
+        export_payload = published.export_payload
+        exports = published.exports
+        run = published.run_payload
         figure_set_export_scope = run.get("figure_set_export_scope")
         if (
             figure_set_export_scope is not None

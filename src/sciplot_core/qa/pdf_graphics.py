@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
-import fitz
+import pymupdf as fitz
 
 
 def _embedded_raster_info(document: fitz.Document) -> list[dict[str, Any]]:

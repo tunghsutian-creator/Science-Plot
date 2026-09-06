@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-import fitz
+import pymupdf as fitz
 from PIL import Image
 from sciplot_core.policy import DEFAULT_FIGURE_SIZE
 
