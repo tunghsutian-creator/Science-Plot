@@ -1,0 +1,24 @@
+{
+  "size": "60x55",
+  "palette_colors": [
+    "#4361EE",
+    "#00B4D8",
+    "#06B67A",
+    "#F47C35",
+    "#C947A5"
+  ],
+  "x_label_override": "Synthetic formulations",
+  "y_label_override": "Tensile strength (MPa)",
+  "summary_statistic": "median_iqr",
+  "raw_point_jitter_fraction": 0.24,
+  "y_min": 10,
+  "y_max": 120,
+  "y_ticks": [
+    20,
+    40,
+    60,
+    80,
+    100,
+    120
+  ]
+}

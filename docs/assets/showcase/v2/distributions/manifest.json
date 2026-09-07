@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-07",
+  "purpose": "SciPlot GitHub synthetic showcase",
+  "data_generator": "generate_data.py",
+  "renderer": "SciPlot public render CLI / native Veusz",
+  "image_conversion": "Poppler pdftoppm at 300 dpi; full PDF page; no image edits",
+  "figures": [
+    {
+      "image": "replicate-distributions.png",
+      "template": "box_strip",
+      "source": "data/synthetic-replicate-distributions.csv",
+      "source_kind": "synthetic",
+      "source_sha256": "8248234ce299b629e9a4b5924d215eca7b6ced08927d271e144afd0ce8466ae4",
+      "options": "requests/replicate-distributions.json",
+      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/distributions/data/synthetic-replicate-distributions.csv --auto --template box_strip --options @docs/assets/showcase/v2/distributions/requests/replicate-distributions.json --out .tmp_verify/github_showcase_v2/distributions/replicates-60x55-lf",
+      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v2/distributions/replicates-60x55-lf/synthetic-replicate-distributions_box_strip.pdf docs/assets/showcase/v2/distributions/replicate-distributions",
+      "physical_size_mm": [
+        60,
+        55
+      ],
+      "png_size_px": [
+        709,
+        650
+      ],
+      "png_sha256": "41d143ac42727ef022ead912e93259e5d8722208204aaf1a98913dea9c19ec8a",
+      "native_pdf": ".tmp_verify/github_showcase_v2/distributions/replicates-60x55-lf/synthetic-replicate-distributions_box_strip.pdf",
+      "native_vsz": ".tmp_verify/github_showcase_v2/distributions/replicates-60x55-lf/_veusz/single/studio/document.vsz",
+      "evidence": ".tmp_verify/github_showcase_v2/distributions/replicates-60x55-lf-result.json",
+      "semantics": {
+        "sample_count": 5,
+        "sample_labels": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "observations_per_sample": 25,
+        "observation_count": 125,
+        "unit": "MPa",
+        "summary": "Native box, median and IQR; raw observations retained; whiskers follow the native boxplot rule. Synthetic values are not measured materials."
+      },
+      "qa": {
+        "native_render_issues": [],
+        "exact_source_values_verified": true,
+        "source_sha256_matches_native_spec": true,
+        "all_source_observations_or_cells_retained": true,
+        "visual_review": "Passed at 60 x 55 mm: all A-E sample labels and units readable; five sample colors retained; component labels use documented Pol./Mod./Fill./Add. abbreviations; no data clipping; legends and colorbar do not overlap data; full PDF page rasterized without crop or retouch.",
+        "csv_line_ending": "LF; byte-level verification confirmed only CRLF-to-LF changed."
+      },
+      "options_sha256": "4752fc45ded15d1257df029d78ad46f1ca886399ecd66c3b9d7ed94af36a9e32"
+    },
+    {
+      "image": "composition-bars.png",
+      "template": "bar",
+      "source": "data/synthetic-composition-bars.csv",
+      "source_kind": "synthetic",
+      "source_sha256": "bfa7b9ae5ede3e15882f05c098cc823f380bbd6edc6516c02d4493109a4c3461",
+      "options": "requests/composition-bars.json",
+      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/distributions/data/synthetic-composition-bars.csv --template bar --options @docs/assets/showcase/v2/distributions/requests/composition-bars.json --out .tmp_verify/github_showcase_v2/distributions/composition-60x55-lf",
+      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v2/distributions/composition-60x55-lf/synthetic-composition-bars_bar.pdf docs/assets/showcase/v2/distributions/composition-bars",
+      "physical_size_mm": [
+        60,
+        55
+      ],
+      "png_size_px": [
+        709,
+        650
+      ],
+      "png_sha256": "1c21b3b827537f73a7e8ee3aa9d2a57578399ddb36772803d691672d6bc6f6d8",
+      "native_pdf": ".tmp_verify/github_showcase_v2/distributions/composition-60x55-lf/synthetic-composition-bars_bar.pdf",
+      "native_vsz": ".tmp_verify/github_showcase_v2/distributions/composition-60x55-lf/_veusz/single/studio/document.vsz",
+      "evidence": ".tmp_verify/github_showcase_v2/distributions/composition-60x55-lf-result.json",
+      "semantics": {
+        "sample_count": 5,
+        "sample_labels": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ],
+        "components_per_sample": 4,
+        "component_value_count": 20,
+        "unit": "%",
+        "summary": "Additive mass fractions for Polymer, Modifier, Filler, Additive sum to 100% in each sample. Components are not statistical replicates; no mean, error bar or box summary is used.",
+        "component_label_mapping": {
+          "Pol.": "Polymer",
+          "Mod.": "Modifier",
+          "Fill.": "Filler",
+          "Add.": "Additive"
+        }
+      },
+      "qa": {
+        "native_render_issues": [],
+        "exact_source_values_verified": true,
+        "source_sha256_matches_native_spec": true,
+        "all_source_observations_or_cells_retained": true,
+        "visual_review": "Passed at 60 x 55 mm: all A-E sample labels and units readable; five sample colors retained; component labels use documented Pol./Mod./Fill./Add. abbreviations; no data clipping; legends and colorbar do not overlap data; full PDF page rasterized without crop or retouch.",
+        "csv_line_ending": "LF; byte-level verification confirmed only CRLF-to-LF changed."
+      },
+      "options_sha256": "bf4f8991f08bfc81c44943d900a07ba6c7609540b489033861f43c4a2d7b8720"
+    },
+    {
+      "image": "response-heatmap.png",
+      "template": "heatmap",
+      "source": "data/synthetic-response-heatmap.csv",
+      "source_kind": "synthetic",
+      "source_sha256": "4d7fe091ccae80f1abe6db6b322541ea1f7cf3ca868e8a124c46d65ff77ffe57",
+      "options": "requests/response-heatmap.json",
+      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/distributions/data/synthetic-response-heatmap.csv --template heatmap --options @docs/assets/showcase/v2/distributions/requests/response-heatmap.json --out .tmp_verify/github_showcase_v2/distributions/heatmap-60x55-lf",
+      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v2/distributions/heatmap-60x55-lf/synthetic-response-heatmap_heatmap.pdf docs/assets/showcase/v2/distributions/response-heatmap",
+      "physical_size_mm": [
+        60,
+        55
+      ],
+      "png_size_px": [
+        709,
+        650
+      ],
+      "png_sha256": "f51574e3257286b1d3ea03bf96d600dc93ef4cf7b7e667ca691678a3ebeb600c",
+      "native_pdf": ".tmp_verify/github_showcase_v2/distributions/heatmap-60x55-lf/synthetic-response-heatmap_heatmap.pdf",
+      "native_vsz": ".tmp_verify/github_showcase_v2/distributions/heatmap-60x55-lf/_veusz/single/studio/document.vsz",
+      "evidence": ".tmp_verify/github_showcase_v2/distributions/heatmap-60x55-lf-result.json",
+      "semantics": {
+        "kind": "continuous_synthetic_response_field",
+        "grid_shape": [
+          41,
+          61
+        ],
+        "coordinate_value_count": 2501,
+        "x_unit": "min",
+        "y_unit": "°C",
+        "z_unit": "%",
+        "summary": "One continuous synthetic scalar field, not a set of sample groups. All grid values are retained. 100*(1-exp(-t*0.015*exp((T-150)/23))) is illustrative, not an experimentally fitted kinetic law."
+      },
+      "qa": {
+        "native_render_issues": [],
+        "exact_source_values_verified": true,
+        "source_sha256_matches_native_spec": true,
+        "all_source_observations_or_cells_retained": true,
+        "visual_review": "Passed at 60 x 55 mm: all A-E sample labels and units readable; five sample colors retained; component labels use documented Pol./Mod./Fill./Add. abbreviations; no data clipping; legends and colorbar do not overlap data; full PDF page rasterized without crop or retouch.",
+        "csv_line_ending": "LF; byte-level verification confirmed only CRLF-to-LF changed."
+      },
+      "options_sha256": "713ecdaec1459839cee55c89ed8b0460a294e1353dc23fdd0cdbdb91f975afa2"
+    }
+  ],
+  "physical_size_policy": "All three figures use 60 x 55 mm; source observations and continuous grid remain complete.",
+  "csv_line_endings": "LF; generator sets csv.writer lineterminator explicitly."
+}

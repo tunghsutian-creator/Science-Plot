@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "purpose": "Native SciPlot synthetic showcase, not measured data",
+  "figure": {
+    "template": "curve",
+    "source": "spectra-rich.csv",
+    "options": "options.json",
+    "image": "spectra-rich.png",
+    "sample_count": 5,
+    "points_per_sample": 601,
+    "requested_size_mm": [
+      60,
+      55
+    ],
+    "png_size_px": [
+      709,
+      650
+    ],
+    "png_dpi": 300,
+    "data_origin": "Deterministic synthetic absorbance-shaped curves. No chemical identity or experimental inference.",
+    "generation": {
+      "x": "250, 251, ..., 850 nm",
+      "i_for_samples_S01_to_S05": [
+        0,
+        3,
+        5,
+        8,
+        11
+      ],
+      "formula": "0.025 + (0.86+0.19*sin(i*0.55))*exp(-0.5*((x-(365+22*i))/(21+2*(i%3)))**2) + (0.17+0.015*i)*exp(-0.5*((x-(290+8*i))/13)**2) + 0.11*exp(-0.5*((x-(690-4*i))/49)**2)",
+      "rounding": "six decimal places"
+    },
+    "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/spectra/spectra-rich.csv --template curve --options @docs/assets/showcase/v2/spectra/options.json --out .tmp_verify/github_showcase_v2/spectra/release",
+    "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v2/spectra/release/spectra-rich_curve.pdf docs/assets/showcase/v2/spectra/spectra-rich",
+    "layout": "y range 0 to 1.5 reserves clear space above the complete curves for the five-item legend.",
+    "postprocessing": "Full native PDF page rasterized directly; no cropping or plotted-data changes.",
+    "qa": {
+      "native_render_issues": [],
+      "source_to_spec": "passed: all 3005 x/y pairs match the CSV exactly",
+      "visual_review": "passed: five labels, full curves, axis units visible; legend clear of peaks"
+    },
+    "sha256": {
+      "options.json": "9a63eb6988e46b2a38586101c7c92887ac9288888e55e66056c0b53c1739479a",
+      "spectra-rich.csv": "5340fd26a917996e28ad7eb136e87e24f289c7e80e6b211ded96b7aba1811585",
+      "spectra-rich.png": "ff8bb9401d53effec577cf44d4fbf4156a0b04203ffd8a0f2ace9b312d64b2ff"
+    }
+  }
+}

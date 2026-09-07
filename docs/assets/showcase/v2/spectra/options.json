@@ -1,0 +1,15 @@
+{
+  "size": "60x55",
+  "x_label_override": "Wavelength (nm)",
+  "y_label_override": "Absorbance (a.u.)",
+  "y_min": 0,
+  "y_max": 1.5,
+  "palette_colors": [
+    "#E64B55",
+    "#8755C6",
+    "#2979D8",
+    "#00ADA4",
+    "#F2A52B"
+  ],
+  "legend_position": "upper_right"
+}

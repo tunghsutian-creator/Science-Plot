@@ -1,6 +1,6 @@
 # SciPlot
 
-![SciPlot：让 AI 理解任务，让数据忠实成图。](docs/assets/sciplot-banner.svg)
+![SciPlot：让数据，成为好图。AI 理解任务，本地忠实成图。](docs/assets/sciplot-banner.png)
 
 **把重复的绘图步骤交给程序，把判断留给研究者。**
 
@@ -17,33 +17,59 @@ SciPlot 是面向外部 AI 的本地科研绘图工具，将实验数据整理�
 
 以下图片由 **SciPlot / Veusz 实际渲染**，使用仓库内可追溯的**合成演示数据**。
 它们展示图形与排版能力，不代表实测结果或材料性能结论；点击图片可查看原尺寸。
-来源、生成命令与展示范围见[图例说明](docs/assets/showcase/README.md)。
+普通图采用 **60 × 55 mm**，每图优选五组样品并保留完整数据点；连续响应场保留完整网格。
+性能对比采用 **120 × 55 mm**，容纳更多样品与指标。
+来源、生成命令与展示范围见[图例说明](docs/assets/showcase/v2/README.md)。
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <b>多样品光谱 · 清楚比较每一条曲线</b><br>
-      <a href="docs/assets/showcase/uvvis-curves.png"><img src="docs/assets/showcase/uvvis-curves.png" width="420" alt="合成 UV-vis 演示：四个样品的吸光度随波长变化曲线，保留样品图例与坐标单位"></a><br>
-      UV-vis 曲线，四组独立数据，统一配色与单位。
+      <b>多样品光谱 · 让曲线差异更鲜明</b><br>
+      <a href="docs/assets/showcase/v2/spectra/spectra-rich.png"><img src="docs/assets/showcase/v2/spectra/spectra-rich.png" width="420" alt="合成光谱演示：五组彩色多峰曲线，每组完整保留601个数据点"></a><br>
+      五组样品 × 601 点，多峰曲线配合鲜明配色。
     </td>
     <td width="50%" valign="top">
-      <b>重复测试分布 · 让每个数据点可见</b><br>
-      <a href="docs/assets/showcase/replicate-distribution.png"><img src="docs/assets/showcase/replicate-distribution.png" width="420" alt="合成重复测试演示：箱线图叠加各组原始数据点"></a><br>
-      箱线图叠加原始点，同时呈现中位数和分布。
+      <b>堆叠光谱 · 分开展示每组响应</b><br>
+      <a href="docs/assets/showcase/v2/curves/stacked-spectra.png"><img src="docs/assets/showcase/v2/curves/stacked-spectra.png" width="420" alt="合成堆叠光谱演示：五组彩色曲线，每组600点，采用明确的纵向显示偏移"></a><br>
+      五组样品 × 600 点，纵向错开显示，源数值保留。
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <b>流变点线 · 跨数量级看清趋势</b><br>
+      <a href="docs/assets/showcase/v2/curves/rheology-point-lines.png"><img src="docs/assets/showcase/v2/curves/rheology-point-lines.png" width="420" alt="合成流变演示：五组各30点，双对数坐标，颜色与点形区分样品"></a><br>
+      五组样品 × 30 点，双对数坐标与多种点形。
+    </td>
+    <td width="50%" valign="top">
+      <b>重复测试分布 · 同时呈现统计与原始点</b><br>
+      <a href="docs/assets/showcase/v2/distributions/replicate-distributions.png"><img src="docs/assets/showcase/v2/distributions/replicate-distributions.png" width="420" alt="合成重复测试演示：五组各25个观测点，箱线图叠加全部125个原始点"></a><br>
+      五组样品 × 25 点，箱线图叠加全部原始观测。
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <b>组成柱图 · 把配方比例一眼讲清</b><br>
+      <a href="docs/assets/showcase/v2/distributions/composition-bars.png"><img src="docs/assets/showcase/v2/distributions/composition-bars.png" width="420" alt="合成组成演示：五个配方各含四个组分，每个配方合计100%"></a><br>
+      五个配方 × 四种组分，颜色与明度区分比例。
+    </td>
+    <td width="50%" valign="top">
+      <b>连续响应场 · 让二维变化铺展开来</b><br>
+      <a href="docs/assets/showcase/v2/distributions/response-heatmap.png"><img src="docs/assets/showcase/v2/distributions/response-heatmap.png" width="420" alt="合成连续响应场：完整61乘41网格，颜色表示响应值，附数值色条"></a><br>
+      61 × 41 完整网格，用连续色阶呈现响应变化。
     </td>
   </tr>
   <tr>
     <td colspan="2">
-      <b>性能散点对照 · 看见位置与分组</b><br>
-      <a href="docs/assets/showcase/performance-scatter.png"><img src="docs/assets/showcase/performance-scatter.png" width="860" alt="合成性能对比演示：密度与比冲击强度的散点图，带分组区域及材料索引"></a><br>
-      样品和参照点保留各自身份；浅色区域表示样品范围，不是置信区间。
+      <b>性能散点对照 · 更多样品，更完整的比较视野</b><br>
+      <a href="docs/assets/showcase/v2/performance/performance-scatter-rich.png"><img src="docs/assets/showcase/v2/performance/performance-scatter-rich.png" width="860" alt="合成性能对比演示：四个彩色分组、十六个样品与十六种点形，附分组包络和完整材料索引"></a><br>
+      四个分组、16 个样品、16 种点形；浅色包络表示组内范围，不是置信区间。
     </td>
   </tr>
   <tr>
     <td colspan="2">
-      <b>多指标雷达图 · 把比较边界说清楚</b><br>
-      <a href="docs/assets/showcase/performance-radar.png"><img src="docs/assets/showcase/performance-radar.png" width="860" alt="合成多指标雷达演示：按声明边界归一化，参照材料缺失的指标保持缺失"></a><br>
-      按声明的指标方向和边界归一化；参照材料缺失的指标不补点。
+      <b>多指标雷达图 · 同屏展开多维表现</b><br>
+      <a href="docs/assets/showcase/v2/performance/performance-radar-rich.png"><img src="docs/assets/showcase/v2/performance/performance-radar-rich.png" width="860" alt="合成多指标雷达演示：六个彩色样品、五个带单位指标，按声明方向与范围归一化"></a><br>
+      六个样品 × 五个指标，按明确方向与边界归一化；面积不作为综合性能分数。
     </td>
   </tr>
 </table>

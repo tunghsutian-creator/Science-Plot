@@ -1,0 +1,44 @@
+{
+  "size": "60x55",
+  "data_variables": {
+    "x": "time_min",
+    "y": "temperature_C",
+    "z": "conversion_pct"
+  },
+  "x_label_override": "Time (min)",
+  "y_label_override": "Temperature (°C)",
+  "y_min": 118,
+  "y_max": 245,
+  "y_ticks": [
+    120,
+    140,
+    160,
+    180,
+    200
+  ],
+  "z_label_override": "Synthetic conversion (%)",
+  "z_min": 0,
+  "z_max": 100,
+  "z_ticks": [
+    0,
+    25,
+    50,
+    75,
+    100
+  ],
+  "z_tick_format": "%.0f",
+  "colormap_colors": [
+    "#302775",
+    "#4268D8",
+    "#21A9CF",
+    "#43C59E",
+    "#BFE773",
+    "#F5D15D",
+    "#F18D48",
+    "#D94546"
+  ],
+  "show_colorbar": true,
+  "colorbar_direction": "horizontal",
+  "colorbar_width_mm": 35,
+  "colorbar_height_mm": 2.8
+}

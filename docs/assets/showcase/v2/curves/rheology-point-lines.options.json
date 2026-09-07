@@ -1,0 +1,16 @@
+{
+  "size": "60x55",
+  "x_label_override": "Angular frequency (rad s⁻¹)",
+  "y_label_override": "Storage modulus (Pa)",
+  "xscale": "log",
+  "yscale": "log",
+  "series_label_mode": "legend",
+  "legend_position": "auto",
+  "palette_colors": [
+    "#DC2626",
+    "#2563EB",
+    "#059669",
+    "#F97316",
+    "#9333EA"
+  ]
+}

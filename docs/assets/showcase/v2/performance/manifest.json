@@ -1,0 +1,206 @@
+{
+  "kind": "sciplot_synthetic_showcase",
+  "version": 2,
+  "generated_date": "2026-09-07",
+  "implementation_commit": "d6791809a06141188d3797b561f05e31b2126711",
+  "synthetic": true,
+  "scientific_evidence": false,
+  "renderer": "SciPlot public task route with native Veusz PDF export",
+  "rasterization": "pdftoppm -png -r 300 -singlefile INPUT_PDF OUTPUT_PREFIX",
+  "preparation": "mkdir -p .tmp_verify/github_showcase_v2/performance/.sciplot/tasks .tmp_verify/github_showcase_v2/performance/reproduce_tasks",
+  "figures": [
+    {
+      "image": "performance-scatter-rich.png",
+      "image_size_px": [
+        1417,
+        650
+      ],
+      "image_sha256": "97ae4143d252dd5fd3763b7468517a62dbde904de007852bd94aaca0771b1404",
+      "source": "performance-scatter-rich.csv",
+      "source_sha256": "cb5a846aa53109f422baef3ac978853d8e13f0d2ffcd60af1355b8260a7e7566",
+      "request": "scatter.request.json",
+      "request_sha256": "289b3ccc1747ace7eaeae1cdbabdf4f07683eeb221da630a92f0669fc1e22e34",
+      "command": "skill/scripts/sciplot task start --request docs/assets/showcase/v2/performance/scatter.request.json --task-dir .tmp_verify/github_showcase_v2/performance/reproduce_tasks/scatter --json",
+      "source_qa_delivery_current": {
+        "source": true,
+        "qa": true,
+        "delivery": true
+      },
+      "visual_review": "passed; full-page image inspected, labels and units visible without clipping or overlap",
+      "point_count": 16,
+      "groups": 4,
+      "points_per_group": 4,
+      "source_row_count": 48,
+      "displayed_metrics": [
+        "density",
+        "impact_strength"
+      ],
+      "not_displayed_metric": "elongation_at_break is auxiliary source metadata required by the shared performance planning contract",
+      "palette": [
+        "#397FE5",
+        "#10A990",
+        "#ED6470",
+        "#DFA126"
+      ],
+      "identities": "16 unique native markers; 4 group headings, two legend items per row",
+      "generation": "Four deterministic elliptical groups from cx,cy,rx,ry,phase parameters; angle=2*pi*j/12+phase; radius=.43+.5*((j*7)%11)/10; x=cx+rx*radius*cos(angle)+.01*sin(3*angle); y=cy+ry*radius*sin(angle)+5*(x-cx)/rx; final independent synthetic design uses j in [0,3,6,9], six-decimal source values.",
+      "group_parameters": [
+        [
+          1.05,
+          77,
+          0.105,
+          15,
+          0.3
+        ],
+        [
+          1.3,
+          47,
+          0.125,
+          12,
+          0.8
+        ],
+        [
+          1.38,
+          91,
+          0.12,
+          17,
+          1.25
+        ],
+        [
+          1.66,
+          59,
+          0.1,
+          18,
+          1.75
+        ]
+      ],
+      "public_route_limit": "A 48-point shared-LegendIdentity candidate was rejected by current FigureTask material-order validation in both public task and studio creation. The published source contains only these 16 independently identified points; blocked source and receipts remain in ignored evidence."
+    },
+    {
+      "image": "performance-radar-rich.png",
+      "image_size_px": [
+        1417,
+        650
+      ],
+      "image_sha256": "bcde5b7043929318c8052d8dda50b09251c239090626403881df3bce6cab77b8",
+      "source": "performance-radar-rich.csv",
+      "source_sha256": "2ecee4a2e2ca4f8ed942efca3a024a780d03bb0c1bf1e7b8c7f551f0f30cf5b3",
+      "request": "radar.request.json",
+      "request_sha256": "7bdfea07af16a82803d6c357129c12af2d202c51a8aae0ed26170ff79e0f0beb",
+      "command": "skill/scripts/sciplot task start --request docs/assets/showcase/v2/performance/radar.request.json --task-dir .tmp_verify/github_showcase_v2/performance/reproduce_tasks/radar --json",
+      "source_qa_delivery_current": {
+        "source": true,
+        "qa": true,
+        "delivery": true
+      },
+      "visual_review": "passed; full-page image inspected, labels and units visible without clipping or overlap",
+      "polygon_count": 6,
+      "metrics_per_polygon": 5,
+      "source_row_count": 30,
+      "metrics": [
+        "density",
+        "impact_strength",
+        "tensile_strength",
+        "elongation_at_break",
+        "recovery"
+      ],
+      "legend_group": "Synthetic designs",
+      "palette": [
+        "#3568C0",
+        "#C83E4D",
+        "#2A9D8F",
+        "#D99A24",
+        "#7C9ED9",
+        "#7B61A8"
+      ],
+      "generation": "Declared normalized profiles are converted to raw values using Value=ScaleMin+(ScaleMax-ScaleMin)*score for higher metrics and Value=ScaleMax-(ScaleMax-ScaleMin)*score for lower metrics. Source values are written to six decimals.",
+      "normalized_profiles": [
+        [
+          0.76,
+          0.46,
+          0.56,
+          0.69,
+          0.39
+        ],
+        [
+          0.4,
+          0.78,
+          0.44,
+          0.51,
+          0.71
+        ],
+        [
+          0.56,
+          0.63,
+          0.84,
+          0.41,
+          0.49
+        ],
+        [
+          0.48,
+          0.39,
+          0.68,
+          0.83,
+          0.56
+        ],
+        [
+          0.68,
+          0.55,
+          0.4,
+          0.58,
+          0.84
+        ],
+        [
+          0.82,
+          0.72,
+          0.61,
+          0.46,
+          0.68
+        ]
+      ],
+      "units": [
+        "g cm^-3",
+        "kJ m^-2",
+        "MPa",
+        "%",
+        "%"
+      ],
+      "bounds": [
+        [
+          0.7,
+          1.7
+        ],
+        [
+          0,
+          120
+        ],
+        [
+          0,
+          150
+        ],
+        [
+          0,
+          500
+        ],
+        [
+          0,
+          100
+        ]
+      ],
+      "directions": [
+        "lower",
+        "higher",
+        "higher",
+        "higher",
+        "higher"
+      ]
+    }
+  ],
+  "limitations": [
+    "All data are deterministic synthetic demonstrations, not measured material properties.",
+    "Envelope fills show the supplied synthetic point range, not confidence intervals.",
+    "Radar radius follows declared per-metric direction and bounds; polygon area is not an aggregate performance score.",
+    "Source-driven palette overrides are used where the public contract permits them; no renderer, VSZ text, or raster figure content was patched."
+  ],
+  "reproduction_note": "Execute from the repository root. Existing projects are resumed by their returned project path; a new complete creation needs fresh task and output directories."
+}

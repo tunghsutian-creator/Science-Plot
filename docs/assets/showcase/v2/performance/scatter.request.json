@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "action": "create",
+  "source": "docs/assets/showcase/v2/performance/performance-scatter-rich.csv",
+  "rule_id": "performance_comparison",
+  "template": "scatter",
+  "out": ".tmp_verify/github_showcase_v2/performance/scatter_supported_SciPlot"
+}

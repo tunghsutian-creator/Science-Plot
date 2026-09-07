@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "action": "create",
+  "source": "docs/assets/showcase/v2/performance/performance-radar-rich.csv",
+  "rule_id": "performance_comparison",
+  "template": "polar_curve",
+  "out": ".tmp_verify/github_showcase_v2/performance/radar_SciPlot"
+}

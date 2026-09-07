@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "purpose": "GitHub SciPlot native-rendered synthetic showcase",
+  "figures": [
+    {
+      "id": "stacked-spectra",
+      "template": "stacked_curve",
+      "source": "stacked-spectra.csv",
+      "options": "stacked-spectra.options.json",
+      "image": "stacked-spectra.png",
+      "data_origin": "Synthetic illustration only; no measured sample, chemistry assignment, or material-performance claim.",
+      "sample_count": 5,
+      "points_per_sample": 600,
+      "sample_metadata": "CSV rows 1-3 declare coordinate/response columns, units and synthetic sample identifiers.",
+      "requested_size_mm": [
+        60,
+        55
+      ],
+      "native_pdf_media_size_mm": [
+        59.972,
+        55.033
+      ],
+      "png_size_px": [
+        709,
+        650
+      ],
+      "png_dpi": 300,
+      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/curves/stacked-spectra.csv --template stacked_curve --options @docs/assets/showcase/v2/curves/stacked-spectra.options.json --out .tmp_verify/github_showcase_v2/curves/stacked_v5_60x55_lf",
+      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v2/curves/stacked_v5_60x55_lf/stacked-spectra_stacked_curve.pdf docs/assets/showcase/v2/curves/stacked-spectra",
+      "postprocessing": "None: direct full-page PDF rasterization; no cropping, recoloring, or image editing.",
+      "native_document": ".tmp_verify/github_showcase_v2/curves/stacked_v5_60x55_lf/_veusz/single/studio/document.vsz",
+      "qa": {
+        "artifact_status": "passed",
+        "native_render_issues": [],
+        "source_to_spec_status": "passed",
+        "visual_review": "passed at 60 x 55 mm: five complete spectra; sample labels raised using the native series_label_offset_fraction option to clear the broad peaks; no cropping or label overlap.",
+        "verified_series_count": 5,
+        "verified_points_count": 3000,
+        "all_source_x_values_preserved": true,
+        "all_y_values_match_after_declared_display_offset": true,
+        "requested_palette_preserved": true,
+        "source_line_endings": "LF; CRLF normalization preserves all CSV cells; new native render binds current source SHA-256.",
+        "png_unchanged_after_line_ending_normalization": true
+      },
+      "sha256": {
+        "stacked-spectra.csv": "f5d450653e475a11cfca92d25dd7b6988d054e5c8b78e795dde5aa7845dd324a",
+        "stacked-spectra.png": "ea2923663081aacf812de295589d05caabfc4765450e106710da6abf9c8733dc",
+        "stacked-spectra.options.json": "f045b40110db1b0a5436c1b523ca83d9ae3020706b8e1828bb664d9e3e1727e7"
+      },
+      "data_semantics": "Five synthetic absorbance spectra on 4000 to 500 cm⁻¹, each containing ten smooth peaks with varied heights and small shifts. Absorbance is dimensionless. Native stacked_curve applies an explicit constant vertical display offset to each curve and hides numerical y ticks; CSV values remain unshifted.",
+      "axis_labels": {
+        "x": "Wavenumber (cm⁻¹)",
+        "y": "Absorbance"
+      },
+      "display_transform": [
+        {
+          "id": "vertical_offset_stack",
+          "mode": "q01_shift_and_auto_spacing",
+          "series_count": 5,
+          "scientific_values_changed_in_visual_document": true,
+          "purpose": "visual separation only; processed source table retains the unshifted values"
+        }
+      ]
+    },
+    {
+      "id": "rheology-point-lines",
+      "template": "point_line",
+      "source": "rheology-point-lines.csv",
+      "options": "rheology-point-lines.options.json",
+      "image": "rheology-point-lines.png",
+      "data_origin": "Synthetic illustration only; no measured sample, chemistry assignment, or material-performance claim.",
+      "sample_count": 5,
+      "points_per_sample": 30,
+      "sample_metadata": "CSV rows 1-3 declare coordinate/response columns, units and synthetic sample identifiers.",
+      "requested_size_mm": [
+        60,
+        55
+      ],
+      "native_pdf_media_size_mm": [
+        59.972,
+        55.033
+      ],
+      "png_size_px": [
+        709,
+        650
+      ],
+      "png_dpi": 300,
+      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/curves/rheology-point-lines.csv --template point_line --options @docs/assets/showcase/v2/curves/rheology-point-lines.options.json --out .tmp_verify/github_showcase_v2/curves/point_v4_60x55_lf",
+      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v2/curves/point_v4_60x55_lf/rheology-point-lines_point_line.pdf docs/assets/showcase/v2/curves/rheology-point-lines",
+      "postprocessing": "None: direct full-page PDF rasterization; no cropping, recoloring, or image editing.",
+      "native_document": ".tmp_verify/github_showcase_v2/curves/point_v4_60x55_lf/_veusz/single/studio/document.vsz",
+      "qa": {
+        "artifact_status": "passed",
+        "native_render_issues": [],
+        "source_to_spec_status": "passed",
+        "visual_review": "passed at 60 x 55 mm: five complete point-line series; five-entry legend in lower right clears the curves; exact unit labels and both logarithmic axes verified.",
+        "verified_series_count": 5,
+        "verified_points_count": 150,
+        "all_source_x_values_preserved": true,
+        "all_y_values_match_after_declared_display_offset": true,
+        "requested_palette_preserved": true,
+        "source_line_endings": "LF; CRLF normalization preserves all CSV cells; new native render binds current source SHA-256.",
+        "png_unchanged_after_line_ending_normalization": true
+      },
+      "sha256": {
+        "rheology-point-lines.csv": "5a19871f01820b74a260f5af5e8c3cdd78a6373c758f588934ea3ef9b27219ed",
+        "rheology-point-lines.png": "f1d85707f96fbdd54a870430b5c7409facc4d6d7e65ea5504c72cc3366badd00",
+        "rheology-point-lines.options.json": "d28802f9921660e800bbced0ddbb3aa2af05e670c39bc07719446a896a33037b"
+      },
+      "data_semantics": "Five synthetic storage-modulus responses versus angular frequency, 0.01 to 1000 rad s⁻¹; positive modulus values in Pa. Both axes are logarithmic display axes. Each line joins all 30 supplied points without fitted values or interpolation. Marker shapes and colors distinguish samples.",
+      "axis_labels": {
+        "x": "Angular frequency (rad s⁻¹)",
+        "y": "Storage modulus (Pa)"
+      },
+      "display_transform": "Logarithmic axes only; numerical source values are unchanged."
+    }
+  ]
+}
