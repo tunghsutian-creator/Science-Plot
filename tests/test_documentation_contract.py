@@ -28,9 +28,13 @@ def _normalized(path: Path) -> str:
 def test_user_plotting_guidance_keeps_deliveries_source_adjacent() -> None:
     readme = _normalized(REPO_ROOT / "README.md")
 
-    assert "绘图交付不要写进 SciPlot 软件或代码仓库内部的 `outputs/`。" in readme
-    assert "优先省略 `--out`" in readme
-    assert "在原数据旁创建 `SOURCE_SciPlot/`" in readme
+    assert (
+        "Outputs are saved beside your source data in `SOURCE_SciPlot/` by default."
+        in readme
+    )
+    skill = _normalized(REPO_ROOT / "skill" / "SKILL.md")
+    assert "omit `--out` by default" in skill
+    assert "Do not put user plotting deliveries inside the SciPlot repository" in skill
 
     for path in ACTIVE_GUIDANCE:
         guidance = _read(path)
@@ -72,7 +76,8 @@ def test_active_documents_declare_distinct_responsibilities() -> None:
     roadmap = _read(REPO_ROOT / "DEVELOPMENT_ROADMAP.md")
     automation_contract = _normalized(AUTOMATION_CONTROL_CONTRACT)
 
-    assert "本文是用户工作流和产品边界的唯一说明" in readme
+    assert "local scientific plotting tool for use with an external AI assistant" in readme
+    assert "`README.md` owns product behavior and the user workflow." in skill
     assert "This skill owns agent routing and verification." in skill
     assert "current module-ownership and dependency reference" in architecture
     assert "External AI is the task interface" in roadmap
@@ -94,19 +99,18 @@ def test_task_guidance_preserves_real_choices_and_separate_human_acceptance() ->
     assert "arbitrary DataMapping answers" in guide
     assert "no redundant user permission" in guide
     assert "task capabilities" in guide and "project operations-preview" in guide
-    assert "MCP" in readme and "独立小白使用测试" in readme
+    assert "MCP" in readme and "runs plotting and exports locally" in readme
+    assert "Independent beginner and installation acceptance" in roadmap
 
 
 def test_skill_defers_the_exact_mypy_scope_to_pyproject() -> None:
-    readme = _read(REPO_ROOT / "README.md")
     skill = _read(REPO_ROOT / "skill" / "SKILL.md")
     architecture = _read(REPO_ROOT / "docs" / "ARCHITECTURE.md")
 
-    assert "`[tool.mypy]` 中声明的路径" in readme
-    assert "精确范围、文件数量和严格选项的唯一权威" in readme
-    assert "42 个文件" not in readme
     assert "declared under `[tool.mypy]` in `pyproject.toml`" in skill
     assert "Its exact scope and strictness belong to `pyproject.toml`." in skill
     assert "configured files" not in skill
     assert "The exact strict Python diagnostic scope" in architecture
+    assert "all strictness options belong only to `[tool.mypy]`" in architecture
+    assert "without maintaining another scope list or file count" in architecture
     assert "Strict Python 3.11 baseline for `foundation/`" not in architecture

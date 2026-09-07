@@ -10,7 +10,7 @@
   "x_label_override": "Synthetic formulations",
   "y_label_override": "Mass fraction (%)",
   "y_min": -2,
-  "y_max": 175,
+  "y_max": 135,
   "y_ticks": [
     0,
     20,

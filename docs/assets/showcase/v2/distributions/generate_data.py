@@ -29,7 +29,7 @@ rng = random.Random(1729)
 means = [32, 47, 64, 79, 96]
 sigmas = [4, 6, 7, 8, 7.5]
 groups = [
-    [round(rng.gauss(mean, sigma), 3) for _ in range(25)]
+    [round(rng.gauss(mean, sigma), 3) for _ in range(10)]
     for mean, sigma in zip(means, sigmas, strict=True)
 ]
 write_csv(
@@ -56,13 +56,9 @@ write_options(
     },
 )
 
-compositions = [
-    (82, 10, 6, 2),
-    (69, 17, 10, 4),
-    (62, 20, 13, 5),
-    (56, 23, 15, 6),
-    (42, 31, 19, 8),
-]
+# Redesigned synthetic two-component example: the previous minor components
+# are combined into the modifier fraction; these are not measured formulations.
+compositions = [(82, 18), (69, 31), (62, 38), (56, 44), (42, 58)]
 write_csv(
     "synthetic-composition-bars.csv",
     [
@@ -71,7 +67,7 @@ write_csv(
             [letter, component, value]
             for letter, values in zip("ABCDE", compositions, strict=True)
             for component, value in zip(
-                ["Pol.", "Mod.", "Fill.", "Add."], values, strict=True
+                ["Pol.", "Mod."], values, strict=True
             )
         ],
     ],
@@ -84,7 +80,7 @@ write_options(
         "x_label_override": "Synthetic formulations",
         "y_label_override": "Mass fraction (%)",
         "y_min": -2,
-        "y_max": 175,
+        "y_max": 135,
         "y_ticks": [0, 20, 40, 60, 80, 100],
     },
 )

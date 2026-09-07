@@ -75,8 +75,8 @@ def build():
     )
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
       width="1600" height="850" viewBox="0 0 1600 850" role="img" aria-labelledby="title desc">
-    <title id="title">SciPlot — 让数据，成为好图。</title>
-    <desc id="desc">鲜艳的五样品光谱、五组重复分布与十六样品性能散点，均来自 SciPlot 原生渲染的合成演示数据。面向外部 AI 的本地科研绘图工具。</desc>
+    <title id="title">SciPlot — Your data. Clearly plotted.</title>
+    <desc id="desc">Local scientific plotting with AI. Native-rendered spectra, distributions and performance comparisons using synthetic demonstration data.</desc>
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
         <stop stop-color="#080F20"/><stop offset=".6" stop-color="#151B3D"/><stop offset="1" stop-color="#312958"/>
@@ -100,15 +100,15 @@ def build():
       <text x="66" y="268" font-size="164" font-weight="700" letter-spacing="-8" fill="#FFFFFF">SciPlot<tspan fill="#3DEAC1">.</tspan></text>
       <rect x="76" y="292" width="495" height="6" rx="3" fill="url(#spectrum)"/>
     </g>
-    <g font-family="PingFang SC">
-      <text x="73" y="407" font-size="64" font-weight="600" fill="#FFFFFF">让数据，成为好图。</text>
-      <text x="76" y="475" font-size="28" fill="#C4CCE4">AI 理解任务 · 本地忠实成图</text>
-      <text x="76" y="525" font-size="25" fill="#C4CCE4">可编辑 · 可追溯 · 可继续修改</text>
-      <text x="76" y="633" font-size="21" fill="#B5C1DF">实验数据</text>
+    <g font-family="Arial">
+      <text x="73" y="387" font-size="60" font-weight="600" fill="#FFFFFF">Your data.</text>
+      <text x="73" y="459" font-size="60" font-weight="600" fill="#FFFFFF">Clearly plotted.</text>
+      <text x="76" y="525" font-size="25" fill="#C4CCE4">Editable figures. Traceable data.</text>
+      <text x="76" y="633" font-size="21" fill="#B5C1DF">Your data</text>
       <text x="212" y="633" font-size="24" fill="#736FBA">→</text>
-      <text x="265" y="633" font-size="21" fill="#B5C1DF">原生图稿</text>
+      <text x="265" y="633" font-size="21" fill="#B5C1DF">Figures</text>
       <text x="400" y="633" font-size="24" fill="#736FBA">→</text>
-      <text x="453" y="633" font-size="21" fill="#B5C1DF">审阅与交付</text>
+      <text x="453" y="633" font-size="21" fill="#B5C1DF">Export</text>
     </g>
     <g font-family="Arial" font-size="20" font-weight="600" letter-spacing="2">
       <text x="76" y="738" fill="#48E6C7">VSZ</text>

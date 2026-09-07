@@ -1,17 +1,17 @@
-# 分布、组成与连续响应场：合成示例
+# Distributions, composition and response fields
 
-三张图片均为 SciPlot 公开 `render` 命令生成的真实原生 Veusz 图，再用 Poppler 将完整 PDF 页面转为 300 dpi PNG。未裁切、修图或用另一绘图库重画。原生 PDF、VSZ 和运行 QA 位于忽略目录 `.tmp_verify/github_showcase_v2/distributions/`。
+These synthetic examples are rendered by SciPlot's public CLI as native, editable Veusz figures. Full PDF pages are converted to 300 dpi PNG with Poppler, without cropping or retouching. Every figure is 60 × 55 mm (709 × 650 px).
 
-| 图片 | 数据范围 | 表达含义 |
+| Figure | Data | Meaning |
 | --- | --- | --- |
-| [分布图](replicate-distributions.png) | 5 组 × 25 个观测值，共 125 点 | 拉伸强度（MPa）的原生箱线图叠加全部观测点，显示中位数与 IQR |
-| [组成柱图](composition-bars.png) | 5 配方 × 4 组分，共 20 值 | Pol.（Polymer）、Mod.（Modifier）、Fill.（Filler）、Add.（Additive）的质量分数，每配方合计 100%；组分不是统计重复 |
-| [连续响应场](response-heatmap.png) | 61 个时间坐标 × 41 个温度坐标，共 2,501 网格值 | 一张连续标量场；颜色表示合成转化率（%），不是五组样品的比较 |
+| [Distribution](replicate-distributions.png) | 5 samples × 10 observations | Tensile strength (MPa): median, IQR and all 50 observations |
+| [Composition](composition-bars.png) | 5 formulations × 2 components | Polymer (Pol.) and Modifier (Mod.) mass fractions, totaling 100% per formulation |
+| [Response field](response-heatmap.png) | 61 × 41 coordinates | One continuous synthetic conversion field; retained unchanged |
 
-所有 A–E 都是明确的虚拟配方，没有真实实验来源或文献性能主张。每个普通分组图使用五组样品。连续响应场保留完整网格，不把连续坐标当成样品组数。
+All data are illustrative, with no experimental or literature performance claims. The two-component compositions are a redesigned synthetic example: Modifier combines all non-polymer fractions. Polymer/Modifier percentages are A: 82/18, B: 69/31, C: 62/38, D: 56/44 and E: 42/58. Components are additive fractions, not statistical replicates.
 
-运行 [generate_data.py](generate_data.py) 可确定性重建源 CSV 和公开选项；该脚本只生成数据和请求，不绘图，CSV 显式使用 LF 换行。分布数据使用标准库 `random.Random(1729)`，五组高斯分布参数 `(均值, 标准差)` 为 `(32, 4)`、`(47, 6)`、`(64, 7)`、`(79, 8)`、`(96, 7.5)`，各生成 25 值，保留三位小数。组成数据是显式列出的虚拟质量百分比。
+[generate_data.py](generate_data.py) deterministically writes LF-terminated CSVs and public render options; it does not draw figures. Distribution values use `random.Random(1729)`, with `(mean, standard deviation)` pairs `(32, 4)`, `(47, 6)`, `(64, 7)`, `(79, 8)` and `(96, 7.5)`, ten observations each, rounded to three decimals.
 
-连续场采用示意公式 `100 × (1 − exp(−t × 0.015 × exp((T − 150) / 23)))`。时间为 `0–60 min`、步长 `1 min`；温度为 `120–200 °C`、步长 `2 °C`。公式只用来展示连续响应，不是实验拟合结果或特定反应机理。
+The unchanged response field uses `100 × (1 − exp(−t × 0.015 × exp((T − 150) / 23)))`, sampled every minute over 0–60 min and every 2 °C over 120–200 °C. This is an illustrative formula, not a fitted kinetic model.
 
-[manifest.json](manifest.json) 记录各图片的源文件、SHA-256、完整 CLI 命令、PDF 转 PNG 命令、原生文档与 QA 证据。复现时给 `--out` 指定新的输出目录。最终检查确认 125 个观测点、20 个组分值及 2,501 个网格值逐值保留，源 CSV 哈希与原生 spec 一致，原生渲染 QA 均无 issues；逐图检查了五个样品标签、单位、五种配色以及图例/色条与数据的间隔。图片均为 60 × 55 mm 全页面，300 dpi PNG 为 709 × 650 px。组成图使用上表说明的短组分名，连续场在上方预留色条与标题空间，数据不做删减。
+[manifest.json](manifest.json) records sources, hashes, commands, native documents and QA evidence. Use a new output directory when reproducing. Current distribution and composition evidence is in `.tmp_verify/github_showcase_v3/distributions/`; unchanged heatmap evidence remains in the manifest's v2 location. All source values and hashes match the native specifications, render QA has no issues, and final-size labels and legend spacing have been reviewed.
