@@ -1,47 +1,47 @@
-Material,Role,Group,Metric,Value,Unit,DisplayLabel,ScatterAxis,ScatterMin,ScatterMax,RadarOrder,Direction,ScaleMin,ScaleMax,MaterialOrder,Marker,MarkerLineColor,MarkerFillColor,EnvelopeInclude,LegendLabel,LegendGroup,LegendIdentity
+Material,Role,Group,Metric,Value,Unit,DisplayLabel,ScatterAxis,ScatterMin,ScatterMax,RadarOrder,Direction,ScaleMin,ScaleMax,MaterialOrder,Marker,EnvelopeInclude,LegendLabel,LegendGroup,LegendIdentity
 Demo A,sample,Synthetic designs,density,0.940000,g cm^-3,"Density
-(g cm⁻³)",x,,,1,lower,0.7,1.7,1,,,,,Demo A,Synthetic designs,Demo A
+(g cm⁻³)",x,,,1,lower,0.7,1.7,1,,,Demo A,Synthetic designs,Demo A
 Demo A,sample,Synthetic designs,impact_strength,55.200000,kJ m^-2,"Impact
-(kJ m⁻²)",y,,,2,higher,0,120,1,,,,,Demo A,Synthetic designs,Demo A
+(kJ m⁻²)",y,,,2,higher,0,120,1,,,Demo A,Synthetic designs,Demo A
 Demo A,sample,Synthetic designs,tensile_strength,84.000000,MPa,"Strength
-(MPa)",,,,3,higher,0,150,1,,,,,Demo A,Synthetic designs,Demo A
+(MPa)",,,,3,higher,0,150,1,,,Demo A,Synthetic designs,Demo A
 Demo A,sample,Synthetic designs,elongation_at_break,345.000000,%,"Elongation
-(%)",,,,4,higher,0,500,1,,,,,Demo A,Synthetic designs,Demo A
+(%)",,,,4,higher,0,500,1,,,Demo A,Synthetic designs,Demo A
 Demo A,sample,Synthetic designs,recovery,39.000000,%,"Recovery
-(%)",,,,5,higher,0,100,1,,,,,Demo A,Synthetic designs,Demo A
+(%)",,,,5,higher,0,100,1,,,Demo A,Synthetic designs,Demo A
 Demo B,sample,Synthetic designs,density,1.300000,g cm^-3,"Density
-(g cm⁻³)",x,,,1,lower,0.7,1.7,2,,,,,Demo B,Synthetic designs,Demo B
+(g cm⁻³)",x,,,1,lower,0.7,1.7,2,,,Demo B,Synthetic designs,Demo B
 Demo B,sample,Synthetic designs,impact_strength,93.600000,kJ m^-2,"Impact
-(kJ m⁻²)",y,,,2,higher,0,120,2,,,,,Demo B,Synthetic designs,Demo B
+(kJ m⁻²)",y,,,2,higher,0,120,2,,,Demo B,Synthetic designs,Demo B
 Demo B,sample,Synthetic designs,tensile_strength,66.000000,MPa,"Strength
-(MPa)",,,,3,higher,0,150,2,,,,,Demo B,Synthetic designs,Demo B
+(MPa)",,,,3,higher,0,150,2,,,Demo B,Synthetic designs,Demo B
 Demo B,sample,Synthetic designs,elongation_at_break,255.000000,%,"Elongation
-(%)",,,,4,higher,0,500,2,,,,,Demo B,Synthetic designs,Demo B
+(%)",,,,4,higher,0,500,2,,,Demo B,Synthetic designs,Demo B
 Demo B,sample,Synthetic designs,recovery,71.000000,%,"Recovery
-(%)",,,,5,higher,0,100,2,,,,,Demo B,Synthetic designs,Demo B
+(%)",,,,5,higher,0,100,2,,,Demo B,Synthetic designs,Demo B
 Demo C,sample,Synthetic designs,density,1.140000,g cm^-3,"Density
-(g cm⁻³)",x,,,1,lower,0.7,1.7,3,,,,,Demo C,Synthetic designs,Demo C
+(g cm⁻³)",x,,,1,lower,0.7,1.7,3,,,Demo C,Synthetic designs,Demo C
 Demo C,sample,Synthetic designs,impact_strength,75.600000,kJ m^-2,"Impact
-(kJ m⁻²)",y,,,2,higher,0,120,3,,,,,Demo C,Synthetic designs,Demo C
+(kJ m⁻²)",y,,,2,higher,0,120,3,,,Demo C,Synthetic designs,Demo C
 Demo C,sample,Synthetic designs,tensile_strength,126.000000,MPa,"Strength
-(MPa)",,,,3,higher,0,150,3,,,,,Demo C,Synthetic designs,Demo C
+(MPa)",,,,3,higher,0,150,3,,,Demo C,Synthetic designs,Demo C
 Demo C,sample,Synthetic designs,elongation_at_break,205.000000,%,"Elongation
-(%)",,,,4,higher,0,500,3,,,,,Demo C,Synthetic designs,Demo C
+(%)",,,,4,higher,0,500,3,,,Demo C,Synthetic designs,Demo C
 Demo C,sample,Synthetic designs,recovery,49.000000,%,"Recovery
-(%)",,,,5,higher,0,100,3,,,,,Demo C,Synthetic designs,Demo C
+(%)",,,,5,higher,0,100,3,,,Demo C,Synthetic designs,Demo C
 Ref D,reference,Synthetic references,density,1.220000,g cm^-3,"Density
-(g cm⁻³)",x,,,1,lower,0.7,1.7,4,,#D99A24,,false,Ref D,Reference materials,Ref D
+(g cm⁻³)",x,,,1,lower,0.7,1.7,4,,false,Ref D,Reference materials,Ref D
 Ref D,reference,Synthetic references,impact_strength,46.800000,kJ m^-2,"Impact
-(kJ m⁻²)",y,,,2,higher,0,120,4,,#D99A24,,false,Ref D,Reference materials,Ref D
+(kJ m⁻²)",y,,,2,higher,0,120,4,,false,Ref D,Reference materials,Ref D
 Ref D,reference,Synthetic references,tensile_strength,102.000000,MPa,"Strength
-(MPa)",,,,3,higher,0,150,4,,#D99A24,,false,Ref D,Reference materials,Ref D
+(MPa)",,,,3,higher,0,150,4,,false,Ref D,Reference materials,Ref D
 Ref E,reference,Synthetic references,density,1.020000,g cm^-3,"Density
-(g cm⁻³)",x,,,1,lower,0.7,1.7,5,,#7C9ED9,,false,Ref E,Reference materials,Ref E
+(g cm⁻³)",x,,,1,lower,0.7,1.7,5,,false,Ref E,Reference materials,Ref E
 Ref E,reference,Synthetic references,impact_strength,66.000000,kJ m^-2,"Impact
-(kJ m⁻²)",y,,,2,higher,0,120,5,,#7C9ED9,,false,Ref E,Reference materials,Ref E
+(kJ m⁻²)",y,,,2,higher,0,120,5,,false,Ref E,Reference materials,Ref E
 Ref E,reference,Synthetic references,recovery,84.000000,%,"Recovery
-(%)",,,,5,higher,0,100,5,,#7C9ED9,,false,Ref E,Reference materials,Ref E
+(%)",,,,5,higher,0,100,5,,false,Ref E,Reference materials,Ref E
 Ref F,reference,Synthetic references,density,0.880000,g cm^-3,"Density
-(g cm⁻³)",x,,,1,lower,0.7,1.7,6,,#7B61A8,,false,Ref F,Reference materials,Ref F
+(g cm⁻³)",x,,,1,lower,0.7,1.7,6,,false,Ref F,Reference materials,Ref F
 Ref F,reference,Synthetic references,impact_strength,86.400000,kJ m^-2,"Impact
-(kJ m⁻²)",y,,,2,higher,0,120,6,,#7B61A8,,false,Ref F,Reference materials,Ref F
+(kJ m⁻²)",y,,,2,higher,0,120,6,,false,Ref F,Reference materials,Ref F

@@ -25,27 +25,28 @@
         650
       ],
       "png_dpi": 300,
-      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/curves/stacked-spectra.csv --template stacked_curve --options @docs/assets/showcase/v2/curves/stacked-spectra.options.json --out .tmp_verify/github_showcase_v2/curves/stacked_v5_60x55_lf",
-      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v2/curves/stacked_v5_60x55_lf/stacked-spectra_stacked_curve.pdf docs/assets/showcase/v2/curves/stacked-spectra",
+      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/curves/stacked-spectra.csv --template stacked_curve --options @docs/assets/showcase/v2/curves/stacked-spectra.options.json --out .tmp_verify/github_showcase_v4/curves/stacked-default",
+      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v4/curves/stacked-default/stacked-spectra_stacked_curve.pdf docs/assets/showcase/v2/curves/stacked-spectra",
       "postprocessing": "None: direct full-page PDF rasterization; no cropping, recoloring, or image editing.",
-      "native_document": ".tmp_verify/github_showcase_v2/curves/stacked_v5_60x55_lf/_veusz/single/studio/document.vsz",
+      "native_document": ".tmp_verify/github_showcase_v4/curves/stacked-default/_veusz/single/studio/document.vsz",
       "qa": {
         "artifact_status": "passed",
         "native_render_issues": [],
         "source_to_spec_status": "passed",
-        "visual_review": "passed at 60 x 55 mm: five complete spectra; sample labels raised using the native series_label_offset_fraction option to clear the broad peaks; no cropping or label overlap.",
+        "visual_review": "passed: five complete series, clear sample labels and legend, correct axis units at 60 x 55 mm; native program default colors only.",
         "verified_series_count": 5,
         "verified_points_count": 3000,
         "all_source_x_values_preserved": true,
         "all_y_values_match_after_declared_display_offset": true,
-        "requested_palette_preserved": true,
         "source_line_endings": "LF; CRLF normalization preserves all CSV cells; new native render binds current source SHA-256.",
-        "png_unchanged_after_line_ending_normalization": true
+        "source_csv_bytes_unchanged": true,
+        "program_default_palette_used": true,
+        "non_color_geometry_and_data_unchanged": true
       },
       "sha256": {
         "stacked-spectra.csv": "f5d450653e475a11cfca92d25dd7b6988d054e5c8b78e795dde5aa7845dd324a",
-        "stacked-spectra.png": "ea2923663081aacf812de295589d05caabfc4765450e106710da6abf9c8733dc",
-        "stacked-spectra.options.json": "f045b40110db1b0a5436c1b523ca83d9ae3020706b8e1828bb664d9e3e1727e7"
+        "stacked-spectra.png": "dac0f432c4f37969baf40e8260b171f7b8e9d5585a8d8e72a313970a0372841a",
+        "stacked-spectra.options.json": "1fe3358e1985cde42ab91c53b278911ac59f0d908d7dbd057c02a88c0f163dce"
       },
       "data_semantics": "Five synthetic absorbance spectra on 4000 to 500 cm⁻¹, each containing ten smooth peaks with varied heights and small shifts. Absorbance is dimensionless. Native stacked_curve applies an explicit constant vertical display offset to each curve and hides numerical y ticks; CSV values remain unshifted.",
       "axis_labels": {
@@ -59,6 +60,52 @@
           "series_count": 5,
           "scientific_values_changed_in_visual_document": true,
           "purpose": "visual separation only; processed source table retains the unshifted values"
+        }
+      ],
+      "palette_resolution": {
+        "kind": "sciplot_palette_resolution",
+        "version": 1,
+        "palette_id": "control_first_bright",
+        "colors": [
+          "#222222",
+          "#3568C0",
+          "#C83E4D",
+          "#2A9D8F",
+          "#D99A24",
+          "#7C9ED9",
+          "#7B61A8"
+        ],
+        "source": "shared_project_default",
+        "explicit": false,
+        "template_id": "stacked_curve",
+        "custom_colors": false,
+        "authority_order": [
+          "explicit_render_option",
+          "direct_render_option",
+          "shared_project_default"
+        ],
+        "shared_project_default": "control_first_bright"
+      },
+      "actual_series_colors": [
+        {
+          "sample": "S01",
+          "color": "#222222"
+        },
+        {
+          "sample": "S02",
+          "color": "#3568C0"
+        },
+        {
+          "sample": "S03",
+          "color": "#C83E4D"
+        },
+        {
+          "sample": "S04",
+          "color": "#2A9D8F"
+        },
+        {
+          "sample": "S05",
+          "color": "#D99A24"
         }
       ]
     },
@@ -85,26 +132,28 @@
         650
       ],
       "png_dpi": 300,
-      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/curves/rheology-point-lines.csv --template point_line --options @docs/assets/showcase/v2/curves/rheology-point-lines.options.json --out .tmp_verify/github_showcase_v3/curves/rheology-16",
-      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v3/curves/rheology-16/rheology-point-lines_point_line.pdf docs/assets/showcase/v2/curves/rheology-point-lines",
+      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/curves/rheology-point-lines.csv --template point_line --options @docs/assets/showcase/v2/curves/rheology-point-lines.options.json --out .tmp_verify/github_showcase_v4/curves/rheology-default",
+      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v4/curves/rheology-default/rheology-point-lines_point_line.pdf docs/assets/showcase/v2/curves/rheology-point-lines",
       "postprocessing": "None: direct full-page PDF rasterization; no cropping, recoloring, or image editing.",
-      "native_document": ".tmp_verify/github_showcase_v3/curves/rheology-16/_veusz/single/studio/document.vsz",
+      "native_document": ".tmp_verify/github_showcase_v4/curves/rheology-default/_veusz/single/studio/document.vsz",
       "qa": {
         "artifact_status": "passed",
         "native_render_issues": [],
         "source_to_spec_status": "passed",
-        "visual_review": "passed: five 16-point curves, readable point shapes and a clear legend at 60 x 55 mm.",
+        "visual_review": "passed: five complete series, clear sample labels and legend, correct axis units at 60 x 55 mm; native program default colors only.",
         "verified_series_count": 5,
         "verified_points_count": 80,
         "all_source_x_values_preserved": true,
         "all_y_values_match_after_declared_display_offset": true,
-        "requested_palette_preserved": true,
-        "source_line_endings": "LF"
+        "source_line_endings": "LF",
+        "source_csv_bytes_unchanged": true,
+        "program_default_palette_used": true,
+        "non_color_geometry_and_data_unchanged": true
       },
       "sha256": {
         "rheology-point-lines.csv": "9d7993664e8c79dfe5657e305bd5377c51e21605b3e1a7c1472ad3b871403534",
-        "rheology-point-lines.png": "cb0b81ac71c245c81cd61128731c865c820a5970f1284fd50284e68792206a23",
-        "rheology-point-lines.options.json": "d28802f9921660e800bbced0ddbb3aa2af05e670c39bc07719446a896a33037b"
+        "rheology-point-lines.png": "659793fc6ab5bb97a6abff691732242bb288974e4b38f496452de420b4c02bca",
+        "rheology-point-lines.options.json": "341ae56226d703547b6fb067b55071650cf23499aaada25c97cbd4998ef1b211"
       },
       "data_semantics": "Five synthetic storage-modulus responses versus angular frequency, 0.01 to 1000 rad s⁻¹; positive modulus values in Pa. Both axes are logarithmic display axes. Each line joins all 16 supplied points without fitted values or interpolation. Marker shapes and colors distinguish samples.",
       "axis_labels": {
@@ -134,7 +183,53 @@
           29
         ],
         "method": "Evenly spaced index selection from the prior explicitly synthetic demonstration; no new fitted or interpolated values."
-      }
+      },
+      "palette_resolution": {
+        "kind": "sciplot_palette_resolution",
+        "version": 1,
+        "palette_id": "control_first_bright",
+        "colors": [
+          "#222222",
+          "#3568C0",
+          "#C83E4D",
+          "#2A9D8F",
+          "#D99A24",
+          "#7C9ED9",
+          "#7B61A8"
+        ],
+        "source": "shared_project_default",
+        "explicit": false,
+        "template_id": "point_line",
+        "custom_colors": false,
+        "authority_order": [
+          "explicit_render_option",
+          "direct_render_option",
+          "shared_project_default"
+        ],
+        "shared_project_default": "control_first_bright"
+      },
+      "actual_series_colors": [
+        {
+          "sample": "R01",
+          "color": "#222222"
+        },
+        {
+          "sample": "R02",
+          "color": "#3568C0"
+        },
+        {
+          "sample": "R03",
+          "color": "#C83E4D"
+        },
+        {
+          "sample": "R04",
+          "color": "#2A9D8F"
+        },
+        {
+          "sample": "R05",
+          "color": "#D99A24"
+        }
+      ]
     }
   ]
 }

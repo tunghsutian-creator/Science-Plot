@@ -27,16 +27,6 @@
     100
   ],
   "z_tick_format": "%.0f",
-  "colormap_colors": [
-    "#302775",
-    "#4268D8",
-    "#21A9CF",
-    "#43C59E",
-    "#BFE773",
-    "#F5D15D",
-    "#F18D48",
-    "#D94546"
-  ],
   "show_colorbar": true,
   "colorbar_direction": "horizontal",
   "colorbar_width_mm": 35,

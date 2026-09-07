@@ -30,19 +30,43 @@
       "formula": "0.025 + (0.86+0.19*sin(i*0.55))*exp(-0.5*((x-(365+22*i))/(21+2*(i%3)))**2) + (0.17+0.015*i)*exp(-0.5*((x-(290+8*i))/13)**2) + 0.11*exp(-0.5*((x-(690-4*i))/49)**2)",
       "rounding": "six decimal places"
     },
-    "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/spectra/spectra-rich.csv --template curve --options @docs/assets/showcase/v2/spectra/options.json --out .tmp_verify/github_showcase_v2/spectra/release",
-    "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v2/spectra/release/spectra-rich_curve.pdf docs/assets/showcase/v2/spectra/spectra-rich",
+    "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/spectra/spectra-rich.csv --template curve --options @docs/assets/showcase/v2/spectra/options.json --out .tmp_verify/github_showcase_v4/spectra/default",
+    "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v4/spectra/default/spectra-rich_curve.pdf docs/assets/showcase/v2/spectra/spectra-rich",
     "layout": "y range 0 to 1.5 reserves clear space above the complete curves for the five-item legend.",
     "postprocessing": "Full native PDF page rasterized directly; no cropping or plotted-data changes.",
     "qa": {
       "native_render_issues": [],
       "source_to_spec": "passed: all 3005 x/y pairs match the CSV exactly",
-      "visual_review": "passed: five labels, full curves, axis units visible; legend clear of peaks"
+      "visual_review": "passed: default near-black, blue, red, teal and gold curves; labels and peaks remain clear."
     },
     "sha256": {
-      "options.json": "9a63eb6988e46b2a38586101c7c92887ac9288888e55e66056c0b53c1739479a",
+      "options.json": "f2797ff817c07919f518ce0ef6633ecabcfb19b1c91ad222ac9941fe77cce52a",
       "spectra-rich.csv": "5340fd26a917996e28ad7eb136e87e24f289c7e80e6b211ded96b7aba1811585",
-      "spectra-rich.png": "ff8bb9401d53effec577cf44d4fbf4156a0b04203ffd8a0f2ace9b312d64b2ff"
+      "spectra-rich.png": "1dceba7d0ba8381dc92fde7f2a3c739983e7ac6bcc1cdd99874027b65aa5b537"
+    },
+    "palette_resolution": {
+      "kind": "sciplot_palette_resolution",
+      "version": 1,
+      "palette_id": "control_first_bright",
+      "colors": [
+        "#222222",
+        "#3568C0",
+        "#C83E4D",
+        "#2A9D8F",
+        "#D99A24",
+        "#7C9ED9",
+        "#7B61A8"
+      ],
+      "source": "shared_project_default",
+      "explicit": false,
+      "template_id": "curve",
+      "custom_colors": false,
+      "authority_order": [
+        "explicit_render_option",
+        "direct_render_option",
+        "shared_project_default"
+      ],
+      "shared_project_default": "control_first_bright"
     }
   }
 }

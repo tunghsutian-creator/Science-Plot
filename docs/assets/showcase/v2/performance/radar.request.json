@@ -4,5 +4,5 @@
   "source": "docs/assets/showcase/v2/performance/performance-radar-rich.csv",
   "rule_id": "performance_comparison",
   "template": "polar_curve",
-  "out": ".tmp_verify/github_showcase_v3/performance/radar_mixed_SciPlot"
+  "out": ".tmp_verify/github_showcase_v4/performance/radar_default_SciPlot"
 }

@@ -1,12 +1,5 @@
 {
   "size": "60x55",
-  "palette_colors": [
-    "#4361EE",
-    "#00B4D8",
-    "#06B67A",
-    "#F47C35",
-    "#C947A5"
-  ],
   "x_label_override": "Synthetic formulations",
   "y_label_override": "Mass fraction (%)",
   "y_min": -2,

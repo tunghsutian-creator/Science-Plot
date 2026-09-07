@@ -13,8 +13,8 @@
       "source_kind": "synthetic",
       "source_sha256": "6781a0c754905ac929ff7fd7b7322852c844b971d988478d45677642e46a2e8a",
       "options": "requests/replicate-distributions.json",
-      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/distributions/data/synthetic-replicate-distributions.csv --auto --template box_strip --options @docs/assets/showcase/v2/distributions/requests/replicate-distributions.json --out .tmp_verify/github_showcase_v3/distributions/replicates-n10",
-      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v3/distributions/replicates-n10/synthetic-replicate-distributions_box_strip.pdf docs/assets/showcase/v2/distributions/replicate-distributions",
+      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/distributions/data/synthetic-replicate-distributions.csv --template box_strip --options @docs/assets/showcase/v2/distributions/requests/replicate-distributions.json --out .tmp_verify/github_showcase_v4/distributions/replicates-shared-default",
+      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v4/distributions/replicates-shared-default/synthetic-replicate-distributions_box_strip.pdf docs/assets/showcase/v2/distributions/replicate-distributions",
       "physical_size_mm": [
         60,
         55
@@ -23,10 +23,10 @@
         709,
         650
       ],
-      "png_sha256": "976d2f1d1a77b254ddd2ad2b4afdd94c72ee707207c4c6af800531388b213e87",
-      "native_pdf": ".tmp_verify/github_showcase_v3/distributions/replicates-n10/synthetic-replicate-distributions_box_strip.pdf",
-      "native_vsz": ".tmp_verify/github_showcase_v3/distributions/replicates-n10/_veusz/single/studio/document.vsz",
-      "evidence": ".tmp_verify/github_showcase_v3/distributions/replicates-n10-result.json",
+      "png_sha256": "ffb6b73171ab3f52a9094b23d520d2f55cc54753efc28464e494b276cfb34fef",
+      "native_pdf": ".tmp_verify/github_showcase_v4/distributions/replicates-shared-default/synthetic-replicate-distributions_box_strip.pdf",
+      "native_vsz": ".tmp_verify/github_showcase_v4/distributions/replicates-shared-default/_veusz/single/studio/document.vsz",
+      "evidence": ".tmp_verify/github_showcase_v4/distributions/replicates-shared-default-result.json",
       "semantics": {
         "sample_count": 5,
         "sample_labels": [
@@ -46,10 +46,38 @@
         "exact_source_values_verified": true,
         "source_sha256_matches_native_spec": true,
         "all_source_observations_or_cells_retained": true,
-        "visual_review": "Passed at 60 x 55 mm: all A-E labels, units and five colors are readable; all observations and components are present; no clipping or legend overlap; full PDF page rasterized without crop or retouch.",
-        "csv_line_ending": "LF, explicitly set by the generator."
+        "visual_review": "Passed at 60 x 55 mm with SciPlot default colors: labels and units readable, all observations or cells retained, no clipping, and legends or colorbar clear of data.",
+        "csv_line_ending": "LF, explicitly set by the generator.",
+        "source_csv_unchanged_this_revision": true,
+        "noncolor_axes_unchanged": true,
+        "default_palette_verified": true,
+        "no_request_color_overrides": true
       },
-      "options_sha256": "4752fc45ded15d1257df029d78ad46f1ca886399ecd66c3b9d7ed94af36a9e32"
+      "options_sha256": "3c8b2b7d175043d17addc3de9b12d8333653b67e0a500557b3a543c95127d70c",
+      "palette_resolution": {
+        "kind": "sciplot_palette_resolution",
+        "version": 1,
+        "palette_id": "control_first_bright",
+        "colors": [
+          "#222222",
+          "#3568C0",
+          "#C83E4D",
+          "#2A9D8F",
+          "#D99A24",
+          "#7C9ED9",
+          "#7B61A8"
+        ],
+        "source": "shared_project_default",
+        "explicit": false,
+        "template_id": "box_strip",
+        "custom_colors": false,
+        "authority_order": [
+          "explicit_render_option",
+          "direct_render_option",
+          "shared_project_default"
+        ],
+        "shared_project_default": "control_first_bright"
+      }
     },
     {
       "image": "composition-bars.png",
@@ -58,8 +86,8 @@
       "source_kind": "synthetic",
       "source_sha256": "e95637b6e0c0e68df1364eb892f90d3b0eb1ff71f685c22d0685bf20bd424aa6",
       "options": "requests/composition-bars.json",
-      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/distributions/data/synthetic-composition-bars.csv --template bar --options @docs/assets/showcase/v2/distributions/requests/composition-bars.json --out .tmp_verify/github_showcase_v3/distributions/composition-two",
-      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v3/distributions/composition-two/synthetic-composition-bars_bar.pdf docs/assets/showcase/v2/distributions/composition-bars",
+      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/distributions/data/synthetic-composition-bars.csv --template bar --options @docs/assets/showcase/v2/distributions/requests/composition-bars.json --out .tmp_verify/github_showcase_v4/distributions/composition-default",
+      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v4/distributions/composition-default/synthetic-composition-bars_bar.pdf docs/assets/showcase/v2/distributions/composition-bars",
       "physical_size_mm": [
         60,
         55
@@ -68,10 +96,10 @@
         709,
         650
       ],
-      "png_sha256": "b10373622fea747f7c427e9c121cadfa9cd553e00919d1ae8942a419515c2d9b",
-      "native_pdf": ".tmp_verify/github_showcase_v3/distributions/composition-two/synthetic-composition-bars_bar.pdf",
-      "native_vsz": ".tmp_verify/github_showcase_v3/distributions/composition-two/_veusz/single/studio/document.vsz",
-      "evidence": ".tmp_verify/github_showcase_v3/distributions/composition-two-result.json",
+      "png_sha256": "97e662826d578367223bf0b225d9729e49d40581e83960aa4b1ce7975f57c783",
+      "native_pdf": ".tmp_verify/github_showcase_v4/distributions/composition-default/synthetic-composition-bars_bar.pdf",
+      "native_vsz": ".tmp_verify/github_showcase_v4/distributions/composition-default/_veusz/single/studio/document.vsz",
+      "evidence": ".tmp_verify/github_showcase_v4/distributions/composition-default-result.json",
       "semantics": {
         "sample_count": 5,
         "sample_labels": [
@@ -122,10 +150,38 @@
         "exact_source_values_verified": true,
         "source_sha256_matches_native_spec": true,
         "all_source_observations_or_cells_retained": true,
-        "visual_review": "Passed at 60 x 55 mm: all A-E labels, units and five colors are readable; all observations and components are present; no clipping or legend overlap; full PDF page rasterized without crop or retouch.",
-        "csv_line_ending": "LF, explicitly set by the generator."
+        "visual_review": "Passed at 60 x 55 mm with SciPlot default colors: labels and units readable, all observations or cells retained, no clipping, and legends or colorbar clear of data.",
+        "csv_line_ending": "LF, explicitly set by the generator.",
+        "source_csv_unchanged_this_revision": true,
+        "noncolor_axes_unchanged": true,
+        "default_palette_verified": true,
+        "no_request_color_overrides": true
       },
-      "options_sha256": "7939676d5652d97505f104d146f6f3e12ff148d8c7d2ea5cd3ba75374f36edec"
+      "options_sha256": "a58561d4adcbaa5098c6739a2f90486ea11db0b713732c1d50478efffdf8f179",
+      "palette_resolution": {
+        "kind": "sciplot_palette_resolution",
+        "version": 1,
+        "palette_id": "control_first_bright",
+        "colors": [
+          "#222222",
+          "#3568C0",
+          "#C83E4D",
+          "#2A9D8F",
+          "#D99A24",
+          "#7C9ED9",
+          "#7B61A8"
+        ],
+        "source": "shared_project_default",
+        "explicit": false,
+        "template_id": "bar",
+        "custom_colors": false,
+        "authority_order": [
+          "explicit_render_option",
+          "direct_render_option",
+          "shared_project_default"
+        ],
+        "shared_project_default": "control_first_bright"
+      }
     },
     {
       "image": "response-heatmap.png",
@@ -134,8 +190,8 @@
       "source_kind": "synthetic",
       "source_sha256": "4d7fe091ccae80f1abe6db6b322541ea1f7cf3ca868e8a124c46d65ff77ffe57",
       "options": "requests/response-heatmap.json",
-      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/distributions/data/synthetic-response-heatmap.csv --template heatmap --options @docs/assets/showcase/v2/distributions/requests/response-heatmap.json --out .tmp_verify/github_showcase_v2/distributions/heatmap-60x55-lf",
-      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v2/distributions/heatmap-60x55-lf/synthetic-response-heatmap_heatmap.pdf docs/assets/showcase/v2/distributions/response-heatmap",
+      "render_command": "skill/scripts/sciplot render docs/assets/showcase/v2/distributions/data/synthetic-response-heatmap.csv --template heatmap --options @docs/assets/showcase/v2/distributions/requests/response-heatmap.json --out .tmp_verify/github_showcase_v4/distributions/heatmap-default",
+      "png_command": "pdftoppm -png -r 300 -singlefile .tmp_verify/github_showcase_v4/distributions/heatmap-default/synthetic-response-heatmap_heatmap.pdf docs/assets/showcase/v2/distributions/response-heatmap",
       "physical_size_mm": [
         60,
         55
@@ -144,10 +200,10 @@
         709,
         650
       ],
-      "png_sha256": "f51574e3257286b1d3ea03bf96d600dc93ef4cf7b7e667ca691678a3ebeb600c",
-      "native_pdf": ".tmp_verify/github_showcase_v2/distributions/heatmap-60x55-lf/synthetic-response-heatmap_heatmap.pdf",
-      "native_vsz": ".tmp_verify/github_showcase_v2/distributions/heatmap-60x55-lf/_veusz/single/studio/document.vsz",
-      "evidence": ".tmp_verify/github_showcase_v2/distributions/heatmap-60x55-lf-result.json",
+      "png_sha256": "e05df983f40c0454e32220e63811d211702bee4ce231e34d357c1ab3a501f97f",
+      "native_pdf": ".tmp_verify/github_showcase_v4/distributions/heatmap-default/synthetic-response-heatmap_heatmap.pdf",
+      "native_vsz": ".tmp_verify/github_showcase_v4/distributions/heatmap-default/_veusz/single/studio/document.vsz",
+      "evidence": ".tmp_verify/github_showcase_v4/distributions/heatmap-default-result.json",
       "semantics": {
         "kind": "continuous_synthetic_response_field",
         "grid_shape": [
@@ -165,14 +221,57 @@
         "exact_source_values_verified": true,
         "source_sha256_matches_native_spec": true,
         "all_source_observations_or_cells_retained": true,
-        "visual_review": "Previously reviewed 60 x 55 mm native heatmap retained unchanged; full grid, readable units, and clear colorbar spacing.",
-        "csv_line_ending": "LF; byte-level verification confirmed only CRLF-to-LF changed.",
-        "unchanged_this_revision": true
+        "visual_review": "Passed at 60 x 55 mm with SciPlot default colors: labels and units readable, all observations or cells retained, no clipping, and legends or colorbar clear of data.",
+        "csv_line_ending": "LF, explicitly set by the generator.",
+        "source_csv_unchanged_this_revision": true,
+        "noncolor_axes_unchanged": true,
+        "default_palette_verified": true,
+        "no_request_color_overrides": true
       },
-      "options_sha256": "713ecdaec1459839cee55c89ed8b0460a294e1353dc23fdd0cdbdb91f975afa2"
+      "options_sha256": "573e7f908997e774dd302bf1b2aa67f2aa234031ed9352474748bf41bcb31273",
+      "palette_resolution": {
+        "kind": "sciplot_palette_resolution",
+        "version": 1,
+        "palette_id": "control_first_bright",
+        "colors": [
+          "#222222",
+          "#3568C0",
+          "#C83E4D",
+          "#2A9D8F",
+          "#D99A24",
+          "#7C9ED9",
+          "#7B61A8"
+        ],
+        "source": "shared_project_default",
+        "explicit": false,
+        "template_id": "heatmap",
+        "custom_colors": false,
+        "authority_order": [
+          "explicit_render_option",
+          "direct_render_option",
+          "shared_project_default"
+        ],
+        "shared_project_default": "control_first_bright",
+        "scalar_field_exception": {
+          "colormap_id": "sciplot_cividis",
+          "colors": [
+            "#00204C",
+            "#173F5F",
+            "#365C6D",
+            "#587273",
+            "#7C8973",
+            "#A59C74",
+            "#CFB36F",
+            "#F6D35B",
+            "#FFEA46"
+          ],
+          "reason": "heatmap_scalar_field_semantics"
+        }
+      }
     }
   ],
   "physical_size_policy": "All three figures use 60 x 55 mm; source observations and continuous grid remain complete.",
   "csv_line_endings": "LF; generator sets csv.writer lineterminator explicitly.",
-  "revision": "Five samples with 10 observations each; five formulations with two additive components. Heatmap retained unchanged."
+  "revision": "All three figures use SciPlot default colors; source CSV bytes and noncolor layouts are unchanged.",
+  "color_policy": "No caller palette or color overrides. Categorical series use shared control_first_bright; the scalar field uses default sciplot_cividis."
 }

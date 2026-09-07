@@ -12,7 +12,7 @@ Figures stay editable in Veusz, so you can return to a saved project and keep re
 
 ## Gallery
 
-Synthetic examples rendered by SciPlot / Veusz. Standard figures use **60 × 55 mm**;
+Synthetic examples rendered by SciPlot / Veusz with default colors. Standard figures use **60 × 55 mm**;
 performance comparisons use **120 × 55 mm**. Click any image to view it at full size.
 [Data and reproduction notes](docs/assets/showcase/v2/README.md).
 
@@ -56,8 +56,8 @@ performance comparisons use **120 × 55 mm**. Click any image to view it at full
   <tr>
     <td colspan="2">
       <b>Performance comparison</b><br>
-      <a href="docs/assets/showcase/v2/performance/performance-scatter-rich.png"><img src="docs/assets/showcase/v2/performance/performance-scatter-rich.png" width="860" alt="Sixteen synthetic materials in four colored groups, each with a distinct marker"></a><br>
-      Sixteen materials in four groups. Shaded envelopes show group ranges, not confidence intervals.
+      <a href="docs/assets/showcase/v2/performance/performance-scatter-rich.png"><img src="docs/assets/showcase/v2/performance/performance-scatter-rich.png" width="860" alt="Four synthetic samples and twelve references, with filled and hollow markers"></a><br>
+      Four samples and twelve references. Shading shows the sample range, not a confidence interval.
     </td>
   </tr>
   <tr>

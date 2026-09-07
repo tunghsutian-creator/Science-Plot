@@ -1,49 +1,49 @@
-Material,Role,Group,Metric,Value,Unit,DisplayLabel,ScatterAxis,ScatterMin,ScatterMax,RadarOrder,Direction,ScaleMin,ScaleMax,MaterialOrder,Marker,MarkerLineColor,MarkerFillColor,EnvelopeInclude,LegendLabel,LegendGroup,LegendIdentity,LegendItemsPerRow
-A1,sample,Group A,density,1.100967,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,1,,#397FE5,#397FE5,true,A1,Group A,A1,2
-A1,sample,Group A,impact_strength,81.333092,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,1,,#397FE5,#397FE5,true,A1,Group A,A1,2
-A1,sample,Group A,elongation_at_break,170.456485,%,Elongation,,,,3,higher,0,300,1,,#397FE5,#397FE5,true,A1,Group A,A1,2
-A2,sample,Group A,density,1.014926,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,2,,#397FE5,#397FE5,true,A2,Group A,A2,2
-A2,sample,Group A,impact_strength,88.656770,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,2,,#397FE5,#397FE5,true,A2,Group A,A2,2
-A2,sample,Group A,elongation_at_break,184.528330,%,Elongation,,,,3,higher,0,300,2,,#397FE5,#397FE5,true,A2,Group A,A2,2
-A3,sample,Group A,density,0.953894,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,3,,#397FE5,#397FE5,true,A3,Group A,A3,2
-A3,sample,Group A,impact_strength,68.522640,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,3,,#397FE5,#397FE5,true,A3,Group A,A3,2
-A3,sample,Group A,elongation_at_break,182.174770,%,Elongation,,,,3,higher,0,300,3,,#397FE5,#397FE5,true,A3,Group A,A3,2
-A4,sample,Group A,density,1.081971,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,4,,#397FE5,#397FE5,true,A4,Group A,A4,2
-A4,sample,Group A,impact_strength,66.628474,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,4,,#397FE5,#397FE5,true,A4,Group A,A4,2
-A4,sample,Group A,elongation_at_break,171.311305,%,Elongation,,,,3,higher,0,300,4,,#397FE5,#397FE5,true,A4,Group A,A4,2
-B1,reference,Group B,density,1.344203,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,5,,#10A990,#10A990,true,B1,Group B,B1,2
-B1,reference,Group B,impact_strength,52.469662,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,5,,#10A990,#10A990,true,B1,Group B,B1,2
-B1,reference,Group B,elongation_at_break,169.710865,%,Elongation,,,,3,higher,0,300,5,,#10A990,#10A990,true,B1,Group B,B1,2
-B2,reference,Group B,density,1.223981,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,6,,#10A990,#10A990,true,B2,Group B,B2,2
-B2,reference,Group B,impact_strength,51.734499,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,6,,#10A990,#10A990,true,B2,Group B,B2,2
-B2,reference,Group B,elongation_at_break,170.020855,%,Elongation,,,,3,higher,0,300,6,,#10A990,#10A990,true,B2,Group B,B2,2
-B3,reference,Group B,density,1.216608,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,7,,#10A990,#10A990,true,B3,Group B,B3,2
-B3,reference,Group B,impact_strength,36.089025,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,7,,#10A990,#10A990,true,B3,Group B,B3,2
-B3,reference,Group B,elongation_at_break,165.252640,%,Elongation,,,,3,higher,0,300,7,,#10A990,#10A990,true,B3,Group B,B3,2
-B4,reference,Group B,density,1.367052,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,8,,#10A990,#10A990,true,B4,Group B,B4,2
-B4,reference,Group B,impact_strength,42.742871,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,8,,#10A990,#10A990,true,B4,Group B,B4,2
-B4,reference,Group B,elongation_at_break,168.682660,%,Elongation,,,,3,higher,0,300,8,,#10A990,#10A990,true,B4,Group B,B4,2
-C1,reference,Group C,density,1.390555,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,9,,#ED6470,#ED6470,true,C1,Group C,C1,2
-C1,reference,Group C,impact_strength,98.376870,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,9,,#ED6470,#ED6470,true,C1,Group C,C1,2
-C1,reference,Group C,elongation_at_break,162.525025,%,Elongation,,,,3,higher,0,300,9,,#ED6470,#ED6470,true,C1,Group C,C1,2
-C2,reference,Group C,density,1.282299,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,10,,#ED6470,#ED6470,true,C2,Group C,C2,2
-C2,reference,Group C,impact_strength,91.914368,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,10,,#ED6470,#ED6470,true,C2,Group C,C2,2
-C2,reference,Group C,elongation_at_break,162.296545,%,Elongation,,,,3,higher,0,300,10,,#ED6470,#ED6470,true,C2,Group C,C2,2
-C3,reference,Group C,density,1.352418,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,11,,#ED6470,#ED6470,true,C3,Group C,C3,2
-C3,reference,Group C,impact_strength,75.653922,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,11,,#ED6470,#ED6470,true,C3,Group C,C3,2
-C3,reference,Group C,elongation_at_break,169.341190,%,Elongation,,,,3,higher,0,300,11,,#ED6470,#ED6470,true,C3,Group C,C3,2
-C4,reference,Group C,density,1.466313,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,12,,#ED6470,#ED6470,true,C4,Group C,C4,2
-C4,reference,Group C,impact_strength,90.147188,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,12,,#ED6470,#ED6470,true,C4,Group C,C4,2
-C4,reference,Group C,elongation_at_break,159.115915,%,Elongation,,,,3,higher,0,300,12,,#ED6470,#ED6470,true,C4,Group C,C4,2
-D1,reference,Group D,density,1.643746,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,13,,#DFA126,#DFA126,true,D1,Group D,D1,2
-D1,reference,Group D,impact_strength,65.803355,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,13,,#DFA126,#DFA126,true,D1,Group D,D1,2
-D1,reference,Group D,elongation_at_break,146.031430,%,Elongation,,,,3,higher,0,300,13,,#DFA126,#DFA126,true,D1,Group D,D1,2
-D2,reference,Group D,density,1.563368,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,14,,#DFA126,#DFA126,true,D2,Group D,D2,2
-D2,reference,Group D,impact_strength,51.184584,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,14,,#DFA126,#DFA126,true,D2,Group D,D2,2
-D2,reference,Group D,elongation_at_break,159.848440,%,Elongation,,,,3,higher,0,300,14,,#DFA126,#DFA126,true,D2,Group D,D2,2
-D3,reference,Group D,density,1.684275,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,15,,#DFA126,#DFA126,true,D3,Group D,D3,2
-D3,reference,Group D,impact_strength,44.627412,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,15,,#DFA126,#DFA126,true,D3,Group D,D3,2
-D3,reference,Group D,elongation_at_break,149.307625,%,Elongation,,,,3,higher,0,300,15,,#DFA126,#DFA126,true,D3,Group D,D3,2
-D4,reference,Group D,density,1.746792,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,16,,#DFA126,#DFA126,true,D4,Group D,D4,2
-D4,reference,Group D,impact_strength,66.002580,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,16,,#DFA126,#DFA126,true,D4,Group D,D4,2
-D4,reference,Group D,elongation_at_break,141.394360,%,Elongation,,,,3,higher,0,300,16,,#DFA126,#DFA126,true,D4,Group D,D4,2
+Material,Role,Group,Metric,Value,Unit,DisplayLabel,ScatterAxis,ScatterMin,ScatterMax,RadarOrder,Direction,ScaleMin,ScaleMax,MaterialOrder,Marker,EnvelopeInclude,LegendLabel,LegendGroup,LegendIdentity,LegendItemsPerRow
+A1,sample,Group A,density,1.100967,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,1,,true,A1,Group A,A1,2
+A1,sample,Group A,impact_strength,81.333092,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,1,,true,A1,Group A,A1,2
+A1,sample,Group A,elongation_at_break,170.456485,%,Elongation,,,,3,higher,0,300,1,,true,A1,Group A,A1,2
+A2,sample,Group A,density,1.014926,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,2,,true,A2,Group A,A2,2
+A2,sample,Group A,impact_strength,88.656770,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,2,,true,A2,Group A,A2,2
+A2,sample,Group A,elongation_at_break,184.528330,%,Elongation,,,,3,higher,0,300,2,,true,A2,Group A,A2,2
+A3,sample,Group A,density,0.953894,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,3,,true,A3,Group A,A3,2
+A3,sample,Group A,impact_strength,68.522640,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,3,,true,A3,Group A,A3,2
+A3,sample,Group A,elongation_at_break,182.174770,%,Elongation,,,,3,higher,0,300,3,,true,A3,Group A,A3,2
+A4,sample,Group A,density,1.081971,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,4,,true,A4,Group A,A4,2
+A4,sample,Group A,impact_strength,66.628474,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,4,,true,A4,Group A,A4,2
+A4,sample,Group A,elongation_at_break,171.311305,%,Elongation,,,,3,higher,0,300,4,,true,A4,Group A,A4,2
+B1,reference,Group B,density,1.344203,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,5,,,B1,Group B,B1,2
+B1,reference,Group B,impact_strength,52.469662,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,5,,,B1,Group B,B1,2
+B1,reference,Group B,elongation_at_break,169.710865,%,Elongation,,,,3,higher,0,300,5,,,B1,Group B,B1,2
+B2,reference,Group B,density,1.223981,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,6,,,B2,Group B,B2,2
+B2,reference,Group B,impact_strength,51.734499,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,6,,,B2,Group B,B2,2
+B2,reference,Group B,elongation_at_break,170.020855,%,Elongation,,,,3,higher,0,300,6,,,B2,Group B,B2,2
+B3,reference,Group B,density,1.216608,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,7,,,B3,Group B,B3,2
+B3,reference,Group B,impact_strength,36.089025,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,7,,,B3,Group B,B3,2
+B3,reference,Group B,elongation_at_break,165.252640,%,Elongation,,,,3,higher,0,300,7,,,B3,Group B,B3,2
+B4,reference,Group B,density,1.367052,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,8,,,B4,Group B,B4,2
+B4,reference,Group B,impact_strength,42.742871,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,8,,,B4,Group B,B4,2
+B4,reference,Group B,elongation_at_break,168.682660,%,Elongation,,,,3,higher,0,300,8,,,B4,Group B,B4,2
+C1,reference,Group C,density,1.390555,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,9,,,C1,Group C,C1,2
+C1,reference,Group C,impact_strength,98.376870,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,9,,,C1,Group C,C1,2
+C1,reference,Group C,elongation_at_break,162.525025,%,Elongation,,,,3,higher,0,300,9,,,C1,Group C,C1,2
+C2,reference,Group C,density,1.282299,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,10,,,C2,Group C,C2,2
+C2,reference,Group C,impact_strength,91.914368,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,10,,,C2,Group C,C2,2
+C2,reference,Group C,elongation_at_break,162.296545,%,Elongation,,,,3,higher,0,300,10,,,C2,Group C,C2,2
+C3,reference,Group C,density,1.352418,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,11,,,C3,Group C,C3,2
+C3,reference,Group C,impact_strength,75.653922,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,11,,,C3,Group C,C3,2
+C3,reference,Group C,elongation_at_break,169.341190,%,Elongation,,,,3,higher,0,300,11,,,C3,Group C,C3,2
+C4,reference,Group C,density,1.466313,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,12,,,C4,Group C,C4,2
+C4,reference,Group C,impact_strength,90.147188,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,12,,,C4,Group C,C4,2
+C4,reference,Group C,elongation_at_break,159.115915,%,Elongation,,,,3,higher,0,300,12,,,C4,Group C,C4,2
+D1,reference,Group D,density,1.643746,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,13,,,D1,Group D,D1,2
+D1,reference,Group D,impact_strength,65.803355,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,13,,,D1,Group D,D1,2
+D1,reference,Group D,elongation_at_break,146.031430,%,Elongation,,,,3,higher,0,300,13,,,D1,Group D,D1,2
+D2,reference,Group D,density,1.563368,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,14,,,D2,Group D,D2,2
+D2,reference,Group D,impact_strength,51.184584,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,14,,,D2,Group D,D2,2
+D2,reference,Group D,elongation_at_break,159.848440,%,Elongation,,,,3,higher,0,300,14,,,D2,Group D,D2,2
+D3,reference,Group D,density,1.684275,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,15,,,D3,Group D,D3,2
+D3,reference,Group D,impact_strength,44.627412,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,15,,,D3,Group D,D3,2
+D3,reference,Group D,elongation_at_break,149.307625,%,Elongation,,,,3,higher,0,300,15,,,D3,Group D,D3,2
+D4,reference,Group D,density,1.746792,g cm^-3,Density,x,0.85,1.85,1,lower,0.7,1.9,16,,,D4,Group D,D4,2
+D4,reference,Group D,impact_strength,66.002580,kJ m^-2,Impact strength,y,20,125,2,higher,0,130,16,,,D4,Group D,D4,2
+D4,reference,Group D,elongation_at_break,141.394360,%,Elongation,,,,3,higher,0,300,16,,,D4,Group D,D4,2

@@ -11,7 +11,6 @@ DATA = ROOT / "data"
 REQUESTS = ROOT / "requests"
 DATA.mkdir(exist_ok=True)
 REQUESTS.mkdir(exist_ok=True)
-COLORS = ["#4361EE", "#00B4D8", "#06B67A", "#F47C35", "#C947A5"]
 
 
 def write_csv(name, rows):
@@ -45,7 +44,6 @@ write_options(
     "replicate-distributions.json",
     {
         "size": "60x55",
-        "palette_colors": COLORS,
         "x_label_override": "Synthetic formulations",
         "y_label_override": "Tensile strength (MPa)",
         "summary_statistic": "median_iqr",
@@ -76,7 +74,6 @@ write_options(
     "composition-bars.json",
     {
         "size": "60x55",
-        "palette_colors": COLORS,
         "x_label_override": "Synthetic formulations",
         "y_label_override": "Mass fraction (%)",
         "y_min": -2,
@@ -125,16 +122,6 @@ write_options(
         "z_max": 100,
         "z_ticks": [0, 25, 50, 75, 100],
         "z_tick_format": "%.0f",
-        "colormap_colors": [
-            "#302775",
-            "#4268D8",
-            "#21A9CF",
-            "#43C59E",
-            "#BFE773",
-            "#F5D15D",
-            "#F18D48",
-            "#D94546",
-        ],
         "show_colorbar": True,
         "colorbar_direction": "horizontal",
         "colorbar_width_mm": 35,

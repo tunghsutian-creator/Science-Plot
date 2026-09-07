@@ -5,12 +5,5 @@
   "reverse_x": true,
   "series_label_mode": "inline",
   "stack_spacing_scale": 1.08,
-  "palette_colors": [
-    "#DC2626",
-    "#2563EB",
-    "#059669",
-    "#F97316",
-    "#9333EA"
-  ],
   "series_label_offset_fraction": 0.065
 }

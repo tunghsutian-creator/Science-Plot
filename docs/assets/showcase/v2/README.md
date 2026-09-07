@@ -4,6 +4,9 @@ These eight examples use **synthetic data**, rendered with SciPlot / Veusz and
 exported as complete PDF pages before conversion to 300 dpi PNG. They illustrate
 plot types, not measured material properties.
 
+All data figures use SciPlot's built-in default colors, including the default
+heatmap color scale. Only the surrounding cover artwork uses decorative colors.
+
 Standard figures are **60 × 55 mm** (709 × 650 px); performance figures are
 **120 × 55 mm** (1417 × 650 px).
 
@@ -29,7 +32,8 @@ per sample. Composition has two components, Polymer and Modifier, totaling 100%
 for every formulation. The continuous response field is a mathematical illustration.
 See the [data notes](distributions/README.md) for formulas and component definitions.
 
-Scatter envelopes show group ranges, not confidence intervals. The radar contains
+Scatter shading shows the sample range, not a confidence interval; references use
+unfilled markers without envelopes. The radar contains
 three complete five-metric profiles and three reference datasets with 3, 3 and 2
 available metrics. References use unconnected hollow markers; missing values are
 neither filled nor interpolated. Each radar axis has its own declared range and

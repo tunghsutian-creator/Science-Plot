@@ -7,7 +7,7 @@
   "scientific_evidence": false,
   "renderer": "SciPlot public task route with native Veusz PDF export",
   "rasterization": "pdftoppm -png -r 300 -singlefile INPUT_PDF OUTPUT_PREFIX",
-  "preparation": "mkdir -p .tmp_verify/github_showcase_v2/performance/.sciplot/tasks .tmp_verify/github_showcase_v2/performance/reproduce_tasks",
+  "preparation": "mkdir -p .tmp_verify/github_showcase_v4/performance/.sciplot/tasks .tmp_verify/github_showcase_v4/performance/reproduce_tasks",
   "figures": [
     {
       "image": "performance-scatter-rich.png",
@@ -15,18 +15,18 @@
         1417,
         650
       ],
-      "image_sha256": "97ae4143d252dd5fd3763b7468517a62dbde904de007852bd94aaca0771b1404",
+      "image_sha256": "d706ef93f94e416d0f41bf585539301fb9045fe4ccf3f6ce9352ff197b0a0fd6",
       "source": "performance-scatter-rich.csv",
-      "source_sha256": "cb5a846aa53109f422baef3ac978853d8e13f0d2ffcd60af1355b8260a7e7566",
+      "source_sha256": "ef5f139f0c7bcec06e9361a461feb0ca084d16d085324521061fae7f2a1b6fee",
       "request": "scatter.request.json",
-      "request_sha256": "289b3ccc1747ace7eaeae1cdbabdf4f07683eeb221da630a92f0669fc1e22e34",
-      "command": "skill/scripts/sciplot task start --request docs/assets/showcase/v2/performance/scatter.request.json --task-dir .tmp_verify/github_showcase_v2/performance/reproduce_tasks/scatter --json",
+      "request_sha256": "de2c31786df74bef7c4d8def83305b0583a9554291721a9e2a9ea6e9a6eb2350",
+      "command": "skill/scripts/sciplot task start --request docs/assets/showcase/v2/performance/scatter.request.json --task-dir .tmp_verify/github_showcase_v4/performance/reproduce_tasks/scatter-default --json",
       "source_qa_delivery_current": {
         "source": true,
         "qa": true,
         "delivery": true
       },
-      "visual_review": "passed; full-page image inspected, labels and units visible without clipping or overlap",
+      "visual_review": "passed; program-default semantic colors, complete original data, units and labels inspected on the full native PDF page without clipping or overlap",
       "point_count": 16,
       "groups": 4,
       "points_per_group": 4,
@@ -36,12 +36,6 @@
         "impact_strength"
       ],
       "not_displayed_metric": "elongation_at_break is auxiliary source metadata required by the shared performance planning contract",
-      "palette": [
-        "#397FE5",
-        "#10A990",
-        "#ED6470",
-        "#DFA126"
-      ],
       "identities": "16 unique native markers; 4 group headings, two legend items per row",
       "generation": "Four deterministic elliptical groups from cx,cy,rx,ry,phase parameters; angle=2*pi*j/12+phase; radius=.43+.5*((j*7)%11)/10; x=cx+rx*radius*cos(angle)+.01*sin(3*angle); y=cy+ry*radius*sin(angle)+5*(x-cx)/rx; final independent synthetic design uses j in [0,3,6,9], six-decimal source values.",
       "group_parameters": [
@@ -74,7 +68,121 @@
           1.75
         ]
       ],
-      "public_route_limit": "A 48-point shared-LegendIdentity candidate was rejected by current FigureTask material-order validation in both public task and studio creation. The published source contains only these 16 independently identified points; blocked source and receipts remain in ignored evidence."
+      "public_route_limit": "A 48-point shared-LegendIdentity candidate was rejected by current FigureTask material-order validation in both public task and studio creation. The published source contains only these 16 independently identified points; blocked source and receipts remain in ignored evidence.",
+      "preparation": "mkdir -p .tmp_verify/github_showcase_v4/performance/.sciplot/tasks .tmp_verify/github_showcase_v4/performance/reproduce_tasks",
+      "color_selection": "Program-default performance semantic styling. MarkerLineColor and MarkerFillColor columns are absent from the source; the public task request contains no color or palette override.",
+      "resolved_series_color_evidence": [
+        {
+          "label": "A1",
+          "role": "sample",
+          "line_color": "#3568C0",
+          "marker_fill_color": "#3568C0"
+        },
+        {
+          "label": "A2",
+          "role": "sample",
+          "line_color": "#3568C0",
+          "marker_fill_color": "#3568C0"
+        },
+        {
+          "label": "A3",
+          "role": "sample",
+          "line_color": "#3568C0",
+          "marker_fill_color": "#3568C0"
+        },
+        {
+          "label": "A4",
+          "role": "sample",
+          "line_color": "#3568C0",
+          "marker_fill_color": "#3568C0"
+        },
+        {
+          "label": "B1",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "B2",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "B3",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "B4",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "C1",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "C2",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "C3",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "C4",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "D1",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "D2",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "D3",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "D4",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        }
+      ],
+      "style_revision": "program_default_colors",
+      "sample_count": 4,
+      "reference_material_count": 12,
+      "sample_group_count": 1,
+      "reference_group_count": 3,
+      "sample_envelope_count": 1,
+      "reference_envelope_count": 0,
+      "group_roles": {
+        "Group A": "sample",
+        "Group B": "reference",
+        "Group C": "reference",
+        "Group D": "reference"
+      },
+      "envelope_default_policy": "Group A keeps its program-default sample extent envelope. Reference EnvelopeInclude is blank, so Groups B-D use the program default false and have no envelopes. Their twelve original observations remain visible as neutral hollow markers."
     },
     {
       "image": "performance-radar-rich.png",
@@ -82,18 +190,18 @@
         1417,
         650
       ],
-      "image_sha256": "56d32cec3a34120fd6cc5f0509bd973c624e16c17996ad63499af3262c314b7e",
+      "image_sha256": "70f49840d7a168d554d4592498c5d6596ac930f4d20fefa363290c057baefce5",
       "source": "performance-radar-rich.csv",
-      "source_sha256": "b5221c51229f10970c6e48aa7f3eccd07be6f8b8ed0d11faf6aea840e824a939",
+      "source_sha256": "403368be0196013d55d7d4603d199b9709e375fb1f106f61b1d41354e73281b6",
       "request": "radar.request.json",
-      "request_sha256": "0ed0868e21dd69722f2f180fe3adf01da2f3462077e53fb207f9ab896fb95aea",
-      "command": "skill/scripts/sciplot task start --request docs/assets/showcase/v2/performance/radar.request.json --task-dir .tmp_verify/github_showcase_v3/performance/reproduce_tasks/radar-mixed --json",
+      "request_sha256": "286fe69dceea93de9f4127ef8d1ae9da26a4fb19ae48664f55bd0f492b9e2192",
+      "command": "skill/scripts/sciplot task start --request docs/assets/showcase/v2/performance/radar.request.json --task-dir .tmp_verify/github_showcase_v4/performance/reproduce_tasks/radar-default --json",
       "source_qa_delivery_current": {
         "source": true,
         "qa": true,
         "delivery": true
       },
-      "visual_review": "passed; three complete colored sample polygons and eight hollow reference points on five unit-bearing axes; labels and units visible without clipping or overlap",
+      "visual_review": "passed; program-default semantic colors, complete original data, units and labels inspected on the full native PDF page without clipping or overlap",
       "polygon_count": 3,
       "metrics_per_polygon": 5,
       "source_row_count": 23,
@@ -103,14 +211,6 @@
         "tensile_strength",
         "elongation_at_break",
         "recovery"
-      ],
-      "palette": [
-        "#3568C0",
-        "#C83E4D",
-        "#2A9D8F",
-        "#D99A24",
-        "#7C9ED9",
-        "#7B61A8"
       ],
       "generation": "The original deterministic values for Demo A-C are preserved completely. Ref D-F select and relabel existing values from former synthetic Demo D-F; only the stated present metrics are included in the source CSV. No selected value, unit, normalization bound or metric direction was changed, and no missing metric was estimated.",
       "normalized_profiles": [
@@ -172,7 +272,7 @@
         "higher",
         "higher"
       ],
-      "preparation": "mkdir -p .tmp_verify/github_showcase_v3/performance/.sciplot/tasks .tmp_verify/github_showcase_v3/performance/reproduce_tasks",
+      "preparation": "mkdir -p .tmp_verify/github_showcase_v4/performance/.sciplot/tasks .tmp_verify/github_showcase_v4/performance/reproduce_tasks",
       "sample_count": 3,
       "reference_material_count": 3,
       "reference_point_count": 8,
@@ -212,24 +312,24 @@
         ]
       },
       "reference_omitted_metric_count": 7,
-      "reference_gap_policy": "Missing reference metrics are absent source rows. Each reference is rendered only as colored hollow markers at its available axes; no reference lines, filled polygon, closure point, zero placeholder or interpolated metric is created.",
+      "reference_gap_policy": "Missing reference metrics remain absent source rows. Each reference is rendered only as program-default neutral hollow markers at its available axes; no reference lines, filled polygon, closure point, zero placeholder or interpolated metric is created.",
       "reference_marker_styles": {
         "Ref D": {
           "line_hidden": true,
           "marker_fill": "white",
-          "marker_line": "#D99A24",
+          "marker_line": "#666666",
           "point_count": 3
         },
         "Ref E": {
           "line_hidden": true,
           "marker_fill": "white",
-          "marker_line": "#7C9ED9",
+          "marker_line": "#666666",
           "point_count": 3
         },
         "Ref F": {
           "line_hidden": true,
           "marker_fill": "white",
-          "marker_line": "#7B61A8",
+          "marker_line": "#666666",
           "point_count": 2
         }
       },
@@ -239,14 +339,58 @@
         "Demo C"
       ],
       "revision": "mixed_complete_samples_and_incomplete_references",
-      "source_format": "UTF-8 CSV with LF line endings"
+      "source_format": "UTF-8 CSV with LF line endings",
+      "color_selection": "Program-default performance semantic styling. MarkerLineColor and MarkerFillColor columns are absent from the source; the public task request contains no color or palette override.",
+      "resolved_series_color_evidence": [
+        {
+          "label": "Demo A",
+          "role": "sample",
+          "line_color": "#3568C0",
+          "marker_fill_color": "#3568C0"
+        },
+        {
+          "label": "Demo B",
+          "role": "sample",
+          "line_color": "#C83E4D",
+          "marker_fill_color": "#C83E4D"
+        },
+        {
+          "label": "Demo C",
+          "role": "sample",
+          "line_color": "#2A9D8F",
+          "marker_fill_color": "#2A9D8F"
+        },
+        {
+          "label": "Ref D",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "Ref E",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        },
+        {
+          "label": "Ref F",
+          "role": "reference",
+          "line_color": "#666666",
+          "marker_fill_color": "white"
+        }
+      ],
+      "style_revision": "program_default_colors"
     }
   ],
   "limitations": [
     "All data are deterministic synthetic demonstrations, not measured material properties.",
     "Envelope fills show the supplied synthetic point range, not confidence intervals.",
     "Radar radius follows declared per-metric direction and bounds; polygon area is not an aggregate performance score.",
-    "Source-driven palette overrides are used where the public contract permits them; no renderer, VSZ text, or raster figure content was patched."
+    "Colors come from current program-default performance semantic rules. The ordinary control-first palette is not manually copied into performance input data. Reference materials use neutral hollow markers; custom reference envelopes are disabled by restoring their default inclusion state."
   ],
-  "reproduction_note": "Execute from the repository root. Existing projects are resumed by their returned project path; a new complete creation needs fresh task and output directories."
+  "reproduction_note": "Execute from the repository root. Existing projects are resumed by their returned project path; a new complete creation needs fresh task and output directories.",
+  "default_color_authority": [
+    "src/sciplot_core/performance_comparison/styles.py",
+    "src/sciplot_core/policy/visual_identity.py"
+  ]
 }
