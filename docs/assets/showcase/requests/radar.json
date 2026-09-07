@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "action": "create",
+  "source": "docs/assets/showcase/data/material-performance-radar-demo.csv",
+  "rule_id": "performance_comparison",
+  "out": ".tmp_verify/github_showcase/reproduce/radar_SciPlot",
+  "template": "polar_curve"
+}

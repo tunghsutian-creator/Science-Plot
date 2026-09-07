@@ -39,6 +39,8 @@ ftir_output/
 !/docs/ARCHITECTURE.md
 !/docs/AUTOMATION_CONTROL_CONTRACT.md
 !/docs/THIRD_PARTY_NOTICES.md
+# Public project artwork and synthetic plotting previews for the GitHub README.
+!/docs/assets/
 
 # Vendored Veusz runtime only; upstream development material is local-only.
 /third_party/veusz/tests/

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-labelledby="title desc">
+  <title id="title">SciPlot — 让 AI 理解任务，让数据忠实成图。</title>
+  <desc id="desc">面向外部 AI 的本地科研绘图工具。从实验数据到可编辑图稿，支持 PDF、300 dpi TIFF、CSV 和 VSZ。</desc>
+  <rect width="1280" height="400" rx="20" fill="#F5F4EF"/>
+  <rect x="48" y="48" width="6" height="34" rx="3" fill="#3568C0"/>
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif">
+    <text x="70" y="72" font-size="20" font-weight="600" letter-spacing="3" fill="#3568C0">SCIENTIFIC PLOTTING, WITH AI</text>
+    <text x="48" y="178" font-size="96" font-weight="750" letter-spacing="-5" fill="#19232D">SciPlot<tspan fill="#3568C0">.</tspan></text>
+    <text x="52" y="240" font-size="33" font-weight="600" fill="#19232D">让 AI 理解任务，让数据忠实成图。</text>
+    <text x="52" y="285" font-size="22" fill="#54616D">从实验数据，到可编辑、可追溯的科研图稿。</text>
+    <text x="52" y="352" font-size="18" font-weight="600" letter-spacing="2" fill="#3568C0">LOCAL EXECUTION  /  EDITABLE FIGURES</text>
+    <line x1="829" y1="55" x2="829" y2="345" stroke="#D9DEDB"/>
+    <g fill="#19232D">
+      <text x="876" y="88" font-size="15" letter-spacing="2" fill="#687780">THE FIGURE WORKFLOW</text>
+      <text x="876" y="149" font-size="17" font-weight="600" fill="#3568C0">01</text>
+      <text x="922" y="149" font-size="24" font-weight="600">读取实验数据</text>
+      <text x="922" y="179" font-size="17" fill="#54616D">保留来源、数值与单位</text>
+      <text x="876" y="234" font-size="17" font-weight="600" fill="#3568C0">02</text>
+      <text x="922" y="234" font-size="24" font-weight="600">生成与审阅图稿</text>
+      <text x="922" y="264" font-size="17" fill="#54616D">原生 Veusz · 修改先预览</text>
+      <text x="876" y="319" font-size="17" font-weight="600" fill="#3568C0">03</text>
+      <text x="922" y="319" font-size="24" font-weight="600">交付，继续编辑</text>
+      <text x="922" y="349" font-size="17" fill="#54616D">PDF · TIFF · CSV · VSZ</text>
+    </g>
+  </g>
+</svg>

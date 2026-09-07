@@ -1,9 +1,91 @@
 # SciPlot
 
-SciPlot 是供外部 AI 控制的本地科研绘图工具。AI 理解研究任务，通过公开 CLI 读取原始
-数据与规则、审阅科学计划、查询和修改已保存的图，再交付 PDF、300 dpi TIFF、绘图数据、
-QA 和可追溯运行记录。确定性科学处理和原生 Veusz 文档操作由 SciPlot 执行；
-`studio/document.vsz` 保持可编辑的视觉权威。
+![SciPlot：让 AI 理解任务，让数据忠实成图。](docs/assets/sciplot-banner.svg)
+
+**把重复的绘图步骤交给程序，把判断留给研究者。**
+
+SciPlot 是面向外部 AI 的本地科研绘图工具，将实验数据整理为**可编辑、可追溯、可继续修改**的科研图。
+你描述研究任务，AI 通过公开 CLI 或 MCP 读取数据与规则、审阅方案和修改预览；SciPlot
+执行确定性科学处理、原生 Veusz 编辑、校验与导出，让受管项目的修改有来源和操作记录。
+
+*From experimental data to editable scientific figures — with traceable local execution.*
+
+[典型图例](#典型图例) · [核心能力](#为什么使用-sciplot) · [开始使用](#开始使用) ·
+[AI 操作指南](skill/references/external-control.md) · [macOS 构建与连接](distribution/macos/README.md)
+
+## 典型图例
+
+以下图片由 **SciPlot / Veusz 实际渲染**，使用仓库内可追溯的**合成演示数据**。
+它们展示图形与排版能力，不代表实测结果或材料性能结论；点击图片可查看原尺寸。
+来源、生成命令与展示范围见[图例说明](docs/assets/showcase/README.md)。
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <b>多样品光谱 · 清楚比较每一条曲线</b><br>
+      <a href="docs/assets/showcase/uvvis-curves.png"><img src="docs/assets/showcase/uvvis-curves.png" width="420" alt="合成 UV-vis 演示：四个样品的吸光度随波长变化曲线，保留样品图例与坐标单位"></a><br>
+      UV-vis 曲线，四组独立数据，统一配色与单位。
+    </td>
+    <td width="50%" valign="top">
+      <b>重复测试分布 · 让每个数据点可见</b><br>
+      <a href="docs/assets/showcase/replicate-distribution.png"><img src="docs/assets/showcase/replicate-distribution.png" width="420" alt="合成重复测试演示：箱线图叠加各组原始数据点"></a><br>
+      箱线图叠加原始点，同时呈现中位数和分布。
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <b>性能散点对照 · 看见位置与分组</b><br>
+      <a href="docs/assets/showcase/performance-scatter.png"><img src="docs/assets/showcase/performance-scatter.png" width="860" alt="合成性能对比演示：密度与比冲击强度的散点图，带分组区域及材料索引"></a><br>
+      样品和参照点保留各自身份；浅色区域表示样品范围，不是置信区间。
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <b>多指标雷达图 · 把比较边界说清楚</b><br>
+      <a href="docs/assets/showcase/performance-radar.png"><img src="docs/assets/showcase/performance-radar.png" width="860" alt="合成多指标雷达演示：按声明边界归一化，参照材料缺失的指标保持缺失"></a><br>
+      按声明的指标方向和边界归一化；参照材料缺失的指标不补点。
+    </td>
+  </tr>
+</table>
+
+## 为什么使用 SciPlot
+
+| 你关心的事 | SciPlot 如何支持 |
+| --- | --- |
+| **把精力放在研究上** | 外部 AI 理解意图，本地任务编排完成检查、建项、修改和导出；SciPlot 的确定性功能无需配置内置模型或 API key。 |
+| **保留数据的科学含义** | 依据明确规则读取数值、单位、样品和重复测量；缺失指标保留为空，无法确定的映射会报告原因。 |
+| **改图前看得见结果** | 公开样式与标注操作先生成候选预览，提交时审计数据、绑定与当前文档版本。 |
+| **交付后仍能继续编辑** | 一并保存原生 VSZ、PDF、300 dpi TIFF 和源数据派生 CSV；VSZ 包含绘图数据与可编辑对象。 |
+| **换个会话，接着改图** | 已保存的受管项目可重新查询并继续修改，来源、QA 和运行记录保存在本地隐藏工作区。 |
+
+当前提供 **24 种就绪实验规则**，覆盖力学、流变、热分析、光谱、散射和材料性能比较。
+原生构建器支持 9 类图形，每条规则有自己的输入与模板范围；可用能力以
+`rules list --json` 和 `task capabilities --json` 为准。
+
+## 开始使用
+
+先按[源码安装说明](#当前本机开发环境与代码入口)准备环境，或查看
+[macOS 本地分发构建](distribution/macos/README.md)。在源码目录运行：
+
+```bash
+skill/scripts/sciplot doctor --json
+skill/scripts/sciplot task capabilities --json
+```
+
+环境检查返回 `status=ready` 后，把数据路径和绘图意图交给能调用本地 CLI 或 MCP 的外部 AI。例如：
+
+> 请用 SciPlot 读取 `/绝对路径/UVvis.csv`，检查波长、吸光度和样品身份，生成可编辑光谱图，
+> 导出 PDF、300 dpi TIFF 和绘图 CSV。如果单位或映射不明确，先报告具体问题。
+
+后续可以继续表达修改意图：
+
+> 继续刚才的项目，把第二条曲线改为蓝色，先检查修改预览，再导出当前图稿。
+
+从原始数据到交付：**读取与校验 → 来源绑定的计划 → 原生图稿 → 预览与审阅 → 导出与续办**。
+受管项目保存的 `studio/document.vsz` 是视觉权威；导出使用当前保存的图稿。
+完整命令、支持边界和恢复方式见下方说明及 [AI 操作指南](skill/references/external-control.md)。
+
+---
 
 ## 文档与产品真相
 

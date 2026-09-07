@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "action": "create",
+  "source": "docs/assets/showcase/data/curves/uvvis-demo.csv",
+  "rule_id": "uvvis_spectrum",
+  "out": ".tmp_verify/github_showcase/reproduce/uvvis_SciPlot"
+}

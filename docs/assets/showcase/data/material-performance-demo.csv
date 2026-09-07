@@ -1,0 +1,25 @@
+Material,Role,Group,Metric,Value,Unit,DisplayLabel,ScatterAxis,RadarOrder,Direction,ScaleMin,ScaleMax,Journal,Year,DOI,MaterialOrder
+Demo A,sample,Demonstration samples,density,1.05,g cm^-3,Density,x,1,lower,0.8,1.6,,,,1
+Demo A,sample,Demonstration samples,specific_impact_strength,62,kJ m^-2,Specific impact strength,y,2,higher,0,120,,,,1
+Demo A,sample,Demonstration samples,tensile_strength,70,MPa,Tensile strength,,3,higher,0,180,,,,1
+Demo A,sample,Demonstration samples,elongation_at_break,80,%,Elongation at break,,4,higher,0,120,,,,1
+Demo B,sample,Demonstration samples,density,1.10,g cm^-3,Density,x,1,lower,0.8,1.6,,,,2
+Demo B,sample,Demonstration samples,specific_impact_strength,78,kJ m^-2,Specific impact strength,y,2,higher,0,120,,,,2
+Demo B,sample,Demonstration samples,tensile_strength,82,MPa,Tensile strength,,3,higher,0,180,,,,2
+Demo B,sample,Demonstration samples,elongation_at_break,65,%,Elongation at break,,4,higher,0,120,,,,2
+Demo C,sample,Demonstration samples,density,1.18,g cm^-3,Density,x,1,lower,0.8,1.6,,,,3
+Demo C,sample,Demonstration samples,specific_impact_strength,70,kJ m^-2,Specific impact strength,y,2,higher,0,120,,,,3
+Demo C,sample,Demonstration samples,tensile_strength,95,MPa,Tensile strength,,3,higher,0,180,,,,3
+Demo C,sample,Demonstration samples,elongation_at_break,50,%,Elongation at break,,4,higher,0,120,,,,3
+Ref A,reference,Reference placeholders,density,1.13,g cm^-3,Density,x,1,lower,0.8,1.6,,,,4
+Ref A,reference,Reference placeholders,specific_impact_strength,25,kJ m^-2,Specific impact strength,y,2,higher,0,120,,,,4
+Ref A,reference,Reference placeholders,tensile_strength,75,MPa,Tensile strength,,3,higher,0,180,,,,4
+Ref A,reference,Reference placeholders,elongation_at_break,60,%,Elongation at break,,4,higher,0,120,,,,4
+Ref B,reference,Reference placeholders,density,1.04,g cm^-3,Density,x,1,lower,0.8,1.6,,,,5
+Ref B,reference,Reference placeholders,specific_impact_strength,35,kJ m^-2,Specific impact strength,y,2,higher,0,120,,,,5
+Ref B,reference,Reference placeholders,tensile_strength,45,MPa,Tensile strength,,3,higher,0,180,,,,5
+Ref B,reference,Reference placeholders,elongation_at_break,30,%,Elongation at break,,4,higher,0,120,,,,5
+Ref C,reference,Reference placeholders,density,1.55,g cm^-3,Density,x,1,lower,0.8,1.6,,,,6
+Ref C,reference,Reference placeholders,specific_impact_strength,90,kJ m^-2,Specific impact strength,y,2,higher,0,120,,,,6
+Ref C,reference,Reference placeholders,tensile_strength,160,MPa,Tensile strength,,3,higher,0,180,,,,6
+Ref C,reference,Reference placeholders,elongation_at_break,2.5,%,Elongation at break,,4,higher,0,120,,,,6
