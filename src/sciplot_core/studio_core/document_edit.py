@@ -64,8 +64,24 @@ def preview_project_document(
 
 
 def _candidate(
-    document: Path, spec: Path, changes: list[dict[str, Any]], output: Path
+    document: Path, spec: Path, changes: list[dict[str, Any]], output: Path,
+    *, operations: list[dict[str, Any]] | None = None, figure_id: str = "",
 ) -> dict[str, Any]:
+    if operations is not None:
+        from sciplot_core.studio_core.annotation_batch import compile_annotation_operations
+
+        compile_annotation_operations(json.loads(spec.read_text()), operations,
+                                      document_sha256=file_sha256(document), figure_id=figure_id)
+        operation_path = output / "operations.json"
+        operation_path.write_text(json.dumps(operations, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+        result = run_document_worker(
+            "edit-annotations", document, spec, "--operations", operation_path,
+            "--figure-id", figure_id, "--output-document", output / "document.vsz",
+            "--output-spec", output / "spec.json", "--preview-png", output / "candidate.png",
+        )
+        result["scientific_audit"] = audit_edited_document(
+            Path(result["candidate"]["path"]), Path(result["candidate_spec"]["path"]))
+        return result
     validate_edit_science_policy(changes, spec)
     change_path = output / "changes.json"
     change_path.write_text(
@@ -94,6 +110,7 @@ def preview_document_edit(
     output_dir: Path,
     figure_id: str | None = None,
     expected_document_sha256: str,
+    operations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     project = resolve_project_path(project)
     selected = resolve_project_figure(project, figure_id)
@@ -112,7 +129,10 @@ def preview_document_edit(
         )
     output = new_preview_directory(project, output_dir)
     audit_edited_document(document, spec)
-    candidate = _candidate(document, spec, changes, output)
+    if operations is not None and changes:
+        raise ValueError("Use either native changes or semantic operations in one preview.")
+    candidate = _candidate(document, spec, changes, output, operations=operations,
+                           figure_id=selected["figure_id"])
     if edit_state(project) != state:
         raise ValueError("Project or delivery changed during the edit preview.")
     review = {
@@ -131,6 +151,9 @@ def preview_document_edit(
         "scientific_audit": candidate["scientific_audit"],
         "ready_to_use": False,
     }
+    if operations is not None:
+        review.update(version=2, operations=operations, spec=str(spec),
+                      candidate_spec=candidate["candidate_spec"])
     review["operation_id"] = preview_identity(review)
     path = output / "edit-preview.json"
     atomic_write_json(path, review)
@@ -143,7 +166,7 @@ def apply_document_edit(project: Path, preview: dict[str, Any]) -> dict[str, Any
     review = {k: v for k, v in preview.items() if k != "review_path"}
     if (
         review.get("kind") != "sciplot_document_edit_preview"
-        or review.get("version") != 1
+        or review.get("version") not in {1, 2}
         or review.get("status") != "ready"
         or review.get("project") != str(project)
         or review.get("operation_id") != preview_identity(review)
@@ -176,12 +199,18 @@ def apply_document_edit(project: Path, preview: dict[str, Any]) -> dict[str, Any
             )
         check_artifact(review["candidate"])
         check_artifact(review["preview"])
+        if review["version"] == 2:
+            if review.get("spec") != str(spec) or review.get("changes") != [] or not isinstance(review.get("operations"), list):
+                raise ValueError("The annotation preview must name its current specification.")
+            check_artifact(review["candidate_spec"])
         # Re-run the allowed native operations. Caller-controlled candidate bytes
         # are never installed, even if their hashes and science audit look valid.
         with tempfile.TemporaryDirectory(
             prefix=".sciplot-edit-", dir=project.parent
         ) as directory:
-            candidate = _candidate(document, spec, review["changes"], Path(directory))
+            candidate = _candidate(document, spec, review["changes"], Path(directory),
+                                   operations=review.get("operations") if review["version"] == 2 else None,
+                                   figure_id=review["figure_id"])
             if (
                 candidate["changes"] != review["actual_changes"]
                 or candidate["preview"]["sha256"] != review["preview"]["sha256"]
@@ -189,6 +218,10 @@ def apply_document_edit(project: Path, preview: dict[str, Any]) -> dict[str, Any
                 raise ValueError(
                     "The native edit no longer matches its reviewed preview."
                 )
+            if review["version"] == 2 and candidate["candidate_spec"]["sha256"] != review["candidate_spec"]["sha256"]:
+                raise ValueError("The annotation specification no longer matches its preview.")
             return commit_document_edit(
-                project, document, Path(candidate["candidate"]["path"]), review
+                project, document, Path(candidate["candidate"]["path"]), review,
+                spec=spec if review["version"] == 2 else None,
+                candidate_spec=Path(candidate["candidate_spec"]["path"]) if review["version"] == 2 else None,
             )

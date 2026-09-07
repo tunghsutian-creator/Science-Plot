@@ -16,6 +16,15 @@ from sciplot_core.cli.value_io import (
 def dispatch_interfaces(
     args: Any, argv: list[str] | None, *, serve_intake
 ) -> int | None:
+    if args.command == "mcp":
+        from sciplot_core.mcp_server import run_stdio
+
+        run_stdio()
+        return 0
+    if args.command == "task":
+        from sciplot_core.cli.dispatch.tasks import dispatch_task
+
+        return dispatch_task(args)
     if args.command == "project":
         from sciplot_core.cli.dispatch.project import dispatch_project_control
 

@@ -244,6 +244,12 @@ def audit_overlay_inventory(
         + performance_line_contracts(spec)
     ]
 
+    from sciplot_core.studio_core.annotation_geometry import annotation_widgets
+
+    approved = {item["path"] for item in annotation_widgets(spec) if item["type"] == "line"}
+    # Declared annotations have their own stricter coordinate and anchor audit.
+    line_records = [record for record in line_records if record["path"] not in approved]
+
     actual_lines_by_path = {str(record["path"]): record for record in line_records}
 
     expected_lines_by_path = {str(record["path"]): record for record in expected_lines}

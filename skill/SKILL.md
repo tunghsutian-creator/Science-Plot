@@ -62,6 +62,28 @@ the explicit saved-figure/object references in the external API.
    skill/scripts/sciplot project capabilities --json
    ```
 
+   Prefer the complete local `task` route for supported create/edit/export work:
+   `task capabilities → task start --request REQUEST_JSON → task inspect/resume`.
+   The local runner owns recognition, fresh source-bound planning, creation,
+   reviewed native edits and publication; it never invokes a model. Use
+   `needs_input` only for the actual exposed rule-selection question, and
+   inspect the candidate image before accepting a `needs_review` preview with
+   `{"accept_preview":true}`. Existing user intent authorizes that change;
+   preview acceptance is not an additional mandatory user permission step.
+   Reuse the returned task directory in a new session. A completed receipt is
+   historical; check current source/QA/delivery before later handoff. Source
+   changes, unsupported mappings and uncertain interrupted creation fail closed.
+   The MCP stdio adapter exposes the same services and schemas; read full JSON
+   and PNG resources only as needed. See the operation guide for exact fields.
+
+   Public annotation operations now include reference lines, text/arrows and
+   source-bound observed peak labels, plus update/removal. Query annotations
+   and exact units first; use `project operations-preview` or a task `edit`
+   request, and apply through the existing native transaction. Do not replace
+   rejected operations with arbitrary Python or VSZ text changes. Remove
+   annotations before source revision until rebinding has its own reviewed
+   contract. The lower-level routes below remain available for diagnostics.
+
 3. For new raw data, inspect the source and ready rule invocation, then preserve
    a successful source-bound plan before execution:
 
@@ -148,6 +170,9 @@ lineage remain in the hidden runtime workspace.
 
 ## Command routing
 
+- `task`: complete local create/edit/export requests, persisted questions and
+  preview review, bounded recovery and compact historical task receipts.
+- `mcp`: optional stdio transport for the same domain services; no internal model.
 - `project`: external-AI creation from an expected plan, saved-project inspection,
   native preview/edit and durable operation queries. Creation alone prepares
   the source through the existing Studio lifecycle; queries and edits do not.

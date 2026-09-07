@@ -11,6 +11,9 @@ with values read from the current command results, not literal arguments.
 
 ## Start or resume
 
+For a standard task, prefer the local runner described below. The lower-level
+commands later in this guide remain available for exact control and diagnostics.
+
 ```bash
 skill/scripts/sciplot doctor --json
 skill/scripts/sciplot project capabilities --json
@@ -21,6 +24,72 @@ Require Doctor `status=ready`. For an existing managed Studio project, start at
 external edit, close every writable native Veusz window for that project,
 including a clean window with no unsaved changes. Save any intended native
 changes first. A blocked session is a conflict to resolve, not a lock to delete.
+
+## Complete local tasks and MCP
+
+Read `task capabilities --json` once per interface version for the closed request
+and response schemas. A create request is:
+
+```json
+{"version":1,"action":"create","source":"/absolute/path/UVvis.csv"}
+```
+
+```bash
+skill/scripts/sciplot task start --request REQUEST_JSON --json
+skill/scripts/sciplot task inspect TASK_DIRECTORY --json
+skill/scripts/sciplot task resume TASK_DIRECTORY --response RESPONSE_JSON --json
+```
+
+The runner selects an authoritative recognized rule, builds and verifies a fresh
+plan, prepares the managed project and exports it. Specify `rule_id`/`template`
+only when the user's scientific intent establishes that choice. `out` is an
+optional new visible delivery beside the raw source. `task_dir` is an optional
+new evidence location outside raw data, projects and visible delivery packages.
+Reusing a task directory with the same request returns its receipt, never a
+second creation; a different request is rejected.
+
+`needs_input` exposes an actual rule-selection question and evidence reference.
+Resume with `{"rule_id":"uvvis_spectrum"}` and optional `template`; source bytes
+are rechecked. Invalid choices remain correctable. This does not implement
+arbitrary DataMapping answers, worksheet selections or scientific repairs.
+Preserve those blockers rather than inventing an answer or silently reshaping data.
+
+An edit request contains `version:1`, `action:"edit"`, `project`, optional
+`figure_id`, `expected_document_sha256`, and `operations` from the shared
+annotation operation schema. It returns `needs_review` with `preview.image`,
+`preview.review_path`, actual changes and audit. Read the image and audit, then
+resume with `{"accept_preview":true}` to apply and export in one local continuation.
+Use `false` to discard the proposed change without changing the document. The
+user's existing concrete instruction authorizes the edit; no redundant user
+permission is required for each mechanical step.
+
+An export request is `{"version":1,"action":"export","project":"/managed/project"}`.
+Export failures preserve the current project. Resolve the reported cause and
+resume with `{"retry":true}`. An interrupted creation before a project identity
+was checkpointed reports uncertainty if output exists; it never overwrites it.
+Applied edits use the original preview and durable operation for bounded retry.
+
+`status=complete` is historical task completion. At initial completion require
+`result.studio_run.ready_to_use=true`; later query the current project evidence.
+Top-level `ready_to_use=null` deliberately avoids certifying old results.
+`model_calls_by_sciplot=0` describes the deterministic runner, not the external
+client's model use. External token usage remains null when no telemetry is available.
+
+When reliable source headers allow it, `profile` points to reusable rule/template
+configuration. Pass that path as `profile` in a new create request, without
+overriding rule/template. Headers, units and current data are read again; old
+samples, numerical values and confirmation receipts are never reused. A missing
+or incompatible profile does not justify forcing the saved rule. Unsupported
+profile saving is explicitly reported as `profile_unavailable`.
+
+The optional `sciplot mcp` stdio server exposes these services directly. Install
+the `mcp` extra in a source environment; the macOS bundle includes it. Tools are
+discoverable via MCP, with shared JSON schemas. Normal operations need no repository
+inspection, internal imports, model key or Python code generation. Results are
+compact; read returned `sciplot://result/…` JSON/PNG resources on demand. Resource
+URIs are scoped to the current connection; retain project/task paths for a new one.
+
+## Explicit low-level creation
 
 For new raw data, read the source and the registered invocation:
 
@@ -147,7 +216,67 @@ when intent, scientific meaning or scope is unresolved. Keep the complete
 `edit-preview.json` unchanged; it binds the request, source, project, delivery
 and candidate evidence and is the input to apply.
 
+## Native reference lines, arrows and observed peaks
+
+Read the exact closed operation schema in `project capabilities` and current
+annotation IDs, axes units and bounds:
+
+```bash
+skill/scripts/sciplot project annotations PROJECT --figure FIGURE_ID --json
+```
+
+For example, only when the actual x-axis unit is `nm`, OPERATIONS_JSON may contain:
+
+```json
+[
+  {"op":"add_reference_line","id":"reference450","parent_path":"/page1/graph1",
+   "axis":"x","value":450,"unit":"nm"},
+  {"op":"add_annotation","id":"note1","parent_path":"/page1/graph1",
+   "text":"Observed feature","position":{"mode":"relative","x":0.75,"y":0.8},
+   "arrow_to":{"mode":"axes","x":450,"y":4,"x_unit":"nm","y_unit":"a.u."}}
+]
+```
+
+Coordinates above are examples, not inferred measurements; use current inspected
+units and a real requested target. Positions are axis data coordinates or graph
+fractions; no arbitrary expressions or pixels. Reference lines and text styles
+use shared policy. This first operation set supports ordinary Cartesian curves,
+including point_line/stacked_curve, and the native graph x/y axes. Schema-rejected
+settings are unavailable even if the underlying Veusz widget supports them.
+
+```bash
+skill/scripts/sciplot project operations-preview PROJECT --figure FIGURE_ID \
+  --expected-document SHA256 --operations OPERATIONS_JSON --out NEW_DIRECTORY --json
+```
+
+Use the returned preview with the same `project edit-apply` service, or place the
+operations in a task edit request to have apply and export handled locally after
+review. Document and annotation spec are replayed, audited, archived and committed
+together; raw scientific arrays and unrequested settings remain unchanged.
+
+For observed peaks, WINDOW_JSON is `{"min":400,"max":500,"unit":"nm"}`:
+
+```bash
+skill/scripts/sciplot project peaks PROJECT --figure FIGURE_ID --object OBJECT_PATH \
+  --expected-document SHA256 --window WINDOW_JSON --polarity maximum --json
+```
+
+Use the returned complete `candidate` in `{"op":"add_peak_label","id":"peak1",
+"candidate":CANDIDATE}`. Candidates are unsmoothed strict discrete interior
+extrema; boundaries, plateaus, duplicate x coordinates, hidden curves and
+out-of-axis points are excluded. Choose `minimum` only when the user's experiment
+semantics calls for it. No candidate is a chemical/phase assignment. A changed
+series or invalid candidate is rejected, never silently rebound.
+
+To change/delete an existing annotation pass its inspected `id` and complete
+`expected_annotation` to `update_annotation`/`remove_annotation`; an update takes
+a schema-valid add operation as `replacement`. A source revision currently
+requires explicit annotation removal first, then recomputation against the new
+data. Do not strip spec metadata or bypass the source-update guard.
+
 ## Apply, recover a reply, and export
+
+The following common apply also accepts the annotation operation previews below.
 
 ```bash
 skill/scripts/sciplot project edit-apply PROJECT --preview NEW_EDIT_DIRECTORY/edit-preview.json --json
@@ -181,6 +310,10 @@ figures are included by the managed export use case, even when only one figure
 was styled.
 
 ## Resume in a new AI session
+
+For a local task retain TASK_DIRECTORY and query `task inspect` first. Only
+continue the pending operation; do not recreate its source or reuse old resource
+URIs from another MCP connection.
 
 Retain PROJECT, the user's task, and any relevant operation ID or preview path.
 A new process or conversation repeats `project capabilities`, `project inspect`

@@ -17,6 +17,8 @@ from sciplot_core.studio_core.source_update_commit import reject_symlink_path
 class ProjectSessionBusy(ValueError):
     """A native writable session or another external transaction owns the project."""
 
+    reason_code = "project_busy"
+
 
 class ProjectSessionLease:
     def __init__(self, project: Path, *, native: bool) -> None:

@@ -20,7 +20,8 @@ QA 和可追溯运行记录。确定性科学处理和原生 Veusz 文档操作�
 
 项目后续开发唯一面向的任务入口是外部 AI：优先完善公开、可查询、可预览和可续办的
 本地操作合同。外部 AI 不需要配置 SciPlot 内置 provider，不依赖浏览器或 GUI 当前选择。
-当前接口是 CLI；尚未实现 MCP 服务或通用任务编排运行时。
+当前提供 CLI、可选 MCP stdio 服务，以及覆盖建项、预览修改、提交和导出的本地任务编排。
+任务编排只调用确定性服务，不调用模型；未支持的科学选择不会由程序补猜。
 
 原生 Veusz `MainWindow` 保留为兼容的高级文档工具。SciPlot 在同一个 Veusz
 `Document` 上保留两个默认隐藏、可关闭的 dock：
@@ -53,6 +54,51 @@ DSC、TGA/DTG、UV-vis、XRD、SAXS 等规范配对曲线支持显式选择 Exce
 
 ## 外部 AI 的日常入口
 
+标准任务优先使用 `task`，将机械步骤交给本地程序。读取
+`task capabilities --json` 的请求/答复 schema，把一次明确请求写入 JSON：
+
+```json
+{"version":1,"action":"create","source":"/绝对路径/UVvis.csv"}
+```
+
+```bash
+skill/scripts/sciplot task start --request REQUEST_JSON --json
+skill/scripts/sciplot task inspect TASK_DIRECTORY --json
+skill/scripts/sciplot task resume TASK_DIRECTORY --response RESPONSE_JSON --json
+```
+
+`create` 在本地识别、生成并校验来源绑定的计划，再建项、检查和导出。
+确实不能确定实验规则时返回 `needs_input`，接收 `rule_id` 和可选 `template` 后重建计划；
+这不是任意工作表/列映射问题的通用回答器。未支持的映射和数据修复仍返回具体阻断原因。
+`edit` 接收当前项目、文档 SHA 和一批操作，返回 `needs_review` 及候选 PNG；
+外部 AI 审阅后用 `{"accept_preview":true}` 续办，由本地提交并完成导出。
+明确的既有用户意图已授权修改，不为每个执行步骤额外要求用户确认。
+拒绝预览用 `false`，文档保持原样。`export` 只导出已有项目，不重新准备来源。
+
+`status=complete` 是任务完成记录；刚完成的导出以 `result.studio_run.ready_to_use` 为准。
+日后查询同时检查 `current_project` 中的独立来源、QA 和交付状态，不能把历史完成当作当前 ready。
+首次导出失败保留已创建的项目，`{"retry":true}` 继续导出；相同任务目录/请求不会重复建项。
+进程若中断在尚未持久化项目身份的建项阶段，查询后会明确报告结果不确定，不覆盖已有输出。
+任务记录存于隐藏工作区并返回可续办的 `task_dir`；不要把记录放入原始数据或交付包。
+
+可靠规范表头来源可生成 `profile.json`，下次 `create` 传入 `profile` 复用规则和模板。
+程序重新读取表头/单位、来源和计划，不复用数值、样品身份或旧确认凭据。
+无法可靠保存配置时返回 `profile_unavailable`，正常绘图不会因此假装失败。
+
+MCP 使用同一套服务及参数 schema，可在支持 stdio 的外部 AI 中注册：
+
+```bash
+# 源码开发环境安装可选接口；macOS 目录包已包含它。
+.venv/bin/python -m pip install -e '.[studio,mcp]'
+skill/scripts/sciplot mcp
+```
+
+MCP 提供 13 个可发现工具，默认返回精简结果，完整 JSON 与 PNG 通过本连接返回的
+`sciplot://result/…` 引用按需读取。普通调用不需要读取 SciPlot 源码或写任意 Python。
+macOS 构建及连接说明见 [分发说明](distribution/macos/README.md)。
+
+以下低层 CLI 仍保留，用于明确计划、诊断和逐步控制。
+
 首次调用读取 `project capabilities --json`；从原始数据建项使用
 `rules list/show → plan → project create --expected-plan`。已有受管项目从 `project inspect` 继续，
 无需重新准备原始数据。完整操作与恢复说明见
@@ -83,11 +129,32 @@ skill/scripts/sciplot studio PROJECT --export pdf,tiff_300 --json
 ```
 
 占位符必须替换为当前结果中的值；每次预览输出使用源、项目和可见交付之外的新目录。
-当前可编辑范围是查询实际列出的坐标轴字体、普通曲线颜色/线宽、图例字体/位置字段。
+这条低层样式接口的可编辑范围是查询实际列出的坐标轴字体、普通曲线颜色/线宽、图例字体/位置字段。
 不通过这条样式接口修改科学数值、单位、样品身份、数据绑定或坐标轴尺度。
 apply 会复核当前项目、来源和交付版本，保留旧 VSZ 并事务替换；它不自动导出。
 新会话重新查询同一 PROJECT 即可续办。查询和编辑成功均不表示交付 ready，最终以
 完整项目导出结果、当前 QA 与实际制品检查为准。
+
+## 参考线、文字、箭头和观测峰标注
+
+通过 `project annotations PROJECT --figure FIGURE_ID --json` 查询标注、图框范围和精确轴单位，
+通过 `project capabilities` 获取闭合的 `annotation_operations.operations_schema`。
+支持 `set_style`、`add_reference_line`、`add_annotation`、`add_peak_label`、
+`update_annotation` 和 `remove_annotation`。每次 1–100 个操作，可交给 `task` 的 `edit` 请求，
+或调用低层 `project operations-preview … --operations OPERATIONS_JSON --expected-document SHA256 --out NEW_DIRECTORY`。
+预览与既有 `project edit-apply` 相接；低层 apply 本身仍不导出。
+
+位置分为精确轴单位的 `axes` 和图框 0–1 比例的 `relative`。箭头的目标和文字位置可分别指定；
+参考线固定在数据坐标。操作使用原生 Veusz 对象，并将标注意图/峰证据与 VSZ 同事务保存、
+重演、校验、归档和恢复，不改变科学数据或另建画面模型。
+
+`project peaks` 在指定曲线及带单位的窗口内查询无平滑的严格离散内部极值，
+`add_peak_label` 消费返回的候选证据。候选绑定数据版本，排除边界、平台、重复 x、隐藏曲线
+及轴外峰；它们是观测峰，不是官能团或晶相归属。参数示例见[外部控制指南](skill/references/external-control.md)。
+
+当前标注仅用于普通笛卡尔曲线及原生图框 x/y 轴；单位必须与查询一致，不自动换算。
+文字和线条样式取共享策略，未开放任意脚本/表达式。数据更新前须用公开操作移除标注，再对
+新数据重新标注；程序不会静默丢弃或自动把峰箭头挂到新数据上。
 
 ## 原生兼容入口与 exact-current 导出：Studio
 
@@ -878,8 +945,10 @@ skill/scripts/sciplot doctor --json
 扩展，也不足以保证 Studio 可用；以 doctor 的 Qt/Veusz 检查结果为准。
 环境故障和重复问题的记录规则见 `skill/SKILL.md`。
 该源码安装流程已在 macOS 的独立 Python 虚拟环境验证，包括重新编译 Veusz 原生 helpers、
-doctor、真实 DSC 建项、重开及导出。它不等同于已提供独立安装包，也不代表 Windows/Linux
-已经完成安装验收。
+doctor、真实 DSC 建项、重开及导出。源码安装验证不代表 Windows/Linux 已完成安装验收。
+新增 macOS 可搬移 `.app` 构建器及本机验证说明见
+[distribution/macos](distribution/macos/README.md)；新机器安装、签名发行和独立小白使用测试
+仍需分别验收，不能由源码测试或代理操作成功代替。
 
 当前开发优先级见 [DEVELOPMENT_ROADMAP.md](DEVELOPMENT_ROADMAP.md)，代码和模块边界见
 `docs/ARCHITECTURE.md`，第三方许可见 [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md)。

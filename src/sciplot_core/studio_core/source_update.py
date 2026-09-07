@@ -82,6 +82,12 @@ def _prepared_update(
     request = json.loads((project / "plot_request.json").read_text())
     selected_sheet = _selected_worksheet(request, worksheet)
     for document, spec in project_figures(project).values():
+        if json.loads(spec.read_text()).get("native_annotations"):
+            raise ValueError(
+                "annotation_source_revision_required: 此图包含外部标注。"
+                "请先通过公开操作移除标注，再更新数据并重新标注；"
+                "程序不会静默丢弃标注或让箭头指向其他数据。"
+            )
         _audit_exact_document_data(
             document_path=document, spec_path=spec, check_presentation=False
         )

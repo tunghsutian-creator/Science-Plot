@@ -75,6 +75,14 @@ def _build_parser() -> argparse.ArgumentParser:
     edit_parser.add_argument("--changes", required=True, type=Path)
     edit_parser.add_argument("--output-document", required=True, type=Path)
     edit_parser.add_argument("--preview-png", required=True, type=Path)
+    annotation_parser = subparsers.add_parser("edit-annotations")
+    annotation_parser.add_argument("document", type=Path)
+    annotation_parser.add_argument("spec", type=Path)
+    annotation_parser.add_argument("--operations", required=True, type=Path)
+    annotation_parser.add_argument("--figure-id", required=True)
+    annotation_parser.add_argument("--output-document", required=True, type=Path)
+    annotation_parser.add_argument("--output-spec", required=True, type=Path)
+    annotation_parser.add_argument("--preview-png", required=True, type=Path)
     migrate_unit_labels_parser = subparsers.add_parser(
         "migrate-unit-labels",
         help="Normalize visible unit labels in an existing Veusz document.",
@@ -119,6 +127,14 @@ def main(argv: list[str] | None = None) -> int:
         payload = edit_document(
             args.document, json.loads(args.changes.read_text(encoding="utf-8")),
             output_document=args.output_document, preview_png=args.preview_png,
+        )
+    elif args.command == "edit-annotations":
+        from sciplot_core.veusz_worker.annotations import edit_native_annotations
+
+        payload = edit_native_annotations(
+            args.document, args.spec, json.loads(args.operations.read_text()),
+            figure_id=args.figure_id, output_document=args.output_document,
+            output_spec=args.output_spec, preview_png=args.preview_png,
         )
     elif args.command == "migrate-unit-labels":
         payload = migrate_unit_labels(args.document)

@@ -75,50 +75,26 @@ def test_active_documents_declare_distinct_responsibilities() -> None:
     assert "本文是用户工作流和产品边界的唯一说明" in readme
     assert "This skill owns agent routing and verification." in skill
     assert "current module-ownership and dependency reference" in architecture
-    assert "R0 complete; paused before R1 authorization" in roadmap
-    assert "当前唯一候选下一步是 R1，尚未授权" in roadmap
-    assert "docs/AUTOMATION_CONTROL_CONTRACT.md" in roadmap
+    assert "External AI is the task interface" in roadmap
+    assert "Independent beginner and installation acceptance" in roadmap
+    assert "Reviewed annotation rebinding" in roadmap
     assert "R0 frozen design draft; not current runtime behavior" in automation_contract
     assert "does not add a conductor" in automation_contract
     assert "R0 automation baseline evidence" in architecture
 
 
-def test_human_confirmation_is_a_real_operation_gate_not_a_generic_runtime() -> None:
+def test_task_guidance_preserves_real_choices_and_separate_human_acceptance() -> None:
     roadmap = _normalized(REPO_ROOT / "DEVELOPMENT_ROADMAP.md")
-    automation_contract = _normalized(AUTOMATION_CONTROL_CONTRACT)
-
-    assert "2026-09-01 人工确认范围决定" in roadmap
-    assert "不预建通用问题生成器" in roadmap
-    assert "`decision.question`" in roadmap
-    assert "显式为 `null`" in roadmap
-    assert "真实一问一答不作为 R2 退出门" in roadmap
-    assert "R5 的首个试点限定为真实且可由 rule identity selection 解除的歧义" in roadmap
-    assert "显式 `--rule`" in roadmap
-    assert "fresh `plan`" in roadmap
-    assert "同一显式 rule" in roadmap
-    assert "原始源 hash 未变" in roadmap
-    assert "一次真实 `needs_human_confirmation`" not in roadmap
-    assert (
-        "A bounded question payload is no longer an R1/R2 exit requirement"
-        in automation_contract
-    )
-    assert "generic question generator is explicitly out of scope" in automation_contract
-    assert (
-        "`decision.question` is a closed, explicitly nullable pass-through field"
-        in automation_contract
-    )
-    assert (
-        "R5 owns one real ambiguity that can be resolved by rule-identity"
-        in automation_contract
-    )
-    assert "scientific facts must not be encoded into `--rule`" in automation_contract
-    assert "not manufactured as a pilot exit gate" in automation_contract
-    assert "DataMapping receipts and rheology" in automation_contract
-    assert "complete zero-write confirmation handoff" in automation_contract
-    assert (
-        "R1/R2 must add and test exactly one bounded question"
-        not in automation_contract
-    )
+    guide = _normalized(REPO_ROOT / "skill/references/external-control.md")
+    readme = _normalized(REPO_ROOT / "README.md")
+    assert "rule-selection answer must not encode arbitrary scientific facts" in roadmap
+    assert "current headers, units and mappings can be validated" in roadmap
+    assert "not this human usability evidence" in roadmap
+    assert "needs_input" in guide and "rule_id" in guide
+    assert "arbitrary DataMapping answers" in guide
+    assert "no redundant user permission" in guide
+    assert "task capabilities" in guide and "project operations-preview" in guide
+    assert "MCP" in readme and "独立小白使用测试" in readme
 
 
 def test_skill_defers_the_exact_mypy_scope_to_pyproject() -> None:

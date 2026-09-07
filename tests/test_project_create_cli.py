@@ -5,11 +5,13 @@ import subprocess
 from argparse import Namespace
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from sciplot_core._paths import REPO_ROOT
 from sciplot_core.cli.dispatch import project_create as command
+from sciplot_core.studio_core import project_creation as service
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.output_contract import resolve_user_output_layout
 from sciplot_core.plan_preview import build_plan_preview
@@ -23,107 +25,93 @@ def _source(root: Path) -> Path:
 
 def _args(root: Path) -> Namespace:
     source = _source(root)
-    plan = build_plan_preview(
-        source, request={"rule_id": "uvvis_spectrum", "template": "curve"}
-    )
+    plan = build_plan_preview(source, request={"rule_id": "uvvis_spectrum", "template": "curve"})
     assert plan["status"] == "planned", plan
     expected = root / "plan.json"
     expected.write_text(json.dumps(plan))
-    return Namespace(
-        target=source, expected_plan=expected, out=root / "Visible", json=True
-    )
+    return Namespace(target=source, expected_plan=expected, out=root / "Visible", json=True)
 
 
 def _inventory(root: Path) -> dict[str, str]:
-    return {
-        str(path.relative_to(root)): file_sha256(path)
-        for path in root.rglob("*")
-        if path.is_file()
-    }
+    return {str(path.relative_to(root)): file_sha256(path)
+            for path in root.rglob("*") if path.is_file()}
 
 
 def _studio_payload() -> dict:
     return {
-        "project_dir": "/managed",
-        "document": "/managed/studio/document.vsz",
+        "project_dir": "/managed", "document": "/managed/studio/document.vsz",
         "request": "/managed/plot_request.json",
-        "studio_run": {
-            "state": "ready",
-            "ready_to_use": True,
-            "manifest": "/managed/runs/studio_001/manifest.json",
-            "delivery_package": {"path": "/Visible", "complete": True},
-        },
+        "studio_run": {"state": "ready", "ready_to_use": True,
+                       "manifest": "/managed/runs/studio_001/manifest.json",
+                       "delivery_package": {"path": "/Visible", "complete": True}},
     }
 
 
-def test_create_passes_verified_explicit_plan_and_preserves_reexec_arguments(
-    tmp_path, monkeypatch
-):
-    args = _args(tmp_path)
+def _stub(monkeypatch, payload=None):
+    payload = payload or _studio_payload()
     calls = []
+    def prepare(*args, **kwargs):
+        calls.append((args, kwargs))
+        return payload
+    monkeypatch.setattr(service, "prepare_studio_document", prepare)
+    monkeypatch.setattr(service, "export_project_document", lambda **kwargs:
+                        SimpleNamespace(run_payload=payload["studio_run"],
+                                        ready_to_use=payload["studio_run"]["ready_to_use"]))
+    return calls
 
-    def run(**kwargs):
-        calls.append(kwargs)
-        print(json.dumps(_studio_payload()))
-        return 0
 
-    monkeypatch.setattr(command, "run_studio_command", run)
+def test_create_uses_shared_preparation_and_publication_once(tmp_path, monkeypatch, capsys):
+    args = _args(tmp_path)
+    calls = _stub(monkeypatch)
     assert command.dispatch_project_create(args) == 0
     layout = resolve_user_output_layout(args.target, requested_delivery_root=args.out)
-    assert calls == [
-        {
-            "target": args.target,
-            "output_root": layout.workspace_root / "projects",
-            "delivery_root": layout.delivery_root,
-            "rule_id": "uvvis_spectrum",
-            "template": "curve",
-            "export": "pdf,tiff_300",
-            "json_output": True,
-            "original_argv": [
-                "project",
-                "create",
-                str(args.target),
-                "--expected-plan",
-                str(args.expected_plan),
-                "--json",
-                "--out",
-                str(args.out),
-            ],
-        }
-    ]
+    assert calls == [((args.target,), {
+        "output_root": layout.workspace_root / "projects", "delivery_root": layout.delivery_root,
+        "rule_id": "uvvis_spectrum", "template": "curve",
+    })]
+    assert json.loads(capsys.readouterr().out)["status"] == "created"
+
+
+def test_shared_creation_has_no_protocol_stdout(tmp_path, monkeypatch, capsys):
+    args = _args(tmp_path)
+    _stub(monkeypatch)
+    result = service.create_project(args.target, expected_plan=json.loads(args.expected_plan.read_text()),
+                                    output_dir=args.out)
+    assert result["studio_run"]["ready_to_use"] is True
+    assert capsys.readouterr().out == ""
+
+
+def test_source_changed_during_preparation_is_not_published(tmp_path, monkeypatch):
+    args = _args(tmp_path)
+    def prepare(*a, **kw):
+        args.target.write_text(args.target.read_text().replace("450,2", "450,99"))
+        return _studio_payload()
+    monkeypatch.setattr(service, "prepare_studio_document", prepare)
+    monkeypatch.setattr(service, "export_project_document", lambda **kw: pytest.fail("changed source published"))
+    with pytest.raises(ValueError, match="Source changed during project"):
+        command.dispatch_project_create(args)
 
 
 def test_stale_expected_plan_creates_no_outputs_or_locks(tmp_path, monkeypatch):
     args = _args(tmp_path)
     args.target.write_text(args.target.read_text().replace("450,2", "450,22"))
     before = _inventory(tmp_path)
-    monkeypatch.setattr(
-        command,
-        "run_studio_command",
-        lambda **_: pytest.fail("stale plan reached Studio"),
-    )
+    monkeypatch.setattr(service, "prepare_studio_document", lambda *a, **k: pytest.fail("stale plan reached Studio"))
     with pytest.raises(ValueError, match="Source changed"):
         command.dispatch_project_create(args)
     assert _inventory(tmp_path) == before
     assert not (tmp_path / ".sciplot").exists()
-    assert not args.out.exists()
 
 
 @pytest.mark.parametrize("existing", ["visible", "workspace"])
-def test_existing_output_or_workspace_is_preserved_before_runtime_allocation(
-    tmp_path, monkeypatch, existing
-):
+def test_existing_output_or_workspace_is_preserved_before_runtime_allocation(tmp_path, monkeypatch, existing):
     args = _args(tmp_path)
     layout = resolve_user_output_layout(args.target, requested_delivery_root=args.out)
     path = layout.delivery_root if existing == "visible" else layout.workspace_root
     path.mkdir(parents=True)
     (path / "keep.txt").write_text("existing user evidence")
     before = _inventory(tmp_path)
-    monkeypatch.setattr(
-        command,
-        "run_studio_command",
-        lambda **_: pytest.fail("existing output reached Studio"),
-    )
+    monkeypatch.setattr(service, "prepare_studio_document", lambda *a, **k: pytest.fail("existing output reached Studio"))
     with pytest.raises(ValueError, match="requires a new"):
         command.dispatch_project_create(args)
     assert _inventory(tmp_path) == before
@@ -131,98 +119,50 @@ def test_existing_output_or_workspace_is_preserved_before_runtime_allocation(
 
 def test_create_rechecks_output_after_obtaining_its_path_lease(tmp_path, monkeypatch):
     args = _args(tmp_path)
-
     @contextmanager
     def raced_lease(project):
         args.out.mkdir()
         (args.out / "keep.txt").write_text("concurrent owner")
         yield
-
-    monkeypatch.setattr(command, "external_project_session", raced_lease)
-    monkeypatch.setattr(
-        command,
-        "run_studio_command",
-        lambda **_: pytest.fail("concurrent output reached Studio"),
-    )
+    monkeypatch.setattr(service, "external_project_session", raced_lease)
+    monkeypatch.setattr(service, "prepare_studio_document", lambda *a, **k: pytest.fail("concurrent output reached Studio"))
     with pytest.raises(ValueError, match="requires a new"):
         command.dispatch_project_create(args)
     assert (args.out / "keep.txt").read_text() == "concurrent owner"
 
 
-def test_creation_stdout_is_compact_and_points_to_full_manifest(
-    tmp_path, monkeypatch, capsys
-):
+def test_creation_stdout_is_compact_and_points_to_full_manifest(tmp_path, monkeypatch, capsys):
     args = _args(tmp_path)
     payload = _studio_payload()
     payload["studio"] = {"result": {"series": [{"x_values": list(range(10000))}]}}
     payload["studio_run"]["qa"] = {"internal_arrays": list(range(10000))}
-    payload["figure_set"] = {
-        "primary_figure_id": "curve",
-        "figures": [
-            {
-                "figure_id": "curve",
-                "title": "Measured curve",
-                "document": payload["document"],
-                "resolved_figure_task": {"scientific_values": list(range(10000))},
-            }
-        ],
-    }
-    payload["studio_run"]["delivery_package"]["figures"] = [
-        {
-            "figure_id": "curve",
-            "format": "pdf",
-            "path": "/Visible/figures/curve.pdf",
-            "internal_array": list(range(10000)),
-        }
-    ]
-
-    def run(**kwargs):
-        print(json.dumps(payload))
-        return 0
-
-    monkeypatch.setattr(command, "run_studio_command", run)
+    payload["figure_set"] = {"primary_figure_id": "curve", "figures": [{
+        "figure_id": "curve", "title": "Measured curve", "document": payload["document"],
+        "resolved_figure_task": {"scientific_values": list(range(10000))},
+    }]}
+    payload["studio_run"]["delivery_package"]["figures"] = [{
+        "figure_id": "curve", "format": "pdf", "path": "/Visible/figures/curve.pdf",
+        "internal_array": list(range(10000)),
+    }]
+    _stub(monkeypatch, payload)
     assert command.dispatch_project_create(args) == 0
     stdout = capsys.readouterr().out
     result = json.loads(stdout)
     assert len(stdout.encode()) < 15000
-    assert result["kind"] == "sciplot_project_creation_result"
-    assert result["version"] == 1 and result["status"] == "created"
+    assert result["kind"] == "sciplot_project_creation_result" and result["status"] == "created"
     assert result["studio_run"]["manifest"] == payload["studio_run"]["manifest"]
-    assert result["figures"][0]["exports"] == [
-        {"format": "pdf", "path": "/Visible/figures/curve.pdf"}
-    ]
-    assert all(
-        key not in stdout
-        for key in (
-            "x_values",
-            "internal_arrays",
-            "scientific_values",
-            "resolved_figure_task",
-        )
-    )
+    assert result["figures"][0]["exports"] == [{"format": "pdf", "path": "/Visible/figures/curve.pdf"}]
+    assert all(key not in stdout for key in ("x_values", "internal_arrays", "scientific_values", "resolved_figure_task"))
 
 
-@pytest.mark.parametrize("returncode", [0, 1, 7])
-def test_creation_failure_retains_reason_and_never_returns_success(
-    tmp_path, monkeypatch, capsys, returncode
-):
+def test_creation_failure_retains_reason_and_never_returns_success(tmp_path, monkeypatch, capsys):
     args = _args(tmp_path)
     payload = _studio_payload()
-    payload["studio_run"].update(
-        {
-            "state": "failed",
-            "ready_to_use": False,
-            "failure_stage": "quality_or_delivery_gate",
-            "failure_reason": "Current artifact QA failed.",
-        }
-    )
-
-    def run(**kwargs):
-        print(json.dumps(payload))
-        return returncode
-
-    monkeypatch.setattr(command, "run_studio_command", run)
-    assert command.dispatch_project_create(args) == (returncode or 1)
+    payload["studio_run"].update({"state": "failed", "ready_to_use": False,
+                                 "failure_stage": "quality_or_delivery_gate",
+                                 "failure_reason": "Current artifact QA failed."})
+    _stub(monkeypatch, payload)
+    assert command.dispatch_project_create(args) == 1
     result = json.loads(capsys.readouterr().out)
     assert result["status"] == "blocked"
     assert result["studio_run"]["ready_to_use"] is False

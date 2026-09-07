@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sciplot_core.verification.axis_owners import GENERIC_AXIS_OWNERS
 from sciplot_core.verification.external_ai_owners import EXTERNAL_AI_OWNERS
+from sciplot_core.verification.task_control_owners import TASK_CONTROL_OWNERS
 from sciplot_core.verification.owner_model import ChangedOwner
 from sciplot_core.verification.project_integrity_owners import PROJECT_INTEGRITY_OWNERS
 from sciplot_core.verification.project_revision_owners import PROJECT_REVISION_OWNERS
@@ -23,33 +24,6 @@ from sciplot_core.verification.type_gate_owners import (
 )
 
 CHANGED_OWNERS = (
-    ChangedOwner(
-        owner_id="automation_baseline_evidence",
-        exact_paths=frozenset(
-            {
-                "src/sciplot_core/automation_baseline.py",
-                "src/sciplot_core/automation_baseline_identity_validation.py",
-                "src/sciplot_core/automation_baseline_probe.py",
-                "src/sciplot_core/automation_baseline_schema.py",
-                "src/sciplot_core/automation_baseline_validation.py",
-                "src/sciplot_core/automation_baseline_validation_utils.py",
-            }
-        ),
-        owned_test_paths=frozenset({"tests/test_automation_baseline.py"}),
-        pytest_targets=(
-            "tests/test_automation_baseline.py",
-            "tests/test_automation_states.py",
-            "tests/test_rule_invocation_contract.py::test_rules_plan_and_autoplot_share_one_stale_rule_decision",
-            "tests/test_plan_preview.py::test_plan_preview_blocks_uncertified_rule_before_source_inspection",
-            "tests/test_autoplot_run.py::test_run_autoplot_returns_v2_rule_repair_without_project_or_write",
-            "tests/test_publish_state.py::test_publish_state_preserves_a_scientific_confirmation_blocker",
-            "tests/test_frontend_topology.py::test_package_has_one_cli_and_no_standalone_frontend_entrypoint",
-            *ARCHITECTURE_CORE_TARGETS,
-        ),
-        handoff_gates=("doctor",),
-        final_milestone_gates=("smoke",),
-        release_gates=("full_pytest",),
-    ),
     ChangedOwner(
         owner_id="documentation_contract",
         path_prefixes=("docs/",),
@@ -394,6 +368,7 @@ CHANGED_OWNERS = (
     *PROJECT_INTEGRITY_OWNERS,
     *PROJECT_REVISION_OWNERS,
     *EXTERNAL_AI_OWNERS,
+    *TASK_CONTROL_OWNERS,
 )
 
 IGNORED_CHANGED_PATHS = frozenset({"DEVELOPMENT_LOG.md"})

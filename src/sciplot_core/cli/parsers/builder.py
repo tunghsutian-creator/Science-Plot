@@ -11,6 +11,7 @@ from sciplot_core.cli.parsers.data_management import register_data_management_co
 from sciplot_core.cli.parsers.batch import register_batch_commands
 from sciplot_core.cli.parsers.interfaces import register_interfaces_commands
 from sciplot_core.cli.parsers.project import register_project_commands
+from sciplot_core.cli.parsers.tasks import register_task_commands
 from sciplot_core.cli.parsers.quality_publication import (
     register_quality_publication_commands,
 )
@@ -32,6 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     register_batch_commands(subparsers)
     register_interfaces_commands(subparsers)
     register_project_commands(subparsers)
+    register_task_commands(subparsers)
     register_quality_publication_commands(subparsers)
     internal_commands = {
         "readiness-probe",

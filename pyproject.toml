@@ -20,7 +20,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mcp = ["mcp==2.1.1"]
 dev = [
+  "types-jsonschema==4.26.0.20260518",
   "mypy==2.3.0",
   "pandas-stubs==3.0.3.260530",
   "pytest>=9,<10",
@@ -155,6 +157,29 @@ files = [
   "src/sciplot_core/studio_core/project_session.py",
   "src/sciplot_core/veusz_worker/document_edit.py",
   "src/sciplot_core/verification/external_ai_owners.py",
+  "src/sciplot_core/task_contract.py",
+  "src/sciplot_core/task_control.py",
+  "src/sciplot_core/task_execution.py",
+  "src/sciplot_core/task_planning.py",
+  "src/sciplot_core/task_storage.py",
+  "src/sciplot_core/mcp_server",
+  "src/sciplot_core/studio_core/annotation_axes.py",
+  "src/sciplot_core/studio_core/annotation_batch.py",
+  "src/sciplot_core/studio_core/annotation_contracts.py",
+  "src/sciplot_core/studio_core/annotation_geometry.py",
+  "src/sciplot_core/studio_core/annotation_operations.py",
+  "src/sciplot_core/studio_core/annotation_schema.py",
+  "src/sciplot_core/studio_core/document_edit_companion.py",
+  "src/sciplot_core/studio_core/peak_analysis.py",
+  "src/sciplot_core/studio_core/peak_evidence.py",
+  "src/sciplot_core/studio_core/project_capabilities.py",
+  "src/sciplot_core/studio_core/project_creation.py",
+  "src/sciplot_core/studio_core/project_receipt.py",
+  "src/sciplot_core/veusz_worker/annotations.py",
+  "src/sciplot_core/cli/dispatch/tasks.py",
+  "src/sciplot_core/cli/parsers/tasks.py",
+  "src/sciplot_core/verification/task_control_owners.py",
+  "src/sciplot_core/veusz_runtime.py",
 ]
 mypy_path = "src"
 explicit_package_bases = true

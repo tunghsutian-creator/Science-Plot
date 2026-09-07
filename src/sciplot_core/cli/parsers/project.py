@@ -27,6 +27,21 @@ def register_project_commands(subparsers: Any) -> None:
         "--out", type=Path, help="New source-adjacent visible delivery directory."
     )
     create.add_argument("--json", action="store_true")
+    for name in ("annotations", "operations-preview", "peaks"):
+        action = actions.add_parser(name)
+        action.add_argument("target", type=Path)
+        action.add_argument("--figure")
+        action.add_argument("--json", action="store_true")
+        if name != "annotations":
+            action.add_argument("--expected-document", required=True)
+        if name == "operations-preview":
+            action.add_argument("--operations", type=Path, required=True)
+            action.add_argument("--out", type=Path, required=True)
+        if name == "peaks":
+            action.add_argument("--object", required=True)
+            action.add_argument("--window", type=Path, required=True,
+                                help="JSON object with min, max and exact x-axis unit.")
+            action.add_argument("--polarity", choices=("maximum", "minimum"), required=True)
     for name in ("inspect", "preview", "edit-preview", "edit-apply", "operation"):
         action = actions.add_parser(name)
         action.add_argument(

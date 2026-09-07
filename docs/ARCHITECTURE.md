@@ -35,7 +35,29 @@ External AI is the product task interface and the direction for further
 development. The public CLI is the reference adapter for source planning,
 saved-project queries, native edits, exact-current export and continuation.
 It calls existing local domain services without starting an internal provider.
-There is no MCP server, generic task conductor or additional document state store.
+`task_control` orchestrates bounded create/edit/export requests over those owners;
+task receipts live outside active projects and do not define scientific readiness.
+`mcp_server` is an optional stdio adapter with shared schemas and per-connection
+immutable result resources. Neither adapter reads chat state or starts a model.
+
+`project_creation` shares source-bound preparation and exact-current publication
+between CLI, tasks and MCP. Task creation checkpoints the prepared project before
+export so an export failure can resume without re-preparing data. Profiles reuse
+only verified rule/template selections; actual header/unit evidence and a fresh
+source plan are required for each new input.
+
+`annotation_axes`, `annotation_contracts`, `annotation_geometry`, `annotation_batch`
+and `peak_evidence` own pure annotation meaning, geometry and data-bound observed
+extrema. `annotation_operations`/`peak_analysis` are saved-project services;
+the native worker creates ordinary Veusz widgets. The existing edit transaction
+replays and audits both VSZ and `spec.native_annotations`, archives both, and
+rolls both back on failure. Annotation metadata is semantic/provenance evidence,
+not a second visual document. Source updates currently require annotations to be
+removed explicitly before changing data; no implicit anchor rebinding occurs.
+
+`distribution/macos` builds a relocatable runtime from the installed dependency
+environment, audits bundled native dependencies and generates client connection
+instructions. It is build tooling outside the core wheel, not another plotting UI.
 
 Veusz `MainWindow` remains a compatible native document tool. It owns its object
 tree, property editor, Datasets, canvas, menus, Save and Undo/Redo. External

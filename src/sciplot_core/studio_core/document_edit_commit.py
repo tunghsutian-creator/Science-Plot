@@ -14,6 +14,9 @@ from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.studio_core.delivery_recovery import _write_durable
 from sciplot_core.studio_core.document_edit_state import edit_state, history_directory
 from sciplot_core.studio_core.delivery_recovery_state import canonical_path
+from sciplot_core.studio_core.document_edit_companion import (
+    archive_companion, companion_path, recover_companion, replace_companion,
+)
 
 
 def read_edit_operation(project: Path, operation_id: str) -> dict[str, Any]:
@@ -31,6 +34,11 @@ def read_edit_operation(project: Path, operation_id: str) -> dict[str, Any]:
         raise ValueError("The recorded edit does not name a managed document.")
     document = canonical_path(project / relative)
     current = file_sha256(document) if document.is_file() else None
+    companion = record.get("companion")
+    companion_current = (
+        file_sha256(companion_path(project, companion)) == companion["result_sha256"]
+        if isinstance(companion, dict) else True
+    )
     return {
         "kind": "sciplot_document_edit_outcome",
         "version": 1,
@@ -40,7 +48,7 @@ def read_edit_operation(project: Path, operation_id: str) -> dict[str, Any]:
         "document": str(document),
         "document_sha256": current,
         "result_sha256": record["result_sha256"],
-        "result_is_current": current == record["result_sha256"],
+        "result_is_current": current == record["result_sha256"] and companion_current,
         "previous_document_sha256": record["base_sha256"],
         "archive": str(root / "before.vsz"),
         "ready_to_use": False,
@@ -56,6 +64,8 @@ def prior_edit_result(project: Path, review: dict[str, Any]) -> dict[str, Any] |
     stored = json.loads((root / "preview.json").read_text())
     if stored != review:
         raise ValueError("The stored operation does not match this edit preview.")
+    pending = json.loads((root / "outcome.json").read_text())
+    recover_companion(project, root, pending, review)
     outcome = read_edit_operation(project, review["operation_id"])
     if outcome["result_is_current"]:
         # A process can stop after replace but before writing its success reply.
@@ -88,6 +98,7 @@ def commit_document_edit(
     document: Path,
     candidate: Path,
     review: dict[str, Any],
+    *, spec: Path | None = None, candidate_spec: Path | None = None,
 ) -> dict[str, Any]:
     """Caller holds the external-session and canonical-project locks."""
     before_state = review["base_state"]
@@ -112,12 +123,16 @@ def commit_document_edit(
     shutil.copyfile(candidate, after_path)
     with after_path.open("rb") as handle:
         os.fsync(handle.fileno())
-    record = {
+    record: dict[str, Any] = {
         "status": "pending",
         "document_relative": str(document.relative_to(project)),
         "base_sha256": base_hash,
         "result_sha256": result_hash,
     }
+    if (spec is None) != (candidate_spec is None):
+        raise ValueError("Annotation commits require both current and candidate specifications.")
+    if spec is not None and candidate_spec is not None:
+        record["companion"] = archive_companion(project, spec, candidate_spec, root)
     atomic_write_json(root / "outcome.json", record)
     descriptor, name = tempfile.mkstemp(
         prefix=".external-edit-", suffix=".vsz", dir=document.parent
@@ -125,6 +140,7 @@ def commit_document_edit(
     os.close(descriptor)
     staged = Path(name)
     replaced = False
+    companion_replaced = False
     try:
         shutil.copyfile(after_path, staged)
         staged.chmod(original_mode)
@@ -140,6 +156,9 @@ def commit_document_edit(
         }
         if edit_state(project) != expected:
             raise ValueError("Project changed during staging; no edit was installed.")
+        if spec is not None and candidate_spec is not None:
+            replace_companion(spec, candidate_spec.read_bytes(), record["companion"]["mode"])
+            companion_replaced = True
         _replace_current_document(staged, document)
         replaced = True
         after_state = {
@@ -149,11 +168,15 @@ def commit_document_edit(
                 str(document.relative_to(project)): result_hash,
             },
         }
+        if spec is not None:
+            after_state["project_files"][str(spec.relative_to(project))] = record["companion"]["result_sha256"]
         if edit_state(project) != after_state:
             raise ValueError("Project changed during edit installation.")
         record["status"] = "applied"
         atomic_write_json(root / "outcome.json", record)
     except BaseException:
+        if companion_replaced and spec is not None:
+            replace_companion(spec, (root / "before.spec.json").read_bytes(), record["companion"]["mode"])
         if replaced:
             if document.is_file() and file_sha256(document) != result_hash:
                 shutil.copyfile(document, root / "conflicting_document.vsz")

@@ -176,6 +176,12 @@ def audit_legends_and_labels(
         ),
     )
 
+    from sciplot_core.studio_core.annotation_geometry import annotation_widgets
+
+    approved = {item["path"] for item in annotation_widgets(spec) if item["type"] == "label"}
+    # The coordinator has separately proved every declared annotation setting.
+    visible_direct_labels = [record for record in visible_direct_labels if record["path"] not in approved]
+
     if len(visible_direct_labels) != len(expected_direct_labels) or any(
         (
             not (

@@ -49,7 +49,7 @@ def _cli_runtime_error_payload(
         "version": 1,
         "status": "failed",
         "category": category,
-        "reason_code": f"cli_{category}",
+        "reason_code": getattr(exc, "reason_code", f"cli_{category}"),
         "exception_type": type(exc).__name__,
         "message": str(exc) or type(exc).__name__,
     }

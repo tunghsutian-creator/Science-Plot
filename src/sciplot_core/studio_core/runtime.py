@@ -90,6 +90,12 @@ def _capture_process_stderr(log_path: Path):
 
 
 def _qt_framework_paths() -> list[Path]:
+    bundled = os.environ.get("SCIPLOT_BUNDLED_QT_LIB")
+    if bundled:
+        directory = Path(bundled)
+        if not directory.is_dir():
+            raise ValueError("The bundled Qt library directory is missing; repair this installation.")
+        return [directory]
     candidates = [
         Path("/opt/homebrew/opt/qtbase/lib"),
         Path("/opt/homebrew/opt/qt/lib"),

@@ -55,6 +55,9 @@ def audit_spec_data(
         loaded_document = document.Document()
         loaded_document.load(str(resolved_document))
         visible_spec = effective_series_presentation(spec)
+        from sciplot_core.veusz_worker.annotations import audit_native_annotations
+
+        audit_native_annotations(loaded_document, visible_spec)
         inventory = build_spec_audit_inventory(loaded_document, visible_spec)
         inventory.check_presentation = check_presentation
         series = audit_axes_and_series(inventory, visible_spec)
