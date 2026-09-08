@@ -56,6 +56,38 @@ def _v1_task(*, order: int = 1) -> FigureTask:
     )
 
 
+@pytest.mark.parametrize('metric,label,scale', [
+    ('loss_modulus', r'\italic{G}″ (Pa)', 'log'),
+    ('loss_factor', r'tan \delta', 'linear'),
+    ('complex_viscosity', r'|\eta^{*}| (mPa·s)', 'log'),
+    ('complex_modulus', r'|\italic{G}^{*}| (Pa)', 'log'),
+])
+def test_frequency_task_projection_uses_its_own_axis_presentation(metric, label, scale):
+    from sciplot_core.studio_core.figure_source_request import figure_source_request
+
+    task = FigureTask(figure_id=metric, order=1, title=metric, x_metric='angular_frequency',
+                      y_metric=metric, template='point_line', artifact_stem=metric, document_stem=metric)
+    plan = ResolvedFigurePlan.planned(rule_id='rheology_frequency_sweep', selection_policy='test',
+                                     primary_figure_id=metric, tasks=(task,))
+    request = {'rule_id': 'rheology_frequency_sweep', 'template': 'point_line',
+               'render_options': {'y_label_override': "Storage modulus, G' (Pa)", 'yscale': 'log', 'y_tick_format': '%Ve'}}
+    before = deepcopy(request)
+    projected, binding = figure_source_request(request, figure=figure_queue_item_from_task(task),
+        task=task, figure_plan=plan, queue_override=None)
+    assert binding is None and projected['y_metric'] == metric
+    assert projected['render_options']['y_label_override'] == label
+    assert projected['render_options']['yscale'] == scale
+    if metric == 'loss_factor':
+        assert projected['render_options']['y_tick_format'] == 'Auto'
+    assert request == before
+    if metric == 'loss_factor':
+        request['explicit_render_option_keys'] = ['yscale', 'y_tick_format']
+        explicit, _ = figure_source_request(request, figure=figure_queue_item_from_task(task),
+            task=task, figure_plan=plan, queue_override=None)
+        assert explicit['render_options']['yscale'] == 'log'
+        assert explicit['render_options']['y_tick_format'] == '%Ve'
+
+
 @pytest.mark.focused
 def test_registry_geometry_legacy_fallback_requires_an_absent_spec(
     tmp_path: Path,

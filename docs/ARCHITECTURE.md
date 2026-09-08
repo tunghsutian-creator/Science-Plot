@@ -37,6 +37,9 @@ saved-project queries, native edits, exact-current export and continuation.
 It calls existing local domain services without starting an internal provider.
 `task_control` orchestrates bounded create/edit/export requests over those owners;
 task receipts live outside active projects and do not define scientific readiness.
+Task inspection projects current figure identities and sample-style targets from
+its single existing project query; it never uses historical receipt revisions as
+current edit targets or starts a native settings worker for that projection.
 Task edits may defer export and return the saved document revision for successive
 edits. Their completion scope is saved editing; a separate export owns readiness.
 `task_editing` owns pure pending-batch replacement and no-change decisions.
@@ -45,15 +48,48 @@ the saved baseline and require current preview identity on later responses.
 They never recover an uncertain apply by replacing it. A no-change shortcut is
 limited to complete, native-normalized, audited pure style operations; export
 intent and scientific validation remain with the existing task/native owners.
+`annotation_schema.validate_operation_batch` uses the advertised JSON Schema
+to reject malformed wire shapes before new task allocation, pending-intent
+replacement or project preview I/O. The validator caches only immutable schema
+validators, never document state. Historical task parsing stays compatible;
+unit, sample, native-setting and scientific validation remain in their owners.
+Failed, unaccepted previews may be corrected with the current task-local
+preview_revision. Ready previews remain operation-ID-bound. These bindings are
+exclusive, checked under the existing task lease and retain original baseline,
+intent history and failure reasons; neither accepted nor uncertain applied work
+can be replaced. Identical latest corrections keep the same receipt semantics.
 `task_discovery` reads bounded existing creation receipts by exact original source
 path. It uses the shared receipt validation and source fingerprint, reports
 partial searches and ambiguity, and returns historical task/project references.
 It adds no persistent project index, raw-path resolution to the edit APIs, or
 implicit project creation/selection. Queries of selected projects remain separate.
+Preview location validation reads request paths only, resolving relative sources
+against the project. The document-edit owner retains complete before/after byte
+inventories; directory allocation does not repeat that file-hashing pass.
 `mcp_server` is an optional stdio adapter with shared schemas and per-connection
 immutable result resources. Neither adapter reads chat state or starts a model.
 `studio_core/control_results.py` owns the shared compact CLI/MCP projection;
 domain services retain full evidence and CLI `--full`/MCP resources expose it.
+`sample_style_presets` captures audited current ordinary sample line styles into
+a standalone explicitly selected preference file. Application checks its byte
+fingerprint and exact unique target labels, then expands it through sample styles
+into the existing native transaction. Saved previews contain frozen native values,
+not a mutable preset-file dependency. Source metadata is historical context, not
+a global identity catalog or target scientific authority. No data, axes, layout
+or semantic color encodings are transferred; source-revision style preservation
+keeps its separate, stricter scientific-compatibility owner.
+
+`task_group_contract` validates explicit independent experiment lists;
+`task_group_storage` owns their hashed progress and cross-item path boundaries.
+`task_groups` references existing task receipts, checkpoints follow-up requests
+before execution and carries successful items past another item's question or
+failure. Shared sample styles expand into ordinary per-figure edit tasks with
+deferred export; the existing native transactions retain all scientific checks.
+`task_group_review` queries current project evidence and caches native PNGs by
+project/figure/document/spec identity, then writes a read-only HTML gallery.
+It contains no plotting implementation, browser editor, model provider or
+aggregate publication certification. Candidate previews retain their distinct
+scope and revision bindings; MCP exposes owner-returned PNG snapshots on demand.
 
 `project_creation` shares source-bound preparation and exact-current publication
 between CLI, tasks and MCP. Task creation checkpoints the prepared project before
@@ -71,7 +107,10 @@ not a second visual document. Source updates currently require annotations to be
 removed explicitly before changing data; no implicit anchor rebinding occurs.
 
 `sample_style` exposes exact ordinary series labels and expands supported
-color/width batches using current advertised native fields. Duplicate labels
+color/width batches using current advertised native fields. `document_edit_policy`
+binds visible marker colors and generated direct-label colors to ordinary series;
+sample colors expand to all those fields using each field's current value. Free
+annotations and semantic legends remain outside sample color edits. Duplicate labels
 remain ambiguous. The saved-project service binds both the document revision
 and specification hash before passing expanded operations to the existing
 transaction; workers do not interpret sample aliases or add another style policy.

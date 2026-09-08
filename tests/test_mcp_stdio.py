@@ -36,7 +36,7 @@ def test_official_stdio_client_discovery_and_error_recovery():
     async def scenario():
         async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
             tools = await client.list_tools()
-            assert len(tools.tools) == 14
+            assert len(tools.tools) == 18
             caps = await _call(client, "sciplot_capabilities", {})
             assert caps["transport"] == "mcp_stdio"
             assert caps["model_configuration_required"] is False
@@ -116,7 +116,27 @@ def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tm
             found = await _call(client, "sciplot_task_find", {"source": str(source), "tasks_root": str(tmp_path)})
             assert found["match_count"] == 1 and found["scan_complete"]
             assert found["matches"][0]["project"] == project and found["matches"][0]["source_current"] is True
-            inspected = await _call(client, "sciplot_project_inspect", {"project": project})
+            failure_query = await _call(client, "sciplot_task_inspect", {"task": created["task_dir"]})
+            failure_figure = failure_query["current_project"]["figures"][0]
+            failed_call = await client.call_tool("sciplot_task_start", {"request": {
+                "version": 1, "action": "edit", "project": project, "export": False,
+                "expected_document_sha256": failure_figure["document_sha256"],
+                "operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2"}}]},
+                "task_dir": str(tmp_path / "failed_preview")})
+            assert failed_call.is_error
+            failed_preview = failed_call.structured_content
+            assert failed_preview["status"] == "blocked" and failed_preview["phase"] == "previewing"
+            corrected = await _call(client, "sciplot_task_resume", {"task": failed_preview["task_dir"], "response": {
+                "expected_preview_revision": failed_preview["preview_revision"],
+                "revise_operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2.5pt"}}]}})
+            assert corrected["status"] == "needs_review" and corrected["preview_revision"] == 2
+            assert "preview_resource" in corrected
+            cancelled = await _call(client, "sciplot_task_resume", {"task": failed_preview["task_dir"], "response": {
+                "expected_operation_id": corrected["operation_id"], "accept_preview": False}})
+            assert cancelled["status"] == "cancelled"
+            assert file_sha256(Path(failure_figure["document"])) == failure_figure["document_sha256"]
+            task_state = await _call(client, "sciplot_task_inspect", {"task": found["matches"][0]["task_dir"]})
+            inspected = task_state["current_project"]
             figure = inspected["figures"][0]
             edited = await _call(client, "sciplot_task_start", {
                 "request": {"version": 1, "action": "edit", "project": project,
@@ -129,6 +149,13 @@ def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tm
             assert edited["status"] == "needs_review"
             png = await client.call_tool("sciplot_read_result", {"uri": edited["preview_resource"]})
             assert not png.is_error and png.content[1].type == "image"
+            original_record = Path(edited["task_dir"]) / "task.json"
+            original_task_bytes = original_record.read_bytes()
+            malformed = await client.call_tool("sciplot_task_resume", {"task": edited["task_dir"], "response": {
+                "expected_operation_id": edited["operation_id"],
+                "revise_operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": 2}}],
+            }})
+            assert malformed.is_error and original_record.read_bytes() == original_task_bytes
             replacement = {"expected_operation_id": edited["operation_id"], "revise_operations": [
                 {"op": "add_reference_line", "id": "reference450", "parent_path": "/page1/graph1", "axis": "x", "value": 450, "unit": "nm"},
                 {"op": "set_sample_style", "samples": ["A"], "style": {"color": "#2A9D8F"}},
@@ -176,8 +203,10 @@ def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tm
             assert Path(figure["document"]).read_bytes() == stable
         async with Client(_parameters(), read_timeout_seconds=180) as client:
             found = await _call(client, "sciplot_task_find", {"source": str(source), "tasks_root": str(tmp_path)})
-            recovered = await _call(client, "sciplot_project_inspect", {"project": found["matches"][0]["project"]})
+            task_state = await _call(client, "sciplot_task_inspect", {"task": found["matches"][0]["task_dir"]})
+            recovered = task_state["current_project"]
             assert recovered["delivery"]["current"] is True
+            assert recovered["figures"][0]["document_sha256"] == file_sha256(Path(figure["document"]))
 
     anyio.run(scenario)
     assert source.read_bytes() == raw

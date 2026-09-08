@@ -54,6 +54,8 @@ def task_response_schema() -> dict[str, Any]:
 
     operation_id = {"type": "string", "pattern": "^[a-f0-9]{64}$",
                     "description": "Current preview operation_id. Required for revisions and for accepting or rejecting a revised preview."}
+    replacement = {**annotation_operation_capabilities()["operations_schema"],
+                   "description": "Replace the whole batch against the same saved document; this does not append to the old preview."}
     return {
         "oneOf": [
             {"type": "object", "additionalProperties": False,
@@ -65,11 +67,14 @@ def task_response_schema() -> dict[str, Any]:
                             "expected_operation_id": operation_id},
              "required": ["accept_preview"]},
             {"type": "object", "additionalProperties": False,
-             "properties": {"revise_operations": {
-                                **annotation_operation_capabilities()["operations_schema"],
-                                "description": "Replace the whole pending batch against the same saved document; this does not append to the old preview."},
+             "properties": {"revise_operations": replacement,
                             "expected_operation_id": operation_id},
              "required": ["revise_operations", "expected_operation_id"]},
+            {"type": "object", "additionalProperties": False,
+             "properties": {"revise_operations": replacement,
+                            "expected_preview_revision": {"type": "integer", "minimum": 1,
+                                "description": "Current preview_revision, only for blocked/previewing tasks. A needs_review preview requires its expected_operation_id instead."}},
+             "required": ["revise_operations", "expected_preview_revision"]},
             {"type": "object", "additionalProperties": False,
              "properties": {"retry": {"type": "boolean", "const": True}},
              "required": ["retry"]},

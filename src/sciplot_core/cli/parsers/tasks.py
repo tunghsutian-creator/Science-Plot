@@ -24,4 +24,16 @@ def register_task_commands(subparsers: Any) -> None:
         action.add_argument("--json", action="store_true")
         if name == "resume":
             action.add_argument("--response", type=Path, required=True)
+    group = actions.add_parser("group", help="Run an explicit experiment list and review all native figures together.")
+    group_actions = group.add_subparsers(dest="group_action", required=True)
+    for name in ("capabilities", "start", "inspect", "resume"):
+        action = group_actions.add_parser(name)
+        action.add_argument("--json", action="store_true")
+        if name == "start":
+            action.add_argument("--request", type=Path, required=True)
+            action.add_argument("--group-dir", type=Path, required=True)
+        elif name in {"inspect", "resume"}:
+            action.add_argument("target", type=Path)
+            if name == "resume":
+                action.add_argument("--responses", type=Path, help="JSON array of item/task-bound answers. Omit to continue pending work.")
     subparsers.add_parser("mcp", help="Run the optional external-AI MCP stdio server.")

@@ -95,15 +95,26 @@ class Adapter:
             except AdapterError as exc:
                 warnings.append(str(exc))
         preview_artifact = _preview_artifact(payload)
-        if preview_artifact is not None:
+        artifacts = ([{"preview": preview_artifact}] if preview_artifact is not None else [])
+        grouped = payload.get("kind") == "sciplot_task_group_result"
+        if grouped:
+            artifacts = payload["previews"]
+        group_resources = []
+        for artifact in artifacts:
             try:
-                snapshot = self.resources.add_preview(Path(preview_artifact["path"]), expected_sha256=preview_artifact.get("sha256"))
-                compact = {**compact, "preview_resource": snapshot.uri}
+                preview = artifact["preview"]
+                snapshot = self.resources.add_preview(Path(preview["path"]), expected_sha256=preview.get("sha256"))
+                if grouped:
+                    group_resources.append({**{key: artifact[key] for key in ("item_id", "figure_id", "scope")}, "uri": snapshot.uri})
+                else:
+                    compact = {**compact, "preview_resource": snapshot.uri}
                 links.append(snapshot)
             except (AdapterError, OSError) as exc:
                 # Resource presentation failure does not turn a completed domain
                 # mutation into an ambiguous failed action.
                 warnings.append(str(exc))
+        if grouped:
+            compact = {**compact, "preview_resources": group_resources}
         if warnings:
             compact = {**compact, "resource_warnings": warnings}
         result = _text_result(compact, is_error=compact.get("status") in {"error", "failed", "blocked"})

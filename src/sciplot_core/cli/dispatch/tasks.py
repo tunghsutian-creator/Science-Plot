@@ -20,7 +20,22 @@ def _object(path: Path) -> dict[str, Any]:
 
 def dispatch_task(args: Any) -> int:
     action = args.task_action
-    if action == "capabilities":
+    result: dict[str, Any]
+    if action == "group":
+        from sciplot_core.task_groups import inspect_group, resume_group, start_group
+        from sciplot_core.task_group_contract import group_request_schema, group_responses_schema
+
+        if args.group_action == "capabilities":
+            result = {"request_schema": group_request_schema(), "responses_schema": group_responses_schema()}
+        elif args.group_action == "start":
+            result = start_group(_object(args.request), group_dir=args.group_dir,
+                                 base_dir=args.request.expanduser().resolve().parent)
+        elif args.group_action == "inspect":
+            result = inspect_group(args.target)
+        else:
+            responses = json.loads(args.responses.expanduser().read_text()) if args.responses else []
+            result = resume_group(args.target, responses)
+    elif action == "capabilities":
         result = {"kind": "sciplot_task_capabilities", "version": 1,
                   "request_schema": task_request_schema(),
                   "response_schema": task_response_schema(),

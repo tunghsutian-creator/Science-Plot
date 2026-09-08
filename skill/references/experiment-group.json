@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "title": "FTIR and frequency sweep",
+  "items": [
+    {
+      "id": "ftir",
+      "label": "FTIR",
+      "request": {
+        "version": 1,
+        "action": "create",
+        "source": "inputs/FTIR",
+        "rule_id": "ftir_spectrum",
+        "template": "stacked_curve",
+        "out": "figures/FTIR"
+      }
+    },
+    {
+      "id": "frequency",
+      "label": "Frequency sweep",
+      "request": {
+        "version": 1,
+        "action": "create",
+        "source": "inputs/frequency",
+        "rule_id": "rheology_frequency_sweep",
+        "template": "point_line",
+        "out": "figures/frequency"
+      }
+    }
+  ]
+}

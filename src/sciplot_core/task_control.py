@@ -9,6 +9,7 @@ from typing import Any
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.output_contract import resolve_user_output_layout
+from sciplot_core.studio_core.annotation_schema import validate_operation_batch
 from sciplot_core.studio_core.project_query import inspect_project, resolve_project_path
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.project_session import external_project_session
@@ -28,6 +29,8 @@ def start_task(
     request: dict[str, Any], *, task_dir: Path | None = None,
 ) -> dict[str, Any]:
     request = validate_task_request(request)
+    if request["action"] == "edit":
+        validate_operation_batch(request["operations"])
     if request["action"] == "create":
         source = canonical_path(Path(request["source"]))
         digest = source_tree_sha256(source)
@@ -75,7 +78,10 @@ def inspect_task(task: Path) -> dict[str, Any]:
         try:
             current = inspect_project(Path(state["project"]))
             summary["current_project"] = {
-                key: current[key] for key in ("project", "source", "qa", "delivery")
+                key: current[key] for key in (
+                    "project", "primary_figure_id", "figures", "source", "qa", "delivery",
+                    "ready_to_use", "readiness_evaluated", "document_authority", "live_gui_state_evaluated",
+                )
                 if key in current
             }
         except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:

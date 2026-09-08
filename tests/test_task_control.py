@@ -134,7 +134,10 @@ def _edit_task(tmp_path, monkeypatch, *, export=True):
     task = tmp_path / "task"
     result = control.start_task({"version": 1, "action": "edit", "project": str(project),
                                 "expected_document_sha256": "b" * 64,
-                                "operations": [{"op": "set_style"}], "export": export}, task_dir=task)
+                                "operations": [{"op": "set_style", "object_path": "/page1/graph1/series_1",
+                                                "setting_path": "/page1/graph1/series_1/PlotLine/color",
+                                                "expected_value": "black", "value": "red"}],
+                                "export": export}, task_dir=task)
     assert result["status"] == "needs_review"
     return task, project
 
@@ -184,6 +187,67 @@ def test_declined_review_never_mutates_document(tmp_path, monkeypatch):
     task, _ = _edit_task(tmp_path, monkeypatch)
     monkeypatch.setattr(execution, "apply_document_edit", lambda *a: pytest.fail("declined review applied"))
     assert control.resume_task(task, {"accept_preview": False})["status"] == "cancelled"
+
+
+def test_task_inspection_returns_current_edit_targets_in_one_query(tmp_path, monkeypatch):
+    task, project = _edit_task(tmp_path, monkeypatch)
+    control.resume_task(task, {"accept_preview": False})
+    before = (task / "task.json").read_bytes()
+    figures = [{"figure_id": "current", "document_sha256": "d" * 64,
+                "sample_styles": [{"sample": "A", "object_paths": ["/page1/graph1/series_1"], "unique": True}]}]
+    queries = []
+    def inspect(path):
+        queries.append(path)
+        return {"project": str(project), "primary_figure_id": "current", "figures": figures,
+                "source": {}, "qa": {}, "delivery": {}, "ready_to_use": None,
+                "readiness_evaluated": False, "document_authority": "saved_vsz",
+                "live_gui_state_evaluated": False}
+    monkeypatch.setattr(control, "inspect_project", inspect)
+    result = control.inspect_task(task)
+    current = result["current_project"]
+    assert current["primary_figure_id"] == "current" and current["figures"] == figures
+    assert current["ready_to_use"] is None and current["readiness_evaluated"] is False
+    assert current["document_authority"] == "saved_vsz"
+    assert current["live_gui_state_evaluated"] is False
+    assert queries == [project]
+    assert (task / "task.json").read_bytes() == before
+
+
+def test_failed_current_query_does_not_offer_historical_edit_targets(tmp_path, monkeypatch):
+    task, _ = _edit_task(tmp_path, monkeypatch)
+    def unavailable(*args):
+        raise ValueError("Project changed during inspection")
+    monkeypatch.setattr(control, "inspect_project", unavailable)
+    result = control.inspect_task(task)
+    assert result["current_project"]["status"] == "unknown"
+    assert "figures" not in result["current_project"]
+
+
+def test_malformed_edit_is_rejected_before_task_directory_or_project_query(tmp_path, monkeypatch):
+    from sciplot_core.studio_core.annotation_schema import AnnotationOperationError
+    def unnecessary(*args):
+        pytest.fail("Malformed operation reached project I/O")
+    monkeypatch.setattr(control, "resolve_project_path", unnecessary)
+    task = tmp_path / "task"
+    with pytest.raises(AnnotationOperationError) as failure:
+        control.start_task({"version": 1, "action": "edit", "project": "/p",
+                           "expected_document_sha256": "a" * 64,
+                           "operations": [{"op": "set_style"}]}, task_dir=task)
+    assert failure.value.reason_code == "invalid_operation"
+    assert not task.exists() and not list(tmp_path.iterdir())
+
+
+def test_legacy_blocked_task_with_malformed_operations_stays_inspectable(tmp_path, monkeypatch):
+    from sciplot_core.task_storage import load_task, save_task
+    task, _ = _edit_task(tmp_path, monkeypatch)
+    state = load_task(task)
+    state["request"]["operations"] = [{"op": "set_style"}]
+    state.update(status="blocked", phase="previewing")
+    save_task(task, state)
+    monkeypatch.setattr(control, "inspect_project", lambda *a: {})
+    before = (task / "task.json").read_bytes()
+    assert control.inspect_task(task)["status"] == "blocked"
+    assert (task / "task.json").read_bytes() == before
 
 
 @pytest.mark.parametrize("value", [None, 0, 1, "false", []])

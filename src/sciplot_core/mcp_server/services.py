@@ -22,6 +22,13 @@ def _preview_output(arguments: dict[str, Any]) -> Path:
 
 
 def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if name in {"sciplot_group_start", "sciplot_group_inspect", "sciplot_group_resume"}:
+        from sciplot_core.task_groups import inspect_group, resume_group, start_group
+
+        if name == "sciplot_group_start":
+            return start_group(arguments["request"], group_dir=Path(arguments["group_dir"]))
+        group = Path(arguments["group"])
+        return inspect_group(group) if name == "sciplot_group_inspect" else resume_group(group, arguments.get("responses"))
     if name == "sciplot_capabilities":
         from sciplot_core.studio_core.project_capabilities import project_control_capabilities
         from sciplot_core.studio_core.annotation_schema import annotation_operation_capabilities
@@ -60,6 +67,11 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         from sciplot_core.studio_core.annotation_operations import inspect_annotation_state
 
         return inspect_annotation_state(project, figure_id=figure_id)
+    if name == "sciplot_sample_style_capture":
+        from sciplot_core.studio_core.sample_style_presets import capture_sample_style_preset
+
+        return capture_sample_style_preset(project, figure_id=figure_id,
+            samples=arguments.get("samples"), output_dir=_preview_output(arguments))
     if name == "sciplot_edit_preview":
         from sciplot_core.studio_core.annotation_operations import preview_document_operations
 

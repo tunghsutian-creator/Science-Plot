@@ -6,7 +6,7 @@ from typing import Any
 
 from sciplot_core.studio_core.annotation_schema import AnnotationOperationError
 from sciplot_core.studio_core.document_edit_policy import (
-    SAMPLE_STYLE_FIELDS, ordinary_curve_paths,
+    SAMPLE_STYLE_FIELDS, ordinary_curve_paths, sample_color_settings,
 )
 
 
@@ -30,6 +30,7 @@ def expand_sample_styles(
 ) -> list[dict[str, Any]]:
     """Bind shorthand to inspected current values; the existing transaction audits it."""
     targets = {item["sample"]: item for item in sample_style_targets(spec)}
+    colors = sample_color_settings(spec)
     expanded: list[dict[str, Any]] = []
     for operation in operations:
         if operation.get("op") != "set_sample_style":
@@ -59,17 +60,18 @@ def expand_sample_styles(
                     f"Sample label {sample!r} names multiple curves; inspect and use explicit set_style object paths.",
                 )
             path = target["object_paths"][0]
-            fields = {field["setting_path"]: field
-                      for field in objects.get(path, {}).get("editable_fields", [])}
             for name, value in style.items():
-                setting = f"{path}/{SAMPLE_STYLE_FIELDS[name]}"
-                if setting not in fields:
-                    raise AnnotationOperationError(
-                        "unsupported_sample_style", f"The current curve does not advertise {setting}.",
-                    )
-                expanded.append({"op": "set_style", "object_path": path,
-                                 "setting_path": setting,
-                                 "expected_value": fields[setting]["current_value"], "value": value})
+                settings = colors[path] if name == "color" else [f"{path}/{SAMPLE_STYLE_FIELDS[name]}"]
+                for setting in settings:
+                    owner = setting.rsplit("/", 2)[0]
+                    fields = {field["setting_path"]: field for field in objects.get(owner, {}).get("editable_fields", [])}
+                    if setting not in fields:
+                        raise AnnotationOperationError(
+                            "unsupported_sample_style", f"The current curve does not advertise {setting}.",
+                        )
+                    expanded.append({"op": "set_style", "object_path": owner,
+                                     "setting_path": setting,
+                                     "expected_value": fields[setting]["current_value"], "value": value})
     if len(expanded) > 100:
         raise AnnotationOperationError("invalid_operations", "The expanded batch exceeds 100 native operations.")
     return expanded

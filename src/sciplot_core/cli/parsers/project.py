@@ -27,6 +27,12 @@ def register_project_commands(subparsers: Any) -> None:
         "--out", type=Path, help="New source-adjacent visible delivery directory."
     )
     create.add_argument("--json", action="store_true")
+    capture = actions.add_parser("style-capture", help="Save reusable ordinary sample colors and widths from a saved figure.")
+    capture.add_argument("target", type=Path)
+    capture.add_argument("--figure")
+    capture.add_argument("--sample", action="append", help="Exact sample label; repeat for a subset. Default captures all ordinary samples.")
+    capture.add_argument("--out", type=Path, required=True, help="New preset directory outside project, source and delivery.")
+    capture.add_argument("--json", action="store_true")
     for name in ("annotations", "operations-preview", "peaks"):
         action = actions.add_parser(name)
         action.add_argument("target", type=Path)

@@ -43,6 +43,10 @@ def figure_source_request(
         )
         projected["render_options"] = dict(mechanical_source.render_options)
         return projected, mechanical_source.binding
+    if figure_plan is not None and figure_plan.rule_id == "rheology_frequency_sweep":
+        # Task projection chooses data; the existing rheology owner also binds
+        # this metric's label, unit and scale instead of inheriting the primary.
+        return _rheology_frequency_figure_request(request, figure), None
     projected = (
         request_for_figure_task(request, task)
         if task is not None

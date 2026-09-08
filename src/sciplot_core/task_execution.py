@@ -146,7 +146,12 @@ def record_failure(root: Path, state: dict[str, Any], exc: Exception) -> None:
             "reason_code": "task_worker_timeout" if timed_out else getattr(exc, "reason_code", "task_execution_failed"),
             "message": "本地工作进程超时，任务进度已保留；查询当前状态后可重试。" if timed_out else str(exc),
             **({"timeout_seconds": exc.timeout} if isinstance(exc, TimeoutExpired) else {}),
-            "recovery": "保留此任务；解决所述问题后查询或重试。原始数据不会自动修改。",
+            "recovery": (
+                "可重试原操作；需改正操作时，用当前 preview_revision 作为 expected_preview_revision 提交 revise_operations。"
+                if state["request"]["action"] == "edit" and state["phase"] == "previewing"
+                and state.get("preview_accepted") is not True and "applied_operation" not in state
+                else "保留此任务；解决所述问题后查询或重试。原始数据不会自动修改。"
+            ),
         },
     })
     save_task(root, state)

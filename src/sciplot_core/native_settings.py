@@ -13,7 +13,8 @@ from sciplot_core.setting_catalog import specs_for_object_type
 # limits continue to come from the same specs used by the native inspector.
 _SAFE_SUFFIXES = {
     "axis": frozenset({"Label/size", "Label/bold", "TickLabels/size"}),
-    "xy": frozenset({"PlotLine/color", "PlotLine/width"}),
+    "xy": frozenset({"PlotLine/color", "PlotLine/width", "MarkerFill/color", "MarkerLine/color"}),
+    "label": frozenset({"Text/color"}),
     "key": frozenset({
         "Text/size", "columns", "horzPosn", "vertPosn", "horzManual", "vertManual",
     }),

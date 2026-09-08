@@ -108,7 +108,9 @@ def _rheology_frequency_figure_request(
             str(render_options.get("yscale") or "").casefold() != "log"
             and "y_tick_format" not in explicit_render_keys
         ):
-            render_options.pop("y_tick_format", None)
+            # An absent key inherits the frequency rule's logarithmic format
+            # during the later merge. Explicit native Auto keeps this axis linear.
+            render_options["y_tick_format"] = "Auto"
     metric_label = rheology_metric_axis_label(y_metric)
     if y_metric == "complex_viscosity":
         metric_label = "|\\eta^{*}| (mPa·s)"

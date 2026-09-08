@@ -36,9 +36,10 @@ def test_public_task_creation_annotation_review_export_and_continuation(tmp_path
     assert found["matches"][0]["source_current"] is True
     project = Path(found["matches"][0]["project"])
     assert {str(p): file_sha256(p) for p in project.rglob("*") if p.is_file()} == before_lookup
-    figure_id = created["result"]["primary_figure_id"]
-    inspected = _cli("project", "inspect", project, "--figure", figure_id)
-    figure = inspected["selected_figure"]
+    inspected = _cli("task", "inspect", found["matches"][0]["task_dir"])["current_project"]
+    figure_id = inspected["primary_figure_id"]
+    figure = next(item for item in inspected["figures"] if item["figure_id"] == figure_id)
+    assert figure["sample_styles"][0]["sample"] == "E3"
     request.write_text(json.dumps({
         "version": 1, "action": "edit", "project": str(project), "figure_id": figure_id,
         "expected_document_sha256": figure["document_sha256"], "operations": [{
@@ -57,6 +58,9 @@ def test_public_task_creation_annotation_review_export_and_continuation(tmp_path
     assert applied["result"]["studio_run"]["ready_to_use"] is True
     current = _cli("task", "inspect", applied["task_dir"])
     assert current["current_project"]["delivery"]["current"] is True
+    current_figure = current["current_project"]["figures"][0]
+    assert current_figure["document_sha256"] == file_sha256(Path(figure["document"]))
+    assert current_figure["document_sha256"] != figure["document_sha256"]
     inventory = sorted((project / "runs").glob("studio_*"))
     again = _cli("task", "resume", review["task_dir"], "--response", response)
     assert again["status"] == "complete"
@@ -111,6 +115,15 @@ def test_three_sample_style_rounds_save_without_export_then_publish_current_data
             first_id = review["operation_id"]
             previous_image = Path(review["preview"]["image"]["path"])
             previous_bytes = previous_image.read_bytes()
+            task_record = Path(review["task_dir"]) / "task.json"
+            task_bytes = task_record.read_bytes()
+            response.write_text(json.dumps({"expected_operation_id": first_id,
+                "revise_operations": [{"op": "set_sample_style", "samples": ["E0"], "style": {"width": 2}}]}))
+            rejected = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "task", "resume", review["task_dir"],
+                                       "--response", str(response), "--json"], capture_output=True, text=True, timeout=120)
+            assert rejected.returncode == 1
+            assert json.loads(rejected.stdout)["reason_code"] == "invalid_task_response"
+            assert task_record.read_bytes() == task_bytes and previous_image.read_bytes() == previous_bytes
             response.write_text(json.dumps({"expected_operation_id": first_id,
                 "revise_operations": [{"op": "set_sample_style", "samples": ["E0", "E3"], "style": {"width": "1.75pt"}}]}))
             review = _cli("task", "resume", review["task_dir"], "--response", response)
@@ -160,3 +173,43 @@ def test_three_sample_style_rounds_save_without_export_then_publish_current_data
     assert sorted((project / "runs").glob("studio_*")) == stable_runs
     assert {str(p.relative_to(delivery)): file_sha256(p) for p in delivery.rglob("*") if p.is_file()} == stable_delivery
     assert source.read_bytes() == original
+
+
+@pytest.mark.comprehensive
+def test_failed_native_preview_is_corrected_in_place_and_then_saved(tmp_path):
+    source = tmp_path / "UVvis.csv"
+    source.write_text("Wavelength,Absorbance\nnm,a.u.\nA,A\n400,1\n450,3\n500,2\n")
+    raw = source.read_bytes()
+    request, response = tmp_path / "request.json", tmp_path / "response.json"
+    request.write_text(json.dumps({"version": 1, "action": "create", "source": str(source)}))
+    created = _cli("task", "start", "--request", request)
+    project = Path(created["project"])
+    current = _cli("task", "inspect", created["task_dir"])["current_project"]
+    figure = current["figures"][0]
+    document = Path(figure["document"])
+    before = document.read_bytes()
+    runs = sorted((project / "runs").iterdir())
+    task = tmp_path / "failed_edit"
+    edit_request = {"version": 1, "action": "edit", "project": str(project),
+        "expected_document_sha256": figure["document_sha256"], "export": False,
+        "operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2"}}]}
+    request.write_text(json.dumps(edit_request))
+    failed = subprocess.run([str(REPO_ROOT / "skill/scripts/sciplot"), "task", "start", "--request", str(request),
+                             "--task-dir", str(task), "--json"], capture_output=True, text=True, timeout=120)
+    assert failed.returncode == 1
+    blocked = json.loads(failed.stdout)
+    assert blocked["status"] == "blocked" and blocked["phase"] == "previewing"
+    assert document.read_bytes() == before
+    correction = {"expected_preview_revision": blocked["preview_revision"],
+                  "revise_operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": "2.5pt"}}]}
+    response.write_text(json.dumps(correction))
+    review = _cli("task", "resume", task, "--response", response)
+    assert review["status"] == "needs_review" and review["preview_revision"] == 2
+    assert _cli("task", "resume", task, "--response", response) == review
+    response.write_text(json.dumps({"accept_preview": True, "expected_operation_id": review["operation_id"]}))
+    saved = _cli("task", "resume", task, "--response", response)
+    assert saved["status"] == "complete" and saved["result"]["status"] == "saved"
+    assert saved["result"]["document_sha256"] == file_sha256(document) != figure["document_sha256"]
+    state = json.loads((task / "task.json").read_text())
+    assert state["request"] == edit_request and state["preview_failures"][0]["blocker"] == blocked["blocker"]
+    assert sorted((project / "runs").iterdir()) == runs and source.read_bytes() == raw

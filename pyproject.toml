@@ -17,6 +17,7 @@ dependencies = [
   "PyMuPDF",
   "Pillow",
   "platformdirs",
+  "jsonschema>=4.26,<5",
 ]
 
 [project.optional-dependencies]
@@ -152,6 +153,11 @@ files = [
   "src/sciplot_core/studio_core/document_edit_policy.py",
   "src/sciplot_core/studio_core/control_results.py",
   "src/sciplot_core/studio_core/sample_style.py",
+  "src/sciplot_core/studio_core/sample_style_presets.py",
+  "src/sciplot_core/task_group_contract.py",
+  "src/sciplot_core/task_group_storage.py",
+  "src/sciplot_core/task_group_review.py",
+  "src/sciplot_core/task_groups.py",
   "src/sciplot_core/studio_core/document_edit_state.py",
   "src/sciplot_core/studio_core/project_query.py",
   "src/sciplot_core/studio_core/project_query_evidence.py",

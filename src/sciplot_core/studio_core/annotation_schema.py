@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from functools import lru_cache
 from typing import Any
+
+from jsonschema import Draft202012Validator
 
 from sciplot_core.studio_core.document_edit_policy import SAMPLE_STYLE_FIELDS
 
@@ -15,6 +19,39 @@ class AnnotationOperationError(ValueError):
 def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
     return {"type": "object", "properties": properties, "required": required,
             "additionalProperties": False}
+
+
+@lru_cache(maxsize=1)
+def _operation_validators() -> dict[str, Draft202012Validator]:
+    variants = annotation_operation_capabilities()["operations_schema"]["items"]["oneOf"]
+    return {schema["properties"]["op"]["const"]: Draft202012Validator(schema)
+            for schema in variants}
+
+
+def validate_operation_batch(operations: Any) -> None:
+    """Check the public wire shape before project I/O or pending-preview replacement.
+
+    This does not validate native settings, units, bindings or scientific meaning;
+    those still require the existing project/native owners and current evidence.
+    """
+    if not isinstance(operations, list) or not 1 <= len(operations) <= 100:
+        raise AnnotationOperationError("invalid_operations", "Provide 1–100 explicit operations.")
+    try:
+        json.dumps(operations, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise AnnotationOperationError("invalid_operations", "Operations must contain finite JSON values.") from exc
+    validators = _operation_validators()
+    for index, operation in enumerate(operations):
+        location = f"operations/{index}"
+        if not isinstance(operation, dict):
+            raise AnnotationOperationError("invalid_operation", f"{location} must be an object.", field=location)
+        kind = operation.get("op")
+        if not isinstance(kind, str) or kind not in validators:
+            raise AnnotationOperationError("unsupported_operation", f"{location}/op is unsupported; use the advertised operations.", field=location + "/op")
+        error = next(validators[kind].iter_errors(operation), None)
+        if error is not None:
+            field = "/".join([location, *map(str, error.absolute_path)])
+            raise AnnotationOperationError("invalid_operation", f"{field}: {error.message[:500]}", field=field)
 
 
 def annotation_operation_capabilities() -> dict[str, Any]:
@@ -74,6 +111,12 @@ def annotation_operation_capabilities() -> dict[str, Any]:
         "style": {**object_schema({name: string for name in SAMPLE_STYLE_FIELDS}, []),
                   "minProperties": 1},
     }, ["samples", "style"])
+    add("apply_sample_style_preset", {
+        "preset": {"type": "string", "minLength": 1}, "expected_preset_sha256": digest,
+        "samples": {"type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": True,
+                    "items": {"type": "string", "minLength": 1},
+                    "description": "Optional exact target subset. Default requires preset coverage for every ordinary target sample; no position matching."},
+    }, ["preset", "expected_preset_sha256"])
     return {
         "kind": "sciplot_annotation_operations", "version": 1,
         "operations_schema": {"type": "array", "minItems": 1, "maxItems": 100,

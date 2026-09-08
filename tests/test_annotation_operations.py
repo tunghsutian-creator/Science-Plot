@@ -93,6 +93,29 @@ def test_sample_batch_requires_native_capability_and_bounds_expansion(spec):
         expand_sample_styles(spec, _sample_objects("series_1"), [request] * 51)
 
 
+def test_sample_color_updates_bound_label_and_markers_using_their_current_values(spec):
+    spec["series"][0]["marker"] = "circle"
+    spec["direct_labels"] = [{"name": "label_1", "label": "A"}]
+    curve, label = "/page1/graph1/series_1", "/page1/graph1/label_1"
+    objects = _sample_objects("series_1")
+    objects[curve]["editable_fields"].extend([
+        {"setting_path": curve + "/MarkerFill/color", "current_value": "red"},
+        {"setting_path": curve + "/MarkerLine/color", "current_value": "blue"},
+    ])
+    objects[label] = {"editable_fields": [
+        {"setting_path": label + "/Text/color", "current_value": "black"}]}
+    operation = {"op": "set_sample_style", "samples": ["A"], "style": {"color": "#3568C0"}}
+    expanded = expand_sample_styles(spec, objects, [operation])
+    assert [(item["object_path"], item["expected_value"]) for item in expanded] == [
+        (curve, "#222222"), (curve, "red"), (curve, "blue"), (label, "black")]
+    assert all(item["value"] == "#3568C0" for item in expanded)
+    with pytest.raises(AnnotationOperationError, match="exceeds 100"):
+        expand_sample_styles(spec, objects, [operation] * 26)
+    del objects[label]
+    with pytest.raises(AnnotationOperationError, match="does not advertise"):
+        expand_sample_styles(spec, objects, [operation])
+
+
 def test_sample_preview_binds_mapping_hash_before_native_transaction(tmp_path, monkeypatch, spec):
     from sciplot_core.studio_core import annotation_operations as service, document_edit
     from sciplot_core.foundation.file_hashing import file_sha256

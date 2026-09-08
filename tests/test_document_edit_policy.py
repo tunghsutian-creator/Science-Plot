@@ -90,3 +90,49 @@ def test_color_must_target_the_exact_series_named_by_the_spec(tmp_path) -> None:
     objects = _objects()
     objects["/page1/graph1/auxiliary"] = objects.pop(CURVE)
     assert len(filter_editable_fields(objects, spec)["/page1/graph1/auxiliary"]["editable_fields"]) == 1
+
+
+@pytest.mark.parametrize("contract,editable", [
+    ({}, True),
+    ({"performance_comparison": {"kind": "semantic"}}, False),
+    ({"categorical": {"presentation_kind": "point_line_raw_overlay"}}, False),
+    ({"scalar_field": {"z_label": "Intensity"}}, False),
+    ({"legend": {"native_key": False}}, False),
+])
+def test_bound_marker_and_label_colors_follow_the_ordinary_sample_policy(tmp_path, contract, editable):
+    label, note = "/page1/graph1/label_1", "/page1/graph1/note"
+    spec = _spec(tmp_path, template="point_line", series=[{
+        "name": "series_1", "label": "A", "presentation_kind": "curve", "marker": "circle"}],
+        direct_labels=[{"name": "label_1", "label": "A"}], **contract)
+    settings = [CURVE + "/MarkerFill/color", CURVE + "/MarkerLine/color", label + "/Text/color"]
+    objects = _objects()
+    objects[CURVE]["editable_fields"].extend({"setting_path": item} for item in settings[:2])
+    objects[label] = {"type": "label", "editable_fields": [{"setting_path": settings[2]}]}
+    objects[note] = {"type": "label", "editable_fields": [{"setting_path": note + "/Text/color"}]}
+    fields = {field["setting_path"] for widget in filter_editable_fields(objects, spec).values()
+              for field in widget["editable_fields"]}
+    for setting in settings:
+        change = {"object_path": setting.rsplit("/", 2)[0], "setting_path": setting}
+        assert (setting in fields) == editable
+        if editable:
+            validate_edit_science_policy([change], spec)
+        else:
+            with pytest.raises(ValueError, match="uniquely bound ordinary curve"):
+                validate_edit_science_policy([change], spec)
+    assert note + "/Text/color" not in fields
+    with pytest.raises(ValueError, match="uniquely bound ordinary curve"):
+        validate_edit_science_policy([{"object_path": note, "setting_path": note + "/Text/color"}], spec)
+
+
+@pytest.mark.parametrize("labels", [
+    [{"name": "label_1", "label": "Other"}],
+    [{"name": "free_note", "label": "A"}],
+    [{"name": "label_1", "label": "A"}] * 2,
+])
+def test_direct_label_color_needs_a_unique_generated_sample_binding(tmp_path, labels):
+    spec = _spec(tmp_path, series=[{"name": "series_1", "label": "A", "presentation_kind": "curve"}],
+                 direct_labels=labels)
+    for label in labels:
+        path = "/page1/graph1/" + label["name"]
+        with pytest.raises(ValueError, match="uniquely bound ordinary curve"):
+            validate_edit_science_policy([{"object_path": path, "setting_path": path + "/Text/color"}], spec)

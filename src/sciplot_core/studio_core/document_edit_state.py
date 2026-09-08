@@ -41,13 +41,17 @@ def edit_state(project: Path) -> dict[str, Any]:
 
 
 def new_preview_directory(project: Path, target: Path) -> Path:
+    project = canonical_path(project)
     output = canonical_path(target)
-    state = edit_state(project)
-    request = json.loads((project / "plot_request.json").read_text())
-    forbidden = [project, Path(state["delivery"])]
+    request = json.loads(canonical_path(project / "plot_request.json").read_text())
+    delivery = canonical_path(requested_delivery_root({"request": request}, run_output=project))
+    # This checks paths only. The edit owner captures and verifies byte identity
+    # before and after preview generation; another inventory here is redundant.
+    forbidden = [project, delivery]
     for key in ("input", "input_path", "data_dir"):
         if isinstance(request.get(key), str):
-            forbidden.append(canonical_path(Path(request[key])))
+            source = Path(request[key]).expanduser()
+            forbidden.append(canonical_path(source if source.is_absolute() else project / source))
     if output.exists() or any(
         output == p or output.is_relative_to(p) for p in forbidden
     ):

@@ -113,7 +113,12 @@ def test_superseded_answers_cannot_change_the_current_review(edits, answer):
 
 
 @pytest.mark.parametrize("changes", [{"revise_operations": []}, {"expected_operation_id": 3},
-                                     {"revise_operations": "new style"}, {"export": False}])
+                                     {"revise_operations": "new style"}, {"export": False},
+                                     {"revise_operations": [{"op": "set_style"}]},
+                                     {"revise_operations": [{"op": "run_python", "code": "print(1)"}]},
+                                     {"revise_operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"width": 2}}]},
+                                     {"revise_operations": [{"op": "add_annotation", "id": "note", "parent_path": "/page1/graph1", "text": "note",
+                                                             "position": {"mode": "relative", "x": True, "y": 0.5}}]}])
 def test_invalid_revision_is_read_only(edits, changes):
     first = task_control.start_task(edits.request, task_dir=edits.task)
     before = (edits.task / "task.json").read_bytes()
@@ -142,6 +147,37 @@ def test_failed_replacement_cannot_reactivate_old_preview_and_retry_keeps_new_in
     assert resumed["preview_revision"] == 2 and resumed["status"] == "needs_review"
     assert edits.calls[-1]["operations"] == [style("3pt")]
     assert (edits.task / "preview_003/edit-preview.json").exists() and not edits.effects
+
+
+@pytest.mark.parametrize("after_replacement", [False, True])
+def test_failed_preview_can_be_corrected_with_current_revision(edits, monkeypatch, after_replacement):
+    def fail(*args, **kwargs):
+        raise ValueError("Native value is invalid")
+    if after_replacement:
+        first = task_control.start_task(edits.request, task_dir=edits.task)
+    monkeypatch.setattr(annotation_operations, "preview_document_operations", fail)
+    blocked = (revision(edits, first["operation_id"]) if after_replacement
+               else task_control.start_task(edits.request, task_dir=edits.task))
+    assert blocked["status"] == "blocked" and blocked["phase"] == "previewing"
+    failed_state = json.loads((edits.task / "task.json").read_text())
+    response = {"expected_preview_revision": blocked["preview_revision"], "revise_operations": [style("4pt")]}
+    monkeypatch.setattr(annotation_operations, "preview_document_operations", edits.preview)
+    corrected = task_control.resume_task(edits.task, response)
+    assert corrected["status"] == "needs_review"
+    assert corrected["preview_revision"] == blocked["preview_revision"] + 1
+    state = json.loads((edits.task / "task.json").read_text())
+    assert state["request"] == edits.request and state["edit_revisions"][-1] == response
+    assert state["preview_failures"][-1]["blocker"] == failed_state["blocker"]
+    assert state["preview_attempt"] == failed_state["preview_attempt"] + 1
+    stable = (edits.task / "task.json").read_bytes()
+    assert task_control.resume_task(edits.task, response) == corrected
+    assert (edits.task / "task.json").read_bytes() == stable
+    with pytest.raises(TaskControlError):
+        task_control.resume_task(edits.task, {"accept_preview": True})
+    completed = task_control.resume_task(edits.task, {"accept_preview": True,
+                                                      "expected_operation_id": corrected["operation_id"]})
+    assert completed["status"] == "complete" and completed["result"]["status"] == "saved"
+    assert task_control.resume_task(edits.task, response) == completed
 
 
 def test_uncertain_apply_cannot_be_revised(edits, monkeypatch):

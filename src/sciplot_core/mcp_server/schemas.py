@@ -16,6 +16,7 @@ def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, 
 
 def tool_definitions() -> list[Tool]:
     from sciplot_core.task_control import task_request_schema, task_response_schema
+    from sciplot_core.task_group_contract import group_request_schema, group_responses_schema
 
     string = {"type": "string", "minLength": 1}
     sha = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
@@ -32,7 +33,7 @@ def tool_definitions() -> list[Tool]:
             output_schema={"type": "object"},
             annotations=ToolAnnotations(
                 read_only_hint=read_only,
-                destructive_hint=name in {"task_start", "task_resume", "edit_apply", "export"},
+                destructive_hint=name in {"task_start", "task_resume", "group_start", "group_resume", "edit_apply", "export"},
                 idempotent_hint=read_only, open_world_hint=False,
             ),
         ))
@@ -45,14 +46,23 @@ def tool_definitions() -> list[Tool]:
     add("task_find", "Find creation receipts by exact original source path in the source-adjacent task history or an explicit tasks_root. Returns candidates and source currentness; inspect the selected task/project before continuing. Does not create or choose a project.",
         {"source": string, "tasks_root": string, "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
         ["source"], read_only=True)
-    add("task_resume", "Continue a saved task with a choice, bound preview response, or replacement operations. Revised previews require the current expected_operation_id; identical revision retries do not rerun. Existing user intent authorizes edits.",
+    add("task_resume", "Continue a saved task with a choice, bound preview response, or replacement operations. Use expected_operation_id for a ready preview; only blocked/previewing corrections use expected_preview_revision. Identical revision retries do not rerun. Existing user intent authorizes edits.",
         {"task": string, "response": task_response_schema()}, ["task", "response"])
+    add("group_start", "Run 1–32 independent experiment tasks from an explicit list. Optional shared sample_style_preset applies to each created figure through ordinary reviewed edits. One item needing judgment does not stop others. Returns a local overview and native PNG resources; no model calls.",
+        {"request": group_request_schema(), "group_dir": string}, ["request", "group_dir"])
+    add("group_inspect", "Refresh an experiment group's current evidence and cached native previews. Does not advance tasks. Generated overview is read-only; pending candidates are marked separately from saved figures.",
+        {"group": string}, ["group"])
+    add("group_resume", "Continue pending/interrupted experiment tasks or supply per-item responses bound to each current task_dir. Preview responses require expected_operation_id. Never accepts previews or answers scientific questions automatically.",
+        {"group": string, "responses": group_responses_schema()}, ["group"])
     add("project_inspect", "Query saved figures, current hashes and independent source/QA/delivery evidence. Pass figure_id for objects and exact editable field values; status ok is not readiness certification.",
         {**figure, "object_path": string, "full": {"type": "boolean", "default": False}}, ["project"], read_only=True)
     add("preview", "Render the current saved figure without changing it. Returns a PNG resource URI; use read_result to inspect the image on demand.",
         {**figure, **output}, ["project"])
     add("annotation_inspect", "Read current annotation IDs, coordinate units and graph bounds before creating or replacing annotations.",
         figure, ["project"], read_only=True)
+    add("sample_style_capture", "Save reusable ordinary sample colors and line widths from the current audited figure. Returns a preset path and fingerprint for apply_sample_style_preset in edit_preview or task edit. No data, axes or annotations are copied.",
+        {**figure, **output, "samples": {"type": "array", "minItems": 1, "maxItems": 100,
+                                        "uniqueItems": True, "items": string}}, ["project"])
     add("edit_preview", "Preview a batch of advertised native style/annotation operations against the saved SHA. Read the returned image and scientific audit before apply; no raw data is changed.",
         {**revision, **output, "operations": annotation_operation_capabilities()["operations_schema"]},
         ["project", "expected_document_sha256", "operations"])

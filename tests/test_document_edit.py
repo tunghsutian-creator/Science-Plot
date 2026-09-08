@@ -154,6 +154,46 @@ def test_changed_recovery_archive_cannot_report_already_applied(edit_case):
     assert file_sha256(document) == file_sha256(candidate)
 
 
+def test_preview_location_validation_does_not_hash_project_or_delivery(edit_case, tmp_path, monkeypatch):
+    from sciplot_core.studio_core import document_edit_state as state
+    project, _, _, _ = edit_case
+    def unnecessary(*args):
+        pytest.fail("Path validation must not read and hash the project/export inventory")
+    monkeypatch.setattr(state, "project_inventory", unnecessary)
+    monkeypatch.setattr(state, "file_inventory", unnecessary)
+    assert new_preview_directory(project, tmp_path / "preview").is_dir()
+
+
+@pytest.mark.parametrize("key", ["input", "input_path", "data_dir"])
+def test_preview_location_resolves_relative_source_against_project(edit_case, tmp_path, key):
+    project, _, _, _ = edit_case
+    source = tmp_path / "external_source"
+    source.mkdir()
+    (project / "plot_request.json").write_text(json.dumps({key: "../external_source"}))
+    with pytest.raises(ValueError, match="new preview directory"):
+        new_preview_directory(project, source / "preview")
+    assert not (source / "preview").exists()
+
+
+@pytest.mark.parametrize("protected", ["project", "delivery", "source", "symlink"])
+def test_preview_location_retains_path_boundaries_without_inventory(edit_case, tmp_path, protected):
+    project, _, _, _ = edit_case
+    delivery, source = tmp_path / "visible", tmp_path / "original"
+    delivery.mkdir()
+    source.mkdir()
+    (project / "plot_request.json").write_text(json.dumps({
+        "input": str(source), "delivery_output": str(delivery)}))
+    if protected == "symlink":
+        alias = tmp_path / "alias"
+        alias.symlink_to(tmp_path / "outside", target_is_directory=True)
+        target = alias / "preview"
+    else:
+        target = {"project": project, "delivery": delivery, "source": source}[protected] / "preview"
+    with pytest.raises(ValueError):
+        new_preview_directory(project, target)
+    assert not target.exists()
+
+
 @pytest.mark.comprehensive
 def test_process_exit_after_replace_reconciles_durable_pending_outcome(edit_case):
     project, document, candidate, review = edit_case

@@ -27,6 +27,11 @@ def dispatch_project_control(args: Any) -> int:
         return dispatch_project_create(args)
     if action == "capabilities":
         payload = project_control_capabilities()
+    elif action == "style-capture":
+        from sciplot_core.studio_core.sample_style_presets import capture_sample_style_preset
+
+        payload = capture_sample_style_preset(args.target, figure_id=args.figure,
+                                              samples=args.sample, output_dir=args.out)
     elif action == "annotations":
         from sciplot_core.studio_core.annotation_operations import inspect_annotation_state
 

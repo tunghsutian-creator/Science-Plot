@@ -48,6 +48,15 @@ new evidence location outside raw data, projects and visible delivery packages.
 Reusing a task directory with the same request returns its receipt, never a
 second creation; a different request is rejected.
 
+`task inspect` queries current saved project evidence once and returns it under
+`current_project`, including `primary_figure_id`, `figures[].document_sha256`
+and `figures[].sample_styles`. Use these current identities to continue a
+supported sample-style or annotation task without another project query.
+The task's `result` stays historical; a failed current query exposes no edit
+targets. This is saved-file state, not live GUI state or readiness certification.
+Explicit object/setting edits still require `project inspect --figure FIGURE_ID`
+for their current native settings and allowed fields.
+
 When a new session knows only the original source path, recover a creation task
 and its recorded project with:
 
@@ -102,12 +111,36 @@ Original requests and previous candidate files remain available. The summary's
 submission returns its current receipt without rendering again. A failed build
 keeps the replacement intent and resumes with `{"retry":true}`.
 
+If the task is `blocked` in `previewing` and the operation itself needs correction,
+replace it in place using the returned `preview_revision`:
+
+```json
+{"expected_preview_revision":2,"revise_operations":[{"op":"set_sample_style","samples":["E0"],"style":{"width":"2pt"}}]}
+```
+
+Use the actual current integer, not the example value. This binding is only for
+failed previews, which may have no image or operation ID. A `needs_review` task
+still requires `expected_operation_id`; the two bindings cannot be combined.
+The corrected batch uses the original saved baseline and keeps the original
+request, failed attempts and failure reasons in its receipt. Repeated identical
+corrections are idempotent. Read the new image and bind acceptance to its new
+operation ID. Applying/exporting, accepted or completed work cannot be replaced
+through this recovery path; a changed saved baseline still requires a new task.
+
 Accept or reject the new preview with
 `{"accept_preview":true,"expected_operation_id":"CURRENT_PREVIEW_OPERATION_ID"}`.
 Always bind responses this way; unbound responses remain compatible only for
 an initial preview. Stale responses leave the current task unchanged. A task
 already applying, exporting or complete requires a new edit task for new intent;
 an uncertain apply must first be recovered, not replaced.
+
+Malformed operations (missing/unknown fields, wrong JSON types or nonfinite
+values) are rejected before task creation or replacement of a pending preview.
+The error identifies the operation/field; correct that request and keep using
+the existing preview ID. The CLI and MCP enforce the shared public operation
+schema. Passing this shape check does not establish valid units, sample mapping,
+native settings or source evidence: those checks still run against the project.
+Historical blocked tasks remain inspectable even if their old request is malformed.
 
 Pure style requests that already match after native normalization and science
 validation finish automatically with an `unchanged` edit outcome. They require
@@ -135,6 +168,8 @@ not aliases, fuzzy matches or native widget names. A batch can include:
 ```
 
 `style` supports `color` and `width`; mix several operations for different colors.
+Sample color also updates visible markers and uniquely bound generated sample
+direct labels. Free annotations keep their color; line width affects only curves.
 The local service resolves the unique curves and current setting values, then
 previews the expanded `set_style` operations in the existing native transaction.
 The inspected document and sample-mapping spec must still match. Unknown,
@@ -292,8 +327,8 @@ skill/scripts/sciplot project edit-preview PROJECT --figure FIGURE_ID \
 This stages native edits and a PNG, then audits the candidate's scientific
 contents against the current spec. It does not replace the saved document.
 Review the returned `actual_changes`, scientific audit and preview image.
-Current capability scope covers the advertised axis typography, ordinary curve
-color/line width, and legend typography/placement fields. It excludes data,
+Current capability scope covers the advertised axis typography, ordinary sample
+line/marker/direct-label color, line width, and legend typography/placement fields. It excludes data,
 expressions, scientific labels/units, axis scales/bounds, sample identity and
 semantic color encodings. An unadvertised field is unavailable, even if native
 Veusz has such a setting. Do not substitute text patches, arbitrary Python or
@@ -396,6 +431,107 @@ Require `studio_run.ready_to_use=true`, current QA, and the complete source-adja
 package. Inspect the final PDF/TIFF appearance as part of handoff. All registered
 figures are included by the managed export use case, even when only one figure
 was styled.
+
+## Experiment groups and collective previews
+
+Use an explicit list of 1–32 independent experiments. Every item has a unique
+`id`, a display `label` and an ordinary create/edit/export `request`. Grouping
+does not infer that similar filenames identify the same sample or experiment.
+Start from [the example manifest](experiment-group.json).
+Copy that manifest into a working directory beside your data, then replace its
+source/output paths with your confirmed input locations. Relative paths in the
+CLI manifest resolve beside that file; MCP paths resolve against its server's
+working directory, so prefer absolute paths over MCP.
+
+```bash
+skill/scripts/sciplot task group capabilities --json
+skill/scripts/sciplot task group start --request EXPERIMENTS_JSON --group-dir NEW_GROUP_DIRECTORY --json
+skill/scripts/sciplot task group inspect GROUP_DIRECTORY --json
+skill/scripts/sciplot task group resume GROUP_DIRECTORY --json
+```
+
+The group directory must be outside every input, project and delivery. Each item
+needs independent destinations; overlapping outputs and malformed requests are
+rejected before the group is created. Each child uses the existing task owner.
+An item with a question, failed task or pending preview leaves other items free
+to finish. Running tasks recover through their existing bounded retry logic;
+uncertain creation is never overwritten. Calling start again with the same
+manifest/directory returns the existing group, and completed tasks do not rerun.
+
+The returned `overview` opens a local read-only gallery with one card per figure.
+`previews` contains the exact native PNG paths, hashes and saved/candidate scope.
+MCP `sciplot_group_start`, `sciplot_group_inspect` and `sciplot_group_resume`
+return `preview_resources` indexed by item and figure. Read selected PNGs using
+`sciplot_read_result`. Unchanged saved figures reuse cached previews; changing a
+document or spec requires a new snapshot. The group reports current input and
+project evidence separately from historical completion. It does not certify
+aggregate readiness or imply that the gallery is a publication layout.
+
+Optionally include a top-level `sample_style_preset` object with the `preset`
+path and `expected_preset_sha256` from style capture. This applies to create
+requests only and requires exact preset coverage of each figure's ordinary
+samples. The runner creates reviewed per-figure edit tasks with `export:false`
+and exports each changed project once after its style tasks finish. A project
+with several figures progresses sequentially under existing revision guards;
+it may need more than one round of preview responses. An already matching
+style finishes without acceptance or another export.
+
+Supply answers as a JSON array with each current item and child task bound:
+
+```json
+[{"item_id":"ftir","task_dir":"CURRENT_CHILD_TASK_DIRECTORY","response":{"accept_preview":true,"expected_operation_id":"CURRENT_OPERATION_ID"}}]
+```
+
+Pass it with `task group resume GROUP_DIRECTORY --responses RESPONSES_JSON
+--json` or MCP `group_resume.responses`. Ordinary rule choices, retries and
+preview revisions use the same response field. All group preview acceptance
+or rejection responses require `expected_operation_id`. Inspect the actual
+images before accepting; existing user intent provides authorization. Old
+task-directory responses cannot advance a later figure. Resume without answers
+continues pending work and never chooses rules or accepts previews automatically.
+Individual child tasks can also be inspected through the existing task API.
+
+## Reuse sample styles across figures
+
+Capture the actual saved colors and line widths of ordinary curves:
+
+```bash
+skill/scripts/sciplot project style-capture PROJECT --figure FIGURE_ID --out NEW_PRESET_DIRECTORY --json
+```
+
+Optional repeated `--sample E0 --sample E2` captures a subset; the default captures
+all unambiguous ordinary samples. The result returns `preset`, `preset_sha256`,
+sample labels and captured values. MCP exposes `sciplot_sample_style_capture` with
+the same `project`, optional `figure_id`/`samples`, and `output_dir` arguments.
+Capture audits the saved source figure and does not edit or export it.
+
+Use the returned file and fingerprint in a target figure's task edit or
+`project operations-preview` batch:
+
+```json
+[{"op":"apply_sample_style_preset","preset":"/absolute/path/sample-styles.json","expected_preset_sha256":"PRESET_SHA256"}]
+```
+
+The target request still needs its current saved document hash. Matching uses
+exact sample names, so reversed series order or a different experiment family
+does not move the colors to other samples. The default requires preset coverage
+for every ordinary target sample. Add `"samples":["E0","E2"]` for an explicit
+subset; unselected curves retain their styles. Extra preset samples need not
+exist in the target. Missing/ambiguous labels, semantic color encodings and
+changed preset bytes are rejected. The ordinary 100-expanded-operation limit
+still applies. Line width counts as one operation per sample; sample color counts
+once for the line, twice more for visible markers, and once more for a bound direct
+label when present. The preview lists these individual changes.
+
+Presets contain only sample colors/line widths plus historical source metadata.
+Applying color keeps each target sample's line, visible markers and uniquely bound
+generated direct label consistent, including when the target uses a stacked curve.
+They do not copy plotting values, units, axes, annotations or layout, and applying
+a preset does not reopen its original project. Preview freezes the matched
+values into the existing signed native operations. Later changes to the preset
+cannot change an already reviewed application. Inspect the image/audit and use
+the usual task acceptance; `export:false` supports continued editing. An already
+matching audited style batch completes as unchanged.
 
 ## Resume in a new AI session
 

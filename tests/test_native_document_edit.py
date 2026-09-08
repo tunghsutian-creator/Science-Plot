@@ -105,6 +105,39 @@ def _worker(*args: str, failed: bool = False) -> dict:
 
 
 @pytest.mark.comprehensive
+def test_native_sample_style_keeps_point_line_markers_in_the_sample_color(tmp_path):
+    from sciplot_core.studio_core.document_edit_policy import filter_editable_fields, validate_edit_science_policy
+    from sciplot_core.studio_core.sample_style import expand_sample_styles
+
+    source = tmp_path / "values.csv"
+    source.write_text("Time,Force\ns,N\nA,A\n0,1\n1,3\n2,2\n")
+    raw = source.read_bytes()
+    rendered = render_to_dir(source, template="point_line", output_dir=tmp_path / "render",
+                             export_formats=("pdf",), options={"size": "60x55"})
+    document, spec_path = Path(rendered["veusz_documents"][0]), Path(rendered["veusz_specs"][0])
+    original = file_sha256(document)
+    spec = json.loads(spec_path.read_text())
+    state = _worker("inspect-document-state", str(document))
+    objects = filter_editable_fields(state["widgets"], spec_path)
+    operations = expand_sample_styles(spec, objects, [
+        {"op": "set_sample_style", "samples": ["A"], "style": {"color": "#A020F0"}}])
+    assert len(operations) == 3
+    changes = [{key: value for key, value in operation.items() if key != "op"} for operation in operations]
+    validate_edit_science_policy(changes, spec_path)
+    request = tmp_path / "changes.json"
+    request.write_text(json.dumps(changes))
+    candidate = tmp_path / "candidate.vsz"
+    result = _worker("edit-document", str(document), "--changes", str(request),
+        "--output-document", str(candidate), "--preview-png", str(tmp_path / "candidate.png"),
+        "--audit-spec", str(spec_path))
+    assert result["document_audit"]["status"] == "passed"
+    reopened = _worker("inspect-document-state", str(candidate))["widgets"]["/page1/graph1/series_1"]
+    assert all(reopened["settings"][key] == "#A020F0" for key in (
+        "PlotLine/color", "MarkerFill/color", "MarkerLine/color"))
+    assert file_sha256(document) == original and source.read_bytes() == raw
+
+
+@pytest.mark.comprehensive
 def test_native_candidate_preview_reopen_audit_and_rejected_batch(tmp_path: Path) -> None:
     source = tmp_path / "values.csv"
     source.write_text("Time,Force\ns,N\nA,A\n0,1\n1,3\n2,2\n")

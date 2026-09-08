@@ -77,6 +77,9 @@ the explicit saved-figure/object references in the external API.
    to recover creation receipts from its adjacent history, or provide
    `--tasks-root` for a custom history directory. Inspect the chosen task/project;
    incomplete searches and multiple matches do not establish a unique project.
+   `task inspect` includes current figure IDs, saved document hashes and sample
+   labels under `current_project`; reuse those for the next supported task.
+   Query native object settings only when the requested operation needs them.
    The MCP stdio adapter exposes the same services and schemas; read full JSON
    and PNG resources only as needed. See the operation guide for exact fields.
 
@@ -88,6 +91,26 @@ the explicit saved-figure/object references in the external API.
    selection. The local service binds current settings and preserves the same
    native preview, science audit and revision guards.
 
+   For consistent sample styling across experiments, capture a saved ordinary
+   curve figure with `project style-capture` or MCP `sample_style_capture`.
+   Use the returned preset path/hash in `apply_sample_style_preset`; default
+   matching requires coverage of all ordinary target samples, or pass an exact
+   subset. Names are matched explicitly, never by curve position. Read the new
+   preview before applying; no axes, measurements or annotations are copied.
+   Sample color includes visible markers and bound generated sample labels;
+   free annotations keep their styles.
+
+   For several experiments, use `task group start --request EXPERIMENTS_JSON
+   --group-dir NEW_DIRECTORY --json` and its MCP group tools. The explicit list
+   contains ordinary task requests; do not scan a mixed folder and silently pick
+   datasets. The optional shared sample preset applies to newly created figures.
+   Inspect the local `overview` and returned PNGs, then pass item/task-bound
+   responses through `task group resume`. One pending item does not stop the
+   others. Omit responses to continue interrupted work; this never accepts
+   previews or chooses scientific answers. Same-project figure edits remain
+   sequential under the existing document transaction. Group completion is task
+   progress; inspect each project's current source/QA/delivery for handoff.
+
    Refine a pending preview with `revise_operations` and its current
    `expected_operation_id`; the replacement is the complete batch against the
    same saved baseline. Accept or reject revised previews with that current ID
@@ -95,6 +118,12 @@ the explicit saved-figure/object references in the external API.
    idempotent. Native-validated pure style requests already satisfied return
    `unchanged` without another review or document write; requested export still
    runs. See the operation guide for recovery and completion scope.
+   A malformed operation is rejected before a new task or replacement is saved;
+   correct the reported field while retaining the existing pending preview ID.
+   For a `blocked/previewing` failure that needs corrected operations, use its
+   current `preview_revision` as `expected_preview_revision` with the complete
+   replacement. Read and accept the newly generated preview by operation ID.
+   This correction path never replaces accepted or uncertain applied work.
 
    Public annotation operations now include reference lines, text/arrows and
    source-bound observed peak labels, plus update/removal. Query annotations
