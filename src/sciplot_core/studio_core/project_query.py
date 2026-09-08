@@ -10,6 +10,7 @@ from typing import Any
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.studio_core.document_edit_policy import filter_editable_fields
+from sciplot_core.studio_core.sample_style import sample_style_targets
 from sciplot_core.studio_core.project_query_evidence import (
     publication_indicators,
     source_indicators,
@@ -77,6 +78,8 @@ def inspect_project(
     request_sha = existing_file_sha256(request_path)
     registry_sha = existing_file_sha256(root / "studio" / "figure_set.json")
     request, primary, figures = project_snapshot(root)
+    for figure in figures:
+        figure["sample_styles"] = sample_style_targets(json.loads(Path(figure["spec"]).read_text()))
     source = source_indicators(root, request, figures)
     payload: dict[str, Any] = {
         "kind": "sciplot_project_inspection",

@@ -15,8 +15,8 @@ TASK_CONTROL_OWNERS = (
             "src/sciplot_core/studio_core/project_receipt.py",
             "src/sciplot_core/studio_core/project_capabilities.py",
         }),
-        owned_test_paths=frozenset({"tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py"}),
-        pytest_targets=("tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py",
+        owned_test_paths=frozenset({"tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py", "tests/test_task_preview_revision.py", "tests/test_task_discovery.py"}),
+        pytest_targets=("tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py", "tests/test_task_preview_revision.py", "tests/test_task_discovery.py",
                         "tests/test_project_create_cli.py", *ARCHITECTURE_CORE_TARGETS),
         mypy_required=True, handoff_gates=("doctor",),
         final_milestone_gates=("smoke",), release_gates=("full_pytest",),
@@ -27,6 +27,7 @@ TASK_CONTROL_OWNERS = (
                        "src/sciplot_core/studio_core/peak_"),
         exact_paths=frozenset({
             "src/sciplot_core/studio_core/document_edit_companion.py",
+            "src/sciplot_core/studio_core/sample_style.py",
             "src/sciplot_core/veusz_worker/annotations.py",
             "src/sciplot_core/veusz_worker/spec_audit/labels.py",
             "src/sciplot_core/veusz_worker/spec_audit/overlays.py",
@@ -40,6 +41,7 @@ TASK_CONTROL_OWNERS = (
     ),
     ChangedOwner(
         owner_id="mcp_control_adapter", path_prefixes=("src/sciplot_core/mcp_server/",),
+        exact_paths=frozenset({"src/sciplot_core/studio_core/control_results.py"}),
         owned_test_paths=frozenset({"tests/test_mcp_server.py", "tests/test_mcp_stdio.py"}),
         pytest_targets=("tests/test_mcp_server.py", "tests/test_mcp_stdio.py", *ARCHITECTURE_CORE_TARGETS),
         mypy_required=True, handoff_gates=("doctor",),

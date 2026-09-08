@@ -42,7 +42,10 @@ def tool_definitions() -> list[Tool]:
         {"request": task_request_schema(), "task_dir": string}, ["request"])
     add("task_inspect", "Resume context from a saved task. This does not rerun or certify its historical result.",
         {"task": string}, ["task"], read_only=True)
-    add("task_resume", "Continue a saved task with the missing choice or reviewed preview response. Existing user intent authorizes edits; clarify only unresolved scope or meaning.",
+    add("task_find", "Find creation receipts by exact original source path in the source-adjacent task history or an explicit tasks_root. Returns candidates and source currentness; inspect the selected task/project before continuing. Does not create or choose a project.",
+        {"source": string, "tasks_root": string, "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
+        ["source"], read_only=True)
+    add("task_resume", "Continue a saved task with a choice, bound preview response, or replacement operations. Revised previews require the current expected_operation_id; identical revision retries do not rerun. Existing user intent authorizes edits.",
         {"task": string, "response": task_response_schema()}, ["task", "response"])
     add("project_inspect", "Query saved figures, current hashes and independent source/QA/delivery evidence. Pass figure_id for objects and exact editable field values; status ok is not readiness certification.",
         {**figure, "object_path": string, "full": {"type": "boolean", "default": False}}, ["project"], read_only=True)

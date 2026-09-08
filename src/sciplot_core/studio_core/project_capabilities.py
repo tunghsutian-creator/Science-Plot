@@ -26,6 +26,7 @@ def project_control_capabilities() -> dict[str, Any]:
             "peaks": "project peaks PROJECT --figure FIGURE_ID --object WIDGET_PATH --expected-document SHA256 --window WINDOW_JSON --polarity maximum|minimum --json",
             "task_start": "task start --request REQUEST_JSON [--task-dir NEW_DIRECTORY] --json",
             "task_inspect": "task inspect TASK_DIRECTORY --json",
+            "task_find": "task find SOURCE [--tasks-root HISTORY_DIRECTORY] [--limit 20] --json",
             "task_resume": "task resume TASK_DIRECTORY --response RESPONSE_JSON --json",
             "task_schema": "task capabilities --json",
             "mcp": "mcp",
@@ -39,4 +40,3 @@ def project_control_capabilities() -> dict[str, Any]:
         "annotation_operations": annotation_operation_capabilities(),
         "task_policy": "Local create/edit/export orchestration, durable tasks, reviewed edits and fresh source validation; no model calls by SciPlot.",
     }
-

@@ -36,7 +36,7 @@ def test_official_stdio_client_discovery_and_error_recovery():
     async def scenario():
         async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
             tools = await client.list_tools()
-            assert len(tools.tools) == 13
+            assert len(tools.tools) == 14
             caps = await _call(client, "sciplot_capabilities", {})
             assert caps["transport"] == "mcp_stdio"
             assert caps["model_configuration_required"] is False
@@ -96,7 +96,8 @@ def test_stdio_native_preview_style_apply_export_and_new_connection(tmp_path):
 
 
 @pytest.mark.comprehensive
-def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tmp_path):
+@pytest.mark.parametrize("defer_export", [False, True])
+def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tmp_path, defer_export):
     source = tmp_path / "UVvis.csv"
     source.write_text("Wavelength,Absorbance\nnm,a.u.\nA,A\n400,1\n450,3\n500,2\n", encoding="utf-8")
     raw = source.read_bytes()
@@ -112,24 +113,71 @@ def test_stdio_local_task_creates_then_reviews_applies_and_exports_annotation(tm
             assert created["external_model_tokens"] is None
             assert created["result"]["studio_run"]["ready_to_use"] is True
             project = created["project"]
+            found = await _call(client, "sciplot_task_find", {"source": str(source), "tasks_root": str(tmp_path)})
+            assert found["match_count"] == 1 and found["scan_complete"]
+            assert found["matches"][0]["project"] == project and found["matches"][0]["source_current"] is True
             inspected = await _call(client, "sciplot_project_inspect", {"project": project})
             figure = inspected["figures"][0]
             edited = await _call(client, "sciplot_task_start", {
                 "request": {"version": 1, "action": "edit", "project": project,
                     "figure_id": figure["figure_id"], "expected_document_sha256": figure["document_sha256"],
-                    "operations": [{"op": "add_reference_line", "id": "reference425", "parent_path": "/page1/graph1", "axis": "x", "value": 425, "unit": "nm"}]},
+                    "export": not defer_export,
+                    "operations": [{"op": "add_reference_line", "id": "reference425", "parent_path": "/page1/graph1", "axis": "x", "value": 425, "unit": "nm"},
+                                   {"op": "set_sample_style", "samples": ["A"], "style": {"color": "#3568C0"}}]},
                 "task_dir": str(tmp_path / "edit_task"),
             })
             assert edited["status"] == "needs_review"
             png = await client.call_tool("sciplot_read_result", {"uri": edited["preview_resource"]})
             assert not png.is_error and png.content[1].type == "image"
-            completed = await _call(client, "sciplot_task_resume", {"task": edited["task_dir"], "response": {"accept_preview": True}})
+            replacement = {"expected_operation_id": edited["operation_id"], "revise_operations": [
+                {"op": "add_reference_line", "id": "reference450", "parent_path": "/page1/graph1", "axis": "x", "value": 450, "unit": "nm"},
+                {"op": "set_sample_style", "samples": ["A"], "style": {"color": "#2A9D8F"}},
+            ]}
+            revised = await _call(client, "sciplot_task_resume", {"task": edited["task_dir"], "response": replacement})
+            assert revised["status"] == "needs_review" and revised["preview_revision"] == 2
+            assert file_sha256(Path(figure["document"])) == figure["document_sha256"]
+            assert revised["preview_resource"] != edited["preview_resource"]
+            second_png = await client.call_tool("sciplot_read_result", {"uri": revised["preview_resource"]})
+            assert second_png.content[1].type == "image"
+            task_record = Path(edited["task_dir"]) / "task.json"
+            task_bytes = task_record.read_bytes()
+            stale = await client.call_tool("sciplot_task_resume", {"task": edited["task_dir"], "response": {
+                "accept_preview": True, "expected_operation_id": edited["operation_id"],
+            }})
+            assert stale.is_error and task_record.read_bytes() == task_bytes
+            repeated = await _call(client, "sciplot_task_resume", {"task": edited["task_dir"], "response": replacement})
+            assert repeated["operation_id"] == revised["operation_id"] and task_record.read_bytes() == task_bytes
+            completed = await _call(client, "sciplot_task_resume", {"task": edited["task_dir"], "response": {
+                "accept_preview": True, "expected_operation_id": revised["operation_id"],
+            }})
             assert completed["status"] == "complete"
-            assert completed["result"]["studio_run"]["ready_to_use"] is True
+            if defer_export:
+                assert completed["result"]["status"] == "saved"
+                assert completed["result"]["export_performed"] is False
+                pending = await _call(client, "sciplot_project_inspect", {"project": project})
+                assert pending["delivery"]["current"] is False
+                exported = await _call(client, "sciplot_export", {"project": project})
+                assert exported["studio_run"]["ready_to_use"] is True
+            else:
+                assert completed["result"]["studio_run"]["ready_to_use"] is True
             current = await _call(client, "sciplot_task_inspect", {"task": edited["task_dir"]})
             assert current["current_project"]["delivery"]["current"] is True
             annotation = await _call(client, "sciplot_annotation_inspect", {"project": project, "figure_id": figure["figure_id"]})
-            assert annotation["annotations"][0]["id"] == "reference425"
+            assert [item["id"] for item in annotation["annotations"]] == ["reference450"]
+            stable = Path(figure["document"]).read_bytes()
+            unchanged = await _call(client, "sciplot_task_start", {
+                "request": {"version": 1, "action": "edit", "project": project, "figure_id": figure["figure_id"],
+                    "expected_document_sha256": file_sha256(Path(figure["document"])), "export": False,
+                    "operations": [{"op": "set_sample_style", "samples": ["A"], "style": {"color": "#2A9D8F"}}]},
+                "task_dir": str(tmp_path / "unchanged_task"),
+            })
+            assert unchanged["status"] == "complete" and unchanged["result"]["status"] == "unchanged"
+            assert "preview_resource" not in unchanged
+            assert Path(figure["document"]).read_bytes() == stable
+        async with Client(_parameters(), read_timeout_seconds=180) as client:
+            found = await _call(client, "sciplot_task_find", {"source": str(source), "tasks_root": str(tmp_path)})
+            recovered = await _call(client, "sciplot_project_inspect", {"project": found["matches"][0]["project"]})
+            assert recovered["delivery"]["current"] is True
 
     anyio.run(scenario)
     assert source.read_bytes() == raw

@@ -73,8 +73,11 @@ performance comparisons use **120 × 55 mm**. Click any image to view it at full
 
 - Plot mechanics, rheology, thermal analysis, spectra, scattering, and material comparisons.
 - Preview changes to colors, fonts, legends, and annotations before applying them.
+- Change ordinary curves together by their exact sample labels, and save successive edits before exporting.
+- Refine a pending preview in the same task; styles that already match need no extra confirmation or save.
 - Preserve sample identities, units, and data sources. Missing reference values stay missing.
 - Reopen saved projects and continue editing with AI or directly in Veusz.
+- Find previous task-created projects from their original data path when starting a new AI session.
 
 SciPlot runs plotting and exports locally. It does not require an internal model or API key;
 your external AI assistant uses its own model connection.
@@ -111,6 +114,11 @@ Then describe the figure you need:
 Continue with a simple follow-up:
 
 > Reopen that project, change the second curve to blue, and show me a preview.
+
+For a few rounds of refinement:
+
+> Make the E0 and E3 curves thicker. Save the change so we can keep editing;
+> export PDF and TIFF when I ask for the final figures.
 
 The [AI connection guide](skill/references/external-control.md) covers CLI and MCP setup.
 If data or units are ambiguous, SciPlot reports what needs clarification before plotting.

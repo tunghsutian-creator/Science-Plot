@@ -78,9 +78,13 @@ def _candidate(
             "edit-annotations", document, spec, "--operations", operation_path,
             "--figure-id", figure_id, "--output-document", output / "document.vsz",
             "--output-spec", output / "spec.json", "--preview-png", output / "candidate.png",
+            "--audit-candidate",
         )
+        if not isinstance(result.get("document_audit"), dict):
+            raise ValueError("Native candidate editing did not return its required scientific audit.")
         result["scientific_audit"] = audit_edited_document(
-            Path(result["candidate"]["path"]), Path(result["candidate_spec"]["path"]))
+            Path(result["candidate"]["path"]), Path(result["candidate_spec"]["path"]),
+            native_audit=result["document_audit"])
         return result
     validate_edit_science_policy(changes, spec)
     change_path = output / "changes.json"
@@ -96,9 +100,12 @@ def _candidate(
         output / "document.vsz",
         "--preview-png",
         output / "candidate.png",
+        "--audit-spec", spec,
     )
+    if not isinstance(result.get("document_audit"), dict):
+        raise ValueError("Native candidate editing did not return its required scientific audit.")
     result["scientific_audit"] = audit_edited_document(
-        Path(result["candidate"]["path"]), spec
+        Path(result["candidate"]["path"]), spec, native_audit=result["document_audit"],
     )
     return result
 
@@ -111,6 +118,7 @@ def preview_document_edit(
     figure_id: str | None = None,
     expected_document_sha256: str,
     operations: list[dict[str, Any]] | None = None,
+    expected_spec_sha256: str | None = None,
 ) -> dict[str, Any]:
     project = resolve_project_path(project)
     selected = resolve_project_figure(project, figure_id)
@@ -120,6 +128,10 @@ def preview_document_edit(
             "The document revision is stale. Inspect its current objects first."
         )
     state = edit_state(project)
+    if expected_spec_sha256 is not None and state["project_files"].get(
+        str(spec.relative_to(project))
+    ) != expected_spec_sha256:
+        raise ValueError("The sample mapping changed during style resolution; inspect again.")
     if (
         state["project_files"].get(str(document.relative_to(project)))
         != expected_document_sha256

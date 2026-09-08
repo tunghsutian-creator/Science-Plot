@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+from contextlib import redirect_stdout
+from io import StringIO
 import subprocess
+from time import perf_counter
 from pathlib import Path
 
 import pytest
@@ -26,7 +29,7 @@ def _cli(*arguments, succeeds=True):
 
 
 @pytest.mark.comprehensive
-def test_external_native_edit_preview_apply_export_and_cold_resume(tmp_path):
+def test_external_native_edit_preview_apply_export_and_cold_resume(tmp_path, monkeypatch):
     source = tmp_path / "UVvis.csv"
     source.write_text(
         "Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\n"
@@ -50,7 +53,7 @@ def test_external_native_edit_preview_apply_export_and_cold_resume(tmp_path):
     old_document = document.read_bytes()
     summary = _cli("project", "inspect", visible)
     figure = summary["primary_figure_id"]
-    detail = _cli("project", "inspect", project, "--figure", figure)
+    detail = _cli("project", "inspect", project, "--figure", figure, "--full")
     objects = detail["selected_figure"]["objects"]
     operations = []
     for object_path, suffix, new in (("/page1/graph1/x", "/Label/size", "9pt"),):
@@ -104,6 +107,7 @@ def test_external_native_edit_preview_apply_export_and_cold_resume(tmp_path):
         tmp_path / "edit",
         "--expected-document",
         file_sha256(document),
+        "--full",
     )
     assert review["scientific_audit"]["status"] == "passed"
     assert current["preview"]["sha256"] != review["preview"]["sha256"]
@@ -140,7 +144,26 @@ def test_external_native_edit_preview_apply_export_and_cold_resume(tmp_path):
     finally:
         lease.close()
     assert edit_state(project) == before
-    applied = _cli("project", "edit-apply", project, "--preview", review["review_path"])
+    # Exercise the same public CLI entry in this process so the native launches
+    # are observable; all other CLI calls still start a fresh process.
+    from sciplot_core.cli import main
+    native_commands = []
+    original_run = subprocess.run
+    def observed_run(command, *args, **kwargs):
+        if "sciplot_core.veusz_worker" in command:
+            native_commands.append(command[3])
+        return original_run(command, *args, **kwargs)
+    output = StringIO()
+    started = perf_counter()
+    with monkeypatch.context() as patch, redirect_stdout(output):
+        patch.setattr(subprocess, "run", observed_run)
+        assert main(["project", "edit-apply", str(project), "--preview", review["review_path"], "--json"]) == 0
+    elapsed = perf_counter() - started
+    applied = json.loads(output.getvalue())
+    assert native_commands == ["edit-document"]
+    (tmp_path / "apply_measurement.json").write_text(json.dumps({
+        "worker_starts": len(native_commands), "commands": native_commands, "elapsed_seconds": elapsed,
+    }))
     assert applied["status"] == "applied"
     assert applied["export_required"] is True and applied["ready_to_use"] is False
     assert Path(applied["archive"]).read_bytes() == old_document
@@ -171,7 +194,7 @@ def test_external_native_edit_preview_apply_export_and_cold_resume(tmp_path):
     exported = _cli("studio", project, "--export", "pdf,tiff_300")
     assert exported["studio_run"]["ready_to_use"] is True
     assert file_sha256(document) == first_hash
-    resumed = _cli("project", "inspect", visible, "--figure", figure)
+    resumed = _cli("project", "inspect", visible, "--figure", figure, "--full")
     assert resumed["qa"]["current"] is True and resumed["delivery"]["current"] is True
     assert (
         resumed["selected_figure"]["objects"]["/page1/graph1/x"]["settings"][

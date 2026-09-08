@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from sciplot_core.studio_core.document_edit_policy import SAMPLE_STYLE_FIELDS
 
 class AnnotationOperationError(ValueError):
     def __init__(self, reason_code: str, message: str, *, field: str = "") -> None:
@@ -66,6 +67,13 @@ def annotation_operation_capabilities() -> dict[str, Any]:
     add("update_annotation", {"id": identifier, "expected_annotation": record_schema,
                                "replacement": {"oneOf": operations[1:4]}},
         ["id", "expected_annotation", "replacement"])
+    add("set_sample_style", {
+        "samples": {"type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": True,
+                    "items": {"type": "string", "minLength": 1},
+                    "description": "Exact unique labels from the selected figure's sample_styles inventory."},
+        "style": {**object_schema({name: string for name in SAMPLE_STYLE_FIELDS}, []),
+                  "minProperties": 1},
+    }, ["samples", "style"])
     return {
         "kind": "sciplot_annotation_operations", "version": 1,
         "operations_schema": {"type": "array", "minItems": 1, "maxItems": 100,

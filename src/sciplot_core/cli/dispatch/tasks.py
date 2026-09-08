@@ -8,6 +8,7 @@ from sciplot_core.cli.value_io import _print_json
 from sciplot_core.task_control import (
     inspect_task, resume_task, start_task, task_request_schema, task_response_schema,
 )
+from sciplot_core.task_discovery import find_tasks
 
 
 def _object(path: Path) -> dict[str, Any]:
@@ -24,6 +25,8 @@ def dispatch_task(args: Any) -> int:
                   "request_schema": task_request_schema(),
                   "response_schema": task_response_schema(),
                   "model_configuration_required": False}
+    elif action == "find":
+        result = find_tasks(args.source, tasks_root=args.tasks_root, limit=args.limit)
     elif action == "start":
         result = start_task(_object(args.request), task_dir=args.task_dir)
     elif action == "inspect":

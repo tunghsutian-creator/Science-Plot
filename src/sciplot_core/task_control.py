@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from subprocess import TimeoutExpired
 from typing import Any
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
@@ -17,6 +18,7 @@ from sciplot_core.task_contract import (
 from sciplot_core.task_execution import (
     record_failure, run_apply_export, run_creation, run_edit_preview, run_export,
 )
+from sciplot_core.task_editing import begin_preview_revision, validate_preview_response
 from sciplot_core.task_storage import (
     load_task, save_task, task_location, task_path, task_summary,
 )
@@ -39,6 +41,7 @@ def start_task(
         if key in request:
             request[key] = str(canonical_path(Path(request[key])))
     root = task_location(request, task_dir)
+    root.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with external_project_session(root):
         if root.exists():
             state = load_task(root)
@@ -60,7 +63,7 @@ def start_task(
                 run_edit_preview(root, state)
             else:
                 run_export(root, state)
-        except (ValueError, OSError, RuntimeError) as exc:
+        except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
             record_failure(root, state, exc)
         return task_summary(state)
 
@@ -75,12 +78,16 @@ def inspect_task(task: Path) -> dict[str, Any]:
                 key: current[key] for key in ("project", "source", "qa", "delivery")
                 if key in current
             }
-        except (ValueError, OSError, RuntimeError) as exc:
+        except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
             summary["current_project"] = {"status": "unknown", "message": str(exc)}
     return summary
 
 
 def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
+    if "revise_operations" in response:
+        if begin_preview_revision(state, response):
+            run_edit_preview(root, state)
+        return
     if state["status"] in {"complete", "cancelled"}:
         return
     if state["status"] == "needs_input":
@@ -96,8 +103,7 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
         state["selection"] = dict(response)
         run_creation(root, state)
     elif state["status"] == "needs_review":
-        if set(response) != {"accept_preview"} or type(response["accept_preview"]) is not bool:
-            raise TaskControlError("invalid_task_response", "请返回是否采纳当前预览。")
+        validate_preview_response(state, response)
         if not response["accept_preview"]:
             state.update({"status": "cancelled", "phase": "finished"})
             save_task(root, state)
@@ -141,10 +147,10 @@ def resume_task(task: Path, response: dict[str, Any]) -> dict[str, Any]:
         try:
             _resume(root, state, response)
         except TaskControlError as exc:
-            if exc.reason_code == "invalid_task_response":
+            if exc.reason_code in {"invalid_task_response", "stale_task_preview", "task_not_revisable"}:
                 raise
             record_failure(root, state, exc)
-        except (ValueError, OSError, RuntimeError) as exc:
+        except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
             record_failure(root, state, exc)
         return task_summary(state)
 

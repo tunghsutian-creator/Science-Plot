@@ -77,6 +77,24 @@ services = StudioProjectServices(
 )
 configure_studio_project_services(services)
 bridge = attach_studio_project(window, target, project_dir=project, request_path=project / 'plot_request.json')
+window.resize(1200, 820)
+for _ in range(12):
+    app.processEvents()
+plot_geometry = window.plot.geometry().getRect()
+window_size = window.size()
+assert isinstance(bridge.dock.widget(), QtWidgets.QScrollArea)
+for _ in range(2):
+    bridge.dock.toggleViewAction().trigger()
+    for _ in range(12):
+        app.processEvents()
+    assert bridge.dock.isVisible()
+    assert window.size() == window_size
+    bridge.dock.toggleViewAction().trigger()
+    for _ in range(12):
+        app.processEvents()
+    assert not bridge.dock.isVisible()
+    assert window.size() == window_size
+    assert window.plot.geometry().getRect() == plot_geometry
 bridge.dock.show()
 assert not bridge.update_source_button.isEnabled()
 services = replace(services, preview_delivery_recovery=preview, apply_delivery_recovery=apply, preview_source_update=preview, apply_source_update=apply)

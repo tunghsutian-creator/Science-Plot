@@ -56,6 +56,16 @@ def test_unknown_experiment_pauses_and_resumes_only_with_current_source(tmp_path
     assert len(calls) == 1
 
 
+def test_default_task_directory_creates_its_history_parent_before_acquiring_lease(tmp_path, monkeypatch):
+    path = source(tmp_path)
+    monkeypatch.setattr(execution, "create_project", lambda *a, **k: receipt(tmp_path / "managed"))
+    assert not (tmp_path / ".sciplot").exists()
+    result = control.start_task({"version": 1, "action": "create", "source": str(path)})
+    root = Path(result["task_dir"])
+    assert result["status"] == "complete" and (root / "task.json").is_file()
+    assert root.parent == tmp_path / ".sciplot" / "tasks"
+
+
 def test_source_change_while_question_pending_never_executes(tmp_path, monkeypatch):
     path = source(tmp_path)
     monkeypatch.setattr(task_planning, "inspect_payload", lambda _: {})
@@ -110,7 +120,7 @@ def test_task_record_tampering_is_rejected(tmp_path, monkeypatch):
         control.inspect_task(task)
 
 
-def _edit_task(tmp_path, monkeypatch):
+def _edit_task(tmp_path, monkeypatch, *, export=True):
     from sciplot_core.studio_core import annotation_operations
     project = tmp_path / "project"
     project.mkdir()
@@ -118,13 +128,13 @@ def _edit_task(tmp_path, monkeypatch):
     monkeypatch.setattr(control, "resolve_project_path", lambda _: project)
     from sciplot_core import task_storage
     monkeypatch.setattr(task_storage, "resolve_project_path", lambda _: project)
-    review = {"project": str(project), "operation_id": "a" * 64,
+    review = {"project": str(project), "operation_id": "a" * 64, "figure_id": "figure1",
               "preview": {"path": "/candidate.png"}, "scientific_audit": {"status": "passed"}}
     monkeypatch.setattr(annotation_operations, "preview_document_operations", lambda *a, **k: review)
     task = tmp_path / "task"
     result = control.start_task({"version": 1, "action": "edit", "project": str(project),
                                 "expected_document_sha256": "b" * 64,
-                                "operations": [{"op": "set_style"}]}, task_dir=task)
+                                "operations": [{"op": "set_style"}], "export": export}, task_dir=task)
     assert result["status"] == "needs_review"
     return task, project
 
@@ -174,3 +184,41 @@ def test_declined_review_never_mutates_document(tmp_path, monkeypatch):
     task, _ = _edit_task(tmp_path, monkeypatch)
     monkeypatch.setattr(execution, "apply_document_edit", lambda *a: pytest.fail("declined review applied"))
     assert control.resume_task(task, {"accept_preview": False})["status"] == "cancelled"
+
+
+@pytest.mark.parametrize("value", [None, 0, 1, "false", []])
+def test_deferred_export_choice_requires_an_actual_boolean(value):
+    with pytest.raises(TaskControlError, match="export"):
+        validate_task_request({"version": 1, "action": "edit", "project": "/p",
+                               "expected_document_sha256": "a" * 64,
+                               "operations": [{"op": "set_style"}], "export": value})
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_deferred_edit_returns_saved_revision_and_never_exports_on_retry(tmp_path, monkeypatch, interrupted):
+    task, project = _edit_task(tmp_path, monkeypatch, export=False)
+    applied = {"status": "applied", "document": str(project / "studio/document.vsz"),
+               "operation_id": "a" * 64, "result_sha256": "c" * 64}
+    calls = []
+    def apply(*args):
+        calls.append("apply")
+        if interrupted and len(calls) == 1:
+            raise RuntimeError("Lost apply reply")
+        return {**applied, "status": "already_applied" if interrupted else "applied"}
+    monkeypatch.setattr(execution, "apply_document_edit", apply)
+    monkeypatch.setattr(execution, "export_project", lambda *a: pytest.fail("deferred edit exported"))
+    result = control.resume_task(task, {"accept_preview": True})
+    if interrupted:
+        assert result["status"] == "blocked" and result["phase"] == "applying"
+        result = control.resume_task(task, {"retry": True})
+    assert result["status"] == "complete"
+    assert result["result"]["status"] == "saved"
+    assert result["result"]["document_sha256"] == "c" * 64
+    assert result["result"]["export_performed"] is False
+    assert result["result"]["export_required"] is True
+    assert result["result"]["ready_to_use"] is False
+    assert result["ready_to_use"] is None and not result["readiness_evaluated"]
+    assert "preview" not in result and "deferred" in result["completion_scope"]
+    count = len(calls)
+    assert control.resume_task(task, {"retry": True}) == result
+    assert len(calls) == count

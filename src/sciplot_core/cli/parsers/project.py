@@ -35,6 +35,8 @@ def register_project_commands(subparsers: Any) -> None:
         if name != "annotations":
             action.add_argument("--expected-document", required=True)
         if name == "operations-preview":
+            action.add_argument("--full", action="store_true",
+                                help="Return the complete signed review; default returns its summary and review_path.")
             action.add_argument("--operations", type=Path, required=True)
             action.add_argument("--out", type=Path, required=True)
         if name == "peaks":
@@ -48,6 +50,9 @@ def register_project_commands(subparsers: Any) -> None:
             "target", type=Path, help="Project, canonical VSZ or associated delivery."
         )
         action.add_argument("--json", action="store_true")
+        if name in {"inspect", "edit-preview"}:
+            action.add_argument("--full", action="store_true",
+                                help="Include complete native settings or signed edit state; default is compact.")
         if name in {"inspect", "preview", "edit-preview"}:
             action.add_argument(
                 "--figure", help="Exact figure_id returned by project inspect."

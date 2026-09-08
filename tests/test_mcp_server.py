@@ -23,7 +23,7 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 
 def test_tool_discovery_uses_closed_shared_operation_schema():
     tools = {item.name: item for item in tool_definitions()}
-    assert len(tools) == 13
+    assert len(tools) == 14
     for item in tools.values():
         assert item.input_schema["additionalProperties"] is False
         assert item.annotations.open_world_hint is False
@@ -32,6 +32,7 @@ def test_tool_discovery_uses_closed_shared_operation_schema():
     assert tools["sciplot_project_inspect"].annotations.read_only_hint is True
     assert tools["sciplot_edit_apply"].annotations.read_only_hint is False
     assert tools["sciplot_task_start"].annotations.idempotent_hint is False
+    assert tools["sciplot_task_find"].annotations.read_only_hint is True
 
 
 def test_invalid_or_unknown_calls_never_reach_domain_owner(monkeypatch):

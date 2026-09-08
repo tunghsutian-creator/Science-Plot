@@ -37,6 +37,22 @@ def edit_case(tmp_path):
     return project, document, candidate, review
 
 
+def test_sample_mapping_drift_is_rejected_before_candidate_or_audit(edit_case, tmp_path, monkeypatch):
+    project, document, _, _ = edit_case
+    spec = project / "studio/spec.json"
+    spec.write_text('{"series":[]}')
+    monkeypatch.setattr(edits, "resolve_project_path", lambda _: project)
+    monkeypatch.setattr(edits, "resolve_project_figure", lambda *a: {
+        "document": str(document), "spec": str(spec), "figure_id": "f"})
+    monkeypatch.setattr(edits, "audit_edited_document", lambda *a: pytest.fail("stale sample mapping audited"))
+    output = tmp_path / "preview"
+    with pytest.raises(ValueError, match="sample mapping changed"):
+        edits.preview_document_edit(project, [], output_dir=output,
+                                    expected_document_sha256=file_sha256(document),
+                                    expected_spec_sha256="b" * 64, operations=[{"op": "set_style"}])
+    assert not output.exists()
+
+
 def test_commit_preserves_source_and_archives_then_reconciles_lost_response(edit_case):
     project, document, candidate, review = edit_case
     source = (project / "source/data.csv").read_bytes()

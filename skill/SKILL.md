@@ -73,8 +73,28 @@ the explicit saved-figure/object references in the external API.
    Reuse the returned task directory in a new session. A completed receipt is
    historical; check current source/QA/delivery before later handoff. Source
    changes, unsupported mappings and uncertain interrupted creation fail closed.
+   If only the original source path is known, use `task find SOURCE --json`
+   to recover creation receipts from its adjacent history, or provide
+   `--tasks-root` for a custom history directory. Inspect the chosen task/project;
+   incomplete searches and multiple matches do not establish a unique project.
    The MCP stdio adapter exposes the same services and schemas; read full JSON
    and PNG resources only as needed. See the operation guide for exact fields.
+
+   For successive edits use `export:false` on the task edit request. After
+   accepting the preview, use the returned saved document SHA for the next edit;
+   export once when requested. A completed saved edit is not a ready delivery.
+   Exact unique labels in `figures[].sample_styles` support `set_sample_style`
+   batches for ordinary curve color/width; ambiguity requires explicit object
+   selection. The local service binds current settings and preserves the same
+   native preview, science audit and revision guards.
+
+   Refine a pending preview with `revise_operations` and its current
+   `expected_operation_id`; the replacement is the complete batch against the
+   same saved baseline. Accept or reject revised previews with that current ID
+   so an old response cannot apply new intent. An identical revision retry is
+   idempotent. Native-validated pure style requests already satisfied return
+   `unchanged` without another review or document write; requested export still
+   runs. See the operation guide for recovery and completion scope.
 
    Public annotation operations now include reference lines, text/arrows and
    source-bound observed peak labels, plus update/removal. Query annotations
@@ -113,6 +133,10 @@ the explicit saved-figure/object references in the external API.
    the literal word `primary`. Bind operations to `document_sha256` and exact
    absolute native paths/expected values from `editable_fields`. Use a new
    dedicated directory for each current/candidate PNG preview.
+
+   Project inspection and edit-preview CLI results are compact by default,
+   matching MCP. Use `--full` only for complete native settings or signed state;
+   apply the persisted complete file at `review_path`, never compact stdout.
 
 5. Preview and apply only the authorized advertised style edits. Read the
    candidate image, actual changes and scientific audit before apply:

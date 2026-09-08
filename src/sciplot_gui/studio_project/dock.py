@@ -116,7 +116,13 @@ class DockMixin:
         result_buttons.addWidget(self.show_delivery_button)
         result_buttons.addWidget(self.reveal_vsz_button)
         layout.addLayout(result_buttons)
-        dock.setWidget(body)
+        # The controls can exceed the native dock column's available width and
+        # height. Scroll them instead of forcing a permanent window/plot resize.
+        scroll = QtWidgets.QScrollArea(dock)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        scroll.setWidget(body)
+        dock.setWidget(scroll)
         return dock
 
     def _current_render_sha256(self) -> str | None:

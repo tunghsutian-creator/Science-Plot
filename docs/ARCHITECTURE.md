@@ -37,8 +37,23 @@ saved-project queries, native edits, exact-current export and continuation.
 It calls existing local domain services without starting an internal provider.
 `task_control` orchestrates bounded create/edit/export requests over those owners;
 task receipts live outside active projects and do not define scientific readiness.
+Task edits may defer export and return the saved document revision for successive
+edits. Their completion scope is saved editing; a separate export owns readiness.
+`task_editing` owns pure pending-batch replacement and no-change decisions.
+Replacements retain the original request and a task-local intent history, reuse
+the saved baseline and require current preview identity on later responses.
+They never recover an uncertain apply by replacing it. A no-change shortcut is
+limited to complete, native-normalized, audited pure style operations; export
+intent and scientific validation remain with the existing task/native owners.
+`task_discovery` reads bounded existing creation receipts by exact original source
+path. It uses the shared receipt validation and source fingerprint, reports
+partial searches and ambiguity, and returns historical task/project references.
+It adds no persistent project index, raw-path resolution to the edit APIs, or
+implicit project creation/selection. Queries of selected projects remain separate.
 `mcp_server` is an optional stdio adapter with shared schemas and per-connection
 immutable result resources. Neither adapter reads chat state or starts a model.
+`studio_core/control_results.py` owns the shared compact CLI/MCP projection;
+domain services retain full evidence and CLI `--full`/MCP resources expose it.
 
 `project_creation` shares source-bound preparation and exact-current publication
 between CLI, tasks and MCP. Task creation checkpoints the prepared project before
@@ -54,6 +69,20 @@ replays and audits both VSZ and `spec.native_annotations`, archives both, and
 rolls both back on failure. Annotation metadata is semantic/provenance evidence,
 not a second visual document. Source updates currently require annotations to be
 removed explicitly before changing data; no implicit anchor rebinding occurs.
+
+`sample_style` exposes exact ordinary series labels and expands supported
+color/width batches using current advertised native fields. Duplicate labels
+remain ambiguous. The saved-project service binds both the document revision
+and specification hash before passing expanded operations to the existing
+transaction; workers do not interpret sample aliases or add another style policy.
+
+Candidate editing and candidate data audit share one native worker process.
+The source-coverage audit owner still creates private document/spec snapshots
+for its in-process runner; the host checks the returned audit's scope, current
+file identities and closed unit inventory before verifying prepared sources.
+Initial-document audit and apply-time native replay retain their own checks.
+Returned audit evidence is internal worker output, never an accepted preview
+field supplied by an external caller or a persisted cross-operation cache.
 
 `distribution/macos` builds a relocatable runtime from the installed dependency
 environment, audits bundled native dependencies and generates client connection

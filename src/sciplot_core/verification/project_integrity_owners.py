@@ -91,8 +91,8 @@ PROJECT_INTEGRITY_OWNERS = (
                 "src/sciplot_core/studio_core/guide_contracts.py",
             }
         ),
-        owned_test_paths=frozenset({"tests/test_managed_document_science.py"}),
-        pytest_targets=("tests/test_managed_document_science.py",),
+        owned_test_paths=frozenset({"tests/test_managed_document_science.py", "tests/test_document_audit_transport.py"}),
+        pytest_targets=("tests/test_managed_document_science.py", "tests/test_document_audit_transport.py"),
         handoff_gates=("doctor",),
         final_milestone_gates=("smoke",),
         release_gates=("acceptance_rules", "full_pytest"),

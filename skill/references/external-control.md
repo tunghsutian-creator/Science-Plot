@@ -48,6 +48,32 @@ new evidence location outside raw data, projects and visible delivery packages.
 Reusing a task directory with the same request returns its receipt, never a
 second creation; a different request is rejected.
 
+When a new session knows only the original source path, recover a creation task
+and its recorded project with:
+
+```bash
+skill/scripts/sciplot task find SOURCE --json
+skill/scripts/sciplot task find SOURCE --tasks-root HISTORY_DIRECTORY --limit 20 --json
+```
+
+MCP exposes the same service as `sciplot_task_find`. The default history is
+`SOURCE_PARENT/.sciplot/tasks`; pass the actual task root for custom task/output
+locations. The search reads that root and its direct task directories, validates
+existing receipt hashes, matches the exact recorded source path and fingerprints
+the current source once. It does not use filenames/content similarity to infer
+origin or create another project. Only creation receipts provide this original
+source relationship; low-level projects without them need their explicit saved
+project or delivery path.
+
+Results list newest recorded tasks first and retain pending questions or blocked
+tasks as well as completed ones. Inspect the selected `task_dir` or historical
+`project` reference before continuing. `source_current:false` means the original
+source differs or is missing; unknown evidence stays null. Multiple candidates
+or an incomplete scan require selection or a narrower lookup. Read `match_count`,
+`has_more_matches`, `scan_complete` and `issues`: the search scans at most 1,000
+receipts, skips unreadable/oversized/symlinked records and returns at most 100
+matches (20 by default). A zero result only describes the reported search scope.
+
 `needs_input` exposes an actual rule-selection question and evidence reference.
 Resume with `{"rule_id":"uvvis_spectrum"}` and optional `template`; source bytes
 are rechecked. Invalid choices remain correctable. This does not implement
@@ -63,14 +89,69 @@ Use `false` to discard the proposed change without changing the document. The
 user's existing concrete instruction authorizes the edit; no redundant user
 permission is required for each mechanical step.
 
+To refine a pending preview in the same task, resume with a replacement batch:
+
+```json
+{"expected_operation_id":"CURRENT_PREVIEW_OPERATION_ID","revise_operations":[{"op":"set_sample_style","samples":["E0","E3"],"style":{"width":"2pt"}}]}
+```
+
+Use the returned `operation_id`, and replace the whole batch: the replacement
+uses the same saved document, figure and revision, not the prior candidate.
+Original requests and previous candidate files remain available. The summary's
+`preview_revision` counts requested versions; an identical latest revision
+submission returns its current receipt without rendering again. A failed build
+keeps the replacement intent and resumes with `{"retry":true}`.
+
+Accept or reject the new preview with
+`{"accept_preview":true,"expected_operation_id":"CURRENT_PREVIEW_OPERATION_ID"}`.
+Always bind responses this way; unbound responses remain compatible only for
+an initial preview. Stale responses leave the current task unchanged. A task
+already applying, exporting or complete requires a new edit task for new intent;
+an uncertain apply must first be recovered, not replaced.
+
+Pure style requests that already match after native normalization and science
+validation finish automatically with an `unchanged` edit outcome. They require
+no preview acceptance and do not rewrite the saved document. With `export:false`,
+the result reports `document_changed:false`, the same saved document SHA and
+`export_required:null`: existing delivery currentness is a separate query. When
+export is requested (the default), it still runs and `edit_outcome.status` records
+`unchanged` alongside the export receipt. Annotation operations and mixed batches
+always retain review; this shortcut does not infer semantic equivalence.
+
+For successive edits, add `"export":false` to the edit request. Accepting its
+preview saves the current document and completes that edit without exporting.
+The `sciplot_task_edit_result` has `status:"saved"`, `document_sha256`,
+`figure_id`, `export_performed:false` and `export_required:true`; use that saved
+revision for the next edit. Completed summaries omit the old preview image;
+its evidence remains in the task directory. Omitting `export` retains apply-and-export
+behavior. Finish with an export task when the figure is ready for publication.
+
+To edit multiple ordinary sample curves, read `figures[].sample_styles` from
+`project inspect`. These are exact source-bound labels in the selected figure,
+not aliases, fuzzy matches or native widget names. A batch can include:
+
+```json
+{"op":"set_sample_style","samples":["E0","E3"],"style":{"width":"1.5pt"}}
+```
+
+`style` supports `color` and `width`; mix several operations for different colors.
+The local service resolves the unique curves and current setting values, then
+previews the expanded `set_style` operations in the existing native transaction.
+The inspected document and sample-mapping spec must still match. Unknown,
+duplicate or ambiguous labels are rejected; for ambiguous labels inspect the
+curves and choose explicit `set_style` paths. Semantic color encodings remain
+protected, and a batch may expand to at most 100 native operations.
+
 An export request is `{"version":1,"action":"export","project":"/managed/project"}`.
 Export failures preserve the current project. Resolve the reported cause and
 resume with `{"retry":true}`. An interrupted creation before a project identity
 was checkpointed reports uncertainty if output exists; it never overwrites it.
 Applied edits use the original preview and durable operation for bounded retry.
 
-`status=complete` is historical task completion. At initial completion require
-`result.studio_run.ready_to_use=true`; later query the current project evidence.
+`status=complete` is historical completion of the requested scope. A saved edit
+with deferred export is not a publication receipt. For create/export or an edit
+that requested export, require `result.studio_run.ready_to_use=true` at handoff;
+later query the current project evidence.
 Top-level `ready_to_use=null` deliberately avoids certifying old results.
 `model_calls_by_sciplot=0` describes the deterministic runner, not the external
 client's model use. External token usage remains null when no telemetry is available.
@@ -88,6 +169,13 @@ discoverable via MCP, with shared JSON schemas. Normal operations need no reposi
 inspection, internal imports, model key or Python code generation. Results are
 compact; read returned `sciplot://result/…` JSON/PNG resources on demand. Resource
 URIs are scoped to the current connection; retain project/task paths for a new one.
+
+CLI `project inspect`, `project edit-preview` and `project operations-preview`
+use the same compact projection as MCP: current editable values, display context,
+revision identity, actual changes and audit remain present. Use `--full` for
+complete native settings or signed preview state. Always apply the complete
+saved JSON at `review_path`; the compact stdout is a summary, not an apply file.
+MCP additionally returns an immutable full-result resource when it compacts a result.
 
 ## Explicit low-level creation
 

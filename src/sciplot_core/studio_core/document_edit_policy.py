@@ -8,9 +8,11 @@ from pathlib import Path
 from typing import Any
 
 
-def _ordinary_curve_paths(spec_path: Path) -> set[str]:
+SAMPLE_STYLE_FIELDS = {"color": "PlotLine/color", "width": "PlotLine/width"}
+
+
+def ordinary_curve_paths(spec: dict[str, Any]) -> set[str]:
     """Allow only explicit ordinary-series contracts in the generated spec."""
-    spec = json.loads(spec_path.read_text(encoding="utf-8"))
     if not isinstance(spec, dict):
         raise ValueError("A generated figure specification object is required.")
     # veusz_spec_builder emits null for absent scalar/categorical contracts.
@@ -50,7 +52,7 @@ def filter_editable_fields(
     objects: dict[str, dict[str, Any]], spec_path: Path,
 ) -> dict[str, dict[str, Any]]:
     """Return the advertised native objects with semantic color edits removed."""
-    allowed = _ordinary_curve_paths(spec_path)
+    allowed = ordinary_curve_paths(json.loads(spec_path.read_text(encoding="utf-8")))
     return {
         path: {
             **widget,
@@ -72,7 +74,7 @@ def validate_edit_science_policy(
     changes: list[dict[str, Any]], spec_path: Path,
 ) -> None:
     """Apply the same rule at submission; advertised permissions are not proof."""
-    allowed = _ordinary_curve_paths(spec_path)
+    allowed = ordinary_curve_paths(json.loads(spec_path.read_text(encoding="utf-8")))
     for change in changes:
         if not isinstance(change, dict):
             raise ValueError("Each native setting change must be an object.")

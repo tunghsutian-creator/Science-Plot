@@ -32,6 +32,12 @@ def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             "annotation_operations": annotation_operation_capabilities(),
             "resource_lifetime": "Immutable session snapshots; requery after restart or eviction.",
         }
+    if name == "sciplot_task_find":
+        from sciplot_core.task_discovery import find_tasks
+
+        root = arguments.get("tasks_root")
+        return find_tasks(Path(arguments["source"]), tasks_root=Path(root) if root else None,
+                          limit=arguments.get("limit", 20))
     if name in {"sciplot_task_start", "sciplot_task_inspect", "sciplot_task_resume"}:
         from sciplot_core.task_control import inspect_task, resume_task, start_task
 

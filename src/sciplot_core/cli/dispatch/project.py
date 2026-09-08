@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from sciplot_core.cli.value_io import _print_json
+from sciplot_core.studio_core.control_results import compact_result
 from sciplot_core.studio_core.document_edit import (
     apply_document_edit,
     preview_document_edit,
@@ -78,5 +79,5 @@ def dispatch_project_control(args: Any) -> int:
         payload = read_edit_operation(
             resolve_project_path(args.target), args.operation_id
         )
-    _print_json(payload)
+    _print_json(payload if getattr(args, "full", False) else compact_result(payload))
     return 1 if payload.get("status") == "blocked" else 0

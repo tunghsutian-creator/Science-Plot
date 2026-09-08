@@ -114,3 +114,13 @@ def test_skill_defers_the_exact_mypy_scope_to_pyproject() -> None:
     assert "all strictness options belong only to `[tool.mypy]`" in architecture
     assert "without maintaining another scope list or file count" in architecture
     assert "Strict Python 3.11 baseline for `foundation/`" not in architecture
+
+
+def test_self_use_edit_guidance_keeps_deferred_readiness_and_full_evidence():
+    guide = _read(REPO_ROOT / "skill/references/external-control.md")
+    assert '"export":false' in guide and 'status:"saved"' in guide
+    assert "not a publication receipt" in guide
+    assert "--full" in guide and "review_path" in guide
+    assert "compact stdout is a summary, not an apply file" in guide
+    assert "set_sample_style" in guide and "figures[].sample_styles" in guide
+    assert "ambiguous labels are rejected" in guide

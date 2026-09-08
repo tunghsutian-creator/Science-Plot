@@ -1,4 +1,4 @@
-"""Compact transport projections preserve scientific uncertainty and revisions."""
+"""Shared CLI/MCP projections preserve scientific uncertainty and revisions."""
 
 from __future__ import annotations
 

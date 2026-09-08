@@ -22,7 +22,7 @@ from mcp.types import (
 )
 
 from sciplot_core.mcp_server.errors import AdapterError, error_payload
-from sciplot_core.mcp_server.projections import compact_result
+from sciplot_core.studio_core.control_results import compact_result
 from sciplot_core.mcp_server.resources import ResourceSnapshot, ResourceStore
 from sciplot_core.mcp_server.schemas import tool_definitions
 from sciplot_core.mcp_server.services import invoke_owner

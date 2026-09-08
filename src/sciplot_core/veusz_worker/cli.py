@@ -75,6 +75,7 @@ def _build_parser() -> argparse.ArgumentParser:
     edit_parser.add_argument("--changes", required=True, type=Path)
     edit_parser.add_argument("--output-document", required=True, type=Path)
     edit_parser.add_argument("--preview-png", required=True, type=Path)
+    edit_parser.add_argument("--audit-spec", type=Path)
     annotation_parser = subparsers.add_parser("edit-annotations")
     annotation_parser.add_argument("document", type=Path)
     annotation_parser.add_argument("spec", type=Path)
@@ -83,6 +84,7 @@ def _build_parser() -> argparse.ArgumentParser:
     annotation_parser.add_argument("--output-document", required=True, type=Path)
     annotation_parser.add_argument("--output-spec", required=True, type=Path)
     annotation_parser.add_argument("--preview-png", required=True, type=Path)
+    annotation_parser.add_argument("--audit-candidate", action="store_true")
     migrate_unit_labels_parser = subparsers.add_parser(
         "migrate-unit-labels",
         help="Normalize visible unit labels in an existing Veusz document.",
@@ -146,5 +148,15 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         payload = save_spec(args.document, args.spec)
+    if (args.command == "edit-document" and args.audit_spec is not None) or (
+        args.command == "edit-annotations" and args.audit_candidate
+    ):
+        from sciplot_core.source_coverage.document_audit import _audit_exact_document_data
+
+        payload["document_audit"], _ = _audit_exact_document_data(
+            document_path=args.output_document,
+            spec_path=args.audit_spec if args.command == "edit-document" else args.output_spec,
+            check_presentation=False, audit_runner=audit_spec_data,
+        )
     print(json.dumps(json_safe(payload), indent=2, ensure_ascii=False))
     return 0

@@ -12,6 +12,7 @@ from sciplot_core.studio_core.annotation_schema import AnnotationOperationError
 from sciplot_core.studio_core.peak_analysis import peak_candidates_for_spec, validate_peak_candidate
 from sciplot_core.studio_core.document_edit_state import edit_state, preview_identity, history_directory
 from sciplot_core.studio_core import document_edit_commit as commit
+from sciplot_core.studio_core.sample_style import expand_sample_styles, sample_style_targets
 
 
 @pytest.fixture
@@ -33,6 +34,87 @@ def note(identifier="note"):
 
 def compile_ops(spec, operations):
     return compile_annotation_operations(spec, operations, document_sha256="d" * 64, figure_id="f")
+
+
+def _sample_objects(*names):
+    return {f"/page1/graph1/{name}": {"editable_fields": [
+        {"setting_path": f"/page1/graph1/{name}/PlotLine/color", "current_value": "#222222"},
+        {"setting_path": f"/page1/graph1/{name}/PlotLine/width", "current_value": "1.2pt"},
+    ]} for name in names}
+
+
+def test_sample_batch_binds_exact_labels_to_current_fields_and_keeps_other_ops(spec):
+    spec["series"].append({**spec["series"][0], "name": "series_2", "label": "B"})
+    before = copy.deepcopy(spec)
+    request = {"op": "set_sample_style", "samples": ["B", "A"],
+               "style": {"color": "#3568C0", "width": "1.5pt"}}
+    operations = [request, note()]
+    expanded = expand_sample_styles(spec, _sample_objects("series_1", "series_2"), operations)
+    assert [op["object_path"] for op in expanded[:-1]] == [
+        "/page1/graph1/series_2", "/page1/graph1/series_2",
+        "/page1/graph1/series_1", "/page1/graph1/series_1"]
+    assert [op["expected_value"] for op in expanded[:-1]] == ["#222222", "1.2pt"] * 2
+    assert expanded[-1] == note() and operations[0] == request
+    assert spec == before
+    assert compile_ops(spec, expanded)[2][-1]["id"] == "note"
+
+
+@pytest.mark.parametrize("samples,style", [([], {"color": "red"}), (["A", "A"], {"color": "red"}),
+                                         (["A"], {}), (["A"], {"label": "Wrong sample"}),
+                                         ([None], {"width": "2pt"})])
+def test_sample_batch_rejects_invalid_or_scientific_fields(spec, samples, style):
+    with pytest.raises(AnnotationOperationError, match="unique exact"):
+        expand_sample_styles(spec, _sample_objects("series_1"), [
+            {"op": "set_sample_style", "samples": samples, "style": style}])
+
+
+def test_sample_batch_does_not_guess_aliases_or_edit_ambiguous_semantic_curves(spec):
+    operation = {"op": "set_sample_style", "samples": ["a"], "style": {"color": "red"}}
+    with pytest.raises(AnnotationOperationError, match="exact sample label"):
+        expand_sample_styles(spec, _sample_objects("series_1"), [operation])
+    operation["samples"] = ["A"]
+    spec["series"].append({**spec["series"][0], "name": "series_2"})
+    assert sample_style_targets(spec) == [{"sample": "A", "object_paths": [
+        "/page1/graph1/series_1", "/page1/graph1/series_2"], "unique": False}]
+    with pytest.raises(AnnotationOperationError, match="multiple curves"):
+        expand_sample_styles(spec, _sample_objects("series_1", "series_2"), [operation])
+    spec["performance_comparison"] = {"kind": "semantic"}
+    assert sample_style_targets(spec) == []
+    with pytest.raises(AnnotationOperationError, match="No ordinary curve"):
+        expand_sample_styles(spec, _sample_objects("series_1", "series_2"), [operation])
+
+
+def test_sample_batch_requires_native_capability_and_bounds_expansion(spec):
+    request = {"op": "set_sample_style", "samples": ["A"], "style": {"color": "red"}}
+    with pytest.raises(AnnotationOperationError, match="does not advertise"):
+        expand_sample_styles(spec, {}, [request])
+    request["style"]["width"] = "2pt"
+    with pytest.raises(AnnotationOperationError, match="exceeds 100"):
+        expand_sample_styles(spec, _sample_objects("series_1"), [request] * 51)
+
+
+def test_sample_preview_binds_mapping_hash_before_native_transaction(tmp_path, monkeypatch, spec):
+    from sciplot_core.studio_core import annotation_operations as service, document_edit
+    from sciplot_core.foundation.file_hashing import file_sha256
+
+    path = tmp_path / "spec.json"
+    path.write_text(json.dumps(spec))
+    selected = {"figure_id": "f", "document_sha256": "d" * 64, "spec": str(path),
+                "spec_sha256": file_sha256(path), "objects": _sample_objects("series_1")}
+    monkeypatch.setattr(service, "resolve_project_figure", lambda *a: selected)
+    monkeypatch.setattr(service, "inspect_project", lambda *a, **k: {"selected_figure": selected})
+    calls = []
+    monkeypatch.setattr(document_edit, "preview_document_edit", lambda *a, **k: calls.append(k) or {})
+    operation = {"op": "set_sample_style", "samples": ["A"], "style": {"color": "red"}}
+    service.preview_document_operations(tmp_path, [operation], output_dir=tmp_path / "preview",
+                                        expected_document_sha256="d" * 64)
+    assert calls[0]["expected_spec_sha256"] == file_sha256(path)
+    assert calls[0]["operations"][0]["expected_value"] == "#222222"
+    path.write_text(json.dumps({**spec, "series": []}))
+    with pytest.raises(AnnotationOperationError, match="mapping changed"):
+        service.preview_document_operations(tmp_path, [operation], output_dir=tmp_path / "preview2",
+                                            expected_document_sha256="d" * 64)
+    assert len(calls) == 1
 
 
 def test_mixed_batch_preserves_science_and_expands_arrow(spec):

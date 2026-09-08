@@ -78,7 +78,9 @@ def run_document_worker(*arguments: object) -> dict[str, Any]:
     return result
 
 
-def audit_edited_document(document: Path, spec: Path) -> dict[str, Any]:
+def audit_edited_document(
+    document: Path, spec: Path, *, native_audit: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     specification = spec.read_bytes()
     records = _source_records(json.loads(specification))
 
@@ -92,7 +94,7 @@ def audit_edited_document(document: Path, spec: Path) -> dict[str, Any]:
             )
 
     verify_sources()
-    audit = _audit_candidate(document, spec)
+    audit = _audit_candidate(document, spec, native_audit=native_audit)
     verify_sources()
     return audit
 

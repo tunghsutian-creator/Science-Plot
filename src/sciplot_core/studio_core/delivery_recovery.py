@@ -28,9 +28,12 @@ from sciplot_core.studio_core.delivery_recovery_state import (
 )
 
 
-def _audit_candidate(candidate: Path, spec_path: Path) -> dict[str, Any]:
+def _audit_candidate(
+    candidate: Path, spec_path: Path, *, native_audit: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     audit, spec = _audit_exact_document_data(
-        document_path=candidate, spec_path=spec_path, check_presentation=False
+        document_path=candidate, spec_path=spec_path, check_presentation=False,
+        native_audit=native_audit,
     )
     snapshots = [
         _stable_file_snapshot(path, label="recovery prepared source")

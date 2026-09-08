@@ -358,7 +358,11 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
     )
 
     assert SCIENTIFIC_TRANSACTION_TYPE_PATHS
-    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 75
+    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 79
+    assert {
+        "src/sciplot_core/studio_core/control_results.py",
+        "src/sciplot_core/studio_core/sample_style.py",
+    } <= SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert SCIENTIFIC_TRANSACTION_TYPE_PATHS == frozenset(
         path
         for path in configured_files
@@ -711,7 +715,7 @@ def test_explicit_type_gate_scopes_are_pairwise_disjoint() -> None:
         STUDIO_FIGURE_SET_EXECUTION_TYPE_PATHS,
     )
 
-    assert tuple(map(len, scopes)) == (75, 4, 7, 10, 5, 5)
+    assert tuple(map(len, scopes)) == (79, 4, 7, 10, 5, 5)
     assert all(
         scope.isdisjoint(other)
         for index, scope in enumerate(scopes)

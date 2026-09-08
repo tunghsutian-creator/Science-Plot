@@ -82,13 +82,27 @@ def load_task(root: Path) -> dict[str, Any]:
 def task_summary(state: dict[str, Any]) -> dict[str, Any]:
     keys = (
         "kind", "version", "task_dir", "status", "phase", "updated_at", "question",
-        "blocker", "result", "preview", "operation_id", "profile", "profile_unavailable", "project",
+        "blocker", "result", "preview", "operation_id", "profile", "profile_unavailable", "project", "edit_outcome",
     )
+    summary = {key: state[key] for key in keys if key in state}
+    if state["status"] in {"complete", "cancelled"}:
+        summary.pop("preview", None)
+    saved = (state.get("result") or {}).get("kind") == "sciplot_task_edit_result"
+    if saved:
+        summary.pop("edit_outcome", None)
+    unchanged = saved and state["result"].get("status") == "unchanged"
+    if state["request"]["action"] == "edit":
+        summary["preview_revision"] = len(state.get("edit_revisions") or []) + 1
     return {
-        **{key: state[key] for key in keys if key in state},
+        **summary,
         "model_calls_by_sciplot": 0,
         "external_model_tokens": None,
         "ready_to_use": None,
         "readiness_evaluated": False,
-        "completion_scope": "Task receipt; current project evidence is queried separately.",
+        "completion_scope": (
+            "Requested styles already matched; no document write or export. Query current evidence separately."
+            if unchanged else
+            "Saved edit only; export was deferred. Current project evidence is queried separately."
+            if saved else "Task receipt; current project evidence is queried separately."
+        ),
     }

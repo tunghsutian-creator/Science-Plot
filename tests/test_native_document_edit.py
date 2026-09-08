@@ -129,15 +129,16 @@ def test_native_candidate_preview_reopen_audit_and_rejected_batch(tmp_path: Path
     changes.write_text(json.dumps(edits))
     candidate, png = tmp_path / "candidate.vsz", tmp_path / "after.png"
     result = _worker("edit-document", str(document), "--changes", str(changes),
-                     "--output-document", str(candidate), "--preview-png", str(png))
+                     "--output-document", str(candidate), "--preview-png", str(png), "--audit-spec", str(spec))
     assert result["document"]["sha256"] == original == file_sha256(document)
     assert result["candidate"]["sha256"] == file_sha256(candidate) != original
     assert result["preview"]["sha256"] != before["preview"]["sha256"]
     assert len(result["changes"]) == 3
     reopened = _worker("inspect-document-state", str(candidate))
     assert reopened["widgets"]["/page1/graph1/x"]["settings"]["Label/size"] == "10pt"
-    assert _worker("audit-spec-data", str(candidate), str(spec),
-                   "--allow-presentation-edits")["status"] == "passed"
+    separate_audit = _worker("audit-spec-data", str(candidate), str(spec), "--allow-presentation-edits")
+    assert separate_audit["status"] == "passed"
+    assert result["document_audit"] == separate_audit
     # A valid first edit followed by a forbidden scientific edit must write nothing.
     edits.append({"object_path": "/page1/graph1/x", "setting_path": "/page1/graph1/x/label",
                   "expected_value": "Time (s)", "value": "Changed unit"})
