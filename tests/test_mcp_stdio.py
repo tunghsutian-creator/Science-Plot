@@ -36,7 +36,7 @@ def test_official_stdio_client_discovery_and_error_recovery():
     async def scenario():
         async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
             tools = await client.list_tools()
-            assert len(tools.tools) == 18
+            assert len(tools.tools) == 22
             caps = await _call(client, "sciplot_capabilities", {})
             assert caps["transport"] == "mcp_stdio"
             assert caps["model_configuration_required"] is False

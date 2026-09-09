@@ -21,7 +21,20 @@ def _object(path: Path) -> dict[str, Any]:
 def dispatch_task(args: Any) -> int:
     action = args.task_action
     result: dict[str, Any]
-    if action == "group":
+    if action == "compare":
+        from sciplot_core.task_comparisons import inspect_comparison, resume_comparison, select_comparison, start_comparison
+        from sciplot_core.task_comparison_contract import comparison_request_schema, comparison_selection_schema
+
+        if args.compare_action == "capabilities":
+            result = {"request_schema": comparison_request_schema(), "selection_schema": comparison_selection_schema()}
+        elif args.compare_action == "start":
+            result = start_comparison(_object(args.request), comparison_dir=args.comparison_dir,
+                                      base_dir=args.request.expanduser().resolve().parent)
+        elif args.compare_action == "select":
+            result = select_comparison(args.target, _object(args.selection))
+        else:
+            result = inspect_comparison(args.target) if args.compare_action == "inspect" else resume_comparison(args.target)
+    elif action == "group":
         from sciplot_core.task_groups import inspect_group, resume_group, start_group
         from sciplot_core.task_group_contract import group_request_schema, group_responses_schema
 

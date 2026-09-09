@@ -17,6 +17,7 @@ def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, 
 def tool_definitions() -> list[Tool]:
     from sciplot_core.task_control import task_request_schema, task_response_schema
     from sciplot_core.task_group_contract import group_request_schema, group_responses_schema
+    from sciplot_core.task_comparison_contract import comparison_request_schema, comparison_selection_schema
 
     string = {"type": "string", "minLength": 1}
     sha = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
@@ -33,7 +34,7 @@ def tool_definitions() -> list[Tool]:
             output_schema={"type": "object"},
             annotations=ToolAnnotations(
                 read_only_hint=read_only,
-                destructive_hint=name in {"task_start", "task_resume", "group_start", "group_resume", "edit_apply", "export"},
+                destructive_hint=name in {"task_start", "task_resume", "group_start", "group_resume", "comparison_resume", "comparison_select", "edit_apply", "export"},
                 idempotent_hint=read_only, open_world_hint=False,
             ),
         ))
@@ -54,6 +55,14 @@ def tool_definitions() -> list[Tool]:
         {"group": string}, ["group"])
     add("group_resume", "Continue pending/interrupted experiment tasks or supply per-item responses bound to each current task_dir. Preview responses require expected_operation_id. Never accepts previews or answers scientific questions automatically.",
         {"group": string, "responses": group_responses_schema()}, ["group"])
+    add("comparison_start", "Generate 2–8 independent native alternatives from the same saved figure baseline. No candidate is applied. Returns original/candidate PNG resources, compact factual differences and a local comparison page. Caller supplies and judges supported operations; no model calls.",
+        {"request": comparison_request_schema(), "comparison_dir": string}, ["request", "comparison_dir"])
+    add("comparison_inspect", "Read frozen alternatives, their validity and current project evidence. Does not render or advance tasks; queries reuse stored native images.",
+        {"comparison": string}, ["comparison"])
+    add("comparison_resume", "Resume interrupted candidate generation, or finish a previously frozen explicit selection. Never chooses a candidate. A changed baseline requires a new comparison.",
+        {"comparison": string}, ["comparison"])
+    add("comparison_select", "After viewing alternatives, select exactly one candidate or baseline using the current comparison_id. Only this candidate is applied, with optional export from the original request. Repeating the same selection is recoverable; choosing a second candidate is rejected.",
+        {"comparison": string, "selection": comparison_selection_schema()}, ["comparison", "selection"])
     add("project_inspect", "Query saved figures, current hashes and independent source/QA/delivery evidence. Pass figure_id for objects and exact editable field values; status ok is not readiness certification.",
         {**figure, "object_path": string, "full": {"type": "boolean", "default": False}}, ["project"], read_only=True)
     add("preview", "Render the current saved figure without changing it. Returns a PNG resource URI; use read_result to inspect the image on demand.",

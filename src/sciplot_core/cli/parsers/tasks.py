@@ -36,4 +36,16 @@ def register_task_commands(subparsers: Any) -> None:
             action.add_argument("target", type=Path)
             if name == "resume":
                 action.add_argument("--responses", type=Path, help="JSON array of item/task-bound answers. Omit to continue pending work.")
+    compare = actions.add_parser("compare", help="Compare independent native alternatives from one saved figure, then select one.")
+    compare_actions = compare.add_subparsers(dest="compare_action", required=True)
+    for name in ("capabilities", "start", "inspect", "resume", "select"):
+        action = compare_actions.add_parser(name)
+        action.add_argument("--json", action="store_true")
+        if name == "start":
+            action.add_argument("--request", type=Path, required=True)
+            action.add_argument("--comparison-dir", type=Path, required=True)
+        elif name != "capabilities":
+            action.add_argument("target", type=Path)
+            if name == "select":
+                action.add_argument("--selection", type=Path, required=True)
     subparsers.add_parser("mcp", help="Run the optional external-AI MCP stdio server.")

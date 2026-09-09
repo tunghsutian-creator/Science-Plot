@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "title": "Compare line emphasis",
+  "project": "PROJECT_FROM_INSPECT",
+  "figure_id": "FIGURE_ID_FROM_INSPECT",
+  "expected_document_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "export": false,
+  "candidates": [
+    {
+      "id": "fine",
+      "label": "Fine lines",
+      "operations": [{"op": "set_sample_style", "samples": ["E0", "E2"], "style": {"width": "0.8pt"}}]
+    },
+    {
+      "id": "strong",
+      "label": "Stronger lines",
+      "operations": [{"op": "set_sample_style", "samples": ["E0", "E2"], "style": {"width": "1.6pt"}}]
+    }
+  ]
+}

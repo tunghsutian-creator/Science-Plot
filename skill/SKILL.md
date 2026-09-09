@@ -111,6 +111,17 @@ the explicit saved-figure/object references in the external API.
    sequential under the existing document transaction. Group completion is task
    progress; inspect each project's current source/QA/delivery for handoff.
 
+   For alternatives of the same saved figure, use `task compare start` with
+   2–8 labelled operation batches, one explicit figure ID and the saved SHA.
+   Inspect the returned original/candidate PNGs and differences, then select one
+   candidate with the current `comparison_id`, or select `baseline` to keep the
+   original. Existing user intent authorizes that choice; no extra user approval
+   is implied. All candidates share one project baseline and remain separate
+   pending edit tasks. `compare resume` recovers generation or a previously
+   chosen apply; it never chooses. Default export is false. Use `export:true`
+   only when the chosen result should also be published. A changed baseline
+   requires a new comparison. Do not treat experiment grouping as this workflow.
+
    Refine a pending preview with `revise_operations` and its current
    `expected_operation_id`; the replacement is the complete batch against the
    same saved baseline. Accept or reject revised previews with that current ID

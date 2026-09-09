@@ -91,6 +91,30 @@ It contains no plotting implementation, browser editor, model provider or
 aggregate publication certification. Candidate previews retain their distinct
 scope and revision bindings; MCP exposes owner-returned PNG snapshots on demand.
 
+`task_comparison_contract` validates explicit alternative operation batches for
+one saved figure. `task_comparison_storage` binds their receipts and native
+review identities to one full project/delivery baseline. `task_comparisons`
+creates independent ordinary edit tasks with export disabled, freezes exactly
+one caller selection before any write, and delegates application and optional
+export to the existing task/transaction owners. Retries recover that same
+selection; they cannot apply a second candidate. `task_comparison_review`
+validates stored native images and presents the original, alternatives and
+bounded factual differences without rendering during inspection. These are
+historical comparison snapshots after selection, with current evidence reported
+separately. There is no internal model, alternate renderer or browser editor.
+
+`task_group_gallery`, `task_comparison_gallery` and `task_review_html` own only
+the read-only HTML presentation of those query results. Packaged local CSS/JS
+is embedded in each page for offline search, attention filtering, image zoom,
+side-by-side viewing and explicit text copying. The page never calls a write
+endpoint. A copied choice carries the comparison directory, candidate and
+revision identities and asks the caller to re-query before selection. Current
+source/export/delivery indicators remain separate from task completion and
+historical comparison images; missing evidence is displayed as unknown.
+Comparison queries project the current saved figure path/revision from their
+existing inspection, without another native worker. The gallery adds no global
+project index or scientific readiness gate.
+
 `project_creation` shares source-bound preparation and exact-current publication
 between CLI, tasks and MCP. Task creation checkpoints the prepared project before
 export so an export failure can resume without re-preparing data. Profiles reuse

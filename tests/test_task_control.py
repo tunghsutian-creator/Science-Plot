@@ -153,6 +153,24 @@ def test_review_then_apply_and_export_are_one_local_continuation(tmp_path, monke
     assert calls == ["apply", "export"]
 
 
+@pytest.mark.parametrize("action", ["edit", "export"])
+def test_interrupted_initial_edit_or_export_receipt_resumes_its_safe_start(tmp_path, monkeypatch, action):
+    from sciplot_core.task_storage import load_task, save_task
+
+    task, project = _edit_task(tmp_path, monkeypatch, export=False)
+    state = load_task(task)
+    state.update(status="running", phase="starting")
+    for key in ("preview", "operation_id", "preview_attempt"):
+        state.pop(key, None)
+    if action == "export":
+        state["request"] = {"version": 1, "action": "export", "project": str(project)}
+    save_task(task, state)
+    monkeypatch.setattr(execution, "apply_document_edit", lambda *a: pytest.fail("resume must not accept a preview"))
+    monkeypatch.setattr(execution, "export_project", lambda *a: receipt(project))
+    result = control.resume_task(task, {"retry": True})
+    assert result["status"] == ("needs_review" if action == "edit" else "complete")
+
+
 def test_export_failure_retry_does_not_reapply_or_recreate(tmp_path, monkeypatch):
     task, project = _edit_task(tmp_path, monkeypatch)
     calls = []

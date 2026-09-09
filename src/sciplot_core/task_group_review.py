@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
-from html import escape
 import json
 from pathlib import Path
 from subprocess import TimeoutExpired
 from typing import Any
-from urllib.parse import quote
 from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import file_sha256
@@ -20,6 +18,7 @@ from sciplot_core.studio_core.document_edit import preview_project_document
 from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_group_storage import active_step, step_state
+from sciplot_core.task_group_gallery import write_group_gallery as _write_gallery
 
 
 def _valid_image(image: dict[str, Any]) -> bool:
@@ -76,7 +75,9 @@ def _item_overview(root: Path, item: dict[str, Any]) -> dict[str, Any]:
     original = item["steps"][0]["request"]
     if original["action"] == "create":
         result["source"] = original["source"]
-        result["source_current"] = bool(first and source_tree_sha256(Path(original["source"])) == first["source_sha256"])
+        expected_source = (first or {}).get("source_sha256")
+        result["source_current"] = (source_tree_sha256(Path(original["source"])) == expected_source
+                                    if expected_source else None)
     project = (child or {}).get("project") or (first or {}).get("project")
     if not project:
         return result
@@ -105,50 +106,6 @@ def _item_overview(root: Path, item: dict[str, Any]) -> dict[str, Any]:
             preview["preview_error"] = str(exc)
         result["figures"].append(preview)
     return result
-
-
-def _write_gallery(root: Path, result: dict[str, Any]) -> str:
-    cards = []
-    for item in result["items"]:
-        problem = item.get("blocker") or item.get("task", {}).get("blocker") or item.get("task", {}).get("question")
-        for index, figure in enumerate(item["figures"] or [{}]):
-            body = []
-            caption = "待审修改" if figure.get("scope") == "candidate" else "已保存"
-            title = figure.get("title", "等待处理")
-            if figure.get("preview"):
-                path = canonical_path(Path(figure["preview"]["path"]))
-                href = quote(str(path.relative_to(root)))
-                body.append(f'<a class="image" href="{href}" aria-label="查看大图：{escape(title)}"><img loading="lazy" src="{href}" alt="{escape(item["label"])} · {escape(title)}"></a>')
-            else:
-                body.append(f'<p class="problem">{escape(figure.get("preview_error", "暂无预览"))}</p>')
-            if problem:
-                message = problem.get("message") or problem.get("prompt") or "此项需要进一步确认。"
-                body.append(f'<p class="problem">{escape(str(message))}</p>')
-            if item.get("source_current") is False:
-                body.append('<p class="problem">原始输入已变化或尚未完成绑定；请检查此项。</p>')
-            cards.append(f'<section id="{item["id"]}-{index}"><p class="eyebrow">{escape(item["label"])}</p>'
-                         f'<header><h2>{escape(title)}</h2><span>{caption if figure else "待处理"}</span></header>{"".join(body)}</section>')
-    title = escape(result["title"])
-    html = f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>{title} · SciPlot</title>
-<style>body{{margin:0;background:#f4f6f8;color:#202b36;font:16px/1.6 system-ui,sans-serif}}
-main{{max-width:1400px;margin:auto;padding:32px}}h1{{margin:0}}.intro{{color:#526170}}
-.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:20px}}
-section{{background:white;border:1px solid #d9e1e7;border-radius:12px;padding:20px;min-width:0}}
-header{{display:flex;justify-content:space-between;align-items:baseline;gap:12px}}h2{{font-size:18px;line-height:1.4;margin:8px 0 16px;min-height:50px}}
-header span{{font-size:12px;color:#526170;white-space:nowrap;background:#eff4f8;padding:2px 8px;border-radius:20px}}
-.image{{display:flex;align-items:center;justify-content:center;height:340px}}img{{width:100%;height:100%;object-fit:contain}}
-.eyebrow{{font-size:13px;color:#526170;margin:0}}.problem{{color:#923f1b}}@media(max-width:500px){{main{{padding:20px}}.image{{height:310px}}}}
-a{{color:#235ca2}}a:focus-visible{{outline:3px solid #235ca2;outline-offset:3px}}
-</style></head><body><main><h1>{title}</h1>
-<p class="intro">{len(result["items"])} 个实验 · {len(result["previews"])} 张预览 · 点击图片查看大图。更新状态后重新打开本页。</p>
-<p class="intro">查询于 {escape(result["queried_at"])} · <a href="group.json">实验组记录</a></p>
-<div class="grid">{"".join(cards)}</div></main></body></html>'''
-    path = canonical_path(root / "overview.html")
-    temporary = canonical_path(root / "overview.tmp")
-    temporary.write_text(html, encoding="utf-8")
-    temporary.replace(path)
-    return str(path)
 
 
 def group_overview(root: Path, state: dict[str, Any]) -> dict[str, Any]:

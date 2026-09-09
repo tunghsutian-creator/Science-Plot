@@ -96,7 +96,8 @@ class Adapter:
                 warnings.append(str(exc))
         preview_artifact = _preview_artifact(payload)
         artifacts = ([{"preview": preview_artifact}] if preview_artifact is not None else [])
-        grouped = payload.get("kind") == "sciplot_task_group_result"
+        comparison = payload.get("kind") == "sciplot_task_comparison_result"
+        grouped = comparison or payload.get("kind") == "sciplot_task_group_result"
         if grouped:
             artifacts = payload["previews"]
         group_resources = []
@@ -105,7 +106,8 @@ class Adapter:
                 preview = artifact["preview"]
                 snapshot = self.resources.add_preview(Path(preview["path"]), expected_sha256=preview.get("sha256"))
                 if grouped:
-                    group_resources.append({**{key: artifact[key] for key in ("item_id", "figure_id", "scope")}, "uri": snapshot.uri})
+                    keys = ("candidate_id", "figure_id", "scope") if comparison else ("item_id", "figure_id", "scope")
+                    group_resources.append({**{key: artifact[key] for key in keys}, "uri": snapshot.uri})
                 else:
                     compact = {**compact, "preview_resource": snapshot.uri}
                 links.append(snapshot)

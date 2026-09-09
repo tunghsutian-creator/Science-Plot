@@ -22,6 +22,15 @@ def _preview_output(arguments: dict[str, Any]) -> Path:
 
 
 def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if name in {"sciplot_comparison_start", "sciplot_comparison_inspect", "sciplot_comparison_resume", "sciplot_comparison_select"}:
+        from sciplot_core.task_comparisons import inspect_comparison, resume_comparison, select_comparison, start_comparison
+
+        if name == "sciplot_comparison_start":
+            return start_comparison(arguments["request"], comparison_dir=Path(arguments["comparison_dir"]))
+        comparison = Path(arguments["comparison"])
+        if name == "sciplot_comparison_select":
+            return select_comparison(comparison, arguments["selection"])
+        return inspect_comparison(comparison) if name == "sciplot_comparison_inspect" else resume_comparison(comparison)
     if name in {"sciplot_group_start", "sciplot_group_inspect", "sciplot_group_resume"}:
         from sciplot_core.task_groups import inspect_group, resume_group, start_group
 

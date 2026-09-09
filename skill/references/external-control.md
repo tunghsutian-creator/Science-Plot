@@ -432,6 +432,78 @@ package. Inspect the final PDF/TIFF appearance as part of handoff. All registere
 figures are included by the managed export use case, even when only one figure
 was styled.
 
+## Comparing alternatives of the same saved figure
+
+Use `task compare` to explore 2–8 explicit operation batches against one saved
+figure. Start from [the comparison manifest](figure-comparison.json), replacing
+its project, figure ID, SHA and sample names with values from `project inspect`.
+Each candidate has a unique `id` and `label`, optional short `rationale`, and
+ordinary advertised `operations`. These are alternatives for the same data and
+saved figure; chart-type conversion and automatic scientific transformations
+are not introduced. The external AI proposes and judges alternatives. SciPlot
+does not invoke a model or independently invent a winning design.
+
+```bash
+skill/scripts/sciplot task compare capabilities --json
+skill/scripts/sciplot task compare start --request CANDIDATES_JSON --comparison-dir NEW_DIRECTORY --json
+skill/scripts/sciplot task compare inspect COMPARISON_DIRECTORY --json
+skill/scripts/sciplot task compare resume COMPARISON_DIRECTORY --json
+```
+
+The comparison directory must be outside the source, managed project and
+delivery. CLI project/preset paths resolve beside the manifest. MCP paths
+resolve against the server working directory. One immutable request captures a
+full project/delivery baseline and creates separate native edit tasks with
+export disabled. Creating and inspecting candidates never applies them. A
+failed candidate does not prevent viewing or choosing another valid one.
+
+Read the original and candidate PNGs from `previews` or the local `overview`.
+Each candidate reports its operation ID, science-audit status, change count and
+the first 12 factual setting differences; `review_path` contains the full native
+review. A `rationale` is caller-supplied intent, not a measured quality score.
+`baseline_current`, `selectable` and `comparison_id` describe the current choice
+context. Changed candidate artifacts are unavailable; changed project/data/
+delivery state requires a new comparison. Inspections reuse the stored images
+and never launch a renderer. `resume` retries pending/failed generation; already
+generated candidates are retained and no candidate is chosen automatically.
+
+The read-only page can enlarge an image and compare one candidate beside the
+original, switching candidates locally. Expand a candidate's choice note to
+copy its directory, candidate ID and expected comparison ID back to the AI
+assistant. This is text handoff only: re-inspect the comparison, verify that the
+copied ID and selectable state still match, then use the normal selection
+service. A stale or already selected comparison offers no new choice note.
+Current saved-project source/export/delivery indicators are distinct from the
+comparison images. The timestamp is the last query time; browser refresh alone
+does not inspect the project. Re-run `task compare inspect` to update the page.
+
+After visually comparing, send one selection using the returned comparison ID:
+
+```json
+{"candidate_id":"strong","expected_comparison_id":"CURRENT_COMPARISON_SHA256"}
+```
+
+```bash
+skill/scripts/sciplot task compare select COMPARISON_DIRECTORY --selection SELECTION_JSON --json
+```
+
+Use `candidate_id:"baseline"` to keep the original. Selection is frozen before
+the native transaction begins; identical retries or `resume` recover that same
+choice after an interrupted reply. A second, different selection is rejected.
+Unchosen edit tasks are never accepted by the comparison owner. Their previews
+remain historical evidence after application. An unchanged candidate requires
+no document write. The default `export:false` saves the chosen edit for continued
+work; `export:true` in the original manifest adds one ordinary export task after
+selection, with recovery that does not reapply the edit. A saved choice does not
+certify publication; inspect `current_evidence` and export for delivery.
+
+MCP exposes `sciplot_comparison_start`, `sciplot_comparison_inspect`,
+`sciplot_comparison_resume` and `sciplot_comparison_select`. Start takes `request`
+and `comparison_dir`; subsequent calls take `comparison`, and select adds the
+same `selection` object. Results include `preview_resources`, keyed by
+`candidate_id` (`baseline` names the original). A new connection can inspect the
+comparison and obtain fresh resource URIs without regenerating candidates.
+
 ## Experiment groups and collective previews
 
 Use an explicit list of 1–32 independent experiments. Every item has a unique
@@ -466,6 +538,14 @@ return `preview_resources` indexed by item and figure. Read selected PNGs using
 document or spec requires a new snapshot. The group reports current input and
 project evidence separately from historical completion. It does not certify
 aggregate readiness or imply that the gallery is a publication layout.
+
+The gallery supports local search by experiment, figure or exact sample text,
+attention filtering, image enlargement, and copying known source, saved VSZ and
+delivery paths. "Needs attention" includes incomplete tasks, unavailable
+previews and stale or unknown source/export/delivery evidence; a completed task
+alone cannot clear that filter. Candidate images remain marked unsaved even
+when the currently saved project's delivery is current. Re-run `task group
+inspect` to refresh the query snapshot; browser interactions do not run tasks.
 
 Optionally include a top-level `sample_style_preset` object with the `preset`
 path and `expected_preset_sha256` from style capture. This applies to create

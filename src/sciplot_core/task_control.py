@@ -127,6 +127,10 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
             run_apply_export(root, state)
         elif phase == "previewing":
             run_edit_preview(root, state)
+        elif phase == "starting" and state["request"]["action"] == "edit":
+            run_edit_preview(root, state)
+        elif phase == "starting" and state["request"]["action"] == "export":
+            run_export(root, state)
         elif phase in {"planning", "creating", "starting"}:
             request = state["request"]
             if request["action"] != "create":

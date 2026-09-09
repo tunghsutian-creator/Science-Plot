@@ -75,7 +75,8 @@ performance comparisons use **120 × 55 mm**. Click any image to view it at full
 - Preview changes to colors, fonts, legends, and annotations before applying them.
 - Change ordinary curves together by their exact sample labels, and save successive edits before exporting.
 - Save sample colors and line widths as a preset, then reuse them by sample name across other experiment figures, including matching marker and direct-label colors.
-- Run an explicit experiment group, continue each task independently, and inspect all native figures in one local gallery. Repeated queries reuse unchanged previews.
+- Run an explicit experiment group, continue each task independently, and inspect all native figures in one local gallery. Search by experiment or sample, filter items needing attention, and copy source/document/delivery paths. Data, export and delivery freshness are shown separately; repeated queries reuse unchanged previews.
+- Compare 2–8 native alternatives for the same saved figure, view each beside the original, and inspect their differences. Copy a choice back to your AI assistant to apply exactly one candidate or keep the original. Viewing and copying never apply changes; the assistant rechecks the comparison before acting.
 - Refine a pending preview in the same task; styles that already match need no extra confirmation or save.
 - Preserve sample identities, units, and data sources. Missing reference values stay missing.
 - Reopen saved projects and continue editing with AI or directly in Veusz.
