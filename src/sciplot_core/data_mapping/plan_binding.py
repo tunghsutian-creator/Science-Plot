@@ -34,13 +34,13 @@ def resolve_mapping_plan_request(
     if not isinstance(original, str) or Path(original).expanduser().resolve() != source:
         raise ValueError("The mapping request does not target the original task source.")
     outputs = execution.get("outputs") or []
-    if not source.is_file() or len(outputs) != 1:
-        raise ValueError("Mapped creation currently requires one source file and one output table.")
-    output = outputs[0]
-    recorded_source = (
-        Path(execution["source_root"]) / output["source_relative_path"]
-    ).resolve()
-    if recorded_source != source or len(execution["source_hashes"]) != 1:
+    if not source.is_file() or not outputs:
+        raise ValueError("Mapped creation requires one original source file and selected output tables.")
+    recorded_sources = {
+        (Path(execution["source_root"]) / output["source_relative_path"]).resolve()
+        for output in outputs
+    }
+    if recorded_sources != {source} or len(execution["source_hashes"]) != 1:
         raise ValueError("The confirmed mapping does not cover exactly the task source.")
     for key in ("rule_id", "template"):
         selected = seed.get(key)

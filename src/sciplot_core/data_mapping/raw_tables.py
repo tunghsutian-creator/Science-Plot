@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from io import StringIO
+import csv
 from pathlib import Path
 from typing import Any
 import pandas as pd
@@ -84,9 +85,9 @@ def _read_raw_table(
     preserve_cells: bool = False,
 ) -> _RawTable:
     suffix = path.suffix.casefold()
-    if suffix in {".xlsx", ".xls"}:
+    if suffix in {".xlsx", ".xls", ".xlsm"}:
         sheet = reference.sheet if reference.sheet is not None else 0
-        raw = pd.read_excel(path, sheet_name=sheet, header=None, dtype=object)
+        raw = pd.read_excel(path, sheet_name=sheet, header=None, dtype=object, keep_default_na=False)
     else:
         if reference.sheet is not None:
             raise ValueError(
@@ -94,7 +95,7 @@ def _read_raw_table(
             )
         text = decode_text(path)
         delimiter = _detect_delimiter(text, reference)
-        raw = pd.read_csv(
+        raw = pd.DataFrame(list(csv.reader(StringIO(text), delimiter=delimiter))) if preserve_cells or reference.data_start_row is not None else pd.read_csv(
             StringIO(text),
             sep=delimiter,
             header=None,
@@ -106,7 +107,15 @@ def _read_raw_table(
         )
     if raw.empty:
         raise ValueError(f"Data mapping source is empty: {reference.relative_path}")
-    raw = raw.dropna(axis=1, how="all")
+    # Never collapse empty interior columns: selections use original cell indices.
+    for coordinate, expected in reference.cell_evidence.items():
+        row, column = (int(part) for part in coordinate.split(","))
+        if row >= raw.shape[0] or column >= raw.shape[1]:
+            raise ValueError(f"Metadata cell {coordinate} is outside the source.")
+        value = raw.iat[row, column]
+        actual = "" if value is None or pd.isna(value) else str(value)
+        if actual != expected:
+            raise ValueError(f"Metadata cell {coordinate} changed.")
     header_row = reference.header_row
     if header_row is None:
         headers = tuple(f"column_{index}" for index in range(raw.shape[1]))
@@ -121,6 +130,11 @@ def _read_raw_table(
             for index, value in enumerate(raw.iloc[header_row].tolist())
         )
         frame = raw.iloc[header_row + 1 :].reset_index(drop=True)
+    if reference.data_start_row is not None:
+        end = reference.data_end_row if reference.data_end_row is not None else len(raw)
+        if end > len(raw) or reference.data_start_row >= end:
+            raise ValueError("Selected data rows are outside the source.")
+        frame = raw.iloc[reference.data_start_row:end].reset_index(drop=True)
     if not preserve_cells:
         frame = frame.map(_normalize_missing)
     return _RawTable(

@@ -66,7 +66,7 @@ the explicit saved-figure/object references in the external API.
    `task capabilities → task start --request REQUEST_JSON → task inspect/resume`.
    The local runner owns recognition, fresh source-bound planning, creation,
    reviewed native edits and publication; it never invokes a model. Use
-   `needs_input` only for the actual exposed rule or source-column question, and
+   `needs_input` only for the actual exposed rule, table, source-column or annotation question, and
    inspect the candidate image before accepting a `needs_review` preview with
    `{"accept_preview":true}`. Existing user intent authorizes that change;
    preview acceptance is not an additional mandatory user permission step.
@@ -83,21 +83,35 @@ the explicit saved-figure/object references in the external API.
    The MCP stdio adapter exposes the same services and schemas; read full JSON
    and PNG resources only as needed. See the operation guide for exact fields.
 
-   For a supported CSV/TSV column question, inspect its original cells, units,
-   labels and zero-based indices. Reply with the current `expected_question_id`
-   and exactly one x/y pair. `choose_columns:true` explicitly requests this
+   For a supported CSV/TSV or Excel question, inspect original cells, units,
+   labels and zero-based indices. Select worksheet and metadata/data rows with
+   `table_selection`, then answer with current `expected_question_id` and x/y
+   `pairs`. The legacy single-pair answer remains supported.
+   `choose_columns:true` explicitly requests this
    workflow; an ambiguous single-x/multiple-y source may pause automatically.
    The same confirmed DataMapping binds planning, creation and later export.
    Do not turn the mapped CSV into a new raw source or reuse its selection as a
-   profile. Missing units, unsupported layouts and cross-sample pairs fail closed.
+   profile. Use `task table-region TASK --query QUERY_JSON --json` (or MCP
+   `task_table_region`) to read cells beyond the initial preview. Inspect the
+   per-column rejection reasons and raw metadata. Supply missing scientific
+   information through `metadata_confirmations`, bound to the original SHA,
+   worksheet and column, using a verified original cell, a cited external excerpt
+   or an attributed user statement. Never claim a user statement without an actual
+   statement, or promote an external inference into an original cell fact.
+   Review the resulting question before selecting pairs. A complete replacement
+   list corrects pending declarations; `[]` withdraws them, and changing the table
+   region resets them. Missing information, conflicts, unsupported layouts and
+   cross-sample pairs fail closed. No unit conversion is implied by confirmation.
 
    Use `action:"update_source"` with the saved project and explicit new source
    to review a data revision. Inspect every before/candidate PNG and the full
    change record, then answer `accept_source_update` with the current
    `expected_revision_id`. The task saves and exports through existing owners;
    export retries do not apply the revision again. Partial installation remains
-   blocked with its archive preserved. External annotations still require
-   explicit removal before a source update. Projects with confirmed mappings
+   blocked with its archive preserved. Compatible fixed annotations keep their
+   coordinates. Observed peak anchors require current candidate selection or
+   explicit removal/replacement. Inspect both provisional and final PNGs;
+   provisional markers are never committed. Projects with confirmed mappings
    require a fresh source-bound mapping; source-update does not reuse old columns.
 
    For successive edits use `export:false` on the task edit request. After
@@ -157,9 +171,10 @@ the explicit saved-figure/object references in the external API.
    source-bound observed peak labels, plus update/removal. Query annotations
    and exact units first; use `project operations-preview` or a task `edit`
    request, and apply through the existing native transaction. Do not replace
-   rejected operations with arbitrary Python or VSZ text changes. Remove
-   annotations before source revision until rebinding has its own reviewed
-   contract. The lower-level routes below remain available for diagnostics.
+   rejected operations with arbitrary Python or VSZ text changes. Source updates
+   offer reviewed peak rebinding and fixed-annotation retention; remove annotations
+   explicitly only when removal is intended. The lower-level routes below remain
+   available for diagnostics.
 
 3. For new raw data, inspect the source and ready rule invocation, then preserve
    a successful source-bound plan before execution:

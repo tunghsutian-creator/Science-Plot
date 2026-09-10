@@ -74,6 +74,7 @@ def prepare_candidate(
     temporary: Path,
     *,
     worksheet: str | None,
+    mapping_request: dict[str, Any] | None = None,
 ) -> tuple[Path, list[dict[str, Any]]]:
     # Intake's public package composes the Studio facade; load it only after
     # the facade is initialized, as the existing Studio intake route does.
@@ -82,6 +83,32 @@ def prepare_candidate(
 
     previous = json.loads((project / "plot_request.json").read_text())
     rule_id = str(previous.get("rule_id") or "")
+    if mapping_request is not None:
+        from sciplot_core.plan_preview import build_plan_preview
+        from sciplot_core.studio_core.project_creation import _prepare_mapped_project
+        from sciplot_core.output_contract import UserOutputLayout
+
+        if mapping_request.get("rule_id") != rule_id or mapping_request.get("template") != previous.get("template"):
+            raise ValueError("Fresh mapping must preserve the project's confirmed experiment and template.")
+        plan = dict(build_plan_preview(source, request=mapping_request))
+        if plan["status"] != "planned":
+            raise ValueError(f"Fresh source mapping cannot prepare this project: {plan.get('blocker')}")
+        result = _prepare_mapped_project(source, verified=plan, layout=UserOutputLayout(
+            delivery_root=requested_delivery_root({"request": previous}, run_output=project),
+            workspace_root=temporary,
+        ))
+        candidate = Path(result["project_dir"])
+        from sciplot_core.intake.models import IncomingFile, IntakeGroupInput
+        from sciplot_core.intake.project.source_materialization import materialize_intake_groups
+        from sciplot_core.foundation.json_io import atomic_write_json
+
+        # The source revision installer archives raw/source as one active set.
+        # These are byte copies of the original workbook, never mapped raw data.
+        _, _, snapshots = materialize_intake_groups(project_dir=candidate, groups=[
+            IntakeGroupInput(sample=source.stem, files=(IncomingFile(source.name, source.read_bytes()),))])
+        atomic_write_json(candidate / "source_snapshot.json", {"original_source": str(source), "files": snapshots})
+        verify_project_science(candidate)
+        return candidate, []
     if (
         not rule_id
         or previous.get("data_mapping")

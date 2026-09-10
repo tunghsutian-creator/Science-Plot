@@ -79,8 +79,8 @@ performance comparisons use **120 × 55 mm**. Click any image to view it at full
 - Compare 2–8 native alternatives for the same saved figure, view each beside the original, and inspect their differences. Copy a choice back to your AI assistant to apply exactly one candidate or keep the original. Viewing and copying never apply changes; the assistant rechecks the comparison before acting.
 - Refine a pending preview in the same task; styles that already match need no extra confirmation or save.
 - Preserve sample identities, units, and data sources. Missing reference values stay missing.
-- Choose one x/y column pair from a supported CSV or TSV using its original column positions, units and sample labels. Ambiguous shared-x response columns pause for a source-bound answer.
-- Update an existing project from a new source through the same AI task interface, review all original/candidate figures, and export the saved result. External annotations require explicit removal first; projects with confirmed column mappings require fresh mapping instead.
+- Select an Excel worksheet, metadata rows and a data region, then choose one or more x/y pairs, including shared X columns. CSV/TSV descriptions and multirow headers use the same original-cell mapping. Units and unique sample names must be declared in the selected cells; missing or nonfinite selected values require correction.
+- Update an existing project through the same AI task interface. Confirmed mappings are selected afresh. Compatible fixed annotations keep their coordinates; observed peaks show moved, missing or multiple candidates and require explicit handling before the final preview is accepted. Interrupted export resumes without applying the data revision twice.
 - Reopen saved projects and continue editing with AI or directly in Veusz.
 - Find previous task-created projects from their original data path when starting a new AI session.
 
@@ -132,8 +132,17 @@ Reuse a style you have already settled on:
 
 The [AI connection guide](skill/references/external-control.md) covers CLI and MCP setup.
 If data or units are ambiguous, SciPlot reports what needs clarification before plotting.
+For pending table questions, query any bounded original region and inspect per-column
+rejection reasons. Missing quantities, units and sample identities can be confirmed
+with original cells, cited external excerpts or attributed user statements. Raw facts
+remain separate; corrections replace the pending declarations and conflicts block creation.
+These confirmations do not perform unit conversion or establish a new scientific quantity.
+The [metadata acceptance record](docs/SCIENTIFIC_METADATA_ACCEPTANCE.md) records the
+untouched workbook that completed this flow and the external-evidence case that still blocks.
 Independent installation, beginner and real-client efficiency acceptance is still pending;
 the [acceptance protocol](docs/INDEPENDENT_ACCEPTANCE.md) defines the separate evidence needed.
+The [table and source-update acceptance record](docs/TABLE_SOURCE_UPDATE_ACCEPTANCE.md)
+separates automated coverage from independent original-workbook cases and remaining gaps.
 
 ## Exports
 

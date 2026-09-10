@@ -23,6 +23,8 @@ from sciplot_core.task_contract import TaskControlError
 
 def prepare_source_update_review(
     project: Path, source: Path, *, review_path: Path, worksheet: str | None = None,
+    mapping_request: dict[str, Any] | None = None,
+    annotation_decisions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Keep before/candidate PNGs after the isolated candidate is discarded."""
     project, source = resolve_project_path(project), canonical_path(source)
@@ -45,7 +47,9 @@ def prepare_source_update_review(
                 check_artifact(rendered["preview"])
                 previews.append({"figure_id": figure_id, "scope": scope, "preview": rendered["preview"]})
 
-    review = preview_project_source_update(project, source, worksheet=worksheet, on_candidate=capture)
+    review = preview_project_source_update(project, source, worksheet=worksheet, on_candidate=capture,
+        **({"mapping_request": mapping_request} if mapping_request else {}),
+        **({"annotation_decisions": annotation_decisions} if annotation_decisions is not None else {}))
     result = {
         "kind": "sciplot_task_source_update_review", "version": 1,
         "status": review["status"], "project": str(project), "review_path": str(path),

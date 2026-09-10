@@ -29,6 +29,9 @@ from sciplot_core.studio_core.source_update_staging import (
     transfer_project_styles,
     verify_project_science,
 )
+from sciplot_core.studio_core.source_update_annotations import transfer_annotations
+from sciplot_core.studio_core.annotation_contracts import annotation_records
+from sciplot_core.studio_core.annotation_rebinding import relocate_annotation_evidence
 
 
 def _selected_worksheet(request: dict[str, Any], worksheet: str | None) -> str | None:
@@ -64,7 +67,9 @@ def _check_external_state(project: Path, source: Path, review: dict[str, Any]) -
 
 @contextmanager
 def _prepared_update(
-    project_dir: Path, source_path: Path, worksheet: str | None
+    project_dir: Path, source_path: Path, worksheet: str | None,
+    mapping_request: dict[str, Any] | None = None,
+    annotation_decisions: list[dict[str, Any]] | None = None,
 ) -> Iterator[tuple[Path, dict[str, Any]]]:
     reject_symlink_path(project_dir.expanduser())
     reject_symlink_path(source_path.expanduser())
@@ -83,12 +88,7 @@ def _prepared_update(
     request = json.loads((project / "plot_request.json").read_text())
     selected_sheet = _selected_worksheet(request, worksheet)
     for document, spec in project_figures(project).values():
-        if json.loads(spec.read_text()).get("native_annotations"):
-            raise ValueError(
-                "annotation_source_revision_required: 此图包含外部标注。"
-                "请先通过公开操作移除标注，再更新数据并重新标注；"
-                "程序不会静默丢弃标注或让箭头指向其他数据。"
-            )
+        annotation_records(json.loads(spec.read_text()))
         _audit_exact_document_data(
             document_path=document, spec_path=spec, check_presentation=False
         )
@@ -98,13 +98,15 @@ def _prepared_update(
         prefix=".sciplot-source-update-", dir=project.parent
     ) as temporary:
         candidate, confirmations = prepare_candidate(
-            project, source, Path(temporary), worksheet=selected_sheet
+            project, source, Path(temporary), worksheet=selected_sheet,
+            **({"mapping_request": mapping_request} if mapping_request else {}),
         )
         if delivery and delivery.is_dir():
             # An unmerged visible edit must be recovered first; update cannot
             # make that edit disappear as a side effect of replacing the source.
             _protect_editable_documents(delivery, candidate)
         styles = transfer_project_styles(project, candidate)
+        annotations = transfer_annotations(project, candidate, annotation_decisions or [])
         if (
             project_inventory(project) != original_state
             or file_inventory(source) != source_state
@@ -137,16 +139,26 @@ def _prepared_update(
                 "Apply adopts the source revision; Save and Export then updates the delivery.",
             ],
         }
+        if mapping_request is not None:
+            review["mapping_request"] = mapping_request
+            review["mapping"] = json.loads((candidate / "plot_request.json").read_text())["data_mapping_plan_binding"]
+        if annotations:
+            review["annotation_review"] = annotations
+            review["annotation_decisions"] = annotation_decisions or []
+            if any(item["requires_choice"] for item in annotations):
+                review["status"] = "needs_annotation_choices"
         yield candidate, review
 
 
 def preview_project_source_update(
     project_dir: Path, source: Path, *, worksheet: str | None = None,
     on_candidate: Callable[[Path, dict[str, Any]], None] | None = None,
+    mapping_request: dict[str, Any] | None = None,
+    annotation_decisions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build and audit an isolated candidate without changing the active project."""
     try:
-        with _prepared_update(project_dir, source, worksheet) as (candidate, preview):
+        with _prepared_update(project_dir, source, worksheet, mapping_request, annotation_decisions) as (candidate, preview):
             if on_candidate is not None:
                 on_candidate(candidate, preview)
                 project = Path(preview["project"])
@@ -188,7 +200,7 @@ def apply_project_source_update(
     if prior is not None:
         return _applied_result(project, preview, prior, status="already_applied")
     with _prepared_update(
-        project, Path(preview["source"]), preview.get("worksheet")
+        project, Path(preview["source"]), preview.get("worksheet"), preview.get("mapping_request"), preview.get("annotation_decisions")
     ) as (candidate, current):
         if current != preview:
             raise ValueError(
@@ -207,6 +219,7 @@ def apply_project_source_update(
                 project, Path(preview["source"]), current
             ),
             review=current,
+            **({"relocate_companion": relocate_annotation_evidence} if current.get("annotation_review") else {}),
         )
     return _applied_result(project, preview, archive, status="updated")
 

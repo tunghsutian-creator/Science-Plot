@@ -16,6 +16,7 @@ def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, 
 
 def tool_definitions() -> list[Tool]:
     from sciplot_core.task_control import task_request_schema, task_response_schema
+    from sciplot_core.task_choice_schema import table_region_schema
     from sciplot_core.task_group_contract import group_request_schema, group_responses_schema
     from sciplot_core.task_comparison_contract import comparison_request_schema, comparison_selection_schema
 
@@ -44,6 +45,8 @@ def tool_definitions() -> list[Tool]:
         {"request": task_request_schema(), "task_dir": string}, ["request"])
     add("task_inspect", "Resume context from a saved task. This does not rerun or certify its historical result.",
         {"task": string}, ["task"], read_only=True)
+    add("task_table_region", "Read up to 128 original rows by 64 columns, bound to the current table question and source bytes. Does not change the question or select cells.",
+        {"task": string, "query": table_region_schema()}, ["task", "query"], read_only=True)
     add("task_find", "Find creation receipts by exact original source path in the source-adjacent task history or an explicit tasks_root. Returns candidates and source currentness; inspect the selected task/project before continuing. Does not create or choose a project.",
         {"source": string, "tasks_root": string, "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
         ["source"], read_only=True)

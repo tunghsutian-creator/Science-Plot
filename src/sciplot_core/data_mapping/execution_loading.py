@@ -188,7 +188,7 @@ def load_data_mapping_execution(
         if not expected_path.is_file():
             raise FileNotFoundError(f"Mapped data output not found: {expected_path}")
         expected_frame = frames[reference.source_id]
-        expected_hash = _mapped_csv_sha256(expected_frame)
+        expected_hash = _mapped_csv_sha256(expected_frame, full_precision=proposal.provider == "explicit_table_choice")
         if (
             file_sha256(expected_path) != expected_hash
             or output.get("sha256") != expected_hash
@@ -213,6 +213,13 @@ def load_data_mapping_execution(
     expected_effective_input = (
         expected_output_paths[0] if len(expected_output_paths) == 1 else data_dir
     )
+    if proposal.provider == "explicit_table_choice":
+        from sciplot_core.data_mapping.output_files import paired_table_text
+
+        expected_effective_input = execution_root / "selected_pairs.csv"
+        if expected_effective_input.read_bytes() != paired_table_text(proposal, frames).encode("utf-8"):
+            raise ValueError("Selected paired table does not reproduce original values and metadata.")
+        expected_output_paths.append(expected_effective_input)
     if (
         Path(str(payload.get("effective_input") or "")).expanduser().resolve()
         != expected_effective_input.resolve()
@@ -278,7 +285,7 @@ def load_data_mapping_execution(
     step_inputs = mapping_step.get("input_artifacts")
     expected_input = (
         (source_root / proposal.sources[0].relative_path).resolve()
-        if execution_version >= 2 and len(proposal.sources) == 1 else source_root
+        if execution_version >= 2 and len({s.relative_path for s in proposal.sources}) == 1 else source_root
     )
     if (
         not isinstance(step_inputs, list)

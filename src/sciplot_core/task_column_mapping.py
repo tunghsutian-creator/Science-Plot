@@ -11,6 +11,7 @@ from sciplot_core.data_mapping import (
     preview_data_mapping_proposal,
 )
 from sciplot_core.data_mapping.column_choice import column_choice_snapshot, proposal_for_column_choice
+from sciplot_core.data_mapping.table_choice import table_choice_snapshot, select_table, proposal_for_table_columns
 from sciplot_core.data_mapping.contracts import DATA_MAPPING_EXECUTION_FILENAME
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
@@ -22,8 +23,18 @@ from sciplot_core.task_storage import save_task
 def column_question(source: Path, selected: dict[str, Any], *, explicit: bool = False) -> dict[str, Any] | None:
     snapshot = column_choice_snapshot(source, selected["rule_id"])
     if snapshot is None:
+        table = table_choice_snapshot(source, selected["rule_id"]) if explicit or source.suffix.casefold() in {".xls", ".xlsx", ".xlsm"} else None
+        if table is not None:
+            question = {
+                "field": "table_selection", "reason_code": "table_selection_required",
+                "message": "请选择原始工作表、表头/单位/样品行和数据起止行；索引从 0 开始，结束行不包含在内。可再次回答 table_selection 更正区域。",
+                "selection": {"rule_id": selected["rule_id"], "template": resolve_rule_template(selected["rule_id"], selected.get("template"))},
+                "evidence": table,
+            }
+            question["question_id"] = canonical_json_sha256(question, allow_nan=False)
+            return question
         if explicit:
-            raise TaskControlError("column_mapping_unsupported", "列选择仅支持已有普通曲线规则的 CSV/TSV，需明确单位及单行或规范三行表头。")
+            raise TaskControlError("column_mapping_unsupported", "列选择支持普通曲线规则的 CSV/TSV 和 Excel；需要原始坐标、单位和样品证据。")
         return None
     x_columns = [column for column in snapshot["columns"] if column["x_eligible"]]
     y_columns = [column for column in snapshot["columns"] if column["y_eligible"]]
@@ -54,8 +65,9 @@ def validate_column_response(state: dict[str, Any], response: dict[str, Any]) ->
     question = state["question"]
     choice = response.get("column_mapping")
     if (set(response) != {"expected_question_id", "column_mapping"}
-            or not isinstance(choice, dict) or set(choice) != {"x_column", "y_column"}
-            or any(type(value) is not int or value < 0 for value in choice.values())):
+            or not isinstance(choice, dict)
+            or (set(choice) != {"pairs"} and (set(choice) != {"x_column", "y_column"}
+            or any(type(value) is not int or value < 0 for value in choice.values())))):
         raise TaskControlError("invalid_task_response", "请回答 column_mapping 的 x_column/y_column，并附当前 expected_question_id。")
     if response["expected_question_id"] != question["question_id"]:
         raise TaskControlError("stale_task_question", "此答案对应旧问题，请读取当前列选择问题。")
@@ -78,8 +90,14 @@ def accept_column_response(root: Path, state: dict[str, Any], response: dict[str
     else:
         atomic_write_json(request_path, seed)
     try:
-        proposal = proposal_for_column_choice(
-            question["evidence"], **response["column_mapping"], request_path=request_path,
+        factory = proposal_for_table_columns if question["evidence"]["kind"] == "sciplot_table_columns" else proposal_for_column_choice
+        values = response["column_mapping"]
+        if factory is proposal_for_table_columns and "pairs" not in values:
+            values = {"pairs": [values]}
+        if factory is proposal_for_column_choice and "pairs" in values:
+            raise ValueError("Use table_selection before selecting multiple pairs.")
+        proposal = factory(
+            question["evidence"], **values, request_path=request_path,
             proposal_id=f"columns_{answer_id}", created_at=state["created_at"],
         )
         preview_data_mapping_proposal(proposal, source_root=Path(seed["input"]).parent,
@@ -103,6 +121,62 @@ def accept_column_response(root: Path, state: dict[str, Any], response: dict[str
         "output_root": str(attempt / "execution"),
     }
     save_task(root, state)  # Recover the same confirmation if materialization is interrupted.
+
+
+def accept_table_response(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
+    question = state["question"]
+    if set(response) != {"expected_question_id", "table_selection"}:
+        raise TaskControlError("invalid_task_response", "请回答 table_selection 并附当前 expected_question_id。")
+    if response["expected_question_id"] != question["question_id"]:
+        raise TaskControlError("stale_task_question", "此答案对应旧问题，请读取当前选择问题。")
+    evidence = question["evidence"]
+    snapshot = evidence.get("table_snapshot") or evidence
+    if snapshot.get("kind") != "sciplot_table_choice":
+        snapshot = table_choice_snapshot(Path(state["request"]["source"]), question["selection"]["rule_id"])
+    try:
+        columns = select_table(snapshot, response["table_selection"])
+    except (ValueError, TypeError) as exc:
+        raise TaskControlError("invalid_mapping_selection", str(exc)) from exc
+    next_question = {"field": "column_mapping", "reason_code": "column_selection_required",
+                     "message": "请查看逐列 rejection_reasons，确认 pairs；可用 metadata_confirmations 补充有证据的量名、单位和样品，或用 table_selection 更正区域。",
+                     "selection": question["selection"], "evidence": columns}
+    state.setdefault("scientific_choice_history", []).append({"question": question, "response": response})
+    next_question["revision"] = len(state["scientific_choice_history"])
+    next_question["question_id"] = canonical_json_sha256(next_question, allow_nan=False)
+    state.pop("mapping_choice", None)
+    state.pop("data_mapping", None)
+    pause_for_columns(state, next_question)
+    save_task(root, state)
+
+
+def accept_metadata_response(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
+    question = state["question"]
+    if question.get("field") != "column_mapping":
+        raise TaskControlError("invalid_task_response", "请先用 table_selection 选择原始区域。")
+    if set(response) != {"expected_question_id", "metadata_confirmations"}:
+        raise TaskControlError("invalid_task_response", "Replace metadata_confirmations with the full current list and expected_question_id.")
+    if response["expected_question_id"] != question["question_id"]:
+        raise TaskControlError("stale_task_question", "此答案对应旧问题，请读取当前科学信息确认问题。")
+    evidence = question["evidence"]
+    if evidence.get("kind") != "sciplot_table_columns":
+        raise TaskControlError("invalid_task_response", "请先用 table_selection 选择原始区域。")
+    try:
+        from sciplot_core.mapping_contract.table_metadata import validate_metadata_confirmations
+
+        validate_metadata_confirmations(response["metadata_confirmations"])
+        columns = select_table(evidence["table_snapshot"], evidence["table_selection"], response["metadata_confirmations"])
+    except (ValueError, TypeError) as exc:
+        raise TaskControlError("invalid_mapping_selection", str(exc)) from exc
+    state.setdefault("scientific_choice_history", []).append({"question": question, "response": response})
+    next_question = {"field": "column_mapping", "reason_code": "column_selection_required",
+        "message": "请审阅 raw_metadata、metadata_confirmations 和逐列拒绝原因后选择 pairs。更正时提交完整 metadata_confirmations 列表；空列表撤回全部声明。冲突继续阻断。",
+        "selection": question["selection"], "evidence": columns, "revision": len(state["scientific_choice_history"])}
+    next_question["question_id"] = canonical_json_sha256(next_question, allow_nan=False)
+    state.pop("mapping_choice", None)
+    state.pop("data_mapping", None)
+    state.pop("mapping_error", None)
+    pause_for_columns(state, next_question)
+    save_task(root, state)
 
 
 def mapped_plan_request(state: dict[str, Any]) -> dict[str, Any]:

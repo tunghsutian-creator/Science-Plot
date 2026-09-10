@@ -15,28 +15,42 @@ Validate a clean machine separately from relocation on the development machine.
 Finish a signed/notarized distribution path if distributing to other Macs.
 Additional platforms and AI clients need their own installation acceptance.
 
-## 2. More scientific choices through the same task contract
+## 2. Independent original-data acceptance for table choices
 
-Validate the current single-pair CSV/TSV column-choice task with an independent
-user's genuinely ambiguous source. Source-backed normalized PDA regression does
-not close that acceptance. Extend the same source-bound DataMapping route to
-worksheet selection and additional table layouts only with original-cell evidence.
-The task rule-selection answer must not encode arbitrary scientific facts.
-Extend reusable profiles only when current headers, units and mappings can be
-validated; continue to reject incompatible or unsupported profiles.
+Worksheet/region selection, multirow headers, shared X and multiple XY use
+the same source-bound task/DataMapping route. Bounded original-region queries,
+per-column diagnostics and evidence-bound metadata confirmations now complete
+one untouched independent XRD workbook through creation/export. A real external
+figure confirms another source's quantity while its missing unit still blocks it.
+See [the metadata acceptance record](docs/SCIENTIFIC_METADATA_ACCEPTANCE.md).
+The five earlier failures remain historical evidence; no independent natural
+source-revision workflow has completed yet.
 
-Exit: a real source needing each newly supported choice can pause and continue
-through task/MCP without a code workaround or lost scientific evidence.
+Next resolve per-pair row ranges, merged metadata and numeric-only sample
+labels with explicit evidence before adding a supported choice. Extend real-case
+coverage for externally documented units and scientific statements. Unit conversions
+or new quantities need their own scientific rule contract; never infer them just
+to make an acceptance source pass. The task rule-selection answer must not encode
+arbitrary scientific facts. Extend reusable profiles only when current headers,
+units and mappings can be validated.
 
-## 3. Reviewed annotation rebinding on source revision
+Exit: every advertised new choice has an untouched independent source completing
+selection, correction, native creation and exact-current export through task/MCP.
 
-Define separate behavior for fixed-coordinate guides, layout text and observed
-peak anchors. Present moved, missing and ambiguous anchors in source-update
-preview and commit the reviewed document/evidence together. Until then, require
-explicit annotation removal before source update.
+## 3. Reviewed annotation rebinding: independent source-revision acceptance
 
-Exit: source-update tests cover retained fixed guides and correctly reviewed
-peak changes without silently reattaching annotations or weakening audits.
+Fresh mapped-source selection, compatible fixed annotations and reviewed observed
+peak rebinding now have automated native coverage, including moved/missing/multiple
+candidates and export-only recovery. An independently produced original/revision
+pair with known sample identity is still needed for the same full lifecycle.
+Do not count edited synthetic copies or development fixtures as this evidence.
+
+Validate original metadata, measurements, sample identity and final VSZ/spec/CSV
+together. Uncertain partial installations remain blocked with their archive;
+automatic recovery from such mixed installations is still unfinished.
+
+Exit: untouched real revisions cover every peak outcome and confirmed mapping,
+with reviewed previews, correct exports and recorded interruption recovery.
 
 ## 4. Measured usability and AI-efficiency improvements
 

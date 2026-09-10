@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_request
 
 from sciplot_core.figure_plan import (
     FigurePlanResolutionError,
@@ -85,6 +86,7 @@ def reuse_existing_studio_document(
     )
     try:
         if request_rule_id or request.get("resolved_figure_plan") is not None:
+            effective_request, _mapping_application = resolve_data_mapping_request(request, base_dir=request_path.parent)
             study_model_value = request.get("study_model")
             study_model = (
                 study_model_value if isinstance(study_model_value, dict) else {}
@@ -95,7 +97,7 @@ def reuse_existing_studio_document(
                 template=presentation_identity.template,
                 study_model=study_model,
                 input_path=_resolve_request_input(
-                    request,
+                    effective_request,
                     base_dir=request_path.parent,
                 ),
                 request=request,

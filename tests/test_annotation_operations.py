@@ -32,6 +32,53 @@ def note(identifier="note"):
             "arrow_to": {"mode": "axes", "x": 425, "y": 3, "x_unit": "nm", "y_unit": "a.u."}}
 
 
+@pytest.mark.parametrize("values,status,count", [([1, 2, 4, 2, 1], "moved", 1),
+    ([1, 2, 3, 4, 5], "missing", 0), ([1, 3, 1, 4, 2], "ambiguous", 2)])
+def test_source_revision_peak_cases_require_exact_reviewed_decisions(spec, values, status, count):
+    from sciplot_core.studio_core.annotation_rebinding import annotation_revision
+    old_peak = peak_candidates_for_spec(spec, object_path="/page1/graph1/series_1",
+        window={"min": 400, "max": 500, "unit": "nm"}, polarity="maximum")[0]
+    original = copy.deepcopy(spec)
+    original["native_annotations"] = {"version": 1, "items": [normalize_annotation(spec, {
+        "op": "add_peak_label", "id": "peak", "candidate": old_peak})]}
+    replacement = copy.deepcopy(spec)
+    replacement["series"][0]["y_values"] = values
+    before = copy.deepcopy(original)
+    records, provisional = annotation_revision(original, replacement, figure_id="f", document_sha256="d" * 64, decisions=[])
+    assert records[0]["status"] == status and records[0]["requires_choice"]
+    assert len(records[0]["candidates"]) == count and provisional
+    choice = {"figure_id": "f", "id": "peak", "action": "remove"}
+    if count:
+        candidate = records[0]["candidates"][-1]
+        choice.update(action="rebind", candidate_id=candidate["candidate_id"], text=f"{candidate['x']:g} nm")
+    resolved, operations = annotation_revision(original, replacement, figure_id="f", document_sha256="d" * 64, decisions=[choice])
+    assert not resolved[0]["requires_choice"]
+    if count:
+        result = compile_annotation_operations(replacement, operations, figure_id="f", document_sha256="d" * 64)[1]
+        assert annotation_records(result)[0]["peak_anchor"]["x"] == candidate["x"]
+        stale = {**choice, "candidate_id": old_peak["candidate_id"]}
+        with pytest.raises(ValueError, match="current candidate"):
+            annotation_revision(original, replacement, figure_id="f", document_sha256="d" * 64, decisions=[stale])
+    else:
+        assert operations == []
+    assert original == before
+
+
+def test_fixed_and_data_annotations_cannot_jump_between_samples(spec):
+    from sciplot_core.studio_core.annotation_rebinding import annotation_revision
+    peak = peak_candidates_for_spec(spec, object_path="/page1/graph1/series_1",
+        window={"min": 400, "max": 500, "unit": "nm"}, polarity="maximum")[0]
+    original = copy.deepcopy(spec)
+    fixed = {"op": "add_reference_line", "id": "fixed", "parent_path": "/page1/graph1", "axis": "x", "value": 450, "unit": "nm"}
+    original["native_annotations"] = {"version": 1, "items": [normalize_annotation(spec, fixed), normalize_annotation(spec, {
+        "op": "add_peak_label", "id": "peak", "candidate": peak})]}
+    replacement = copy.deepcopy(spec)
+    replacement["series"][0]["label"] = "B"
+    report, operations = annotation_revision(original, replacement, figure_id="f", document_sha256="d" * 64, decisions=[])
+    assert report[0]["status"] == "fixed_retained" and operations[0] == fixed
+    assert report[1]["status"] == "sample_missing" and not report[1]["candidates"]
+
+
 def compile_ops(spec, operations):
     return compile_annotation_operations(spec, operations, document_sha256="d" * 64, figure_id="f")
 
@@ -280,7 +327,7 @@ def test_spec_and_document_rollback_and_pending_recovery(tmp_path, monkeypatch):
     assert commit.read_edit_operation(project, review["operation_id"])["result_is_current"] is False
 
 
-def test_source_update_blocks_before_preparing_or_losing_annotations(tmp_path, monkeypatch):
+def test_source_update_rejects_invalid_annotation_scope_before_preparing(tmp_path, monkeypatch):
     from sciplot_core.studio_core import source_update
 
     project = tmp_path / "managed"
@@ -294,5 +341,5 @@ def test_source_update_blocks_before_preparing_or_losing_annotations(tmp_path, m
     monkeypatch.setattr(source_update, "prepare_candidate", lambda *a, **k: pytest.fail("must not prepare source"))
     result = source_update.preview_project_source_update(project, source)
     assert result["status"] == "blocked"
-    assert "annotation_source_revision_required" in result["reason"]
+    assert "Annotations currently require ordinary Cartesian curves" in result["reason"]
     assert json.loads(spec.read_text())["native_annotations"]["items"] == [note()]

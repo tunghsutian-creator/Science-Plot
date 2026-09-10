@@ -121,18 +121,34 @@ export so an export failure can resume without re-preparing data. Profiles reuse
 only verified rule/template selections; actual header/unit evidence and a fresh
 source plan are required for each new input.
 
-`data_mapping/column_choice` reads original CSV/TSV cells through the existing
-mapping reader and proposes one explicit pair with source-owned units and labels.
+`data_mapping/column_choice` retains the original single-pair CSV/TSV route.
+`data_mapping/table_choice` exposes original Excel worksheets and CSV/TSV rows,
+binds explicit metadata/data ranges, and proposes shared-X or paired-XY source
+views with original cell evidence. Empty interior columns never change indices.
 `task_column_mapping` binds a question identity to that proposal and persists the
-same path-bound confirmation before execution. It adds no transformations or
-profile reuse. `data_mapping/plan_binding` verifies the immutable execution and
+same path-bound confirmation before execution. The mapping owner composes selected
+pairs into its verified effective table; that table and every selected output must
+reproduce from the original cells. It adds no profile reuse or numerical changes.
+`data_mapping/plan_binding` verifies the immutable execution and
 request seed; the outer plan hashes the original input while the existing
 scientific transform and FigurePlan describe the effective mapped input.
 Creation, query and export verify both identities. Publication retains the
 effective-source archive and a separate byte-verified original-input archive.
 Mapping execution v2 fingerprints the explicit file for a single-source step,
 so task/output files in its parent are not mistaken for source data; historical
-v1 directory-bound executions retain their original verification rules.
+v1 directory-bound executions retain their original verification rules. Reuse of
+saved mapped projects resolves the same effective source before FigurePlan checks.
+
+`task_table_region` serves bounded, source/question-bound original rectangles through
+CLI and MCP without changing the task. `mapping_contract/table_metadata` owns the
+closed declaration schema. `data_mapping/table_metadata` resolves column diagnostics
+and separates original facts from cited external excerpts and attributed statements.
+`task_column_mapping` replaces pending declarations with question-versioned history;
+changing the selected region resets them. `DataMappingProposal.table_confirmation`
+freezes the selection, pairs and evidence, and the mapping frame owner replays these
+bindings against the original before confirmation, execution and export verification.
+External citation relevance is judged by the caller; SciPlot verifies record shape,
+source/cell identity and deterministic consistency, not the truth of an external claim.
 
 `task_source_execution` checkpoints source-update preview, application and export.
 `task_source_update` persists all before/candidate PNGs and a review identity;
@@ -140,10 +156,10 @@ the existing source-update owner continues to prepare, audit and install the
 candidate. Its durable operation records the reviewed baseline, installed target
 and archive before replacement. Recovery accepts only a byte-proven completed
 installation or an untouched baseline; mixed states retain the archive and block.
-An export retry never reapplies the source revision. Neither this adapter nor
-its MCP image resources rebind annotations or infer scientific choices.
-Source-update rejects all persisted mapping-binding forms before preparing a
-candidate; replacing mapped data requires a newly confirmed mapping.
+An export retry never reapplies the source revision. The task requires fresh
+source-bound selection for all persisted mapping forms. The staging owner consumes
+the confirmed plan through mapped project preparation and keeps original byte
+snapshots through the existing Intake materializer.
 
 `annotation_axes`, `annotation_contracts`, `annotation_geometry`, `annotation_batch`
 and `peak_evidence` own pure annotation meaning, geometry and data-bound observed
@@ -151,8 +167,14 @@ extrema. `annotation_operations`/`peak_analysis` are saved-project services;
 the native worker creates ordinary Veusz widgets. The existing edit transaction
 replays and audits both VSZ and `spec.native_annotations`, archives both, and
 rolls both back on failure. Annotation metadata is semantic/provenance evidence,
-not a second visual document. Source updates currently require annotations to be
-removed explicitly before changing data; no implicit anchor rebinding occurs.
+not a second visual document. `annotation_rebinding` classifies fixed annotations
+and observed peaks by exact sample identity, coordinates, units and window.
+`source_update_annotations` uses the existing audited native candidate editor,
+first for provisional review markers and then for explicit decisions. Candidate
+IDs bind complete numeric series, independently of temporary file paths. Final
+source-update confirmation binds the decisions and all figure previews. Installing
+the candidate refreshes only path-dependent peak provenance signatures after
+checking unchanged sample values, source hashes and observed points.
 
 `sample_style` exposes exact ordinary series labels and expands supported
 color/width batches using current advertised native fields. `document_edit_policy`

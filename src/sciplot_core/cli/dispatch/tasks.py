@@ -49,10 +49,17 @@ def dispatch_task(args: Any) -> int:
             responses = json.loads(args.responses.expanduser().read_text()) if args.responses else []
             result = resume_group(args.target, responses)
     elif action == "capabilities":
+        from sciplot_core.task_choice_schema import table_region_schema
+
         result = {"kind": "sciplot_task_capabilities", "version": 1,
                   "request_schema": task_request_schema(),
                   "response_schema": task_response_schema(),
+                  "table_region_query_schema": table_region_schema(),
                   "model_configuration_required": False}
+    elif action == "table-region":
+        from sciplot_core.task_table_region import inspect_table_region
+
+        result = inspect_table_region(args.target, _object(args.query))
     elif action == "find":
         result = find_tasks(args.source, tasks_root=args.tasks_root, limit=args.limit)
     elif action == "start":

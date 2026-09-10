@@ -85,7 +85,7 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
     keys = (
         "kind", "version", "task_dir", "status", "phase", "updated_at", "question",
         "blocker", "result", "preview", "operation_id", "profile", "profile_unavailable", "project", "edit_outcome",
-        "mapping_error", "data_mapping", "revision_id", "previews", "source_update_outcome",
+        "mapping_error", "data_mapping", "revision_id", "previews", "source_update_outcome", "annotation_error",
     )
     summary = {key: state[key] for key in keys if key in state}
     if state["status"] in {"complete", "cancelled"}:

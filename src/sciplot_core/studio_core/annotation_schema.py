@@ -128,6 +128,6 @@ def annotation_operation_capabilities() -> dict[str, Any]:
         "identity": "Saved document SHA and inspected paths; annotation IDs are unique per figure.",
         "scope": "Cartesian ordinary curves; native graph x/y axes only.",
         "peak_method": "Unsmoothed strict discrete interior extrema in an explicit x window; no assignments.",
-        "source_revision": "Remove managed annotations before changing source data; anchors never silently rebind.",
+        "source_revision": "Source-update previews retain compatible fixed annotations and require explicit choices for observed peak anchors, including moved, missing and ambiguous candidates.",
         "discovery": "inspect_annotation_state returns current annotations, exact units and graph bounds.",
     }

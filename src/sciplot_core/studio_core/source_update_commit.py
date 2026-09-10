@@ -130,6 +130,7 @@ def install_source_update(
     validate: Callable[[], object],
     precommit: Callable[[], None] | None = None,
     review: dict[str, Any] | None = None,
+    relocate_companion: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
 ) -> Path:
     """Keep old runtime history; atomically replace each reviewed active part."""
     reject_symlink_path(project)
@@ -146,9 +147,14 @@ def install_source_update(
         )
     for path in [*candidate.glob("*.json"), *(candidate / "studio").rglob("*.json")]:
         value = json.loads(path.read_text(encoding="utf-8"))
+        relocated = relocate_metadata(value, candidate, project)
+        if isinstance(value, dict) and value.get("native_annotations"):
+            if relocate_companion is None:
+                raise ValueError("Annotated source installation requires reviewed provenance relocation.")
+            relocated = relocate_companion(value, relocated)
         path.write_text(
             json.dumps(
-                relocate_metadata(value, candidate, project),
+                relocated,
                 ensure_ascii=False,
                 indent=2,
             ),

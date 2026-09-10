@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from sciplot_core.task_choice_schema import annotation_response_schema, column_mapping_schema, table_response_schema, metadata_response_schema
 
 
 class TaskControlError(ValueError):
@@ -16,7 +17,7 @@ _FIELDS = {
     "create": {"source", "rule_id", "template", "out", "profile", "choose_columns"},
     "edit": {"project", "figure_id", "expected_document_sha256", "operations", "export"},
     "export": {"project"},
-    "update_source": {"project", "source", "worksheet"},
+    "update_source": {"project", "source", "worksheet", "choose_columns"},
 }
 _REQUIRED = {
     "create": {"source"},
@@ -36,10 +37,10 @@ def task_request_schema() -> dict[str, Any]:
             "action": {"type": "string", "const": action},
             **{key: {"type": "string", "minLength": 1} for key in sorted(fields)},
         }
-        if action == "create":
+        if action in {"create", "update_source"}:
             properties["choose_columns"] = {
                 "type": "boolean", "const": True,
-                "description": "Explicitly select one source x/y pair in a supported CSV/TSV; answer the returned source-bound question.",
+                "description": "Select original worksheet, metadata/data rows and x/y pairs in CSV/TSV or Excel; answer source-bound questions.",
             }
         if action == "edit":
             properties["export"] = {"type": "boolean", "default": True,
@@ -65,12 +66,13 @@ def task_response_schema() -> dict[str, Any]:
                    "description": "Replace the whole batch against the same saved document; this does not append to the old preview."}
     return {
         "oneOf": [
+            table_response_schema(),
+            metadata_response_schema(),
+            annotation_response_schema(),
             {"type": "object", "additionalProperties": False,
              "properties": {
                  "expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-                 "column_mapping": {"type": "object", "additionalProperties": False,
-                    "properties": {key: {"type": "integer", "minimum": 0} for key in ("x_column", "y_column")},
-                    "required": ["x_column", "y_column"]}},
+                 "column_mapping": column_mapping_schema()},
              "required": ["expected_question_id", "column_mapping"]},
             {"type": "object", "additionalProperties": False,
              "properties": {"accept_source_update": {"type": "boolean"},

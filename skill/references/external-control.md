@@ -103,11 +103,88 @@ file remains intact. Samples and units must be present in the source, and the
 registered scientific rule still validates the mapped table. The persisted
 DataMapping confirmation is reused on interruption, and the plan/project retain
 both original and effective source identities. Changed sources reject old answers.
-The selection is not saved as a reusable profile. Other layouts, Excel worksheet
-selection, missing units and arbitrary scientific repairs remain unsupported.
-This first column-choice route also rejects missing/nonfinite selected values,
+The selection is not saved as a reusable profile. The table route below can confirm
+missing metadata with explicit evidence; arbitrary scientific repairs remain unsupported.
+The column-choice route rejects missing/nonfinite selected values,
 blank data records and sample labels that cannot survive the mapped filename
 unchanged. It never drops such records or silently renames the selected sample.
+
+Excel and other row layouts use `table_selection` first. Inspect each worksheet's
+original preview, then select its exact name (null for text), header rows, optional
+unit/sample rows and a contiguous data range. All indices are zero-based and the
+end row is exclusive. For example:
+
+```json
+{"expected_question_id":"CURRENT_QUESTION_SHA256","table_selection":{"sheet":"Measured","header_rows":[1],"unit_row":2,"sample_row":3,"data_start_row":4,"data_end_row":104}}
+```
+
+The next question separates `raw_metadata`, `metadata_confirmations`,
+`x_rejection_reasons`, `y_rejection_reasons`, and `sample_rejection_reasons` per
+column. Numeric diagnostics include point count and up to 16 failing original row
+indices. Pair identity is checked when choosing pairs; a missing X sample may be
+valid for a shared axis. Choose explicit pairs when the science is resolved:
+
+```json
+{"expected_question_id":"CURRENT_QUESTION_SHA256","column_mapping":{"pairs":[{"x_column":0,"y_column":1},{"x_column":0,"y_column":3},{"x_column":4,"y_column":5}]}}
+```
+
+This example selects two responses sharing X and one separate XY pair. Each Y
+needs a unique sample label from the selected X or Y sample cell. If both are
+present they must match; shared X may have an empty sample cell. One pair without
+a sample row uses the original filename.
+Answer `table_selection` again with the current question ID to correct metadata
+or data bounds, including from a legacy single-pair question. No file rewrite is
+needed. Currently one region on one worksheet, up to 32 pairs and 256 columns is
+supported. Per-pair row ranges, numeric-only sample names, merged metadata cells
+needing expansion remain unsupported.
+
+Read beyond the initial preview without changing the question:
+
+```bash
+skill/scripts/sciplot task table-region TASK --query region.json --json
+```
+
+```json
+{"expected_question_id":"CURRENT_QUESTION_SHA256","sheet":"Measured","row_start":120,"row_end":125,"column_start":0,"column_end":6}
+```
+
+The equivalent MCP tool is `sciplot_task_table_region` with `task` and `query`.
+Bounds are zero-based and end-exclusive, at most 128 rows × 64 columns. The
+result preserves original indices, blank cells and decoded cell values. It is
+not a formula/style or merged-cell interpretation. Source or question changes
+invalidate a query.
+
+For missing scientific information, answer with a complete declaration list:
+
+```json
+{"expected_question_id":"CURRENT_QUESTION_SHA256","metadata_confirmations":[
+  {"source_sha256":"ORIGINAL_FILE_SHA256","sheet":"Measured","column_index":1,"field":"sample","value":"A","evidence":{"kind":"source_cell","sheet":"Measured","row_index":1,"column_index":1,"text":"A"}},
+  {"source_sha256":"ORIGINAL_FILE_SHA256","sheet":"Measured","column_index":1,"field":"quantity","value":"Absorbance","evidence":{"kind":"external_reference","uri":"https://example.org/instrument-record","locator":"Measurement A, axis description","excerpt":"Absorbance (a.u.)"}},
+  {"source_sha256":"ORIGINAL_FILE_SHA256","sheet":"Measured","column_index":1,"field":"unit","value":"a.u.","evidence":{"kind":"user_statement","asserted_by":"DATA_OWNER","statement":"ACTUAL_USER_STATEMENT_ABOUT_THIS_COLUMN"}}
+]}
+```
+
+Replace placeholders with inspected evidence, never invented statements. Each item
+binds original file SHA, worksheet, column and exactly one `quantity`, `unit` or
+`sample`. Evidence is either a byte-verified source cell, an external URI with a
+locator and excerpt, or an attributed user statement. The caller must read and
+judge external materials; the deterministic service does not fetch the citation
+or certify its truth. Frozen excerpts and declarations are included in the signed
+DataMapping proposal, alongside the separately retained original cell facts.
+
+Inspect the returned question before selecting pairs. A non-axis header can be
+identified explicitly as a sample before supplementing its missing quantity.
+Existing axis names, explicit units and sample cells cannot be overwritten by a
+contradictory declaration. Multiple different declarations of a field also block
+that column. Units still use the existing scientific rule validator; confirmation
+does not convert measurements or make a different quantity equivalent.
+
+To correct a pending statement, submit the entire replacement list with the new
+question ID. `[]` withdraws all declarations; table re-selection also clears them.
+Accepted answers and superseded questions remain in the task history. Errors in
+shape, source binding or cell text leave the current question unchanged; scientific
+conflicts stay visible and prevent the affected pair from proceeding. Once creation
+has begun, this pending-answer correction route cannot mutate the saved mapping.
 
 To revise an existing project's data, start:
 
@@ -131,10 +208,28 @@ applies the reviewed revision, and the task exports the exact saved result.
 An export failure resumes export only. A lost apply reply is recoverable only
 when the durable operation and current bytes prove the same completed result;
 an interrupted partial installation remains blocked with its archive retained.
-Projects with external annotations must first remove them explicitly; no anchor
-rebinding is performed. Projects with confirmed mappings require a fresh mapping
-choice and cannot yet use this source-update task; old column selections are not
-reused on a new source. These questions do not authorize arbitrary scientific facts.
+Projects with confirmed mappings pause for fresh table/column selection before
+preparation; old column positions are never reused on new bytes. Compatible fixed
+annotations retain coordinates. Peaks are matched only to the exact sample and
+original search window. `needs_input` / `annotation_rebinding` returns factual
+statuses and provisional before/candidate PNGs. Short P markers match the
+candidate records' `preview_marker`, sample and numerical coordinates. Review moved, unchanged, missing,
+ambiguous or incompatible anchors, then answer:
+
+```json
+{"expected_revision_id":"CURRENT_REVISION_SHA256","annotation_choices":[{"figure_id":"CURRENT_FIGURE","id":"peakA","action":"rebind","candidate_id":"CURRENT_CANDIDATE_SHA256","text":"460 nm"}]}
+```
+
+Each decision uses `rebind` with explicit final text, `remove`, `keep` for a compatible
+fixed annotation, or `replace` with a same-ID fixed annotation operation. A missing
+peak cannot be rebound. Optional rebind `position` uses the ordinary coordinate
+contract; otherwise existing arrow-label placement is retained and unoffset labels
+follow the selected point. Unanswered anchors remain pending; subsequent replies
+retain prior decisions and replace only the annotation identities answered again.
+Inspect the resulting
+final PNGs and then accept their **new** revision ID. Old responses cannot approve
+new choices. Provisional candidate markers cannot be installed. These questions do
+not authorize arbitrary scientific facts.
 The task interface does not accept arbitrary DataMapping answers beyond its
 advertised source-column choice schema.
 
@@ -442,9 +537,9 @@ series or invalid candidate is rejected, never silently rebound.
 
 To change/delete an existing annotation pass its inspected `id` and complete
 `expected_annotation` to `update_annotation`/`remove_annotation`; an update takes
-a schema-valid add operation as `replacement`. A source revision currently
-requires explicit annotation removal first, then recomputation against the new
-data. Do not strip spec metadata or bypass the source-update guard.
+a schema-valid add operation as `replacement`. Source revisions use the reviewed
+fixed-annotation and peak-rebinding task described above. Do not strip spec
+metadata or bypass the source-update guard.
 
 ## Apply, recover a reply, and export
 

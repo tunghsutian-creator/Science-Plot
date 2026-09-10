@@ -149,6 +149,10 @@ def _prepare_mapping_frames(
     dict[str, tuple[str, ...]],
 ]:
     resolved_sources = verify_data_mapping_sources(proposal, source_root=source_root)
+    if proposal.table_confirmation:
+        from sciplot_core.data_mapping.table_choice import verify_table_confirmation
+
+        verify_table_confirmation(proposal, resolved_sources[proposal.sources[0].source_id])
     frames: dict[str, pd.DataFrame] = {}
     units: dict[str, dict[str, str]] = {}
     events: dict[str, list[dict[str, Any]]] = {}

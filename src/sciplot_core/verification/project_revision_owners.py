@@ -51,6 +51,7 @@ PROJECT_REVISION_OWNERS = (
                 "src/sciplot_core/studio_core/source_update_commit.py",
                 "src/sciplot_core/studio_core/source_update_review.py",
                 "src/sciplot_core/studio_core/source_update_staging.py",
+                "src/sciplot_core/studio_core/source_update_annotations.py",
                 "src/sciplot_core/veusz_worker/style_transfer.py",
                 "src/sciplot_core/veusz_runtime.py",
                 "src/sciplot_core/cli/dispatch/project_revision.py",

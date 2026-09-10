@@ -19,9 +19,9 @@ from sciplot_core.task_contract import (
 from sciplot_core.task_execution import (
     record_failure, run_apply_export, run_creation, run_edit_preview, run_export,
 )
-from sciplot_core.task_column_mapping import accept_column_response
+from sciplot_core.task_column_mapping import accept_column_response, accept_table_response
 from sciplot_core.task_planning import assert_source_current
-from sciplot_core.task_source_execution import run_source_apply_export, run_source_preview, validate_source_response
+from sciplot_core.task_source_execution import accept_annotation_response, run_source_apply_export, run_source_preview, validate_source_response
 from sciplot_core.task_editing import begin_preview_revision, validate_preview_response
 from sciplot_core.task_storage import (
     load_task, save_task, task_location, task_path, task_summary,
@@ -103,10 +103,27 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
     if state["status"] in {"complete", "cancelled"}:
         return
     if state["status"] == "needs_input":
+        if "metadata_confirmations" in response:
+            from sciplot_core.task_column_mapping import accept_metadata_response
+
+            assert_source_current(state)
+            accept_metadata_response(root, state, response)
+            return
+        if state["question"].get("field") == "annotation_rebinding":
+            assert_source_current(state)
+            accept_annotation_response(root, state, response)
+            return
+        if state["question"].get("field") == "table_selection" or "table_selection" in response:
+            assert_source_current(state)
+            accept_table_response(root, state, response)
+            return
         if state["question"].get("field") == "column_mapping":
             assert_source_current(state)
             accept_column_response(root, state, response)
-            run_creation(root, state)
+            if state["request"]["action"] == "update_source":
+                run_source_preview(root, state)
+            else:
+                run_creation(root, state)
             return
         if (
             set(response) - {"rule_id", "template"}
@@ -147,7 +164,7 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
                 run_export(root, state)
             elif phase == "applying" and state.get("preview_accepted") is True:
                 run_source_apply_export(root, state)
-            elif phase in {"starting", "previewing"}:
+            elif phase in {"starting", "previewing", "scientific_choice"}:
                 run_source_preview(root, state)
             else:
                 raise TaskControlError("task_recovery_required", "请查询源更新任务的具体状态。")

@@ -60,8 +60,18 @@ class DataMappingProposal:
     rationale: str = ""
     proposal_id: str = field(default_factory=lambda: str(uuid4()))
     created_at: str = field(default_factory=_now)
+    table_confirmation: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        if not isinstance(self.table_confirmation, dict):
+            raise ValueError("table_confirmation must be an object.")
+        if self.table_confirmation:
+            from sciplot_core.mapping_contract.table_metadata import validate_metadata_confirmations
+
+            if (self.provider != "explicit_table_choice"
+                    or set(self.table_confirmation) != {"rule_id", "selection", "metadata_confirmations", "pairs"}):
+                raise ValueError("table_confirmation requires the explicit table-choice contract.")
+            validate_metadata_confirmations(self.table_confirmation["metadata_confirmations"])
         object.__setattr__(
             self, "proposal_id", _safe_id(self.proposal_id, "proposal_id")
         )
@@ -91,7 +101,12 @@ class DataMappingProposal:
         if len(set(source_ids)) != len(source_ids):
             raise ValueError("DataMappingProposal source IDs must be unique.")
         source_paths = [source.relative_path for source in self.sources]
-        if len(set(source_paths)) != len(source_paths):
+        if len(set(source_paths)) != len(source_paths) and not (
+            self.provider == "explicit_table_choice"
+            and all(source.data_start_row is not None and source.cell_evidence for source in self.sources)
+            and all(len({source.sha256 for source in self.sources if source.relative_path == path}) == 1
+                    for path in source_paths)
+        ):
             raise ValueError("DataMappingProposal source paths must be unique.")
         if not self.columns or not all(
             isinstance(column, DataColumnMapping) for column in self.columns
@@ -225,6 +240,7 @@ class DataMappingProposal:
             "executable": False,
             "rationale": self.rationale,
             "created_at": self.created_at,
+            **({"table_confirmation": self.table_confirmation} if self.table_confirmation else {}),
         }
 
     @classmethod
@@ -248,6 +264,7 @@ class DataMappingProposal:
                 "executable",
                 "rationale",
                 "created_at",
+                "table_confirmation",
             },
             label="DataMappingProposal",
         )
@@ -280,6 +297,7 @@ class DataMappingProposal:
                     f"Every DataMappingProposal {label} entry must be an object."
                 )
         proposal = cls(
+            table_confirmation=payload.get("table_confirmation", {}),
             proposal_id=_required_text(
                 payload.get("proposal_id"),
                 "proposal_id",

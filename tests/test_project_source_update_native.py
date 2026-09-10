@@ -24,6 +24,58 @@ def _files(root: Path) -> dict[str, bytes]:
     }
 
 
+@pytest.mark.comprehensive
+@pytest.mark.parametrize("ys,status", [([1, 2, 3, 4, 5], "missing"), ([1, 4, 1, 3, 1], "ambiguous")])
+def test_native_peak_revision_missing_and_multiple_candidates(tmp_path, ys, status):
+    from sciplot_core.task_control import start_task, resume_task, inspect_task
+    from sciplot_core.studio_core.project_query import resolve_project_figure
+    from sciplot_core.studio_core.peak_analysis import inspect_peak_candidates
+    from sciplot_core.foundation.file_hashing import file_sha256
+    from sciplot_core.studio_core.annotation_operations import inspect_annotation_state
+
+    old, new = tmp_path / "old.csv", tmp_path / "new.csv"
+    for path, values in ((old, [1, 3, 2, 1, 1]), (new, ys)):
+        path.write_text("Wavelength,Absorbance\nnm,a.u.\nA,A\n" + "".join(f"{x},{y}\n" for x, y in zip([400, 425, 450, 475, 500], values, strict=True)))
+    first = start_task({"version": 1, "action": "create", "source": str(old), "rule_id": "uvvis_spectrum"}, task_dir=tmp_path / "create")
+    assert first["status"] == "complete", first
+    project = Path(first["project"])
+    figure = resolve_project_figure(project, None)
+    document = Path(figure["document"])
+    peaks = inspect_peak_candidates(project, figure_id=figure["figure_id"], object_path="/page1/graph1/series_1",
+        window={"min": 400, "max": 500, "unit": "nm"}, polarity="maximum", expected_document_sha256=file_sha256(document))
+    edit_task = tmp_path / "edit"
+    edit = start_task({"version": 1, "action": "edit", "project": str(project), "expected_document_sha256": file_sha256(document),
+        "operations": [{"op": "add_peak_label", "id": "peak", "candidate": peaks["candidates"][0]}]}, task_dir=edit_task)
+    assert edit["status"] == "needs_review", edit
+    assert resume_task(edit_task, {"accept_preview": True})["status"] == "complete"
+    old_bytes, new_bytes, baseline = old.read_bytes(), new.read_bytes(), document.read_bytes()
+    task = tmp_path / "update"
+    update = start_task({"version": 1, "action": "update_source", "project": str(project), "source": str(new)}, task_dir=task)
+    assert update["status"] == "needs_input", update
+    issue = update["question"]["evidence"][0]
+    assert issue["status"] == status
+    assert len(update["previews"]) == 2
+    assert document.read_bytes() == baseline
+    decision = {"figure_id": issue["figure_id"], "id": "peak", "action": "remove"}
+    if status == "ambiguous":
+        peak = issue["candidates"][1]
+        decision.update(action="rebind", candidate_id=peak["candidate_id"], text="475 nm")
+    invalid = resume_task(task, {"expected_revision_id": update["revision_id"], "annotation_choices": [{**decision, "action": "keep"}]})
+    assert invalid["status"] == "needs_input" and invalid["annotation_error"]
+    update = resume_task(task, {"expected_revision_id": update["revision_id"], "annotation_choices": [decision]})
+    assert update["status"] == "needs_review", update
+    update = resume_task(task, {"expected_revision_id": update["revision_id"], "accept_source_update": True})
+    assert update["status"] == "complete", update
+    annotations = inspect_annotation_state(project)["annotations"]
+    if status == "missing":
+        assert annotations == []
+    else:
+        assert annotations[0]["peak_anchor"]["x"] == 475
+    assert old.read_bytes() == old_bytes and new.read_bytes() == new_bytes
+    current = inspect_task(task)["current_project"]
+    assert current["source"]["current"] and current["qa"]["current"] and current["delivery"]["current"]
+
+
 def _source(path: Path, *, changed: bool = False) -> None:
     path.write_text(
         "Wavelength,Absorbance,Wavelength,Absorbance\nnm,a.u.,nm,a.u.\n"

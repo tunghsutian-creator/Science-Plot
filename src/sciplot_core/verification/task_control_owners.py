@@ -7,10 +7,10 @@ from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 TASK_CONTROL_OWNERS = (
     ChangedOwner(
         owner_id="source_bound_column_mapping",
-        path_prefixes=("src/sciplot_core/data_mapping/",),
+        path_prefixes=("src/sciplot_core/data_mapping/", "src/sciplot_core/mapping_contract/"),
         owned_test_paths=frozenset({"tests/test_column_choice.py", "tests/test_task_column_mapping.py",
-            "tests/test_task_column_mapping_native.py", "tests/test_task_mapping_plan.py", "tests/test_task_mapping_review.py"}),
-        pytest_targets=("tests/test_column_choice.py", "tests/test_task_column_mapping.py",
+            "tests/test_task_column_mapping_native.py", "tests/test_task_mapping_plan.py", "tests/test_task_mapping_review.py", "tests/test_table_choice.py", "tests/test_table_metadata.py"}),
+        pytest_targets=("tests/test_column_choice.py", "tests/test_table_choice.py", "tests/test_table_metadata.py", "tests/test_task_column_mapping.py",
             "tests/test_task_column_mapping_native.py", "tests/test_task_mapping_plan.py", "tests/test_task_mapping_review.py",
             "tests/test_plan_preview.py", "tests/test_project_query.py", *ARCHITECTURE_CORE_TARGETS),
         mypy_required=True, handoff_gates=("doctor",), final_milestone_gates=("smoke",),

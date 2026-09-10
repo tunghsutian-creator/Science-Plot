@@ -53,6 +53,7 @@ from sciplot_core.data_mapping.output_files import (
     _safe_output_name,
     _write_mapped_csv,
     _rebase_paths,
+    paired_table_text,
 )
 
 from sciplot_core.data_mapping.request_rebinding import (
@@ -162,7 +163,7 @@ def execute_data_mapping_proposal(
             filename = _safe_output_name(reference, resolved, used=used_names)
             destination = data_dir / filename
             frame = frames[reference.source_id]
-            _write_mapped_csv(destination, frame)
+            _write_mapped_csv(destination, frame, **({"full_precision": True} if resolved.provider == "explicit_table_choice" else {}))
             output_paths.append(destination)
             output_labels.append(destination.stem)
             outputs.append(
@@ -183,11 +184,15 @@ def execute_data_mapping_proposal(
         if not output_paths:
             raise ValueError("Data mapping produced no output tables.")
         effective_input = output_paths[0] if len(output_paths) == 1 else data_dir
+        if resolved.provider == "explicit_table_choice":
+            effective_input = temporary / "selected_pairs.csv"
+            effective_input.write_text(paired_table_text(resolved, frames), encoding="utf-8")
+            output_paths.append(effective_input)
         proposal_hash = data_mapping_proposal_sha256(resolved)
         step = build_transform_step(
             step_id=f"data_mapping_{resolved.proposal_id}",
             operation="execute_confirmed_data_mapping_proposal",
-            input_path=next(iter(sources.values())) if len(sources) == 1 else root,
+            input_path=next(iter(sources.values())) if len(set(sources.values())) == 1 else root,
             output_path=output_paths[0],
             additional_outputs=output_paths[1:],
             implementation_ref=(

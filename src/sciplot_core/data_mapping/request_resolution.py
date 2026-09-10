@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from sciplot_core.foundation.file_hashing import file_sha256
 
 from sciplot_core.data_mapping.contracts import (
     DATA_MAPPING_APPLICATION_KIND,
@@ -75,6 +76,14 @@ def resolve_data_mapping_request(
             for output in mapped_outputs
         )
     )
+    if execution["provider"] == "explicit_table_choice":
+        # The verified composite is the actual adapter input. Its complete
+        # sample inventory is independently checked by plan/series validation.
+        mapped_outputs = [{"source_id": "selected_pairs", "path": str(effective_input),
+                           "sha256": file_sha256(effective_input),
+                           "rows": execution["outputs"][0]["rows"],
+                           "columns": [column for item in execution["outputs"] for column in item["columns"]],
+                           "sample_label": None}]
     application = {
         "kind": DATA_MAPPING_APPLICATION_KIND,
         "version": DATA_MAPPING_APPLICATION_VERSION,

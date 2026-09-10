@@ -6,6 +6,8 @@ import hashlib
 import os
 import re
 import unicodedata
+import csv
+from io import StringIO
 from pathlib import Path
 from typing import Any
 import pandas as pd
@@ -46,25 +48,51 @@ def _filename_collision_key(value: str) -> str:
     return unicodedata.normalize("NFC", value).casefold()
 
 
-def _write_mapped_csv(path: Path, frame: pd.DataFrame) -> None:
+def _write_mapped_csv(path: Path, frame: pd.DataFrame, *, full_precision: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(
         path,
         index=False,
         encoding="utf-8",
         lineterminator="\n",
-        float_format="%.15g",
+        float_format=None if full_precision else "%.15g",
     )
 
 
-def _mapped_csv_sha256(frame: pd.DataFrame) -> str:
+def _mapped_csv_sha256(frame: pd.DataFrame, *, full_precision: bool = False) -> str:
     text = frame.to_csv(
         None,
         index=False,
         lineterminator="\n",
-        float_format="%.15g",
+        float_format=None if full_precision else "%.15g",
     )
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def paired_table_text(proposal: DataMappingProposal, frames: dict[str, pd.DataFrame]) -> str:
+    """Compose selected pairs as the existing three-metadata-row adapter contract."""
+    headers, units, labels, series = [], [], [], []
+    for reference in proposal.sources:
+        columns = [column for column in proposal.columns if column.source_id == reference.source_id]
+        if [column.role for column in columns] != ["x", "y"]:
+            raise ValueError("Explicit table choice requires one ordered x/y pair per source view.")
+        frame = frames[reference.source_id]
+        for column in columns:
+            unit = proposal.unit_overrides[column.output_column]
+            header = column.output_column
+            if header.endswith(f" ({unit})"):
+                header = header[:-(len(unit) + 3)]
+            headers.append(header)
+            units.append(unit)
+            labels.append(proposal.sample_labels[reference.source_id])
+            series.append(frame[column.output_column].tolist())
+    if len({len(values) for values in series}) != 1:
+        raise ValueError("Selected paired-table ranges must have equal row counts.")
+    buffer = StringIO(newline="")
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerows([headers, units, labels])
+    writer.writerows(zip(*series, strict=True))
+    return buffer.getvalue()
 
 
 def _rebase_paths(value: Any, *, source: Path, target: Path) -> Any:

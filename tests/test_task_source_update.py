@@ -207,7 +207,7 @@ def test_helper_rejects_new_source_directory_for_saved_review(revisions):
     assert sorted(path.name for path in source.iterdir()) == ["data.csv"]
 
 
-def test_annotation_source_guard_still_blocks_task_review(revisions, monkeypatch, tmp_path):
+def test_invalid_annotated_document_still_blocks_before_candidate(revisions, monkeypatch, tmp_path):
     from sciplot_core.studio_core import source_update
 
     project, _, source, _ = revisions
@@ -217,4 +217,30 @@ def test_annotation_source_guard_still_blocks_task_review(revisions, monkeypatch
     monkeypatch.setattr(source_update, "prepare_candidate", lambda *a, **k: pytest.fail("must not prepare annotated project"))
     result = helper.prepare_source_update_review(project, source, review_path=tmp_path / "task/review.json")
     assert result["status"] == "blocked" and result["previews"] == []
-    assert "annotation_source_revision_required" in result["source_update"]["reason"]
+    assert "Annotations currently require ordinary Cartesian curves" in result["source_update"]["reason"]
+
+
+def test_partial_annotation_answers_retain_prior_choices_after_reload(revisions, monkeypatch, tmp_path):
+    from sciplot_core import task_source_execution as execution
+    from sciplot_core.foundation.json_hashing import canonical_json_sha256
+    from sciplot_core.studio_core.source_update_review import payload_hash
+
+    project, _, _, _ = revisions
+    review = {"source_update": {"project_sha256": payload_hash(transaction.project_inventory(project))}}
+    identity = canonical_json_sha256(review, allow_nan=False)
+    review["revision_id"] = identity
+    review_path = tmp_path / "review.json"
+    review_path.write_text(json.dumps(review))
+    first = {"figure_id": "f", "id": "peak1", "action": "remove"}
+    second = {"figure_id": "f", "id": "peak2", "action": "remove"}
+    state = json.loads(json.dumps({"request": {"project": str(project)}, "revision_id": identity,
+        "question": {"review_path": str(review_path)}, "annotation_decisions": [first],
+        "status": "needs_input"}))
+    seen = []
+    monkeypatch.setattr(execution, "save_task", lambda *args: None)
+    monkeypatch.setattr(execution, "run_source_preview", lambda root, current: seen.append(current["annotation_decisions"]))
+    execution.accept_annotation_response(tmp_path, state, {"expected_revision_id": identity, "annotation_choices": [second]})
+    assert seen == [[first, second]]
+    with pytest.raises(ValueError, match="重复"):
+        execution.accept_annotation_response(tmp_path, state, {"expected_revision_id": identity, "annotation_choices": [second, second]})
+    assert state["annotation_decisions"] == [first, second]
