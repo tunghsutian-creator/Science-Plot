@@ -123,6 +123,16 @@ def _mapping_status(
         )
     coverage = _mapping_coverage_from_run(latest_run)
     application_payload = application if isinstance(application, dict) else {}
+    mapping_inputs = [
+        artifact
+        for step in application_payload.get("transform_steps", [])
+        if isinstance(step, dict)
+        for artifact in step.get("input_artifacts", [])
+        if isinstance(artifact, dict)
+    ]
+    source_audit_path = (
+        mapping_inputs[0].get("path") if len(mapping_inputs) == 1 else None
+    )
     run_application = _mapping_application_from_run(latest_run)
     application_status = str(application_payload.get("status") or "validated")
     coverage_status = str(coverage.get("status") or "not_run")
@@ -160,6 +170,7 @@ def _mapping_status(
         "coverage_status": coverage_status,
         "proposal_id": application_payload.get("proposal_id"),
         "source_root": application_payload.get("source_root"),
+        "source_audit_path": source_audit_path,
         "effective_input": application_payload.get("effective_input"),
         "application_matches_current_run": application_matches,
         "verification_base_valid": base_verified,

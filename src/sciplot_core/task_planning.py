@@ -19,6 +19,7 @@ from sciplot_core.semantic import classify_source
 from sciplot_core.source_tables import read_raw_table
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError
+from sciplot_core.task_column_mapping import column_question, mapped_plan_request, pause_for_columns
 
 
 def assert_source_current(state: dict[str, Any]) -> Path:
@@ -146,13 +147,29 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
                 message="尚不能确定实验类型。请选择与原始数据实际含义一致的实验。",
                 evidence=str(root / "inspection.json"))
             return None
-    plan = dict(build_plan_preview(source, request=selected))
+    mapping_choice = state.get("mapping_choice")
+    plan_request = mapped_plan_request(state) if mapping_choice else selected
+    plan = dict(build_plan_preview(source, request=plan_request))
     atomic_write_json(root / "plan.json", plan)
     state["selection"] = {"rule_id": plan["rule_id"], "template": plan["template"]}
+    blocker_snapshot = plan.get("blocker")
+    reason = str(blocker_snapshot.get("reason_code", "")) if isinstance(blocker_snapshot, dict) else ""
+    invalid_rule = reason in {"plan_rule_invalid", "plan_rule_unknown", "plan_template_unsupported"}
+    if not mapping_choice and not invalid_rule:
+        question = column_question(source, state["selection"], explicit=request.get("choose_columns", False))
+        if question:
+            pause_for_columns(state, question)
+            return None
     if plan["status"] == "blocked":
         blocker_value = plan["blocker"]
         blocker = blocker_value if isinstance(blocker_value, dict) else {}
         reason = str(blocker.get("reason_code", "plan_blocked"))
+        if mapping_choice and reason.endswith("_transform_invalid"):
+            state.pop("mapping_choice", None)
+            state.pop("data_mapping", None)
+            pause_for_columns(state, mapping_choice["question"])
+            state["mapping_error"] = plan["blocker"]
+            return None
         if reason in {"plan_rule_invalid", "plan_rule_unknown", "plan_template_unsupported"} or (
             "question" in state and reason.endswith("_transform_invalid")
         ):
@@ -163,11 +180,19 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
         state.update({"status": "blocked", "phase": "planning", "blocker": plan["blocker"]})
         return None
     state.pop("question", None)
+    state.pop("mapping_error", None)
     return plan
 
 
 def save_profile(root: Path, state: dict[str, Any]) -> None:
     source = assert_source_current(state)
+    if state.get("mapping_choice"):
+        state["profile"] = None
+        state["profile_unavailable"] = {
+            "reason_code": "mapped_profile_unsupported",
+            "message": "本次列选择绑定此原始文件；新数据需要重新检查列、单位和样品。",
+        }
+        return
     selection = state["selection"]
     if not isinstance(selection.get("rule_id"), str):
         return

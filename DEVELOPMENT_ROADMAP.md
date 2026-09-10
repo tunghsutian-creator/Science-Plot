@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-09-07. External AI is the task interface. Current behavior belongs
+Status: 2026-09-10. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 
 ## 1. Independent beginner and installation acceptance
@@ -17,14 +17,16 @@ Additional platforms and AI clients need their own installation acceptance.
 
 ## 2. More scientific choices through the same task contract
 
-Connect real worksheet/column-mapping choices to their existing source-bound
-DataMapping owner, using concrete questions and original-cell evidence. The
-current task rule-selection answer must not encode arbitrary scientific facts.
+Validate the current single-pair CSV/TSV column-choice task with an independent
+user's genuinely ambiguous source. Source-backed normalized PDA regression does
+not close that acceptance. Extend the same source-bound DataMapping route to
+worksheet selection and additional table layouts only with original-cell evidence.
+The task rule-selection answer must not encode arbitrary scientific facts.
 Extend reusable profiles only when current headers, units and mappings can be
 validated; continue to reject incompatible or unsupported profiles.
 
-Exit: a real source needing such a choice can pause and continue through the
-public task/MCP interface without a code workaround or lost scientific evidence.
+Exit: a real source needing each newly supported choice can pause and continue
+through task/MCP without a code workaround or lost scientific evidence.
 
 ## 3. Reviewed annotation rebinding on source revision
 

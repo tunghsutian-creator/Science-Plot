@@ -22,6 +22,7 @@ CHANGED_VERIFICATION_OWNER = ChangedOwner(
             "src/sciplot_core/cli/parsers/builder.py",
             "src/sciplot_core/cli/dispatch/diagnostics.py",
             "src/sciplot_core/doctor/payload.py",
+            "src/sciplot_core/doctor/actions.py",
         }
     ),
     owned_test_paths=frozenset(

@@ -13,14 +13,16 @@ class TaskControlError(ValueError):
 
 
 _FIELDS = {
-    "create": {"source", "rule_id", "template", "out", "profile"},
+    "create": {"source", "rule_id", "template", "out", "profile", "choose_columns"},
     "edit": {"project", "figure_id", "expected_document_sha256", "operations", "export"},
     "export": {"project"},
+    "update_source": {"project", "source", "worksheet"},
 }
 _REQUIRED = {
     "create": {"source"},
     "edit": {"project", "expected_document_sha256", "operations"},
     "export": {"project"},
+    "update_source": {"project", "source"},
 }
 
 
@@ -34,6 +36,11 @@ def task_request_schema() -> dict[str, Any]:
             "action": {"type": "string", "const": action},
             **{key: {"type": "string", "minLength": 1} for key in sorted(fields)},
         }
+        if action == "create":
+            properties["choose_columns"] = {
+                "type": "boolean", "const": True,
+                "description": "Explicitly select one source x/y pair in a supported CSV/TSV; answer the returned source-bound question.",
+            }
         if action == "edit":
             properties["export"] = {"type": "boolean", "default": True,
                                     "description": "False saves the reviewed edit for continued work; export later with an export task."}
@@ -58,6 +65,17 @@ def task_response_schema() -> dict[str, Any]:
                    "description": "Replace the whole batch against the same saved document; this does not append to the old preview."}
     return {
         "oneOf": [
+            {"type": "object", "additionalProperties": False,
+             "properties": {
+                 "expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                 "column_mapping": {"type": "object", "additionalProperties": False,
+                    "properties": {key: {"type": "integer", "minimum": 0} for key in ("x_column", "y_column")},
+                    "required": ["x_column", "y_column"]}},
+             "required": ["expected_question_id", "column_mapping"]},
+            {"type": "object", "additionalProperties": False,
+             "properties": {"accept_source_update": {"type": "boolean"},
+                            "expected_revision_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+             "required": ["accept_source_update", "expected_revision_id"]},
             {"type": "object", "additionalProperties": False,
              "properties": {key: {"type": "string", "minLength": 1}
                             for key in ("rule_id", "template")},
@@ -89,11 +107,11 @@ def validate_task_request(value: dict[str, Any]) -> dict[str, Any]:
     if type(value.get("version")) is not int or value["version"] != 1:
         raise TaskControlError("unsupported_task_version", "任务接口版本必须为 1。")
     if not isinstance(action, str) or action not in _FIELDS:
-        raise TaskControlError("unsupported_task_action", "任务支持 create、edit、export。")
+        raise TaskControlError("unsupported_task_action", "任务支持 create、edit、export、update_source。")
     allowed = {"version", "action"} | _FIELDS[action]
     if set(value) - allowed or not _REQUIRED[action] <= set(value):
         raise TaskControlError("invalid_task_fields", "任务参数缺失或含未支持的字段。")
-    for key in _FIELDS[action] & set(value) - {"operations", "export"}:
+    for key in _FIELDS[action] & set(value) - {"operations", "export", "choose_columns"}:
         if not isinstance(value[key], str) or not value[key].strip():
             raise TaskControlError("invalid_task_field", f"{key} 必须是非空字符串。")
     if action == "edit":
@@ -109,4 +127,8 @@ def validate_task_request(value: dict[str, Any]) -> dict[str, Any]:
             raise TaskControlError("invalid_operations", "每个操作必须是 JSON 对象。")
     if value.get("profile") and (value.get("rule_id") or value.get("template")):
         raise TaskControlError("profile_selection_conflict", "复用配置时不同时覆盖规则和模板。")
+    if "choose_columns" in value and value["choose_columns"] is not True:
+        raise TaskControlError("invalid_column_choice", "显式列选择使用 choose_columns=true。")
+    if value.get("choose_columns") and value.get("profile"):
+        raise TaskControlError("profile_selection_conflict", "列选择需要当前原始证据，不能同时复用旧配置。")
     return dict(json.loads(json.dumps(value, ensure_ascii=False, allow_nan=False)))

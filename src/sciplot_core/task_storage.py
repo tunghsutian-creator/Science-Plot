@@ -34,6 +34,8 @@ def task_location(request: dict[str, Any], supplied: Path | None) -> Path:
         original = json.loads((project / "plot_request.json").read_text())
         delivery = requested_delivery_root({"request": original}, run_output=project)
         protected = [project, delivery]
+        if request["action"] == "update_source":
+            protected.append(canonical_path(Path(request["source"])))
         for key in ("input", "input_path", "data_dir"):
             source = original.get(key)
             if isinstance(source, str):
@@ -83,10 +85,12 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
     keys = (
         "kind", "version", "task_dir", "status", "phase", "updated_at", "question",
         "blocker", "result", "preview", "operation_id", "profile", "profile_unavailable", "project", "edit_outcome",
+        "mapping_error", "data_mapping", "revision_id", "previews", "source_update_outcome",
     )
     summary = {key: state[key] for key in keys if key in state}
     if state["status"] in {"complete", "cancelled"}:
         summary.pop("preview", None)
+        summary.pop("previews", None)
     saved = (state.get("result") or {}).get("kind") == "sciplot_task_edit_result"
     if saved:
         summary.pop("edit_outcome", None)

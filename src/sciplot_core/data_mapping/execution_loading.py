@@ -59,7 +59,7 @@ def load_data_mapping_execution(
     execution_version = payload.get("version")
     if (
         type(execution_version) is not int
-        or execution_version != DATA_MAPPING_EXECUTION_VERSION
+        or execution_version not in {1, DATA_MAPPING_EXECUTION_VERSION}
     ):
         raise ValueError(
             f"Unsupported data mapping execution version: {execution_version!r}"
@@ -276,14 +276,20 @@ def load_data_mapping_execution(
             "Active data mapping step no longer matches the confirmed proposal."
         )
     step_inputs = mapping_step.get("input_artifacts")
+    expected_input = (
+        (source_root / proposal.sources[0].relative_path).resolve()
+        if execution_version >= 2 and len(proposal.sources) == 1 else source_root
+    )
     if (
         not isinstance(step_inputs, list)
         or len(step_inputs) != 1
         or not isinstance(step_inputs[0], dict)
         or Path(str(step_inputs[0].get("path") or "")).expanduser().resolve()
-        != source_root
+        != expected_input
     ):
         raise ValueError("Active data mapping step changed its confirmed source root.")
+    if expected_input.is_file() and step_inputs[0].get("sha256") != file_sha256(expected_input):
+        raise ValueError("Active data mapping step changed its confirmed source hash.")
     step_outputs = mapping_step.get("output_artifacts")
     if not isinstance(step_outputs, list) or len(step_outputs) != len(
         expected_output_paths

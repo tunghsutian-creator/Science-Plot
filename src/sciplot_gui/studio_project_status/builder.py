@@ -230,14 +230,14 @@ def build_studio_project_status(
     except (OSError, RuntimeError, ValueError):
         source_path = None
     try:
-        mapping_source_root = _request_path_value(
-            mapping.get("source_root"),
+        mapping_audit_source = _request_path_value(
+            mapping.get("source_audit_path") or mapping.get("source_root"),
             base_dir=resolved_request.parent,
         )
     except (OSError, RuntimeError, ValueError):
-        mapping_source_root = None
-    if mapping.get("status") == "verified" and mapping_source_root is not None:
-        source_path = mapping_source_root
+        mapping_audit_source = None
+    if mapping.get("status") == "verified" and mapping_audit_source is not None:
+        source_path = mapping_audit_source
     transform_ledger = (
         latest_run.get("transform_ledger")
         if isinstance(latest_run.get("transform_ledger"), dict)

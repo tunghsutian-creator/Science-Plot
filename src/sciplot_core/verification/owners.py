@@ -235,6 +235,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/workflow/scientific_source_resolution.py",
                 "src/sciplot_core/workflow/source_binding.py",
                 "src/sciplot_gui/studio_project_status/builder.py",
+                "src/sciplot_gui/studio_project_status/mapping_status.py",
                 "src/sciplot_gui/studio_project_status/messages.py",
                 "src/sciplot_gui/studio_project/context.py",
             }

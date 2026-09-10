@@ -86,6 +86,9 @@ def prepare_candidate(
         not rule_id
         or previous.get("data_mapping")
         or previous.get("data_mapping_application")
+        or "data_mapping_execution" in previous
+        or "data_mapping_proposal_id" in previous
+        or "data_mapping_plan_binding" in previous
     ):
         raise ValueError(
             "This source needs a fresh explicit data mapping before it can replace the project source."

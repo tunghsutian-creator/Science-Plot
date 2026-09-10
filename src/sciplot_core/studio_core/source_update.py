@@ -6,7 +6,7 @@ import json
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.output_contract import requested_delivery_root
@@ -16,6 +16,7 @@ from sciplot_core.studio_core.source_update_commit import (
     file_inventory,
     install_source_update,
     project_inventory,
+    prior_source_update_result,
     reject_symlink_path,
 )
 from sciplot_core.studio_core.source_update_review import (
@@ -140,11 +141,18 @@ def _prepared_update(
 
 
 def preview_project_source_update(
-    project_dir: Path, source: Path, *, worksheet: str | None = None
+    project_dir: Path, source: Path, *, worksheet: str | None = None,
+    on_candidate: Callable[[Path, dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Build and audit an isolated candidate without changing the active project."""
     try:
-        with _prepared_update(project_dir, source, worksheet) as (_, preview):
+        with _prepared_update(project_dir, source, worksheet) as (candidate, preview):
+            if on_candidate is not None:
+                on_candidate(candidate, preview)
+                project = Path(preview["project"])
+                if payload_hash(project_inventory(project)) != preview["project_sha256"]:
+                    raise ValueError("The project changed while rendering its source-update preview.")
+                _check_external_state(project, Path(preview["source"]), preview)
             return preview
     except (ValueError, OSError, RuntimeError) as exc:
         return {
@@ -170,6 +178,15 @@ def apply_project_source_update(
         )
     reject_symlink_path(project_dir.expanduser())
     project = project_dir.expanduser().resolve()
+    if preview.get("project") != str(project):
+        raise ValueError("The source-update preview belongs to another project.")
+    def validate_recovered() -> None:
+        _check_external_state(project, Path(preview["source"]), preview)
+        verify_project_science(project)
+
+    prior = prior_source_update_result(project, preview, validate=validate_recovered)
+    if prior is not None:
+        return _applied_result(project, preview, prior, status="already_applied")
     with _prepared_update(
         project, Path(preview["source"]), preview.get("worksheet")
     ) as (candidate, current):
@@ -189,11 +206,18 @@ def apply_project_source_update(
             precommit=lambda: _check_external_state(
                 project, Path(preview["source"]), current
             ),
+            review=current,
         )
+    return _applied_result(project, preview, archive, status="updated")
+
+
+def _applied_result(
+    project: Path, preview: dict[str, Any], archive: Path, *, status: str,
+) -> dict[str, Any]:
     return {
         "kind": "sciplot_project_source_update",
         "version": 1,
-        "status": "updated",
+        "status": status,
         "project": str(project),
         "document": str(project / "studio" / "document.vsz"),
         "archive": str(archive),

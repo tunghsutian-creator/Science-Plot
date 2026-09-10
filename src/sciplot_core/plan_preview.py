@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Final, Literal, TypedDict
+from typing import Any
+
+from sciplot_core.data_mapping.plan_binding import (
+    resolve_mapping_plan_request,
+    verify_mapping_sample_identity,
+)
 
 from sciplot_core.figure_plan import (
     FigurePlanResolutionError,
-    ResolvedFigurePlanPayload,
     resolve_figure_plan,
 )
 from sciplot_core.materials_rules import SemanticRule, get_rule
@@ -16,6 +20,16 @@ from sciplot_core.materials_rules.catalog import resolve_rule_template
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.plan_identity import preview_identity_for
+from sciplot_core.plan_preview_contract import (
+    PLAN_PREVIEW_KIND,
+    PLAN_PREVIEW_VERSION,
+    PlanPreviewBase as PlanPreviewBase,
+    PlanPreviewBlocker,
+    PlanPreviewPayload,
+    PlanPreviewStatus,
+    _blocked_preview,
+    _preview_base,
+)
 from sciplot_core.readiness.registry_io import load_validated_envelope_registry
 from sciplot_core.readiness.rule_certification import (
     current_rule_invocation_contract_payload,
@@ -28,34 +42,6 @@ from sciplot_core.semantic_sources.scientific_source import (
 from sciplot_core.study_model import study_model_from_request
 
 
-PLAN_PREVIEW_KIND: Final = "sciplot_figure_plan_preview"
-PLAN_PREVIEW_VERSION: Final = 1
-
-
-PlanPreviewStatus = Literal["planned", "not_applicable", "blocked"]
-
-
-class PlanPreviewBlocker(TypedDict):
-    reason_code: str
-    message: str
-
-
-class PlanPreviewBase(TypedDict):
-    kind: Literal["sciplot_figure_plan_preview"]
-    version: Literal[1]
-    source: str
-    rule_id: str | None
-    template: str
-    preview_identity: dict[str, Any] | None
-
-
-class PlanPreviewPayload(PlanPreviewBase):
-    status: PlanPreviewStatus
-    resolved_figure_plan: ResolvedFigurePlanPayload | None
-    scientific_transform: dict[str, Any] | None
-    blocker: PlanPreviewBlocker | None
-
-
 def build_plan_preview(
     input_path: Path,
     *,
@@ -64,6 +50,8 @@ def build_plan_preview(
     """Resolve semantic intent and selected tasks without rendering or writes."""
 
     source = input_path.expanduser().resolve()
+    if "data_mapping_execution" in request or "data_mapping_proposal_id" in request:
+        return _build_mapped_plan_preview(source, request=request)
     request_snapshot = deepcopy(request)
     requested_rule_value = request_snapshot.get("rule_id")
     requested_template_value = request_snapshot.get("template")
@@ -262,41 +250,42 @@ def build_plan_preview(
     return payload
 
 
-def _blocked_preview(
-    *,
-    source: Path,
-    rule_id: str | None,
-    template: str,
-    reason_code: str,
-    message: str,
-    scientific_transform: dict[str, Any] | None = None,
+def _build_mapped_plan_preview(
+    source: Path, *, request: dict[str, Any]
 ) -> PlanPreviewPayload:
-    return {
-        **_preview_base(source=source, rule_id=rule_id, template=template),
-        "status": "blocked",
-        "resolved_figure_plan": None,
-        "scientific_transform": scientific_transform,
-        "blocker": {
-            "reason_code": reason_code,
-            "message": message,
-        },
-    }
+    """Keep original identity while scientific owners resolve the mapped table."""
 
-
-def _preview_base(
-    *,
-    source: Path,
-    rule_id: str | None,
-    template: str,
-) -> PlanPreviewBase:
-    return {
-        "kind": PLAN_PREVIEW_KIND,
-        "version": PLAN_PREVIEW_VERSION,
-        "source": str(source),
-        "rule_id": rule_id,
-        "template": template,
-        "preview_identity": None,
-    }
+    try:
+        canonical_request, binding = resolve_mapping_plan_request(source, request)
+        effective_request = deepcopy(canonical_request)
+        effective_request.pop("data_mapping_execution", None)
+        effective_request.pop("data_mapping_proposal_id", None)
+        effective_request["input"] = binding["effective_input"]
+        payload = build_plan_preview(
+            Path(binding["effective_input"]), request=effective_request
+        )
+        if payload["status"] != "blocked":
+            verify_mapping_sample_identity(binding, payload["scientific_transform"])
+        # Verification after scientific resolution guards both the original
+        # source and every immutable execution artifact against concurrent edits.
+        _current_request, current_binding = resolve_mapping_plan_request(source, request)
+        if current_binding != binding:
+            raise ValueError("The confirmed mapping changed during plan resolution.")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return _blocked_preview(
+            source=source,
+            rule_id=request.get("rule_id"),
+            template=str(request.get("template") or "curve"),
+            reason_code="plan_mapping_invalid",
+            message=str(exc),
+        )
+    payload["source"] = str(source)
+    payload["data_mapping"] = binding
+    if payload["status"] != "blocked":
+        payload["preview_identity"] = preview_identity_for(
+            dict(payload), source_sha256=binding["original_input_sha256"]
+        )
+    return payload
 
 
 def verify_expected_plan(
@@ -334,6 +323,14 @@ def verify_expected_plan(
         "rule_id": rule_id if rule_id is not None else expected.get("rule_id"),
         "template": template if template is not None else expected.get("template"),
     }
+    mapping = expected.get("data_mapping")
+    if mapping is not None:
+        if not isinstance(mapping, dict):
+            raise ValueError("Expected plan has an invalid confirmed mapping binding.")
+        selected.update({
+            key: mapping.get(key)
+            for key in ("data_mapping_execution", "data_mapping_proposal_id")
+        })
     current = build_plan_preview(
         source,
         request={key: value for key, value in selected.items() if value is not None},

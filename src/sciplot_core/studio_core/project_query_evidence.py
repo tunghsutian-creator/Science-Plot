@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.data_mapping.plan_binding import resolve_mapping_plan_request
+from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_request
 from sciplot_core.delivery.package_validation import verify_delivery_package
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.foundation.source_tree import source_tree_sha256
@@ -48,6 +50,42 @@ def source_indicators(
         sha256=actual,
         expected_sha256=expected,
     )
+    mapped_raw: dict[str, str] = {}
+    if "data_mapping_execution" in request:
+        try:
+            if source is None:
+                raise ValueError("The mapped project lost its original source.")
+            effective_request, application = resolve_data_mapping_request(
+                request, base_dir=project
+            )
+            if application is None:
+                raise ValueError("The mapped project lost its execution binding.")
+            recorded_mapping = request.get("data_mapping_plan_binding")
+            if recorded_mapping is not None:
+                _seed, mapping = resolve_mapping_plan_request(source, request)
+                if recorded_mapping != mapping:
+                    raise ValueError("The mapped project no longer matches its creation plan.")
+            effective_source = Path(effective_request["input"])
+            effective_hash = _tree_hash(effective_source)
+            input_state = _indicator(
+                effective_hash == expected if expected else None,
+                path=str(source),
+                sha256=actual,
+                effective_input=str(effective_source),
+                effective_sha256=effective_hash,
+                expected_sha256=expected,
+                mapping_verified=True,
+            )
+            # The owner above checked the original file against its immutable
+            # proposal. Keep its file hash in the ordinary raw-source indicator.
+            raw_digest = existing_file_sha256(source)
+            if raw_digest is not None:
+                mapped_raw[str(source)] = raw_digest
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            input_state = _indicator(
+                False, path=str(source) if source else None,
+                mapping_verified=False, error=str(exc),
+            )
     prepared: dict[str, str] = {}
     prepared_error = None
     try:
@@ -79,7 +117,7 @@ def source_indicators(
         changed_paths=mismatches,
         error=prepared_error,
     )
-    raw: dict[str, str] = {}
+    raw: dict[str, str] = dict(mapped_raw)
     model = request.get("study_model") or {}
     for sample in model.get("samples", []):
         for replicate in sample.get("replicates", []):

@@ -34,6 +34,8 @@ def validate_group_location(root: Path, request: dict[str, Any]) -> None:
             layout = resolve_user_output_layout(source, requested_delivery_root=task.get("out"))
             destinations.extend((item["id"], path) for path in (layout.workspace_root, layout.delivery_root))
         else:
+            if task["action"] == "update_source":
+                sources.append(Path(task["source"]))
             destinations.append((item["id"], resolve_project_path(Path(task["project"]))))
     for index, (identifier, path) in enumerate(destinations):
         for other_id, other in destinations[:index]:

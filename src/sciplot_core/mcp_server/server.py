@@ -98,15 +98,17 @@ class Adapter:
         artifacts = ([{"preview": preview_artifact}] if preview_artifact is not None else [])
         comparison = payload.get("kind") == "sciplot_task_comparison_result"
         grouped = comparison or payload.get("kind") == "sciplot_task_group_result"
-        if grouped:
+        source_revision = payload.get("kind") == "sciplot_task" and isinstance(payload.get("previews"), list)
+        if grouped or source_revision:
             artifacts = payload["previews"]
         group_resources = []
         for artifact in artifacts:
             try:
                 preview = artifact["preview"]
                 snapshot = self.resources.add_preview(Path(preview["path"]), expected_sha256=preview.get("sha256"))
-                if grouped:
-                    keys = ("candidate_id", "figure_id", "scope") if comparison else ("item_id", "figure_id", "scope")
+                if grouped or source_revision:
+                    keys = (("figure_id", "scope") if source_revision else
+                            ("candidate_id", "figure_id", "scope") if comparison else ("item_id", "figure_id", "scope"))
                     group_resources.append({**{key: artifact[key] for key in keys}, "uri": snapshot.uri})
                 else:
                     compact = {**compact, "preview_resource": snapshot.uri}
@@ -115,7 +117,7 @@ class Adapter:
                 # Resource presentation failure does not turn a completed domain
                 # mutation into an ambiguous failed action.
                 warnings.append(str(exc))
-        if grouped:
+        if grouped or source_revision:
             compact = {**compact, "preview_resources": group_resources}
         if warnings:
             compact = {**compact, "resource_warnings": warnings}

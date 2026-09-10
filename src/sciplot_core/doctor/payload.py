@@ -143,7 +143,9 @@ def doctor_payload() -> dict[str, Any]:
         "status": "ready" if not required_failures else "blocked",
         "repo_root": str(REPO_ROOT),
         "normal_mode": {
-            "daily_entrypoint": "sciplot studio PATH",
+            "task_interface": "external_ai",
+            "daily_entrypoint": "sciplot task start --request REQUEST_JSON --json",
+            "capabilities_entrypoint": "sciplot task capabilities --json",
             "interactive_entrypoint": "sciplot studio PATH",
             "headless_export_entrypoint": (
                 "sciplot studio PATH --out /path/to/Visible_Figure_Project "
@@ -154,6 +156,7 @@ def doctor_payload() -> dict[str, Any]:
                 "--out /path/to/Visible_Figure_Project"
             ),
             "frontend_default": "veusz_mainwindow",
+            "frontend_default_scope": "compatible_native_editor",
             "assistant_default": "independent",
             "assistant_visibility_default": "hidden",
             "codex_required": False,
@@ -161,15 +164,35 @@ def doctor_payload() -> dict[str, Any]:
             "automatic_recognition_required": False,
         },
         "command_surface": {
+            "task_family": {
+                "command": "task",
+                "preferred_for": "external_ai_create_edit_export_and_continuation",
+                "capabilities": "sciplot task capabilities --json",
+                "start": "sciplot task start --request REQUEST_JSON --json",
+                "inspect": "sciplot task inspect TASK_DIRECTORY --json",
+                "resume": "sciplot task resume TASK_DIRECTORY --response RESPONSE_JSON --json",
+                "find": "sciplot task find SOURCE --json",
+                "role": "deterministic local tasks with source-bound planning, native preview review, export, and durable recovery",
+                "internal_model_required": False,
+            },
+            "project_control": {
+                "command": "project",
+                "role": "saved-project inspection and advertised native operations through the same shared owners",
+            },
+            "mcp_transport": {
+                "command": "mcp",
+                "role": "optional stdio transport for the same task and project services",
+                "internal_model_required": False,
+            },
             "interactive_family": {
                 "command": "studio",
                 "interactive": "sciplot studio PATH",
                 "headless": ("sciplot studio PATH --export pdf,tiff_300 --json"),
-                "role": "project preparation, native Veusz editing, exact-current export, QA, and delivery",
+                "role": "compatible project preparation, native Veusz editing, exact-current export, QA, and delivery",
             },
             "automation_family": {
                 "command": "autoplot",
-                "role": "public automated project, QA, and delivery orchestration over the internal request and one-step status pipeline",
+                "role": "compatible one-time raw-source plotting, QA, and delivery; its run-only project is not directly resumable by project control",
                 "separate_renderer": False,
             },
             "request_replay": {

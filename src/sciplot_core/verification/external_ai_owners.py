@@ -37,6 +37,7 @@ EXTERNAL_AI_OWNERS = (
         exact_paths=frozenset(
             {
                 "src/sciplot_core/plan_identity.py",
+                "src/sciplot_core/plan_preview_contract.py",
                 "src/sciplot_core/plan_preview.py",
                 "src/sciplot_core/autoplot/run.py",
                 "src/sciplot_core/cli/parsers/rendering.py",

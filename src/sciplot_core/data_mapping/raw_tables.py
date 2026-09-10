@@ -80,6 +80,8 @@ def _normalize_decimal_comma(value: object) -> object:
 def _read_raw_table(
     reference: DataSourceReference,
     path: Path,
+    *,
+    preserve_cells: bool = False,
 ) -> _RawTable:
     suffix = path.suffix.casefold()
     if suffix in {".xlsx", ".xls"}:
@@ -99,6 +101,7 @@ def _read_raw_table(
             dtype=object,
             keep_default_na=False,
             na_filter=False,
+            skip_blank_lines=not preserve_cells,
             engine="python",
         )
     if raw.empty:
@@ -118,7 +121,8 @@ def _read_raw_table(
             for index, value in enumerate(raw.iloc[header_row].tolist())
         )
         frame = raw.iloc[header_row + 1 :].reset_index(drop=True)
-    frame = frame.map(_normalize_missing)
+    if not preserve_cells:
+        frame = frame.map(_normalize_missing)
     return _RawTable(
         source=reference,
         path=path,

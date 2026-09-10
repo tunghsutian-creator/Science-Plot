@@ -40,14 +40,14 @@ def tool_definitions() -> list[Tool]:
         ))
 
     add("capabilities", "Read the versioned local control contract. No model or provider is started.", {}, [], read_only=True)
-    add("task_start", "Start one authorized local create/edit/export task. The local runner carries mechanical steps; inspect a returned needs_input or needs_review state before resuming.",
+    add("task_start", "Start one authorized local create/edit/export/update_source task. Answer source-bound column questions; inspect all returned source-update or edit candidate PNGs before resuming.",
         {"request": task_request_schema(), "task_dir": string}, ["request"])
     add("task_inspect", "Resume context from a saved task. This does not rerun or certify its historical result.",
         {"task": string}, ["task"], read_only=True)
     add("task_find", "Find creation receipts by exact original source path in the source-adjacent task history or an explicit tasks_root. Returns candidates and source currentness; inspect the selected task/project before continuing. Does not create or choose a project.",
         {"source": string, "tasks_root": string, "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
         ["source"], read_only=True)
-    add("task_resume", "Continue a saved task with a choice, bound preview response, or replacement operations. Use expected_operation_id for a ready preview; only blocked/previewing corrections use expected_preview_revision. Identical revision retries do not rerun. Existing user intent authorizes edits.",
+    add("task_resume", "Continue a saved task. Column answers require expected_question_id; source-update decisions require expected_revision_id. Style previews use expected_operation_id and blocked preview corrections use expected_preview_revision. Existing user intent authorizes the requested work.",
         {"task": string, "response": task_response_schema()}, ["task", "response"])
     add("group_start", "Run 1–32 independent experiment tasks from an explicit list. Optional shared sample_style_preset applies to each created figure through ordinary reviewed edits. One item needing judgment does not stop others. Returns a local overview and native PNG resources; no model calls.",
         {"request": group_request_schema(), "group_dir": string}, ["request", "group_dir"])

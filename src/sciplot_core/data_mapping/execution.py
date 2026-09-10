@@ -187,7 +187,7 @@ def execute_data_mapping_proposal(
         step = build_transform_step(
             step_id=f"data_mapping_{resolved.proposal_id}",
             operation="execute_confirmed_data_mapping_proposal",
-            input_path=root,
+            input_path=next(iter(sources.values())) if len(sources) == 1 else root,
             output_path=output_paths[0],
             additional_outputs=output_paths[1:],
             implementation_ref=(

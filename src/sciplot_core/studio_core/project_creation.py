@@ -6,7 +6,13 @@ from pathlib import Path
 from collections.abc import Callable
 from typing import Any
 
-from sciplot_core.output_contract import UserOutputLayout, resolve_user_output_layout
+from sciplot_core.data_mapping.plan_binding import resolve_mapping_plan_request
+from sciplot_core.foundation.json_io import atomic_write_json
+from sciplot_core.output_contract import (
+    REQUEST_DELIVERY_ROOT_KEY,
+    UserOutputLayout,
+    resolve_user_output_layout,
+)
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.plan_preview import verify_expected_plan
 from sciplot_core.studio_core.project_export import export_project_document
@@ -60,11 +66,14 @@ def create_project(
     layout.workspace_root.parent.mkdir(parents=True, exist_ok=True)
     with external_project_session(layout.workspace_root):
         require_new_layout(layout)
-        payload = prepare_studio_document(
-            source, output_root=layout.workspace_root / "projects",
-            delivery_root=layout.delivery_root, rule_id=verified["rule_id"],
-            template=verified["template"],
-        )
+        if "data_mapping" in verified:
+            payload = _prepare_mapped_project(source, verified=verified, layout=layout)
+        else:
+            payload = prepare_studio_document(
+                source, output_root=layout.workspace_root / "projects",
+                delivery_root=layout.delivery_root, rule_id=verified["rule_id"],
+                template=verified["template"],
+            )
         if source_tree_sha256(source) != verified["preview_identity"]["source_tree_sha256"]:
             raise ValueError(
                 "Source changed during project preparation. The candidate is preserved; "
@@ -73,6 +82,29 @@ def create_project(
         if on_prepared is not None:
             on_prepared({key: payload[key] for key in ("project_dir", "document", "request")})
         return _publish(payload)
+
+
+def _prepare_mapped_project(
+    source: Path, *, verified: dict[str, Any], layout: UserOutputLayout
+) -> dict[str, Any]:
+    """Enter the existing canonical-request Studio route with confirmed lineage."""
+
+    mapping = verified["data_mapping"]
+    request, current = resolve_mapping_plan_request(
+        source,
+        {**mapping, "rule_id": verified["rule_id"], "template": verified["template"]},
+    )
+    if current != mapping:
+        raise ValueError("The confirmed mapping changed after the expected plan.")
+    project = layout.workspace_root / "projects" / source.stem
+    project.mkdir(parents=True, exist_ok=False)
+    request["output"] = str(project / "runs" / "run_001")
+    request[REQUEST_DELIVERY_ROOT_KEY] = str(layout.delivery_root)
+    request["resolved_figure_plan"] = verified["resolved_figure_plan"]
+    request["data_mapping_plan_binding"] = current
+    request_path = project / "plot_request.json"
+    atomic_write_json(request_path, request)
+    return prepare_studio_document(request_path)
 
 
 def export_project(project: Path) -> dict[str, Any]:

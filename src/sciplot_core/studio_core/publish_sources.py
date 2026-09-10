@@ -7,11 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.data_mapping.plan_binding import resolve_mapping_plan_request
 from sciplot_core.figure_plan import (
     ResolvedFigurePlan,
     source_trees_match_sha256,
 )
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.materials_rules import compute_analysis_metrics
 from sciplot_core.presentation_identity import SelectedPresentationIdentity
 from sciplot_core.source_coverage.managed_task_sources import (
@@ -81,6 +83,28 @@ def prepare_studio_run_sources(
     raw_archive = (
         _archive_studio_input(input_path, output_dir) if input_path is not None else {}
     )
+    if data_mapping_application is not None:
+        original_input = _resolve_request_input(request, base_dir=request_path.parent)
+        if original_input is None:
+            raise ValueError("The mapped project lost its original source input.")
+        recorded_mapping = request.get("data_mapping_plan_binding")
+        original_hash = source_tree_sha256(original_input)
+        if recorded_mapping is not None:
+            _seed, current_mapping = resolve_mapping_plan_request(original_input, request)
+            if current_mapping != recorded_mapping:
+                raise ValueError("The mapped project no longer matches its creation plan.")
+            original_hash = current_mapping["original_input_sha256"]
+        # The main archive remains the effective FigurePlan source. Preserve the
+        # actual original file separately, including when both have the same name.
+        raw_archive["original_input"] = _archive_studio_input(
+            original_input, output_dir / "mapping_original"
+        )
+        if original_hash is None or not source_trees_match_sha256(
+            original_hash,
+            original_input,
+            Path(raw_archive["original_input"]["path"]),
+        ):
+            raise ValueError("Original mapping source changed during archival.")
     existing_ledger = _verified_mapping_ledger_extension(
         request.get("transform_ledger"),
         (

@@ -79,6 +79,8 @@ performance comparisons use **120 × 55 mm**. Click any image to view it at full
 - Compare 2–8 native alternatives for the same saved figure, view each beside the original, and inspect their differences. Copy a choice back to your AI assistant to apply exactly one candidate or keep the original. Viewing and copying never apply changes; the assistant rechecks the comparison before acting.
 - Refine a pending preview in the same task; styles that already match need no extra confirmation or save.
 - Preserve sample identities, units, and data sources. Missing reference values stay missing.
+- Choose one x/y column pair from a supported CSV or TSV using its original column positions, units and sample labels. Ambiguous shared-x response columns pause for a source-bound answer.
+- Update an existing project from a new source through the same AI task interface, review all original/candidate figures, and export the saved result. External annotations require explicit removal first; projects with confirmed column mappings require fresh mapping instead.
 - Reopen saved projects and continue editing with AI or directly in Veusz.
 - Find previous task-created projects from their original data path when starting a new AI session.
 
@@ -130,6 +132,8 @@ Reuse a style you have already settled on:
 
 The [AI connection guide](skill/references/external-control.md) covers CLI and MCP setup.
 If data or units are ambiguous, SciPlot reports what needs clarification before plotting.
+Independent installation, beginner and real-client efficiency acceptance is still pending;
+the [acceptance protocol](docs/INDEPENDENT_ACCEPTANCE.md) defines the separate evidence needed.
 
 ## Exports
 

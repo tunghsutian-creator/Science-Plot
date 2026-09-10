@@ -6,6 +6,17 @@ from sciplot_core.verification.type_gate_owners import ARCHITECTURE_CORE_TARGETS
 
 TASK_CONTROL_OWNERS = (
     ChangedOwner(
+        owner_id="source_bound_column_mapping",
+        path_prefixes=("src/sciplot_core/data_mapping/",),
+        owned_test_paths=frozenset({"tests/test_column_choice.py", "tests/test_task_column_mapping.py",
+            "tests/test_task_column_mapping_native.py", "tests/test_task_mapping_plan.py", "tests/test_task_mapping_review.py"}),
+        pytest_targets=("tests/test_column_choice.py", "tests/test_task_column_mapping.py",
+            "tests/test_task_column_mapping_native.py", "tests/test_task_mapping_plan.py", "tests/test_task_mapping_review.py",
+            "tests/test_plan_preview.py", "tests/test_project_query.py", *ARCHITECTURE_CORE_TARGETS),
+        mypy_required=True, handoff_gates=("doctor",), final_milestone_gates=("smoke",),
+        release_gates=("acceptance_rules", "full_pytest"),
+    ),
+    ChangedOwner(
         owner_id="local_task_control",
         path_prefixes=("src/sciplot_core/task_",),
         exact_paths=frozenset({
@@ -17,11 +28,13 @@ TASK_CONTROL_OWNERS = (
             "src/sciplot_core/studio_core/project_receipt.py",
             "src/sciplot_core/studio_core/project_capabilities.py",
         }),
-        owned_test_paths=frozenset({"tests/test_task_review_gallery.py", "tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py", "tests/test_task_preview_revision.py", "tests/test_task_revision_guards.py", "tests/test_task_discovery.py", "tests/test_task_groups.py", "tests/test_task_groups_native.py", "tests/test_task_comparisons.py", "tests/test_task_comparisons_native.py"}),
+        owned_test_paths=frozenset({"tests/test_task_source_update.py", "tests/test_task_source_control.py", "tests/test_task_source_control_native.py", "tests/test_task_review_gallery.py", "tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py", "tests/test_task_preview_revision.py", "tests/test_task_revision_guards.py", "tests/test_task_discovery.py", "tests/test_task_groups.py", "tests/test_task_groups_native.py", "tests/test_task_comparisons.py", "tests/test_task_comparisons_native.py"}),
         pytest_targets=("tests/test_task_review_gallery.py", "tests/test_task_control.py", "tests/test_task_control_native.py", "tests/test_task_recovery.py", "tests/test_task_preview_revision.py", "tests/test_task_discovery.py",
                         "tests/test_task_revision_guards.py", "tests/test_task_groups.py", "tests/test_task_groups_native.py",
                         "tests/test_task_comparisons.py", "tests/test_task_comparisons_native.py",
-                        "tests/test_project_create_cli.py", *ARCHITECTURE_CORE_TARGETS),
+                        "tests/test_project_create_cli.py", "tests/test_task_column_mapping.py", "tests/test_task_column_mapping_native.py",
+                        "tests/test_task_source_update.py", "tests/test_task_source_control.py", "tests/test_task_source_control_native.py",
+                        *ARCHITECTURE_CORE_TARGETS),
         mypy_required=True, handoff_gates=("doctor",),
         final_milestone_gates=("smoke",), release_gates=("full_pytest",),
     ),
@@ -48,8 +61,8 @@ TASK_CONTROL_OWNERS = (
     ChangedOwner(
         owner_id="mcp_control_adapter", path_prefixes=("src/sciplot_core/mcp_server/",),
         exact_paths=frozenset({"src/sciplot_core/studio_core/control_results.py"}),
-        owned_test_paths=frozenset({"tests/test_mcp_server.py", "tests/test_mcp_stdio.py"}),
-        pytest_targets=("tests/test_mcp_server.py", "tests/test_mcp_stdio.py", *ARCHITECTURE_CORE_TARGETS),
+        owned_test_paths=frozenset({"tests/test_mcp_server.py", "tests/test_mcp_stdio.py", "tests/test_mcp_task_choices.py"}),
+        pytest_targets=("tests/test_mcp_server.py", "tests/test_mcp_stdio.py", "tests/test_mcp_task_choices.py", *ARCHITECTURE_CORE_TARGETS),
         mypy_required=True, handoff_gates=("doctor",),
         final_milestone_gates=("smoke",), release_gates=("full_pytest",),
     ),

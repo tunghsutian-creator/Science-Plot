@@ -19,6 +19,9 @@ from sciplot_core.task_contract import (
 from sciplot_core.task_execution import (
     record_failure, run_apply_export, run_creation, run_edit_preview, run_export,
 )
+from sciplot_core.task_column_mapping import accept_column_response
+from sciplot_core.task_planning import assert_source_current
+from sciplot_core.task_source_execution import run_source_apply_export, run_source_preview, validate_source_response
 from sciplot_core.task_editing import begin_preview_revision, validate_preview_response
 from sciplot_core.task_storage import (
     load_task, save_task, task_location, task_path, task_summary,
@@ -31,15 +34,16 @@ def start_task(
     request = validate_task_request(request)
     if request["action"] == "edit":
         validate_operation_batch(request["operations"])
-    if request["action"] == "create":
+    if request["action"] in {"create", "update_source"}:
         source = canonical_path(Path(request["source"]))
         digest = source_tree_sha256(source)
         if digest is None:
             raise TaskControlError("source_not_found", "未找到原始数据文件或目录。")
         request["source"] = str(source)
     else:
-        request["project"] = str(resolve_project_path(Path(request["project"])))
         digest = None
+    if request["action"] != "create":
+        request["project"] = str(resolve_project_path(Path(request["project"])))
     for key in ("out", "profile"):
         if key in request:
             request[key] = str(canonical_path(Path(request[key])))
@@ -64,6 +68,8 @@ def start_task(
                 run_creation(root, state)
             elif request["action"] == "edit":
                 run_edit_preview(root, state)
+            elif request["action"] == "update_source":
+                run_source_preview(root, state)
             else:
                 run_export(root, state)
         except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
@@ -97,6 +103,11 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
     if state["status"] in {"complete", "cancelled"}:
         return
     if state["status"] == "needs_input":
+        if state["question"].get("field") == "column_mapping":
+            assert_source_current(state)
+            accept_column_response(root, state, response)
+            run_creation(root, state)
+            return
         if (
             set(response) - {"rule_id", "template"}
             or not isinstance(response.get("rule_id"), str)
@@ -109,6 +120,16 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
         state["selection"] = dict(response)
         run_creation(root, state)
     elif state["status"] == "needs_review":
+        if state["request"]["action"] == "update_source":
+            validate_source_response(state, response)
+            if not response["accept_source_update"]:
+                state.update(status="cancelled", phase="finished")
+                save_task(root, state)
+                return
+            state["preview_accepted"] = True
+            save_task(root, state)
+            run_source_apply_export(root, state)
+            return
         validate_preview_response(state, response)
         if not response["accept_preview"]:
             state.update({"status": "cancelled", "phase": "finished"})
@@ -121,6 +142,16 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
         if response != {"retry": True} or type(response.get("retry")) is not bool:
             raise TaskControlError("invalid_task_response", "修复具体问题后使用 retry=true。")
         phase = state["phase"]
+        if state["request"]["action"] == "update_source":
+            if phase == "exporting":
+                run_export(root, state)
+            elif phase == "applying" and state.get("preview_accepted") is True:
+                run_source_apply_export(root, state)
+            elif phase in {"starting", "previewing"}:
+                run_source_preview(root, state)
+            else:
+                raise TaskControlError("task_recovery_required", "请查询源更新任务的具体状态。")
+            return
         if phase == "exporting":
             run_export(root, state)
         elif phase == "applying" and state.get("preview_accepted") is True:
@@ -157,7 +188,8 @@ def resume_task(task: Path, response: dict[str, Any]) -> dict[str, Any]:
         try:
             _resume(root, state, response)
         except TaskControlError as exc:
-            if exc.reason_code in {"invalid_task_response", "stale_task_preview", "task_not_revisable"}:
+            if exc.reason_code in {"invalid_task_response", "stale_task_preview", "task_not_revisable",
+                                    "stale_task_question", "invalid_mapping_selection", "stale_source_review"}:
                 raise
             record_failure(root, state, exc)
         except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:

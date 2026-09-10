@@ -20,6 +20,8 @@ def preview_identity_for(
             "scientific_transform",
         )
     }
+    if "data_mapping" in preview:
+        selection["data_mapping"] = preview["data_mapping"]
     identity = {
         "kind": "sciplot_plan_preview_identity",
         "version": 1,

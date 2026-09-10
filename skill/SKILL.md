@@ -62,11 +62,11 @@ the explicit saved-figure/object references in the external API.
    skill/scripts/sciplot project capabilities --json
    ```
 
-   Prefer the complete local `task` route for supported create/edit/export work:
+   Prefer the complete local `task` route for supported create/edit/export/update_source work:
    `task capabilities → task start --request REQUEST_JSON → task inspect/resume`.
    The local runner owns recognition, fresh source-bound planning, creation,
    reviewed native edits and publication; it never invokes a model. Use
-   `needs_input` only for the actual exposed rule-selection question, and
+   `needs_input` only for the actual exposed rule or source-column question, and
    inspect the candidate image before accepting a `needs_review` preview with
    `{"accept_preview":true}`. Existing user intent authorizes that change;
    preview acceptance is not an additional mandatory user permission step.
@@ -82,6 +82,23 @@ the explicit saved-figure/object references in the external API.
    Query native object settings only when the requested operation needs them.
    The MCP stdio adapter exposes the same services and schemas; read full JSON
    and PNG resources only as needed. See the operation guide for exact fields.
+
+   For a supported CSV/TSV column question, inspect its original cells, units,
+   labels and zero-based indices. Reply with the current `expected_question_id`
+   and exactly one x/y pair. `choose_columns:true` explicitly requests this
+   workflow; an ambiguous single-x/multiple-y source may pause automatically.
+   The same confirmed DataMapping binds planning, creation and later export.
+   Do not turn the mapped CSV into a new raw source or reuse its selection as a
+   profile. Missing units, unsupported layouts and cross-sample pairs fail closed.
+
+   Use `action:"update_source"` with the saved project and explicit new source
+   to review a data revision. Inspect every before/candidate PNG and the full
+   change record, then answer `accept_source_update` with the current
+   `expected_revision_id`. The task saves and exports through existing owners;
+   export retries do not apply the revision again. Partial installation remains
+   blocked with its archive preserved. External annotations still require
+   explicit removal before a source update. Projects with confirmed mappings
+   require a fresh source-bound mapping; source-update does not reuse old columns.
 
    For successive edits use `export:false` on the task edit request. After
    accepting the preview, use the returned saved document SHA for the next edit;
@@ -234,7 +251,7 @@ lineage remain in the hidden runtime workspace.
 
 ## Command routing
 
-- `task`: complete local create/edit/export requests, persisted questions and
+- `task`: complete local create/edit/export/update_source requests, persisted questions and
   preview review, bounded recovery and compact historical task receipts.
 - `mcp`: optional stdio transport for the same domain services; no internal model.
 - `project`: external-AI creation from an expected plan, saved-project inspection,

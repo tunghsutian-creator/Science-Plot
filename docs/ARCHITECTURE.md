@@ -121,6 +121,30 @@ export so an export failure can resume without re-preparing data. Profiles reuse
 only verified rule/template selections; actual header/unit evidence and a fresh
 source plan are required for each new input.
 
+`data_mapping/column_choice` reads original CSV/TSV cells through the existing
+mapping reader and proposes one explicit pair with source-owned units and labels.
+`task_column_mapping` binds a question identity to that proposal and persists the
+same path-bound confirmation before execution. It adds no transformations or
+profile reuse. `data_mapping/plan_binding` verifies the immutable execution and
+request seed; the outer plan hashes the original input while the existing
+scientific transform and FigurePlan describe the effective mapped input.
+Creation, query and export verify both identities. Publication retains the
+effective-source archive and a separate byte-verified original-input archive.
+Mapping execution v2 fingerprints the explicit file for a single-source step,
+so task/output files in its parent are not mistaken for source data; historical
+v1 directory-bound executions retain their original verification rules.
+
+`task_source_execution` checkpoints source-update preview, application and export.
+`task_source_update` persists all before/candidate PNGs and a review identity;
+the existing source-update owner continues to prepare, audit and install the
+candidate. Its durable operation records the reviewed baseline, installed target
+and archive before replacement. Recovery accepts only a byte-proven completed
+installation or an untouched baseline; mixed states retain the archive and block.
+An export retry never reapplies the source revision. Neither this adapter nor
+its MCP image resources rebind annotations or infer scientific choices.
+Source-update rejects all persisted mapping-binding forms before preparing a
+candidate; replacing mapped data requires a newly confirmed mapping.
+
 `annotation_axes`, `annotation_contracts`, `annotation_geometry`, `annotation_batch`
 and `peak_evidence` own pure annotation meaning, geometry and data-bound observed
 extrema. `annotation_operations`/`peak_analysis` are saved-project services;

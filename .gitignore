@@ -37,6 +37,7 @@ ftir_output/
 # Historical design notes are local-only. Retain current architecture and legal notice.
 /docs/*
 !/docs/ARCHITECTURE.md
+!/docs/INDEPENDENT_ACCEPTANCE.md
 !/docs/AUTOMATION_CONTROL_CONTRACT.md
 !/docs/THIRD_PARTY_NOTICES.md
 # Public project artwork and synthetic plotting previews for the GitHub README.

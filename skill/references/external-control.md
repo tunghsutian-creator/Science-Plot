@@ -83,11 +83,60 @@ or an incomplete scan require selection or a narrower lookup. Read `match_count`
 receipts, skips unreadable/oversized/symlinked records and returns at most 100
 matches (20 by default). A zero result only describes the reported search scope.
 
-`needs_input` exposes an actual rule-selection question and evidence reference.
-Resume with `{"rule_id":"uvvis_spectrum"}` and optional `template`; source bytes
-are rechecked. Invalid choices remain correctable. This does not implement
-arbitrary DataMapping answers, worksheet selections or scientific repairs.
-Preserve those blockers rather than inventing an answer or silently reshaping data.
+`needs_input` exposes an actual rule-selection or source-column question and evidence.
+For a rule question, resume with `{"rule_id":"uvvis_spectrum"}` and optional
+`template`; source bytes are rechecked. Invalid choices remain correctable.
+
+For one x/y column pair, use a create request with `choose_columns:true` and the
+actual experiment rule. A supported single-x/multiple-response table also pauses
+automatically. The first supported layouts are CSV/TSV with unit-bearing column
+headers and numeric rows, or the canonical name/unit/sample three-row header.
+Read `question.evidence`: its cells and indices refer to the original file,
+including repeated headers and blank separator columns. Reply with:
+
+```json
+{"expected_question_id":"CURRENT_QUESTION_SHA256","column_mapping":{"x_column":0,"y_column":3}}
+```
+
+Indices are zero-based. Only these two columns enter this figure; the original
+file remains intact. Samples and units must be present in the source, and the
+registered scientific rule still validates the mapped table. The persisted
+DataMapping confirmation is reused on interruption, and the plan/project retain
+both original and effective source identities. Changed sources reject old answers.
+The selection is not saved as a reusable profile. Other layouts, Excel worksheet
+selection, missing units and arbitrary scientific repairs remain unsupported.
+This first column-choice route also rejects missing/nonfinite selected values,
+blank data records and sample labels that cannot survive the mapped filename
+unchanged. It never drops such records or silently renames the selected sample.
+
+To revise an existing project's data, start:
+
+```json
+{"version":1,"action":"update_source","project":"/absolute/saved/project","source":"/absolute/new/source.csv"}
+```
+
+The optional `worksheet` names an explicit worksheet supported by the existing
+source-update owner. The result retains every original/candidate PNG under
+`previews` and a complete saved review at `preview.review_path`; MCP provides
+corresponding `preview_resources`. Inspect all figures and the recorded changes,
+then resume with:
+
+```json
+{"accept_source_update":true,"expected_revision_id":"CURRENT_REVISION_SHA256"}
+```
+
+False cancels without applying. Source, saved project, visible delivery and PNG
+changes invalidate the review. The existing transaction archives the old project,
+applies the reviewed revision, and the task exports the exact saved result.
+An export failure resumes export only. A lost apply reply is recoverable only
+when the durable operation and current bytes prove the same completed result;
+an interrupted partial installation remains blocked with its archive retained.
+Projects with external annotations must first remove them explicitly; no anchor
+rebinding is performed. Projects with confirmed mappings require a fresh mapping
+choice and cannot yet use this source-update task; old column selections are not
+reused on a new source. These questions do not authorize arbitrary scientific facts.
+The task interface does not accept arbitrary DataMapping answers beyond its
+advertised source-column choice schema.
 
 An edit request contains `version:1`, `action:"edit"`, `project`, optional
 `figure_id`, `expected_document_sha256`, and `operations` from the shared
