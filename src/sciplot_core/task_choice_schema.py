@@ -24,25 +24,33 @@ def table_region_schema() -> dict[str, Any]:
 
 def column_mapping_schema() -> dict[str, Any]:
     pair = {"type": "object", "additionalProperties": False,
-            "properties": {key: {"type": "integer", "minimum": 0} for key in ("x_column", "y_column")},
+            "properties": {
+                **{key: {"type": "integer", "minimum": 0} for key in ("x_column", "y_column")},
+                "table_selection": table_selection_schema(),
+                "metadata_confirmations": metadata_confirmations_schema()},
             "required": ["x_column", "y_column"]}
     return {"oneOf": [pair, {"type": "object", "additionalProperties": False,
                              "properties": {"pairs": {"type": "array", "minItems": 1, "maxItems": 32, "items": pair}},
                              "required": ["pairs"]}]}
 
 
-def table_response_schema() -> dict[str, Any]:
+def table_selection_schema() -> dict[str, Any]:
     row = {"type": "integer", "minimum": 0}
+    return {"type": "object", "additionalProperties": False,
+            "description": "Original worksheet and this pair's own data rows (end exclusive). Omission on a pair inherits the current table selection.",
+            "properties": {"sheet": {"type": ["string", "null"]},
+                "header_rows": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": True, "items": row},
+                "data_start_row": row, "data_end_row": row,
+                "unit_row": {"type": ["integer", "null"], "minimum": 0},
+                "sample_row": {"type": ["integer", "null"], "minimum": 0}},
+            "required": ["sheet", "header_rows", "data_start_row", "data_end_row"]}
+
+
+def table_response_schema() -> dict[str, Any]:
     return {"type": "object", "additionalProperties": False,
             "properties": {
                 "expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-                "table_selection": {"type": "object", "additionalProperties": False,
-                    "properties": {"sheet": {"type": ["string", "null"]},
-                        "header_rows": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": True, "items": row},
-                        "data_start_row": row, "data_end_row": row,
-                        "unit_row": {"type": ["integer", "null"], "minimum": 0},
-                        "sample_row": {"type": ["integer", "null"], "minimum": 0}},
-                    "required": ["sheet", "header_rows", "data_start_row", "data_end_row"]}},
+                "table_selection": table_selection_schema()},
             "required": ["expected_question_id", "table_selection"]}
 
 

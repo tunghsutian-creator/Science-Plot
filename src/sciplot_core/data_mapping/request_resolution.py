@@ -81,7 +81,7 @@ def resolve_data_mapping_request(
         # sample inventory is independently checked by plan/series validation.
         mapped_outputs = [{"source_id": "selected_pairs", "path": str(effective_input),
                            "sha256": file_sha256(effective_input),
-                           "rows": execution["outputs"][0]["rows"],
+                           "rows": max(item["rows"] for item in execution["outputs"]),
                            "columns": [column for item in execution["outputs"] for column in item["columns"]],
                            "sample_label": None}]
     application = {
@@ -101,6 +101,7 @@ def resolve_data_mapping_request(
         "mapped_outputs": mapped_outputs,
         "expected_sample_labels": expected_labels,
         "expected_series_count_min": len(expected_labels),
+        "expected_series_points": {item["sample_label"]: item["rows"] for item in execution["outputs"]},
         "transform_steps": deepcopy(execution.get("transform_steps") or []),
         "transform_ledger": _read_json(
             Path(str(execution["transform_ledger"])).expanduser()

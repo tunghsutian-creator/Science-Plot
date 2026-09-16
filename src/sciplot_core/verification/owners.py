@@ -82,6 +82,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/autoplot/run.py",
                 "src/sciplot_core/cli/entrypoint.py",
                 "src/sciplot_core/cli/value_io.py",
+                "src/sciplot_core/source_inspection/model_recognition.py",
                 "src/sciplot_core/cli/dispatch/rendering.py",
                 "src/sciplot_core/cli/parsers/rendering.py",
                 "src/sciplot_core/materials_rules/catalog.py",

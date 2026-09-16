@@ -15,10 +15,12 @@ _HEADER_UNIT_RE = re.compile(r"(?:\(([^()]*)\)|\[([^\[\]]*)\])\s*$")
 
 def axis_match(value: object, aliases: tuple[str, ...]) -> bool:
     text = clean_text(value).casefold()
-    value_token = token(value)
+    # Scientific symbols carry meaning: reducing 2θ to 2 would classify
+    # sample identifiers such as FeⅠ-2 as diffraction-angle headers.
+    value_token = re.sub(r"[\W_]+", "", text)
     for alias in aliases:
         alias_text = alias.casefold()
-        alias_token = token(alias)
+        alias_token = re.sub(r"[\W_]+", "", alias_text)
         if alias_text and (text == alias_text or alias_text in text):
             return True
         if alias_token and (value_token == alias_token or alias_token in value_token):
@@ -30,7 +32,7 @@ def looks_like_unit(value: object) -> bool:
     raw = clean_text(value)
     if raw == "PA":
         return False
-    if "%" in raw:
+    if "%" in raw or raw in {"°", "º", "˚"}:
         return True
     if looks_like_unit_expression(raw):
         return True
@@ -53,6 +55,8 @@ def looks_like_unit(value: object) -> bool:
         "au",
         "abs",
         "degree",
+        "degrees",
+        "deg",
         "count",
         "counts",
         "百分比",

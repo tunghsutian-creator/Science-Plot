@@ -1386,8 +1386,8 @@ def run_data_mapping_probe(
     )
     original_document_text = coverage_document_path.read_text(encoding="utf-8")
     mutated_document_text = original_document_text.replace(
-        "2.000000e+00",
-        "9.000000e+00",
+        "\n2\n",
+        "\n9\n",
         1,
     )
     document_mutation_materialized = mutated_document_text != original_document_text
@@ -1602,8 +1602,8 @@ def run_data_mapping_probe(
             encoding="utf-8",
         )
     extra_precision_document_text = original_document_text.replace(
-        "1.000000e+00",
-        "1.0000004e+00",
+        "\n1\n",
+        "\n1.000000000001\n",
         1,
     )
     extra_precision_materialized = (
@@ -1638,8 +1638,8 @@ def run_data_mapping_probe(
     if dataset_start >= 0 and dataset_end > dataset_start:
         dataset_block = original_document_text[dataset_start:dataset_end]
         forged_block = dataset_block.replace(
-            f"{original_forged_value:.6e}",
-            f"{replacement_forged_value:.6e}",
+            f"\n{original_forged_value:.17g}\n",
+            f"\n{replacement_forged_value:.17g}\n",
             1,
         )
         forged_document_text = (

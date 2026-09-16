@@ -6,7 +6,7 @@ from typing import Any
 
 from sciplot_core.cli.value_io import _print_json
 from sciplot_core.task_control import (
-    inspect_task, resume_task, start_task, task_request_schema, task_response_schema,
+    inspect_task, resume_task, start_task,
 )
 from sciplot_core.task_discovery import find_tasks
 
@@ -49,13 +49,10 @@ def dispatch_task(args: Any) -> int:
             responses = json.loads(args.responses.expanduser().read_text()) if args.responses else []
             result = resume_group(args.target, responses)
     elif action == "capabilities":
-        from sciplot_core.task_choice_schema import table_region_schema
+        from sciplot_core.task_capabilities import task_capabilities
 
-        result = {"kind": "sciplot_task_capabilities", "version": 1,
-                  "request_schema": task_request_schema(),
-                  "response_schema": task_response_schema(),
-                  "table_region_query_schema": table_region_schema(),
-                  "model_configuration_required": False}
+        result = task_capabilities(section=args.section, name=args.name,
+                                   expected_contract_sha256=args.expected_contract, full=args.full)
     elif action == "table-region":
         from sciplot_core.task_table_region import inspect_table_region
 

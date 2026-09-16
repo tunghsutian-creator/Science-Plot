@@ -36,10 +36,17 @@ def test_official_stdio_client_discovery_and_error_recovery():
     async def scenario():
         async with Client(_parameters(cli=True), read_timeout_seconds=60) as client:
             tools = await client.list_tools()
-            assert len(tools.tools) == 22
+            assert len(tools.tools) == 24
             caps = await _call(client, "sciplot_capabilities", {})
             assert caps["transport"] == "mcp_stdio"
             assert caps["model_configuration_required"] is False
+            index = await _call(client, "sciplot_task_capabilities", {})
+            definition = await _call(client, "sciplot_task_capabilities", {
+                "section": "request", "name": "create", "expected_contract_sha256": index["contract_sha256"]})
+            assert definition["schema"]["properties"]["action"]["const"] == "create"
+            stale = await client.call_tool("sciplot_task_capabilities", {
+                "section": "request", "name": "create", "expected_contract_sha256": "0" * 64})
+            assert stale.is_error
             error = await client.call_tool("sciplot_project_inspect", {"project": "/missing/sciplot"})
             assert error.is_error and error.structured_content["ready_to_use"] is False
             assert (await _call(client, "sciplot_capabilities", {}))["transport"] == "mcp_stdio"

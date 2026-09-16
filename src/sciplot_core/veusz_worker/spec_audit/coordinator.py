@@ -54,6 +54,12 @@ def audit_spec_data(
         _ = dataimport, widgets
         loaded_document = document.Document()
         loaded_document.load(str(resolved_document))
+        from sciplot_core.studio_core.veusz_numeric_persistence import FLOAT64_ENCODING, NUMERIC_ENCODING_KEY
+
+        encoding = spec.get(NUMERIC_ENCODING_KEY)
+        if encoding not in (None, FLOAT64_ENCODING):
+            raise ValueError("Unsupported native one-dimensional numeric encoding.")
+        loaded_document._sciplot_exact_1d = encoding == FLOAT64_ENCODING
         visible_spec = effective_series_presentation(spec)
         from sciplot_core.veusz_worker.annotations import audit_native_annotations
 

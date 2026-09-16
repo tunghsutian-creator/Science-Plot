@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from sciplot_core.foundation.iso_timestamps import utc_now_iso
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.studio_core.veusz_numeric_persistence import FLOAT64_ENCODING, NUMERIC_ENCODING_KEY
 from sciplot_core.performance_comparison import (
     PERFORMANCE_RADAR_TEMPLATE_ID,
     PERFORMANCE_SCATTER_TEMPLATE_ID,
@@ -113,6 +114,7 @@ def build_performance_veusz_spec(
     return {
         "kind": "sciplot_veusz_plot_spec",
         "version": 1,
+        NUMERIC_ENCODING_KEY: FLOAT64_ENCODING,
         "created_at": utc_now_iso(),
         "render_engine": "veusz",
         "qa_target": "veusz_export",

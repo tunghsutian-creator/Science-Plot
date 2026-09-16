@@ -27,8 +27,17 @@ changes first. A blocked session is a conflict to resolve, not a lock to delete.
 
 ## Complete local tasks and MCP
 
-Read `task capabilities --json` once per interface version for the closed request
-and response schemas. A create request is:
+Read `task capabilities --json` for the small capability index (version 2).
+Fetch just the required schema with `task capabilities --section request --name
+create --expected-contract CURRENT_SHA --json`. Sections are `request`, `response`,
+`operations` and `table_region`; names come from the index. The fingerprint binds
+each schema read to the same contract. `--full` returns all task schemas with local
+`$defs` references; each schema is independently valid JSON Schema. Task request
+version remains 1, and server validation and document/question/review guards are
+unchanged. MCP offers the same query as `sciplot_task_capabilities`; tool input
+schemas factor repeated definitions at their own root. Returned `next_step`
+guidance identifies the current question/review bindings or the recovery boundary.
+A create request is:
 
 ```json
 {"version":1,"action":"create","source":"/absolute/path/UVvis.csv"}
@@ -134,9 +143,24 @@ present they must match; shared X may have an empty sample cell. One pair withou
 a sample row uses the original filename.
 Answer `table_selection` again with the current question ID to correct metadata
 or data bounds, including from a legacy single-pair question. No file rewrite is
-needed. Currently one region on one worksheet, up to 32 pairs and 256 columns is
-supported. Per-pair row ranges, numeric-only sample names, merged metadata cells
-needing expansion remain unsupported.
+needed. Each pair may supply its own complete `table_selection`, including a
+different sheet in the same original workbook. Omission inherits the current
+selection. For example, a shorter second pair can use:
+
+```json
+{"x_column":2,"y_column":3,"table_selection":{"sheet":"Measured","header_rows":[0],"unit_row":1,"sample_row":2,"data_start_row":3,"data_end_row":103}}
+```
+
+Same-sheet metadata confirmations are inherited unless the pair supplies a full
+replacement `metadata_confirmations` list. A different sheet inherits no declarations;
+supply its own source/sheet/column-bound evidence when needed. Every selected pair
+must be finite throughout its own range. Overlapping response rows cannot identify
+different samples; disjoint vertical blocks can. Up to 32 pairs and 256 columns per
+table are supported. Values and order remain exact, and the scientific plan checks
+each sample's point count. The rectangular derived CSV pads completed pairs with
+empty cells only; these are never measurements. Source update requires fresh ranges
+and evidence, then the ordinary annotation and image review. Numeric-only sample
+names and merged metadata cells needing expansion remain unsupported.
 
 Read beyond the initial preview without changing the question:
 

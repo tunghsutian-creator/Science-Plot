@@ -28,6 +28,7 @@ from sciplot_core.studio_render.scalar_plot_spec import (
 from sciplot_core.studio_render.value_parsing import _string_list
 
 from sciplot_core.studio_core.runtime import upstream_status
+from sciplot_core.studio_core.veusz_numeric_persistence import FLOAT64_ENCODING, NUMERIC_ENCODING_KEY
 from sciplot_core.studio_core.axis_data_visibility import (
     axis_data_visibility_payload,
 )
@@ -133,6 +134,7 @@ def _build_veusz_plot_spec(
     return {
         "kind": "sciplot_veusz_plot_spec",
         "version": 1,
+        NUMERIC_ENCODING_KEY: FLOAT64_ENCODING,
         "created_at": utc_now_iso(),
         "render_engine": "veusz",
         "qa_target": "veusz_export",

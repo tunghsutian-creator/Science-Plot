@@ -101,5 +101,10 @@ def resolve_column_metadata(
             column[f"{role}_eligible"] = not reasons
         column["sample_rejection_reasons"] = ([] if resolved["sample"] else [
             {"code": "missing_sample", "field": "sample", "message": "Confirm identity or select a matching paired sample; legacy single-pair filename fallback remains available."}])
-        column["output_header"] = (resolved["quantity"] if explicit_header_unit(resolved["quantity"])
+        # Replay older confirmations whose then-unrecognized angular spelling
+        # required an appended declared unit, while retaining old header rules.
+        header_unit = explicit_header_unit(resolved["quantity"])
+        newly_recognized = header_unit.casefold() in {"deg", "degrees", "°", "º", "˚"}
+        keep_header = bool(header_unit) and (not newly_recognized or header_unit == resolved["unit"])
+        column["output_header"] = (resolved["quantity"] if keep_header
                                    else f"{resolved['quantity']} ({resolved['unit']})")

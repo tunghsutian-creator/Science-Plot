@@ -33,11 +33,11 @@ def apply_performance_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
     for item in spec["series"]:
         interface.ImportString(
             f"{item['x_name']}(numeric)",
-            "\n".join(f"{float(value):.12g}" for value in item["x_values"]),
+            "\n".join(f"{float(value):.17g}" for value in item["x_values"]),
         )
         interface.ImportString(
             f"{item['y_name']}(numeric)",
-            "\n".join(f"{float(value):.12g}" for value in item["y_values"]),
+            "\n".join(f"{float(value):.17g}" for value in item["y_values"]),
         )
     interface.Set("StyleSheet/Font/font", style["font_family"])
     interface.Set("StyleSheet/Font/size", _pt(float(style["font_size_pt"])))

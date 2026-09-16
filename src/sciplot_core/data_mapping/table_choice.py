@@ -116,7 +116,7 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
 
 
 def proposal_for_table_columns(
-    snapshot: dict[str, Any], *, pairs: list[dict[str, int]], request_path: Path,
+    snapshot: dict[str, Any], *, pairs: list[dict[str, Any]], request_path: Path,
     proposal_id: str, created_at: str,
 ) -> DataMappingProposal:
     if select_table(snapshot["table_snapshot"], snapshot["table_selection"], snapshot.get("metadata_confirmations")) != snapshot:
@@ -131,22 +131,46 @@ def proposal_for_table_columns(
     )
 
 
-def _proposal_contents(snapshot: dict[str, Any], pairs: list[dict[str, int]]) -> dict[str, Any]:
+def _pair_columns(snapshot: dict[str, Any], pair: dict[str, Any]) -> dict[str, Any]:
+    required = {"x_column", "y_column"}
+    if (not isinstance(pair, dict) or not required <= set(pair)
+            or set(pair) - required - {"table_selection", "metadata_confirmations"}
+            or any(type(pair[key]) is not int or pair[key] < 0 for key in required)):
+        raise ValueError("Each pair needs original integer x_column/y_column indices and optional table_selection/metadata_confirmations.")
+    selection = pair.get("table_selection", snapshot["table_selection"])
+    if not isinstance(selection, dict):
+        raise ValueError("A pair's table_selection must be a complete original table region.")
+    # Declarations for one worksheet never migrate implicitly to another.
+    inherited = snapshot.get("metadata_confirmations", []) if selection.get("sheet") == snapshot["table_selection"]["sheet"] else []
+    confirmations = pair.get("metadata_confirmations", inherited)
+    if confirmations is None:
+        raise ValueError("metadata_confirmations must be a complete list; use [] to withdraw.")
+    if selection == snapshot["table_selection"] and confirmations == snapshot.get("metadata_confirmations", []):
+        return snapshot
+    return select_table(snapshot["table_snapshot"], selection, confirmations)
+
+
+def _proposal_contents(snapshot: dict[str, Any], pairs: list[dict[str, Any]]) -> dict[str, Any]:
     if not isinstance(pairs, list) or not 1 <= len(pairs) <= 32:
         raise ValueError("Select 1–32 explicit x/y pairs.")
-    selection, source = snapshot["table_selection"], Path(snapshot["source"])
-    columns = {column["index"]: column for column in snapshot["columns"]}
+    source = Path(snapshot["source"])
     references, mappings, labels, units = [], [], {}, {}
-    selected_y: set[int] = set()
+    selected_y: dict[tuple[str | None, int], list[tuple[int, int]]] = {}
     for index, pair in enumerate(pairs):
-        if not isinstance(pair, dict) or set(pair) != {"x_column", "y_column"} or any(type(value) is not int or value not in columns for value in pair.values()):
+        selected = _pair_columns(snapshot, pair)
+        selection = selected["table_selection"]
+        columns = {column["index"]: column for column in selected["columns"]}
+        if any(pair[key] not in columns for key in ("x_column", "y_column")):
             raise ValueError("Each pair needs original integer x_column/y_column indices.")
         x, y = columns[pair["x_column"]], columns[pair["y_column"]]
         if x["index"] == y["index"] or not x["x_eligible"] or not y["y_eligible"]:
-            raise ValueError("Selected columns need explicit axis names, observed units, and finite numeric values.")
-        if y["index"] in selected_y:
-            raise ValueError("A response column cannot be assigned to multiple samples.")
-        selected_y.add(y["index"])
+            raise ValueError(f"Pair {index} in {selection['sheet']!r} needs explicit axis names, observed units, and finite numeric values; "
+                             f"x_column={x['index']}: {x['x_rejection_reasons']}; y_column={y['index']}: {y['y_rejection_reasons']}.")
+        y_identity = (selection["sheet"], y["index"])
+        bounds = (selection["data_start_row"], selection["data_end_row"])
+        if any(max(bounds[0], start) < min(bounds[1], end) for start, end in selected_y.get(y_identity, [])):
+            raise ValueError("Overlapping rows of a response column cannot be assigned to multiple samples.")
+        selected_y.setdefault(y_identity, []).append(bounds)
         sample = y["sample"] or x["sample"] or (source.stem if len(pairs) == 1 and selection.get("sample_row") is None else "")
         if not sample or (x["sample"] and x["sample"] != sample):
             raise ValueError("Selected columns belong to different samples or lack an original sample label; shared X requires an empty sample cell.")

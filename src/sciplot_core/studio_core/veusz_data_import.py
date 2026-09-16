@@ -17,8 +17,8 @@ def import_veusz_spec_data(
     """Create all numeric and text datasets referenced by plot widgets."""
 
     for item in series:
-        x_data = "\n".join(f"{float(value):.12g}" for value in item["x_values"])
-        y_data = "\n".join(f"{float(value):.12g}" for value in item["y_values"])
+        x_data = "\n".join(f"{float(value):.17g}" for value in item["x_values"])
+        y_data = "\n".join(f"{float(value):.17g}" for value in item["y_values"])
         interface.ImportString(f"{item['x_name']}(numeric)", x_data)
         interface.ImportString(f"{item['y_name']}(numeric)", y_data)
     if categorical is None:
@@ -46,7 +46,7 @@ def import_veusz_spec_data(
     interface.ImportString(
         "category_axis_x(numeric)",
         "\n".join(
-            f"{float(position):.12g}"
+            f"{float(position):.17g}"
             for position in (
                 category_positions
                 if grouped_bar
@@ -60,7 +60,7 @@ def import_veusz_spec_data(
             "\n".join("0" for _position in category_positions)
             if grouped_bar
             else "\n".join(
-                f"{float(group['descriptive_statistics']['median']):.12g}"
+                f"{float(group['descriptive_statistics']['median']):.17g}"
                 for group in groups
             )
         ),
@@ -78,13 +78,13 @@ def _import_bar_error_data(
 ) -> None:
     interface.ImportString(
         "category_bar_positions(numeric)",
-        "\n".join(f"{float(group['position']):.12g}" for group in groups),
+        "\n".join(f"{float(group['position']):.17g}" for group in groups),
     )
     for bar_index, group in enumerate(groups, start=1):
         interface.ImportString(
             f"category_bar_mean_{bar_index}(numeric)",
             "\n".join(
-                f"{float(group['bar_mean']):.12g}" if item_index == bar_index else "nan"
+                f"{float(group['bar_mean']):.17g}" if item_index == bar_index else "nan"
                 for item_index in range(1, len(groups) + 1)
             ),
         )
@@ -96,7 +96,7 @@ def _import_stacked_component_data(
 ) -> None:
     interface.ImportString(
         "category_bar_positions(numeric)",
-        "\n".join(f"{float(group['position']):.12g}" for group in groups),
+        "\n".join(f"{float(group['position']):.17g}" for group in groups),
     )
     for group_index, group in enumerate(groups, start=1):
         components = [
@@ -108,7 +108,7 @@ def _import_stacked_component_data(
             interface.ImportString(
                 f"category_bar_component_{group_index}_{component_index}(numeric)",
                 "\n".join(
-                    f"{float(component['value']):.12g}"
+                    f"{float(component['value']):.17g}"
                     if item_index == group_index
                     else "nan"
                     for item_index in range(1, len(groups) + 1)

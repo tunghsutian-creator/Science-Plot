@@ -68,6 +68,11 @@ def _save_veusz_document_from_spec(
         from PyQt6 import QtWidgets
         from veusz import dataimport, document, widgets
         from veusz.document import CommandInterface
+        from sciplot_core.studio_core.veusz_numeric_persistence import (
+            FLOAT64_ENCODING, NUMERIC_ENCODING_KEY, ensure_veusz_numeric_precision,
+        )
+
+        ensure_veusz_numeric_precision()
 
         _ = dataimport, widgets
         app = QtWidgets.QApplication.instance()
@@ -76,6 +81,7 @@ def _save_veusz_document_from_spec(
             app = QtWidgets.QApplication([])
         try:
             doc = document.Document()
+            doc._sciplot_write_full_precision = spec.get(NUMERIC_ENCODING_KEY) == FLOAT64_ENCODING
             interface = CommandInterface(doc)
             _apply_veusz_spec(interface, spec)
             path.parent.mkdir(parents=True, exist_ok=True)

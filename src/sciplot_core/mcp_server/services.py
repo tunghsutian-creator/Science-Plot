@@ -22,6 +22,10 @@ def _preview_output(arguments: dict[str, Any]) -> Path:
 
 
 def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if name == "sciplot_task_capabilities":
+        from sciplot_core.task_capabilities import task_capabilities
+
+        return task_capabilities(**arguments)
     if name == "sciplot_task_table_region":
         from sciplot_core.task_table_region import inspect_table_region
 

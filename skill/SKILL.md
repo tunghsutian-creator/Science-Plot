@@ -64,6 +64,9 @@ the explicit saved-figure/object references in the external API.
 
    Prefer the complete local `task` route for supported create/edit/export/update_source work:
    `task capabilities → task start --request REQUEST_JSON → task inspect/resume`.
+   Capability discovery returns a small index. Fetch the required `--section`
+   and `--name` with its `--expected-contract` fingerprint; use `--full` only
+   when complete schemas are needed. MCP provides `sciplot_task_capabilities`.
    The local runner owns recognition, fresh source-bound planning, creation,
    reviewed native edits and publication; it never invokes a model. Use
    `needs_input` only for the actual exposed rule, table, source-column or annotation question, and
@@ -87,6 +90,12 @@ the explicit saved-figure/object references in the external API.
    labels and zero-based indices. Select worksheet and metadata/data rows with
    `table_selection`, then answer with current `expected_question_id` and x/y
    `pairs`. The legacy single-pair answer remains supported.
+   Each pair may carry a complete `table_selection` for independent data rows
+   or another sheet in the same original workbook, plus its own full
+   `metadata_confirmations` list. Same-sheet evidence is inherited unless
+   replaced; another sheet inherits no declarations. Review each selected
+   range's numeric and scientific evidence; point counts remain independent
+   through mapping, native creation, source update and export.
    `choose_columns:true` explicitly requests this
    workflow; an ambiguous single-x/multiple-y source may pause automatically.
    The same confirmed DataMapping binds planning, creation and later export.

@@ -273,6 +273,8 @@ def _resolve_output_unit(
 
 def _comparable_unit(value: str) -> str:
     normalized = value.replace("℃", "°C").replace("º", "°").replace("˚", "°")
+    if normalized.strip().casefold() in {"degree", "degrees", "deg", "°"}:
+        return "degree"  # Spelling equivalence only; no scaling or quantity change.
     normalized = re.sub(r"(?<=[A-Za-z])-(?=\d)", "^-", normalized)
     normalized = re.sub(r"[·⋅×*]", " ", normalized)
     return format_unit_label(normalized)

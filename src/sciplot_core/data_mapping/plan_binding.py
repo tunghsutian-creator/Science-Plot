@@ -72,6 +72,8 @@ def resolve_mapping_plan_request(
         "effective_input": str(effective_input),
         "effective_input_sha256": effective_hash,
         "expected_sample_labels": application["expected_sample_labels"],
+        **({"expected_series_points": application["expected_series_points"]}
+           if execution["provider"] == "explicit_table_choice" else {}),
     }
     return seed, binding
 
@@ -88,6 +90,11 @@ def verify_mapping_sample_identity(
             "Mapped scientific sample labels do not match the confirmed labels: "
             f"expected {binding['expected_sample_labels']!r}, found {actual!r}."
         )
+    if "expected_series_points" in binding:
+        series = output.get("series", []) if isinstance(output, dict) else []
+        counts = {item["sample"]: item["point_count"] for item in series}
+        if counts != binding["expected_series_points"]:
+            raise ValueError("Mapped scientific point counts do not match each confirmed source range.")
 
 
 __all__ = ["resolve_mapping_plan_request", "verify_mapping_sample_identity"]

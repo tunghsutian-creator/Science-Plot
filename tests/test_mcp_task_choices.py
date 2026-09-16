@@ -43,8 +43,10 @@ def test_mcp_column_choices_use_shared_closed_request_and_question_schemas():
     tools = {tool.name: tool for tool in tool_definitions()}
     start = tools["sciplot_task_start"].input_schema
     resume = tools["sciplot_task_resume"].input_schema
-    assert start["properties"]["request"] == task_request_schema()
-    assert resume["properties"]["response"] == task_response_schema()
+    from test_task_capabilities import expand
+
+    assert expand(start)["properties"]["request"] == task_request_schema()
+    assert expand(resume)["properties"]["response"] == task_response_schema()
     request = _request(Path("/source.csv"))
     Draft202012Validator(start).validate({"request": request})
     response = {"expected_question_id": "a" * 64, "column_mapping": {"x_column": 3, "y_column": 4}}

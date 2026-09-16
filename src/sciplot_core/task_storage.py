@@ -14,6 +14,7 @@ from sciplot_core.output_contract import resolve_user_output_layout, requested_d
 from sciplot_core.studio_core.project_query import resolve_project_path
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError, validate_task_request
+from sciplot_core.task_next_step import task_next_step
 
 
 def task_path(path: Path) -> Path:
@@ -99,6 +100,7 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
         summary["preview_revision"] = len(state.get("edit_revisions") or []) + 1
     return {
         **summary,
+        "next_step": task_next_step(state),
         "model_calls_by_sciplot": 0,
         "external_model_tokens": None,
         "ready_to_use": None,

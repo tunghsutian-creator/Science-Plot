@@ -23,8 +23,8 @@ def _persisted_expected_numeric_token(value: object) -> str:
         return "nan"
     if math.isinf(number):
         return "inf" if number > 0.0 else "-inf"
-    # Veusz Save writes ordinary numeric datasets with six digits after the
-    # decimal point in scientific notation. Quantize the generation spec once
+    # Historical Veusz specs and current 2D datasets use six digits after the
+    # decimal point in scientific notation. Quantize those legacy specs once
     # to that persisted token, then compare the reopened value exactly. Do not
     # round the reopened value: a hand-edited token carrying extra precision
     # must remain distinguishable.
@@ -84,7 +84,7 @@ def _dataset_evidence(
     actual_values = getattr(dataset, "data", None)
     expected_hash = _numeric_digest(
         expected_values,
-        expected_persisted=True,
+        expected_persisted=not (dimensions == 1 and getattr(loaded_document, "_sciplot_exact_1d", False)),
     )
     actual_hash = _numeric_digest(actual_values)
     if actual_hash != expected_hash:

@@ -59,8 +59,16 @@ def _cli_runtime_error_payload(
 
 
 def _recovery_hint(input_path: Path | None) -> str:
-    target = str(input_path) if input_path is not None else "<input>"
-    return f"Hint: run `sciplot inspect {target} --json` to see how SciPlot read the table, reshape it as a 2-column curve / replicate / heatmap table, or prepare an editable Veusz project with `sciplot studio {target}`."
+    target = json.dumps(str(input_path) if input_path is not None else "<input>", ensure_ascii=False)
+    return (
+        "Hint: keep the original file unchanged. For CSV/TSV or Excel column data, read "
+        "`sciplot task capabilities --section request --name create --json`, then use "
+        f'`sciplot task start --request REQUEST_JSON --json` with source={target} and choose_columns=true. '
+        "Confirm a rule matching the actual scientific quantities; follow the returned question "
+        "and use `sciplot task table-region` to inspect original cells once a table question is available. "
+        "Horizontal series and unsupported quantities need a supported import path; column selection "
+        "does not transpose data or convert units."
+    )
 
 
 def _load_options(value: str | None) -> dict[str, Any]:

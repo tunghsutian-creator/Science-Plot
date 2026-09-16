@@ -128,7 +128,12 @@ views with original cell evidence. Empty interior columns never change indices.
 `task_column_mapping` binds a question identity to that proposal and persists the
 same path-bound confirmation before execution. The mapping owner composes selected
 pairs into its verified effective table; that table and every selected output must
-reproduce from the original cells. It adds no profile reuse or numerical changes.
+reproduce from the original cells. Each pair may select independent rows, worksheet
+and metadata declarations. Disjoint vertical blocks are distinct views; overlapping
+response rows cannot become different samples. Completed pairs are serialized as
+empty XY cells in the rectangular composite, while individual mapped outputs retain
+their exact lengths. Plan binding checks sample order and each selected point count.
+It adds no profile reuse or numerical changes.
 `data_mapping/plan_binding` verifies the immutable execution and
 request seed; the outer plan hashes the original input while the existing
 scientific transform and FigurePlan describe the effective mapped input.
@@ -149,6 +154,13 @@ freezes the selection, pairs and evidence, and the mapping frame owner replays t
 bindings against the original before confirmation, execution and export verification.
 External citation relevance is judged by the caller; SciPlot verifies record shape,
 source/cell identity and deterministic consistency, not the truth of an external claim.
+
+`task_capabilities` projects a compact index and on-demand schemas from the existing
+request, response and operation owners. A canonical fingerprint binds query versions.
+`task_schema_compaction` factors repeated schema nodes into local definitions at each
+standalone schema/tool root; it never weakens the server validators. `task_next_step`
+projects existing scientific-question, preview and recovery states into guidance,
+without performing recovery, accepting previews or replacing transaction archives.
 
 `task_source_execution` checkpoints source-update preview, application and export.
 `task_source_update` persists all before/candidate PNGs and a review identity;
@@ -391,6 +403,7 @@ a cross-session identity.
 | Ordinary XY axis-data visibility | `studio_core/axis_data_visibility.py`, `veusz_worker/spec_audit/series.py` | Recompute finite data extents against both configured render-option bounds and final effective axes. Persist potential below/above-bound counts separately from coordinates actually clipped by the final spec; reject stale or forged visibility evidence during exact-current audit. |
 | Pure plot construction | `studio_render/` | Convert confirmed data and policy into render specs. |
 | Veusz lifecycle | `studio_core/`, `studio.py` | Core owns implementation; `studio.py` exposes the stable GUI/CLI integration API. |
+| Native numeric persistence | `studio_core/veusz_numeric_persistence.py`, `veusz_data_import.py`, `veusz_save.py`, `performance_veusz/apply.py`, `veusz_worker/numeric_evidence.py` | New ordinary/performance specs declare `native_1d_numeric_encoding=float64_round_trip_v1`. Import and native Save retain binary64 curve values with 17 significant digits; strict reopened-data audit rejects precision loss. The runtime adapter changes the native writer's numeric format only, without modifying upstream source or patching VSZ text. Historical specs retain their earlier quantized comparison; two-dimensional persistence keeps its existing contract. |
 | Rule contract certification | `readiness/rule_contract.py`, `readiness/rule_certification.py` | Build the canonical rule payload once, derive full/semantic hashes, and compare one already-resolved rule with exactly one validated-envelope registry entry. No Studio policy or I/O belongs here. |
 | Validated-envelope registry and scoped acceptance lineage | `readiness/constants.py`, `readiness/registry_model.py`, `readiness/registry_build.py`, `readiness/registry_merge.py`, `readiness/registry_io.py`, `readiness/status.py`, `cli/parsers/diagnostics.py`, `cli/dispatch/diagnostics.py` | Legacy registry v1 remains readable; complete certification and scoped merges write registry v2. `certify` builds from one complete ready-rule acceptance summary. `merge` replaces only selected entries after the same strict row, manifest, contract, evidence, artifact, and manual-visual validation, while every unselected base entry must still match its current full and semantic rule contracts. Versioned lineage records form a non-overlapping complete partition of registry entries and retain each real summary identity and selected rule set; status projects that same lineage. A candidate uses the existing registry schema and never reruns unselected lifecycles, invents hashes, or creates another authority. |
 | Studio prepare-time rule binding | `studio_core/rule_contract_binding.py` | Own the closed versioned binding persisted in canonical `plot_request.json`. Only successful generated preparation mints or refreshes it; exact-current reuse preserves it. |

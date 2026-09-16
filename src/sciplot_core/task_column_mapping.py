@@ -62,12 +62,13 @@ def pause_for_columns(state: dict[str, Any], question: dict[str, Any]) -> None:
 
 
 def validate_column_response(state: dict[str, Any], response: dict[str, Any]) -> None:
+    from jsonschema import Draft202012Validator
+    from sciplot_core.task_choice_schema import column_mapping_schema
+
     question = state["question"]
     choice = response.get("column_mapping")
     if (set(response) != {"expected_question_id", "column_mapping"}
-            or not isinstance(choice, dict)
-            or (set(choice) != {"pairs"} and (set(choice) != {"x_column", "y_column"}
-            or any(type(value) is not int or value < 0 for value in choice.values())))):
+            or not Draft202012Validator(column_mapping_schema()).is_valid(choice)):
         raise TaskControlError("invalid_task_response", "请回答 column_mapping 的 x_column/y_column，并附当前 expected_question_id。")
     if response["expected_question_id"] != question["question_id"]:
         raise TaskControlError("stale_task_question", "此答案对应旧问题，请读取当前列选择问题。")
@@ -94,7 +95,7 @@ def accept_column_response(root: Path, state: dict[str, Any], response: dict[str
         values = response["column_mapping"]
         if factory is proposal_for_table_columns and "pairs" not in values:
             values = {"pairs": [values]}
-        if factory is proposal_for_column_choice and "pairs" in values:
+        if factory is proposal_for_column_choice and set(values) != {"x_column", "y_column"}:
             raise ValueError("Use table_selection before selecting multiple pairs.")
         proposal = factory(
             question["evidence"], **values, request_path=request_path,
@@ -138,7 +139,7 @@ def accept_table_response(root: Path, state: dict[str, Any], response: dict[str,
     except (ValueError, TypeError) as exc:
         raise TaskControlError("invalid_mapping_selection", str(exc)) from exc
     next_question = {"field": "column_mapping", "reason_code": "column_selection_required",
-                     "message": "请查看逐列 rejection_reasons，确认 pairs；可用 metadata_confirmations 补充有证据的量名、单位和样品，或用 table_selection 更正区域。",
+                     "message": "请查看逐列 rejection_reasons，确认 pairs。每组可指定独立的完整 table_selection 和 metadata_confirmations；另一工作表不继承声明。可用 metadata_confirmations 补充有证据的量名、单位和样品，或用 table_selection 更正默认区域。",
                      "selection": question["selection"], "evidence": columns}
     state.setdefault("scientific_choice_history", []).append({"question": question, "response": response})
     next_question["revision"] = len(state["scientific_choice_history"])

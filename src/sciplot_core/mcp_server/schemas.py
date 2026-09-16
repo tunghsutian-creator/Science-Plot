@@ -7,6 +7,7 @@ from typing import Any
 from mcp.types import Tool, ToolAnnotations
 
 from sciplot_core.studio_core.annotation_schema import annotation_operation_capabilities
+from sciplot_core.task_schema_compaction import compact_schema
 
 
 def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
@@ -31,7 +32,7 @@ def tool_definitions() -> list[Tool]:
     def add(name: str, description: str, properties: dict[str, Any], required: list[str], *, read_only: bool = False) -> None:
         definitions.append(Tool(
             name=f"sciplot_{name}", description=description,
-            input_schema=object_schema(properties, required),
+            input_schema=compact_schema(object_schema(properties, required)),
             output_schema={"type": "object"},
             annotations=ToolAnnotations(
                 read_only_hint=read_only,
@@ -41,6 +42,9 @@ def tool_definitions() -> list[Tool]:
         ))
 
     add("capabilities", "Read the versioned local control contract. No model or provider is started.", {}, [], read_only=True)
+    add("task_capabilities", "Read a small task capability index or one exact schema. Pass its contract_sha256 as expected_contract_sha256 when fetching sections; server validation remains complete.",
+        {"section": {"enum": ["request", "response", "operations", "table_region"]}, "name": string,
+         "expected_contract_sha256": sha, "full": {"type": "boolean"}}, [], read_only=True)
     add("task_start", "Start one authorized local create/edit/export/update_source task. Answer source-bound column questions; inspect all returned source-update or edit candidate PNGs before resuming.",
         {"request": task_request_schema(), "task_dir": string}, ["request"])
     add("task_inspect", "Resume context from a saved task. This does not rerun or certify its historical result.",

@@ -7,8 +7,12 @@ from typing import Any
 def register_task_commands(subparsers: Any) -> None:
     parser = subparsers.add_parser("task", help="Run and resume complete local plotting tasks.")
     actions = parser.add_subparsers(dest="task_action", required=True)
-    capabilities = actions.add_parser("capabilities", help="Read task request and response schemas.")
+    capabilities = actions.add_parser("capabilities", help="Read the small task capability index, or a requested schema.")
     capabilities.add_argument("--json", action="store_true")
+    capabilities.add_argument("--section", choices=("request", "response", "operations", "table_region"))
+    capabilities.add_argument("--name", help="One action, response field or operation from the capability index.")
+    capabilities.add_argument("--expected-contract", help="Reject schemas from a different capability fingerprint.")
+    capabilities.add_argument("--full", action="store_true", help="Read all task schemas with repeated definitions factored out.")
     region = actions.add_parser("table-region", help="Read a source-bound original cell rectangle; read-only.")
     region.add_argument("target", type=Path)
     region.add_argument("--query", type=Path, required=True)

@@ -8,6 +8,7 @@ import re
 import unicodedata
 import csv
 from io import StringIO
+from itertools import zip_longest
 from pathlib import Path
 from typing import Any
 import pandas as pd
@@ -86,12 +87,12 @@ def paired_table_text(proposal: DataMappingProposal, frames: dict[str, pd.DataFr
             units.append(unit)
             labels.append(proposal.sample_labels[reference.source_id])
             series.append(frame[column.output_column].tolist())
-    if len({len(values) for values in series}) != 1:
-        raise ValueError("Selected paired-table ranges must have equal row counts.")
     buffer = StringIO(newline="")
     writer = csv.writer(buffer, lineterminator="\n")
     writer.writerows([headers, units, labels])
-    writer.writerows(zip(*series, strict=True))
+    # Rectangular serialization only: both cells of a finished XY pair stay
+    # empty. Each source frame and its point count remain independently exact.
+    writer.writerows(zip_longest(*series, fillvalue=""))
     return buffer.getvalue()
 
 

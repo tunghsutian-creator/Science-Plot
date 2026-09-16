@@ -23,13 +23,16 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 
 def test_tool_discovery_uses_closed_shared_operation_schema():
     tools = {item.name: item for item in tool_definitions()}
-    assert len(tools) == 23
+    assert len(tools) == 24
     assert tools["sciplot_task_table_region"].annotations.read_only_hint is True
     for item in tools.values():
         assert item.input_schema["additionalProperties"] is False
         assert item.annotations.open_world_hint is False
-    schema = tools["sciplot_edit_preview"].input_schema["properties"]["operations"]
+    from test_task_capabilities import expand
+
+    schema = expand(tools["sciplot_edit_preview"].input_schema)["properties"]["operations"]
     assert schema == annotation_operation_capabilities()["operations_schema"]
+    assert tools["sciplot_task_capabilities"].annotations.read_only_hint is True
     assert tools["sciplot_project_inspect"].annotations.read_only_hint is True
     assert tools["sciplot_edit_apply"].annotations.read_only_hint is False
     assert tools["sciplot_task_start"].annotations.idempotent_hint is False

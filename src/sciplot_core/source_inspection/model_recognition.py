@@ -183,9 +183,9 @@ def recognize_source(
         return RecognizedSource(model="table_summary", raw=raw)
 
     raise ValueError(
-        "Could not recognize this file. Reformat it as a curve_table, "
-        "replicate_table, heatmap xyz_long_table, or one of the supported "
-        "rheology export tables."
+        "Could not recognize this file's table layout. Original cells, scientific "
+        "quantities, units and sample identities need confirmation through a "
+        "supported import path."
     )
 
 
