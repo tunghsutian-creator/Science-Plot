@@ -65,5 +65,9 @@ def dispatch_task(args: Any) -> int:
         result = inspect_task(args.target)
     else:
         result = resume_task(args.target, _object(args.response))
+    if action in {"start", "inspect", "resume"} and not args.full:
+        from sciplot_core.task_result_projection import compact_task_result
+
+        result = compact_task_result(result)
     _print_json(result)
     return 1 if result.get("status") == "blocked" else 0

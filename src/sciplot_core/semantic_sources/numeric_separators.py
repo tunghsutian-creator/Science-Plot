@@ -44,9 +44,10 @@ def selected_rows_use_decimal_comma(
     evidence: set[str] = set()
     ambiguous = False
     selected_columns = tuple(dict.fromkeys(columns))
+    cells = raw.to_numpy(dtype=object, copy=False)
     for row_index in rows:
         for column in selected_columns:
-            kind = _separator_evidence(raw.iat[row_index, column])
+            kind = _separator_evidence(cells[row_index, column])
             if kind in {"point", "comma"}:
                 evidence.add(kind)
             elif kind == "ambiguous":

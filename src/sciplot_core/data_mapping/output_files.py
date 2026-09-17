@@ -7,6 +7,7 @@ import os
 import re
 import unicodedata
 import csv
+import json
 from io import StringIO
 from itertools import zip_longest
 from pathlib import Path
@@ -85,7 +86,10 @@ def paired_table_text(proposal: DataMappingProposal, frames: dict[str, pd.DataFr
                 header = header[:-(len(unit) + 3)]
             headers.append(header)
             units.append(unit)
-            labels.append(proposal.sample_labels[reference.source_id])
+            label = proposal.sample_labels[reference.source_id]
+            if proposal.table_confirmation.get("sample_row_encoding") == "explicit_json_v1":
+                label = "@sample:" + json.dumps(label, ensure_ascii=False)
+            labels.append(label)
             series.append(frame[column.output_column].tolist())
     buffer = StringIO(newline="")
     writer = csv.writer(buffer, lineterminator="\n")

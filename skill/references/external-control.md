@@ -16,7 +16,7 @@ commands later in this guide remain available for exact control and diagnostics.
 
 ```bash
 skill/scripts/sciplot doctor --json
-skill/scripts/sciplot project capabilities --json
+skill/scripts/sciplot task capabilities --json
 ```
 
 Require Doctor `status=ready`. For an existing managed Studio project, start at
@@ -56,6 +56,91 @@ optional new visible delivery beside the raw source. `task_dir` is an optional
 new evidence location outside raw data, projects and visible delivery packages.
 Reusing a task directory with the same request returns its receipt, never a
 second creation; a different request is rejected.
+
+### Fast ordinary route
+
+Reuse capability schemas within the same contract revision. `task start` already
+owns recognition, source-bound planning, native creation, export and validation;
+do not precede it with the lower-level inspect/rule/plan/create/export sequence.
+Completed `start` and `resume` responses include a fresh `current_project` query.
+If `next_step.action` is `review_exports_and_deliver`, view its exported TIFF
+`images` and hand off; the unchanged result needs no extra inspect, native PNG
+generation or export. Existing receipts still get a fresh query when returned;
+saved historical evidence is never substituted for it. A later source, document
+or delivery change requires another query. `task inspect` remains the entrypoint
+for a new session or an existing task.
+
+Task `start`, `resume` and `inspect` use the same compact response in CLI and MCP.
+Successful responses omit duplicate artifact inventories and healthy-check detail;
+they retain current figure IDs, document hashes, sample labels, source/QA/delivery
+currentness and exported review image paths. Pending scientific questions,
+conflicts, preview images/audits and revision guards are not suppressed. Read
+`--full` or MCP `full:true` for the detailed response; MCP also offers an immutable
+full-result resource. The complete hashed task history remains in `task.json`.
+Full task responses are response projections, not copies of the entire history.
+
+`local_timing` reports the number and cumulative duration of active local calls,
+and the latest call; its phase breakdown is in the full response. It excludes external model inference, transport
+and user waiting; `external_model_seconds` and token counts remain unknown.
+Repeating an already finished task does not rewrite its timing or rerun creation.
+
+### Already-reviewed original data: one mapping submission
+
+Keep the external AI's original-data interpretation. When it has already inspected
+the cells, it may submit those explicit choices in `create.mapping` instead of
+waiting for individual table/metadata/column questions. Provide the original
+single-file byte SHA-256 (not the source-tree hash), a known `rule_id`, and:
+
+```json
+{
+  "source_sha256": "CURRENT_ORIGINAL_FILE_SHA256",
+  "table_selection": {
+    "sheet": "Measured", "header_rows": [0], "unit_row": 1,
+    "sample_row": 2, "data_start_row": 3, "data_end_row": 103
+  },
+  "column_mapping": {"pairs": [{"x_column": 0, "y_column": 1}]}
+}
+```
+
+This object belongs under `mapping` in the ordinary create request with `version`,
+`action`, `source` and `rule_id`. `sheet:null` selects a CSV/TSV. Bounds remain
+zero-based/end-exclusive; each pair may specify its own complete selection.
+Optional `metadata_confirmations` uses the same original-cell, cited-excerpt or
+attributed-user evidence as interactive answers. No data arrays, inferred missing
+units, source rewriting, unit conversion or visual-preview acceptance is added.
+Do not combine this with a saved profile. `choose_columns:true` remains optional
+and backward compatible; `mapping` already explicitly selects the column route.
+
+Every choice runs through the existing mapping owners and durable confirmation.
+Wrong SHA blocks creation; invalid region, unit or sample pairing returns the
+current `needs_input` question with `mapping_error`. Correct it using ordinary
+source-bound `resume` answers; the failed original batch is not reapplied. An
+interrupted incomplete batch can retry its original intent before native creation.
+Capability schemas may be larger for this optional input; fetch them once per
+contract revision, and do not reread them for every figure.
+
+Pending table questions retain column diagnostics and question bindings while
+omitting repeated whole-workbook snapshots. Initial previews show up to eight
+rows per sheet; `preview_truncated` marks the limit. Use `task table-region` for
+more original cells or read `question.full_evidence_path` for the full saved
+question. This compact projection does not change the question hash or validation.
+
+For XLSX/XLSM merged metadata, original region queries include `merged_cells`
+with zero-based bounds and exclusive ends. An explicit selection with
+`expand_merged_metadata:true` associates selected metadata with the declared
+anchor, preserves original blanks under `raw_metadata` and `cell_evidence`, and
+returns `merged_metadata` associations. A merge crossing into measurements is
+rejected. Numeric sample IDs selected from original cells are represented by a
+versioned explicit JSON sample row in derived mapping data; original identities
+and point counts are preserved. This does not infer numeric metadata in raw data.
+
+For new source-update transactions, retry can restore a proven old baseline from
+an interrupted replacement. All project, archive and preserved candidate parts
+must match the recorded bytes before any recovery mutation. Candidate bytes and
+a rollback receipt remain alongside the original archive. Recovery itself can
+be retried after another interruption. Altered or unknown parts and legacy mixed
+installations still block; a restored baseline does not bypass fresh scientific,
+source, delivery or reviewed-candidate checks.
 
 `task inspect` queries current saved project evidence once and returns it under
 `current_project`, including `primary_figure_id`, `figures[].document_sha256`

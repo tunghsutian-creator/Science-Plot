@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import re
 
 from sciplot_core.foundation.text_values import clean_text, token
@@ -170,6 +172,14 @@ def _adjacent_pair_sample(
     axis_aliases: tuple[str, ...],
 ) -> str:
     label = clean_text(value)
+    if label.startswith("@sample:") and label == clean_text(paired_value):
+        try:
+            declared = json.loads(label[len("@sample:"):])
+        except ValueError as exc:
+            raise ValueError("Invalid explicit sample label.") from exc
+        if not isinstance(declared, str) or not declared.strip():
+            raise ValueError("An explicit sample label must contain a nonempty string.")
+        return declared
     if (
         not label
         or label != clean_text(paired_value)

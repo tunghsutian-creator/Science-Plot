@@ -14,6 +14,7 @@ from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.project_manifest import locked_intake_project_manifest
 from sciplot_core.studio_core.launchers import _write_veusz_launcher
+from sciplot_core.studio_core.source_update_recovery import installation_identity, restore_interrupted_update
 
 
 def reject_symlink_path(path: Path) -> None:
@@ -79,11 +80,11 @@ def _outcome_path(project: Path, review: dict[str, Any]) -> Path:
 def prior_source_update_result(
     project: Path, review: dict[str, Any], *, validate: Callable[[], object],
 ) -> Path | None:
-    """Recover only byte-proven completion or an untouched baseline.
+    """Recover byte-proven completion or restore a proven interrupted baseline.
 
     A hard interruption during the multi-part installation is deliberately not
-    interpreted as success. Its archived original files remain available for
-    explicit recovery; normal exceptions use the existing rollback below.
+    interpreted as success. New sealed intents can restore verified original
+    parts before retry; unknown bytes and legacy mixed states remain blocked.
     """
     path = _outcome_path(project, review)
     if not path.exists():
@@ -93,7 +94,7 @@ def prior_source_update_result(
         if (
             not isinstance(record, dict) or record.get("review") != review
             or record.get("project") != str(project)
-            or record.get("status") not in {"pending", "applied", "rolled_back"}
+            or record.get("status") not in {"pending", "applied", "rolled_back", "recovering"}
         ):
             raise ValueError("The source-update recovery record changed; preserve its evidence.")
         archive = Path(record["archive"])
@@ -101,6 +102,8 @@ def prior_source_update_result(
         if archive.parent != expected_parent or len(archive.name) != 32:
             raise ValueError("The source-update archive has an invalid recorded location.")
         reject_symlink_path(archive)
+        if record.get("version") == 2 and record.get("installation_sha256") != installation_identity(record):
+            raise ValueError("The source-update recovery record changed; preserve its evidence.")
         current = project_inventory(project)
         if current == record["result_files"] and record["status"] != "rolled_back":
             if not archive.is_dir() or project_inventory(archive) != record["archived_files"]:
@@ -112,9 +115,11 @@ def prior_source_update_result(
             atomic_write_json(path, record)
             return archive
         if (
-            current == record["base_files"] and record["status"] != "applied"
+            current == record["base_files"] and record["status"] in {"pending", "rolled_back"}
             and (not archive.exists() or not any(archive.iterdir()))
         ):
+            return None
+        if restore_interrupted_update(project, record, path, inventory=project_inventory, check_path=reject_symlink_path):
             return None
         raise ValueError(
             "The source update is interrupted or its result has changed. "
@@ -178,7 +183,7 @@ def install_source_update(
                 if key.split("/", 1)[0] in replaced_names
             }
             record = {
-                "kind": "sciplot_source_update_outcome", "version": 1,
+                "kind": "sciplot_source_update_outcome", "version": 2,
                 "status": "pending", "project": str(project), "review": review,
                 "archive": str(archive), "base_files": expected,
                 "archived_files": archived_files,
@@ -186,7 +191,9 @@ def install_source_update(
                     **{key: digest for key, digest in expected.items() if key not in archived_files},
                     **project_inventory(candidate),
                 },
+                "replacement_names": names,
             }
+            record["installation_sha256"] = installation_identity(record)
             atomic_write_json(outcome_path, record)
         archive.mkdir(parents=True)
         moved: list[str] = []

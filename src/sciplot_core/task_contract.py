@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from sciplot_core.task_choice_schema import annotation_response_schema, column_mapping_schema, table_response_schema, metadata_response_schema
+from sciplot_core.task_choice_schema import annotation_response_schema, column_mapping_schema, table_response_schema, metadata_response_schema, initial_mapping_schema
 
 
 class TaskControlError(ValueError):
@@ -14,7 +14,7 @@ class TaskControlError(ValueError):
 
 
 _FIELDS = {
-    "create": {"source", "rule_id", "template", "out", "profile", "choose_columns"},
+    "create": {"source", "rule_id", "template", "out", "profile", "choose_columns", "mapping"},
     "edit": {"project", "figure_id", "expected_document_sha256", "operations", "export"},
     "export": {"project"},
     "update_source": {"project", "source", "worksheet", "choose_columns"},
@@ -49,11 +49,16 @@ def task_request_schema() -> dict[str, Any]:
                 "type": "string", "pattern": "^[a-f0-9]{64}$",
             }
             properties["operations"] = annotation_operation_capabilities()["operations_schema"]
-        variants.append({
+        if action == "create":
+            properties["mapping"] = initial_mapping_schema()
+        variant: dict[str, Any] = {
             "type": "object", "additionalProperties": False,
             "properties": properties,
             "required": ["version", "action", *sorted(_REQUIRED[action])],
-        })
+        }
+        if action == "create":
+            variant["dependentSchemas"] = {"mapping": {"required": ["rule_id"], "not": {"required": ["profile"]}}}
+        variants.append(variant)
     return {"oneOf": variants}
 
 
@@ -113,7 +118,7 @@ def validate_task_request(value: dict[str, Any]) -> dict[str, Any]:
     allowed = {"version", "action"} | _FIELDS[action]
     if set(value) - allowed or not _REQUIRED[action] <= set(value):
         raise TaskControlError("invalid_task_fields", "任务参数缺失或含未支持的字段。")
-    for key in _FIELDS[action] & set(value) - {"operations", "export", "choose_columns"}:
+    for key in _FIELDS[action] & set(value) - {"operations", "export", "choose_columns", "mapping"}:
         if not isinstance(value[key], str) or not value[key].strip():
             raise TaskControlError("invalid_task_field", f"{key} 必须是非空字符串。")
     if action == "edit":
@@ -133,4 +138,11 @@ def validate_task_request(value: dict[str, Any]) -> dict[str, Any]:
         raise TaskControlError("invalid_column_choice", "显式列选择使用 choose_columns=true。")
     if value.get("choose_columns") and value.get("profile"):
         raise TaskControlError("profile_selection_conflict", "列选择需要当前原始证据，不能同时复用旧配置。")
+    if "mapping" in value:
+        from jsonschema import Draft202012Validator
+
+        if not Draft202012Validator(initial_mapping_schema()).is_valid(value["mapping"]):
+            raise TaskControlError("invalid_initial_mapping", "mapping 需要原文件 SHA、完整 table_selection 和 column_mapping；不接收重写的数值数组。")
+        if not value.get("rule_id") or value.get("profile"):
+            raise TaskControlError("invalid_initial_mapping", "预先提交映射需要明确 rule_id，不能复用旧 profile。")
     return dict(json.loads(json.dumps(value, ensure_ascii=False, allow_nan=False)))

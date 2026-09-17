@@ -80,12 +80,24 @@ performance comparisons use **120 × 55 mm**. Click any image to view it at full
 - Refine a pending preview in the same task; styles that already match need no extra confirmation or save.
 - Preserve sample identities, units, and data sources. Missing reference values stay missing.
 - Select original metadata/data rows, then choose one or more x/y pairs, including shared X. Each pair can have its own row range and worksheet in the same workbook. CSV/TSV descriptions and multirow headers use the same source-bound mapping. Missing scientific metadata needs explicit evidence; missing or nonfinite measurements require correction. Fresh source updates use the same independent ranges and reviewed annotation workflow.
+- Explicitly associate merged XLSX/XLSM metadata with its original anchor, including numeric sample IDs, while preserving original cells and measurement rows.
 - Update an existing project through the same AI task interface. Confirmed mappings are selected afresh. Compatible fixed annotations keep their coordinates; observed peaks show moved, missing or multiple candidates and require explicit handling before the final preview is accepted. Interrupted export resumes without applying the data revision twice.
 - Reopen saved projects and continue editing with AI or directly in Veusz.
 - Find previous task-created projects from their original data path when starting a new AI session.
 
 SciPlot runs plotting and exports locally. It does not require an internal model or API key;
 your external AI assistant uses its own model connection.
+
+Ordinary AI requests use one local task for planning, plotting and export. Completed
+calls include current source/QA/delivery checks and exported images to review, so
+the assistant can avoid repeated inspection and rendering calls. Byte-checked
+table parsing is reused within that operation. Task timing separates local work
+from external AI time; see [measured performance and its limits](docs/TASK_CAPABILITY_MEASUREMENTS.md).
+When the AI has already reviewed the original table, it can submit the file hash,
+regions, column pairs and any supported evidence declarations together using
+`create.mapping`. Local validation and plotting then run in one call. Replies are
+compact by default; full execution details remain available on demand (`--full`
+or MCP `full:true`). Original data interpretation stays with the external AI.
 
 ## Get started
 

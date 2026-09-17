@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
+
+from numpy.typing import NDArray
 
 import pandas as pd
 
@@ -33,20 +36,21 @@ def first_paired_curve_data_block(
 ) -> PairedCurveDataBlock:
     """Close on a blank/text row and reject any later complete numeric pair."""
 
+    cells = raw.to_numpy(dtype=object, copy=False)
     rows: list[int] = []
     closed = False
     for row in range(data_start, raw.shape[0]):
         if closed:
-            if _has_complete_numeric_pair(raw, row=row, pairs=pairs):
+            if _has_complete_numeric_pair(cells, row=row, pairs=pairs):
                 raise ValueError(_DISCONNECTED_BLOCK_MESSAGE)
             continue
-        if _ends_block(raw, row=row, pairs=pairs):
+        if _ends_block(cells, row=row, pairs=pairs):
             if rows:
                 closed = True
             continue
         rows.append(row)
     evidence_rows = [
-        row for row in rows if _has_complete_numeric_pair(raw, row=row, pairs=pairs)
+        row for row in rows if _has_complete_numeric_pair(cells, row=row, pairs=pairs)
     ]
     return PairedCurveDataBlock(
         rows=tuple(rows),
@@ -59,12 +63,12 @@ def first_paired_curve_data_block(
 
 
 def _ends_block(
-    raw: pd.DataFrame,
+    raw: NDArray[Any],
     *,
     row: int,
     pairs: tuple[tuple[int, int], ...],
 ) -> bool:
-    values = raw.iloc[row].tolist()
+    values = raw[row].tolist()
     if not any(clean_text(value) for value in values):
         return True
     selected_columns = {column for pair in pairs for column in pair}
@@ -75,24 +79,24 @@ def _ends_block(
     ):
         return True
     selected_kinds = tuple(
-        numeric_cell_syntax(raw.iat[row, column]) for column in selected_columns
+        numeric_cell_syntax(raw[row, column]) for column in selected_columns
     )
     if any(kind in {"numeric_candidate", "nonfinite"} for kind in selected_kinds):
         return False
     return any(
-        _is_structural_text(raw.iat[row, column]) for column in selected_columns
+        _is_structural_text(raw[row, column]) for column in selected_columns
     )
 
 
 def _has_complete_numeric_pair(
-    raw: pd.DataFrame,
+    raw: NDArray[Any],
     *,
     row: int,
     pairs: tuple[tuple[int, int], ...],
 ) -> bool:
     return any(
-        numeric_cell_syntax(raw.iat[row, x_index]) == "numeric_candidate"
-        and numeric_cell_syntax(raw.iat[row, y_index]) == "numeric_candidate"
+        numeric_cell_syntax(raw[row, x_index]) == "numeric_candidate"
+        and numeric_cell_syntax(raw[row, y_index]) == "numeric_candidate"
         for x_index, y_index in pairs
     )
 

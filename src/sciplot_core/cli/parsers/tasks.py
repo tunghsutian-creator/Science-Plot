@@ -26,10 +26,12 @@ def register_task_commands(subparsers: Any) -> None:
     start.add_argument("--request", type=Path, required=True)
     start.add_argument("--task-dir", type=Path)
     start.add_argument("--json", action="store_true")
+    start.add_argument("--full", action="store_true", help="Return the detailed task response; default is a compact receipt.")
     for name in ("inspect", "resume"):
         action = actions.add_parser(name)
         action.add_argument("target", type=Path)
         action.add_argument("--json", action="store_true")
+        action.add_argument("--full", action="store_true", help="Return the detailed task response; default is a compact receipt.")
         if name == "resume":
             action.add_argument("--response", type=Path, required=True)
     group = actions.add_parser("group", help="Run an explicit experiment list and review all native figures together.")

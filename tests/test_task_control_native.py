@@ -28,6 +28,16 @@ def test_public_task_creation_annotation_review_export_and_continuation(tmp_path
     created = _cli("task", "start", "--request", request)
     assert created["status"] == "complete"
     assert created["result"]["kind"] == "sciplot_project_creation_result"
+    assert all(created["current_project"][key]["current"] for key in ("source", "qa", "delivery"))
+    assert created["next_step"]["action"] == "review_exports_and_deliver"
+    assert all(Path(path).is_file() for path in created["next_step"]["images"])
+    assert created["next_step"]["images"]
+    assert created["local_timing"]["last_call_seconds"] > 0
+    assert created["local_timing"]["external_model_seconds"] is None
+    task_record = Path(created["task_dir"]) / "task.json"
+    task_bytes = task_record.read_bytes()
+    assert _cli("task", "start", "--request", request, "--task-dir", created["task_dir"]) == created
+    assert task_record.read_bytes() == task_bytes
     project = Path(created["project"])
     before_lookup = {str(p): file_sha256(p) for p in project.rglob("*") if p.is_file()}
     found = _cli("task", "find", source)
@@ -147,6 +157,7 @@ def test_three_sample_style_rounds_save_without_export_then_publish_current_data
         assert _cli("task", "resume", review["task_dir"], "--response", response) == saved
     current = _cli("task", "inspect", saved["task_dir"])
     assert current["current_project"]["delivery"]["current"] is False
+    assert current["next_step"]["action"] != "review_exports_and_deliver"
     request.write_text(json.dumps({"version": 1, "action": "export", "project": str(project)}))
     exported = _cli("task", "start", "--request", request, "--task-dir", tmp_path / "export")
     assert exported["result"]["studio_run"]["ready_to_use"] is True

@@ -47,6 +47,70 @@ def test_source_update_recovery_verifies_current_project_and_old_archive(revisio
         transaction.prior_source_update_result(project, review, validate=lambda: None)
 
 
+@pytest.mark.parametrize("boundary", range(10))
+def test_hard_interruption_restores_exact_baseline_at_every_replace_boundary(revisions, boundary):
+    """Construct the on-disk state after each atomic rename, without exception rollback."""
+    import os
+
+    project, candidate, _, review = revisions
+    baseline = transaction.project_inventory(project)
+    archive = _install(project, candidate, review)
+    path = transaction._outcome_path(project, review)
+    record = json.loads(path.read_text())
+    names = record["replacement_names"]
+    # Reconstruct the exact crash boundary from the successfully staged bytes.
+    for index, name in enumerate(names):
+        if index * 2 + 2 > boundary:
+            os.replace(project / name, candidate / name)
+        if index * 2 + 1 > boundary:
+            os.replace(archive / name, project / name)
+    record["status"] = "pending"
+    path.write_text(json.dumps(record))
+    assert transaction.prior_source_update_result(project, review, validate=lambda: None) is None
+    assert transaction.project_inventory(project) == baseline
+    assert transaction.prior_source_update_result(project, review, validate=lambda: None) is None
+
+
+@pytest.mark.parametrize("after_final_restore", [False, True])
+def test_recovery_can_resume_its_own_interruption_and_preserves_candidate(revisions, monkeypatch, after_final_restore):
+    import os
+    from sciplot_core.studio_core import source_update_recovery as recovery
+
+    project, candidate, _, review = revisions
+    baseline = transaction.project_inventory(project)
+    archive = _install(project, candidate, review)
+    path = transaction._outcome_path(project, review)
+    record = json.loads(path.read_text())
+    # Crash before the last part was installed.
+    name = record["replacement_names"][-1]
+    os.replace(project / name, candidate / name)
+    record["status"] = "pending"
+    path.write_text(json.dumps(record))
+    replace = os.replace
+    count = 0
+
+    def interrupt(a, b):
+        nonlocal count
+        if not after_final_restore and ".interrupted" in str(b):
+            count += 1
+            if count == 2:
+                raise OSError("second interruption")
+        result = replace(a, b)
+        if after_final_restore and a == archive / record["replacement_names"][0]:
+            raise OSError("second interruption")
+        return result
+
+    monkeypatch.setattr(recovery.os, "replace", interrupt)
+    with pytest.raises(OSError, match="second interruption"):
+        transaction.prior_source_update_result(project, review, validate=lambda: None)
+    monkeypatch.setattr(recovery.os, "replace", replace)
+    assert transaction.prior_source_update_result(project, review, validate=lambda: None) is None
+    assert transaction.project_inventory(project) == baseline
+    saved = archive.with_name(archive.name + ".interrupted")
+    assert saved.exists() and transaction.project_inventory(saved)
+    assert archive.with_name(archive.name + ".rollback.json").is_file()
+
+
 def test_lost_source_update_success_receipt_recovers_without_reinstall(revisions, monkeypatch):
     project, candidate, _, review = revisions
     write = transaction.atomic_write_json

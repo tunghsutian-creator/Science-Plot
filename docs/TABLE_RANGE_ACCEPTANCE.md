@@ -146,3 +146,43 @@ remain unchanged. Metadata, hashes, worksheet structure and before/after CLI
 results are recorded in `candidates/additional-candidate-audit.json` under the
 same ignored evidence root. These candidates do not close changed-measurement
 revision acceptance.
+
+## 2026-09-17 merged metadata and interrupted installation
+
+The untouched Bath-01345 `Sintered titania XRD_MIP_Compression.xlsx` now completes
+the public task route with `expand_merged_metadata:true`. Its SHA-256 is
+`ece4b70a827b3b1e36716b449caf0c89d50716cba9992488556de08e94cf00cd`.
+Selection uses original `XRD` header row 6, sample row 5, data rows `[7,4899)`,
+and XY columns 0/1 and 2/3. Original merged sample headings supply the association;
+the blank non-anchor cells remain blank in raw metadata and cell evidence.
+No separate sample declaration is needed for this explicit merged selection.
+
+Both Ti acrylate samples retain all 4,892 points. Every original X/Y value and
+its order equals the spec, reopened native Veusz datasets and delivered CSV.
+Archived raw bytes match the workbook, and canonical/delivered VSZ hashes are
+identical (`2b282a9e458a0ac8603c4a7062783bf04c8f19833c3e89a46f92ab2f9dc8fac1`).
+Cold inspection reports current source, QA and delivery. The exported TIFF was
+visually reviewed for curves, sample labels, axes and clipping; this is an
+uncalibrated agent review. Evidence: `.tmp_verify/speed_20260917/merged-real/`,
+including requests/results, `integrity.json` and its verification script.
+
+Native automated coverage adds merged numeric sample `8` and textual `009`,
+preserving exact identity and three points per curve through mapping, creation
+and cold export. Numeric metadata receives a versioned derived sample encoding;
+unmarked numerical rows are not inferred to be sample rows. Merges crossing into
+measurements are rejected. This numeric case is synthetic, not independent data.
+
+Version-2 source-update intents record the complete old/new file inventories and
+replacement names before installation. Tests interrupt every top-level rename
+boundary, and interrupt rollback itself; retry restores the exact baseline and
+preserves displaced candidate bytes and a rollback receipt. A native subprocess
+test exits abruptly after archiving the active source, then retries through the
+public task CLI and verifies revised native values plus current source/QA/delivery.
+Unknown bytes, changed recovery records and legacy mixed states remain blocked.
+Tests: `test_task_source_update.py`, `test_task_source_control_native.py` and
+`test_table_metadata.py`; results are under the same speed verification root.
+
+Independent changed-measurement unequal/cross-sheet revision acceptance remains
+open. Existing user archives supplied for speed tests are original plotting
+inputs, not an independently established natural before/after revision pair.
+Synthetic interruption and numeric-label tests do not close that external item.

@@ -60,7 +60,13 @@ def test_native_peak_revision_missing_and_multiple_candidates(tmp_path, ys, stat
     if status == "ambiguous":
         peak = issue["candidates"][1]
         decision.update(action="rebind", candidate_id=peak["candidate_id"], text="475 nm")
-    invalid = resume_task(task, {"expected_revision_id": update["revision_id"], "annotation_choices": [{**decision, "action": "keep"}]})
+        record = (task / "task.json").read_bytes()
+        with pytest.raises(ValueError, match="annotation_choices"):
+            resume_task(task, {"expected_revision_id": update["revision_id"],
+                              "annotation_choices": [{**decision, "action": "keep"}]})
+        assert (task / "task.json").read_bytes() == record
+    invalid = resume_task(task, {"expected_revision_id": update["revision_id"], "annotation_choices": [
+        {"figure_id": issue["figure_id"], "id": "peak", "action": "keep"}]})
     assert invalid["status"] == "needs_input" and invalid["annotation_error"]
     update = resume_task(task, {"expected_revision_id": update["revision_id"], "annotation_choices": [decision]})
     assert update["status"] == "needs_review", update

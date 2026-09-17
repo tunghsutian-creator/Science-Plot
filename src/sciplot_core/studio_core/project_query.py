@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.foundation.file_hashing import existing_file_sha256
+from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.studio_core.document_edit_policy import filter_editable_fields
 from sciplot_core.studio_core.sample_style import sample_style_targets
 from sciplot_core.studio_core.project_query_evidence import (
@@ -62,6 +63,7 @@ def _inspect_document(document: Path) -> dict[str, Any]:
     return payload
 
 
+@with_table_reads
 def inspect_project(
     project: Path,
     *,

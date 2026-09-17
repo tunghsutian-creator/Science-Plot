@@ -16,6 +16,7 @@ from sciplot_core.materials_rules import get_rule
 from sciplot_core.studio_core.prepare_generated import generate_studio_document
 from sciplot_core.studio_core.export_execution import export_studio_document
 from sciplot_core.studio_core.publish_run import publish_studio_export_run
+from sciplot_core.studio_render.domain_defaults import _apply_domain_render_defaults
 
 
 RULE_ID = "rheology_temperature_sweep"
@@ -24,6 +25,22 @@ EXPECTED_FIGURE_IDS = (
     "tan_delta_vs_temperature",
 )
 EXPECTED_SAMPLE_ORDER = ("PA-2", "D-PA", "SD-PA", "S-PA")
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_temperature_secondary_axis_uses_its_metric_unless_explicit(explicit: bool) -> None:
+    inherited = {"y_label_override": "custom" if explicit else "\\italic{G}′ (Pa)"}
+    request = {
+        "rule_id": RULE_ID, "template": "point_line",
+        "x_metric": "temperature", "y_metric": "loss_factor",
+        "render_options": inherited,
+        "explicit_render_option_keys": ["y_label_override"] if explicit else [],
+    }
+    result = _apply_domain_render_defaults(
+        inherited, request=request,
+        axis_info={"x_label": "Temperature (°C)", "y_label": "Loss Factor"},
+    )
+    assert result["y_label_override"] == ("custom" if explicit else "tan \\delta")
 
 
 def _temperature_fixture() -> Path:
@@ -98,6 +115,9 @@ def test_temperature_studio_activates_exact_two_task_plan_with_one_preparation(
         assert document.is_file()
         assert spec["source_request"]["resolved_figure_task"] == task.to_payload()
         assert [item["label"] for item in spec["series"]] == list(EXPECTED_SAMPLE_ORDER)
+        assert spec["axes"]["y"]["label"] == (
+            "tan \\delta" if task.figure_id == "tan_delta_vs_temperature" else "\\italic{G}′ (Pa)"
+        )
 
     preparation_steps = [
         step

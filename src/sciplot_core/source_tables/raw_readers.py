@@ -9,6 +9,7 @@ from typing import Any
 
 import pandas as pd
 from sciplot_core.foundation.text_decoding import decode_text_file
+from sciplot_core.source_tables.read_session import read_table_once
 
 
 def _read_delimited(path: Path, **kwargs: Any) -> pd.DataFrame:
@@ -65,6 +66,21 @@ def read_raw_table(
     """Read CSV/TSV/TXT/XLSX without assigning a header row."""
 
     table_path = Path(path)
+    return read_table_once(table_path, ("raw_table", sheet_name, preserve_na_tokens),
+                           lambda: _read_table(table_path, sheet_name, preserve_na_tokens=preserve_na_tokens))
+
+
+def read_sheet_names(path: Path) -> list[str]:
+    """Reuse only byte-bound workbook structure within the active read session."""
+    def read() -> pd.DataFrame:
+        with pd.ExcelFile(path) as workbook:
+            return pd.DataFrame({"name": workbook.sheet_names})
+
+    frame = read_table_once(path, ("workbook_sheet_names",), read)
+    return [str(name) for name in frame["name"]]
+
+
+def _read_table(table_path: Path, sheet_name: str | int, *, preserve_na_tokens: bool) -> pd.DataFrame:
     suffix = table_path.suffix.lower()
     if suffix in {".xlsx", ".xlsm"}:
         return pd.read_excel(

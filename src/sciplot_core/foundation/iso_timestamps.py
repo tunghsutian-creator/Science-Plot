@@ -28,4 +28,10 @@ def require_zoned_iso_timestamp(value: object, label: str) -> str:
     return text
 
 
-__all__ = ["require_zoned_iso_timestamp", "utc_now_iso"]
+def local_display_time(value: str) -> str:
+    """Format an ISO timestamp in the reader's local timezone for presentation."""
+
+    return datetime.fromisoformat(value).astimezone().isoformat(sep=" ", timespec="seconds")
+
+
+__all__ = ["require_zoned_iso_timestamp", "utc_now_iso", "local_display_time"]

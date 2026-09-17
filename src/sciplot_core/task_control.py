@@ -9,6 +9,8 @@ from typing import Any
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.output_contract import resolve_user_output_layout
+from sciplot_core.source_tables.read_session import with_table_reads
+from sciplot_core.task_timing import timed_task_call, finish_timing, observe_phase
 from sciplot_core.studio_core.annotation_schema import validate_operation_batch
 from sciplot_core.studio_core.project_query import inspect_project, resolve_project_path
 from sciplot_core.studio_core.project_query_paths import canonical_path
@@ -28,6 +30,39 @@ from sciplot_core.task_storage import (
 )
 
 
+def _finished_call(root: Path, state: dict[str, Any]) -> dict[str, Any]:
+    if state["status"] == "complete":
+        observe_phase(root, {"phase": "checking_current_project"})
+    result = _current_result(state) if state["status"] == "complete" else None
+    finish_timing(state)
+    save_task(root, state)
+    return {**task_summary(state), **({key: result[key] for key in ("current_project", "next_step") if key in result} if result else {})}
+
+
+def _current_result(state: dict[str, Any]) -> dict[str, Any]:
+    summary = task_summary(state)
+    if state.get("project"):
+        try:
+            current = inspect_project(Path(state["project"]))
+            summary["current_project"] = {key: current[key] for key in (
+                "project", "primary_figure_id", "figures", "source", "qa", "delivery",
+                "ready_to_use", "readiness_evaluated", "document_authority", "live_gui_state_evaluated",
+            ) if key in current}
+            if (state["status"] == "complete" and (state.get("result", {}).get("studio_run") or {}).get("ready_to_use") is True
+                    and all((current.get(key) or {}).get("current") is True for key in ("source", "qa", "delivery"))):
+                summary["next_step"] = {
+                    "action": "review_exports_and_deliver", "task": state["task_dir"],
+                    "images": [item["path"] for figure in state["result"].get("figures", [])
+                               for item in figure.get("exports", []) if item.get("format") == "tiff"],
+                    "message": "Current source/QA/delivery were queried in this call. Review the exported images, then deliver; requery after later changes. No additional native preview or inspect is required for this unchanged result.",
+                }
+        except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
+            summary["current_project"] = {"status": "unknown", "message": str(exc)}
+    return summary
+
+
+@with_table_reads
+@timed_task_call
 def start_task(
     request: dict[str, Any], *, task_dir: Path | None = None,
 ) -> dict[str, Any]:
@@ -54,7 +89,7 @@ def start_task(
             state = load_task(root)
             if state["request"] != request:
                 raise TaskControlError("task_already_exists", "此任务目录已用于其他请求。")
-            return task_summary(state)
+            return _current_result(state) if state["status"] == "complete" else task_summary(state)
         root.mkdir(parents=True, mode=0o700)
         state = {
             "kind": "sciplot_task", "version": 1, "task_dir": str(root),
@@ -74,25 +109,13 @@ def start_task(
                 run_export(root, state)
         except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
             record_failure(root, state, exc)
-        return task_summary(state)
+        return _finished_call(root, state)
 
 
+@with_table_reads
 def inspect_task(task: Path) -> dict[str, Any]:
     state = load_task(task_path(task))
-    summary = task_summary(state)
-    if state.get("project"):
-        try:
-            current = inspect_project(Path(state["project"]))
-            summary["current_project"] = {
-                key: current[key] for key in (
-                    "project", "primary_figure_id", "figures", "source", "qa", "delivery",
-                    "ready_to_use", "readiness_evaluated", "document_authority", "live_gui_state_evaluated",
-                )
-                if key in current
-            }
-        except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
-            summary["current_project"] = {"status": "unknown", "message": str(exc)}
-    return summary
+    return _current_result(state)
 
 
 def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
@@ -101,6 +124,14 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
             run_edit_preview(root, state)
         return
     if state["status"] in {"complete", "cancelled"}:
+        return
+    if (response == {"retry": True} and response.get("retry") is True
+            and state["request"]["action"] == "create" and state["request"].get("mapping")
+            and state.get("phase") == "scientific_choice" and not state.get("initial_mapping_attempted")
+            and not state.get("project")):
+        # An interrupted batch may checkpoint one question/confirmation. Resume
+        # only the caller's original explicit choices, before any native creation.
+        run_creation(root, state)
         return
     if state["status"] == "needs_input":
         if "metadata_confirmations" in response:
@@ -196,12 +227,17 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
             raise TaskControlError("task_recovery_required", "请查询当前任务的具体问题。")
 
 
+@with_table_reads
+@timed_task_call
 def resume_task(task: Path, response: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(response, dict):
         raise TaskControlError("invalid_task_response", "任务答复必须是 JSON 对象。")
     root = task_path(task)
     with external_project_session(root):
         state = load_task(root)
+        if state["status"] in {"complete", "cancelled"} and "revise_operations" not in response:
+            return _current_result(state) if state["status"] == "complete" else task_summary(state)
+        original_revision = state["state_sha256"]
         try:
             _resume(root, state, response)
         except TaskControlError as exc:
@@ -211,7 +247,9 @@ def resume_task(task: Path, response: dict[str, Any]) -> dict[str, Any]:
             record_failure(root, state, exc)
         except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
             record_failure(root, state, exc)
-        return task_summary(state)
+        if state["state_sha256"] == original_revision:
+            return _current_result(state) if state["status"] == "complete" else task_summary(state)
+        return _finished_call(root, state)
 
 
 __all__ = ["start_task", "inspect_task", "resume_task", "task_request_schema", "task_response_schema"]

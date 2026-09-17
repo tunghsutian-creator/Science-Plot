@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 import pandas as pd
 from sciplot_core.foundation.json_values import json_safe
+from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.mapping_contract import (
     DataMappingProposal,
 )
@@ -137,6 +138,7 @@ def _apply_source_mapping(
     return frame, units, events
 
 
+@with_table_reads
 def _prepare_mapping_frames(
     proposal: DataMappingProposal,
     *,

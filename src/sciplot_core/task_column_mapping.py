@@ -20,18 +20,25 @@ from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_storage import save_task
 
 
+def table_question(source: Path, selected: dict[str, Any]) -> dict[str, Any] | None:
+    table = table_choice_snapshot(source, selected["rule_id"])
+    if table is not None:
+        question = {
+            "field": "table_selection", "reason_code": "table_selection_required",
+            "message": "请选择原始工作表、表头/单位/样品行和数据起止行；索引从 0 开始，结束行不包含在内。可再次回答 table_selection 更正区域。",
+            "selection": {"rule_id": selected["rule_id"], "template": resolve_rule_template(selected["rule_id"], selected.get("template"))},
+            "evidence": table,
+        }
+        question["question_id"] = canonical_json_sha256(question, allow_nan=False)
+        return question
+    return None
+
+
 def column_question(source: Path, selected: dict[str, Any], *, explicit: bool = False) -> dict[str, Any] | None:
     snapshot = column_choice_snapshot(source, selected["rule_id"])
     if snapshot is None:
-        table = table_choice_snapshot(source, selected["rule_id"]) if explicit or source.suffix.casefold() in {".xls", ".xlsx", ".xlsm"} else None
-        if table is not None:
-            question = {
-                "field": "table_selection", "reason_code": "table_selection_required",
-                "message": "请选择原始工作表、表头/单位/样品行和数据起止行；索引从 0 开始，结束行不包含在内。可再次回答 table_selection 更正区域。",
-                "selection": {"rule_id": selected["rule_id"], "template": resolve_rule_template(selected["rule_id"], selected.get("template"))},
-                "evidence": table,
-            }
-            question["question_id"] = canonical_json_sha256(question, allow_nan=False)
+        question = table_question(source, selected) if explicit or source.suffix.casefold() in {".xls", ".xlsx", ".xlsm"} else None
+        if question is not None:
             return question
         if explicit:
             raise TaskControlError("column_mapping_unsupported", "列选择支持普通曲线规则的 CSV/TSV 和 Excel；需要原始坐标、单位和样品证据。")

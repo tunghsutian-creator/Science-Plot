@@ -23,6 +23,7 @@ def tool_definitions() -> list[Tool]:
 
     string = {"type": "string", "minLength": 1}
     sha = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    full = {"type": "boolean", "default": False, "description": "Return the detailed response. Default receipts are compact; full JSON is also available through the returned resource URI."}
     project = {"project": {**string, "description": "Canonical project or bound delivery path returned by SciPlot."}}
     figure = {**project, "figure_id": string}
     revision = {**figure, "expected_document_sha256": sha}
@@ -46,16 +47,16 @@ def tool_definitions() -> list[Tool]:
         {"section": {"enum": ["request", "response", "operations", "table_region"]}, "name": string,
          "expected_contract_sha256": sha, "full": {"type": "boolean"}}, [], read_only=True)
     add("task_start", "Start one authorized local create/edit/export/update_source task. Answer source-bound column questions; inspect all returned source-update or edit candidate PNGs before resuming.",
-        {"request": task_request_schema(), "task_dir": string}, ["request"])
+        {"request": task_request_schema(), "task_dir": string, "full": full}, ["request"])
     add("task_inspect", "Resume context from a saved task. This does not rerun or certify its historical result.",
-        {"task": string}, ["task"], read_only=True)
+        {"task": string, "full": full}, ["task"], read_only=True)
     add("task_table_region", "Read up to 128 original rows by 64 columns, bound to the current table question and source bytes. Does not change the question or select cells.",
         {"task": string, "query": table_region_schema()}, ["task", "query"], read_only=True)
     add("task_find", "Find creation receipts by exact original source path in the source-adjacent task history or an explicit tasks_root. Returns candidates and source currentness; inspect the selected task/project before continuing. Does not create or choose a project.",
         {"source": string, "tasks_root": string, "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
         ["source"], read_only=True)
     add("task_resume", "Continue a saved task. Column answers require expected_question_id; source-update decisions require expected_revision_id. Style previews use expected_operation_id and blocked preview corrections use expected_preview_revision. Existing user intent authorizes the requested work.",
-        {"task": string, "response": task_response_schema()}, ["task", "response"])
+        {"task": string, "response": task_response_schema(), "full": full}, ["task", "response"])
     add("group_start", "Run 1–32 independent experiment tasks from an explicit list. Optional shared sample_style_preset applies to each created figure through ordinary reviewed edits. One item needing judgment does not stop others. Returns a local overview and native PNG resources; no model calls.",
         {"request": group_request_schema(), "group_dir": string}, ["request", "group_dir"])
     add("group_inspect", "Refresh an experiment group's current evidence and cached native previews. Does not advance tasks. Generated overview is read-only; pending candidates are marked separately from saved figures.",

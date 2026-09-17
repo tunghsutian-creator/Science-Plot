@@ -12,6 +12,22 @@ from sciplot_core.task_next_step import task_next_step
 from sciplot_core.task_schema_compaction import compact_schema
 
 
+def test_compact_question_keeps_diagnostics_and_full_evidence_off_wire():
+    from copy import deepcopy
+    from sciplot_core.task_storage import task_summary
+
+    state = {"task_dir": "/tmp/task", "status": "needs_input", "phase": "scientific_choice",
+             "request": {"action": "create"}, "question": {"field": "column_mapping", "question_id": "a" * 64,
+             "evidence": {"kind": "sciplot_table_columns", "table_snapshot": {"tables": ["large original preview"]},
+                          "columns": [{"index": 1, "y_eligible": False, "y_rejection_reasons": [{"code": "missing_unit"}]}]}}}
+    before = deepcopy(state)
+    summary = task_summary(state)
+    assert summary["question"]["evidence"]["columns"] == state["question"]["evidence"]["columns"]
+    assert "table_snapshot" not in summary["question"]["evidence"]
+    assert summary["question"]["full_evidence_path"] == "/tmp/task/task.json"
+    assert state == before
+
+
 def expand(schema):
     def visit(value):
         if isinstance(value, list):
@@ -36,6 +52,23 @@ def test_compaction_is_lossless_and_standalone(factory):
     Draft202012Validator.check_schema(compact)
     assert expand(compact) == original == before
     assert len(json.dumps(compact)) < len(json.dumps(original))
+
+
+def test_short_definition_names_do_not_overwrite_existing_references():
+    shared = {"type": "object", "properties": {f"field_{n}": {"type": "integer"} for n in range(8)}, "additionalProperties": False}
+    schema = {"type": "object", "$defs": {"s0": {"type": "string", "const": "original"}},
+              "properties": {"unchanged": {"$ref": "#/$defs/s0"}, "a": shared, "b": shared}}
+    compact = compact_schema(schema)
+    assert compact["$defs"]["s0"] == schema["$defs"]["s0"]
+    assert compact == compact_schema(schema)
+    Draft202012Validator.check_schema(compact)
+    for value in ({"unchanged": "original", "a": {"field_0": 1}}, {"unchanged": 0}, {"b": {"extra": 1}}):
+        assert Draft202012Validator(compact).is_valid(value) == Draft202012Validator(schema).is_valid(value)
+
+
+def test_compaction_never_increases_serialized_size():
+    for schema in ({"type": "string"}, {"type": "object", "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}}}):
+        assert compact_schema(schema) == schema
 
 
 def test_index_and_each_on_demand_schema_share_contract_and_exact_validation():

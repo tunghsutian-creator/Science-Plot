@@ -15,6 +15,7 @@ from sciplot_core.studio_core.project_query import resolve_project_path
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError, validate_task_request
 from sciplot_core.task_next_step import task_next_step
+from sciplot_core.task_timing import observe_phase
 
 
 def task_path(path: Path) -> Path:
@@ -58,6 +59,7 @@ def task_location(request: dict[str, Any], supplied: Path | None) -> Path:
 
 
 def save_task(root: Path, state: dict[str, Any]) -> None:
+    observe_phase(root, state)
     state["updated_at"] = datetime.now(timezone.utc).isoformat()
     state["state_sha256"] = canonical_json_sha256(
         {key: value for key, value in state.items() if key != "state_sha256"},
@@ -86,9 +88,20 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
     keys = (
         "kind", "version", "task_dir", "status", "phase", "updated_at", "question",
         "blocker", "result", "preview", "operation_id", "profile", "profile_unavailable", "project", "edit_outcome",
-        "mapping_error", "data_mapping", "revision_id", "previews", "source_update_outcome", "annotation_error",
+        "mapping_error", "data_mapping", "revision_id", "previews", "source_update_outcome", "annotation_error", "local_timing",
     )
     summary = {key: state[key] for key in keys if key in state}
+    question = summary.get("question")
+    if isinstance(question, dict) and isinstance(question.get("evidence"), dict):
+        evidence = dict(question["evidence"])
+        if evidence.get("kind") == "sciplot_table_columns":
+            evidence.pop("table_snapshot", None)
+        if evidence.get("kind") == "sciplot_table_choice":
+            evidence["tables"] = [{**table, "rows": table.get("rows", [])[:8],
+                                   "preview_truncated": table.get("preview_truncated", False) or len(table.get("rows", [])) > 8}
+                                  for table in evidence["tables"]]
+        summary["question"] = {**question, "evidence": evidence,
+                               "full_evidence_path": str(Path(state["task_dir"]) / "task.json")}
     if state["status"] in {"complete", "cancelled"}:
         summary.pop("preview", None)
         summary.pop("previews", None)
@@ -106,9 +119,9 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
         "ready_to_use": None,
         "readiness_evaluated": False,
         "completion_scope": (
-            "Requested styles already matched; no document write or export. Query current evidence separately."
+            "Requested styles already matched; no document write or export. See current_project for fresh evidence."
             if unchanged else
-            "Saved edit only; export was deferred. Current project evidence is queried separately."
-            if saved else "Task receipt; current project evidence is queried separately."
+            "Saved edit only; export was deferred. See current_project for fresh evidence."
+            if saved else "Task receipt; current_project, when returned, contains fresh project evidence."
         ),
     }

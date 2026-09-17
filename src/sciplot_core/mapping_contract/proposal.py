@@ -69,8 +69,12 @@ class DataMappingProposal:
             from sciplot_core.mapping_contract.table_metadata import validate_metadata_confirmations
 
             if (self.provider != "explicit_table_choice"
-                    or set(self.table_confirmation) != {"rule_id", "selection", "metadata_confirmations", "pairs"}):
+                    or not {"rule_id", "selection", "metadata_confirmations", "pairs"} <= set(self.table_confirmation)
+                    or set(self.table_confirmation) - {"rule_id", "selection", "metadata_confirmations", "pairs", "sample_row_encoding"}):
                 raise ValueError("table_confirmation requires the explicit table-choice contract.")
+            if ("sample_row_encoding" in self.table_confirmation
+                    and self.table_confirmation["sample_row_encoding"] != "explicit_json_v1"):
+                raise ValueError("Unsupported table sample-row encoding.")
             validate_metadata_confirmations(self.table_confirmation["metadata_confirmations"])
         object.__setattr__(
             self, "proposal_id", _safe_id(self.proposal_id, "proposal_id")

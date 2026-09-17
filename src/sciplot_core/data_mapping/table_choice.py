@@ -16,6 +16,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.mapping_contract import DataColumnMapping, DataMappingProposal, DataSourceReference
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit
+from sciplot_core.source_tables.raw_readers import read_sheet_names
 
 
 def _read(source: Path, sheet: str | None, digest: str) -> pd.DataFrame:
@@ -39,8 +40,7 @@ def table_choice_snapshot(source: Path, rule_id: str) -> dict[str, Any] | None:
     before = file_sha256(source)
     sheets: list[str | None] = [None]
     if source.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}:
-        with pd.ExcelFile(source) as workbook:
-            sheets = list(workbook.sheet_names)
+        sheets = list(read_sheet_names(source))
     tables = []
     for sheet in sheets:
         try:
@@ -68,7 +68,7 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
     if fresh != snapshot:
         raise ValueError("Table-choice original evidence changed.")
     required = {"sheet", "header_rows", "data_start_row", "data_end_row"}
-    optional = {"unit_row", "sample_row"}
+    optional = {"unit_row", "sample_row", "expand_merged_metadata"}
     if not isinstance(selection, dict) or not required <= set(selection) or set(selection) - required - optional:
         raise ValueError("Select sheet, header_rows, data_start_row and data_end_row; optional unit_row/sample_row.")
     if selection["sheet"] not in [table["sheet"] for table in snapshot["tables"]]:
@@ -80,7 +80,9 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
     if type(start) is not int or type(end) is not int or not 0 <= start < end:
         raise ValueError("Data rows need increasing non-negative integer bounds (end exclusive).")
     metadata = [*headers]
-    for key in optional:
+    if "expand_merged_metadata" in selection and type(selection["expand_merged_metadata"]) is not bool:
+        raise ValueError("expand_merged_metadata must be an explicit boolean.")
+    for key in ("unit_row", "sample_row"):
         if key in selection and selection[key] is not None:
             value = selection[key]
             if type(value) is not int or value < 0:
@@ -90,19 +92,36 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
     if end > len(frame) or any(row >= start for row in metadata) or frame.shape[1] > 256:
         raise ValueError("Metadata must precede the selected data region; bounds must fit the table (up to 256 columns).")
     rule = get_rule(snapshot["rule_id"])
+    expanded, anchors, associations = {}, {}, []
+    if selection.get("expand_merged_metadata"):
+        from sciplot_core.data_mapping.merged_metadata import merged_metadata_ranges, selected_metadata_cells
+
+        expanded, anchors, associations = selected_metadata_cells(
+            frame, metadata, ranges=merged_metadata_ranges(source, selection["sheet"]), data_start=start)
     columns = []
     for column in range(frame.shape[1]):
         evidence = {f"{row},{column}": _original_text(frame.iat[row, column]) for row in metadata}
-        header = " ".join(_original_text(frame.iat[row, column]).strip() for row in headers).strip()
+        def cell(row: int, column: int = column) -> str:
+            return expanded.get((row, column), _original_text(frame.iat[row, column]))
+
+        header = " ".join(cell(row).strip() for row in headers).strip()
         unit_row, sample_row = selection.get("unit_row"), selection.get("sample_row")
-        unit = (_original_text(frame.iat[unit_row, column]).strip() if unit_row is not None else explicit_header_unit(header))
-        sample = _original_text(frame.iat[sample_row, column]) if sample_row is not None else ""
+        unit = (cell(unit_row).strip() if unit_row is not None else explicit_header_unit(header))
+        sample = cell(sample_row) if sample_row is not None else ""
+        evidence.update(anchors.get(column, {}))
         numbers = pd.to_numeric(frame.iloc[start:end, column], errors="coerce")
         invalid = [start + offset for offset, value in enumerate(numbers) if not math.isfinite(float(value))]
         columns.append({"index": column, "header": header, "unit": unit, "sample": sample,
                         "cell_evidence": evidence,
                         "numeric": {"valid": not invalid, "point_count": end - start,
                                     "invalid_count": len(invalid), "invalid_row_indices": invalid[:16]}})
+        if selection.get("expand_merged_metadata"):
+            original_header = " ".join(_original_text(frame.iat[row, column]).strip() for row in headers).strip()
+            columns[-1]["raw_metadata"] = {
+                "header": original_header,
+                "unit": _original_text(frame.iat[unit_row, column]).strip() if unit_row is not None else explicit_header_unit(original_header),
+                "sample": _original_text(frame.iat[sample_row, column]) if sample_row is not None else "",
+            }
     confirmations = metadata_confirmations if metadata_confirmations is not None else []
     resolve_column_metadata(columns, confirmations, source_sha256=snapshot["file_sha256"],
                             sheet=selection["sheet"], frame=frame, rule=rule)
@@ -112,6 +131,7 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
             "file_sha256": snapshot["file_sha256"], "rule_id": snapshot["rule_id"],
             "table_snapshot": snapshot, "table_selection": selection, "columns": columns,
             "metadata_confirmations": confirmations,
+            **({"merged_metadata": associations} if selection.get("expand_merged_metadata") else {}),
             "rows": _rows(frame, [*metadata, *range(start, min(start + 4, end)), end - 1])}
 
 
@@ -126,9 +146,19 @@ def proposal_for_table_columns(
         base_request_sha256=file_sha256(request_path), **contents,
         provider="explicit_table_choice", proposal_id=proposal_id, created_at=created_at,
         table_confirmation={"rule_id": snapshot["rule_id"], "selection": snapshot["table_selection"],
-                            "metadata_confirmations": snapshot.get("metadata_confirmations", []), "pairs": pairs},
+                            "metadata_confirmations": snapshot.get("metadata_confirmations", []), "pairs": pairs,
+                            **({"sample_row_encoding": "explicit_json_v1"} if any(
+                                _numeric_label(label) for label in contents["sample_labels"].values()) else {})},
         rationale="Explicit original worksheet, metadata evidence, data rows and x/y pairs; no raw cells rewritten.",
     )
+
+
+def _numeric_label(label: str) -> bool:
+    try:
+        float(label)
+    except ValueError:
+        return False
+    return True
 
 
 def _pair_columns(snapshot: dict[str, Any], pair: dict[str, Any]) -> dict[str, Any]:

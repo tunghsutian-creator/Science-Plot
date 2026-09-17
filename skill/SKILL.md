@@ -59,7 +59,7 @@ the explicit saved-figure/object references in the external API.
    complete public CLI loop, examples and recovery behavior:
 
    ```bash
-   skill/scripts/sciplot project capabilities --json
+   skill/scripts/sciplot task capabilities --json
    ```
 
    Prefer the complete local `task` route for supported create/edit/export/update_source work:
@@ -73,6 +73,36 @@ the explicit saved-figure/object references in the external API.
    inspect the candidate image before accepting a `needs_review` preview with
    `{"accept_preview":true}`. Existing user intent authorizes that change;
    preview acceptance is not an additional mandatory user permission step.
+   Keep the ordinary route short. Check Doctor and discover the required task
+   schema together at the start of a session; reuse the same contract fingerprint
+   until it changes. A supported create needs one `task start`, without separate
+   `inspect`, `rules show`, `plan`, `project create`, and `studio` calls. Those
+   lower-level steps below are an alternative diagnostic route, not prerequisites
+   for task start. Completed start/resume calls include fresh `current_project`.
+   Keep raw-data interpretation with the external AI. If the caller has already
+   inspected the original cells and resolved the scientific meaning, submit
+   `create.mapping` with the original file SHA, `table_selection`, optional
+   attributed `metadata_confirmations` and `column_mapping` in that one start.
+   This batches the same validated choices; do not transcribe measurement arrays
+   into the request or create a replacement raw file. Missing or conflicting
+   evidence returns a correctable question. Use the interactive route when the
+   original evidence or intended mapping still needs inspection.
+   When reading an original, show the model headers, units, sample identities,
+   table dimensions and bounded representative cells first; let local tools scan
+   the complete numeric ranges. Read additional cells when needed to resolve an
+   actual ambiguity. Do not print thousands of measurements into model context
+   merely to hand the same values back to SciPlot.
+   Task CLI/MCP responses are compact by default. Reuse their current document
+   hashes, figure IDs and delivery evidence. Read `--full` (MCP `full:true` or
+   the full-result resource) only for details needed by the present decision;
+   do not paste full receipts, capability schemas or raw arrays back into chat.
+   When `next_step.action=review_exports_and_deliver`, inspect the returned TIFF
+   images and hand off using that fresh source/QA/delivery evidence. Do not make
+   another native preview, export, or project query for the unchanged result.
+   Query again after later changes or a new session. Batch requested style changes
+   into one preview and defer intermediate exports when the user is still editing.
+   `local_timing` measures local active calls and phases only; external AI time
+   remains unknown. Do not run tests, smoke, or acceptance during ordinary plotting.
    Reuse the returned task directory in a new session. A completed receipt is
    historical; check current source/QA/delivery before later handoff. Source
    changes, unsupported mappings and uncertain interrupted creation fail closed.
@@ -96,6 +126,12 @@ the explicit saved-figure/object references in the external API.
    replaced; another sheet inherits no declarations. Review each selected
    range's numeric and scientific evidence; point counts remain independent
    through mapping, native creation, source update and export.
+   For original XLSX/XLSM merged metadata, query original merge ranges and set
+   `expand_merged_metadata:true` in the selection only when that association is
+   intended. Expansion applies only above the data range; original blank cells
+   remain in evidence. Explicitly selected numeric sample labels retain their
+   identity through a versioned derived sample row, never by guessing that a
+   numerical measurement row is metadata.
    `choose_columns:true` explicitly requests this
    workflow; an ambiguous single-x/multiple-y source may pause automatically.
    The same confirmed DataMapping binds planning, creation and later export.
@@ -107,7 +143,8 @@ the explicit saved-figure/object references in the external API.
    worksheet and column, using a verified original cell, a cited external excerpt
    or an attributed user statement. Never claim a user statement without an actual
    statement, or promote an external inference into an original cell fact.
-   Review the resulting question before selecting pairs. A complete replacement
+   In the interactive route, review the resulting question before selecting pairs.
+   A complete replacement
    list corrects pending declarations; `[]` withdraws them, and changing the table
    region resets them. Missing information, conflicts, unsupported layouts and
    cross-sample pairs fail closed. No unit conversion is implied by confirmation.
@@ -116,8 +153,11 @@ the explicit saved-figure/object references in the external API.
    to review a data revision. Inspect every before/candidate PNG and the full
    change record, then answer `accept_source_update` with the current
    `expected_revision_id`. The task saves and exports through existing owners;
-   export retries do not apply the revision again. Partial installation remains
-   blocked with its archive preserved. Compatible fixed annotations keep their
+   export retries do not apply the revision again. New version-2 interrupted
+   installations can restore a completely byte-proven baseline on retry, retain
+   displaced candidate bytes and a rollback receipt, then revalidate the same
+   reviewed update. Unknown/tampered parts and legacy mixed installations remain
+   blocked with archives preserved. Compatible fixed annotations keep their
    coordinates. Observed peak anchors require current candidate selection or
    explicit removal/replacement. Inspect both provisional and final PNGs;
    provisional markers are never committed. Projects with confirmed mappings

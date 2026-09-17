@@ -42,7 +42,8 @@ def table_selection_schema() -> dict[str, Any]:
                 "header_rows": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": True, "items": row},
                 "data_start_row": row, "data_end_row": row,
                 "unit_row": {"type": ["integer", "null"], "minimum": 0},
-                "sample_row": {"type": ["integer", "null"], "minimum": 0}},
+                "sample_row": {"type": ["integer", "null"], "minimum": 0},
+                "expand_merged_metadata": {"type": "boolean", "description": "Explicitly associate merged XLSX metadata with its original anchor; measurement cells are never expanded."}},
             "required": ["sheet", "header_rows", "data_start_row", "data_end_row"]}
 
 
@@ -52,6 +53,17 @@ def table_response_schema() -> dict[str, Any]:
                 "expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
                 "table_selection": table_selection_schema()},
             "required": ["expected_question_id", "table_selection"]}
+
+
+def initial_mapping_schema() -> dict[str, Any]:
+    return {"type": "object", "additionalProperties": False,
+            "description": "Explicit choices already reviewed by the caller, bound to the original file bytes. Uses the same table, metadata and pair validation as interactive answers; never accepts a visual edit preview.",
+            "properties": {
+                "source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                "table_selection": table_selection_schema(),
+                "metadata_confirmations": metadata_confirmations_schema(),
+                "column_mapping": column_mapping_schema()},
+            "required": ["source_sha256", "table_selection", "column_mapping"]}
 
 
 def annotation_response_schema() -> dict[str, Any]:

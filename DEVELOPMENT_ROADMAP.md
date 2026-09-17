@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-09-10. External AI is the task interface. Current behavior belongs
+Status: 2026-09-17. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 
 ## 1. Independent beginner and installation acceptance
@@ -37,8 +37,11 @@ curve through native/CSV export. Real changed-value and cross-sheet revisions
 remain additional acceptance work; current changed-value cross-sheet evidence is
 automated. New one-dimensional native persistence now retains full binary64 values
 and audits them exactly; older specs retain their original precision contract.
-Next resolve merged metadata and numeric-only sample labels with explicit evidence
-before adding a supported choice. Extend real-case
+Explicit XLSX/XLSM merged metadata and numeric-only sample labels are implemented.
+The untouched Bath-01345 workbook now selects its declared merged sample row
+without separate sample declarations; numeric labels have native synthetic
+creation/cold-export coverage. An independent numeric-label original remains
+needed. Extend real-case
 coverage for externally documented units and scientific statements. Unit conversions
 or new quantities need their own scientific rule contract; never infer them just
 to make an acceptance source pass. The task rule-selection answer must not encode
@@ -59,8 +62,12 @@ or multiple changed peaks remain needed. Do not count edited synthetic copies or
 development fixtures as that evidence.
 
 Validate original metadata, measurements, sample identity and final VSZ/spec/CSV
-together. Uncertain partial installations remain blocked with their archive;
-automatic recovery from such mixed installations is still unfinished.
+together. New version-2 interrupted installations can restore a completely
+byte-proven baseline, preserve displaced candidate bytes and resume the reviewed
+update. Tests cover every replacement boundary, interruption during recovery and
+a killed native process resumed through public task CLI. Unknown/tampered parts
+and legacy mixed installations still block. Independent real interrupted-update
+evidence remains separate from these fault-injection tests.
 
 Exit: untouched real revisions cover every peak outcome and confirmed mapping,
 with reviewed previews, correct exports and recorded interruption recovery.
@@ -68,9 +75,25 @@ with reviewed previews, correct exports and recorded interruption recovery.
 ## 4. Measured usability and AI-efficiency improvements
 
 Compact capability discovery, named schema reads, lossless definition factoring
-and state-specific next-step guidance are implemented. Local full output decreased
+and state-specific next-step guidance are implemented. In the earlier measurement,
+local full output decreased
 from 204,457 to 51,609 bytes with the same expanded definitions; this is not a
 measured AI token or latency improvement. See [measurement boundaries](docs/TASK_CAPABILITY_MEASUREMENTS.md).
+
+Operation-local byte-checked table reuse, array-based scanning, compact table
+questions, local phase timing and fresh completion queries are implemented.
+Local complete-task benchmarks now cover synthetic spectra, an untouched Bath
+workbook and three archived user experiments. The fast agent route avoids separate
+planning/export calls and redundant completion queries. These measurements still
+do not establish external model latency or token savings.
+Caller-reviewed `create.mapping` now batches original table/metadata/column choices
+in one source-bound call. CLI/MCP task receipts are compact by default, with full
+responses on demand. Their local replay measurements are recorded separately from
+actual external-model token counts and user-perceived end-to-end time.
+Repeated original-table cleanup/workbook structure reads now share the same
+byte-checked operation scope; short schema references further reduce discovery
+text without changing validation. Three-run before/after medians are recorded for
+the already-batched route; native startup/export and external AI time remain.
 
 Use the same real tasks to compare model rounds, tool calls, returned bytes,
 latency, failures and user questions. Report actual client token telemetry when

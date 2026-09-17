@@ -39,7 +39,7 @@ def resolve_column_metadata(
     for column in columns:
         index = column["index"]
         raw = {key: column[key] for key in ("header", "unit", "sample")}
-        column["raw_metadata"] = raw
+        column.setdefault("raw_metadata", raw)
         column["metadata_confirmations"] = [item for item in confirmations if item["column_index"] == index]
         problems: list[dict[str, Any]] = []
         header_unit = explicit_header_unit(raw["header"])

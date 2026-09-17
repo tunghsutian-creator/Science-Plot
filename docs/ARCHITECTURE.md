@@ -134,6 +134,19 @@ response rows cannot become different samples. Completed pairs are serialized as
 empty XY cells in the rectangular composite, while individual mapped outputs retain
 their exact lengths. Plan binding checks sample order and each selected point count.
 It adds no profile reuse or numerical changes.
+`task_initial_mapping` batches only explicit caller-reviewed choices supplied in
+`create.mapping`, bound to the original single-file SHA. It delegates table,
+metadata and column validation to `task_column_mapping`; no alternate importer
+or automatic scientific decision is introduced. Durable confirmations recover
+interrupted batches, while invalid choices retain an ordinary correctable question.
+`data_mapping/merged_metadata` reads original XLSX/XLSM merge declarations.
+Explicit `expand_merged_metadata` selections may associate metadata above the
+measurement region with its anchor; original blanks and anchor coordinates remain
+separate evidence. Numeric labels in new confirmed mappings use optional
+`sample_row_encoding=explicit_json_v1`: derived sample cells contain `@sample:`
+followed by a JSON string, which the existing paired-table scanner decodes as
+explicit identity. Historical mappings reproduce their original serialization;
+unmarked numerical rows are never newly inferred as sample metadata.
 `data_mapping/plan_binding` verifies the immutable execution and
 request seed; the outer plan hashes the original input while the existing
 scientific transform and FigurePlan describe the effective mapped input.
@@ -162,12 +175,38 @@ standalone schema/tool root; it never weakens the server validators. `task_next_
 projects existing scientific-question, preview and recovery states into guidance,
 without performing recovery, accepting previews or replacing transaction archives.
 
+`source_tables/read_session` owns a bounded 32 MiB, operation-local parse cache.
+Every hit rehashes actual source bytes; misses hash before and after parsing, and
+callers receive independent frames. Nested task, creation, query and mapping
+owners share one scope, which is discarded on exit. It reuses original cells,
+workbook sheet names and deterministic missing-token cleanup of selected ranges,
+not scientific decisions, validation results, source hashes or document state.
+Normalized range reuse is bound to the same bytes as the freshly checked original
+metadata cells; changed bytes between raw reading and normalization fail closed.
+Generic paired scanners use one object-array view to avoid per-cell pandas index
+allocation without changing row, locale, exclusion or sample rules.
+`task_result_projection` is a pure CLI/MCP response projection. It removes duplicate
+success inventories and healthy-check detail, retaining current edit identities,
+readiness uncertainty, failed evidence, pending questions and all review audits.
+Full responses are opt-in; neither task storage nor native state is compacted.
+`task_timing` measures active local calls and phases under the existing task lease;
+external model/transport/user time remains unknown. Completed start/resume calls
+query fresh current project evidence before returning it, without persisting that
+query as future readiness authority. Question summaries omit redundant workbook
+snapshots and bound initial previews; the complete hashed question stays on disk.
+
 `task_source_execution` checkpoints source-update preview, application and export.
 `task_source_update` persists all before/candidate PNGs and a review identity;
 the existing source-update owner continues to prepare, audit and install the
 candidate. Its durable operation records the reviewed baseline, installed target
 and archive before replacement. Recovery accepts only a byte-proven completed
-installation or an untouched baseline; mixed states retain the archive and block.
+installation or an untouched baseline. Version-2 installation intents also bind
+replacement part names and their complete old/new inventories. The
+`source_update_recovery` owner classifies every part before mutation, restores a
+byte-proven baseline, and preserves displaced candidate bytes plus a rollback
+receipt. Recovery can itself resume after interruption. Unknown/tampered parts
+and legacy mixed installations retain the archive and block. Retrying from the
+restored baseline still rebuilds and compares the original reviewed candidate.
 An export retry never reapplies the source revision. The task requires fresh
 source-bound selection for all persisted mapping forms. The staging owner consumes
 the confirmed plan through mapped project preparation and keeps original byte

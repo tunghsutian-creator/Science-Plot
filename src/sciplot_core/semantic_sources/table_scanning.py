@@ -124,8 +124,9 @@ def _scan_curve_series_table(
     sample_prefix: str,
 ) -> list[CurveSeriesPayload]:
     best: list[CurveSeriesPayload] = []
+    cells = raw.to_numpy(dtype=object, copy=False)
     for header_index in range(max(0, raw.shape[0] - 2)):
-        row_values = raw.iloc[header_index].tolist()
+        row_values = cells[header_index].tolist()
         pairs: list[tuple[int, int]] = []
         for x_index, value in enumerate(row_values[:-1]):
             if not _axis_match(value, x_aliases):
@@ -143,8 +144,8 @@ def _scan_curve_series_table(
         preceding_samples = (
             {
                 x_index: _preceding_pair_sample(
-                    raw.iat[preceding_sample_index, x_index],
-                    raw.iat[preceding_sample_index, y_index],
+                    cells[preceding_sample_index, x_index],
+                    cells[preceding_sample_index, y_index],
                     axis_aliases=(*x_aliases, *y_aliases),
                 )
                 for x_index, y_index in pairs
@@ -156,7 +157,7 @@ def _scan_curve_series_table(
             preceding_samples.values()
         )
         adjacent_rows = tuple(
-            (row_index, tuple(raw.iloc[row_index].tolist()))
+            (row_index, tuple(cells[row_index].tolist()))
             for row_index in (first_extra, second_extra)
             if row_index < raw.shape[0]
         )
@@ -176,8 +177,8 @@ def _scan_curve_series_table(
             data_start = max(adjacent_metadata_rows) + 1
         else:
             first_row_is_numeric_data = any(
-                _float(raw.iat[first_extra, x_index]) is not None
-                and _float(raw.iat[first_extra, y_index]) is not None
+                _float(cells[first_extra, x_index]) is not None
+                and _float(cells[first_extra, y_index]) is not None
                 for x_index, y_index in pairs
                 if first_extra < raw.shape[0]
             )
@@ -194,8 +195,8 @@ def _scan_curve_series_table(
             excluded_partial_or_nonnumeric_pair_count = 0
             excluded_nonfinite_pair_count = 0
             for row_index in data_block.rows:
-                x_cell = raw.iat[row_index, x_index]
-                y_cell = raw.iat[row_index, y_index]
+                x_cell = cells[row_index, x_index]
+                y_cell = cells[row_index, y_index]
                 if not _clean_text(x_cell) and not _clean_text(y_cell):
                     excluded_empty_pair_count += 1
                     continue
@@ -238,14 +239,14 @@ def _scan_curve_series_table(
             if instrument_metadata is None:
                 x_unit_evidence = _curve_axis_unit(
                     row_values[x_index],
-                    raw.iat[unit_index, x_index] if unit_index >= 0 else "",
+                    cells[unit_index, x_index] if unit_index >= 0 else "",
                     header_index=header_index,
                     unit_index=unit_index,
                     default=default_x_unit,
                 )
                 y_unit_evidence = _curve_axis_unit(
                     row_values[y_index],
-                    raw.iat[unit_index, y_index] if unit_index >= 0 else "",
+                    cells[unit_index, y_index] if unit_index >= 0 else "",
                     header_index=header_index,
                     unit_index=unit_index,
                     default=default_y_unit,

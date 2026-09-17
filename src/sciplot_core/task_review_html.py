@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from html import escape
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
+
+from sciplot_core.foundation.iso_timestamps import local_display_time
 
 
 def text(value: object) -> str:
@@ -69,7 +70,7 @@ def write_page(root: Path, *, title: str, kind: str, intro: str, queried_at: str
     css = (assets / "review.css").read_text(encoding="utf-8")
     script = (assets / "review.js").read_text(encoding="utf-8")
     try:
-        queried_at = datetime.fromisoformat(queried_at).astimezone().isoformat(sep=" ", timespec="seconds")
+        queried_at = local_display_time(queried_at)
     except ValueError:
         pass
     html = f'''<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">

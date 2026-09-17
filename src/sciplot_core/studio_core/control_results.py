@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from sciplot_core.task_result_projection import compact_task_result
+
 
 def _compact_object(item: dict[str, Any]) -> dict[str, Any]:
     result = {key: value for key, value in item.items() if key != "settings"}
@@ -18,7 +20,7 @@ def _compact_object(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def compact_result(payload: dict[str, Any]) -> dict[str, Any]:
-    result = dict(payload)
+    result = dict(compact_task_result(payload))
     selected = payload.get("selected_figure")
     if isinstance(selected, dict):
         # Full native setting trees may contain large arrays. Editable fields

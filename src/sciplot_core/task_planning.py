@@ -12,7 +12,7 @@ import pandas as pd
 from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.foundation.json_io import atomic_write_json
 from sciplot_core.foundation.source_tree import source_tree_sha256
-from sciplot_core.materials_rules.catalog import iter_public_rules
+from sciplot_core.materials_rules.catalog import iter_public_rules, resolve_rule_template
 from sciplot_core.plan_preview import build_plan_preview
 from sciplot_core.render import inspect_payload
 from sciplot_core.semantic import classify_source
@@ -146,6 +146,16 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
             _needs_rule_choice(state, reason_code="rule_selection_required",
                 message="尚不能确定实验类型。请选择与原始数据实际含义一致的实验。",
                 evidence=str(root / "inspection.json"))
+            return None
+    if request.get("mapping") and not state.get("mapping_choice") and not state.get("initial_mapping_attempted"):
+        from sciplot_core.task_initial_mapping import apply_initial_mapping
+
+        try:
+            resolve_rule_template(selected["rule_id"], selected.get("template"))
+        except ValueError as exc:
+            _needs_rule_choice(state, reason_code="plan_rule_invalid", message=str(exc))
+            return None
+        if not apply_initial_mapping(root, state, source, selected):
             return None
     mapping_choice = state.get("mapping_choice")
     plan_request = mapped_plan_request(state) if mapping_choice else selected

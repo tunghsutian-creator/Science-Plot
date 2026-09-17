@@ -6,6 +6,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from sciplot_core.data_mapping.table_choice import _read, _original_text, table_choice_snapshot
+from sciplot_core.data_mapping.merged_metadata import merged_metadata_ranges
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.task_choice_schema import table_region_schema
 from sciplot_core.task_contract import TaskControlError
@@ -41,8 +42,12 @@ def inspect_table_region(task: Path, query: dict[str, Any]) -> dict[str, Any]:
     rows = [{"row_index": row, "cells": [
         {"column_index": column, "text": _original_text(frame.iat[row, column])}
         for column in range(cs, ce)]} for row in range(rs, re)]
+    merges = [item for item in merged_metadata_ranges(source, query["sheet"])
+              if item["row_start"] < re and rs < item["row_end"]
+              and item["column_start"] < ce and cs < item["column_end"]]
     if file_sha256(source) != digest:
         raise TaskControlError("stale_task_question", "Original source changed during region query.")
     return {"kind": "sciplot_original_table_region", "version": 1, "source": str(source),
             "source_sha256": digest, **query, "rows": rows, "writes_performed": False,
-            "cell_values": "decoded original values; formulas/styles/merged-cell expansion are not inferred"}
+            "merged_cells": merges,
+            "cell_values": "decoded original values; formulas/styles are not inferred; merge ranges are original declarations, blanks remain blank"}

@@ -215,6 +215,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/semantic_sources/tensile_export_identity.py",
                 "src/sciplot_core/semantic_sources/tensile_workbooks.py",
                 "src/sciplot_core/source_tables/raw_readers.py",
+                "src/sciplot_core/source_tables/read_session.py",
                 "src/sciplot_core/source_tables/__init__.py",
                 "src/sciplot_core/source_tables/text_normalization.py",
                 "src/sciplot_core/studio_core/semantic_source.py",
@@ -266,6 +267,7 @@ CHANGED_OWNERS = (
                 "tests/test_swelling_single_snapshot.py",
                 "tests/test_swelling_source_contract.py",
                 "tests/test_tga_scientific_transform.py",
+                "tests/test_table_read_session.py",
                 "tests/test_torque_source_contract.py",
             }
         ),
@@ -293,6 +295,7 @@ CHANGED_OWNERS = (
             "tests/test_swelling_single_snapshot.py",
             "tests/test_swelling_source_contract.py",
             "tests/test_tga_scientific_transform.py",
+            "tests/test_table_read_session.py",
             "tests/test_intake_review_recovery.py",
             "tests/test_torque_source_contract.py",
             *ARCHITECTURE_CORE_TARGETS,

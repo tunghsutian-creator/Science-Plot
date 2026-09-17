@@ -20,6 +20,96 @@ from sciplot_core.task_storage import load_task
 from sciplot_core.task_table_region import inspect_table_region
 
 
+def merged_numeric_source(tmp_path):
+    source = tmp_path / "merged.xlsx"
+    book = Workbook()
+    sheet = book.active
+    sheet.title = "Measured"
+    for row in [["Wavelength", "Absorbance", "Wavelength", "Absorbance"],
+                ["nm", "a.u.", "nm", "a.u."], [8, None, "009", None],
+                [400.1234567890123, 0.12345678901234567, 405, 3],
+                [450, 4, 455, 5], [500, 2, 505, 4]]:
+        sheet.append(row)
+    sheet.merge_cells("A3:B3")
+    sheet.merge_cells("C3:D3")
+    book.save(source)
+    return source, {"sheet": "Measured", "header_rows": [0], "unit_row": 1,
+                    "sample_row": 2, "data_start_row": 3, "data_end_row": 6,
+                    "expand_merged_metadata": True}
+
+
+def test_merged_metadata_is_explicit_and_preserves_original_empty_cells(tmp_path):
+    from sciplot_core.data_mapping.output_files import paired_table_text
+    from sciplot_core.semantic_sources.table_scanning import _scan_curve_series_source
+
+    source, selection = merged_numeric_source(tmp_path)
+    before = source.read_bytes()
+    snapshot = table_choice_snapshot(source, "uvvis_spectrum")
+    selected = select_table(snapshot, selection)
+    assert selected["columns"][1]["raw_metadata"]["sample"] == ""
+    assert selected["columns"][1]["sample"] == "8"
+    assert selected["columns"][1]["cell_evidence"]["2,0"] == "8"
+    assert selected["columns"][1]["cell_evidence"]["2,1"] == ""
+    assert len(selected["merged_metadata"]) == 2
+    unexpanded = select_table(snapshot, {**selection, "expand_merged_metadata": False})
+    assert unexpanded["columns"][1]["sample"] == ""
+    request = tmp_path / "request.json"
+    request.write_text("{}")
+    proposal = proposal_for_table_columns(selected,
+        pairs=[{"x_column": 0, "y_column": 1}, {"x_column": 2, "y_column": 3}],
+        request_path=request, proposal_id="merged", created_at="2026-09-17T00:00:00+00:00")
+    _, frames, _, _, _ = _prepare_mapping_frames(proposal, source_root=tmp_path)
+    composite = tmp_path / "selected.csv"
+    composite.write_text(paired_table_text(proposal, frames))
+    series = _scan_curve_series_source(composite, x_aliases=("Wavelength",), y_aliases=("Absorbance",),
+        x_label="Wavelength", y_label="Absorbance", default_x_unit="nm", default_y_unit="a.u.", sample_prefix="wrong")
+    assert [item.sample for item in series] == ["8", "009"]
+    assert [len(item.points) for item in series] == [3, 3]
+    assert series[0].points[0] == (400.1234567890123, 0.1234567890123457)
+    assert source.read_bytes() == before
+
+
+def test_merged_metadata_cannot_expand_into_measurements(tmp_path):
+    from openpyxl import load_workbook
+
+    source, selection = merged_numeric_source(tmp_path)
+    book = load_workbook(source)
+    book.active.unmerge_cells("A3:B3")
+    book.active.merge_cells("A3:A4")
+    book.save(source)
+    with pytest.raises(ValueError, match="wholly above data"):
+        select_table(table_choice_snapshot(source, "uvvis_spectrum"), selection)
+
+
+@pytest.mark.comprehensive
+def test_native_merged_numeric_samples_and_cold_export_preserve_exact_values(tmp_path):
+    from test_project_source_update_native import _native
+
+    source, selection = merged_numeric_source(tmp_path)
+    before = source.read_bytes()
+    task = tmp_path / "task"
+    state = start_task({"version": 1, "action": "create", "source": str(source),
+                        "rule_id": "uvvis_spectrum", "choose_columns": True}, task_dir=task)
+    query = {"expected_question_id": state["question"]["question_id"], "sheet": "Measured",
+             "row_start": 0, "row_end": 4, "column_start": 0, "column_end": 4}
+    region = inspect_table_region(task, query)
+    assert len(region["merged_cells"]) == 2 and region["rows"][2]["cells"][1]["text"] == ""
+    state = resume_task(task, {"expected_question_id": state["question"]["question_id"], "table_selection": selection})
+    state = resume_task(task, {"expected_question_id": state["question"]["question_id"],
+                              "column_mapping": {"pairs": [{"x_column": 0, "y_column": 1}, {"x_column": 2, "y_column": 3}]}})
+    assert state["status"] == "complete", state
+    # A new task forces mapping replay and a fresh byte check during export.
+    exported = start_task({"version": 1, "action": "export", "project": state["project"]}, task_dir=tmp_path / "export-task")
+    assert exported["status"] == "complete", exported
+    native = _native(Path(state["project"]) / "studio/document.vsz")
+    assert list(native["series"]) == ["8", "009"]
+    assert native["series"]["8"]["x"] == [400.1234567890123, 450.0, 500.0]
+    assert native["series"]["8"]["y"] == [0.1234567890123457, 4.0, 2.0]
+    current = inspect_task(task)["current_project"]
+    assert all(current[key]["current"] for key in ("source", "qa", "delivery"))
+    assert source.read_bytes() == before
+
+
 def original(tmp_path):
     source = tmp_path / "original.xlsx"
     book = Workbook()

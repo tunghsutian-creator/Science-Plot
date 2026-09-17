@@ -14,6 +14,7 @@ GENERIC_AXIS_OWNERS = (
                 "src/sciplot_core/studio_core/request_overrides.py",
                 "src/sciplot_core/studio_render/axis_contract.py",
                 "src/sciplot_core/studio_render/axis_limits.py",
+                "src/sciplot_core/studio_render/domain_defaults.py",
                 "src/sciplot_core/studio_render/metric_columns.py",
                 "src/sciplot_core/studio_render/readability_defaults.py",
             }
@@ -25,6 +26,7 @@ GENERIC_AXIS_OWNERS = (
                 "tests/test_semantic_validation.py",
                 "tests/test_source_recognition_contract.py",
                 "tests/test_studio_request_overrides.py",
+                "tests/test_temperature_figure_plan_activation.py",
             }
         ),
         pytest_targets=(
@@ -33,6 +35,7 @@ GENERIC_AXIS_OWNERS = (
             "tests/test_semantic_validation.py",
             "tests/test_source_recognition_contract.py",
             "tests/test_studio_request_overrides.py",
+            "tests/test_temperature_figure_plan_activation.py",
         ),
         release_gates=("full_pytest",),
     ),

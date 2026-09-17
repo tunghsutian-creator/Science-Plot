@@ -12,6 +12,7 @@ from sciplot_core.semantic_sources.table_source_files import (
     table_source_files,
 )
 from sciplot_core.source_tables import read_raw_table
+from sciplot_core.source_tables.read_session import read_table_once
 
 
 def read_raw_table_normalized(path: Path) -> pd.DataFrame:
@@ -38,11 +39,11 @@ def read_candidate_tables(
                     (
                         f"{path.stem}:{sheet_name}",
                         _structural_empty_cells_as_missing(
-                            workbook.parse(
+                            read_table_once(path, ("candidate_sheet", sheet_name), lambda sheet_name=sheet_name: workbook.parse(
                                 sheet_name,
                                 header=None,
                                 keep_default_na=False,
-                            )
+                            ))
                         ).dropna(axis=1, how="all"),
                     )
                     for sheet_name in (

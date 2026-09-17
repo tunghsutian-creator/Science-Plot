@@ -247,6 +247,14 @@ def _apply_domain_render_defaults(
             if "y_label_override" not in explicit_options and metric_label is not None:
                 updated["y_label_override"] = metric_label
     rule_id = str(request.get("rule_id") or "").strip()
+    if rule_id == "rheology_temperature_sweep":
+        metric_pair = _preferred_metric_pair(request)
+        if metric_pair is not None and "y_label_override" not in explicit_contract:
+            metric_label = rheology_metric_axis_label(metric_pair[1])
+            if metric_label is not None:
+                # A secondary temperature task inherits primary style defaults,
+                # but its own metric determines the scientific axis label.
+                updated["y_label_override"] = metric_label
     if rule_id in {"rheology_strain_sweep", "rheology_stress_sweep"}:
         explicit_contract = _explicit_render_options(request)
         metric_pair = _preferred_metric_pair(request)

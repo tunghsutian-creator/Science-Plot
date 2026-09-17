@@ -30,6 +30,48 @@ def _write(path: Path, value: dict) -> Path:
 
 
 @pytest.mark.comprehensive
+def test_killed_native_source_install_resumes_through_public_task(tmp_path):
+    import sys
+    from sciplot_core.veusz_runtime import veusz_worker_environment
+
+    old_source, new_source = tmp_path / "old.csv", tmp_path / "new.csv"
+    _source(old_source)
+    _source(new_source, changed=True)
+    created = task_control.start_task({"version": 1, "action": "create", "source": str(old_source),
+                                      "rule_id": "uvvis_spectrum"}, task_dir=tmp_path / "create")
+    assert created["status"] == "complete", created
+    project = Path(created["project"])
+    task = tmp_path / "update"
+    review = task_control.start_task({"version": 1, "action": "update_source", "project": str(project),
+                                      "source": str(new_source)}, task_dir=task)
+    assert review["status"] == "needs_review", review
+    code = """
+import json, os, sys
+from pathlib import Path
+from sciplot_core.task_control import resume_task
+project, task = map(Path, sys.argv[1:3])
+replace = os.replace
+def kill_after_archive(source, target):
+    replace(source, target)
+    if Path(source) == project / 'source' and '.source_update_history' in Path(target).parts:
+        os._exit(91)
+os.replace = kill_after_archive
+resume_task(task, {'accept_source_update': True, 'expected_revision_id': sys.argv[3]})
+"""
+    killed = subprocess.run([sys.executable, "-c", code, str(project), str(task), review["revision_id"]],
+                            env=veusz_worker_environment(), capture_output=True, text=True, timeout=60)
+    assert killed.returncode == 91, killed.stdout + killed.stderr
+    assert not (project / "source").exists()
+    resumed = _cli("task", "resume", task, "--response", _write(tmp_path / "retry.json", {"retry": True}))
+    assert resumed["status"] == "complete", resumed
+    assert all(resumed["current_project"][key]["current"] for key in ("source", "qa", "delivery"))
+    assert _native(project / "studio/document.vsz")["series"]["A"]["y"] == [8, 9, 10]
+    history = project.parent / ".source_update_history" / project.name
+    assert len(list(history.glob("*.rollback.json"))) == 1
+    assert len(list(history.glob("*.interrupted"))) == 1
+
+
+@pytest.mark.comprehensive
 def test_public_source_update_reviews_native_images_recovers_and_exports_current_project(tmp_path, monkeypatch):
     old_source, new_source = tmp_path / "old_uvvis.csv", tmp_path / "new_uvvis.csv"
     _source(old_source)

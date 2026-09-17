@@ -8,6 +8,7 @@ from typing import Any
 
 from sciplot_core.data_mapping.plan_binding import resolve_mapping_plan_request
 from sciplot_core.foundation.json_io import atomic_write_json
+from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.output_contract import (
     REQUEST_DELIVERY_ROOT_KEY,
     UserOutputLayout,
@@ -44,6 +45,7 @@ def _publish(payload: dict[str, Any]) -> dict[str, Any]:
     return project_receipt(payload, 0 if published.ready_to_use else 1)
 
 
+@with_table_reads
 def create_project(
     source: Path,
     *,
@@ -107,6 +109,7 @@ def _prepare_mapped_project(
     return prepare_studio_document(request_path)
 
 
+@with_table_reads
 def export_project(project: Path) -> dict[str, Any]:
     root = resolve_project_path(project)
     with external_project_session(root):

@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 import pandas as pd
 from sciplot_core.foundation.text_files import decode_text
+from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.source_tables.read_session import read_table_once
 from sciplot_core.mapping_contract import (
     DataColumnMapping,
     DataMappingProposal,
@@ -78,16 +80,16 @@ def _normalize_decimal_comma(value: object) -> object:
     return text.replace(",", ".")
 
 
-def _read_raw_table(
+def _read_original_cells(
     reference: DataSourceReference,
     path: Path,
     *,
     preserve_cells: bool = False,
-) -> _RawTable:
+) -> pd.DataFrame:
     suffix = path.suffix.casefold()
     if suffix in {".xlsx", ".xls", ".xlsm"}:
         sheet = reference.sheet if reference.sheet is not None else 0
-        raw = pd.read_excel(path, sheet_name=sheet, header=None, dtype=object, keep_default_na=False)
+        return pd.read_excel(path, sheet_name=sheet, header=None, dtype=object, keep_default_na=False)
     else:
         if reference.sheet is not None:
             raise ValueError(
@@ -95,7 +97,7 @@ def _read_raw_table(
             )
         text = decode_text(path)
         delimiter = _detect_delimiter(text, reference)
-        raw = pd.DataFrame(list(csv.reader(StringIO(text), delimiter=delimiter))) if preserve_cells or reference.data_start_row is not None else pd.read_csv(
+        return pd.DataFrame(list(csv.reader(StringIO(text), delimiter=delimiter))) if preserve_cells or reference.data_start_row is not None else pd.read_csv(
             StringIO(text),
             sep=delimiter,
             header=None,
@@ -105,6 +107,19 @@ def _read_raw_table(
             skip_blank_lines=not preserve_cells,
             engine="python",
         )
+
+
+def _read_raw_table(
+    reference: DataSourceReference, path: Path, *, preserve_cells: bool = False,
+) -> _RawTable:
+    digest = file_sha256(path)
+    options = ("mapping_cells", reference.sheet, reference.delimiter, reference.decimal,
+               preserve_cells or reference.data_start_row is not None)
+    if path.suffix.casefold() in {".xlsx", ".xls", ".xlsm"}:
+        options = ("mapping_excel", reference.sheet if reference.sheet is not None else 0)
+    raw = read_table_once(path, options,
+        lambda: _read_original_cells(reference, path, preserve_cells=preserve_cells),
+        expected_sha256=digest)
     if raw.empty:
         raise ValueError(f"Data mapping source is empty: {reference.relative_path}")
     # Never collapse empty interior columns: selections use original cell indices.
@@ -136,7 +151,10 @@ def _read_raw_table(
             raise ValueError("Selected data rows are outside the source.")
         frame = raw.iloc[reference.data_start_row:end].reset_index(drop=True)
     if not preserve_cells:
-        frame = frame.map(_normalize_missing)
+        selected = frame
+        frame = read_table_once(path,
+            ("mapping_missing", *options, header_row, reference.data_start_row, reference.data_end_row),
+            lambda: selected.map(_normalize_missing), expected_sha256=digest)
     return _RawTable(
         source=reference,
         path=path,
