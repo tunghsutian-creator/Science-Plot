@@ -227,21 +227,21 @@ RHEOLOGY_RULES: tuple[SemanticRule, ...] = (
         "curve",
         TIME_AXIS,
         AxisSpec(
-            "Creep compliance",
-            "1/Pa",
-            "Creep compliance, J(t) (Pa⁻¹)",
-            aliases=("creep compliance",),
+            "Shear strain",
+            "%",
+            "Shear strain (%)",
+            aliases=("shear strain", "strain", "剪切应变", "应变"),
         ),
         keywords=("creep", "creeptest", "creepcompliance"),
         path_keywords=("creep",),
         analysis=(
             AnalysisSpec(
-                "final_compliance", "last finite J(t)", ("Creep compliance",), "1/Pa"
+                "final_strain", "last finite shear strain per sample", ("Shear strain",), "%"
             ),
             AnalysisSpec(
                 "recovery_ratio",
                 "recovery segment if available",
-                ("Creep compliance",),
+                ("Shear strain",),
                 "fraction",
             ),
         ),

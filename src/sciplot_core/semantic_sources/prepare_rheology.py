@@ -53,6 +53,7 @@ from sciplot_core.semantic_sources.rheology_sweep_sources import (
 
 from sciplot_core.semantic_sources.rheology_workbooks import (
     _write_rheology_sweep_comparison_workbook,
+    write_frequency_comparison_frame,
 )
 
 from sciplot_core.semantic_sources.series_ordering import (
@@ -77,6 +78,20 @@ def prepare_rheology_source(
     series_order = context.series_order
     column_confirmations = context.column_confirmations
     replicate_mode = context.replicate_mode
+
+    if family == "rheology_frequency" and source.is_file() and source.suffix.lower() in {".xlsx", ".xls"}:
+        import pandas as pd
+        from sciplot_core.semantic_sources.rheology_frequency_metrics import complete_frequency_frame
+
+        frame, derivations = complete_frequency_frame(pd.read_excel(source, sheet_name=0, header=None))
+        if derivations:
+            processed_source = processed_dir / "rheology_frequency_comparison.xlsx"
+            write_frequency_comparison_frame(frame, processed_source)
+            return _semantic_preparation_result(
+                source, processed_source=processed_source,
+                operation="normalize_frequency_units_and_derive_missing_viscosity",
+                parameters={"derivations": derivations},
+            )
 
     shared_sweep = _SHARED_RHEOLOGY_SWEEP_CONFIG.get(family)
 
@@ -296,9 +311,9 @@ def prepare_rheology_source(
         processed_source = processed_dir / f"{source.stem}_creep_curve.csv"
         series_list = _read_rheology_interval_series_list(
             source,
-            y_candidates=("creepcompliance", "compliance", "蠕变柔量"),
-            y_label="Creep compliance",
-            y_unit="1/Pa",
+            y_candidates=("shearstrain", "strain", "剪切应变", "应变"),
+            y_label="Shear strain",
+            y_unit="%",
             preferred_result_tokens=("creep",),
         )
         series_list = _order_curve_series(series_list, series_order)
@@ -308,8 +323,8 @@ def prepare_rheology_source(
             processed_source=processed_source,
             operation="extract_rheology_creep_curve",
             parameters={
-                "y_metric": "creep_compliance",
-                "unit": "1/Pa",
+                "y_metric": "shear_strain",
+                "unit": "%",
                 "source_sample_count": len(series_list),
                 "series_order": [series.sample for series in series_list],
                 "source_selections": [

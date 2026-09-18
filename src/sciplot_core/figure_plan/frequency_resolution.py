@@ -115,7 +115,7 @@ def resolve_frequency_plan(
         )
     selected_metrics = {task.y_metric for task in tasks}
     for y_metric in available_metrics:
-        if y_metric in selected_metrics or y_metric not in _RHEOLOGY_FREQUENCY_METRICS:
+        if y_metric in selected_metrics or y_metric not in _RHEOLOGY_FREQUENCY_METRICS or y_metric == "complex_modulus":
             continue
         selected_metrics.add(y_metric)
         figure_id = f"{y_metric}_vs_frequency"
@@ -171,7 +171,9 @@ def _frequency_source_metrics(source: Path | None) -> tuple[str, ...]:
         return ()
     import pandas as pd
 
-    frame = pd.read_excel(workbook, sheet_name=0, header=None, nrows=1)
+    from sciplot_core.semantic_sources.rheology_frequency_metrics import complete_frequency_frame
+
+    frame, _ = complete_frequency_frame(pd.read_excel(workbook, sheet_name=0, header=None))
     if frame.empty:
         return ()
     header_tokens = {_header_token(value) for value in frame.iloc[0].tolist()}

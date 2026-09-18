@@ -415,3 +415,26 @@ def test_uvvis_managed_cli_keeps_styles_and_rejects_changed_measurements(
     assert changed.returncode != 0
     assert "differs from the rendered specification" in changed.stderr + changed.stdout
     assert file_sha256(csv) == before
+
+
+def test_snapshot_accepts_only_ctime_drift_after_fresh_content_check(tmp_path: Path, monkeypatch) -> None:
+    from sciplot_core.source_coverage import file_snapshots
+    source = tmp_path / 'native.vsz'
+    source.write_text('original scientific data')
+    baseline = file_snapshots._stable_file_snapshot(source, label='test')
+    real_snapshot = file_snapshots._stable_file_snapshot
+
+    def metadata_only(path, *, label):
+        snapshot = real_snapshot(path, label=label)
+        snapshot['identity']['ctime_ns'] += 1
+        return snapshot
+
+    monkeypatch.setattr(file_snapshots, '_stable_file_snapshot', metadata_only)
+    file_snapshots._assert_snapshot_current(baseline, label='test')
+    source.write_text('different scientific data')
+    with pytest.raises(ValueError, match='bytes_changed=True'):
+        file_snapshots._assert_snapshot_current(baseline, label='test')
+    source.unlink()
+    source.write_bytes(baseline['bytes'])
+    with pytest.raises(ValueError, match='changed during'):
+        file_snapshots._assert_snapshot_current(baseline, label='test')

@@ -1,7 +1,7 @@
 {
   "kind": "sciplot_validated_envelope_registry",
   "version": 2,
-  "generated_at": "2026-09-05T12:37:18.590562+00:00",
+  "generated_at": "2026-09-18T08:27:05.467867+00:00",
   "source_acceptance": {
     "kind": "sciplot_validated_envelope_acceptance_lineage",
     "version": 1,
@@ -16,14 +16,12 @@
           "impact_metric",
           "dsc_curve",
           "rheology_temperature_sweep",
-          "rheology_frequency_sweep",
           "rheology_stress_relaxation",
           "rheology_strain_sweep",
           "rheology_stress_sweep",
           "rheology_time_sweep",
           "dma_frequency_sweep",
           "dma_temperature_sweep",
-          "rheology_creep",
           "dtg_curve",
           "compression_curve",
           "flexural_curve",
@@ -36,6 +34,22 @@
           "gpc_sec_chromatogram",
           "ftir_spectrum",
           "swelling_curve"
+        ],
+        "limitations": [
+          "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
+          "Exact-current publication QA is implemented separately; this matrix measures rule lifecycle and real-data breadth rather than journal compliance.",
+          "Final PDF/TIFF dimensions are machine-checked. Contact sheets are uncalibrated overview previews whose explicit manual or agent decision does not prove final-physical-size readability.",
+          "Explicit publication composition uses deterministic 183 mm figure-level layout metadata. This rule matrix does not infer composition from independent figures, and SciPlot has no standalone composition UI."
+        ]
+      },
+      {
+        "kind": "sciplot_ready_rule_acceptance",
+        "version": 3,
+        "generated_at": "2026-09-18T08:24:57.627144+00:00",
+        "summary_sha256": "36ad2e2a44bf70272db812c0f0c3ad9ae3609e0a3f87e8fcd2bb2958b658fb0b",
+        "rule_ids": [
+          "rheology_creep",
+          "rheology_frequency_sweep"
         ],
         "limitations": [
           "A passed instrument-shaped fixture is not promoted to real-data acceptance.",
@@ -376,10 +390,10 @@
     {
       "rule_id": "rheology_creep",
       "semantic_family": "rheology_creep",
-      "contract_sha256": "3d331fbde32ffec7d814027312334a9891cce8d56f4664b1310bdccab68cd78c",
-      "semantic_contract_sha256": "f6d5e5ff4ee0b424282195d848468ea8be5d920e006edc6fed0386c07668f832",
-      "accepted_manifest_sha256": "c27efa5633409e21607f001f891acf0717817c402804d06f7c3fe3d4eeabc072",
-      "acceptance_generated_at": "2026-09-05T11:30:22.711989+00:00",
+      "contract_sha256": "e8d11a0fd48a47b6c4e7731d23e2d8e08d66f20d489044eebfc29764d77a407a",
+      "semantic_contract_sha256": "25504b3f03cb50c235ae54b1e1d9fc96e9cd8b66db25a0b39ba2b23b310dad19",
+      "accepted_manifest_sha256": "90b42e283ae9d5345f23eaac2c26053354b6ee083fed1351640f68d80595ec2c",
+      "acceptance_generated_at": "2026-09-18T08:24:57.627144+00:00",
       "evidence_tier": "user_authorized_real_excerpt",
       "evidence_strength": "computed_fixture_hash",
       "real_data_evidence": true,
@@ -413,8 +427,8 @@
       "semantic_family": "rheology_frequency",
       "contract_sha256": "8e1b57ec0b786f86a06b4988e90cbe170a5f4aeb5f9fa28535b175523076a79d",
       "semantic_contract_sha256": "7c190b8ac51488b5d2ce8fc8fbdbeec807c0503cdea645d9a2cb025f1b1648f0",
-      "accepted_manifest_sha256": "8a5008358e8ab80c48a6b542a625b2f9c62c713d0190a597a7747d2ec3478384",
-      "acceptance_generated_at": "2026-09-05T11:30:22.711989+00:00",
+      "accepted_manifest_sha256": "db14155727637d436e86f33d9014461dea6bcc86dff79ff72894d121d8e82cc4",
+      "acceptance_generated_at": "2026-09-18T08:24:57.627144+00:00",
       "evidence_tier": "user_authorized_real_instrument_export",
       "evidence_strength": "registered_fixture_source_and_units",
       "real_data_evidence": true,

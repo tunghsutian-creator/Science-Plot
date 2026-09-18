@@ -116,23 +116,13 @@ def _stress_relaxation_metrics(processed_source: Path) -> list[dict[str, Any]]:
 
 
 def _creep_metrics(processed_source: Path) -> list[dict[str, Any]]:
-    frames = _read_paired_curve_table(processed_source)
+    frames = _read_labeled_paired_curve_table(processed_source)
     if not frames:
-        return [
-            _metric(
-                "final_compliance", None, "1/Pa", "skipped", "No creep curve found."
-            )
-        ]
+        return [_metric("final_strain", None, "%", "skipped", "No creep curve found.")]
     return [
-        _metric("final_compliance", float(frames[0]["y"].iloc[-1]), "1/Pa"),
-        _metric(
-            "recovery_ratio",
-            None,
-            "fraction",
-            "skipped",
-            "Recovery segment not detected.",
-        ),
-    ]
+        _metric("final_strain" + (f"[{sample}]" if len(frames) > 1 else ""), float(frame["y"].iloc[-1]), "%")
+        for sample, frame in frames
+    ] + [_metric("recovery_ratio", None, "fraction", "skipped", "Recovery calculation requires explicit interval boundaries.")]
 
 
 def _tensile_summary_metrics(summary_source: Path) -> list[dict[str, Any]]:

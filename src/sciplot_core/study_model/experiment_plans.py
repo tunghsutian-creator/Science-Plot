@@ -190,11 +190,11 @@ _EXPERIMENT_PLANS: dict[str, dict[str, Any]] = {
         "default_replicate_mode": "mean",
         "figure_queue": (
             {
-                "id": "creep_compliance_vs_time",
-                "title": "Creep compliance vs time",
-                "metric": "creep_compliance",
+                "id": "shear_strain_vs_time",
+                "title": "Shear strain vs time",
+                "metric": "shear_strain",
                 "x_metric": "time",
-                "y_metric": "creep_compliance",
+                "y_metric": "shear_strain",
                 "default_template": "curve",
             },
         ),

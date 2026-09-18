@@ -220,9 +220,9 @@ def run_studio_figure_set_probe(
     checks.append(
         _check(
             "synthetic_available_metric_documents",
-            "A storage/loss frequency sweep creates those independent documents plus the derived complex modulus",
+            "A storage/loss frequency sweep creates those independent documents plus derived complex viscosity",
             {item["metric"] for item in ready_synthetic}
-            == {"storage_modulus", "loss_modulus", "complex_modulus"}
+            == {"storage_modulus", "loss_modulus", "complex_viscosity"}
             and all(item["document_exists"] for item in ready_synthetic)
             and all(item["size_mm"] == [60, 55] for item in ready_synthetic)
             and all(
@@ -234,11 +234,11 @@ def run_studio_figure_set_probe(
     checks.append(
         _check(
             "missing_metrics_are_not_planned",
-            "Metrics absent from the prepared domain are omitted instead of falling back to another metric",
+            "Unavailable loss factor and unrequested optional complex modulus are not planned",
             not unavailable_synthetic
             and not {
                 "loss_factor",
-                "complex_viscosity",
+                "complex_modulus",
             }.intersection(item["metric"] for item in synthetic_figures),
             unavailable_synthetic,
         )

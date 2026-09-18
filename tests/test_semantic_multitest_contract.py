@@ -255,3 +255,24 @@ def test_tensile_workbook_metadata_label_outranks_filename_sample_code(
 
     assert [item.sample for item in series] == ["e2 2mm"]
     assert {row["sample"] for row in summary_rows} == {"e2 2mm"}
+
+
+def test_creep_default_uses_original_strain_and_continuous_time(tmp_path: Path) -> None:
+    from sciplot_core.semantic import prepare_semantic_source
+    from sciplot_core.materials_rules import get_rule
+    from sciplot_core.study_model import experiment_recommendation_payload
+
+    source = tmp_path / 'Creep'
+    source.mkdir()
+    raw = source / 'Sample.csv'
+    raw.write_text('Test:\tSample\nResult:\tCreep\nInterval data:\tTime\tShear Strain\tCreep Compliance\n\t[s]\t[%]\t[1/Pa]\n\t0.1\t2\t999\n\t1\t8\t999\nInterval and data points:\t2\t2\nInterval data:\tTime\tShear Strain\tCreep Compliance\n\t[s]\t[%]\t[1/Pa]\n\t1.1\t5\t-999\n\t2\t3\t-999\n', encoding='utf-16')
+    before = raw.read_bytes()
+    result = prepare_semantic_source(source, output_dir=tmp_path/'prepared', semantic=classify_source(source, requested_rule_id='rheology_creep'))
+    table = pd.read_csv(result['processed_source'], header=None)
+    assert table.iat[0, 1] == 'Shear strain'
+    assert table.iat[1, 1] == '%'
+    assert table.iloc[3:, 0].astype(float).tolist() == [0.1, 1., 1.1, 2.]
+    assert table.iloc[3:, 1].astype(float).tolist() == [2., 8., 5., 3.]
+    assert raw.read_bytes() == before
+    assert get_rule('rheology_creep').y_axis.canonical_unit == '%'
+    assert experiment_recommendation_payload(rule_id='rheology_creep')['figure_queue'][0]['y_metric'] == 'shear_strain'

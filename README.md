@@ -72,6 +72,12 @@ performance comparisons use **120 × 55 mm**. Click any image to view it at full
 ## What you can do
 
 - Plot mechanics, rheology, thermal analysis, spectra, scattering, and material comparisons.
+- Frequency sweeps default to G′, G″, tan δ and complex viscosity. When viscosity
+  is absent, use the original modulus and positive angular frequency to derive
+  |η*| = |G*|/ω with recorded unit conversions; instrument-reported viscosity
+  takes precedence. Complex modulus is available through an explicit figure choice.
+  Creep defaults to original shear strain (%) versus time (s), retaining the
+  selected loading and recovery intervals without using compliance as strain.
 - Preview changes to colors, fonts, legends, and annotations before applying them.
 - Change ordinary curves together by their exact sample labels, and save successive edits before exporting.
 - Save sample colors and line widths as a preset, then reuse them by sample name across other experiment figures, including matching marker and direct-label colors.

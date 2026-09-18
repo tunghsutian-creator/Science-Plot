@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 import tempfile
 from xml.etree import ElementTree
@@ -89,6 +90,18 @@ def _write_rheology_sweep_comparison_workbook(
     ] = _RHEOLOGY_SWEEP_METRICS,
     source_replicates: list[RheologySweepSample] | None = None,
 ) -> None:
+    _write_stable_workbook(output_path, lambda candidate: _write_sweep_workbook(
+        samples, candidate, comparison_sheet=comparison_sheet, metrics=metrics,
+        source_replicates=source_replicates,
+    ))
+
+
+def write_frequency_comparison_frame(frame: pd.DataFrame, output_path: Path) -> None:
+    """Materialize derived workbook columns without invalidating unchanged figures."""
+    _write_stable_workbook(output_path, lambda candidate: frame.to_excel(candidate, header=False, index=False))
+
+
+def _write_stable_workbook(output_path: Path, write: Callable[[Path], object]) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, name = tempfile.mkstemp(
         prefix=f".{output_path.stem}-", suffix=".xlsx", dir=output_path.parent
@@ -96,13 +109,7 @@ def _write_rheology_sweep_comparison_workbook(
     os.close(descriptor)
     candidate = Path(name)
     try:
-        _write_sweep_workbook(
-            samples,
-            candidate,
-            comparison_sheet=comparison_sheet,
-            metrics=metrics,
-            source_replicates=source_replicates,
-        )
+        write(candidate)
         # Several figure tasks read this shared table. Excel ZIP timestamps and
         # core-property dates can change on each save even when every data and
         # presentation entry is identical. Keep the bytes already bound by the

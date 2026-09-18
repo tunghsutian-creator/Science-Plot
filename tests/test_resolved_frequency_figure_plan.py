@@ -96,12 +96,13 @@ def _write_frequency_text_source(path: Path) -> None:
     )
 
 
-def test_frequency_plan_keeps_source_available_complex_modulus(
+def test_frequency_plan_keeps_explicitly_requested_complex_modulus(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "frequency.xlsx"
     _write_frequency_source(source, include_complex_modulus=True)
     study_model = _frequency_study_model()
+    study_model["figure_queue"].append({"id": "complex_modulus_vs_frequency", "x_metric": "angular_frequency", "y_metric": "complex_modulus"})
 
     plan = resolve_figure_plan(
         rule_id="rheology_frequency_sweep",
@@ -143,6 +144,7 @@ def test_frequency_plan_keeps_source_available_complex_modulus(
     assert [item["id"] for item in studio_queue] == list(plan.selected_figure_ids)
     assert [item[0] for item in workflow_sources] == [
         "freq_storage_modulus",
+        "freq_complex_viscosity",
         "freq_complex_modulus",
     ]
 
@@ -270,7 +272,8 @@ def test_frequency_source_metric_change_invalidates_persisted_plan(
     assert refreshed is not None
     assert refreshed.plan_sha256 != plan.plan_sha256
     assert refreshed.source_sha256 != plan.source_sha256
-    assert "complex_modulus_vs_frequency" in refreshed.selected_figure_ids
+    assert "complex_modulus_vs_frequency" not in refreshed.selected_figure_ids
+    assert "complex_viscosity_vs_frequency" in refreshed.selected_figure_ids
 
 
 def test_studio_regeneration_failure_rolls_back_plan_and_primary_document(

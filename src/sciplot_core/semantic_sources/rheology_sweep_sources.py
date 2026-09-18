@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Any
 import pandas as pd
@@ -10,9 +9,9 @@ from sciplot_core.foundation.text_values import (
     clean_text as _clean_text,
     token as _token,
 )
-from sciplot_core.materials_rules import (
-    format_unit_label,
-)
+from sciplot_core.semantic_sources.rheology_units import _unit_conversion as _unit_conversion
+from sciplot_core.materials_rules.unit_formatting import format_unit_label
+from sciplot_core.semantic_sources.rheology_frequency_metrics import complete_sweep_metrics
 
 
 from sciplot_core.semantic_sources.models import (
@@ -125,29 +124,6 @@ def _find_rheology_sweep_headers(
     raise ValueError("Could not find rheology sweep X and requested response columns.")
 
 
-def _unit_conversion(source_unit: str, target_unit: str) -> tuple[str, float, str]:
-    source = format_unit_label(source_unit.strip()).strip()
-    target = format_unit_label(target_unit).strip()
-    if source == target:
-        return target, 1.0, "identity"
-    conversions = {
-        ("1", "%"): (100.0, "fraction_to_percent"),
-        ("fraction", "%"): (100.0, "fraction_to_percent"),
-        ("%", "1"): (0.01, "percent_to_fraction"),
-        ("fraction", "1"): (1.0, "fraction_identity"),
-        ("kPa", "Pa"): (1000.0, "kPa_to_Pa"),
-        ("MPa", "Pa"): (1_000_000.0, "MPa_to_Pa"),
-        ("Pa", "kPa"): (0.001, "Pa_to_kPa"),
-        ("Pa", "MPa"): (0.000001, "Pa_to_MPa"),
-        ("Pa·s", "mPa·s"): (1000.0, "Pa_s_to_mPa_s"),
-        ("cP", "mPa·s"): (1.0, "cP_to_mPa_s"),
-    }
-    conversion = conversions.get((source, target))
-    if conversion is None:
-        return source or target, 1.0, "source_unit_preserved"
-    factor, method = conversion
-    return target, factor, method
-
 
 def _rheology_sweep_units(
     raw: pd.DataFrame,
@@ -237,18 +213,6 @@ def _read_rheology_sweep_sample(
             "factor": factor,
             "method": method,
         }
-    should_derive_complex_modulus = (
-        "complex_modulus" not in metric_indexes
-        and "storage_modulus" in metric_indexes
-        and "loss_modulus" in metric_indexes
-    )
-    if should_derive_complex_modulus:
-        metric_units["complex_modulus"] = (
-            metric_units.get("storage_modulus")
-            or metric_units.get("loss_modulus")
-            or "Pa"
-        )
-
     decimal_comma = selected_columns_use_decimal_comma(
         raw,
         start_row=header_index + 1,
@@ -266,15 +230,11 @@ def _read_rheology_sweep_sample(
             )
             if y_value is not None:
                 row[key] = y_value * metric_factors.get(key, 1.0)
-        if should_derive_complex_modulus:
-            storage = row.get("storage_modulus")
-            loss = row.get("loss_modulus")
-            if storage is not None and loss is not None:
-                row["complex_modulus"] = math.hypot(storage, loss)
         if any(key in row for key in metric_indexes):
             rows.append(row)
     if not rows:
         raise ValueError(f"No numeric rheology sweep points found in {source}.")
+    complete_sweep_metrics(rows, metric_units, metric_conversions, x_label=x_label, x_unit=x_unit)
     return RheologySweepSample(
         sample=sample
         or _sample_from_interval_metadata(raw, _source_display_sample(source)),

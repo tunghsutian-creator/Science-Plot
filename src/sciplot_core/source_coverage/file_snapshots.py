@@ -65,11 +65,18 @@ def _stable_file_snapshot(path: Path, *, label: str) -> dict[str, Any]:
 
 def _assert_snapshot_current(snapshot: dict[str, Any], *, label: str) -> None:
     current = _stable_file_snapshot(Path(snapshot["path"]), label=label)
-    if (
-        current["identity"] != snapshot["identity"]
-        or current["sha256"] != snapshot["sha256"]
-    ):
-        raise ValueError(f"{label} changed during exact-current audit.")
+    # Cloud providers can update extended attributes (and thus ctime) without
+    # changing the file, its modification time or its contents. Each capture
+    # remains race checked; accept ctime-only drift only after a fresh full hash.
+    changed = [
+        key
+        for key, value in current["identity"].items()
+        if key != "ctime_ns" and snapshot["identity"].get(key) != value
+    ]
+    if changed or current["sha256"] != snapshot["sha256"]:
+        raise ValueError(
+            f"{label} changed during exact-current audit; metadata={changed}, bytes_changed={current['sha256'] != snapshot['sha256']}."
+        )
 
 
 def _write_private_snapshot(path: Path, payload: bytes) -> None:

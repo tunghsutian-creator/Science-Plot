@@ -122,6 +122,9 @@ def build_rheology_task_sources(
     prepared_hash_before = file_sha256(prepared_source)
 
     frame = pd.read_excel(prepared_source, sheet_name=0, header=None)
+    if prefix == "freq":
+        from sciplot_core.semantic_sources.rheology_frequency_metrics import complete_frequency_frame
+        frame, _ = complete_frequency_frame(frame)
     if frame.shape[0] < 4:
         if rule_id == TEMPERATURE_RULE_ID:
             raise ValueError(

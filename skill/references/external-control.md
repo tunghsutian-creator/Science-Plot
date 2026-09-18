@@ -667,6 +667,13 @@ and candidate evidence and is the input to apply.
 
 ## Native reference lines, arrows and observed peaks
 
+For new frequency sweeps, the default fourth response is complex viscosity;
+missing values are derived by the registered local source owner only when the
+original modulus/frequency inputs support it. Do not substitute complex modulus.
+For creep, the default axes are original shear strain (%) and time (s), including
+the selected result's loading and recovery intervals. These defaults are shared
+by task, Studio and compatible workflow entry points.
+
 Read the exact closed operation schema in `project capabilities` and current
 annotation IDs, axes units and bounds:
 

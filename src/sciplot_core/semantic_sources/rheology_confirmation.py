@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
+from sciplot_core.semantic_sources.rheology_frequency_metrics import complete_sweep_metrics
 from typing import Any
 from sciplot_core.foundation.text_values import (
     clean_text as _clean_text,
@@ -191,18 +191,6 @@ def _confirmed_rheology_sweep_sample(
             "factor": factor,
             "method": method,
         }
-    should_derive_complex_modulus = (
-        "complex_modulus" not in metric_indexes
-        and "storage_modulus" in metric_indexes
-        and "loss_modulus" in metric_indexes
-    )
-    if should_derive_complex_modulus:
-        metric_units["complex_modulus"] = (
-            metric_units.get("storage_modulus")
-            or metric_units.get("loss_modulus")
-            or "Pa"
-        )
-
     rows: list[dict[str, float]] = []
     for row_index in numeric_rows:
         x_value = _float(raw.iat[row_index, x_index])
@@ -213,11 +201,6 @@ def _confirmed_rheology_sweep_sample(
             y_value = _float(raw.iat[row_index, metric_index])
             if y_value is not None:
                 row[key] = y_value * metric_factors[key]
-        if should_derive_complex_modulus:
-            storage = row.get("storage_modulus")
-            loss = row.get("loss_modulus")
-            if storage is not None and loss is not None:
-                row["complex_modulus"] = math.hypot(storage, loss)
         rows.append(row)
     empty_metrics = [
         key for key in metric_indexes if not any(key in row for row in rows)
@@ -228,6 +211,7 @@ def _confirmed_rheology_sweep_sample(
             f"{', '.join(empty_metrics)}."
         )
 
+    complete_sweep_metrics(rows, metric_units, metric_conversions, x_label=x_label, x_unit=x_unit)
     return RheologySweepSample(
         sample=_source_display_sample(source),
         source=source,

@@ -119,3 +119,16 @@ def test_failed_candidate_write_preserves_previous_workbook_and_removes_partial_
         _write(path, [sample])
     assert path.read_bytes() == before
     assert list(tmp_path.iterdir()) == [path]
+
+
+def test_derived_frequency_frame_keeps_existing_bound_workbook_bytes(tmp_path: Path) -> None:
+    path = tmp_path / 'derived_frequency.xlsx'
+    frame = pd.DataFrame([['Angular Frequency','Complex Viscosity'],['A','A'],['rad/s','mPa·s'],[2.,2500.]])
+    workbooks.write_frequency_comparison_frame(frame, path)
+    _old_save_timestamps(path)
+    before = path.read_bytes()
+    workbooks.write_frequency_comparison_frame(frame, path)
+    assert path.read_bytes() == before
+    frame.iat[3,1] = 3000.
+    workbooks.write_frequency_comparison_frame(frame, path)
+    assert path.read_bytes() != before

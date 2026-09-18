@@ -194,6 +194,7 @@ def test_request_run_reuses_one_typed_plan_for_ordered_multi_task_render(
     assert [task.y_metric for task in plan.tasks] == [
         "storage_modulus",
         "loss_modulus",
+        "complex_viscosity",
     ]
 
     output_dir = tmp_path / "output"
@@ -345,6 +346,6 @@ def test_request_run_reuses_one_typed_plan_for_ordered_multi_task_render(
     assert published_results == [manifest["result"]]
     assert manifest["result"]["multi_metric_bundle"] == {
         "kind": "rheology_sweep_metric_bundle",
-        "metric_ids": ["freq_storage_modulus", "freq_loss_modulus"],
+        "metric_ids": ["freq_storage_modulus", "freq_loss_modulus", "freq_complex_viscosity"],
         "figure_ids": list(plan.selected_figure_ids),
     }

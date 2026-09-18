@@ -26,6 +26,16 @@ raw files + hashes
 - versioned policy and request contracts define constraints;
 - QA reports only checks it actually performs.
 
+Frequency response completion belongs to `semantic_sources/rheology_frequency_metrics.py`:
+instrument, confirmed-column and three-header workbook routes share the original
+modulus/positive-frequency derivation and record units/provenance. The frequency
+plan defaults to viscosity and admits complex modulus only through an explicit
+queue entry. Creep preparation, rule axes and study defaults share original
+shear strain versus time, preserving selected interval order and counts.
+Exact-current file comparison rehashes the full bytes and rejects identity,
+mode, size, modification-time or content changes. A ctime-only metadata update
+between two individually stable snapshots does not invalidate identical data.
+
 Lifecycle success, provenance, artifact QA, human review, and journal
 compliance are separate evidence claims.
 
