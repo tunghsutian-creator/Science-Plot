@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-import math
 from typing import Any
 
 import pandas as pd
+import numpy as np
 
 from sciplot_core.data_mapping.column_choice import _original_text
+from sciplot_core.data_mapping.curve_support import supports_table_mapping
 from sciplot_core.data_mapping.table_metadata import resolve_column_metadata
 from sciplot_core.data_mapping.output_files import _safe_output_name
 from sciplot_core.data_mapping.raw_tables import _read_raw_table
@@ -17,6 +18,7 @@ from sciplot_core.mapping_contract import DataColumnMapping, DataMappingProposal
 from sciplot_core.materials_rules import get_rule
 from sciplot_core.semantic_sources.paired_curve_table_metadata import explicit_header_unit
 from sciplot_core.source_tables.raw_readers import read_sheet_names
+from sciplot_core.source_tables.read_session import read_table_once
 
 
 def _read(source: Path, sheet: str | None, digest: str) -> pd.DataFrame:
@@ -32,10 +34,16 @@ def _rows(frame: pd.DataFrame, indices: list[int]) -> list[dict[str, Any]]:
 
 def table_choice_snapshot(source: Path, rule_id: str) -> dict[str, Any] | None:
     source = source.expanduser().resolve()
-    if not source.is_file() or source.suffix.casefold() not in {".csv", ".tsv", ".xlsx", ".xls", ".xlsm"}:
-        return None
     rule = get_rule(rule_id)
-    if rule.fixture_status != "ready" or rule.scientific_source_adapter != "registered_paired_curve":
+    if not supports_table_mapping(rule):
+        return None
+    return source_table_snapshot(source, rule_id=rule_id)
+
+
+def source_table_snapshot(source: Path, *, rule_id: str | None = None) -> dict[str, Any] | None:
+    """Read original evidence even when the caller still needs to name the experiment."""
+    source = source.expanduser().resolve()
+    if not source.is_file() or source.suffix.casefold() not in {".csv", ".tsv", ".xlsx", ".xls", ".xlsm"}:
         return None
     before = file_sha256(source)
     sheets: list[str | None] = [None]
@@ -58,6 +66,22 @@ def table_choice_snapshot(source: Path, rule_id: str) -> dict[str, Any] | None:
     return {"kind": "sciplot_table_choice", "version": 1, "source": str(source),
             "file_sha256": before, "rule_id": rule_id, "tables": tables,
             "indices": "zero_based; data_end_row is exclusive"}
+
+
+def _numeric_summary(source: Path, sheet: str | None, digest: str,
+                     frame: pd.DataFrame, start: int, end: int) -> pd.DataFrame:
+    """Reuse byte-bound numeric facts, never scientific eligibility or declarations."""
+    def scan() -> pd.DataFrame:
+        summaries = []
+        for column in range(frame.shape[1]):
+            numbers = pd.to_numeric(frame.iloc[start:end, column], errors="coerce").to_numpy(dtype=float)
+            invalid = np.flatnonzero(~np.isfinite(numbers))
+            rows = (invalid[:16] + start).tolist()
+            summaries.append([len(invalid), *rows, *([-1] * (16 - len(rows)))])
+        return pd.DataFrame(summaries)
+
+    return read_table_once(source, ("mapping_numeric_facts", sheet, start, end), scan,
+                           expected_sha256=digest, content_only=True)
 
 
 def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
@@ -98,6 +122,7 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
 
         expanded, anchors, associations = selected_metadata_cells(
             frame, metadata, ranges=merged_metadata_ranges(source, selection["sheet"]), data_start=start)
+    numeric_summary = _numeric_summary(source, selection["sheet"], snapshot["file_sha256"], frame, start, end)
     columns = []
     for column in range(frame.shape[1]):
         evidence = {f"{row},{column}": _original_text(frame.iat[row, column]) for row in metadata}
@@ -109,12 +134,13 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
         unit = (cell(unit_row).strip() if unit_row is not None else explicit_header_unit(header))
         sample = cell(sample_row) if sample_row is not None else ""
         evidence.update(anchors.get(column, {}))
-        numbers = pd.to_numeric(frame.iloc[start:end, column], errors="coerce")
-        invalid = [start + offset for offset, value in enumerate(numbers) if not math.isfinite(float(value))]
+        counts = numeric_summary.iloc[column]
+        invalid_count = int(counts.iloc[0])
+        invalid_rows = [int(value) for value in counts.iloc[1:] if value >= 0]
         columns.append({"index": column, "header": header, "unit": unit, "sample": sample,
                         "cell_evidence": evidence,
-                        "numeric": {"valid": not invalid, "point_count": end - start,
-                                    "invalid_count": len(invalid), "invalid_row_indices": invalid[:16]}})
+                        "numeric": {"valid": invalid_count == 0, "point_count": end - start,
+                                    "invalid_count": invalid_count, "invalid_row_indices": invalid_rows}})
         if selection.get("expand_merged_metadata"):
             original_header = " ".join(_original_text(frame.iat[row, column]).strip() for row in headers).strip()
             columns[-1]["raw_metadata"] = {
@@ -124,7 +150,7 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
             }
     confirmations = metadata_confirmations if metadata_confirmations is not None else []
     resolve_column_metadata(columns, confirmations, source_sha256=snapshot["file_sha256"],
-                            sheet=selection["sheet"], frame=frame, rule=rule)
+                            sheet=selection["sheet"], frame=frame, rule=rule, source=source)
     if file_sha256(source) != snapshot["file_sha256"]:
         raise ValueError("Table-choice source changed while reading.")
     return {"kind": "sciplot_table_columns", "version": 1, "source": str(source),
@@ -164,10 +190,12 @@ def _numeric_label(label: str) -> bool:
 def _pair_columns(snapshot: dict[str, Any], pair: dict[str, Any]) -> dict[str, Any]:
     required = {"x_column", "y_column"}
     if (not isinstance(pair, dict) or not required <= set(pair)
-            or set(pair) - required - {"table_selection", "metadata_confirmations"}
+            or set(pair) - required - {"table_selection", "metadata_confirmations", "label"}
             or any(type(pair[key]) is not int or pair[key] < 0 for key in required)):
         raise ValueError("Each pair needs original integer x_column/y_column indices and optional table_selection/metadata_confirmations.")
     selection = pair.get("table_selection", snapshot["table_selection"])
+    if "label" in pair and (not isinstance(pair["label"], str) or not pair["label"].strip() or len(pair["label"]) > 160):
+        raise ValueError("A display label must be nonempty text, up to 160 characters.")
     if not isinstance(selection, dict):
         raise ValueError("A pair's table_selection must be a complete original table region.")
     # Declarations for one worksheet never migrate implicitly to another.
@@ -204,6 +232,7 @@ def _proposal_contents(snapshot: dict[str, Any], pairs: list[dict[str, Any]]) ->
         sample = y["sample"] or x["sample"] or (source.stem if len(pairs) == 1 and selection.get("sample_row") is None else "")
         if not sample or (x["sample"] and x["sample"] != sample):
             raise ValueError("Selected columns belong to different samples or lack an original sample label; shared X requires an empty sample cell.")
+        sample = pair.get("label", sample)
         if sample in labels.values():
             raise ValueError("Duplicate sample labels require an explicit source correction; samples cannot be merged silently.")
         source_id = f"series_{index:03}"

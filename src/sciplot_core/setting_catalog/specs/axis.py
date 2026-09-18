@@ -92,6 +92,11 @@ AXIS_INSPECTOR_FIELDS = (
         maximum=24,
     ),
     _field(
+        "major_tick_positions", "Ticks", "Major tick positions",
+        "MajorTicks/manualTicks", "float_list",
+        help_text="Explicit numeric axis coordinates, increasing and unique; [] restores automatic ticks.",
+    ),
+    _field(
         "major_tick_length",
         "Ticks",
         "Major tick length",

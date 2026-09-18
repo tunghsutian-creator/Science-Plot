@@ -39,3 +39,32 @@ def test_truly_blank_pdf_is_still_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="PDF raster appears blank"):
         run_qa(tmp_path)
+
+
+def test_compact_vector_style_scan_matches_full_drawing_evidence(tmp_path, monkeypatch):
+    from sciplot_core.qa.pdf_graphics import _stroke_info, _vector_color_info
+    from sciplot_core.qa.pdf_inspection import _pdf_info
+
+    path = tmp_path/'styles.pdf'
+    document = fitz.open()
+    page = document.new_page(width=200,height=200)
+    page.draw_line((10,10),(190,190), color=(0.2,0.4,0.6), width=0.8)
+    page.draw_rect((20,20,80,80), color=None, fill=(0.1,0.2,0.3))
+    page = document.new_page(width=200,height=200)
+    page.draw_rect((30,30,160,160), color=(1,0,0), fill=(0,1,0), width=2.2)
+    document.save(path)
+    document.close()
+    with fitz.open(path) as source:
+        full = [page.get_drawings() for page in source]
+        expected_strokes = _stroke_info(source, styles=full)
+        expected_colors = _vector_color_info(source, styles=full)
+    count = []
+    original = fitz.Page.get_cdrawings
+    def scan(page, *args, **kwargs):
+        count.append(page.number)
+        return original(page,*args,**kwargs)
+    monkeypatch.setattr(fitz.Page,'get_cdrawings',scan)
+    result = _pdf_info(path)
+    assert result['strokes'] == expected_strokes
+    assert result['vector_colors'] == expected_colors
+    assert count == [0,1]

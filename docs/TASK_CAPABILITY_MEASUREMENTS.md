@@ -272,3 +272,161 @@ Reproduction/evidence root: `.tmp_verify/speed_20260917/`:
 The remaining external requirements are matched real AI-client wall time, model
 rounds and token counts, plus independent naturally changed measurement revisions.
 Neither local phase timers nor synthetic fault-injection tests close those items.
+## 2026-09-18: one-answer task recovery
+
+The same pending task now accepts `expected_question_id` plus a complete
+`mapping` answer. It validates original rows, metadata, XY pairs and optional
+display labels locally before continuing creation/export. Recognition failures
+include bounded structural diagnostics; automatic layout repair is limited to
+one explicit, unambiguous axis/unit/sample-row table. No scientific inference or
+raw-array rewriting is introduced.
+
+Six sequential public-CLI runs alternated the pre-change source snapshot and
+current source, three runs each. Both used identical two-series 2,000-point data,
+metadata evidence, native creation and export. Median complete CLI time fell
+from 5.433 s to 4.467 s; task calls fell from four to two. Median returned UTF-8
+text fell from 28,274 to 8,959 bytes. All six complete exported CSVs had the same
+SHA-256 and current source/QA/delivery checks. Local active work was 3.468 s versus
+3.525 s: this gain comes from removing process/answer round trips, not a faster
+native renderer. Predetermined answers exclude actual model inference and token
+accounting; no end-to-end model speedup percentage is inferred.
+
+The ordinary skill entry decreased from 27,015 to 8,057 characters, with advanced
+workflows moved to an on-demand reference. Character counts are not token usage.
+The earlier Luna workbook was no longer present at its supplied Downloads path
+when the original-workbook replay began; it was not reconstructed or substituted.
+Synthetic native coverage verifies independent ranges, original-to-delivery
+values, native constant stacking offsets, units and source revision review.
+
+Reproduction, baseline source, requests, receipts and exact CSV hashes:
+`.tmp_verify/recovery_20260918/`. Client follow-up measurements must record their
+different source/task scope separately from this paired local experiment.
+
+
+### Independent Luna workbook trial after the recovery changes
+
+An explicitly requested fresh `gpt-5.6-luna` subagent used the original
+`最新一批_FTIR_1-17.xlsx`: 17 curves, 7,469 points each. The first 278-second
+phase stopped without output after invalid metadata answers and permission
+retry. Its diagnosis of unsupported percent transmittance was incorrect; logs
+showed declaration/evidence mismatches. Parent changes then added indexed,
+batched rejection messages, FTIR metadata guidance, and unit spelling
+consistency in the original-cell and downstream FTIR validators.
+
+Continuation reused the same task, took 249 seconds and six resume attempts,
+and delivered PDF/TIFF/editable VSZ. Total first-start-to-finish time was 807
+seconds including parent investigation and repairs. Final local call: 30.127
+seconds; cumulative local active calls: 47.870 seconds across 10 recorded
+entries. This is an intervened diagnostic trial, not an unassisted matched
+before/after model benchmark. It did not demonstrate second-scale end-to-end
+plotting. External model token counts and inference durations remain unknown.
+
+Independent parent verification compared every exported X/Y value with the
+original workbook, retained all sample IDs and percent units, checked original
+and current native hashes, and reviewed TIFF. The zero-valued final row causing
+the terminal drops is present in the original and was retained. Detailed local
+evidence: `.tmp_verify/recovery_20260918/luna-original-integrity.json` and
+`luna-trial-metrics.json`; original agent summaries are retained separately.
+
+## 2026-09-18: compact reviewed candidates and large-workbook processing
+
+The same original 17-series FTIR workbook now returns an explicit source-backed
+shared-X candidate in about 1 s. The caller reviews the cited original note,
+rows, columns, quantities, units and samples, then sends the current question ID
+and candidate ID. Optional pair indices choose a subset or order. Full mapping
+and metadata declarations remain available locally; a missing or ambiguous note,
+incomplete range, or unsuitable candidate still needs an explicit mapping answer.
+This does not let the program choose scientific conditions without review.
+
+Sequential public-CLI measurements used a saved pre-change source snapshot and
+the same untouched original file. No tests or other benchmark tasks ran alongside
+these final timings. Both conditions completed native creation, full QA and delivery.
+
+| Local route | Complete times (s) | Median (s) | Answer bytes |
+| --- | --- | --- | --- |
+| Previous code, full mapping | 36.186, 32.825 | 34.505 | 47,640 |
+| Current code, reviewed candidate | 19.047, 21.101 | 20.074 | 184 |
+
+The median local reduction is 41.8% in this two-run comparison. One additional
+current-code run using the old full mapping took 21.244 s, separating reduced
+local processing from the shorter answer route. Both candidate trials used two
+task calls. Predetermined decisions exclude external inference, transport and
+human waiting. Bytes are not tokens, and this is not a universal speed guarantee.
+
+Optimizations remove scalar/regex work on ordinary numeric cells, vectorize
+numeric range diagnostics, share only byte-bound parser facts across identical
+archive copies within one bounded operation, read each cited note sheet once per
+validation, and share compact PDF drawing styles across QA checks. Every cache
+hit rehashes actual file bytes; source/semantic validation and native audits remain.
+
+All five runs retained all 17 × 7,469 original X/Y points exactly, numeric sample
+IDs and percent units. Complete CSV SHA-256 and 1,417 × 1,299 TIFF pixels were
+identical across all runs; the raw workbook SHA was unchanged. Current saved VSZ
+hashes matched completed receipts, with current source/QA/delivery checks.
+Scripts, source baseline, requests, receipts and the parent audit are retained
+under `.tmp_verify/speed_20260918/`, especially `final-measurements.json`.
+
+### Reused Luna diagnostic retest
+
+The existing Luna agent retested from 14:35:04 to 14:38:26 +08:00 (202 s including
+TIFF review). It reused earlier context and needed parent intervention, so this
+is neither a fresh-client run nor an unassisted matched before/after benchmark.
+Eight task-operation receipts record invalid start, valid start, blocked resume,
+retry, blocked inspection, failed post-move retry, corrected start and completion;
+readiness and help checks add separate calls. Do not count only the final task.
+
+The initial JSON incorrectly included CLI-only `task_dir`. A generic error led
+the agent to also remove valid `out`, causing a conflict with the existing user
+delivery. After parent correction, the new task retained `out`, used CLI
+`--task-dir`, and completed with one candidate reply. Its two local calls took
+18.692 s of active work (about 20 s of shell wall time). The request validator now
+names invalid and missing fields, explains CLI `--task-dir`, and preserves valid
+`out` in its correction guidance. A targeted test covers that exact failure.
+
+During the detour the agent moved the old user delivery despite instructions.
+The parent restored it to its original Downloads location without overwriting
+anything, verified all five pre/post file hashes, and matched the original CSV
+and VSZ hashes against the prior integrity record. Source bytes were unchanged.
+The retest's separate development CSV and TIFF pixels equal the original delivery.
+See `luna-retest/original-delivery-restored.json` and the parent trial audit;
+the agent's original summary is retained as historical, incomplete evidence.
+
+## 2026-09-18: local preflight and direct correction feedback
+
+The task boundary now normalizes a misplaced JSON `task_dir` into the transport
+option when unambiguous, retaining valid `out`. Conflicting locations still fail.
+Occupied output/workspace paths are checked before data planning. An explicit
+question-bound new `out` continues the same task; it cannot redirect an uncertain
+native creation. Original outputs are never moved to make a retry succeed.
+
+CLI and MCP wire failures return bounded JSON-pointer constraints. Correctable
+response failures also return the saved current question and next step, avoiding
+an extra inspect/help round trip. Invalid wire answers leave the task unchanged. Existing
+source/numeric/metadata validation still precedes native creation; original row
+indices and invalid numeric counts remain visible for the caller's mapping decision.
+When the caller's question ID still matches, feedback reuses that previously
+returned evidence and sends only the question reference plus correction constraints.
+Missing or stale bindings include the bounded current evidence for a fresh decision.
+
+A sequential real-workbook CLI replay deliberately combined a misplaced task
+location, occupied development output and a duplicate pair-index answer. Timings:
+
+| Call | Local wall time (s) | Result |
+| --- | --- | --- |
+| Start with transport alias and occupied output | 0.340 | Alias normalized; output choice returned before planning |
+| Choose new output in same task | 0.939 | Original FTIR mapping candidate returned |
+| Invalid duplicate pair selection | 0.331 | Constraint and same-question reference returned; task bytes unchanged |
+| Correct answer using the same reviewed candidate | 18.233 | Complete native creation, QA and delivery |
+
+Total: 19.844 s for four calls, no inspect/help calls. This is a single local
+fault-injection replay with predetermined corrections, not an end-to-end AI
+comparison. Request/response bytes and all raw receipts are recorded separately.
+Before same-question delta projection, an earlier replay took 20.994 s and its
+bad-answer response was 7,725 UTF-8 bytes; the final response is 1,802 bytes. Paths
+differ slightly between the two development runs. This measures returned text,
+not external model tokens, and the timing difference is not a matched speed claim.
+All 17 × 7,469 values match the prior independently audited original-data CSV,
+TIFF pixels are identical, all five existing user-delivery hashes and original
+workbook bytes are unchanged, and source/QA/delivery are current. Reproduction:
+`.tmp_verify/communication_20260918/replay.py`; final evidence:
+`real-workbook-compact/audit.json`; earlier full-question feedback: `real-workbook/audit.json`.

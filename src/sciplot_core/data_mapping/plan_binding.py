@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.data_mapping.contracts import _read_json
+from sciplot_core.data_mapping.curve_support import supports_table_mapping
 from sciplot_core.data_mapping.execution_loading import load_data_mapping_execution
 from sciplot_core.data_mapping.request_resolution import resolve_data_mapping_request
 from sciplot_core.foundation.source_tree import source_tree_sha256
@@ -49,8 +50,8 @@ def resolve_mapping_plan_request(
         if key in request and request[key] != selected:
             raise ValueError(f"The mapping plan cannot override confirmed {key}.")
     rule = get_rule(seed["rule_id"])
-    if rule.scientific_source_adapter != "registered_paired_curve":
-        raise ValueError("Mapped creation currently supports registered paired-curve rules only.")
+    if not supports_table_mapping(rule):
+        raise ValueError("This scientific adapter does not consume confirmed XY tables.")
     effective, application = resolve_data_mapping_request(
         seed, base_dir=Path(execution["request_seed"]).parent
     )

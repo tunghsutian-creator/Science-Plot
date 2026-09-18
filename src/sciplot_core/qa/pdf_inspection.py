@@ -17,6 +17,7 @@ from sciplot_core.qa.pdf_text import (
 
 from sciplot_core.qa.pdf_graphics import (
     _embedded_raster_info,
+    _drawing_styles,
     _stroke_info,
     _vector_color_info,
 )
@@ -55,8 +56,9 @@ def _pdf_info(path: Path) -> dict[str, Any]:
         fonts = _font_resource_info(document)
         text_objects = _text_object_info(document)
         embedded_rasters = _embedded_raster_info(document)
-        strokes = _stroke_info(document)
-        vector_colors = _vector_color_info(document)
+        drawing_styles = _drawing_styles(document)
+        strokes = _stroke_info(document, styles=drawing_styles)
+        vector_colors = _vector_color_info(document, styles=drawing_styles)
     first_page = pages[0]
     return {
         "path": str(path),

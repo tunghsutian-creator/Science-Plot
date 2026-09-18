@@ -8,6 +8,10 @@ import pandas as pd
 def clean_text(value: object) -> str:
     if value is None:
         return ""
+    if isinstance(value, str):
+        return value.strip()
+    if type(value) in (int, float, bool):
+        return "" if value != value else str(value).strip()
     try:
         missing = pd.isna([value])
         if missing.ndim == 1 and bool(missing[0]):

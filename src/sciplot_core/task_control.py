@@ -25,6 +25,8 @@ from sciplot_core.task_column_mapping import accept_column_response, accept_tabl
 from sciplot_core.task_planning import assert_source_current
 from sciplot_core.task_source_execution import accept_annotation_response, run_source_apply_export, run_source_preview, validate_source_response
 from sciplot_core.task_editing import begin_preview_revision, validate_preview_response
+from sciplot_core.task_repair import normalize_task_location, request_repair, response_repair
+from sciplot_core.task_output_choice import accept_output_response, creation_output
 from sciplot_core.task_storage import (
     load_task, save_task, task_location, task_path, task_summary,
 )
@@ -66,7 +68,13 @@ def _current_result(state: dict[str, Any]) -> dict[str, Any]:
 def start_task(
     request: dict[str, Any], *, task_dir: Path | None = None,
 ) -> dict[str, Any]:
-    request = validate_task_request(request)
+    original_request = request
+    try:
+        request, task_dir, corrections = normalize_task_location(request, task_dir)
+        request = validate_task_request(request)
+    except TaskControlError as exc:
+        exc.repair = request_repair(original_request, exc)
+        raise
     if request["action"] == "edit":
         validate_operation_batch(request["operations"])
     if request["action"] in {"create", "update_source"}:
@@ -96,6 +104,7 @@ def start_task(
             "created_at": datetime.now(timezone.utc).isoformat(),
             "request": request, "source_sha256": digest,
             "status": "running", "phase": "starting",
+            **({"automatic_corrections": corrections} if corrections else {}),
         }
         save_task(root, state)
         try:
@@ -125,12 +134,41 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
         return
     if state["status"] in {"complete", "cancelled"}:
         return
+    if "out" in response:
+        assert_source_current(state)
+        accept_output_response(state, response)
+        save_task(root, state)
+        run_creation(root, state)
+        return
+    if "mapping_candidate_id" in response:
+        from sciplot_core.task_initial_mapping import candidate_mapping_response
+
+        response = candidate_mapping_response(state, response)
+    if "mapping" in response or (response == {"retry": True} and state.get("pending_mapping_response")):
+        from sciplot_core.task_initial_mapping import accept_mapping_response, resume_mapping_response
+
+        if state["request"]["action"] not in {"create", "update_source"}:
+            raise TaskControlError("invalid_task_response", "当前操作没有原表映射恢复阶段。")
+        assert_source_current(state)
+        ready = (accept_mapping_response(root, state, response) if "mapping" in response
+                 else resume_mapping_response(root, state))
+        if ready:
+            if state["request"]["action"] == "update_source":
+                run_source_preview(root, state)
+            else:
+                run_creation(root, state)
+        return
     if (response == {"retry": True} and response.get("retry") is True
             and state["request"]["action"] == "create" and state["request"].get("mapping")
             and state.get("phase") == "scientific_choice" and not state.get("initial_mapping_attempted")
             and not state.get("project")):
         # An interrupted batch may checkpoint one question/confirmation. Resume
         # only the caller's original explicit choices, before any native creation.
+        run_creation(root, state)
+        return
+    if (response == {"retry": True} and state.get("mapping_choice")
+            and state.get("phase") == "scientific_choice" and state["request"]["action"] == "create"
+            and not state.get("project")):
         run_creation(root, state)
         return
     if state["status"] == "needs_input":
@@ -215,7 +253,7 @@ def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None
             if request["action"] != "create":
                 raise TaskControlError("task_recovery_required", "请查询项目后开始新任务。")
             layout = resolve_user_output_layout(
-                request["source"], requested_delivery_root=request.get("out"),
+                request["source"], requested_delivery_root=creation_output(state),
             )
             if layout.workspace_root.exists() or layout.delivery_root.exists():
                 raise TaskControlError(
@@ -242,7 +280,8 @@ def resume_task(task: Path, response: dict[str, Any]) -> dict[str, Any]:
             _resume(root, state, response)
         except TaskControlError as exc:
             if exc.reason_code in {"invalid_task_response", "stale_task_preview", "task_not_revisable",
-                                    "stale_task_question", "invalid_mapping_selection", "stale_source_review"}:
+                                    "stale_task_question", "invalid_mapping_selection", "invalid_mapping_candidate", "stale_source_review"}:
+                exc.repair = response_repair(state, response, exc)
                 raise
             record_failure(root, state, exc)
         except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:

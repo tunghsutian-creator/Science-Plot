@@ -17,6 +17,7 @@ from sciplot_core.semantic_sources.ftir_transform_contract import (
     build_ftir_transform_contract,
 )
 from sciplot_core.semantic_sources.models import CurveSeriesPayload
+from sciplot_core.semantic_sources.registered_paired_curve_transform import _comparable_unit
 from sciplot_core.semantic_sources.scientific_transform import (
     ResolvedScientificTransform,
 )
@@ -33,7 +34,7 @@ from sciplot_core.source_tables import read_raw_table
 
 
 _SUFFIXES = frozenset({".csv", ".tsv", ".txt"})
-_X_ALIASES = ("wavenumber", "cm-1", "cm^-1")
+_X_ALIASES = ("wavenumber", "cm-1", "cm^-1", "cm⁻¹")
 _Y_ALIASES = (
     "transmittance",
     "%t",
@@ -136,7 +137,7 @@ def _project_structured_series(
     _reject_metadata_partial(raw, diagnostics=diagnostics, data_start=data_start)
     mode = _response_mode(str(diagnostics.get("source_y_header") or ""))
     source_x_unit = _explicit_x_unit(diagnostics)
-    if source_x_unit and _token(source_x_unit) != _token(FTIR_X_UNIT):
+    if source_x_unit and _comparable_unit(source_x_unit) != _comparable_unit(FTIR_X_UNIT):
         raise ValueError(
             f"Unsupported FTIR wavenumber unit {source_x_unit!r} in {source}."
         )
@@ -260,7 +261,7 @@ def _row_evidence(
 def _explicit_x_unit(diagnostics: dict[str, Any]) -> str:
     value = str(diagnostics.get("source_x_unit_detection_value") or "")
     header = str(diagnostics.get("source_x_header") or "")
-    if not value and _token(header) == _token(FTIR_X_UNIT):
+    if not value and _comparable_unit(header) == _comparable_unit(FTIR_X_UNIT):
         diagnostics["source_x_unit_detection"] = "detected_from_header"
         diagnostics["source_x_unit_detection_row_index"] = diagnostics.get(
             "source_header_row_index"

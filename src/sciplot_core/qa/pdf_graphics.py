@@ -37,11 +37,17 @@ def _embedded_raster_info(document: fitz.Document) -> list[dict[str, Any]]:
     return images
 
 
-def _stroke_info(document: fitz.Document) -> dict[str, Any]:
+def _drawing_styles(document: fitz.Document) -> list[list[dict[str, Any]]]:
+    # QA needs styles only; avoid constructing Point/Rect objects for every vertex.
+    return [[{key: drawing.get(key) for key in ("width", "color", "fill")}
+             for drawing in page.get_cdrawings()] for page in document]
+
+
+def _stroke_info(document: fitz.Document, *, styles: list[list[dict[str, Any]]] | None = None) -> dict[str, Any]:
     widths = [
         float(drawing.get("width"))
-        for page in document
-        for drawing in page.get_drawings()
+        for page in (_drawing_styles(document) if styles is None else styles)
+        for drawing in page
         if drawing.get("width") is not None and float(drawing.get("width")) > 0
     ]
     return {
@@ -54,10 +60,10 @@ def _stroke_info(document: fitz.Document) -> dict[str, Any]:
     }
 
 
-def _vector_color_info(document: fitz.Document) -> dict[str, Any]:
+def _vector_color_info(document: fitz.Document, *, styles: list[list[dict[str, Any]]] | None = None) -> dict[str, Any]:
     colors: list[dict[str, Any]] = []
-    for page_index, page in enumerate(document):
-        for drawing in page.get_drawings():
+    for page_index, page in enumerate(_drawing_styles(document) if styles is None else styles):
+        for drawing in page:
             for role in ("color", "fill"):
                 value = drawing.get(role)
                 if not isinstance(value, tuple | list) or len(value) < 3:

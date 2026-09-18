@@ -223,3 +223,23 @@ def test_headerless_intake_filename_uses_one_display_sample(tmp_path: Path) -> N
 
     assert [series.sample for series in resolved.series] == [group]
     assert resolved.contract.output["series_order"] == [group]
+
+
+@pytest.mark.parametrize('spelling', ['cm⁻¹', 'cm^-1', 'cm-1'])
+def test_wavenumber_unit_spellings_preserve_values_and_source_evidence(tmp_path, spelling):
+    source = tmp_path / 'original.csv'
+    points = [(4000.123, 91.0), (399.6747, 23.0)]
+    _write_rows(source, [('Wavenumber', '%T'), (spelling, '%'), ('sample A', 'sample A'), *points])
+    series = resolve_ftir_scientific_transform(source).series[0]
+    assert series.points == tuple(points)
+    assert series.x_unit == 'cm^-1'
+    assert series.y_unit == '%'
+    assert series.diagnostics['source_x_unit'] == spelling
+
+
+@pytest.mark.parametrize('different_unit', ['m^-1', 'nm', 'cm'])
+def test_wavenumber_unit_equivalence_does_not_allow_conversion(tmp_path, different_unit):
+    source = tmp_path / 'original.csv'
+    _write_rows(source, [('Wavenumber', '%T'), (different_unit, '%'), ('sample A', 'sample A'), (4000, 90), (400, 23)])
+    with pytest.raises(ValueError, match='Unsupported FTIR wavenumber unit'):
+        resolve_ftir_scientific_transform(source)

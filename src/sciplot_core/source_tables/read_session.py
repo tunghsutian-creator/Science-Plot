@@ -49,7 +49,7 @@ def with_table_reads(function: Callable[_P, _R]) -> Callable[_P, _R]:
 
 def read_table_once(
     path: Path, options: tuple[Any, ...], loader: Callable[[], pd.DataFrame],
-    *, expected_sha256: str | None = None,
+    *, expected_sha256: str | None = None, content_only: bool = False,
 ) -> pd.DataFrame:
     session = _CURRENT.get()
     if session is None and expected_sha256 is None:
@@ -58,7 +58,10 @@ def read_table_once(
     digest = file_sha256(path)
     if expected_sha256 is not None and digest != expected_sha256:
         raise ValueError("Original table changed while reading.")
-    key = (str(path.resolve()), digest, *options)
+    # Opt in only for parsers whose result depends on bytes/format/options,
+    # never file names, source identity, sample labels or scientific choices.
+    identity = ("content", path.suffix.casefold()) if content_only else ("path", str(path.resolve()))
+    key = (*identity, digest, *options)
     cached = session.tables.get(key) if session else None
     if cached is not None:
         return cached.copy(deep=True)

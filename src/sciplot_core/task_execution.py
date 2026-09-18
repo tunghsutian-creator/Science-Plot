@@ -15,6 +15,7 @@ from sciplot_core.task_contract import TaskControlError
 from sciplot_core.task_editing import current_edit_request, unchanged_style_review
 from sciplot_core.task_planning import plan_task, save_profile
 from sciplot_core.task_storage import save_task
+from sciplot_core.task_output_choice import creation_output, require_available_output
 
 
 def _phase(root: Path, state: dict[str, Any], value: str) -> None:
@@ -40,6 +41,9 @@ def _completed(root: Path, state: dict[str, Any], result: dict[str, Any]) -> Non
 
 
 def run_creation(root: Path, state: dict[str, Any]) -> None:
+    if not require_available_output(state):
+        save_task(root, state)
+        return
     _phase(root, state, "planning")
     plan = plan_task(root, state)
     if plan is None:
@@ -52,9 +56,10 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
         state["project"] = prepared["project_dir"]
         _phase(root, state, "exporting")
 
+    out = creation_output(state)
     result = create_project(
         Path(request["source"]), expected_plan=plan,
-        output_dir=Path(request["out"]) if request.get("out") else None,
+        output_dir=Path(out) if out is not None else None,
         on_prepared=checkpoint,
     )
     _completed(root, state, result)

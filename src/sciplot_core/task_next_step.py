@@ -11,6 +11,25 @@ def task_next_step(state: dict[str, Any]) -> dict[str, Any]:
                 "message": "Inspect current source, QA and delivery before handoff or another edit."}
     if status == "needs_input":
         question = state["question"]
+        if question["field"] == "out":
+            return {"action": "choose_new_output", "task": task,
+                    "schema_query": {"section": "response", "name": "out"},
+                    "response_template": {"expected_question_id": question["question_id"], "out": "NEW_OUTPUT_PATH"},
+                    "message": "Resume this task with a new output path, or inspect the existing project. Do not move existing deliveries or send retry=true."}
+        if question.get("mapping_candidates"):
+            return {"action": "answer_scientific_question", "task": task,
+                    "schema_query": {"section": "response", "name": "mapping_candidate_id"},
+                    "response_bindings": {"expected_question_id": question["question_id"]},
+                    "response_template": {"expected_question_id": question["question_id"],
+                                          "mapping_candidate_id": "ID of the candidate you reviewed"},
+                    "message": "Review mapping_candidates (rows, columns, samples, units and original note). Reply with mapping_candidate_id; optional pair_indices selects/orders samples. Use the full mapping response only to change the proposed regions or scientific declarations."}
+        if (question["field"] in {"table_selection", "column_mapping", "rule_id"}
+                and question.get("question_id") and state["request"]["action"] in {"create", "update_source"}):
+            return {"action": "answer_scientific_question", "task": task,
+                    "schema_query": {"section": "response", "name": "mapping"},
+                    "response_bindings": {"expected_question_id": question["question_id"]},
+                    "cli": "task resume TASK_DIR --response ANSWER_JSON_FILE --json",
+                    "message": "Reply once with mapping: source_sha256, table_selection, metadata_confirmations if needed, column_mapping pairs and optional labels. Include rule_id/template when choosing the experiment. Resume this task; do not split raw files, try other plotting commands, or create another project. Legacy stepwise answers remain supported."}
         field = "annotation_choices" if question["field"] == "annotation_rebinding" else question["field"]
         bindings = ({"expected_revision_id": state["revision_id"]} if field == "annotation_choices" else
                     {"expected_question_id": question["question_id"]} if "question_id" in question and field != "rule_id" else {})

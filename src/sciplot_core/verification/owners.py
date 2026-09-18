@@ -35,6 +35,7 @@ CHANGED_OWNERS = (
                 "DEVELOPMENT_ROADMAP.md",
                 "README.md",
                 "skill/references/external-control.md",
+                "skill/references/advanced-workflows.md",
             }
         ),
         owned_test_paths=frozenset({"tests/test_documentation_contract.py"}),

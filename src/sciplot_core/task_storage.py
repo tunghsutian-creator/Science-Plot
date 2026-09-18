@@ -89,19 +89,28 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
         "kind", "version", "task_dir", "status", "phase", "updated_at", "question",
         "blocker", "result", "preview", "operation_id", "profile", "profile_unavailable", "project", "edit_outcome",
         "mapping_error", "data_mapping", "revision_id", "previews", "source_update_outcome", "annotation_error", "local_timing",
+        "automatic_repairs", "automatic_corrections", "output_selection",
     )
     summary = {key: state[key] for key in keys if key in state}
     question = summary.get("question")
+    if isinstance(question, dict) and question.get("mapping_candidates"):
+        question = {**question, "mapping_candidates": [
+            {key: value for key, value in candidate.items() if key != "mapping"}
+            for candidate in question["mapping_candidates"]]}
+        summary["question"] = question
     if isinstance(question, dict) and isinstance(question.get("evidence"), dict):
         evidence = dict(question["evidence"])
         if evidence.get("kind") == "sciplot_table_columns":
             evidence.pop("table_snapshot", None)
         if evidence.get("kind") == "sciplot_table_choice":
-            evidence["tables"] = [{**table, "rows": table.get("rows", [])[:8],
-                                   "preview_truncated": table.get("preview_truncated", False) or len(table.get("rows", [])) > 8}
+            limit = 1 if question.get("mapping_candidates") else 8
+            evidence["tables"] = [{**table, "rows": table.get("rows", [])[:limit],
+                                   "preview_truncated": table.get("preview_truncated", False) or len(table.get("rows", [])) > limit}
                                   for table in evidence["tables"]]
         summary["question"] = {**question, "evidence": evidence,
                                "full_evidence_path": str(Path(state["task_dir"]) / "task.json")}
+        if question.get("mapping_candidates"):
+            summary["question"].pop("diagnostics", None)  # Candidate bounds/counts already summarize finite ranges.
     if state["status"] in {"complete", "cancelled"}:
         summary.pop("preview", None)
         summary.pop("previews", None)

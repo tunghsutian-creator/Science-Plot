@@ -85,6 +85,8 @@ def _unit_for(units: list[str], index: int, fallback: str) -> str:
 
 
 def _float(value: object, *, decimal_comma: bool = False) -> float | None:
+    if type(value) is float:
+        return None if math.isnan(value) else value
     text = (
         _clean_text(value).replace("\u00a0", "").replace("\u202f", "").replace(" ", "")
     )
@@ -125,10 +127,13 @@ def _scan_curve_series_table(
 ) -> list[CurveSeriesPayload]:
     best: list[CurveSeriesPayload] = []
     cells = raw.to_numpy(dtype=object, copy=False)
+    numeric_axis_alias = any(_float(alias) is not None for alias in x_aliases)
     for header_index in range(max(0, raw.shape[0] - 2)):
         row_values = cells[header_index].tolist()
         pairs: list[tuple[int, int]] = []
         for x_index, value in enumerate(row_values[:-1]):
+            if not numeric_axis_alias and _float(value) is not None:
+                continue
             if not _axis_match(value, x_aliases):
                 continue
             search_stop = min(x_index + 5, raw.shape[1])

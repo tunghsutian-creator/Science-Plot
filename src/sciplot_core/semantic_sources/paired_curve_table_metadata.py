@@ -25,6 +25,11 @@ def axis_match(value: object, aliases: tuple[str, ...]) -> bool:
         alias_token = re.sub(r"[\W_]+", "", alias_text)
         if alias_text and (text == alias_text or alias_text in text):
             return True
+        if "%" in alias_text:
+            # %T is a response identity, not the letter t in a sample name.
+            if alias_text.replace(" ", "") in text.replace(" ", ""):
+                return True
+            continue
         if alias_token and (value_token == alias_token or alias_token in value_token):
             return True
     return False

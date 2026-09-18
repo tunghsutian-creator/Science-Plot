@@ -12,7 +12,7 @@ from sciplot_core.setting_catalog import specs_for_object_type
 # This is an authority subset, not a second field catalog. Labels, types and
 # limits continue to come from the same specs used by the native inspector.
 _SAFE_SUFFIXES = {
-    "axis": frozenset({"Label/size", "Label/bold", "TickLabels/size"}),
+    "axis": frozenset({"Label/size", "Label/bold", "TickLabels/size", "TickLabels/rotate", "MajorTicks/manualTicks"}),
     "xy": frozenset({"PlotLine/color", "PlotLine/width", "MarkerFill/color", "MarkerLine/color"}),
     "label": frozenset({"Text/color"}),
     "key": frozenset({
@@ -51,6 +51,9 @@ def editable_fields(
         path = f"{widget.path}/{spec.suffix}"
         try:
             setting = document.resolveSettingPath(None, path)
+            if (safe_only and object_type == "axis" and spec.suffix == "MajorTicks/manualTicks"
+                    and document.resolveSettingPath(None, f"{widget.path}/mode").get() != "numeric"):
+                continue
         except ValueError:
             continue
         fields.append({
@@ -79,6 +82,12 @@ def _bounded_style_value(capability: dict[str, Any], value: Any) -> None:
                 raise ValueError(f"The setting exceeds its {bound}.")
     elif editor == "choice" and value not in capability["choices"]:
         raise ValueError("The setting value is outside its advertised choices.")
+    elif editor == "float_list":
+        if (not isinstance(value, list) or len(value) > 32
+                or any(isinstance(v, bool) or not isinstance(v, int | float) or not math.isfinite(v) for v in value)):
+            raise ValueError("Tick positions must be a list of at most 32 finite numeric axis coordinates.")
+        if any(a >= b for a, b in zip(value, value[1:], strict=False)):
+            raise ValueError("Tick positions must be increasing and unique.")
     elif editor == "distance":
         match = re.fullmatch(r"\s*(\d+(?:\.\d*)?|\.\d+)\s*(pt|mm|cm|in|inch)\s*", str(value))
         if match is None or not 0 < float(match[1]) < math.inf:
@@ -103,4 +112,8 @@ def validate_native_setting(
         raise ValueError(f"{path} no longer has its expected value")
     if safe_only:
         _bounded_style_value(capability, value)
+        if (path.endswith("/MajorTicks/manualTicks")
+                and document.resolveSettingPath(None, path.removesuffix("/MajorTicks/manualTicks") + "/log").get()
+                and any(v <= 0 for v in value)):
+            raise ValueError("Log-axis tick positions must be positive.")
     return current, setting.normalize(value)

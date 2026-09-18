@@ -79,6 +79,28 @@ def test_expected_value_checks_both_live_and_advertised_state() -> None:
             validate_native_setting(doc, cap, expected_value=expected, value="9pt")
 
 
+@pytest.mark.parametrize("value", [[1, 1], [2, 1], [True], [float('nan')], [float('inf')], ['1530'], list(range(33))])
+def test_manual_tick_positions_reject_invalid_coordinates_without_mutation(value):
+    doc = Document({'/g/x/mode': 'numeric', '/g/x/log': False, '/g/x/MajorTicks/manualTicks': []})
+    cap, = editable_fields(doc, SimpleNamespace(path='/g/x', typename='axis'), safe_only=True)
+    with pytest.raises(ValueError):
+        validate_native_setting(doc, cap, expected_value=[], value=value, safe_only=True)
+    assert doc.settings['/g/x/MajorTicks/manualTicks'].get() == []
+
+
+def test_manual_ticks_are_numeric_only_and_log_positions_remain_positive():
+    widget = SimpleNamespace(path='/g/x', typename='axis')
+    doc = Document({'/g/x/mode': 'numeric', '/g/x/log': False, '/g/x/MajorTicks/manualTicks': []})
+    cap, = editable_fields(doc, widget, safe_only=True)
+    assert validate_native_setting(doc, cap, expected_value=[], value=[1167, 1530], safe_only=True)[1] == [1167, 1530]
+    assert validate_native_setting(doc, cap, expected_value=[], value=[], safe_only=True)[1] == []
+    doc.settings['/g/x/log'].value = True
+    with pytest.raises(ValueError, match='positive'):
+        validate_native_setting(doc, cap, expected_value=[], value=[0, 10], safe_only=True)
+    doc.settings['/g/x/mode'].value = 'labels'
+    assert editable_fields(doc, widget, safe_only=True) == []
+
+
 def test_gui_capabilities_keep_the_existing_selected_object_scope() -> None:
     widget = SimpleNamespace(path="/g/x", typename="axis")
     doc = Document({"/g/x/Label/size": "8pt", "/g/x/label": "Force (N)"})
@@ -153,6 +175,8 @@ def test_native_candidate_preview_reopen_audit_and_rejected_batch(tmp_path: Path
         ("/page1/graph1/x", "axis_label_size", "10pt"),
         ("/page1/graph1/series_1", "series_line_color", "#A020F0"),
         ("/page1/graph1/series_1", "series_line_width", "2pt"),
+        ("/page1/graph1/x", "major_tick_positions", [0, 0.5, 2]),
+        ("/page1/graph1/x", "tick_label_rotation", "90"),
     ]:
         field = next(field for field in state["widgets"][path]["editable_fields"]
                      if field["field_id"] == field_id)
@@ -166,9 +190,11 @@ def test_native_candidate_preview_reopen_audit_and_rejected_batch(tmp_path: Path
     assert result["document"]["sha256"] == original == file_sha256(document)
     assert result["candidate"]["sha256"] == file_sha256(candidate) != original
     assert result["preview"]["sha256"] != before["preview"]["sha256"]
-    assert len(result["changes"]) == 3
+    assert len(result["changes"]) == 5
     reopened = _worker("inspect-document-state", str(candidate))
     assert reopened["widgets"]["/page1/graph1/x"]["settings"]["Label/size"] == "10pt"
+    assert reopened["widgets"]["/page1/graph1/x"]["settings"]["MajorTicks/manualTicks"] == [0, 0.5, 2]
+    assert reopened["widgets"]["/page1/graph1/x"]["settings"]["TickLabels/rotate"] == "90"
     separate_audit = _worker("audit-spec-data", str(candidate), str(spec), "--allow-presentation-edits")
     assert separate_audit["status"] == "passed"
     assert result["document_audit"] == separate_audit

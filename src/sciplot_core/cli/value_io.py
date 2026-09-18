@@ -55,6 +55,8 @@ def _cli_runtime_error_payload(
     }
     if recovery_hint:
         payload["recovery_hint"] = recovery_hint
+    if (repair := getattr(exc, "repair", None)) is not None:
+        payload["repair"] = repair
     return payload
 
 

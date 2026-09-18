@@ -135,7 +135,16 @@ class Adapter:
                     return _read_result(self.resources.get(arguments["uri"]))
                 return await anyio.to_thread.run_sync(self._execute, name, arguments)
         except Exception as exc:
-            return _text_result(error_payload(exc), is_error=True)
+            payload = error_payload(exc)
+            from jsonschema.exceptions import ValidationError
+
+            if isinstance(exc, ValidationError) and name in {"sciplot_task_start", "sciplot_task_resume"}:
+                from sciplot_core.task_repair import adapter_repair
+
+                repair = await anyio.to_thread.run_sync(adapter_repair, name, arguments, exc)
+                if repair is not None:
+                    payload["repair"] = repair
+            return _text_result(payload, is_error=True)
 
 
 def create_server() -> Server[Any]:

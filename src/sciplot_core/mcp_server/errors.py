@@ -44,10 +44,12 @@ def error_payload(exc: Exception) -> dict[str, Any]:
         logging.getLogger(__name__).exception("SciPlot MCP operation failed")
         code = "execution_failed"
         message = "The local operation failed. Inspect the task or project before retrying."
+    repair = getattr(exc, "repair", None)
     return {
         "kind": "sciplot_control_error",
         "version": 1,
         "status": "error",
         "error": {"code": code, "message": message[:1200]},
+        **({"repair": repair} if repair is not None else {}),
         "ready_to_use": False,
     }

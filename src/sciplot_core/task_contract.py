@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from sciplot_core.task_choice_schema import annotation_response_schema, column_mapping_schema, table_response_schema, metadata_response_schema, initial_mapping_schema
+from sciplot_core.task_choice_schema import annotation_response_schema, column_mapping_schema, table_response_schema, metadata_response_schema, initial_mapping_schema, mapping_response_schema, mapping_candidate_response_schema
 
 
 class TaskControlError(ValueError):
     def __init__(self, reason_code: str, message: str) -> None:
         super().__init__(message)
         self.reason_code = reason_code
+        self.repair: dict[str, Any] | None = None
 
 
 _FIELDS = {
@@ -35,6 +36,8 @@ def task_request_schema() -> dict[str, Any]:
         properties: dict[str, Any] = {
             "version": {"type": "integer", "const": 1},
             "action": {"type": "string", "const": action},
+            "task_dir": {"type": "string", "minLength": 1, "deprecated": True,
+                         "description": "Compatibility transport alias. Prefer CLI --task-dir or the MCP outer task_dir; conflicting values are rejected."},
             **{key: {"type": "string", "minLength": 1} for key in sorted(fields)},
         }
         if action in {"create", "update_source"}:
@@ -71,7 +74,13 @@ def task_response_schema() -> dict[str, Any]:
                    "description": "Replace the whole batch against the same saved document; this does not append to the old preview."}
     return {
         "oneOf": [
+            {"type": "object", "additionalProperties": False,
+             "properties": {"expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                            "out": {"type": "string", "minLength": 1}},
+             "required": ["expected_question_id", "out"]},
             table_response_schema(),
+            mapping_response_schema(),
+            mapping_candidate_response_schema(),
             metadata_response_schema(),
             annotation_response_schema(),
             {"type": "object", "additionalProperties": False,
@@ -115,10 +124,13 @@ def validate_task_request(value: dict[str, Any]) -> dict[str, Any]:
         raise TaskControlError("unsupported_task_version", "任务接口版本必须为 1。")
     if not isinstance(action, str) or action not in _FIELDS:
         raise TaskControlError("unsupported_task_action", "任务支持 create、edit、export、update_source。")
-    allowed = {"version", "action"} | _FIELDS[action]
+    allowed = {"version", "action", "task_dir"} | _FIELDS[action]
     if set(value) - allowed or not _REQUIRED[action] <= set(value):
-        raise TaskControlError("invalid_task_fields", "任务参数缺失或含未支持的字段。")
-    for key in _FIELDS[action] & set(value) - {"operations", "export", "choose_columns", "mapping"}:
+        missing = sorted(({"version", "action"} | _REQUIRED[action]) - set(value))
+        unsupported = sorted(set(value) - allowed)
+        raise TaskControlError("invalid_task_fields", f"{action} 请求缺少字段：{missing}；不支持字段：{unsupported}。"
+                               f"允许字段：{sorted(allowed)}。保留其他合法字段（如 out）。")
+    for key in (_FIELDS[action] | {"task_dir"}) & set(value) - {"operations", "export", "choose_columns", "mapping"}:
         if not isinstance(value[key], str) or not value[key].strip():
             raise TaskControlError("invalid_task_field", f"{key} 必须是非空字符串。")
     if action == "edit":

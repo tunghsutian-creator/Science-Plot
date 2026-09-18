@@ -19,7 +19,7 @@ from sciplot_core.semantic import classify_source
 from sciplot_core.source_tables import read_raw_table
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.task_contract import TaskControlError
-from sciplot_core.task_column_mapping import column_question, mapped_plan_request, pause_for_columns
+from sciplot_core.task_column_mapping import column_question, mapped_plan_request, pause_for_columns, table_question
 
 
 def assert_source_current(state: dict[str, Any]) -> Path:
@@ -105,6 +105,7 @@ def _profile_selection(source: Path, path: Path) -> dict[str, Any]:
 def _needs_rule_choice(
     state: dict[str, Any], *, reason_code: str, message: str,
     evidence: str | None = None,
+    source: Path | None = None,
 ) -> None:
     state.pop("blocker", None)
     state.update({
@@ -118,6 +119,18 @@ def _needs_rule_choice(
                         for rule in iter_public_rules()],
         },
     })
+    if source is not None:
+        from sciplot_core.data_mapping.table_choice import source_table_snapshot
+        from sciplot_core.data_mapping.table_diagnostics import table_diagnostics
+
+        try:
+            snapshot = source_table_snapshot(source)
+            if snapshot:
+                state["question"]["evidence"] = snapshot
+                state["question"]["diagnostics"] = table_diagnostics(snapshot)
+        except (OSError, ValueError, TypeError) as exc:
+            state["question"]["table_error"] = str(exc)
+    state["question"]["question_id"] = canonical_json_sha256(state["question"], allow_nan=False)
 
 
 def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
@@ -131,7 +144,7 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
             selected = _profile_selection(source, Path(request["profile"]))
         except (TaskControlError, OSError, ValueError) as exc:
             _needs_rule_choice(state, reason_code=getattr(exc, "reason_code", "invalid_profile"),
-                               message=f"此配置不能用于当前来源：{exc} 请重新确认实验规则。")
+                               message=f"此配置不能用于当前来源：{exc} 请重新确认实验规则。", source=source)
             return None
     if "rule_id" not in selected:
         try:
@@ -145,7 +158,7 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
             atomic_write_json(root / "inspection.json", inspection)
             _needs_rule_choice(state, reason_code="rule_selection_required",
                 message="尚不能确定实验类型。请选择与原始数据实际含义一致的实验。",
-                evidence=str(root / "inspection.json"))
+                evidence=str(root / "inspection.json"), source=source)
             return None
     if request.get("mapping") and not state.get("mapping_choice") and not state.get("initial_mapping_attempted"):
         from sciplot_core.task_initial_mapping import apply_initial_mapping
@@ -153,7 +166,7 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
         try:
             resolve_rule_template(selected["rule_id"], selected.get("template"))
         except ValueError as exc:
-            _needs_rule_choice(state, reason_code="plan_rule_invalid", message=str(exc))
+            _needs_rule_choice(state, reason_code="plan_rule_invalid", message=str(exc), source=source)
             return None
         if not apply_initial_mapping(root, state, source, selected):
             return None
@@ -167,7 +180,22 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
     invalid_rule = reason in {"plan_rule_invalid", "plan_rule_unknown", "plan_template_unsupported"}
     if not mapping_choice and not invalid_rule:
         question = column_question(source, state["selection"], explicit=request.get("choose_columns", False))
+        if question is None and plan["status"] == "blocked":
+            question = table_question(source, state["selection"])
         if question:
+            if (not request.get("choose_columns") and plan["status"] == "blocked"
+                    and question["field"] == "table_selection"):
+                from sciplot_core.data_mapping.table_diagnostics import explicit_layout_mapping
+                from sciplot_core.task_initial_mapping import apply_mapping_choices
+
+                repair = explicit_layout_mapping(question["evidence"], question["diagnostics"])
+                if repair is not None:
+                    if apply_mapping_choices(root, state, repair, source, state["selection"]):
+                        state.setdefault("automatic_repairs", []).append({
+                            "code": "explicit_metadata_layout", "table_selection": repair["table_selection"],
+                            "message": "Located complete original axis/unit/sample rows; reused validated XY mapping without changing cells."})
+                        return plan_task(root, state)
+                    return None
             pause_for_columns(state, question)
             return None
     if plan["status"] == "blocked":
@@ -185,7 +213,7 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
         ):
             _needs_rule_choice(state, reason_code=reason,
                 message=f"当前选择无法用于此来源：{blocker.get('message', '')} 请更正实验规则或模板。",
-                evidence=str(root / "plan.json"))
+                evidence=str(root / "plan.json"), source=source)
             return None
         state.update({"status": "blocked", "phase": "planning", "blocker": plan["blocker"]})
         return None

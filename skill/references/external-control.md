@@ -57,6 +57,26 @@ new evidence location outside raw data, projects and visible delivery packages.
 Reusing a task directory with the same request returns its receipt, never a
 second creation; a different request is rejected.
 
+Prefer CLI `--task-dir` or MCP's outer `task_dir`. A JSON request `task_dir` is a
+compatibility alias, relocated locally and recorded as `automatic_corrections`.
+Two different task locations fail without allocating a task; valid `out` is retained.
+Occupied output/workspace paths return `needs_input` with field `out` before planning.
+Reply with current `expected_question_id` and a new `out`, or inspect the existing
+project. The original request stays in history; selected output is recorded separately.
+This correction is unavailable after native creation has started or its outcome is
+uncertain. Existing deliveries are never moved, overwritten or implicitly adopted.
+
+CLI and MCP wire failures include `repair.issues`: JSON-pointer `path`, violated
+`constraint` and bounded expected/missing/unsupported fields, without raw arrays.
+Correctable response errors additionally include the saved current `repair.question`
+and `repair.next_step`, so the caller can correct and resume directly without a
+separate inspect or schema/help round trip. A malformed or stale wire answer does not modify the
+task. When `question_unchanged=true`, `repair.question` is only the exact question
+reference: reuse its previously returned evidence. Missing/stale bindings return
+the bounded current evidence instead. Do not resubmit an unchanged rejection. Scientific mapping questions continue
+to expose original row indices, nonfinite counts, metadata and eligibility reasons;
+answers are checked against current source bytes before native creation.
+
 ### Fast ordinary route
 
 Reuse capability schemas within the same contract revision. `task start` already
@@ -85,6 +105,46 @@ and user waiting; `external_model_seconds` and token counts remain unknown.
 Repeating an already finished task does not rewrite its timing or rerun creation.
 
 ### Already-reviewed original data: one mapping submission
+
+The same `mapping` object can answer a pending rule/table/column question in one
+`task resume`. Write a JSON file containing:
+
+```json
+{"expected_question_id":"CURRENT_QUESTION_ID","mapping":{"source_sha256":"ORIGINAL_FILE_SHA256","table_selection":{"sheet":"Measured","header_rows":[0],"unit_row":1,"sample_row":2,"data_start_row":3,"data_end_row":103},"column_mapping":{"pairs":[{"x_column":0,"y_column":1,"label":"sample A"}]}}}
+```
+
+Include `rule_id`/`template` when the experiment is still a question. Optional
+When a question includes `mapping_candidates`, first review the proposed original
+rows, X/Y columns, sample list, units and cited original note. Select one with:
+
+```json
+{"expected_question_id":"CURRENT_QUESTION_SHA256","mapping_candidate_id":"REVIEWED_CANDIDATE_SHA256","pair_indices":[0,2]}
+```
+
+Omit `pair_indices` to keep every listed pair, or explicitly select/order the
+required samples. The program expands the frozen source-bound metadata and runs
+the same mapping validation. The compact question omits generated declarations
+and redundant numeric scans; full evidence stays in `full_evidence_path`.
+Use a full `mapping` answer to change the suggested ranges or scientific meaning.
+Candidates never accept source-update or visual-edit previews.
+
+`metadata_confirmations` belongs inside `mapping`. Source updates keep their
+existing rule/template and still require visual revision review. A pair's `label`
+is an explicit display name; the original identity remains in source evidence.
+Original-cell evidence may cite another sheet in the same original workbook.
+
+Recognition failures for supported tables return numeric extents and invalid
+cell counts with the original preview. Those diagnostics are not selected ranges.
+The task repairs a single complete, unambiguous axis/unit/sample-row layout through
+ordinary mapping validation; it never silently removes holes or selects among
+different sample conditions. Other layouts need the AI's one complete answer.
+Wrong choices return the current question plus `mapping_error`; correct that
+question in the same task. A pending answer interrupted before creation resumes
+with `{"retry":true}`. Do not split the original file, switch to legacy plotting
+commands or create another task to recover a table question.
+
+Both ordinary paired curves and FTIR use this shared recovery transaction.
+Unadvertised specialized analysis adapters remain outside the XY mapping boundary.
 
 Keep the external AI's original-data interpretation. When it has already inspected
 the cells, it may submit those explicit choices in `create.mapping` instead of
@@ -217,6 +277,14 @@ The next question separates `raw_metadata`, `metadata_confirmations`,
 column. Numeric diagnostics include point count and up to 16 failing original row
 indices. Pair identity is checked when choosing pairs; a missing X sample may be
 valid for a shared axis. Choose explicit pairs when the science is resolved:
+
+Declaration errors name the list index, target sheet/column/field and original
+cell, with up to eight errors returned together. `sheet` is the target column's
+worksheet; `evidence.sheet` may cite another sheet in the same workbook. Explicit
+unit spelling equivalents such as `cm⁻¹`/`cm^-1` are accepted without numeric
+conversion. For original `%T` evidence, declare quantity `%T` and unit `%` for
+each applicable Y column. A generic `Spectral response` declaration does not
+preserve that explicit transmittance identity.
 
 ```json
 {"expected_question_id":"CURRENT_QUESTION_SHA256","column_mapping":{"pairs":[{"x_column":0,"y_column":1},{"x_column":0,"y_column":3},{"x_column":4,"y_column":5}]}}
@@ -580,8 +648,13 @@ skill/scripts/sciplot project edit-preview PROJECT --figure FIGURE_ID \
 This stages native edits and a PNG, then audits the candidate's scientific
 contents against the current spec. It does not replace the saved document.
 Review the returned `actual_changes`, scientific audit and preview image.
-Current capability scope covers the advertised axis typography, ordinary sample
-line/marker/direct-label color, line width, and legend typography/placement fields. It excludes data,
+Current capability scope covers the advertised axis typography (including tick
+rotation), explicit numeric major-tick coordinates, ordinary sample
+line/marker/direct-label color, line width, and legend typography/placement fields.
+Major-tick coordinates must be a finite, increasing, unique list of at most 32
+values; an empty list restores automatic ticks, and log axes require positive
+coordinates. Label axes do not advertise this numeric field. Tick positions do
+not change the axis bounds or select a new data range. It excludes data,
 expressions, scientific labels/units, axis scales/bounds, sample identity and
 semantic color encodings. An unadvertised field is unavailable, even if native
 Veusz has such a setting. Do not substitute text patches, arbitrary Python or

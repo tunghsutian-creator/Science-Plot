@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from pathlib import Path
 
 import pandas as pd
 
@@ -16,25 +17,24 @@ from sciplot_core.semantic_sources.registered_paired_curve_transform import _com
 def resolve_column_metadata(
     columns: list[dict[str, Any]], confirmations: list[dict[str, Any]], *,
     source_sha256: str, sheet: str | None, frame: pd.DataFrame, rule: SemanticRule,
+    source: Path | None = None,
 ) -> None:
     validate_metadata_confirmations(confirmations)
     grouped: dict[tuple[int, str], list[dict[str, Any]]] = {}
-    for item in confirmations:
-        if item["source_sha256"] != source_sha256 or item["sheet"] != sheet:
-            raise ValueError("Metadata confirmation has a stale source hash or different worksheet.")
-        if item["column_index"] >= len(columns):
-            raise ValueError("Metadata confirmation column is outside the original table.")
-        evidence = item["evidence"]
-        if evidence["kind"] == "source_cell":
-            row, col = evidence["row_index"], evidence["column_index"]
-            if evidence["sheet"] != sheet or row >= len(frame) or col >= frame.shape[1]:
-                raise ValueError("Metadata evidence cell is outside the selected original worksheet.")
-            if _original_text(frame.iat[row, col]) != evidence["text"]:
-                raise ValueError("Metadata evidence cell text does not match the original.")
-            # The association is explicit, but a cell citation cannot invent its value.
-            if item["value"] not in evidence["text"]:
-                raise ValueError("Confirmed value is absent from the cited original cell.")
+    errors: list[str] = []
+    evidence_frames = {sheet: frame}
+    for position, item in enumerate(confirmations):
+        try:
+            _validate_declaration(item, source_sha256=source_sha256, sheet=sheet,
+                                  frame=frame, source=source, column_count=len(columns), evidence_frames=evidence_frames)
+        except ValueError as exc:
+            errors.append(f"metadata_confirmations[{position}] target sheet={item['sheet']!r} "
+                          f"column={item['column_index']} field={item['field']}: {exc}")
         grouped.setdefault((item["column_index"], item["field"]), []).append(item)
+    if errors:
+        detail = "\n".join(errors[:8])
+        remaining = f"\n{len(errors) - 8} further invalid declarations omitted." if len(errors) > 8 else ""
+        raise ValueError(f"{len(errors)} invalid metadata declaration(s):\n{detail}{remaining}")
 
     for column in columns:
         index = column["index"]
@@ -75,6 +75,10 @@ def resolve_column_metadata(
                 equivalent = any(axis_match(original, (axis.canonical_label, *axis.aliases))
                     and value.casefold() in {label.casefold() for label in (axis.canonical_label, *axis.aliases)}
                     for axis in (rule.x_axis, rule.y_axis))
+                if rule.scientific_source_adapter == "ftir" and equivalent:
+                    from sciplot_core.semantic_sources.ftir_sources import _response_mode
+
+                    equivalent = _response_mode(original) == _response_mode(value)
             if original and not equivalent:
                 problems.append({"code": "raw_metadata_conflict", "field": field,
                                  "original": original, "declared": value})
@@ -91,7 +95,16 @@ def resolve_column_metadata(
                 reasons.append({"code": "missing_unit", "field": "unit", "expected": axis.canonical_unit})
             else:
                 try:
-                    _resolve_output_unit(resolved["unit"], canonical_unit=axis.canonical_unit, axis=role, rule_id=rule.rule_id)
+                    canonical = axis.canonical_unit
+                    if rule.scientific_source_adapter == "ftir" and role == "y":
+                        from sciplot_core.semantic_sources.ftir_sources import _response_mode
+
+                        mode = _response_mode(resolved["quantity"])
+                        permitted = {"transmittance": {"%", "1"}, "absorbance": {"a.u.", "1"}, "unknown": {"a.u.", "1"}}[mode]
+                        if resolved["unit"] not in permitted:
+                            raise ValueError(f"Unsupported {mode} response unit {resolved['unit']!r}; explicitly declare one of {sorted(permitted)}.")
+                        canonical = resolved["unit"]
+                    _resolve_output_unit(resolved["unit"], canonical_unit=canonical, axis=role, rule_id=rule.rule_id)
                 except ValueError as exc:
                     reasons.append({"code": "unsupported_unit", "field": "unit", "message": str(exc)})
             if not column["numeric"]["valid"]:
@@ -108,3 +121,45 @@ def resolve_column_metadata(
         keep_header = bool(header_unit) and (not newly_recognized or header_unit == resolved["unit"])
         column["output_header"] = (resolved["quantity"] if keep_header
                                    else f"{resolved['quantity']} ({resolved['unit']})")
+
+
+def _validate_declaration(
+    item: dict[str, Any], *, source_sha256: str, sheet: str | None,
+    frame: pd.DataFrame, source: Path | None, column_count: int,
+    evidence_frames: dict[str | None, pd.DataFrame],
+) -> None:
+    if item["source_sha256"] != source_sha256:
+        raise ValueError(f"Stale source hash; use current source_sha256={source_sha256}.")
+    if item["sheet"] != sheet:
+        raise ValueError(f"Declaration targets a different worksheet. Target worksheet must be {sheet!r}; "
+                         "evidence.sheet names the cited worksheet.")
+    if item["column_index"] >= column_count:
+        raise ValueError("Column is outside the original table.")
+    evidence = item["evidence"]
+    if evidence["kind"] != "source_cell":
+        return
+    row, col = evidence["row_index"], evidence["column_index"]
+    evidence_sheet = evidence["sheet"]
+    if evidence_sheet not in evidence_frames:
+        if source is None or source.suffix.casefold() not in {".xls", ".xlsx", ".xlsm"}:
+            raise ValueError("Cross-sheet evidence requires the same original workbook.")
+        from sciplot_core.data_mapping.raw_tables import _read_raw_table
+        from sciplot_core.mapping_contract import DataSourceReference
+
+        evidence_frames[evidence_sheet] = _read_raw_table(DataSourceReference(
+            "evidence", source.name, source_sha256, sheet=evidence["sheet"], header_row=None,
+        ), source, preserve_cells=True).frame
+    evidence_frame = evidence_frames[evidence_sheet]
+    if row >= len(evidence_frame) or col >= evidence_frame.shape[1]:
+        raise ValueError("Evidence cell is outside the cited original worksheet.")
+    if _original_text(evidence_frame.iat[row, col]) != evidence["text"]:
+        raise ValueError("Evidence cell text does not match the original.")
+    # Only spelling-equivalent explicit units may differ from the cited text.
+    # Quantities and samples still need literal evidence; never infer a response.
+    observed_unit = explicit_header_unit(evidence["text"])
+    equivalent_unit = (item["field"] == "unit" and bool(observed_unit)
+                       and _comparable_unit(item["value"]) == _comparable_unit(observed_unit))
+    if item["value"] not in evidence["text"] and not equivalent_unit:
+        raise ValueError(f"Value {item['value']!r} is absent from original cell "
+                         f"({evidence['sheet']!r}, row={row}, column={col}): {evidence['text'][:120]!r}. "
+                         "Use the literal source value; declarations do not rename scientific quantities.")

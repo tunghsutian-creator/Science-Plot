@@ -119,6 +119,7 @@ def column_choice_snapshot(source: Path, rule_id: str) -> dict[str, Any] | None:
 def proposal_for_column_choice(
     snapshot: dict[str, Any], *, x_column: int, y_column: int,
     request_path: Path, proposal_id: str, created_at: str,
+    label: str | None = None,
 ) -> DataMappingProposal:
     """Revalidate original evidence and propose exactly the two requested columns."""
     if (
@@ -144,6 +145,9 @@ def proposal_for_column_choice(
         raise ValueError("Selected columns need explicit axis names, observed units, and finite numeric values.")
     if x["sample"] != y["sample"]:
         raise ValueError("Selected columns belong to different samples.")
+    if label is not None and (not isinstance(label, str) or not label.strip() or len(label) > 160):
+        raise ValueError("A display label must be nonempty text, up to 160 characters.")
+    sample = label if label is not None else x["sample"]
     request_hash = file_sha256(request_path)
     proposal = DataMappingProposal(
         base_request_sha256=request_hash,
@@ -159,13 +163,13 @@ def proposal_for_column_choice(
             for role, column in (("x", x), ("y", y))
         ),
         provider="explicit_column_choice",
-        sample_labels={"source": x["sample"]},
+        sample_labels={"source": sample},
         unit_overrides={column["output_header"]: column["unit"] for column in (x, y)},
         rationale="Use the explicitly selected original columns; preserve their declared units and values.",
         proposal_id=proposal_id,
         created_at=created_at,
     )
-    if Path(_safe_output_name(proposal.sources[0], proposal, used=set())).stem != x["sample"]:
+    if Path(_safe_output_name(proposal.sources[0], proposal, used=set())).stem != sample:
         raise ValueError(
             "The selected sample label cannot be preserved exactly by the current "
             "mapped-table filename; choose another supported sample."

@@ -119,7 +119,7 @@ def _read_raw_table(
         options = ("mapping_excel", reference.sheet if reference.sheet is not None else 0)
     raw = read_table_once(path, options,
         lambda: _read_original_cells(reference, path, preserve_cells=preserve_cells),
-        expected_sha256=digest)
+        expected_sha256=digest, content_only=True)
     if raw.empty:
         raise ValueError(f"Data mapping source is empty: {reference.relative_path}")
     # Never collapse empty interior columns: selections use original cell indices.
@@ -154,7 +154,7 @@ def _read_raw_table(
         selected = frame
         frame = read_table_once(path,
             ("mapping_missing", *options, header_row, reference.data_start_row, reference.data_end_row),
-            lambda: selected.map(_normalize_missing), expected_sha256=digest)
+            lambda: selected.map(_normalize_missing), expected_sha256=digest, content_only=True)
     return _RawTable(
         source=reference,
         path=path,

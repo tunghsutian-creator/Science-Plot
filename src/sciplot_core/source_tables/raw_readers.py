@@ -67,7 +67,7 @@ def read_raw_table(
 
     table_path = Path(path)
     return read_table_once(table_path, ("raw_table", sheet_name, preserve_na_tokens),
-                           lambda: _read_table(table_path, sheet_name, preserve_na_tokens=preserve_na_tokens))
+                           lambda: _read_table(table_path, sheet_name, preserve_na_tokens=preserve_na_tokens), content_only=True)
 
 
 def read_sheet_names(path: Path) -> list[str]:
@@ -76,7 +76,7 @@ def read_sheet_names(path: Path) -> list[str]:
         with pd.ExcelFile(path) as workbook:
             return pd.DataFrame({"name": workbook.sheet_names})
 
-    frame = read_table_once(path, ("workbook_sheet_names",), read)
+    frame = read_table_once(path, ("workbook_sheet_names",), read, content_only=True)
     return [str(name) for name in frame["name"]]
 
 

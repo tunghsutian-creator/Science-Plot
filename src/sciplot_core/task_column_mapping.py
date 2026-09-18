@@ -23,12 +23,27 @@ from sciplot_core.task_storage import save_task
 def table_question(source: Path, selected: dict[str, Any]) -> dict[str, Any] | None:
     table = table_choice_snapshot(source, selected["rule_id"])
     if table is not None:
+        from sciplot_core.data_mapping.table_diagnostics import table_diagnostics
+
         question = {
             "field": "table_selection", "reason_code": "table_selection_required",
-            "message": "请选择原始工作表、表头/单位/样品行和数据起止行；索引从 0 开始，结束行不包含在内。可再次回答 table_selection 更正区域。",
+            "message": "原表布局需要明确选择。可一次回复 mapping 指定工作表、行范围、元数据及 XY 列；索引从 0 开始，结束行不包含在内。无需另建源文件或重建任务。",
             "selection": {"rule_id": selected["rule_id"], "template": resolve_rule_template(selected["rule_id"], selected.get("template"))},
             "evidence": table,
+            "diagnostics": table_diagnostics(table),
         }
+        from sciplot_core.data_mapping.table_candidates import wide_table_candidates
+
+        candidates = wide_table_candidates(table, question["diagnostics"])
+        if candidates:
+            question["mapping_candidates"] = candidates
+        if selected["rule_id"] == "ftir_spectrum":
+            question["metadata_hint"] = (
+                "For explicit %T data use quantity='%T', unit='%' (unchanged numeric values); "
+                "Absorbance and Spectral response are different identities. Declare quantity/unit/sample "
+                "for every selected Y column missing that metadata. sheet is the target worksheet; "
+                "evidence.sheet may cite a note elsewhere in the same workbook."
+            )
         question["question_id"] = canonical_json_sha256(question, allow_nan=False)
         return question
     return None
@@ -102,7 +117,8 @@ def accept_column_response(root: Path, state: dict[str, Any], response: dict[str
         values = response["column_mapping"]
         if factory is proposal_for_table_columns and "pairs" not in values:
             values = {"pairs": [values]}
-        if factory is proposal_for_column_choice and set(values) != {"x_column", "y_column"}:
+        if factory is proposal_for_column_choice and (not {"x_column", "y_column"} <= set(values)
+                                                     or set(values) - {"x_column", "y_column", "label"}):
             raise ValueError("Use table_selection before selecting multiple pairs.")
         proposal = factory(
             question["evidence"], **values, request_path=request_path,
@@ -150,6 +166,8 @@ def accept_table_response(root: Path, state: dict[str, Any], response: dict[str,
                      "selection": question["selection"], "evidence": columns}
     state.setdefault("scientific_choice_history", []).append({"question": question, "response": response})
     next_question["revision"] = len(state["scientific_choice_history"])
+    if "metadata_hint" in question:
+        next_question["metadata_hint"] = question["metadata_hint"]
     next_question["question_id"] = canonical_json_sha256(next_question, allow_nan=False)
     state.pop("mapping_choice", None)
     state.pop("data_mapping", None)
@@ -179,6 +197,8 @@ def accept_metadata_response(root: Path, state: dict[str, Any], response: dict[s
     next_question = {"field": "column_mapping", "reason_code": "column_selection_required",
         "message": "请审阅 raw_metadata、metadata_confirmations 和逐列拒绝原因后选择 pairs。更正时提交完整 metadata_confirmations 列表；空列表撤回全部声明。冲突继续阻断。",
         "selection": question["selection"], "evidence": columns, "revision": len(state["scientific_choice_history"])}
+    if "metadata_hint" in question:
+        next_question["metadata_hint"] = question["metadata_hint"]
     next_question["question_id"] = canonical_json_sha256(next_question, allow_nan=False)
     state.pop("mapping_choice", None)
     state.pop("data_mapping", None)

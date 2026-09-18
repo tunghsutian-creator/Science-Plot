@@ -37,6 +37,18 @@ saved-project queries, native edits, exact-current export and continuation.
 It calls existing local domain services without starting an internal provider.
 `task_control` orchestrates bounded create/edit/export requests over those owners;
 task receipts live outside active projects and do not define scientific readiness.
+`task_repair` normalizes only the unambiguous misplaced `task_dir` transport alias,
+rejects conflicting locations, and projects bounded field/constraint errors from
+the shared schemas. CLI and MCP response failures include the saved current
+question and next step without a native query, state mutation or automatic retry.
+An exact matching question binding returns only its reference and correction
+constraints; absent/stale bindings return bounded evidence for a fresh decision.
+Source bytes and scientific evidence are still rechecked on resume.
+`task_output_choice` detects occupied output/workspace paths before planning. An
+explicit current-question-bound `out` answer records a separate output selection
+while retaining the original request. It reuses task/source/output overlap guards
+and cannot change output after native creation starts. Existing uncertain-creation
+and export-only recovery remain separate. No existing delivery is moved or adopted.
 Task inspection projects current figure identities and sample-style targets from
 its single existing project query; it never uses historical receipt revisions as
 current edit targets or starts a native settings worker for that projection.
@@ -134,11 +146,28 @@ response rows cannot become different samples. Completed pairs are serialized as
 empty XY cells in the rectangular composite, while individual mapped outputs retain
 their exact lengths. Plan binding checks sample order and each selected point count.
 It adds no profile reuse or numerical changes.
-`task_initial_mapping` batches only explicit caller-reviewed choices supplied in
-`create.mapping`, bound to the original single-file SHA. It delegates table,
+`task_initial_mapping` batches choices supplied in `create.mapping` or one
+question-bound `resume.mapping`, bound to the original single-file SHA. It delegates table,
 metadata and column validation to `task_column_mapping`; no alternate importer
 or automatic scientific decision is introduced. Durable confirmations recover
 interrupted batches, while invalid choices retain an ordinary correctable question.
+Recovery checkpoints its pending answer and reuses an existing confirmation after
+interruption. It never accepts a source-update or native-edit visual preview.
+`data_mapping/curve_support` gates adapters that consume validated XY mappings.
+`data_mapping/table_diagnostics` reports bounded numeric extents and holes; extents
+are not selections. Automatic layout recovery requires one complete table with
+explicit axis names, units, paired unique sample identities and finite data, and
+passes through the same mapping transaction. Other cases return a short question.
+`data_mapping/table_candidates` proposes bounded shared-X tables only with explicit
+axis/unit evidence, complete finite rows, unique header sample identities, and one
+unambiguous source-note quantity/unit declaration. The caller decides whether the
+note applies and which pairs to select; `mapping_candidate_id` plus current question
+identity expands the frozen mapping through the existing transaction. It is never
+auto-applied. Unknown, stale or malformed candidate answers do not mutate the task.
+Optional pair labels name the displayed curves; original sample/cell evidence is
+retained. Same-workbook cross-sheet cell citations are byte-checked and replayed.
+FTIR declarations retain response mode and units; percent transmittance is never
+treated as absorbance or inferred from measurement magnitude.
 `data_mapping/merged_metadata` reads original XLSX/XLSM merge declarations.
 Explicit `expand_merged_metadata` selections may associate metadata above the
 measurement region with its anchor; original blanks and anchor coordinates remain
@@ -161,6 +190,9 @@ saved mapped projects resolves the same effective source before FigurePlan check
 CLI and MCP without changing the task. `mapping_contract/table_metadata` owns the
 closed declaration schema. `data_mapping/table_metadata` resolves column diagnostics
 and separates original facts from cited external excerpts and attributed statements.
+Invalid declarations return bounded, indexed errors together. Only equivalent
+spellings of an explicitly cited unit can differ from its literal cell text;
+quantity/sample evidence and original numeric values remain unchanged.
 `task_column_mapping` replaces pending declarations with question-versioned history;
 changing the selected region resets them. `DataMappingProposal.table_confirmation`
 freezes the selection, pairs and evidence, and the mapping frame owner replays these
@@ -177,7 +209,11 @@ without performing recovery, accepting previews or replacing transaction archive
 
 `source_tables/read_session` owns a bounded 32 MiB, operation-local parse cache.
 Every hit rehashes actual source bytes; misses hash before and after parsing, and
-callers receive independent frames. Nested task, creation, query and mapping
+callers receive independent frames. Explicitly byte/format/options-only parsers
+may share parses across identical archive copies; path-dependent loaders retain
+path identity. Numeric range facts (finite counts and invalid original rows) may
+also be reused by byte identity, while scientific eligibility and metadata evidence
+are recomputed. Nested task, creation, query and mapping
 owners share one scope, which is discarded on exit. It reuses original cells,
 workbook sheet names and deterministic missing-token cleanup of selected ranges,
 not scientific decisions, validation results, source hashes or document state.

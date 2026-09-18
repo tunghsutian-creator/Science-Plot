@@ -19,7 +19,8 @@ def inspect_table_region(task: Path, query: dict[str, Any]) -> dict[str, Any]:
         raise TaskControlError("invalid_task_response", errors[0].message)
     state = load_task(task_path(task))
     question = state.get("question", {})
-    if state["status"] != "needs_input" or question.get("field") not in {"table_selection", "column_mapping"}:
+    if (state["status"] != "needs_input" or question.get("field") not in {"rule_id", "table_selection", "column_mapping"}
+            or not isinstance(question.get("evidence"), dict)):
         raise TaskControlError("invalid_task_response", "Original region queries require a pending table/column question.")
     if query["expected_question_id"] != question["question_id"]:
         raise TaskControlError("stale_task_question", "Query the current table question before reading its cells.")

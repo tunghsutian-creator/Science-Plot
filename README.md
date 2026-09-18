@@ -99,6 +99,19 @@ regions, column pairs and any supported evidence declarations together using
 compact by default; full execution details remain available on demand (`--full`
 or MCP `full:true`). Original data interpretation stays with the external AI.
 
+When layout recognition fails, the same task returns bounded original cells and
+numeric-range diagnostics. When original evidence supports a shared-X proposal,
+the task returns `mapping_candidates` with rows, columns, units, samples and their
+source note. The AI reviews and selects `mapping_candidate_id`, optionally choosing
+pair indices; it need not rewrite generated declarations. Otherwise, it can answer
+once with `mapping` containing the
+worksheet, rows, units/evidence, XY columns and display labels; the task validates
+those choices and continues to export. Incorrect choices remain correctable in
+that task. A single unambiguous header/unit/sample layout can be recovered
+automatically using the same validation. Missing scientific meaning is never
+filled from numerical magnitudes. The shared mapping supports ordinary paired
+curves and FTIR; specialized analysis adapters retain their own contracts.
+
 ## Get started
 
 Source setup requires **Python 3.11+**, a **C/C++ compiler**, and **Qt 6 development tools**, including `qmake`.
@@ -144,6 +157,11 @@ Reuse a style you have already settled on:
 
 The [AI connection guide](skill/references/external-control.md) covers CLI and MCP setup.
 If data or units are ambiguous, SciPlot reports what needs clarification before plotting.
+The local runner checks request shape, source-bound rows/columns and scientific
+metadata before native creation. Rejected replies include compact field constraints,
+the current question and the next response shape, so the AI can correct the same
+task without another discovery call. A misplaced task-location field is normalized;
+conflicting locations or occupied outputs require an explicit choice before planning.
 For pending table questions, query any bounded original region and inspect per-column
 rejection reasons. Missing quantities, units and sample identities can be confirmed
 with original cells, cited external excerpts or attributed user statements. Raw facts

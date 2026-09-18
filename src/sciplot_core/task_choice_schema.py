@@ -26,6 +26,8 @@ def column_mapping_schema() -> dict[str, Any]:
     pair = {"type": "object", "additionalProperties": False,
             "properties": {
                 **{key: {"type": "integer", "minimum": 0} for key in ("x_column", "y_column")},
+                "label": {"type": "string", "minLength": 1, "maxLength": 160, "pattern": "\\S",
+                          "description": "Explicit display label; original sample and column evidence remain bound to the source."},
                 "table_selection": table_selection_schema(),
                 "metadata_confirmations": metadata_confirmations_schema()},
             "required": ["x_column", "y_column"]}
@@ -64,6 +66,27 @@ def initial_mapping_schema() -> dict[str, Any]:
                 "metadata_confirmations": metadata_confirmations_schema(),
                 "column_mapping": column_mapping_schema()},
             "required": ["source_sha256", "table_selection", "column_mapping"]}
+
+
+def mapping_candidate_response_schema() -> dict[str, Any]:
+    digest = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    return {"type": "object", "additionalProperties": False,
+            "description": "Select a reviewed source-bound mapping candidate; optionally select/order its pair indices. No metadata transcription required.",
+            "properties": {"expected_question_id": digest, "mapping_candidate_id": digest,
+                           "pair_indices": {"type": "array", "minItems": 1, "maxItems": 32,
+                                            "uniqueItems": True, "items": {"type": "integer", "minimum": 0}}},
+            "required": ["expected_question_id", "mapping_candidate_id"]}
+
+
+def mapping_response_schema() -> dict[str, Any]:
+    return {"type": "object", "additionalProperties": False,
+            "description": "Correct this task in one reply: original region, metadata, XY pairs and labels. No rewritten arrays or new project required.",
+            "properties": {
+                "expected_question_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+                "rule_id": {"type": "string", "minLength": 1},
+                "template": {"type": "string", "minLength": 1},
+                "mapping": initial_mapping_schema()},
+            "required": ["expected_question_id", "mapping"]}
 
 
 def annotation_response_schema() -> dict[str, Any]:

@@ -1,6 +1,6 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-09-17. External AI is the task interface. Current behavior belongs
+Status: 2026-09-18. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 
 ## 1. Independent beginner and installation acceptance
@@ -39,9 +39,10 @@ automated. New one-dimensional native persistence now retains full binary64 valu
 and audits them exactly; older specs retain their original precision contract.
 Explicit XLSX/XLSM merged metadata and numeric-only sample labels are implemented.
 The untouched Bath-01345 workbook now selects its declared merged sample row
-without separate sample declarations; numeric labels have native synthetic
-creation/cold-export coverage. An independent numeric-label original remains
-needed. Extend real-case
+without separate sample declarations. The user-supplied original 17-series FTIR
+workbook now preserves numeric sample IDs 1–17 through native creation and export,
+with every delivered value checked against its 7,469 original points per curve.
+Extend real-case
 coverage for externally documented units and scientific statements. Unit conversions
 or new quantities need their own scientific rule contract; never infer them just
 to make an acceptance source pass. The task rule-selection answer must not encode
@@ -94,6 +95,36 @@ Repeated original-table cleanup/workbook structure reads now share the same
 byte-checked operation scope; short schema references further reduce discovery
 text without changing validation. Three-run before/after medians are recorded for
 the already-batched route; native startup/export and external AI time remain.
+
+Recovery now accepts one question-bound mapping answer with rows, columns,
+evidence and display labels in the same task. Structural diagnostics and a strict
+single-table metadata repair handle deterministic layout issues locally. This
+shared recovery includes FTIR; scientific ambiguity still belongs to the caller.
+The ordinary agent entry is shorter and advanced workflows are loaded on demand.
+Three-run local correction replay reduced four calls to two while preserving
+the complete exported CSV. Independent client behavior and token telemetry remain
+separate measurements; the prior Luna run exposed repeated recovery detours.
+
+Explicit source-note evidence now supports bounded shared-X mapping candidates:
+the AI reviews the proposed rows, columns, units and samples, then submits the
+question and candidate IDs (optionally a sample subset). Ambiguous notes and
+incomplete numeric ranges still require a full mapping decision. For the original
+17-series FTIR workbook, two sequential local runs per condition reduced median
+complete CLI time from 34.505 to 20.074 s, with identical CSVs and TIFF pixels;
+the answer shrank from 47,640 to 184 UTF-8 bytes. These are not model token counts.
+The reused Luna retest still took 202 s with parent intervention after request
+field mistakes; precise invalid-field diagnostics now address that observed detour.
+The task boundary now automatically relocates unambiguous task-location aliases,
+returns structured constraint violations with current question/next-step context,
+and pauses on occupied outputs before planning. Explicit output correction resumes
+the same task without moving old deliveries; uncertain native creation cannot be
+redirected. Exact current-question bindings reuse the earlier evidence and return
+only correction details; stale bindings return current evidence. A real-workbook
+local fault replay completed in 19.844 s with zero extra inspect/help calls,
+including 0.340 s conflict detection and 0.331 s bad-answer feedback (1,802 bytes).
+This used predetermined corrections, not measured AI inference.
+An unassisted matched client run and further native creation/export optimization
+remain needed before claiming second-scale end-to-end performance.
 
 Use the same real tasks to compare model rounds, tool calls, returned bytes,
 latency, failures and user questions. Report actual client token telemetry when
