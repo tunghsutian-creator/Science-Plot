@@ -38,6 +38,14 @@ XY_INSPECTOR_FIELDS = (
     ),
     _field("series_color", "Markers", "Master color", "color", "color"),
     _field(
+        "series_marker_line_hidden",
+        "Markers",
+        "Marker outline hidden",
+        "MarkerLine/hide",
+        "boolean",
+        immediate=True,
+    ),
+    _field(
         "series_marker_line_color",
         "Markers",
         "Marker outline color",

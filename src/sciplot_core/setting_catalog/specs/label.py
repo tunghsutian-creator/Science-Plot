@@ -58,6 +58,10 @@ LABEL_INSPECTOR_FIELDS = (
         step=5.0,
     ),
     _field(
+        "annotation_text_font", "Typography", "Text font", "Text/font", "choice",
+        immediate=True,
+    ),
+    _field(
         "annotation_text_size",
         "Typography",
         "Text size",

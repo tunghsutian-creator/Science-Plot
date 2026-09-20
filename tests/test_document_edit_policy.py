@@ -136,3 +136,34 @@ def test_direct_label_color_needs_a_unique_generated_sample_binding(tmp_path, la
         path = "/page1/graph1/" + label["name"]
         with pytest.raises(ValueError, match="uniquely bound ordinary curve"):
             validate_edit_science_policy([{"object_path": path, "setting_path": path + "/Text/color"}], spec)
+
+
+@pytest.mark.parametrize("contract,editable", [
+    ({}, True),
+    ({"template": "point_line"}, True),
+    ({"scalar_field": {"z_label": "Intensity"}}, False),
+    ({"categorical": {"presentation_kind": "point_line_raw_overlay"}}, False),
+    ({"performance_comparison": {"kind": "semantic"}}, False),
+    ({"legend": {"native_key": False}}, False),
+    ({"series": [{"name": "series_1", "presentation_kind": "curve"}] * 2}, False),
+    ({"series": [{"name": "series_1"}]}, False),
+])
+def test_curve_line_and_marker_shape_edits_require_a_proven_ordinary_series(tmp_path, contract, editable):
+    spec = _spec(tmp_path, **contract)
+    objects = _objects()
+    paths = [f"{CURVE}/{suffix}" for suffix in (
+        "PlotLine/style", "marker", "markerSize", "MarkerLine/hide", "MarkerFill/hide")]
+    objects[CURVE]["editable_fields"].extend({"setting_path": path} for path in paths)
+    before = deepcopy(objects)
+    advertised = {field["setting_path"] for field in filter_editable_fields(objects, spec)[CURVE]["editable_fields"]}
+    assert objects == before
+    for path in paths:
+        assert (path in advertised) is editable
+        change = {"object_path": CURVE, "setting_path": path}
+        if editable:
+            validate_edit_science_policy([change], spec)
+        else:
+            with pytest.raises(ValueError, match="uniquely bound ordinary curve"):
+                validate_edit_science_policy([change], spec)
+        with pytest.raises(ValueError, match="uniquely bound ordinary curve"):
+            validate_edit_science_policy([{**change, "object_path": "/page1/graph1/auxiliary"}], spec)

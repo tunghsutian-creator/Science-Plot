@@ -16,6 +16,13 @@ from sciplot_core.cli.value_io import (
 def dispatch_interfaces(
     args: Any, argv: list[str] | None, *, serve_intake
 ) -> int | None:
+    if args.command == "edit":
+        from sciplot_core.live_editor.server import serve_editor
+
+        serve_editor(args.target, figure_id=args.figure, port=args.port,
+                     output=args.session_dir, open_browser=not args.no_open)
+        return 0
+
     if args.command == "mcp":
         from sciplot_core.mcp_server import run_stdio
 

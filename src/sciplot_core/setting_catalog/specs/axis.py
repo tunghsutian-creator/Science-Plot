@@ -39,6 +39,10 @@ AXIS_INSPECTOR_FIELDS = (
         immediate=True,
     ),
     _field(
+        "axis_label_font", "Typography", "Label font", "Label/font", "choice",
+        immediate=True,
+    ),
+    _field(
         "axis_label_size",
         "Typography",
         "Label size",
@@ -61,11 +65,27 @@ AXIS_INSPECTOR_FIELDS = (
         immediate=True,
     ),
     _field(
+        "axis_label_italic", "Typography", "Italic label", "Label/italic", "boolean",
+        immediate=True,
+    ),
+    _field(
+        "tick_label_font", "Ticks", "Tick-label font", "TickLabels/font", "choice",
+        immediate=True,
+    ),
+    _field(
         "tick_label_size",
         "Ticks",
         "Tick-label size",
         "TickLabels/size",
         "distance",
+    ),
+    _field(
+        "tick_label_bold", "Ticks", "Bold tick labels", "TickLabels/bold", "boolean",
+        immediate=True,
+    ),
+    _field(
+        "tick_label_italic", "Ticks", "Italic tick labels", "TickLabels/italic", "boolean",
+        immediate=True,
     ),
     _field(
         "tick_label_rotation",

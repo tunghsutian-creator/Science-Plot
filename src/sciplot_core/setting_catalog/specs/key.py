@@ -67,11 +67,23 @@ KEY_INSPECTOR_FIELDS = (
         immediate=True,
     ),
     _field(
+        "legend_text_font", "Typography", "Text font", "Text/font", "choice",
+        immediate=True,
+    ),
+    _field(
         "legend_text_size",
         "Typography",
         "Text size",
         "Text/size",
         "distance",
+    ),
+    _field(
+        "legend_text_bold", "Typography", "Bold text", "Text/bold", "boolean",
+        immediate=True,
+    ),
+    _field(
+        "legend_text_italic", "Typography", "Italic text", "Text/italic", "boolean",
+        immediate=True,
     ),
     _field(
         "legend_text_color",

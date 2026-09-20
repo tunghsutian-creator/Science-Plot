@@ -1,4 +1,4 @@
-"""Keep semantic color encodings outside external native style edits."""
+"""Keep semantic color and shape encodings outside external native style edits."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any
 
 
 SAMPLE_STYLE_FIELDS = {"color": "PlotLine/color", "width": "PlotLine/width"}
+_CURVE_SHAPE_SUFFIXES = ("PlotLine/style", "marker", "markerSize", "MarkerLine/hide", "MarkerFill/hide")
 
 
 def ordinary_curve_paths(spec: dict[str, Any]) -> set[str]:
@@ -59,9 +60,9 @@ def sample_color_settings(spec: dict[str, Any]) -> dict[str, list[str]]:
         path = f"/page1/graph1/{series.get('name')}"
         if path not in allowed:
             continue
-        settings = [path + "/PlotLine/color"]
-        if series.get("marker") not in {None, "none"}:
-            settings.extend([path + "/MarkerFill/color", path + "/MarkerLine/color"])
+        # Native users can enable markers after creation; the immutable generated
+        # spec's initial marker is not the current presentation authority.
+        settings = [path + "/PlotLine/color", path + "/MarkerFill/color", path + "/MarkerLine/color"]
         name = f"label_{index}"
         if names[name] == 1 and any(isinstance(item, dict) and item.get("name") == name
                                   and item.get("label") == series.get("label") for item in labels):
@@ -75,11 +76,25 @@ def _is_sample_color(setting_path: Any) -> bool:
         "/PlotLine/color", "/MarkerFill/color", "/MarkerLine/color", "/Text/color"))
 
 
+def _curve_shape_target(object_path: Any, setting_path: Any) -> bool:
+    return isinstance(object_path, str) and any(
+        setting_path == f"{object_path}/{suffix}" for suffix in _CURVE_SHAPE_SUFFIXES
+    )
+
+
+def _is_curve_shape(setting_path: Any) -> bool:
+    return isinstance(setting_path, str) and setting_path.endswith(
+        tuple(f"/{suffix}" for suffix in _CURVE_SHAPE_SUFFIXES)
+    )
+
+
 def filter_editable_fields(
     objects: dict[str, dict[str, Any]], spec_path: Path,
 ) -> dict[str, dict[str, Any]]:
-    """Return the advertised native objects with semantic color edits removed."""
-    allowed = {setting for settings in sample_color_settings(json.loads(spec_path.read_text(encoding="utf-8"))).values()
+    """Return native objects with unproven color and shape edits removed."""
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    curves = ordinary_curve_paths(spec)
+    allowed = {setting for settings in sample_color_settings(spec).values()
                for setting in settings}
     return {
         path: {
@@ -87,10 +102,16 @@ def filter_editable_fields(
             "editable_fields": [
                 dict(field)
                 for field in widget.get("editable_fields", [])
-                if not _is_sample_color(field.get("setting_path"))
-                or (
-                    widget.get("type") in {"xy", "label"} and field["setting_path"] in allowed
-                    and field["setting_path"].rsplit("/", 2)[0] == path
+                if (
+                    not _is_sample_color(field.get("setting_path"))
+                    or (
+                        widget.get("type") in {"xy", "label"} and field["setting_path"] in allowed
+                        and field["setting_path"].rsplit("/", 2)[0] == path
+                    )
+                ) and (
+                    not _is_curve_shape(field.get("setting_path"))
+                    or (widget.get("type") == "xy" and path in curves
+                        and _curve_shape_target(path, field.get("setting_path")))
                 )
             ],
         }
@@ -102,13 +123,23 @@ def validate_edit_science_policy(
     changes: list[dict[str, Any]], spec_path: Path,
 ) -> None:
     """Apply the same rule at submission; advertised permissions are not proof."""
-    allowed = {setting for settings in sample_color_settings(json.loads(spec_path.read_text(encoding="utf-8"))).values()
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    curves = ordinary_curve_paths(spec)
+    allowed = {setting for settings in sample_color_settings(spec).values()
                for setting in settings}
     for change in changes:
         if not isinstance(change, dict):
             raise ValueError("Each native setting change must be an object.")
         path = change.get("object_path")
         setting = change.get("setting_path")
+        if _is_curve_shape(setting) and (
+            not isinstance(path, str) or path not in curves
+            or not _curve_shape_target(path, setting)
+        ):
+            raise ValueError(
+                "Line and marker styles require a uniquely bound ordinary curve. "
+                "Scalar, performance and categorical encodings must remain unchanged."
+            )
         if _is_sample_color(setting) and (
             not isinstance(path, str) or setting not in allowed
             or setting.rsplit("/", 2)[0] != path

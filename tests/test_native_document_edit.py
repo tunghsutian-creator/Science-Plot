@@ -79,6 +79,73 @@ def test_expected_value_checks_both_live_and_advertised_state() -> None:
             validate_native_setting(doc, cap, expected_value=expected, value="9pt")
 
 
+@pytest.mark.parametrize("line_hidden,line_style,transparency,allow_none", [
+    (False, "solid", 0, True), (True, "solid", 0, False),
+    (False, "none", 0, False), (False, "solid", 100, False),
+])
+def test_curve_shape_choices_are_native_and_keep_point_only_marks(line_hidden, line_style, transparency, allow_none) -> None:
+    widget = SimpleNamespace(path="/g/xy", typename="xy", parent=SimpleNamespace(children=[]))
+    doc = Document({f"/g/xy/{key}": value for key, value in {
+        "xData": "x", "yData": "y", "Color/points": "",
+        "PlotLine/style": line_style, "marker": "circle", "markerSize": "3pt",
+        "PlotLine/interpType": "linear", "errorStyle": "bar", "PlotLine/hide": line_hidden,
+        "PlotLine/transparency": transparency,
+    }.items()})
+    doc.settings["/g/xy/PlotLine/style"].vallist = ["solid", "dashed"]
+    doc.settings["/g/xy/marker"].vallist = ["none", "circle", "diamond"]
+    fields = {field["field_id"]: field for field in editable_fields(doc, widget, safe_only=True)}
+    assert set(fields) == {"series_line_style", "series_marker", "series_marker_size"}
+    marker = fields["series_marker"]
+    assert marker["choices"] == (["none", "circle", "diamond"] if allow_none else ["circle", "diamond"])
+    assert validate_native_setting(doc, marker, expected_value="circle", value="diamond", safe_only=True)[1] == "diamond"
+    for value in (["not-a-native-marker"] if allow_none else ["none", "not-a-native-marker"]):
+        with pytest.raises(ValueError, match="advertised choices"):
+            validate_native_setting(doc, marker, expected_value="circle", value=value, safe_only=True)
+    with pytest.raises(ValueError, match="positive physical size"):
+        validate_native_setting(doc, fields["series_marker_size"], expected_value="3pt", value="0pt", safe_only=True)
+    assert doc.settings["/g/xy/marker"].get() == "circle"
+
+
+@pytest.mark.parametrize("object_type,suffix,field_id", [
+    ("axis", "Label/font", "axis_label_font"),
+    ("axis", "TickLabels/font", "tick_label_font"),
+    ("label", "Text/font", "annotation_text_font"),
+    ("key", "Text/font", "legend_text_font"),
+])
+def test_native_font_choices_are_installed_and_rechecked(monkeypatch, object_type, suffix, field_id) -> None:
+    families = ["Arial", "Times New Roman"]
+    monkeypatch.setattr("sciplot_core.native_settings._font_families", lambda: list(families))
+    path = f"/g/object/{suffix}"
+    doc = Document({path: "Arial"})
+    widget = SimpleNamespace(path="/g/object", typename=object_type)
+    cap, = editable_fields(doc, widget, safe_only=True)
+    assert cap["field_id"] == field_id and cap["editor"] == "choice"
+    assert cap["choices"] == families
+    assert validate_native_setting(doc, cap, expected_value="Arial", value="Times New Roman", safe_only=True)[1] == "Times New Roman"
+    with pytest.raises(ValueError, match="advertised choices"):
+        validate_native_setting(doc, cap, expected_value="Arial", value="Missing Font", safe_only=True)
+    families.remove("Times New Roman")
+    with pytest.raises(ValueError, match="installed native font"):
+        validate_native_setting(doc, cap, expected_value="Arial", value="Times New Roman", safe_only=True)
+    families.clear()
+    assert editable_fields(doc, widget, safe_only=True) == []
+    assert doc.settings[path].get() == "Arial"
+
+
+@pytest.mark.parametrize("object_type,suffix", [
+    ("axis", "Label/italic"), ("axis", "TickLabels/bold"),
+    ("axis", "TickLabels/italic"), ("label", "Text/bold"),
+    ("label", "Text/italic"), ("key", "Text/bold"), ("key", "Text/italic"),
+])
+def test_typography_toggles_are_native_booleans(object_type, suffix) -> None:
+    path = f"/g/object/{suffix}"
+    doc = Document({path: False})
+    cap, = editable_fields(doc, SimpleNamespace(path="/g/object", typename=object_type), safe_only=True)
+    assert validate_native_setting(doc, cap, expected_value=False, value=True, safe_only=True)[1] is True
+    with pytest.raises(ValueError, match="boolean setting"):
+        validate_native_setting(doc, cap, expected_value=False, value="true", safe_only=True)
+
+
 @pytest.mark.parametrize("value", [[1, 1], [2, 1], [True], [float('nan')], [float('inf')], ['1530'], list(range(33))])
 def test_manual_tick_positions_reject_invalid_coordinates_without_mutation(value):
     doc = Document({'/g/x/mode': 'numeric', '/g/x/log': False, '/g/x/MajorTicks/manualTicks': []})
@@ -127,14 +194,15 @@ def _worker(*args: str, failed: bool = False) -> dict:
 
 
 @pytest.mark.comprehensive
-def test_native_sample_style_keeps_point_line_markers_in_the_sample_color(tmp_path):
+@pytest.mark.parametrize("template", ["curve", "point_line"])
+def test_native_sample_style_keeps_initially_hidden_and_visible_markers_in_the_sample_color(tmp_path, template):
     from sciplot_core.studio_core.document_edit_policy import filter_editable_fields, validate_edit_science_policy
     from sciplot_core.studio_core.sample_style import expand_sample_styles
 
     source = tmp_path / "values.csv"
     source.write_text("Time,Force\ns,N\nA,A\n0,1\n1,3\n2,2\n")
     raw = source.read_bytes()
-    rendered = render_to_dir(source, template="point_line", output_dir=tmp_path / "render",
+    rendered = render_to_dir(source, template=template, output_dir=tmp_path / "render",
                              export_formats=("pdf",), options={"size": "60x55"})
     document, spec_path = Path(rendered["veusz_documents"][0]), Path(rendered["veusz_specs"][0])
     original = file_sha256(document)
@@ -170,6 +238,10 @@ def test_native_candidate_preview_reopen_audit_and_rejected_batch(tmp_path: Path
     original = file_sha256(document)
     state = _worker("inspect-document-state", str(document))
     before = _worker("preview-document", str(document), "--out", str(tmp_path / "before.png"))
+    font = next(field for field in state["widgets"]["/page1/graph1/x"]["editable_fields"]
+                if field["field_id"] == "axis_label_font")
+    font_name = next(name for name in font["choices"] if name != font["current_value"]
+                     and name in {"Arial", "DejaVu Sans", "Times New Roman"})
     edits = []
     for path, field_id, value in [
         ("/page1/graph1/x", "axis_label_size", "10pt"),
@@ -177,6 +249,11 @@ def test_native_candidate_preview_reopen_audit_and_rejected_batch(tmp_path: Path
         ("/page1/graph1/series_1", "series_line_width", "2pt"),
         ("/page1/graph1/x", "major_tick_positions", [0, 0.5, 2]),
         ("/page1/graph1/x", "tick_label_rotation", "90"),
+        ("/page1/graph1/series_1", "series_line_style", "dashed"),
+        ("/page1/graph1/series_1", "series_marker", "diamond"),
+        ("/page1/graph1/series_1", "series_marker_size", "4pt"),
+        ("/page1/graph1/x", "axis_label_font", font_name),
+        ("/page1/graph1/x", "axis_label_italic", True),
     ]:
         field = next(field for field in state["widgets"][path]["editable_fields"]
                      if field["field_id"] == field_id)
@@ -190,11 +267,20 @@ def test_native_candidate_preview_reopen_audit_and_rejected_batch(tmp_path: Path
     assert result["document"]["sha256"] == original == file_sha256(document)
     assert result["candidate"]["sha256"] == file_sha256(candidate) != original
     assert result["preview"]["sha256"] != before["preview"]["sha256"]
-    assert len(result["changes"]) == 5
+    assert len(result["changes"]) == 11
+    assert result["changes"][-1] == {"object_path": "/page1/graph1/series_1",
+        "setting_path": "/page1/graph1/series_1/MarkerLine/hide", "old_value": True, "new_value": False}
     reopened = _worker("inspect-document-state", str(candidate))
     assert reopened["widgets"]["/page1/graph1/x"]["settings"]["Label/size"] == "10pt"
     assert reopened["widgets"]["/page1/graph1/x"]["settings"]["MajorTicks/manualTicks"] == [0, 0.5, 2]
     assert reopened["widgets"]["/page1/graph1/x"]["settings"]["TickLabels/rotate"] == "90"
+    reopened_xy = reopened["widgets"]["/page1/graph1/series_1"]["editable_fields"]
+    assert {field["field_id"]: field["current_value"] for field in reopened_xy
+            if field["field_id"] in {"series_line_style", "series_marker", "series_marker_size"}} == {
+        "series_line_style": "dashed", "series_marker": "diamond", "series_marker_size": "4pt",
+    }
+    reopened_axis = reopened["widgets"]["/page1/graph1/x"]["editable_fields"]
+    assert next(field["current_value"] for field in reopened_axis if field["field_id"] == "axis_label_font") == font_name
     separate_audit = _worker("audit-spec-data", str(candidate), str(spec), "--allow-presentation-edits")
     assert separate_audit["status"] == "passed"
     assert result["document_audit"] == separate_audit

@@ -5,8 +5,7 @@ Read only the section needed for edits, source updates, groups, legacy diagnosti
 # SciPlot Materials Analysis
 
 Use the repository CLI and shared contracts. Do not create one-off plotting
-scripts, copy style constants, or introduce another renderer, document model,
-or editor.
+scripts, copy style constants, or introduce another renderer or document model.
 
 ## Authority
 
@@ -22,8 +21,8 @@ repair the stale document. Never revive an older route from historical notes.
 
 ## Product boundary
 
-External AI is the task interface and the sole direction for further product
-development. Use the public local CLI and existing shared services; SciPlot
+External AI is the task interface. The optional local editor supports direct
+visual adjustments to existing figures. Use the public local CLI and shared services; SciPlot
 does not need to host the caller's model or start an internal AI provider.
 `studio/document.vsz` is the saved visual authority. Headless edits use the
 native Veusz API, never a second renderer, document model or GUI selection.
@@ -36,6 +35,15 @@ The browser `app` is limited to initial source, grouping, naming, order, size,
 and export confirmation plus read-only result review. Post-render edits use
 native document operations through the external control services or the
 compatible Veusz editor. Do not automate Veusz with mouse clicks or patch VSZ text.
+
+For direct visual editing, run `skill/scripts/sciplot edit PROJECT --figure FIGURE_ID`.
+This separate loopback editor presents existing native object capabilities, a
+live Veusz preview, native undo/redo, and bounded legend dragging. Browser fields
+do not own scientific mappings or saved history. Save verifies the displayed
+native frame against the existing preview/apply transaction; Export runs the
+shared saved-project task. A saved edit is distinct from a current delivery.
+If another process changes the project or original source, reload the saved
+project before continuing; reload discards this session's unsaved draft.
 
 Internal provider absence must not disable deterministic recognition, plotting,
 native editing, QA, export, or delivery. The external AI may use only the current

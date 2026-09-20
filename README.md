@@ -6,7 +6,7 @@
 
 SciPlot is a local scientific plotting tool for use with an external AI assistant.
 Describe your figure, review the result, and export it with its plotting data.
-Figures stay editable in Veusz, so you can return to a saved project and keep refining it.
+Figures stay editable in Veusz and in SciPlot's live local editor, so you can return to a saved project and keep refining it.
 
 [Gallery](#gallery) · [Get started](#get-started) · [Use with AI](#use-with-ai) · [Exports](#exports)
 
@@ -79,9 +79,15 @@ performance comparisons use **120 × 55 mm**. Click any image to view it at full
   Creep defaults to original shear strain (%) versus time (s), retaining the
   selected loading and recovery intervals without using compliance as strain.
 - Preview changes to colors, fonts, legends, and annotations before applying them.
+- Open a saved figure with `skill/scripts/sciplot edit PROJECT --figure FIGURE_ID`.
+  Select a sample or click the native drawing, change its supported visual properties,
+  and see Veusz redraw immediately. Undo and redo use the native document's history.
+  Save replays and audits the visible changes into the existing VSZ; Export runs the
+  existing exact-current QA and delivery flow. No AI round trip is needed for these controls.
 - Change ordinary curves together by their exact sample labels, and save successive edits before exporting.
 - Save sample colors and line widths as a preset, then reuse them by sample name across other experiment figures, including matching marker and direct-label colors.
-- Run an explicit experiment group, continue each task independently, and inspect all native figures in one local gallery. Search by experiment or sample, filter items needing attention, and copy source/document/delivery paths. Data, export and delivery freshness are shown separately; repeated queries reuse unchanged previews.
+- Run an explicit experiment group, continue each task independently, and inspect native figures in a local workspace with thumbnails, a large canvas, and collapsible details. Pan or zoom the preview, switch to the gallery, search by experiment or sample, filter items needing attention, and copy source/document/delivery paths. Data, export and delivery freshness are shown separately; repeated queries reuse unchanged previews.
+- Write a change request beside an identified saved figure and copy it to your AI assistant with the project, figure and saved-document hash. The assistant re-queries before creating a native edit preview. Drafts stay in the page until it closes or reloads; the page itself does not edit or save a figure.
 - Compare 2–8 native alternatives for the same saved figure, view each beside the original, and inspect their differences. Copy a choice back to your AI assistant to apply exactly one candidate or keep the original. Viewing and copying never apply changes; the assistant rechecks the comparison before acting.
 - Refine a pending preview in the same task; styles that already match need no extra confirmation or save.
 - Preserve sample identities, units, and data sources. Missing reference values stay missing.

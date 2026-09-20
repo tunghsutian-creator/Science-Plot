@@ -12,13 +12,30 @@ from sciplot_core.setting_catalog import specs_for_object_type
 # This is an authority subset, not a second field catalog. Labels, types and
 # limits continue to come from the same specs used by the native inspector.
 _SAFE_SUFFIXES = {
-    "axis": frozenset({"Label/size", "Label/bold", "TickLabels/size", "TickLabels/rotate", "MajorTicks/manualTicks"}),
-    "xy": frozenset({"PlotLine/color", "PlotLine/width", "MarkerFill/color", "MarkerLine/color"}),
-    "label": frozenset({"Text/color"}),
+    "axis": frozenset({
+        "Label/font", "Label/size", "Label/bold", "Label/italic",
+        "TickLabels/font", "TickLabels/size", "TickLabels/bold", "TickLabels/italic",
+        "TickLabels/rotate", "MajorTicks/manualTicks",
+    }),
+    "xy": frozenset({
+        "PlotLine/color", "PlotLine/width", "PlotLine/style", "marker", "markerSize",
+        "MarkerFill/color", "MarkerLine/color", "MarkerFill/hide", "MarkerLine/hide",
+    }),
+    "label": frozenset({"Text/font", "Text/color", "Text/size", "Text/bold", "Text/italic"}),
     "key": frozenset({
-        "Text/size", "columns", "horzPosn", "vertPosn", "horzManual", "vertManual",
+        "Text/font", "Text/size", "Text/bold", "Text/italic",
+        "columns", "horzPosn", "vertPosn", "horzManual", "vertManual",
     }),
 }
+
+
+def _font_families() -> list[str]:
+    """Offer fonts known by the active native renderer, not arbitrary fallbacks."""
+    from PyQt6.QtGui import QFontDatabase, QGuiApplication
+
+    if not isinstance(QGuiApplication.instance(), QGuiApplication):
+        return []
+    return sorted(QFontDatabase.families())
 
 
 def _ordinary_curve(document: Any, widget: Any) -> bool:
@@ -36,10 +53,23 @@ def _ordinary_curve(document: Any, widget: Any) -> bool:
         return False
 
 
+def curve_line_is_visible(document: Any, widget: Any, values: dict[str, Any] | None = None) -> bool:
+    """A marker can be removed only when a native connecting line remains drawn."""
+    def value(suffix: str) -> Any:
+        path = f"{widget.path}/{suffix}"
+        return values[path] if values is not None and path in values else document.resolveSettingPath(None, path).get()
+
+    try:
+        return (value("PlotLine/hide") is False and value("PlotLine/style") != "none"
+                and float(value("PlotLine/transparency")) < 100)
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
 def editable_fields(
     document: Any, widget: Any, *, safe_only: bool = False
 ) -> list[dict[str, Any]]:
-    """Return native values and editor metadata without importing Qt or a GUI."""
+    """Return native metadata; font discovery uses the existing Qt application."""
     object_type = str(widget.typename)
     allowed = _SAFE_SUFFIXES.get(object_type, frozenset())
     if safe_only and object_type == "xy" and not _ordinary_curve(document, widget):
@@ -56,11 +86,18 @@ def editable_fields(
                 continue
         except ValueError:
             continue
+        choices = (_font_families() if spec.suffix.endswith("/font")
+                   else [str(choice) for choice in getattr(setting, "vallist", ())])
+        if safe_only and spec.suffix == "marker" and not curve_line_is_visible(document, widget):
+            # Point-only series must keep markers; ordinary lines can restore none.
+            choices = [choice for choice in choices if choice != "none"]
+        if safe_only and spec.editor == "choice" and not choices:
+            continue
         fields.append({
             "field_id": spec.field_id, "section": spec.section, "label": spec.label,
             "setting_path": path, "editor": spec.editor,
             "current_value": json_safe(setting.get()),
-            "choices": [str(choice) for choice in getattr(setting, "vallist", ())],
+            "choices": choices,
             "minimum": spec.minimum, "maximum": spec.maximum,
             "help_text": spec.help_text or str(getattr(setting, "descr", "") or ""),
         })
@@ -112,6 +149,8 @@ def validate_native_setting(
         raise ValueError(f"{path} no longer has its expected value")
     if safe_only:
         _bounded_style_value(capability, value)
+        if path.endswith("/font") and value not in _font_families():
+            raise ValueError("Use an installed native font family from the advertised choices.")
         if (path.endswith("/MajorTicks/manualTicks")
                 and document.resolveSettingPath(None, path.removesuffix("/MajorTicks/manualTicks") + "/log").get()
                 and any(v <= 0 for v in value)):

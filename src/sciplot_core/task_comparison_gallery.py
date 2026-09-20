@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.foundation.json_hashing import canonical_json_sha256
 from sciplot_core.task_review_html import badge, copy_field, evidence_panel, image_href, image_link, text, write_page
 
 
@@ -39,6 +40,11 @@ def _selection_note(result: dict[str, Any], entry: dict[str, Any]) -> str:
 
 def _card(root: Path, result: dict[str, Any], entry: dict[str, Any]) -> str:
     selected = result.get("selection", {}).get("candidate_id") == entry["id"]
+    historical = "selection" in result or result["status"] == "complete" or result.get("baseline_current") is False
+    identifier = 'comparison-' + canonical_json_sha256(entry["id"])[:20]
+    kind = "history" if historical else "baseline" if entry["id"] == "baseline" else "candidate"
+    attention = entry["status"] not in {"ready", "unchanged"} or bool(entry.get("error")) or (
+        "scientific_audit_status" in entry and entry["scientific_audit_status"] != "passed")
     label = "比较时的原图" if entry["id"] == "baseline" else "候选 · 未应用"
     if entry["status"] == "unchanged":
         label = "与原图一致"
@@ -53,9 +59,13 @@ def _card(root: Path, result: dict[str, Any], entry: dict[str, Any]) -> str:
     body.append(_changes(root, entry))
     if entry.get("preview") and entry["id"] != "baseline" and result["baseline"].get("preview"):
         body.append(f'<button type="button" class="compare-button" data-compare="{text(entry["id"])}">与原图并排查看</button>')
-    if entry.get("selectable"):
+    if result.get("can_select") is True and entry.get("selectable") is True and not historical:
         body.append(copy_field(f'select-{entry["id"]}', "选择说明", _selection_note(result, entry)))
-    return (f'<article class="review-card {"selected" if selected else ""}" data-candidate="{text(entry["id"])}">'
+    search = ' '.join([entry["label"], label, str(entry.get("rationale", ""))])
+    return (f'<article class="review-card {"selected" if selected else ""}" id="{identifier}" '
+            f'data-review-card data-candidate="{text(entry["id"])}" data-search="{text(search)}" '
+            f'data-title="{text(entry["label"])}" data-subtitle="{text(label)}" data-kind="{kind}" '
+            f'data-attention="{str(attention).lower()}">'
             f'<header><h2>{text(entry["label"])}</h2>{badge(label, "good" if selected and result["status"] == "complete" else "neutral")}</header>'
             f'{"".join(body)}</article>')
 
@@ -73,6 +83,35 @@ def _compare_view(root: Path, result: dict[str, Any]) -> str:
             '</div><p class="muted">两侧均为比较时的预览，使用相同查看区域；选择下拉项只切换展示。</p></section>')
 
 
+def _current_state(result: dict[str, Any]) -> str:
+    """One shared query-state section, also available to the workspace inspector."""
+    current = result.get("current_figure") or {}
+    evidence = result.get("current_evidence") or {}
+    baseline = result.get("baseline_current")
+    if baseline is True:
+        baseline_message = "比较基线与当前项目匹配（查询时）。"
+    elif baseline is False:
+        baseline_message = "当前项目与比较时的基线已不同；这些预览仅作历史比较，不能据此应用候选。"
+    else:
+        baseline_message = "尚未确认比较基线是否仍匹配当前项目，请重新查询。"
+    problems = list(dict.fromkeys(message for message in (
+        result.get("current_error"), (result.get("blocker") or {}).get("message"),
+    ) if message))
+    state = ('<section class="comparison-state" data-comparison-state aria-label="当前项目与比较状态">'
+             '<h2>当前项目与比较状态</h2>'
+             f'<p class="{"muted" if baseline is True else "problem"}">{text(baseline_message)}</p>'
+             '<p class="muted">候选中的数值审计描述比较时的快照，不代表当前保存图、数据或交付仍与它一致。</p>')
+    state += ''.join(f'<p class="problem">{text(message)}</p>' for message in problems)
+    state += evidence_panel(evidence)
+    paths = [("project", "当前项目路径", result.get("project")),
+             ("figure", "当前图形 ID", current.get("figure_id")),
+             ("document", "当前保存图路径", current.get("document")),
+             ("revision", "当前保存图 SHA-256", current.get("document_sha256")),
+             ("delivery", "交付目录", (evidence.get("delivery") or {}).get("path"))]
+    state += '<div class="paths">' + ''.join(copy_field(f'current-{key}', label, value) for key, label, value in paths) + '</div>'
+    return state + '</section>'
+
+
 def write_comparison_gallery(root: Path, result: dict[str, Any]) -> str:
     selected = result.get("selection", {}).get("candidate_id")
     message = "查看候选与差异。确定后展开并复制选择说明，交给 AI 继续；复制说明不会应用修改。"
@@ -82,16 +121,8 @@ def write_comparison_gallery(root: Path, result: dict[str, Any]) -> str:
         message = result["blocker"]["message"]
     elif not result.get("can_select"):
         message = "当前比较尚不可选择，请让 AI 查询并处理未完成的步骤。"
-    problem = result.get("current_error") or (result.get("blocker") or {}).get("message")
-    state = '<p class="problem">' + text(problem) + '</p>' if problem else ""
-    current = result.get("current_figure") or {}
-    evidence = result.get("current_evidence") or {}
-    state += evidence_panel(evidence)
-    paths = [("document", "当前保存图路径", current.get("document")),
-             ("delivery", "交付目录", (evidence.get("delivery") or {}).get("path"))]
-    state += '<div class="paths">' + ''.join(copy_field(f'current-{key}', label, value) for key, label, value in paths) + '</div>'
     cards = ''.join(_card(root, result, entry) for entry in [result["baseline"], *result["candidates"]])
     return write_page(root, title=result["title"], kind="方案比较", intro=message,
                       queried_at=result["queried_at"], record="comparison.json",
                       content=f'<p class="summary-line">1 张原图 · {len(result["candidates"])} 个候选 · 比较快照</p>'
-                      + state + _compare_view(root, result) + '<div class="grid comparison-grid">' + cards + '</div>')
+                      + _current_state(result) + _compare_view(root, result) + '<div class="grid comparison-grid">' + cards + '</div>')

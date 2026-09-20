@@ -56,7 +56,7 @@ def test_saved_sample_styles_transfer_across_experiments_by_name(tmp_path, trans
     origin_before = {str(p): file_sha256(p) for p in source_project.rglob("*") if p.is_file()}
     target = task(tmp_path, "target", {"version": 1, "action": "create", "source": str(ftir)})
     target_project = Path(target["project"])
-    target_figure = cli("task", "inspect", target["task_dir"])["current_project"]["figures"][0]
+    target_figure = cli("task", "inspect", target["task_dir"], "--full")["current_project"]["figures"][0]
     specification = Path(target_figure["spec"])
     science_before = json.loads(specification.read_text())
     revision = target_figure["document_sha256"]
@@ -70,7 +70,7 @@ def test_saved_sample_styles_transfer_across_experiments_by_name(tmp_path, trans
 
     def freeze_check(review, preset):
         signed = json.loads(Path(review["preview"]["review_path"]).read_text())
-        assert len(signed["operations"]) == 9 and all(item["op"] == "set_style" for item in signed["operations"])
+        assert len(signed["operations"]) == 15 and all(item["op"] == "set_style" for item in signed["operations"])
         assert file_sha256(Path(target_figure["document"])) == revision
         Path(preset["preset"]).write_text('{"changed_after_preview":true}')
         assert review["preview"]["scientific_audit"]["status"] == "passed"

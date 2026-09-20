@@ -86,6 +86,8 @@ def compile_ops(spec, operations):
 def _sample_objects(*names):
     return {f"/page1/graph1/{name}": {"editable_fields": [
         {"setting_path": f"/page1/graph1/{name}/PlotLine/color", "current_value": "#222222"},
+        {"setting_path": f"/page1/graph1/{name}/MarkerFill/color", "current_value": "#222222"},
+        {"setting_path": f"/page1/graph1/{name}/MarkerLine/color", "current_value": "#222222"},
         {"setting_path": f"/page1/graph1/{name}/PlotLine/width", "current_value": "1.2pt"},
     ]} for name in names}
 
@@ -97,10 +99,8 @@ def test_sample_batch_binds_exact_labels_to_current_fields_and_keeps_other_ops(s
                "style": {"color": "#3568C0", "width": "1.5pt"}}
     operations = [request, note()]
     expanded = expand_sample_styles(spec, _sample_objects("series_1", "series_2"), operations)
-    assert [op["object_path"] for op in expanded[:-1]] == [
-        "/page1/graph1/series_2", "/page1/graph1/series_2",
-        "/page1/graph1/series_1", "/page1/graph1/series_1"]
-    assert [op["expected_value"] for op in expanded[:-1]] == ["#222222", "1.2pt"] * 2
+    assert [op["object_path"] for op in expanded[:-1]] == ["/page1/graph1/series_2"] * 4 + ["/page1/graph1/series_1"] * 4
+    assert [op["expected_value"] for op in expanded[:-1]] == ["#222222", "#222222", "#222222", "1.2pt"] * 2
     assert expanded[-1] == note() and operations[0] == request
     assert spec == before
     assert compile_ops(spec, expanded)[2][-1]["id"] == "note"
@@ -140,15 +140,17 @@ def test_sample_batch_requires_native_capability_and_bounds_expansion(spec):
         expand_sample_styles(spec, _sample_objects("series_1"), [request] * 51)
 
 
-def test_sample_color_updates_bound_label_and_markers_using_their_current_values(spec):
-    spec["series"][0]["marker"] = "circle"
+@pytest.mark.parametrize("initial_marker", ["circle", "none"])
+def test_sample_color_updates_bound_label_and_markers_using_their_current_values(spec, initial_marker):
+    spec["series"][0]["marker"] = initial_marker
     spec["direct_labels"] = [{"name": "label_1", "label": "A"}]
     curve, label = "/page1/graph1/series_1", "/page1/graph1/label_1"
     objects = _sample_objects("series_1")
-    objects[curve]["editable_fields"].extend([
-        {"setting_path": curve + "/MarkerFill/color", "current_value": "red"},
-        {"setting_path": curve + "/MarkerLine/color", "current_value": "blue"},
-    ])
+    for field in objects[curve]["editable_fields"]:
+        if field["setting_path"].endswith("/MarkerFill/color"):
+            field["current_value"] = "red"
+        if field["setting_path"].endswith("/MarkerLine/color"):
+            field["current_value"] = "blue"
     objects[label] = {"editable_fields": [
         {"setting_path": label + "/Text/color", "current_value": "black"}]}
     operation = {"op": "set_sample_style", "samples": ["A"], "style": {"color": "#3568C0"}}

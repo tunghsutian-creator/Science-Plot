@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sciplot_core.verification.axis_owners import GENERIC_AXIS_OWNERS
+from sciplot_core.verification.live_editor_owner import LIVE_EDITOR_OWNER
 from sciplot_core.verification.external_ai_owners import EXTERNAL_AI_OWNERS
 from sciplot_core.verification.task_control_owners import TASK_CONTROL_OWNERS
 from sciplot_core.verification.owner_model import ChangedOwner
@@ -24,9 +25,10 @@ from sciplot_core.verification.type_gate_owners import (
 )
 
 CHANGED_OWNERS = (
+    LIVE_EDITOR_OWNER,
     ChangedOwner(
         owner_id="documentation_contract",
-        path_prefixes=("docs/",),
+        path_prefixes=("docs/", "third_party/tavotto-ui/"),
         exact_paths=frozenset(
             {
                 "AGENTS.md",

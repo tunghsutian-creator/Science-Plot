@@ -47,6 +47,32 @@ saved-project queries, native edits, exact-current export and continuation.
 It calls existing local domain services without starting an internal provider.
 `task_control` orchestrates bounded create/edit/export requests over those owners;
 task receipts live outside active projects and do not define scientific readiness.
+
+The `edit` CLI opens an optional local interactive surface for an existing saved
+figure. `live_editor` owns session binding, serialized browser commands and the
+loopback HTTP adapter. `veusz_worker/live_session.py` keeps one Veusz Document on
+its process main thread, applies advertised native operations, uses native undo/
+redo and renders through the existing preview function. A PaintHelper built from
+the same document and render parameters performs revision-bound pixel hit testing.
+Rendered keys expose their native ControlKey bounds; revision-bound pixel drags
+use the native alignment/manual-position mapping as one validated undo operation.
+There is no Matplotlib renderer or independently persistent browser document.
+The private document copy is an unsaved session; the saved VSZ remains authority.
+
+The browser owns input drafts and request coalescing, not scientific decisions.
+Commands bind a session revision and expected native setting values. Source,
+project and delivery changes reject stale edits. Save derives the final changes
+from native values, calls `preview_document_edit`, compares its native pixels with
+the displayed frame, then calls `apply_document_edit`; client candidate bytes are
+never trusted. Native undo survives Save, and undoing a saved change creates a new
+unsaved difference. Export requires a saved document and delegates to the existing
+export task. Reload replaces the unsaved session from current saved authority.
+Session reads detect a stopped native worker, retain the last frame and require
+reload before further edits. A completed export receipt is accepted only when
+fresh QA and delivery evidence both identify the current saved result.
+The server binds only 127.0.0.1, validates Host/Origin and session proof, and serves
+only packaged UI assets and the current identified native frame.
+
 `task_repair` normalizes only the unambiguous misplaced `task_dir` transport alias,
 rejects conflicting locations, and projects bounded field/constraint errors from
 the shared schemas. CLI and MCP response failures include the saved current
@@ -127,12 +153,21 @@ separately. There is no internal model, alternate renderer or browser editor.
 
 `task_group_gallery`, `task_comparison_gallery` and `task_review_html` own only
 the read-only HTML presentation of those query results. Packaged local CSS/JS
-is embedded in each page for offline search, attention filtering, image zoom,
-side-by-side viewing and explicit text copying. The page never calls a write
+is embedded in each page for an offline thumbnail rail, zoomable/pannable native
+preview canvas, collapsible evidence inspector, search, attention filtering,
+gallery/side-by-side viewing and explicit text copying. The page never calls a write
 endpoint. A copied choice carries the comparison directory, candidate and
 revision identities and asks the caller to re-query before selection. Current
 source/export/delivery indicators remain separate from task completion and
 historical comparison images; missing evidence is displayed as unknown.
+A saved-figure intent field is available only with a native project/document,
+figure identity and document hash, an available preview and no known stale-source
+or blocking state. It copies these bindings and mandatory re-query instructions
+to the external AI; it never emits a native edit or acceptance payload. Unsaved
+drafts are page-local. Candidates and unidentified figures have no intent field.
+Tavotto-derived design tokens, their pinned source and full AGPL notice are
+recorded in `third_party/tavotto-ui/`; the complete license is packaged and embedded
+in each generated page's About dialog. No Tavotto renderer or document model is used.
 Comparison queries project the current saved figure path/revision from their
 existing inspection, without another native worker. The gallery adds no global
 project index or scientific readiness gate.
@@ -305,6 +340,9 @@ same Veusz `Document`; it does not own a second document model or renderer.
 The retained browser `app` is a loopback-only confirmation adapter. It may collect
 initial data choices and show results read-only, but it must not own
 post-render visual editing.
+The separate `edit` adapter owns live presentation and delegates all native edits,
+save transactions and exports to the owners described above; it does not extend
+the Intake state machine or put scientific mapping in the browser.
 
 ## Repository map
 

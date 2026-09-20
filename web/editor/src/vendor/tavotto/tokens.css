@@ -1,0 +1,148 @@
+/* Tavotto index.css lines 30-175, selected theme block; AGPL-3.0-only. See THIRD_PARTY.md. */
+@theme {
+  --color-bg: #f7f6f3;
+  --color-canvas: #eaeae6;
+  --color-surface: #ffffff;
+  --color-surface-2: #f7f7f4;
+  /* 交互面：hover < active < selected，三档都是 ink 的半透明叠加，白 surface 与
+     暖灰 bg 上都成立。组件里不再手写 bg-ink/[.035]…[.09] 那串随机透明度
+     （2026-09-11 收敛前全仓有 9 种）。 */
+  --color-surface-hover: color-mix(in srgb, var(--color-ink) 5%, transparent);
+  --color-surface-active: color-mix(in srgb, var(--color-ink) 8%, transparent);
+
+  /* hairline 与区域边界：ink 12% 的半透明叠加（2026-09-15 打磨批次 A），落在白与纸上都是「一级台阶」
+     而不是一根实线；strong 18% 给 hover 中的边界。 */
+  --color-border: color-mix(in srgb, var(--color-ink) 12%, transparent);
+  --color-border-strong: color-mix(in srgb, var(--color-ink) 18%, transparent);
+  /* 控件边界：未选中的复选框 / 单选的方框圆圈、开关关态的轨道——它们的边界就是
+     控件的全部识别信息，要过非文字对比 3:1（WCAG 1.4.11）。border-strong（#cfcfc7）
+     对白只有 1.57:1、对纸 1.40:1，2026-09-14 审计（S10）量到关态开关在 48px 设置行里
+     几乎看不见。#8a8a82：白 3.48 / 纸 3.10 / surface-2 3.24。
+     border / border-strong 继续给 hairline 分隔、hover 中的输入框与区域边界。 */
+  --color-border-control: #8a8a82;
+  /* 可编辑框的**底**（fieldBox，S8 甲「有框 = 能改」不变；2026-09-15 参考 Codex 设置页的输入框，用户拍板
+     「普通输入框稍微换一个颜色就可以了」）：比面板深一级的灰（对白 1.14:1）、静态无边线、无内阴影；hover 再深
+     一档；聚焦才是不透明 accent 边——3:1 由它承担。此前（批次 A T1）是 ink 16% 的边、hover 25%；同一天先试过
+     「凹面」（这个底 + 1px 内阴影 + 聚焦浮回白底），用户看过对比后取消了内阴影那一层，只留颜色。
+     ink-3 落在 field 上 4.71:1、hover 底 4.54:1（`#ebeae5` 只有 4.46，tokenContrast.test 拦下过），
+     占位 / 单位 / 前缀都还能读。border-control（复选框 / 单选 / 关态开关）仍是实色 3:1，边界就是它们的全部。 */
+  --color-field: #f1f0ec;
+  --color-field-hover: #edece8;
+
+  --color-ink: #1b1b18;
+  /* 次级正文：≥5.9:1（#f2f2ef 上），可放心用于说明文字 */
+  --color-ink-2: #5c5c55;
+  /* 三级正文：可读的最浅一档。实测（issue #210）——白 5.37:1、surface-2 5.00:1、
+     --color-bg 4.78:1，都过普通文字的 4.5:1；但**画布灰 --color-canvas 上只有
+     4.45:1**，差 0.05 不达标。要在画布底色上直接写字得往上挑一档（ink-2）。
+     空画布提示用的是它，成立的理由是那段字坐在**白纸**上而不是画布灰上。 */
+  --color-ink-3: #6b6b64;
+  /* faint：仅装饰、禁用态、非必要信息；不用于需要阅读的文字 */
+  --color-ink-faint: #a3a39a;
+
+  /* 品牌蓝（Tavotto Brand System Rev 2.0）：链接、主动作强调、徽章、focus ring。
+     与选中蓝 --color-sel 分工明确：sel 只做选中 / 对齐 / 尺寸线，不进标志。 */
+  --color-accent: #2868b7;
+  --color-accent-subtle: #e9f0f9;
+  /* 列表 / 分段 / 选项格的**选中态**：ink 10% 的半透明叠加（2026-09-15 打磨批次 A）——
+     hover 5% < active 8% < selected 10%，三档在白面板与纸底上都成立；此前固定色 #ebebe6 在
+     纸底上只有 1.07:1，比 hover 还淡。selected 只是轻 tint，选中态仍要靠字重 / 对勾再说一遍。 */
+  --color-selected: color-mix(in srgb, var(--color-ink) 10%, transparent);
+  --color-danger: #c4442a;
+  /* danger 字落在 danger-subtle 上（InlineWarning / Badge / 状态栏）要过 4.5:1：
+     #fbeeeb 只有 4.40（settings-shell 的 axe 在「更新」分区当场 serious），
+     #fdf3f1 是 4.58——与从前 `bg-danger/[.07]` 混出来的 #fbf2f0（4.53）同一档。 */
+  --color-danger-subtle: #fdf3f1;
+  /* 警示（「需要处理，但还没坏」）：编码 Agent 的「需要登录」用它。
+     与 danger 分工明确——没登录不是故障，装坏了才是。
+     5.9:1（白）/ 5.3:1（暖灰底），两处都过普通文字的 4.5:1。 */
+  --color-warn: #8a5a00;
+  --color-warn-subtle: #f7efe0;
+  /* 成功 / 就绪（「已经好了，不用管」）：编码 Agent 的「可用」用它。
+     小面积图标与 Badge 的字：#2e7d4f 落在 ok-subtle 上只有 4.41:1（tokenContrast.test 抓到），
+     收深一档到 #2b7649——ok-subtle 上 4.85、白上 5.54、白对勾压在上面 5.54。 */
+  --color-ok: #2b7649;
+  --color-ok-subtle: #e6f3ea;
+  --color-sel: #2f6fed;
+  /* 圆角只有四档 + full（圆点 / 开关 / 徽章）。先把 Tailwind 自带的 xl / 2xl…
+     整个清掉，rounded-xl 这种写了也不生效，随机圆角就没有来路。
+       xs 3  ——16px 高以下的小片：kbd、计数角标、缩略图上的标签
+       sm 6  ——控件：输入框、按钮、图标钮、选项格、树行
+       md 8  ——卡片与浮层：菜单、popover、tooltip、select 弹层
+       lg 12 ——对话框、命令面板 */
+  --radius-*: initial;
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  /* md 10 / lg 14（2026-09-15 打磨批次 A）：浮层与对话框比控件（6）大 4～8，此前只差 2。 */
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* 浮层投影（2026-09-15 打磨批次 A）：ring 8% + 大模糊 8%。环替代了实色 border——OpenAI apps-sdk-ui
+     与 Claude 产品壳的浮层都是「1px 半透明环 + 一层 24px 左右的低 alpha 阴影」。对话框 / 命令面板
+     用更深一档的 --shadow-dialog；分段选择器的白色 thumb 用 --shadow-thumb。Tooltip 是 ink 底白字，不带投影。 */
+  --shadow-pop: 0 0 0 1px rgba(27, 27, 24, 0.08), 0 8px 24px rgba(27, 27, 24, 0.08);
+  --shadow-dialog: 0 0 0 1px rgba(27, 27, 24, 0.06), 0 24px 64px rgba(27, 27, 24, 0.1);
+  --shadow-thumb: 0 0 0 1px rgba(27, 27, 24, 0.06), 0 1px 2px rgba(27, 27, 24, 0.08);
+  /* 真的是一张卡的东西才有的抬升（2026-09-15 学 Beautiful UI 的 shadow-card，数取 Codex 浅色的
+     --elevation-composer 前两层：1px 环 4% + 0 2px 8px 4%）——比 shadow-pop 低一档（卡在面上，不是浮在面上）。
+     给素材卡 / 会话卡 / 任务行 / 诊断与修复卡；分区、列表行、输入框、分段控件仍是平的。
+     hover / 选中用 ring-1 叠在它上面说话。 */
+  --shadow-card: 0 0 0 1px rgba(27, 27, 24, 0.04), 0 2px 8px rgba(27, 27, 24, 0.04);
+  /* 改图助手输入框：浮在对话流上的玻璃（2026-09-15 参考 Codex 的 _ComposerLayoutBody，用户拍板）。
+     Codex 的写法：底 = soft 灰 90% 不透明 + backdrop-filter blur(16px)、border 0、浅色投影
+     `0 0 0 1px 4%, 0 2px 8px 4%, 0 4px 40px 8px 2%`（深色是 inset 0 0 1px #fff3 的高光边）。
+     这里同一组数：底是 field 90%，内容从它底下滚过时被糊掉——玻璃只在它浮着的时候成立。 */
+  --color-glass: color-mix(in srgb, var(--color-field) 90%, transparent);
+  --shadow-composer: 0 0 0 1px rgba(27, 27, 24, 0.04), 0 2px 8px rgba(27, 27, 24, 0.04), 0 4px 40px 8px rgba(27, 27, 24, 0.024);
+
+  --text-xs: 11px;
+  --text-xs--line-height: 15px;
+  --text-sm: 12px;
+  --text-sm--line-height: 16px;
+  --text-base: 13px;
+  --text-base--line-height: 18px;
+  --text-lg: 14px;
+  --text-lg--line-height: 20px;
+  /* xl 15：只给 type-title（2026-09-15 打磨批次 A）——标题与正文 12 之间要有 3px 台阶。 */
+  --text-xl: 15px;
+  --text-xl--line-height: 20px;
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Helvetica Neue',
+    'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  /* 画布内文字对象专用：与 UI 字体严格分离，模拟论文排版 */
+  --font-doc: 'Times New Roman', 'Songti SC', 'Source Han Serif SC', serif;
+
+  /* --------------------------------------------------------------------------
+     动效 token —— 时长与缓动的唯一出处，组件里不写字面量。
+     JS 侧的同一份值在 lib/motion.ts（两边必须同步，那里有断言看护）。
+
+     进场比退场慢：退场是「让路」，拖沓会挡住用户的下一步动作。
+     形态一律 opacity + ≤4px 位移 + scale(0.97~1)；回弹只有 --ease-spring 一条曲线
+     （峰值 5%，只给新内容落位的收尾），动画只是点缀，关掉（prefers-reduced-motion）
+     不损失任何信息。
+     -------------------------------------------------------------------------- */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 240ms;
+  /* 退场档：比同名进场短一档 */
+  --duration-exit: 90ms;
+
+  /* 过渡的默认档就是 token（2026-09-14 二审 E1）：写了 transition-* 没写 duration 的地方
+     （折叠箭头、Radio / Checkbox……53 处）此前落在 Tailwind 自带的 150ms / ease——
+     foundation.test 抓 `duration-150` 字面量，抓不到「没写」。默认 = fast + 标准曲线，
+     不用逐处补；motion.test 守着它与 --duration-fast 同源。 */
+  --default-transition-duration: var(--duration-fast);
+  --default-transition-timing-function: var(--ease-standard);
+
+  /* 进场用强 ease-out（起步快、收尾稳），退场用 ease-in（直接让开） */
+  --ease-pop: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  /* hover / 颜色 / 折叠箭头这类来回都要顺的过渡：对称曲线（与 Tailwind 原默认同形，只是有了名字） */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  /* 回弹（2026-09-15 改图助手质感）：终点前先多走 5% 再收回。只给「新内容落位」的收尾——
+     对话块 / diff 卡的 settle-in、发送 ↔ 中止的图标——4px 位移上的回弹是 0.2px，是手感不是
+     动作；退场、hover、跟随输入的东西不用它。JS 侧同一份在 lib/motion.ts 的 EASE_SPRING。 */
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}

@@ -10,7 +10,7 @@ from typing import Any
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.foundation.json_values import json_safe
-from sciplot_core.native_settings import editable_fields, validate_native_setting
+from sciplot_core.native_settings import curve_line_is_visible, editable_fields, validate_native_setting
 
 
 @contextmanager
@@ -69,6 +69,38 @@ def preview_document(document_path: Path, *, output_png: Path) -> dict[str, Any]
             "document": identity, "preview": preview}
 
 
+def _marker_visibility_changes(loaded: Any, actual: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Compile marker activation and reject batches that remove a series' marks."""
+    values = {change["setting_path"]: change["new_value"] for change in actual}
+    affected = {change["object_path"] for change in actual if any(
+        change["setting_path"] == f"{change['object_path']}/{suffix}"
+        for suffix in ("marker", "MarkerLine/hide", "MarkerFill/hide", "PlotLine/style")
+    )}
+    companions = []
+    for path in sorted(affected):
+        widget = loaded.resolveWidgetPath(None, path)
+
+        def value(suffix: str, object_path: str = path) -> Any:
+            key = f"{object_path}/{suffix}"
+            return values[key] if key in values else loaded.resolveSettingPath(None, key).get()
+
+        marker = value("marker")
+        _native_path, fillable = import_module("veusz.utils").getPointPainterPath(marker, 1.0, 0.1)
+        stroke = not value("MarkerLine/hide") and value("MarkerLine/style") != "none" and value("MarkerLine/transparency") < 100
+        fill = fillable and not value("MarkerFill/hide") and value("MarkerFill/style") != "none" and value("MarkerFill/transparency") < 100
+        if f"{path}/marker" in values and marker != "none" and not (stroke or fill):
+            setting_path = f"{path}/MarkerLine/hide"
+            if setting_path in values or value("MarkerLine/style") == "none" or value("MarkerLine/transparency") >= 100:
+                raise ValueError("The selected marker needs a visible native outline or fill.")
+            companions.append({"object_path": path, "setting_path": setting_path,
+                               "expected_value": value("MarkerLine/hide"), "value": False})
+            values[setting_path] = False
+            stroke = True
+        if not curve_line_is_visible(loaded, widget, values) and not (marker != "none" and (stroke or fill)):
+            raise ValueError("A point-only series must keep a visible marker outline or fill.")
+    return companions
+
+
 def prepare_setting_batch(
     loaded: Any, changes: Any,
 ) -> tuple[list[Any], list[dict[str, Any]]]:
@@ -79,7 +111,7 @@ def prepare_setting_batch(
         raise ValueError("Provide between 1 and 100 explicit setting changes.")
     native, actual = [], []
     seen: set[str] = set()
-    for change in changes:
+    def append_change(change: Any) -> None:
         if not isinstance(change, dict) or set(change) != {
             "object_path", "setting_path", "expected_value", "value",
         }:
@@ -106,6 +138,10 @@ def prepare_setting_batch(
         native.append(OperationSettingSet(setting_path, normalized))
         actual.append({"object_path": object_path, "setting_path": setting_path,
                        "old_value": current, "new_value": json_safe(normalized)})
+    for change in changes:
+        append_change(change)
+    for change in _marker_visibility_changes(loaded, actual):
+        append_change(change)
     return native, actual
 
 

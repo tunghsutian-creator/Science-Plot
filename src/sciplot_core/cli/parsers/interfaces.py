@@ -8,6 +8,13 @@ from typing import Any
 
 
 def register_interfaces_commands(subparsers: Any) -> None:
+    edit_parser = subparsers.add_parser("edit", help="Open a live native figure editor in the local browser.")
+    edit_parser.add_argument("target", type=Path, help="Existing SciPlot project, saved VSZ or associated delivery.")
+    edit_parser.add_argument("--figure", help="Exact figure ID; defaults to the project's primary figure.")
+    edit_parser.add_argument("--port", type=int, default=0)
+    edit_parser.add_argument("--session-dir", type=Path, help="New session evidence directory outside source/project/delivery.")
+    edit_parser.add_argument("--no-open", action="store_true")
+
     app_parser = subparsers.add_parser(
         "app",
         help="Open optional browser source/grouping/export confirmation and read-only result review.",

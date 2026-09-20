@@ -83,6 +83,8 @@ EXTERNAL_AI_OWNERS = (
                 "src/sciplot_core/native_settings.py",
                 "src/sciplot_core/setting_catalog/specs/xy.py",
                 "src/sciplot_core/setting_catalog/specs/axis.py",
+                "src/sciplot_core/setting_catalog/specs/label.py",
+                "src/sciplot_core/setting_catalog/specs/key.py",
                 "src/sciplot_core/studio_core/document_edit.py",
                 "src/sciplot_core/studio_core/document_edit_commit.py",
                 "src/sciplot_core/studio_core/document_edit_policy.py",

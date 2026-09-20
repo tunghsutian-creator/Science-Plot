@@ -63,6 +63,8 @@ markers = [
 [tool.mypy]
 python_version = "3.11"
 files = [
+  "src/sciplot_core/live_editor/",
+  "src/sciplot_core/veusz_worker/live_session.py",
   "src/sciplot_core/foundation",
   "src/sciplot_core/json_contract.py",
   "src/sciplot_core/figure_plan",
@@ -229,5 +231,7 @@ sciplot_core = [
   "validated_envelopes.json",
   "intake/intake_static/*",
   "task_review_assets/*",
+  "live_editor_assets/*",
+  "live_editor_assets/assets/*",
   "policy/plot_contract.json",
 ]

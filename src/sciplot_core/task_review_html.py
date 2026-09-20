@@ -69,6 +69,7 @@ def write_page(root: Path, *, title: str, kind: str, intro: str, queried_at: str
     assets = Path(__file__).with_name("task_review_assets")
     css = (assets / "review.css").read_text(encoding="utf-8")
     script = (assets / "review.js").read_text(encoding="utf-8")
+    license_text = (assets / "tavotto-LICENSE.txt").read_text(encoding="utf-8")
     try:
         queried_at = local_display_time(queried_at)
     except ValueError:
@@ -77,12 +78,47 @@ def write_page(root: Path, *, title: str, kind: str, intro: str, queried_at: str
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{text(title)} · SciPlot</title>
 <style>{css}</style></head><body><a class="skip" href="#content">跳到内容</a>
 <header class="topbar"><a class="brand" href="#content">SciPlot<span> / {text(kind)}</span></a>
-<a href="{text(record)}">查看记录 ↗</a></header><main id="content">
-<div class="page-heading"><p class="eyebrow">{text(kind)}</p><h1>{text(title)}</h1><p>{text(intro)}</p>
+<nav id="view-switch" class="view-switch" aria-label="查看方式" hidden>
+<button type="button" data-view="workspace" aria-pressed="true">画布</button>
+<button type="button" data-view="gallery" aria-pressed="false">图库</button></nav>
+<div class="topbar-actions"><a href="{text(record)}">查看记录</a>
+<button type="button" data-about>关于界面</button></div></header><main id="content">
+<div class="page-heading"><h1>{text(title)}</h1><p>{text(intro)}</p>
 <p class="snapshot">查询于 {text(queried_at)}。此页是查询快照；请让 AI 重新查询，再打开更新后的总览。</p></div>
-{content}<footer>预览来自 Veusz。页面只用于审阅；数据、保存图和交付状态分别列出。</footer></main>
+<section id="workspace-view" class="workbench" aria-label="图形工作台" hidden>
+<aside class="figure-rail" aria-label="图形列表"><div class="rail-heading"><h2>图形</h2>
+<span id="rail-count"></span></div><div id="rail-filter"></div>
+<div id="rail-list" class="rail-list"></div></aside>
+<section class="canvas-area" aria-label="原生图形预览"><div class="canvas-toolbar">
+<div class="canvas-heading"><h2 id="canvas-title" tabindex="-1">选择图形</h2><p id="canvas-caption"></p></div>
+<div class="canvas-tools" role="group" aria-label="画布工具">
+<button type="button" id="zoom-out" aria-label="缩小预览" disabled>−</button>
+<output id="zoom-level" aria-label="预览缩放比例">—</output>
+<button type="button" id="zoom-in" aria-label="放大预览" disabled>+</button>
+<button type="button" id="zoom-fit" disabled>适合窗口</button>
+<button type="button" id="details-toggle" aria-controls="inspector" aria-expanded="true">详情</button>
+</div></div>
+<div id="canvas-viewport" class="canvas-viewport" tabindex="0" role="region" aria-label="预览画布，可拖动或方向键平移，使用加减键缩放，0 键适合窗口">
+<img id="canvas-image" class="canvas-image" alt="" draggable="false" hidden>
+<p id="canvas-empty" class="canvas-empty">选择图形查看预览</p></div>
+<div class="canvas-status"><span id="canvas-position" aria-live="polite"></span>
+<span>拖动 / 方向键平移 · + / − 缩放 · 0 适合窗口</span>
+<div role="group" aria-label="切换图形"><button type="button" id="figure-prev" aria-label="上一张图形">上一张</button>
+<button type="button" id="figure-next" aria-label="下一张图形">下一张</button></div></div></section>
+<aside id="inspector" class="inspector" aria-label="当前图形详情"><div class="inspector-heading">
+<h2 id="inspector-title">图形详情</h2><span>查询快照</span></div><div id="inspector-content"></div></aside>
+</section>
+<section id="gallery-view" aria-label="图形图库">{content}</section>
+<footer class="page-footer">预览来自 Veusz。数据、保存图和交付状态分别列出；查看和复制说明不会应用修改。</footer></main>
 <dialog id="image-dialog" aria-labelledby="image-title"><div class="dialog-bar"><h2 id="image-title">预览</h2>
 <button type="button" data-close-dialog>关闭大图</button></div><img id="large-image" alt=""></dialog>
+<dialog id="about-dialog" aria-labelledby="about-title"><div class="dialog-bar"><h2 id="about-title">关于 SciPlot 界面</h2>
+<button type="button" data-close-about>关闭</button></div>
+<p>界面设计与部分样式源自 Tavotto。SciPlot 沿用自己的绘图、数据审计和导出流程。</p>
+<p><a href="https://github.com/Tavotto/Tavotto/tree/4cf5b8c658b06dbd6e1fc8a569fee85ef5d62186">Tavotto 源码与出处</a>
+ · AGPL-3.0-only · 修改版界面，不代表 Tavotto 官方版本。</p>
+<p>本页内嵌未压缩的 HTML、CSS 和 JavaScript；保存页面或查看页面源代码即可取得这份浏览器界面源码。</p>
+<details><summary>查看完整许可证</summary><pre class="license-text">{text(license_text)}</pre></details></dialog>
 <p class="toast" id="notice" role="status" hidden></p><script type="module">{script}</script></body></html>'''
     temporary = root / "overview.tmp"
     temporary.write_text(html, encoding="utf-8")

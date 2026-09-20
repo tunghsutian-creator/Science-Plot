@@ -34,6 +34,16 @@ from sciplot_core.verification.type_gate_owners import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_tavotto_ui_license_selects_documentation_contract() -> None:
+    path = "third_party/tavotto-ui/LICENSE"
+    assert (REPO_ROOT / path).is_file()
+    plan = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+    assert plan["unowned_paths"] == []
+    assert [owner["owner_id"] for owner in plan["owners"]] == ["documentation_contract"]
+    check = next(item for item in plan["checks"] if item["check_id"] == "pytest_changed_owners")
+    assert "tests/test_documentation_contract.py" in check["command"]
+
+
 def test_rheology_workbook_materialization_selects_shared_source_stability() -> None:
     for path in (
         "src/sciplot_core/semantic_sources/rheology_workbooks.py",
@@ -358,7 +368,7 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
     )
 
     assert SCIENTIFIC_TRANSACTION_TYPE_PATHS
-    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 102
+    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 103
     assert {
         "src/sciplot_core/studio_core/control_results.py",
         "src/sciplot_core/studio_core/sample_style.py",
@@ -720,7 +730,7 @@ def test_explicit_type_gate_scopes_are_pairwise_disjoint() -> None:
         STUDIO_FIGURE_SET_EXECUTION_TYPE_PATHS,
     )
 
-    assert tuple(map(len, scopes)) == (102, 4, 7, 10, 5, 5)
+    assert tuple(map(len, scopes)) == (103, 4, 7, 10, 5, 5)
     assert all(
         scope.isdisjoint(other)
         for index, scope in enumerate(scopes)
