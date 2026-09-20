@@ -30,6 +30,8 @@ def test_public_task_creation_annotation_review_export_and_continuation(tmp_path
     assert created["result"]["kind"] == "sciplot_project_creation_result"
     assert all(created["current_project"][key]["current"] for key in ("source", "qa", "delivery"))
     assert created["next_step"]["action"] == "review_exports_and_deliver"
+    assert created["next_step"]["manual_edit"]["command"] == ["sciplot", "edit", created["project"]]
+    assert Path(created["next_step"]["manual_edit"]["launcher"]).is_file()
     assert all(Path(path).is_file() for path in created["next_step"]["images"])
     assert created["next_step"]["images"]
     assert created["local_timing"]["last_call_seconds"] > 0

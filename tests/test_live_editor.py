@@ -397,3 +397,123 @@ def test_packaged_editor_injects_one_session_token_before_module_execution():
     parsed = Tokens()
     parsed.feed(responses[0].decode())
     assert parsed.values == ["session-proof"]
+
+
+def _mock_save(live, monkeypatch):
+    applied = []
+    monkeypatch.setattr(module, "preview_document_edit", lambda *a, **k: {"preview": live.native["preview"]})
+
+    def apply(*args):
+        applied.append(live.document)
+        live.document.write_text("saved " + live.worker.value)
+        return {"result_is_current": True, "result_sha256": file_sha256(live.document)}
+
+    monkeypatch.setattr(module, "apply_document_edit", apply)
+    return applied
+
+
+def test_publish_saves_then_exports_and_duplicate_receipt_does_not_repeat(live, monkeypatch):
+    change(live)
+    applied = _mock_save(live, monkeypatch)
+    exports = []
+
+    def export(*args, **kwargs):
+        assert not live._changes() and live.document.read_text() == "saved 2pt"
+        exports.append(args)
+        return {"status": "complete"}
+
+    monkeypatch.setattr(module, "start_task", export)
+    request = {"request_id": "publish-once", "revision": live.revision, "action": "publish"}
+    result = live.command(request)
+    assert result["message"] == "已保存并更新交付。"
+    assert not result["state"]["dirty"]
+    assert live.command(request) == result
+    assert len(applied) == len(exports) == 1
+
+
+@pytest.mark.parametrize("failure", ["raise", "failed", "requires_input"])
+def test_publish_failure_retains_saved_figure_and_retry_only_exports(live, monkeypatch, failure):
+    change(live)
+    applied = _mock_save(live, monkeypatch)
+
+    def export(*args, **kwargs):
+        if failure == "raise":
+            raise RuntimeError("export failed")
+        return {"status": failure, "task_dir": "/retained/task"}
+
+    monkeypatch.setattr(module, "start_task", export)
+    with pytest.raises(ValueError, match="图形已保存，但交付更新未完成"):
+        command(live, "publish")
+    assert not live.state()["dirty"] and not live.state()["stale"]
+    assert "图形已保存" in live.state()["result"]["message"]
+    if failure != "raise":
+        assert live.state()["result"]["task"]["task_dir"] == "/retained/task"
+    monkeypatch.setattr(module, "start_task", lambda *a, **k: {"status": "complete"})
+    assert command(live, "publish")["result"]["task"]["status"] == "complete"
+    assert len(applied) == 1
+
+
+def _second_figure(live, monkeypatch):
+    document, spec = live.project / "second.vsz", live.project / "second.spec.json"
+    document.write_text("second native")
+    spec.write_text('{"series": []}')
+    primary = copy.deepcopy(live.figure)
+    secondary = {"figure_id": "second", "title": "Second", "status": "ready",
+                 "document": str(document), "spec": str(spec)}
+
+    def resolve(target, identifier):
+        if identifier == "figure":
+            return primary
+        if identifier == "second":
+            return secondary
+        raise ValueError("Unknown figure_id")
+
+    monkeypatch.setattr(module, "resolve_project_figure", resolve)
+    live.test_evidence["figures"] = [primary, secondary]
+    live.baseline = module.edit_state(live.project)
+    return document, spec
+
+
+def test_switch_preserves_history_until_explicit_discard_and_uses_new_spec(live, monkeypatch):
+    document, spec = _second_figure(live, monkeypatch)
+    seen = []
+    monkeypatch.setattr(module, "audit_edited_document", lambda doc, schema: seen.append((doc, schema)))
+    change(live)
+    previous_worker, previous_id = live.worker, live.session_id
+    with pytest.raises(ValueError, match="尚未保存"):
+        command(live, "switch", figure_id="second")
+    assert live.worker is previous_worker and live.state()["dirty"]
+    state = command(live, "switch", figure_id="second", discard=True)["state"]
+    assert state["figure_id"] == "second" and not state["dirty"]
+    assert state["session_id"] != previous_id and previous_worker.closed
+    assert seen == [(document, spec)] and live.document == document and live.spec == spec
+    assert state["figures"][1]["title"] == "Second"
+    assert not state["can_undo"]
+
+
+def test_failed_switch_retains_old_document_worker_and_unsaved_draft(live, monkeypatch):
+    _second_figure(live, monkeypatch)
+    change(live)
+    previous_worker, previous_id, previous_frame = live.worker, live.session_id, live.state()["preview"]
+    with pytest.raises(ValueError, match="Unknown"):
+        command(live, "switch", figure_id="missing", discard=True)
+    assert live.worker is previous_worker and not previous_worker.closed
+    assert live.session_id == previous_id and live.state()["preview"] == previous_frame
+    assert live.state()["dirty"]
+
+
+def test_initial_target_keeps_canonical_secondary_document_identity(live, monkeypatch, tmp_path):
+    target = live.project / "canonical-secondary.vsz"
+    target.write_text("secondary")
+    calls = []
+
+    def resolve(value, identifier):
+        calls.append((value, identifier))
+        return live.figure
+
+    monkeypatch.setattr(module, "resolve_project_figure", resolve)
+    output = tmp_path / "another-session"
+    output.mkdir()
+    opened = module.LiveSession(target, output=output)
+    opened.close()
+    assert calls[0] == (target, None)

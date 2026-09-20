@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sciplot_core.doctor import (
+    _next_actions,
     _publication_foundation_available,
     _vsz_lifecycle_available,
     doctor_payload,
@@ -38,9 +39,16 @@ def test_doctor_prefers_external_tasks_and_retains_native_compatibility() -> Non
     assert routes["mcp_transport"]["command"] == "mcp"
     assert routes["mcp_transport"]["internal_model_required"] is False
     assert normal["interactive_entrypoint"] == routes["interactive_family"]["interactive"]
-    assert normal["frontend_default"] == "veusz_mainwindow"
-    assert normal["frontend_default_scope"] == "compatible_native_editor"
-    assert routes["interactive_family"]["command"] == "studio"
+    assert normal["interactive_entrypoint"] == "sciplot edit PROJECT_OR_DELIVERY"
+    assert normal["frontend_default"] == "live_editor"
+    assert normal["frontend_default_scope"] == "saved_project_visual_adjustments"
+    assert routes["interactive_family"]["command"] == "edit"
+    assert routes["interactive_family"]["document_authority"] == "saved_vsz"
+    assert normal["native_editor_entrypoint"] == routes["native_compatibility"]["interactive"]
+    assert routes["native_compatibility"]["command"] == "studio"
+    assert payload["vsz_lifecycle"]["editor"] == "live_editor"
+    assert payload["vsz_lifecycle"]["native_editor"] == "veusz_mainwindow"
+    assert any("Open_in_SciPlot.command" in item for item in _next_actions([]))
     assert routes["automation_family"]["command"] == "autoplot"
     assert routes["automation_family"]["separate_renderer"] is False
     assert "not directly resumable" in routes["automation_family"]["role"]

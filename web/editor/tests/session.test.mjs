@@ -180,3 +180,58 @@ test('reconnection retries the same preview URL with a fresh image identity',asy
  c.markFrame(1);assert.equal(c.readyForFrameAction,true)
  assert.deepEqual(previewFrames(retry,retry),[retry]);c.dispose()
 })
+test('publish accepts a saved figure and retains saved state when export fails before a safe retry',async()=>{
+ const {controller:c,requests}=setup((body,n)=>n===1?response({state:state(2,'red',{dirty:false}),error:{message:'PDF export failed'}},false):response({state:state(3,'red',{dirty:false}),result:{message:'Delivery updated'}}),state(1,'red',{dirty:true}))
+ await c.load();c.markFrame(1)
+ assert.equal(await c.action('publish'),false)
+ assert.equal(c.state.dirty,false);assert.match(c.result,/已保存/);assert.equal(c.error,'PDF export failed')
+ assert.equal(await c.action('publish'),false,'new saved state must load its own frame before retry')
+ c.markFrame(2);assert.equal(await c.action('publish'),true)
+ assert.deepEqual(requests.map(r=>r.action),['publish','publish']);assert.equal(c.result,'Delivery updated');c.dispose()
+})
+test('switch never drops dirty changes or invalid drafts without an explicit discard',async()=>{
+ const {controller:c,requests}=setup(()=>response({state:state(2,'black',{figure_id:'f2',session_id:'native-2',dirty:false})}),state(1,'red',{dirty:true}))
+ await c.load();c.markFrame(1)
+ assert.equal(await c.switchFigure('f2'),false)
+ c.setDraft(objectPath,{...field(),editor:'distance'},'-')
+ assert.equal(await c.switchFigure('f2','save'),false);assert.equal(requests.length,0)
+ assert.equal(await c.switchFigure('f2','discard'),true)
+ assert.equal(requests[0].discard,true);assert.equal(c.state.figure_id,'f2');assert.equal(c.drafts.size,0);assert.equal(c.paused,false);assert.equal(c.frameRevision,null);c.dispose()
+})
+test('save then switch serializes revisions and stops if saving fails',async()=>{
+ const {controller:c,requests}=setup(body=>body.action==='save'?response({state:state(2,'red',{dirty:false})}):response({state:state(3,'black',{figure_id:'f2',session_id:'native-2',dirty:false})}),state(1,'red',{dirty:true}))
+ await c.load();c.markFrame(1);assert.equal(await c.switchFigure('f2','save'),true)
+ assert.deepEqual(requests.map(r=>[r.action,r.revision]),[['save',1],['switch',2]])
+ assert.equal(requests[1].discard,undefined);assert.equal(c.frameRevision,null);c.dispose()
+ const failed=setup(()=>response({state:state(1,'red',{dirty:true}),error:{message:'Cannot save'}},false),state(1,'red',{dirty:true}))
+ await failed.controller.load();failed.controller.markFrame(1)
+ assert.equal(await failed.controller.switchFigure('f2','save'),false);assert.equal(failed.requests.length,1);assert.equal(failed.controller.state.figure_id,'f1');failed.controller.dispose()
+})
+test('failed discard and switch preserves the old figure and every draft',async()=>{
+ const {controller:c,requests}=setup(()=>response({state:state(),error:{message:'Cannot open figure'}},false))
+ await c.load();c.setDraft(objectPath,field(),'blue')
+ assert.equal(await c.switchFigure('f2','discard'),false)
+ assert.equal(c.state.figure_id,'f1');assert.equal(c.drafts.get(key).text,'blue');assert.equal(c.paused,true)
+ await c.flush();assert.equal(requests.length,1);c.dispose()
+})
+test('ambiguous switch response cannot replay old drafts into a different figure',async()=>{
+ let current=state(),commands=0
+ const c=new SessionController('token',async(url)=>{
+  if(url==='/api/state')return response(current)
+  commands++;current=state(2,'black',{figure_id:'f2',session_id:'native-2',dirty:false});throw new Error('connection lost after switch')
+ },100000)
+ await c.load();c.setDraft(objectPath,field(),'blue');await c.switchFigure('f2','discard')
+ await c.retry();assert.equal(commands,1);assert.equal(c.state.figure_id,'f2');assert.equal(c.drafts.get(key).text,'blue');assert.equal(c.paused,true);assert.match(c.error,/旧输入不会应用/)
+ c.setDraft(objectPath,field(),'red');assert.equal(c.drafts.get(key).text,'blue')
+ c.discardDrafts();assert.equal(c.paused,false);assert.equal(c.drafts.size,0);c.dispose()
+})
+test('switching figures never shows a previous figure as the pending current preview',async()=>{
+ const {previewFrames}=await import('../src/preview.ts')
+ const loaded={state:state(),nonce:1}
+ const differentSession={state:state(2,'black',{session_id:'native-2',figure_id:'f2'}),nonce:1}
+ const differentFigure={state:state(2,'black',{figure_id:'f2'}),nonce:1}
+ assert.deepEqual(previewFrames(differentSession,loaded),[differentSession])
+ assert.deepEqual(previewFrames(differentFigure,loaded),[differentFigure])
+ const sameFigure={state:state(2,'red'),nonce:1}
+ assert.deepEqual(previewFrames(sameFigure,loaded),[loaded,sameFigure])
+})

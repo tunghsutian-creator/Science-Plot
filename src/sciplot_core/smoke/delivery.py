@@ -13,7 +13,7 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
     """Verify the small user-facing delivery surface and its CSV contract."""
 
     delivery_path = Path(str(delivery.get("path") or "")).expanduser().resolve()
-    expected_entries = {"data", "figures", "project", "Open_in_Veusz.command"}
+    expected_entries = {"data", "figures", "project", "Open_in_Veusz.command", "Open_in_SciPlot.command"}
     actual_entries = (
         {path.name for path in delivery_path.iterdir()}
         if delivery_path.is_dir()
@@ -115,6 +115,22 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
+    editor_launcher = delivery_path / "Open_in_SciPlot.command"
+    editor_probe: dict[str, Any] = {"path": str(editor_launcher), "exists": editor_launcher.is_file()}
+    if editor_launcher.is_file():
+        editor_result = subprocess.run(
+            ["zsh", str(editor_launcher)],
+            text=True, capture_output=True, check=False,
+            env={**os.environ, "SCIPLOT_LAUNCH_DRY_RUN": "1"},
+        )
+        arguments = editor_result.stdout.splitlines()
+        editor_probe.update({
+            "returncode": editor_result.returncode,
+            "arguments": arguments,
+            "stderr": editor_result.stderr.strip(),
+            "target_current": arguments[1:] == ["edit", str(delivery_path), "--portable-fallback"],
+        })
+
     passed = (
         delivery_path.is_dir()
         and actual_entries == expected_entries
@@ -134,6 +150,8 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         and launcher_probe.get("exists") is True
         and launcher_probe.get("returncode") == 0
         and Path(launcher_probe.get("dry_run_path") or "").is_file()
+        and editor_probe.get("returncode") == 0
+        and editor_probe.get("target_current") is True
     )
     return {
         "passed": passed,
@@ -145,4 +163,5 @@ def _delivery_layout_probe(delivery: dict[str, Any]) -> dict[str, Any]:
         "figures": figure_locations,
         "projects": project_locations,
         "launcher": launcher_probe,
+        "editor_launcher": editor_probe,
     }

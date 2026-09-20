@@ -16,6 +16,7 @@ from uuid import uuid4
 
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.live_editor.worker import NativeWorker
+from sciplot_core.live_editor.entry import resolve_editor_input
 from sciplot_core.studio_core.document_edit import apply_document_edit, preview_document_edit
 from sciplot_core.studio_core.document_edit_state import audit_edited_document, edit_state, new_preview_directory
 from sciplot_core.studio_core.project_query import inspect_project, resolve_project_figure, resolve_project_path
@@ -91,8 +92,9 @@ def _export_authority(project: Path, state: dict[str, Any]) -> dict[str, Any]:
 class LiveSession:
     def __init__(self, project: Path, *, figure_id: str | None = None,
                  output: Path | None = None):
-        self.project = resolve_project_path(project)
-        self.figure = resolve_project_figure(self.project, figure_id)
+        self.entry_target, _ = resolve_editor_input(project)
+        self.project = resolve_project_path(self.entry_target)
+        self.figure = resolve_project_figure(self.entry_target, figure_id)
         self.figure_id = self.figure["figure_id"]
         self.document = Path(self.figure["document"])
         self.spec = Path(self.figure["spec"])
@@ -107,6 +109,7 @@ class LiveSession:
         self.baseline: dict[str, Any] = {}
         self.evidence: dict[str, Any] = {}
         self.sample_labels: dict[str, str] = {}
+        self.figures: list[dict[str, Any]] = []
         self.checked_at = ""
         self.receipts: dict[str, tuple[str, dict[str, Any]]] = {}
         self.saved_hash = ""
@@ -115,23 +118,25 @@ class LiveSession:
         self.session_error: str | None = None
         self._load()
 
-    def _load(self) -> None:
+    def _load(self, figure_id: str | None = None) -> None:
+        resolve_editor_input(self.entry_target)
         inspection = inspect_project(self.project)
         if (inspection.get("source") or {}).get("current") is False:
             raise ValueError("原始数据已变化，请通过源数据更新流程处理后再编辑。")
-        selected = resolve_project_figure(self.project, self.figure_id)
-        if Path(selected["document"]) != self.document or Path(selected["spec"]) != self.spec:
+        selected = resolve_project_figure(self.project, figure_id or self.figure_id)
+        document, spec = Path(selected["document"]), Path(selected["spec"])
+        if figure_id is None and (document != self.document or spec != self.spec):
             raise ValueError("图形身份发生变化，请重新打开编辑器。")
         before = edit_state(self.project)
-        audit_edited_document(self.document, self.spec)
+        audit_edited_document(document, spec)
         folder = self.output / uuid4().hex
         folder.mkdir(mode=0o700)
         snapshot = folder / "baseline.vsz"
-        shutil.copyfile(self.document, snapshot)
-        worker = NativeWorker(snapshot, self.spec, folder / "frames")
+        shutil.copyfile(document, snapshot)
+        worker = NativeWorker(snapshot, spec, folder / "frames")
         try:
             native = worker.request("state")["state"]
-            labels = {path: item["sample"] for item in sample_style_targets(json.loads(self.spec.read_text()))
+            labels = {path: item["sample"] for item in sample_style_targets(json.loads(spec.read_text()))
                       for path in item["object_paths"]}
             if edit_state(self.project) != before:
                 raise ValueError("打开编辑器期间项目发生变化，请重新打开。")
@@ -140,7 +145,13 @@ class LiveSession:
             raise
         if self.worker is not None:
             self.worker.close()
+        if selected["figure_id"] != self.figure_id:
+            self.session_id = uuid4().hex
+        self.figure, self.figure_id = selected, selected["figure_id"]
+        self.document, self.spec = document, spec
         self.worker, self.native = worker, native
+        self.figures = [{key: item.get(key) for key in ("figure_id", "title", "primary", "status")}
+                        for item in inspection.get("figures", [selected])]
         self.saved_hash = file_sha256(snapshot)
         self.baseline, self.baseline_values = before, field_values(native["objects"])
         self.evidence = {key: inspection.get(key) for key in ("source", "qa", "delivery")}
@@ -184,7 +195,7 @@ class LiveSession:
                        for path, obj in self.native["objects"].items()}
             return copy.deepcopy({
                 "session_id": self.session_id, "revision": self.revision,
-                "figure_id": self.figure_id, "title": self.figure.get("title", self.figure_id),
+                "figures": self.figures, "figure_id": self.figure_id, "title": self.figure.get("title", self.figure_id),
                 "project": str(self.project), "document": str(self.document),
                 "document_sha256": self.saved_hash, "objects": objects,
                 "preview": {**self.native["preview"], "url": f"/api/preview?revision={self.revision}"},
@@ -232,6 +243,36 @@ class LiveSession:
         self._check_current()
         return {**result, "message": "已保存 VSZ；导出会按当前保存图重新生成并检查交付。"}
 
+    def _export(self) -> dict[str, Any]:
+        if self._changes():
+            raise ValueError("请先保存当前图形，再导出。")
+        protected = _export_authority(self.project, self.baseline)
+        task = start_task({"version": 1, "action": "export", "project": str(self.project)},
+                          task_dir=self.output / ("export-" + uuid4().hex))
+        if file_sha256(self.document) != self.saved_hash:
+            self.stale = True
+            raise ValueError("导出过程中保存图已变化，请核查当前状态。")
+        after = edit_state(self.project)
+        try:
+            if _export_authority(self.project, after) != protected:
+                raise ValueError("导出期间源规格、请求或项目元数据发生变化；请重新加载核查。")
+        except (ValueError, OSError):
+            self.stale = True
+            self.last_result = {"task": task, "message": "导出任务记录已保留；当前项目已变化，请重新加载核查。"}
+            raise
+        self.baseline = after
+        self.revision += 1
+        self.last_result = {"task": task}
+        self._check_current()
+        if task.get("status") == "complete" and not all(
+            (self.evidence.get(key) or {}).get("current") is True for key in ("qa", "delivery")
+        ):
+            self.stale = True
+            self.last_result["message"] = "导出任务已结束，但当前 QA 或交付无法确认有效；请重新载入核查。"
+            raise ValueError(self.last_result["message"])
+        return {"task": task, "message": "导出与检查已完成。" if task.get("status") == "complete"
+                  else "导出尚未完成；保存图仍保留，请查看任务状态。"}
+
     def command(self, request: dict[str, Any]) -> dict[str, Any]:
         with self.lock:
             identifier = request.get("request_id")
@@ -273,37 +314,32 @@ class LiveSession:
                 elif action == "save":
                     result = self._save()
                 elif action == "export":
-                    if self._changes():
-                        raise ValueError("请先保存当前图形，再导出。")
-                    protected = _export_authority(self.project, self.baseline)
-                    task = start_task({"version": 1, "action": "export", "project": str(self.project)},
-                                      task_dir=self.output / ("export-" + uuid4().hex))
-                    if file_sha256(self.document) != self.saved_hash:
-                        self.stale = True
-                        raise ValueError("导出过程中保存图已变化，请核查当前状态。")
-                    after = edit_state(self.project)
+                    result = self._export()
+                elif action == "publish":
+                    saved = self._save()
+                    self.last_result = {"save": saved}
                     try:
-                        if _export_authority(self.project, after) != protected:
-                            raise ValueError("导出期间源规格、请求或项目元数据发生变化；请重新加载核查。")
-                    except (ValueError, OSError):
-                        self.stale = True
-                        self.last_result = {"task": task, "message": "导出任务记录已保留；当前项目已变化，请重新加载核查。"}
-                        raise
-                    self.baseline = after
-                    self.revision += 1
-                    self.last_result = {"task": task}
-                    self._check_current()
-                    if task.get("status") == "complete" and not all(
-                        (self.evidence.get(key) or {}).get("current") is True for key in ("qa", "delivery")
-                    ):
-                        self.stale = True
-                        self.last_result["message"] = "导出任务已结束，但当前 QA 或交付无法确认有效；请重新载入核查。"
-                        raise ValueError(self.last_result["message"])
-                    result = {"task": task, "message": "导出与检查已完成。" if task.get("status") == "complete"
-                              else "导出尚未完成；保存图仍保留，请查看任务状态。"}
+                        result = self._export()
+                        if result["task"].get("status") != "complete":
+                            raise ValueError("导出任务尚未完成。")
+                    except (ValueError, OSError, RuntimeError, TimeoutError) as exc:
+                        message = f"图形已保存，但交付更新未完成：{exc} 修正问题后可重试更新交付，无需再次应用已保存修改。"
+                        self.last_result = {**(self.last_result or {}), "save": saved, "message": message}
+                        raise ValueError(message) from exc
+                    result = {**result, "save": saved, "message": "已保存并更新交付。"}
+                elif action == "switch":
+                    figure_id = request.get("figure_id")
+                    if not isinstance(figure_id, str) or not figure_id:
+                        raise ValueError("请选择已注册的图形。")
+                    if "discard" in request and type(request["discard"]) is not bool:
+                        raise ValueError("放弃修改需要明确的布尔值。")
+                    if self._changes() and request.get("discard") is not True:
+                        raise ValueError("当前图形尚未保存；请先保存，或明确放弃后切换。")
+                    self._load(figure_id)
+                    result = {"message": "已切换到所选图形。"}
                 else:
                     raise ValueError("不支持的编辑命令。")
-            if action in {"save", "export", "reload"}:
+            if action in {"save", "export", "publish", "reload", "switch"}:
                 self.last_result = result
             response = {"request_id": identifier, "state": self.state(), "result": result,
                         "elapsed_ms": round((perf_counter() - started) * 1000, 3), **result}

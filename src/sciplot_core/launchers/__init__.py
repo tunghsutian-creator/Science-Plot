@@ -44,6 +44,10 @@ from sciplot_core.launchers.structure import (  # noqa: F401
 from sciplot_core.launchers.delivery_inspection import (  # noqa: F401
     inspect_delivery_launcher_contract,
 )
+from sciplot_core.launchers.delivery_editor_launcher import (
+    inspect_delivery_editor_launcher_contract,
+    write_delivery_editor_launcher,
+)
 from sciplot_core.launchers.project_inspection import (  # noqa: F401
     _project_launcher_record,
     inspect_project_launcher_contract,
@@ -57,8 +61,10 @@ __all__ = [
     "PROJECT_PRIMARY_LAUNCHER",
     "PROJECT_VEUSZ_LAUNCHER",
     "inspect_delivery_launcher_contract",
+    "inspect_delivery_editor_launcher_contract",
     "inspect_project_launcher_contract",
     "portable_sciplot_prelude",
     "portable_vsz_finder",
     "write_delivery_launcher",
+    "write_delivery_editor_launcher",
 ]

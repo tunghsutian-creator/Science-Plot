@@ -241,6 +241,40 @@ def test_failed_current_query_does_not_offer_historical_edit_targets(tmp_path, m
     assert "figures" not in result["current_project"]
 
 
+@pytest.mark.parametrize("has_launcher", [False, True])
+def test_current_handoff_exposes_canvas_without_rewriting_old_deliveries(
+    tmp_path, monkeypatch, has_launcher,
+):
+    from sciplot_core.policy import DELIVERY_EDITOR_LAUNCHER
+    from sciplot_core.task_result_projection import compact_task_result
+
+    project, delivery = tmp_path / "managed", tmp_path / "Visible"
+    delivery.mkdir()
+    launcher = delivery / DELIVERY_EDITOR_LAUNCHER
+    if has_launcher:
+        launcher.write_text("existing launcher")
+    before = {p.name: p.read_bytes() for p in delivery.iterdir()}
+    current = {"project": str(project), "figures": [{"figure_id": "secondary"}], "source": {"current": True},
+               "qa": {"current": True}, "delivery": {"current": True, "path": str(delivery)}}
+    monkeypatch.setattr(control, "inspect_project", lambda _: current)
+    state = {"kind": "sciplot_task", "status": "complete", "phase": "complete",
+             "project": str(project), "task_dir": str(tmp_path / "task"),
+             "request": {"action": "create"}, "result": receipt(project)}
+    result = compact_task_result(control._current_result(state))
+    assert result["next_step"]["action"] == "review_exports_and_deliver"
+    expected = {"command": ["sciplot", "edit", str(project)]}
+    if has_launcher:
+        expected["launcher"] = str(launcher)
+    assert result["next_step"]["manual_edit"] == expected
+    assert {p.name: p.read_bytes() for p in delivery.iterdir()} == before
+    state["request"] = {"action": "edit", "figure_id": "secondary"}
+    assert control._current_result(state)["next_step"]["manual_edit"]["command"] == [
+        "sciplot", "edit", str(project), "--figure", "secondary",
+    ]
+    current["delivery"]["current"] = False
+    assert "manual_edit" not in control._current_result(state)["next_step"]
+
+
 def test_malformed_edit_is_rejected_before_task_directory_or_project_query(tmp_path, monkeypatch):
     from sciplot_core.studio_core.annotation_schema import AnnotationOperationError
     def unnecessary(*args):

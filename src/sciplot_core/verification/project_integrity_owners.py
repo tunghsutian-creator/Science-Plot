@@ -50,6 +50,9 @@ PROJECT_INTEGRITY_OWNERS = (
         exact_paths=frozenset(
             {
                 "src/sciplot_core/studio_core/delivery_target.py",
+                "src/sciplot_core/policy/__init__.py",
+                "src/sciplot_core/policy/render_options.py",
+                "src/sciplot_core/smoke/delivery.py",
                 "src/sciplot_core/studio_core/project_export.py",
                 "src/sciplot_core/studio_core/studio_command.py",
                 "src/sciplot_core/cli/dispatch/interfaces.py",
@@ -61,6 +64,7 @@ PROJECT_INTEGRITY_OWNERS = (
         owned_test_paths=frozenset(
             {
                 "tests/test_delivery_project_documents.py",
+                "tests/test_delivery_editor_launcher.py",
                 "tests/test_delivery_project_continuation.py",
                 "tests/test_delivery_studio_lifecycle.py",
                 "tests/test_project_export_use_case.py",
@@ -68,6 +72,7 @@ PROJECT_INTEGRITY_OWNERS = (
         ),
         pytest_targets=(
             "tests/test_delivery_project_documents.py",
+            "tests/test_delivery_editor_launcher.py",
             "tests/test_delivery_project_continuation.py",
             "tests/test_delivery_studio_lifecycle.py",
             "tests/test_project_export_use_case.py",

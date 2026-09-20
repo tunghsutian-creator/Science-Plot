@@ -37,6 +37,7 @@ function useCanvas(snapshot:Snapshot){
  }
  const zoom=(factor:number)=>setView(v=>({...v,zoom:Math.max(.025,Math.min(8,v.zoom*factor)),fit:false}))
  useEffect(()=>{if(view.fit)fit()},[state?.preview.width,state?.preview.height])
+ useEffect(()=>{drag.current=null;setDragging(false);fit()},[state?.session_id])
  useEffect(()=>{const node=box.current;if(!node)return;const observer=new ResizeObserver(()=>{if(view.fit)fit()});observer.observe(node);return()=>observer.disconnect()},[state?.preview.width,state?.preview.height,view.fit])
  const pick=async(clientX:number,clientY:number)=>{
   if(!image.current||!state||!controller.readyForFrameAction)return null
@@ -57,7 +58,8 @@ export function App(){
  const [collapsed,setCollapsed]=useState(new Set<string>())
  const [leftOpen,setLeftOpen]=useState(()=>window.innerWidth>530),[rightOpen,setRightOpen]=useState(()=>window.innerWidth>800)
  const [confirmReload,setConfirmReload]=useState(false),[showAbout,setShowAbout]=useState(false)
- const reloadDialog=useRef<HTMLDialogElement>(null),aboutDialog=useRef<HTMLDialogElement>(null)
+ const [switchTarget,setSwitchTarget]=useState<string|null>(null)
+ const reloadDialog=useRef<HTMLDialogElement>(null),aboutDialog=useRef<HTMLDialogElement>(null),switchDialog=useRef<HTMLDialogElement>(null)
  const propertyScroll=useRef<HTMLDivElement>(null)
  const canvas=useCanvas(snapshot)
  const spacePan=useRef(false)
@@ -70,8 +72,14 @@ export function App(){
  const mutateReady=!!state&&cleanQueue&&frameReady
  const objects=state?.objects??{}
  const paths=Object.keys(objects)
+ const figures=state?.figures?.length?state.figures:state?[{figure_id:state.figure_id,title:state.title||state.figure_id,primary:true,status:'ready'}]:[]
  useEffect(()=>{void controller.load()},[])
  useEffect(()=>{if(propertyScroll.current)propertyScroll.current.scrollTop=0},[selected,state?.session_id])
+ useEffect(()=>{
+  setQuery('');setCollapsed(new Set());setLoadedFrame(null);setKeyOffset({x:0,y:0});spacePan.current=false
+  const initial=state?.selected_object_path
+  setSelected(initial&&objects[initial]?initial:paths.find(p=>(objects[p].fields??[]).length)||paths[0]||'')
+ },[state?.session_id])
  useEffect(()=>{
   if(selected&&objects[selected])return
   const initial=state?.selected_object_path
@@ -79,7 +87,7 @@ export function App(){
  },[state?.session_id,state?.revision])
  useEffect(()=>{
   const onKey=(event:globalThis.KeyboardEvent)=>{
-   if(reloadDialog.current?.open||aboutDialog.current?.open)return
+   if(reloadDialog.current?.open||aboutDialog.current?.open||switchDialog.current?.open)return
    const action=shortcutAction(event)
    if(!action)return
    event.preventDefault()
@@ -90,6 +98,7 @@ export function App(){
  },[])
  useEffect(()=>{if(confirmReload)reloadDialog.current?.showModal();else reloadDialog.current?.close()},[confirmReload])
  useEffect(()=>{if(showAbout)aboutDialog.current?.showModal();else aboutDialog.current?.close()},[showAbout])
+ useEffect(()=>{if(switchTarget)switchDialog.current?.showModal();else switchDialog.current?.close()},[switchTarget])
  useEffect(()=>{const handler=(e:BeforeUnloadEvent)=>{if(controller.state?.dirty||controller.hasDrafts){e.preventDefault();e.returnValue=''}};window.addEventListener('beforeunload',handler);return()=>window.removeEventListener('beforeunload',handler)},[])
  const selectedObject=objects[selected]
  const keyBounds=selectedObject?.drag_handle?.kind==='key'?selectedObject.drag_handle.bounds:null
@@ -111,24 +120,32 @@ export function App(){
   else if(event.key==='ArrowLeft'){if(hasChildren(path)&&!collapsed.has(path)){toggle(path);event.preventDefault();return}target=path.slice(0,path.lastIndexOf('/'))}
   if(target&&objects[target]&&visible.includes(target)){event.preventDefault();setSelected(target);requestAnimationFrame(()=>document.getElementById('object-'+encodeURIComponent(target))?.focus())}
  }
- const status=state?.session_error?'会话已停止':state?.stale?'文档已变化':busy==='loading'?'正在连接':snapshot.paused?'修改失败':busy==='set'?'正在渲染':drafts.size?'修改待处理':busy==='save'?'正在保存':busy==='export'?'正在导出':busy?'正在处理':!frameReady?'正在加载预览':state?.dirty?'尚未保存':'已保存'
+ const requestSwitch=(figureId:string)=>{
+  if(!state||busy||figureId===state.figure_id)return
+  if(state.dirty||drafts.size||snapshot.paused||state.stale)setSwitchTarget(figureId)
+  else void controller.switchFigure(figureId)
+ }
+ const finishSwitch=async(mode:'save'|'discard')=>{
+  if(switchTarget&&await controller.switchFigure(switchTarget,mode))setSwitchTarget(null)
+ }
+ const status=state?.session_error?'会话已停止':state?.stale?'文档已变化':busy==='loading'?'正在连接':snapshot.paused?'修改失败':busy==='set'?'正在渲染':drafts.size?'修改待处理':busy==='save'?'正在保存':busy==='publish'?'正在保存并更新交付':busy==='export'?'正在导出':busy==='switch'?'正在打开图形':busy?'正在处理':!frameReady?'正在加载预览':state?.dirty?'尚未保存':'已保存'
  const statusTone=state?.stale||snapshot.paused?'danger':drafts.size||busy||!frameReady?'warn':state?.dirty?'accent':'ok'
  return <div className="editor-app">
   <a className="skip-link" href="#native-canvas">跳到画布</a>
   <header className="app-bar">
    <a className="brand" href="#native-canvas">SciPlot<span>实时编辑</span></a>
-   <div className="document-title"><strong>{state?.title||state?.figure_id||'原生图形'}</strong><span>{state?.document?shortPath(state.document):'Veusz 原生文档'}</span></div>
+   <div className="document-title"><label htmlFor="figure-selector">当前图形{figures.length>1?` · 共 ${figures.length} 张`:''}</label><select id="figure-selector" aria-label="选择图形" value={state?.figure_id??''} onChange={event=>requestSwitch(event.target.value)} disabled={!state||!!busy}>{figures.length?figures.map(figure=><option key={figure.figure_id} value={figure.figure_id}>{figure.title||figure.figure_id}{figure.primary?' · 主图':''}</option>):<option value="">正在载入图形…</option>}</select></div>
    <div className="top-actions">
     <button onClick={()=>setShowAbout(true)} className="quiet">关于</button>
     <button onClick={()=>setConfirmReload(true)} disabled={!state||!!busy} title="重新读取已保存的 VSZ">重新载入</button>
     <button onClick={()=>void controller.action('undo')} disabled={!cleanQueue||!state?.can_undo} title="撤销 · ⌘/Ctrl Z">撤销</button>
     <button onClick={()=>void controller.action('redo')} disabled={!cleanQueue||!state?.can_redo} title="重做 · ⌘/Ctrl Shift Z">重做</button>
-    <button onClick={()=>void controller.action('export')} disabled={!mutateReady||state?.dirty} title={state?.dirty?'请先保存原生文档':'按当前已保存文档导出'}>导出</button>
-    <button className="primary" onClick={()=>void controller.action('save')} disabled={!mutateReady||!state?.dirty}>保存 VSZ</button>
+    <button onClick={()=>void controller.action('save')} disabled={!mutateReady||!state?.dirty} title="仅保存可编辑文档，不更新交付文件 · ⌘/Ctrl S">仅保存</button>
+    <button className="primary publish" onClick={()=>void controller.action('publish')} disabled={!mutateReady} title="保存当前图形并更新 PDF、TIFF 和可编辑交付文件">保存并更新交付</button>
    </div>
   </header>
-  <div className="state-bar" role="status" aria-live="polite"><Badge tone={statusTone}>{status}</Badge><span>{state?`版本 ${state.revision}`:'本机编辑会话'}</span><span className="state-description">{result||'点击图形或左侧对象，再在右侧修改属性。'}</span><span className="engine-label" title={state?.checked_at?`最近证据检查：${state.checked_at}`:undefined}>Veusz 原生绘图</span></div>
-  {error&&<div className="error-banner" role="alert"><div><strong>{state?.session_error?'原生会话已停止':snapshot.paused?'修改未完成':'需要处理'}</strong><p>{error}</p>{drafts.size>0&&<p>输入内容已保留；画布显示最近一次成功的原生渲染。</p>}</div><div className="error-actions">{!state?.session_error&&snapshot.paused&&<button onClick={()=>void controller.retry()} disabled={!!busy}>重试修改</button>}{drafts.size>0&&<button onClick={()=>controller.discardDrafts()} disabled={!!busy}>放弃未应用输入</button>}{state?.session_error?<button onClick={()=>setConfirmReload(true)} disabled={!!busy}>重新载入原生会话</button>:!drafts.size&&<button onClick={()=>void controller.load()} disabled={!!busy}>重新连接</button>}</div></div>}
+  <div className="state-bar" role="status" aria-live="polite"><Badge tone={statusTone}>{status}</Badge><span>{state?`版本 ${state.revision}`:'本机编辑会话'}</span><span className="state-description" title={result||undefined}>{result||'修改后点击“保存并更新交付”，即可获得最新文件。'}</span><span className="engine-label" title={state?.checked_at?`最近证据检查：${state.checked_at}`:undefined}>Veusz 原生绘图</span></div>
+  {error&&<div className="error-banner" role="alert"><div><strong>{state?.session_error?'原生会话已停止':snapshot.paused?'修改未完成':'需要处理'}</strong><p>{error}</p>{result&&<p>{result}</p>}{drafts.size>0&&<p>输入内容已保留；画布显示最近一次成功的原生渲染。</p>}</div><div className="error-actions">{!state?.session_error&&snapshot.paused&&<button onClick={()=>void controller.retry()} disabled={!!busy}>重试修改</button>}{drafts.size>0&&<button onClick={()=>controller.discardDrafts()} disabled={!!busy}>放弃未应用输入</button>}{state?.session_error?<button onClick={()=>setConfirmReload(true)} disabled={!!busy}>重新载入原生会话</button>:!drafts.size&&<button onClick={()=>void controller.load()} disabled={!!busy}>重新连接</button>}</div></div>}
   <main className={`editing-workspace ${!leftOpen?'left-closed':''} ${!rightOpen?'right-closed':''}`}>
    <aside className="object-panel" hidden={!leftOpen} aria-label="对象与样品"><div className="panel-heading"><h2>对象与样品</h2><span>{paths.length}</span><button onClick={()=>setLeftOpen(false)} aria-label="收起对象列表" className="icon-button">×</button></div><div className="object-search"><TextInput aria-label="搜索对象或样品" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索对象、样品…"/></div>
     <div className="object-tree" role="tree" aria-label="原生文档对象">
@@ -179,11 +196,12 @@ export function App(){
    </section>
    <aside className="property-panel" hidden={!rightOpen} aria-label="原生属性"><div className="panel-heading"><h2>属性</h2><button onClick={()=>setRightOpen(false)} aria-label="收起属性" className="icon-button">×</button></div>
     <div ref={propertyScroll} className="property-scroll">{selectedObject?<><div className="selected-heading"><span>{typeNames[selectedObject.type]||selectedObject.type}</span><h3>{selectedObject.label||selectedObject.sample||selectedObject.name||shortPath(selected)}</h3><p title={selected}>{selected}</p></div>
-     {(selectedObject.fields??[]).length===0?<div className="unsupported"><strong>此对象暂无开放的编辑属性</strong><p>可从对象列表选择曲线、坐标轴或图例。这里仅展示原生文档当前允许修改的属性。</p></div>:<><p className="editing-hint">输入后自动生成原生预览；保存后写入 VSZ。</p>{(selectedObject.fields??[]).map(field=><PropertyField key={selected+field.setting_path} objectPath={selected} field={field} snapshot={snapshot}/>)}</>}
+     {(selectedObject.fields??[]).length===0?<div className="unsupported"><strong>此对象暂无开放的编辑属性</strong><p>可从对象列表选择曲线、坐标轴或图例。这里仅展示原生文档当前允许修改的属性。</p></div>:<><p className="editing-hint">输入后实时预览；完成后保存并更新交付。</p>{(selectedObject.fields??[]).map(field=><PropertyField key={selected+field.setting_path} objectPath={selected} field={field} snapshot={snapshot}/>)}</>}
     </>:<p className="panel-empty">在图中点击，或从左侧选择一个对象。</p>}
     </div><div className="panel-footnote">{state?.dirty?'修改尚未保存；原始数据保持不变。':'显示当前原生文档属性。'}</div>
    </aside>
   </main>
+  <dialog ref={switchDialog} className="confirm-dialog switch-dialog" onCancel={event=>{if(busy)event.preventDefault();else setSwitchTarget(null)}} onClose={()=>setSwitchTarget(null)} aria-labelledby="switch-title"><h2 id="switch-title">切换到另一张图？</h2><p>即将打开“{figures.find(figure=>figure.figure_id===switchTarget)?.title||switchTarget}”。当前图还有未保存的修改或未应用输入。</p>{drafts.size>0&&<p className="switch-note">未应用输入无法保存。请保留当前编辑，完成输入并等待预览同步；或明确放弃后切换。</p>}{!drafts.size&&state?.dirty&&<p>“仅保存后切换”保留可编辑文档中的修改；交付文件需要之后再更新。</p>}{error&&<p role="alert" className="validation-error">{error}</p>}<div className="dialog-actions"><button autoFocus disabled={!!busy} onClick={()=>setSwitchTarget(null)}>保留当前编辑</button><button disabled={!mutateReady} onClick={()=>void finishSwitch('save')}>仅保存后切换</button><button className="danger-action" disabled={!!busy} onClick={()=>void finishSwitch('discard')}>放弃并切换</button></div></dialog>
   <dialog ref={reloadDialog} className="confirm-dialog" onCancel={()=>setConfirmReload(false)} onClose={()=>setConfirmReload(false)} aria-labelledby="reload-title"><h2 id="reload-title">重新载入已保存文档？</h2><p>当前未保存的原生修改和未应用输入将被放弃。已保存的 VSZ 会重新载入。</p><div className="dialog-actions"><button autoFocus onClick={()=>setConfirmReload(false)}>保留当前编辑</button><button className="primary" onClick={()=>{setConfirmReload(false);void controller.action('reload')}}>重新载入</button></div></dialog>
   <dialog ref={aboutDialog} className="about-dialog" onCancel={()=>setShowAbout(false)} onClose={()=>setShowAbout(false)} aria-labelledby="about-title"><div className="panel-heading"><h2 id="about-title">关于 SciPlot 实时编辑</h2><button onClick={()=>setShowAbout(false)}>关闭</button></div><p>属性修改、点击选择、预览和撤销由同一个原生 Veusz 文档会话执行。保存会通过 SciPlot 现有的独立 preview / apply 事务检查与写入，导出沿用 SciPlot 的数据审计和交付流程。</p><p>部分界面控件与设计主题接收自 <a href="https://github.com/Tavotto/Tavotto/tree/4cf5b8c658b06dbd6e1fc8a569fee85ef5d62186">Tavotto</a>，按 AGPL-3.0-only 使用并修改。这是 SciPlot 界面，不代表 Tavotto 官方版本。</p><p><a href="./tavotto-LICENSE.txt" target="_blank" rel="noreferrer">完整许可证</a> · <a href="./THIRD_PARTY.md" target="_blank" rel="noreferrer">代码来源与修改记录</a> · <a href="./dependency-LICENSES.txt" target="_blank" rel="noreferrer">依赖许可证</a></p></dialog>
  </div>
@@ -194,7 +212,7 @@ function PropertyField({objectPath,field,snapshot}:{objectPath:string;field:Fiel
  const value=displayValue(raw)
  const error=draft?.valid===false?draft.error:undefined
  const id='field-'+encodeURIComponent(field.setting_path)
- const disabled=!!snapshot.state?.stale||snapshot.busy==='save'||snapshot.busy==='export'||snapshot.busy==='reload'||snapshot.busy==='loading'
+ const disabled=!!snapshot.state?.stale||['save','export','publish','switch','reload','loading'].includes(snapshot.busy??'')
  const change=(value:unknown)=>controller.setDraft(objectPath,field,value)
  const help=field.editor==='distance'?'包含单位，例如 8pt / 0.3mm':field.editor==='float_list'?'递增数值，用逗号分隔；留空为自动':field.help_text
  if(!supportedEditors.has(field.editor))return <div className="property-field readonly-field"><label>{field.label}</label><span>{displayValue(field.current_value)}</span><small>此属性暂未提供编辑控件。</small></div>

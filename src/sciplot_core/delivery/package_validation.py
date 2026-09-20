@@ -8,10 +8,12 @@ from typing import Any, Literal, TypedDict
 from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.launchers import (
+    inspect_delivery_editor_launcher_contract,
     inspect_delivery_launcher_contract,
 )
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
+    DELIVERY_EDITOR_LAUNCHER,
     DELIVERY_LAUNCHER,
     DELIVERY_PDF_DIR,
     DELIVERY_PROJECT_DIR,
@@ -70,6 +72,12 @@ def verify_delivery_package(
         else None
     )
     root_ready = bool(recorded_root == expected and expected.is_dir())
+    # Older delivery records remain valid without the newer editor entry. Any
+    # recorded editor evidence requires the entire current launcher contract.
+    editor_recorded = any(
+        key in record
+        for key in ("open_in_sciplot", "open_in_sciplot_sha256", "editor_launcher_contract")
+    )
     expected_top_level = {
         DELIVERY_DATA_DIR,
         DELIVERY_PDF_DIR,
@@ -77,6 +85,8 @@ def verify_delivery_package(
         DELIVERY_PROJECT_DIR,
         DELIVERY_LAUNCHER,
     }
+    if editor_recorded:
+        expected_top_level.add(DELIVERY_EDITOR_LAUNCHER)
     actual_top_level = (
         {path.name for path in expected.iterdir()} if expected.is_dir() else set()
     )
@@ -175,6 +185,16 @@ def verify_delivery_package(
         and launcher_hash_current
         and launcher_structure_current
         and launcher_contract_current
+    )
+    live_editor_contract = inspect_delivery_editor_launcher_contract(expected)
+    editor_path = record.get("open_in_sciplot")
+    editor_launcher_current = not editor_recorded or bool(
+        isinstance(editor_path, str)
+        and editor_path.strip()
+        and Path(editor_path).expanduser().resolve() == expected / DELIVERY_EDITOR_LAUNCHER
+        and live_editor_contract.get("ready") is True
+        and record.get("open_in_sciplot_sha256") == live_editor_contract.get("content_sha256")
+        and record.get("editor_launcher_contract") == live_editor_contract
     )
     artifacts = record.get("artifacts")
     plan_artifact = (
@@ -352,6 +372,7 @@ def verify_delivery_package(
         "launcher_structure_current": launcher_structure_current,
         "launcher_contract_current": launcher_contract_current,
         "launcher_current": launcher_ready,
+        "editor_launcher_current": editor_launcher_current,
         "artifact_records_current": artifact_records_ready,
     }
     return {
@@ -373,4 +394,5 @@ def verify_delivery_package(
         "pairing": pairing,
         "resolved_figure_plan_binding": plan_record_binding,
         "launcher": live_launcher_contract,
+        "editor_launcher": live_editor_contract if editor_recorded else None,
     }

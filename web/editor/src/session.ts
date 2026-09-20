@@ -1,7 +1,8 @@
 /** SciPlot live session controller. Native Veusz owns document values and history. */
 export type Field = {setting_path:string; editor:string; current_value:unknown; choices?:string[]; minimum?:number|null; maximum?:number|null; label:string; section?:string; help_text?:string}
 export type NativeObject = {type:string; name:string; fields:Field[]; parent?:string; sample?:string; label?:string; drag_handle?:{kind:'key';bounds:[number,number,number,number]}}
-export type NativeState = {session_id:string; revision:number; document_sha256:string; figure_id:string; document?:string; title?:string; objects:Record<string,NativeObject>; preview:{url:string;width:number;height:number;sha256:string}; can_undo:boolean;can_redo:boolean;dirty:boolean;selected_object_path?:string;session_error?:string|null;[key:string]:unknown}
+export type Figure = {figure_id:string;title:string;primary:boolean;status:string}
+export type NativeState = {session_id:string; revision:number; document_sha256:string; figure_id:string; figures?:Figure[]; document?:string; title?:string; objects:Record<string,NativeObject>; preview:{url:string;width:number;height:number;sha256:string}; can_undo:boolean;can_redo:boolean;dirty:boolean;selected_object_path?:string;session_error?:string|null;[key:string]:unknown}
 export type Draft = {key:string;objectPath:string;text:unknown;value:unknown;generation:number;valid:boolean;error?:string}
 export type Snapshot = {state:NativeState|null;drafts:Map<string,Draft>;busy:string|null;error:string|null;result:string|null;frameRevision:number|null;paused:boolean;previewNonce:number}
 export type FetchLike = (input:string,init?:RequestInit)=>Promise<Pick<Response,'ok'|'status'|'json'>>
@@ -72,6 +73,7 @@ export class SessionController {
  private generation=0
  private request=0
  private clientId=crypto.randomUUID()
+ private draftSessionId:string|null=null
  private token:string
  private fetcher:FetchLike
  private debounce:number
@@ -89,7 +91,7 @@ export class SessionController {
   if(this.state&&state.session_id===this.state.session_id&&state.revision<this.state.revision)return
   if(this.state&&state.session_id!==this.state.session_id){
    this.frameRevision=null
-   if(this.drafts.size){this.paused=true;this.error='原生会话已更换。输入草稿已保留；请确认重新载入，或放弃未应用输入。'}
+   if(this.drafts.size){this.paused=true;this.error='原生会话已更换。旧输入不会应用到另一张图；草稿已保留，请重新载入或放弃未应用输入。'}
   }
   this.state=state
  }
@@ -101,6 +103,8 @@ export class SessionController {
   finally{this.busy=null;this.emit()}
  }
  setDraft(objectPath:string,field:Field,text:unknown){
+  if(this.drafts.size&&this.draftSessionId!==this.state?.session_id){this.operationRejected('这些输入属于上一张图的会话。请先放弃旧输入或重新载入，避免修改另一张图。');return}
+  if(!this.drafts.size)this.draftSessionId=this.state?.session_id??null
   const parsed=parseField(field,text)
   const draft:Draft={key:field.setting_path,objectPath,text,value:parsed.value,generation:++this.generation,valid:parsed.valid,error:parsed.error}
   this.drafts.set(draft.key,draft)
@@ -118,6 +122,7 @@ export class SessionController {
  async flush():Promise<void>{
   clearTimeout(this.timer)
   if(this.busy||this.paused||!this.state||!this.pending.size)return
+  if(this.draftSessionId!==this.state.session_id){this.paused=true;this.operationRejected('原生会话已更换。旧输入不会应用到另一张图；请放弃旧输入或重新载入。');return}
   const sent=new Map(this.pending);this.pending.clear()
   const changes=[]
   for(const [key,draft] of sent){
@@ -137,42 +142,56 @@ export class SessionController {
  }
  private async send(action:string,extra:Record<string,unknown>={}):Promise<boolean>{
   if(!this.state||this.busy)return false
-  this.busy=action;this.error=null;this.emit()
+  this.busy=action;this.error=null;this.result=null;this.emit()
   const request_id=`${this.clientId}:${++this.request}`
   try{
    const response=await this.fetcher('/api/command',{method:'POST',headers:this.headers(),body:JSON.stringify({request_id,revision:this.state.revision,action,...extra})})
    const payload=await response.json()
    this.receive(payload.state)
+   if(action==='publish'&&(!response.ok||payload.error))this.result=payload.result?.message||(payload.state?.dirty===false?'原生文档已保存；交付更新尚未完成。可重试“保存并更新交付”。':null)
    if(!response.ok||payload.error)throw new Error(payload.error?.message||`原生操作失败 (${response.status})。`)
    if(!payload.state)throw new Error('操作没有返回原生文档状态，请重新连接核实。')
    if(payload.selected_object_path&&this.state)this.state={...this.state,selected_object_path:payload.selected_object_path}
    if(payload.hit?.object_path&&this.state)this.state={...this.state,selected_object_path:payload.hit.object_path}
-   if(action==='save'||action==='export'){
+   if(action==='save'||action==='export'||action==='publish'){
     const result=payload.result
-    this.result=typeof result==='string'?result:result?.message|| (action==='save'?'已保存原生 VSZ 文档。':'已完成原生导出。')
+    this.result=typeof result==='string'?result:result?.message|| (action==='save'?'已保存原生 VSZ 文档；交付文件尚未更新。':action==='publish'?'已保存并更新交付文件。':'已完成原生导出。')
     if(result?.paths)this.result+=' '+(Array.isArray(result.paths)?result.paths.join(' · '):String(result.paths))
    }
    return true
   }catch(error){this.error=error instanceof Error?error.message:String(error);return false}
   finally{this.busy=null;this.emit()}
  }
- async action(action:'undo'|'redo'|'hit'|'move_key'|'save'|'export'|'reload',extra:Record<string,unknown>={}):Promise<boolean>{
+ async action(action:'undo'|'redo'|'hit'|'move_key'|'save'|'export'|'publish'|'reload'|'switch',extra:Record<string,unknown>={}):Promise<boolean>{
   if(!this.state||this.busy)return false
-  if(action!=='reload'&&(this.drafts.size||this.paused||this.state.stale))return false
-  if(['hit','move_key','save','export'].includes(action)&&!this.readyForFrameAction)return false
+  const replacing=action==='reload'||action==='switch'&&extra.discard===true
+  if(!replacing&&(this.drafts.size||this.paused||this.state.stale))return false
+  if(action==='switch'&&this.state.dirty&&extra.discard!==true)return false
+  if(['hit','move_key','save','export','publish'].includes(action)&&!this.readyForFrameAction)return false
   if(action==='undo'&&!this.state.can_undo||action==='redo'&&!this.state.can_redo)return false
+  if(action==='switch'||action==='reload')clearTimeout(this.timer)
   const success=await this.send(action,['hit','move_key'].includes(action)?{...extra,preview_revision:this.frameRevision}:extra)
-  if(success&&action==='reload'){this.pending.clear();this.drafts.clear();this.paused=false;this.result='已重新载入已保存的原生文档。'}
+  if(success&&(action==='reload'||action==='switch')){this.pending.clear();this.drafts.clear();this.draftSessionId=null;this.paused=false;this.error=null;this.result=action==='reload'?'已重新载入已保存的原生文档。':'已打开所选图形。'}
+  if(!success&&(action==='reload'||action==='switch')&&this.drafts.size)this.paused=true
   this.emit();if(success&&this.pending.size&&!this.paused)void this.flush();return success
+ }
+ async switchFigure(figureId:string,mode:'keep'|'save'|'discard'='keep'):Promise<boolean>{
+  if(!this.state||this.busy||figureId===this.state.figure_id)return false
+  if(mode==='save'){
+   if(!this.readyForFrameAction)return false
+   if(this.state.dirty&&!await this.action('save'))return false
+  }
+  return this.action('switch',{figure_id:figureId,...(mode==='discard'?{discard:true}:{})})
  }
  async retry(){
   if(this.busy)return
   // A failed network response may already have applied. Read native values before rebasing.
   await this.load()
   if(this.error){this.paused=true;this.emit();return}
+  if(this.drafts.size&&this.draftSessionId!==this.state?.session_id){this.paused=true;this.operationRejected('原生会话已更换。旧输入不会应用到另一张图；请放弃旧输入或重新载入。');return}
   this.paused=false;this.emit();await this.flush()
  }
  operationRejected(message:string){this.error=message;this.emit()}
- discardDrafts(){clearTimeout(this.timer);this.pending.clear();this.drafts.clear();this.paused=false;this.error=null;this.emit()}
+ discardDrafts(){clearTimeout(this.timer);this.pending.clear();this.drafts.clear();this.draftSessionId=null;this.paused=false;this.error=null;this.emit()}
  dispose(){clearTimeout(this.timer);this.listeners.clear()}
 }

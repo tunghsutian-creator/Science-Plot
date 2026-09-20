@@ -10,7 +10,9 @@ from sciplot_core.figure_plan.manifest_gate import figure_plan_manifest_gate
 from sciplot_core.figure_plan.plan import resolved_figure_plan_from_payload
 from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.launchers import (
+    inspect_delivery_editor_launcher_contract,
     inspect_delivery_launcher_contract,
+    write_delivery_editor_launcher,
     write_delivery_launcher,
 )
 from sciplot_core.output_contract import requested_delivery_root
@@ -132,6 +134,8 @@ def _build_staged_delivery(
         ),
     )
     launcher_contract = inspect_delivery_launcher_contract(delivery_dir)
+    editor_launcher = write_delivery_editor_launcher(delivery_dir)
+    editor_launcher_contract = inspect_delivery_editor_launcher_contract(delivery_dir)
     figure_pairing = _delivery_figure_pairing(figure_records)
     qa_hash_evidence = _qa_hash_evidence(manifest, figure_records)
     qa_hashes_match = bool(qa_hash_evidence) and all(
@@ -178,6 +182,12 @@ def _build_staged_delivery(
             "path": str(project_dir),
             "exists": project_files_exist,
             "details": project_records,
+        },
+        {
+            "id": "open_in_sciplot",
+            "path": str(editor_launcher),
+            "exists": editor_launcher_contract.get("ready") is True and bool(project_records),
+            "details": editor_launcher_contract,
         },
         {
             "id": "open_in_veusz",
@@ -293,6 +303,9 @@ def _build_staged_delivery(
         "open_in_veusz": str(launcher),
         "open_in_veusz_sha256": launcher_contract["content_sha256"],
         "launcher_contract": launcher_contract,
+        "open_in_sciplot": str(editor_launcher),
+        "open_in_sciplot_sha256": editor_launcher_contract["content_sha256"],
+        "editor_launcher_contract": editor_launcher_contract,
         "editable": str(project_dir),
         "editable_vsz": editable_vsz,
         "editable_vsz_projects": project_records,

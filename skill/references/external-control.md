@@ -90,6 +90,14 @@ saved historical evidence is never substituted for it. A later source, document
 or delivery change requires another query. `task inspect` remains the entrypoint
 for a new session or an existing task.
 
+Completed current deliveries also return `next_step.manual_edit`: its argument
+list opens the same managed project in the local SciPlot canvas, and `launcher`
+is present when the visible package already contains `Open_in_SciPlot.command`.
+Include this entry at handoff so the user can adjust the figure without another
+AI turn. In the canvas, Save updates the managed VSZ; Save and update delivery
+also refreshes VSZ/PDF/TIFF through existing QA. A saved draft alone is not a new
+publication receipt. Older packages are not rewritten merely to add this entry.
+
 Task `start`, `resume` and `inspect` use the same compact response in CLI and MCP.
 Successful responses omit duplicate artifact inventories and healthy-check detail;
 they retain current figure IDs, document hashes, sample labels, source/QA/delivery

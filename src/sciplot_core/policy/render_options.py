@@ -227,6 +227,9 @@ DELIVERY_PROJECT_DIR = "project"
 DELIVERY_LAUNCHER = "Open_in_Veusz.command"
 
 
+DELIVERY_EDITOR_LAUNCHER = "Open_in_SciPlot.command"
+
+
 DELIVERY_EDITABLE_DIR = "editable"
 
 

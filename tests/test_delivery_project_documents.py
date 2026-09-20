@@ -875,6 +875,48 @@ def _package_bytes(root: Path) -> dict[str, bytes]:
     }
 
 
+def test_delivery_builder_publishes_default_editor_entry_and_rejects_tampering(tmp_path: Path):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    record = build_delivery_package(run, manifest=manifest)
+    root = Path(record["path"])
+    editor = Path(record["open_in_sciplot"])
+    assert editor == root / "Open_in_SciPlot.command"
+    assert record["complete"] is True
+    assert record["verification"]["checks"]["editor_launcher_current"] is True
+    assert record["open_in_sciplot_sha256"] == existing_file_sha256(editor)
+    assert record["editor_launcher_contract"]["path"] == str(editor)
+    assert (root / "Open_in_Veusz.command").is_file()
+    editor.write_text(editor.read_text() + "# changed after publication\n")
+    result = verify_delivery_package(record, expected_root=root, expected_manifest=manifest)
+    assert result["passed"] is False
+    assert "editor_launcher_current" in result["failed_checks"]
+
+
+def test_legacy_delivery_record_remains_valid_and_is_upgraded_on_publication(tmp_path: Path):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    record = build_delivery_package(run, manifest=manifest)
+    root = Path(record["path"])
+    Path(record.pop("open_in_sciplot")).unlink()
+    record.pop("open_in_sciplot_sha256")
+    record.pop("editor_launcher_contract")
+    record["artifacts"] = [item for item in record["artifacts"] if item["id"] != "open_in_sciplot"]
+    assert verify_delivery_package(record, expected_root=root, expected_manifest=manifest)["passed"] is True
+    upgraded = build_delivery_package(run, manifest=manifest)
+    assert upgraded["complete"] is True
+    assert Path(upgraded["open_in_sciplot"]).is_file()
+
+
+@pytest.mark.parametrize("missing", ["open_in_sciplot", "open_in_sciplot_sha256", "editor_launcher_contract"])
+def test_partial_editor_entry_record_is_not_treated_as_legacy(tmp_path: Path, missing: str):
+    run, manifest, _ = _builder_manifest(tmp_path)
+    record = build_delivery_package(run, manifest=manifest)
+    root = Path(record["path"])
+    record.pop(missing)
+    result = verify_delivery_package(record, expected_root=root, expected_manifest=manifest)
+    assert result["passed"] is False
+    assert "editor_launcher_current" in result["failed_checks"]
+
+
 def test_delivery_copy_failure_keeps_previous_visible_package(
     tmp_path: Path, monkeypatch
 ) -> None:

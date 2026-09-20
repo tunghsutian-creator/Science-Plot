@@ -79,11 +79,14 @@ performance comparisons use **120 × 55 mm**. Click any image to view it at full
   Creep defaults to original shear strain (%) versus time (s), retaining the
   selected loading and recovery intervals without using compliance as strain.
 - Preview changes to colors, fonts, legends, and annotations before applying them.
-- Open a saved figure with `skill/scripts/sciplot edit PROJECT --figure FIGURE_ID`.
+- Double-click `Open_in_SciPlot.command` in a delivery to make visual adjustments,
+  or open a saved figure with `skill/scripts/sciplot edit PROJECT --figure FIGURE_ID`.
   Select a sample or click the native drawing, change its supported visual properties,
   and see Veusz redraw immediately. Undo and redo use the native document's history.
-  Save replays and audits the visible changes into the existing VSZ; Export runs the
-  existing exact-current QA and delivery flow. No AI round trip is needed for these controls.
+  Save replays and audits the visible changes into the existing VSZ. Save and update
+  delivery also runs the existing exact-current QA and delivery flow, refreshing
+  the delivered VSZ, PDF and TIFF. Multi-figure projects have a figure selector;
+  save or discard a draft before switching. No AI round trip is needed for these controls.
 - Change ordinary curves together by their exact sample labels, and save successive edits before exporting.
 - Save sample colors and line widths as a preset, then reuse them by sample name across other experiment figures, including matching marker and direct-label colors.
 - Run an explicit experiment group, continue each task independently, and inspect native figures in a local workspace with thumbnails, a large canvas, and collapsible details. Pan or zoom the preview, switch to the gallery, search by experiment or sample, filter items needing attention, and copy source/document/delivery paths. Data, export and delivery freshness are shown separately; repeated queries reuse unchanged previews.
@@ -94,7 +97,7 @@ performance comparisons use **120 × 55 mm**. Click any image to view it at full
 - Select original metadata/data rows, then choose one or more x/y pairs, including shared X. Each pair can have its own row range and worksheet in the same workbook. CSV/TSV descriptions and multirow headers use the same source-bound mapping. Missing scientific metadata needs explicit evidence; missing or nonfinite measurements require correction. Fresh source updates use the same independent ranges and reviewed annotation workflow.
 - Explicitly associate merged XLSX/XLSM metadata with its original anchor, including numeric sample IDs, while preserving original cells and measurement rows.
 - Update an existing project through the same AI task interface. Confirmed mappings are selected afresh. Compatible fixed annotations keep their coordinates; observed peaks show moved, missing or multiple candidates and require explicit handling before the final preview is accepted. Interrupted export resumes without applying the data revision twice.
-- Reopen saved projects and continue editing with AI or directly in Veusz.
+- Reopen saved projects and continue editing with AI, the SciPlot canvas, or Veusz.
 - Find previous task-created projects from their original data path when starting a new AI session.
 
 SciPlot runs plotting and exports locally. It does not require an internal model or API key;
@@ -196,7 +199,18 @@ separates automated coverage from independent original-workbook cases and remain
 | **CSV** | Source-derived plotting data |
 
 Outputs are saved beside your source data in `SOURCE_SciPlot/` by default.
-Use `Open_in_Veusz.command` in the export folder to reopen a figure.
+Double-click `Open_in_SciPlot.command` in the export folder to open the canvas,
+select a figure, adjust it, then choose **Save and update delivery**. **Save** alone
+updates the managed VSZ; PDF and TIFF remain unchanged until delivery is updated.
+`Open_in_Veusz.command` remains available for advanced native editing.
+
+The canvas resumes the original managed project. If a delivered VSZ has been
+edited separately in Veusz, recover those changes before continuing in the canvas.
+If only the visible folder was copied or moved, its launcher explicitly opens
+the portable Veusz copy; that copy does not update the original project.
+Older deliveries gain the canvas launcher on their next normal export. They can
+already be opened with `skill/scripts/sciplot edit DELIVERY_DIRECTORY` while their
+original project and source bindings remain valid.
 Your original data files are preserved.
 
 Licensed under [GPL-2.0](LICENSE). See [third-party notices](docs/THIRD_PARTY_NOTICES.md).

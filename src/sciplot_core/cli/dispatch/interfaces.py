@@ -18,8 +18,29 @@ def dispatch_interfaces(
 ) -> int | None:
     if args.command == "edit":
         from sciplot_core.live_editor.server import serve_editor
+        from sciplot_core.live_editor.entry import resolve_editor_input
 
-        serve_editor(args.target, figure_id=args.figure, port=args.port,
+        target, portable = resolve_editor_input(args.target, portable_fallback=args.portable_fallback)
+        if portable:
+            if args.figure:
+                raise ValueError("便携副本不能使用原工程图形 ID；请通过 Open_in_Veusz.command 选择具体 VSZ 文件。")
+            if args.check:
+                _print_json({"mode": "portable_veusz", "document": str(target),
+                             "synchronizes_project": False})
+                return 0
+            if args.no_open:
+                raise ValueError("便携副本无法启动原工程画板；可用 --check 检查，或用 Veusz 打开副本。")
+            from sciplot_core.studio import run_studio_command
+
+            return run_studio_command(target=target, original_argv=["studio", str(target)])
+        if args.check:
+            from sciplot_core.studio_core.project_query import resolve_project_figure, resolve_project_path
+
+            _print_json({"mode": "live_editor", "project": str(resolve_project_path(target)),
+                         "figure": resolve_project_figure(target, args.figure)})
+            return 0
+
+        serve_editor(target, figure_id=args.figure, port=args.port,
                      output=args.session_dir, open_browser=not args.no_open)
         return 0
 

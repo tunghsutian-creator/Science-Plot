@@ -13,6 +13,7 @@ from sciplot_core.foundation.file_hashing import existing_file_sha256
 from sciplot_core.launchers.delivery_binding import delivery_binding_from_content
 from sciplot_core.policy import (
     DELIVERY_DATA_DIR,
+    DELIVERY_EDITOR_LAUNCHER,
     DELIVERY_LAUNCHER,
     DELIVERY_PDF_DIR,
     DELIVERY_PROJECT_DIR,
@@ -34,6 +35,7 @@ def _package_snapshot(root: Path) -> dict[str, str]:
         DELIVERY_TIFF_DIR,
         DELIVERY_PROJECT_DIR,
         DELIVERY_LAUNCHER,
+        DELIVERY_EDITOR_LAUNCHER,
     }
     unknown = {item.name for item in root.iterdir()} - allowed
     if unknown:

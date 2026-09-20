@@ -14,6 +14,10 @@ def register_interfaces_commands(subparsers: Any) -> None:
     edit_parser.add_argument("--port", type=int, default=0)
     edit_parser.add_argument("--session-dir", type=Path, help="New session evidence directory outside source/project/delivery.")
     edit_parser.add_argument("--no-open", action="store_true")
+    edit_parser.add_argument("--portable-fallback", action="store_true",
+                             help="Open detached delivery copies in the compatible Veusz editor.")
+    edit_parser.add_argument("--check", action="store_true",
+                             help="Validate and report the saved figure target without starting an editor.")
 
     app_parser = subparsers.add_parser(
         "app",

@@ -48,8 +48,10 @@ It calls existing local domain services without starting an internal provider.
 `task_control` orchestrates bounded create/edit/export requests over those owners;
 task receipts live outside active projects and do not define scientific readiness.
 
-The `edit` CLI opens an optional local interactive surface for an existing saved
-figure. `live_editor` owns session binding, serialized browser commands and the
+The `edit` CLI opens the default post-delivery human editing surface for an existing
+saved figure. `Open_in_SciPlot.command` opens its bound delivery through this CLI;
+the retained `Open_in_Veusz.command` is the advanced and portable native route.
+`live_editor` owns session binding, serialized browser commands and the
 loopback HTTP adapter. `veusz_worker/live_session.py` keeps one Veusz Document on
 its process main thread, applies advertised native operations, uses native undo/
 redo and renders through the existing preview function. A PaintHelper built from
@@ -67,6 +69,14 @@ the displayed frame, then calls `apply_document_edit`; client candidate bytes ar
 never trusted. Native undo survives Save, and undoing a saved change creates a new
 unsaved difference. Export requires a saved document and delegates to the existing
 export task. Reload replaces the unsaved session from current saved authority.
+The combined publish command saves the active draft before calling that export
+owner; an export failure retains the saved revision for export-only retry. Figure
+selection follows registered IDs and requires saving or discarding the current
+draft. Delivery entry resolution preserves explicit secondary-figure targets and
+rejects separately modified visible copies before selecting canonical authority.
+The launcher's explicit portable fallback opens an unbound/moved copy in Veusz;
+it never creates a replacement managed binding. Opening old packages does not
+rewrite them; a subsequent normal export adds the default canvas launcher.
 Session reads detect a stopped native worker, retain the last frame and require
 reload before further edits. A completed export receipt is accepted only when
 fresh QA and delivery evidence both identify the current saved result.
@@ -633,7 +643,9 @@ must not be used for normal user deliveries. Internal evidence belongs to the
 sibling hidden `.sciplot/`; development gates use ignored `.tmp_verify/`.
 
 The visible package contains only plotting data, PDF/TIFF figures, editable
-VSZ projects, and the Veusz launcher. It is not a runtime workspace.
+VSZ projects, the default SciPlot canvas launcher and the retained Veusz launcher.
+It is not a runtime workspace. The legacy Veusz launcher keeps the delivery's
+identity and editable-file baselines; both entrypoints resolve the same owner.
 
 For a supported resolved plan, every selected task has one stable logical ID,
 the plan records a relocation-stable source-content fingerprint, and each task

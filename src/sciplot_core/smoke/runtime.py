@@ -218,8 +218,9 @@ def run_runtime_smoke(*, output_root: Path) -> dict[str, Any]:
         checks.append(
             _check(
                 "independent_mode",
-                "Veusz is the normal frontend and its optional assistant starts independent and hidden",
-                normal_mode.get("frontend_default") == "veusz_mainwindow"
+                "The saved-project canvas is the default human editor and the optional Veusz assistant stays independent and hidden",
+                normal_mode.get("frontend_default") == "live_editor"
+                and normal_mode.get("interactive_entrypoint") == "sciplot edit PROJECT_OR_DELIVERY"
                 and normal_mode.get("assistant_default") == "independent"
                 and normal_mode.get("assistant_visibility_default") == "hidden"
                 and normal_mode.get("codex_required") is False

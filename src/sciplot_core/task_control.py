@@ -9,6 +9,7 @@ from typing import Any
 
 from sciplot_core.foundation.source_tree import source_tree_sha256
 from sciplot_core.output_contract import resolve_user_output_layout
+from sciplot_core.policy import DELIVERY_EDITOR_LAUNCHER
 from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.task_timing import timed_task_call, finish_timing, observe_phase
 from sciplot_core.studio_core.annotation_schema import validate_operation_batch
@@ -52,8 +53,18 @@ def _current_result(state: dict[str, Any]) -> dict[str, Any]:
             ) if key in current}
             if (state["status"] == "complete" and (state.get("result", {}).get("studio_run") or {}).get("ready_to_use") is True
                     and all((current.get(key) or {}).get("current") is True for key in ("source", "qa", "delivery"))):
+                editor: dict[str, Any] = {"command": ["sciplot", "edit", current["project"]]}
+                figure_id = state["request"].get("figure_id")
+                if figure_id in {item["figure_id"] for item in current.get("figures", [])}:
+                    editor["command"].extend(["--figure", figure_id])
+                delivery_path = (current.get("delivery") or {}).get("path")
+                if isinstance(delivery_path, str):
+                    launcher = Path(delivery_path) / DELIVERY_EDITOR_LAUNCHER
+                    if launcher.is_file():
+                        editor["launcher"] = str(launcher)
                 summary["next_step"] = {
                     "action": "review_exports_and_deliver", "task": state["task_dir"],
+                    "manual_edit": editor,
                     "images": [item["path"] for figure in state["result"].get("figures", [])
                                for item in figure.get("exports", []) if item.get("format") == "tiff"],
                     "message": "Current source/QA/delivery were queried in this call. Review the exported images, then deliver; requery after later changes. No additional native preview or inspect is required for this unchanged result.",

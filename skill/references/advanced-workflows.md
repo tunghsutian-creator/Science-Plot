@@ -21,8 +21,8 @@ repair the stale document. Never revive an older route from historical notes.
 
 ## Product boundary
 
-External AI is the task interface. The optional local editor supports direct
-visual adjustments to existing figures. Use the public local CLI and shared services; SciPlot
+External AI is the task interface. The local canvas is the default human editing
+surface after delivery. Use the public local CLI and shared services; SciPlot
 does not need to host the caller's model or start an internal AI provider.
 `studio/document.vsz` is the saved visual authority. Headless edits use the
 native Veusz API, never a second renderer, document model or GUI selection.
@@ -33,17 +33,29 @@ priority. Do not delete these surfaces as part of ordinary external-control work
 
 The browser `app` is limited to initial source, grouping, naming, order, size,
 and export confirmation plus read-only result review. Post-render edits use
-native document operations through the external control services or the
-compatible Veusz editor. Do not automate Veusz with mouse clicks or patch VSZ text.
+native document operations through the local canvas or external control services.
+The compatible Veusz editor remains available. Do not automate Veusz with mouse
+clicks or patch VSZ text.
 
-For direct visual editing, run `skill/scripts/sciplot edit PROJECT --figure FIGURE_ID`.
+For direct visual editing, double-click `Open_in_SciPlot.command` in a delivery,
+or run `skill/scripts/sciplot edit PROJECT --figure FIGURE_ID`.
 This separate loopback editor presents existing native object capabilities, a
 live Veusz preview, native undo/redo, and bounded legend dragging. Browser fields
 do not own scientific mappings or saved history. Save verifies the displayed
-native frame against the existing preview/apply transaction; Export runs the
-shared saved-project task. A saved edit is distinct from a current delivery.
+native frame against the existing preview/apply transaction. Save and update
+delivery saves the active figure, then runs the shared saved-project export task.
+If export fails after Save, retain the saved revision and retry export; do not
+apply its edits again. A saved edit is distinct from a current delivery. Select
+registered figures in the canvas; save or discard the active draft before switching.
 If another process changes the project or original source, reload the saved
 project before continuing; reload discards this session's unsaved draft.
+
+The delivery launcher resumes its bound managed project and checks for separately
+edited visible VSZ copies before opening. Recover such changes through the existing
+delivery-recovery flow. The launcher's explicit portable fallback opens Veusz when
+the visible folder was copied/moved or no associated managed project is available;
+it cannot claim to update the original project. Old packages remain unchanged on
+open and receive the canvas launcher during their next normal successful export.
 
 Internal provider absence must not disable deterministic recognition, plotting,
 native editing, QA, export, or delivery. The external AI may use only the current
@@ -211,6 +223,7 @@ SOURCE_SciPlot/  # or a source-adjacent explicit --out
   figures/*.pdf
   figures/*_300dpi.tiff
   project/*.vsz
+  Open_in_SciPlot.command
   Open_in_Veusz.command
 ```
 
@@ -225,6 +238,8 @@ lineage remain in the hidden runtime workspace.
 - `project`: external-AI creation from an expected plan, saved-project inspection,
   native preview/edit and durable operation queries. Creation alone prepares
   the source through the existing Studio lifecycle; queries and edits do not.
+- `edit`: default post-delivery human canvas over existing saved native figures;
+  live rendering, native history, figure selection, saved edits and delivery updates.
 - `studio`: exact-current export and compatible native interactive command family.
 - `autoplot`: compatible one-time raw-path/QA/delivery route using the same
   renderer. Its run-only project layout is not a canonical Studio project and

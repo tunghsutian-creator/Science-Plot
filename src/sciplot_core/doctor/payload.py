@@ -146,7 +146,8 @@ def doctor_payload() -> dict[str, Any]:
             "task_interface": "external_ai",
             "daily_entrypoint": "sciplot task start --request REQUEST_JSON --json",
             "capabilities_entrypoint": "sciplot task capabilities --json",
-            "interactive_entrypoint": "sciplot studio PATH",
+            "interactive_entrypoint": "sciplot edit PROJECT_OR_DELIVERY",
+            "native_editor_entrypoint": "sciplot studio PATH",
             "headless_export_entrypoint": (
                 "sciplot studio PATH --out /path/to/Visible_Figure_Project "
                 "--export pdf,tiff_300 --json"
@@ -155,8 +156,8 @@ def doctor_payload() -> dict[str, Any]:
                 "sciplot studio PATH --rule RULE_ID --template TEMPLATE_ID "
                 "--out /path/to/Visible_Figure_Project"
             ),
-            "frontend_default": "veusz_mainwindow",
-            "frontend_default_scope": "compatible_native_editor",
+            "frontend_default": "live_editor",
+            "frontend_default_scope": "saved_project_visual_adjustments",
             "assistant_default": "independent",
             "assistant_visibility_default": "hidden",
             "codex_required": False,
@@ -185,6 +186,12 @@ def doctor_payload() -> dict[str, Any]:
                 "internal_model_required": False,
             },
             "interactive_family": {
+                "command": "edit",
+                "interactive": "sciplot edit PROJECT_OR_DELIVERY",
+                "role": "default post-delivery canvas with native rendering, history, saved edits, and delivery updates",
+                "document_authority": "saved_vsz",
+            },
+            "native_compatibility": {
                 "command": "studio",
                 "interactive": "sciplot studio PATH",
                 "headless": ("sciplot studio PATH --export pdf,tiff_300 --json"),
@@ -215,7 +222,8 @@ def doctor_payload() -> dict[str, Any]:
         },
         "vsz_lifecycle": {
             "canonical_artifact": "studio/document.vsz",
-            "editor": "veusz_mainwindow",
+            "editor": "live_editor",
+            "native_editor": "veusz_mainwindow",
             "open_preserves_document": True,
             "manual_edit_detection": "sha256",
             "archive_before_explicit_regeneration": True,

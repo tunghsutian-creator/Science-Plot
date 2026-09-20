@@ -9,7 +9,7 @@ def _next_actions(required_failures: list[dict[str, Any]]) -> list[str]:
     if not required_failures:
         return [
             "Use task capabilities, then task start/resume for external-AI plotting, column choices, source updates, and delivery.",
-            "Use Open_in_Veusz.command when the generated document needs manual correction.",
+            "Use Open_in_SciPlot.command for manual adjustments, then Save and update delivery; Open_in_Veusz.command remains the advanced and portable-copy fallback.",
             "Use assisted repair only when the deterministic result reports a blocking state.",
         ]
     actions: list[str] = []

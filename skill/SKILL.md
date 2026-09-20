@@ -100,6 +100,12 @@ only for edits, source updates, groups/comparisons, legacy diagnostics, or devel
    delivery evidence, figure IDs and document hashes. An unchanged result
    needs no extra query, preview, or export. Read `--full` only for a specific
    missing detail. No tests, smoke, or acceptance runs during ordinary plotting.
+   Include the returned `next_step.manual_edit` entry when handing off: the
+   default human adjustment surface is `Open_in_SciPlot.command`. In its canvas,
+   Save updates the managed VSZ; Save and update delivery also refreshes the
+   delivered VSZ/PDF/TIFF through existing QA. Retain Veusz as the advanced and
+   portable-copy fallback. Opening an old delivery must not rewrite its package;
+   its next normal export adds the new launcher.
 
 5. In a later session, resume the returned task/project and query current state.
    Use `task find SOURCE --json` if only the original path is known; multiple
