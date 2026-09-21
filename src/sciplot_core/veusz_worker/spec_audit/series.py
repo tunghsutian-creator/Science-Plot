@@ -10,6 +10,7 @@ from sciplot_core.studio_core.series_encoding_contract import (
 from sciplot_core.studio_core.axis_data_visibility import (
     validate_axis_data_visibility,
 )
+from sciplot_core.studio_core.document_edit_policy import ordinary_curve_paths
 from sciplot_core.studio_render.models import (
     CATEGORICAL_POINT_LINE_KIND,
     IMPACT_POINT_LINE_SUMMARY_KIND,
@@ -62,6 +63,9 @@ def audit_axes_and_series(
     axis_records = _visible_data_bindings(
         loaded_document,
         widget_type="axis",
+        include_hidden_y_axis=(
+            not inventory.check_presentation and bool(ordinary_curve_paths(spec))
+        ),
         setting_names=(
             "label",
             "direction",

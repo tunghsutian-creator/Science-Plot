@@ -183,6 +183,8 @@ def test_current_audit_allows_presentation_edits_but_keeps_generated_gate(
         """i.To('/page1/graph1/x')
 i.Set('Label/size', '8pt')
 i.Set('Line/width', '0.9pt')
+i.To('/page1/graph1/y')
+i.Set('hide', True)
 i.To('/page1/graph1/series_1')
 i.Set('PlotLine/color', '#006699')
 i.Set('PlotLine/width', '1.5pt')
@@ -265,6 +267,15 @@ def test_managed_mapping_checks_every_figure_and_confirmed_source(
         ("i.To('/page1/graph1/series_1')\ni.Set('yAxis', 'missing')", "axis bindings"),
         ("i.To('/page1/graph1/x')\ni.Set('label', 'Wavelength (um)')", "axis labels"),
         ("i.To('/page1/graph1/x')\ni.Set('min', 450.0)", "axis labels"),
+        ("i.To('/page1/graph1/x')\ni.Set('hide', True)", "axis labels"),
+        (
+            "i.To('/page1/graph1/y')\ni.Set('hide', True)\ni.Set('label', 'Wrong units')",
+            "axis labels",
+        ),
+        (
+            "i.To('/page1/graph1/y')\ni.Set('hide', True)\ni.Set('max', 0.15)",
+            "axis labels",
+        ),
     ],
 )
 def test_current_audit_rejects_scientific_changes(

@@ -56,7 +56,8 @@ def test_external_native_edit_preview_apply_export_and_cold_resume(tmp_path, mon
     detail = _cli("project", "inspect", project, "--figure", figure, "--full")
     objects = detail["selected_figure"]["objects"]
     operations = []
-    for object_path, suffix, new in (("/page1/graph1/x", "/Label/size", "9pt"),):
+    for object_path, suffix, new in (("/page1/graph1/x", "/Label/size", "9pt"),
+                                     ("/page1/graph1/y", "/hide", True)):
         field = next(
             f
             for f in objects[object_path]["editable_fields"]
@@ -203,3 +204,12 @@ def test_external_native_edit_preview_apply_export_and_cold_resume(tmp_path, mon
         == "9pt"
     )
     assert source.read_bytes() == original_source
+    y = resumed['selected_figure']['objects']['/page1/graph1/y']
+    assert next(f['current_value'] for f in y['editable_fields']
+                if f['setting_path'] == '/page1/graph1/y/hide') is True
+    assert y['settings']['label'] == objects['/page1/graph1/y']['settings']['label']
+    import fitz
+    delivered_pdf, = (visible / 'figures').glob('*.pdf')
+    with fitz.open(delivered_pdf) as pdf:
+        assert 'Absorbance' not in pdf[0].get_text()
+        assert 'Wavelength' in pdf[0].get_text()

@@ -49,6 +49,29 @@ def test_ordinary_curve_color_is_advertised_and_accepted(tmp_path, template) -> 
     )
 
 
+@pytest.mark.parametrize("contract,editable", [
+    ({}, True),
+    ({"performance_comparison": {}}, False),
+    ({"categorical": {}}, False),
+    ({"scalar_field": {}}, False),
+    ({"series": []}, False),
+])
+def test_y_visibility_requires_an_ordinary_cartesian_contract(tmp_path, contract, editable):
+    spec = _spec(tmp_path, **contract)
+    path = "/page1/graph1/y"
+    change = {"object_path": path, "setting_path": path + "/hide"}
+    objects = {path: {"type": "axis", "editable_fields": [change]}}
+    fields = filter_editable_fields(objects, spec)[path]["editable_fields"]
+    assert bool(fields) is editable
+    if editable:
+        validate_edit_science_policy([change], spec)
+    else:
+        with pytest.raises(ValueError, match="bound ordinary Cartesian curve"):
+            validate_edit_science_policy([change], spec)
+    with pytest.raises(ValueError, match="bound ordinary Cartesian curve"):
+        validate_edit_science_policy([{**change, "object_path": CURVE}], spec)
+
+
 @pytest.mark.parametrize("contract", [
     {"scalar_field": {"z_label": "Intensity", "show_colorbar": True}},
     {"performance_comparison": {"kind": "sciplot_performance_comparison"}},

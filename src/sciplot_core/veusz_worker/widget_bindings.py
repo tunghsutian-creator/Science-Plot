@@ -211,13 +211,24 @@ def _visible_data_bindings(
     *,
     widget_type: str,
     setting_names: tuple[str, ...],
+    include_hidden_y_axis: bool = False,
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
 
     def collect(path: str, node: Any) -> None:
         if str(getattr(node, "typename", "")) != widget_type:
             return
-        if not _node_is_visible(node):
+        # An ordinary spectrum can omit the drawn ordinate while retaining its
+        # scientific scale. Only that canonical axis may bypass its own hide;
+        # hidden graphs/pages, other axes and data marks remain excluded.
+        hidden_ordinate = (
+            include_hidden_y_axis
+            and widget_type == "axis"
+            and str(path) == "/page1/graph1/y"
+            and getattr(node, "parent", None) is not None
+            and _node_is_visible(node.parent)
+        )
+        if not _node_is_visible(node) and not hidden_ordinate:
             return
         settings = getattr(node, "settings", None)
         bindings: dict[str, Any] = {}

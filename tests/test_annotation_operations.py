@@ -83,6 +83,105 @@ def compile_ops(spec, operations):
     return compile_annotation_operations(spec, operations, document_sha256="d" * 64, figure_id="f")
 
 
+def display_range(**patch):
+    return {"op": "set_axis_range", "axis": "x", "unit": "nm",
+            "expected_min": 400, "expected_max": 500, "min": 425, "max": 475,
+            "ticks": [425,450,475], "allow_clipping": True, **patch}
+
+
+def test_display_range_keeps_all_data_and_records_actual_clipping(spec):
+    from sciplot_core.studio_core.axis_data_visibility import validate_axis_data_visibility
+
+    baseline = copy.deepcopy(spec)
+    styles, after, changes = compile_ops(spec, [display_range()])
+    assert spec == baseline and not styles
+    assert after['series'] == baseline['series']
+    assert after['axes']['y'] == baseline['axes']['y']
+    assert after['axis_data_visibility']['axes']['x']['clipped_coordinate_count'] == 2
+    assert changes[0]['outside_display_coordinate_count'] == 2
+    assert after['axes']['x']['display_window']['allow_clipping'] is True
+    validate_axis_data_visibility(after)
+    after['axes']['x']['display_window']['allow_clipping'] = False
+    with pytest.raises(ValueError, match='authorization'):
+        validate_axis_data_visibility(after)
+
+
+@pytest.mark.parametrize('patch,code', [
+    ({'allow_clipping': False}, 'axis_clipping_not_authorized'),
+    ({'expected_min': 399}, 'stale_axis_range'),
+    ({'unit': 'ppm'}, 'unit_mismatch'),
+    ({'min': 475, 'max': 425}, 'invalid_axis_range'),
+    ({'min': 425, 'max': 425}, 'invalid_axis_range'),
+    ({'ticks': [425,475,450]}, 'invalid_axis_range'),
+    ({'ticks': [450,475]}, 'invalid_axis_range'),
+    ({'ticks': [425,float('nan'),475]}, 'invalid_axis_range'),
+    ({'min': True}, 'invalid_axis_range'),
+    ({'allow_clipping': 'yes'}, 'invalid_axis_range'),
+])
+def test_display_range_rejects_stale_ambiguous_or_implicit_clipping(spec, patch, code):
+    baseline = copy.deepcopy(spec)
+    with pytest.raises(AnnotationOperationError) as failure:
+        compile_ops(spec, [display_range(**patch)])
+    assert failure.value.reason_code == code
+    assert spec == baseline
+
+
+def test_reversed_display_range_and_atomic_annotation_reposition(spec):
+    spec['axes']['x'].update(min=500, max=400, reverse=True)
+    spec['native_annotations'] = {'version':1, 'items': [{
+        'op':'add_annotation','id':'note','parent_path':'/page1/graph1','text':'peak',
+        'position':{'mode':'axes','x':490.0,'y':4.0,'x_unit':'nm','y_unit':'a.u.'}}]}
+    operation = display_range(expected_min=500, expected_max=400, min=475, max=425)
+    with pytest.raises(AnnotationOperationError, match='outside'):
+        compile_ops(spec, [operation])
+    original = spec['native_annotations']['items'][0]
+    replacement = {**original, 'position':{**original['position'],'x':450}}
+    _, after, _ = compile_ops(spec, [operation, {'op':'update_annotation','id':'note',
+        'expected_annotation':original,'replacement':replacement}])
+    assert after['axes']['x']['min'] == 475 and after['axes']['x']['max'] == 425
+    assert annotation_records(after)[0]['position']['x'] == 450
+    with pytest.raises(AnnotationOperationError, match='only once'):
+        compile_ops(spec, [operation, operation])
+
+
+def test_y_display_range_retains_existing_x_window_and_source_axes(spec):
+    from sciplot_core.studio_core.axis_data_visibility import validate_axis_data_visibility
+
+    _, narrowed, _ = compile_ops(spec, [display_range()])
+    baseline = copy.deepcopy(narrowed)
+    operation = display_range(axis='y', unit='a.u.', expected_min=0, expected_max=5,
+                              min=0, max=8, ticks=[0,4,8], allow_clipping=False)
+    _, after, changes = compile_ops(narrowed, [operation])
+    assert narrowed == baseline and after['series'] == baseline['series']
+    assert after['axes']['x'] == baseline['axes']['x']
+    assert after['axes']['y']['display_window']['source_axis'] == spec['axes']['y']
+    assert changes[0]['axis'] == 'y' and changes[0]['outside_display_coordinate_count'] == 0
+    assert after['axis_data_visibility']['axes']['y']['clipped_coordinate_count'] == 0
+    validate_axis_data_visibility(after)
+    second = {**operation, 'expected_max':8, 'max':6, 'ticks':[0,3,6]}
+    _, repeated, _ = compile_ops(after, [second])
+    assert repeated['axes']['y']['display_window']['source_axis'] == spec['axes']['y']
+    with pytest.raises(AnnotationOperationError, match='second style edit'):
+        compile_ops(narrowed, [operation, {'op':'set_style', 'object_path':'/page1/graph1/y',
+            'setting_path':'/page1/graph1/y/MajorTicks/manualTicks',
+            'expected_value':[], 'value':[0,8]}])
+    clipping = {**operation, 'max':3, 'ticks':[0,3]}
+    with pytest.raises(AnnotationOperationError, match='allow_clipping'):
+        compile_ops(narrowed, [clipping])
+    _, clipped, changes = compile_ops(narrowed, [{**clipping, 'allow_clipping':True}])
+    assert changes[0]['outside_display_coordinate_count'] == 1
+    assert clipped['series'] == spec['series']
+    validate_axis_data_visibility(clipped)
+
+
+@pytest.mark.parametrize('field,value', [('scale','log'), ('mode','labels')])
+def test_y_display_range_rejects_nonordinary_axis(spec, field, value):
+    spec['axes']['y'][field] = value
+    with pytest.raises(AnnotationOperationError, match='linear numeric'):
+        compile_ops(spec, [display_range(axis='y', unit='a.u.', expected_min=0,
+            expected_max=5, min=0, max=8, ticks=[0,4,8], allow_clipping=False)])
+
+
 def _sample_objects(*names):
     return {f"/page1/graph1/{name}": {"editable_fields": [
         {"setting_path": f"/page1/graph1/{name}/PlotLine/color", "current_value": "#222222"},

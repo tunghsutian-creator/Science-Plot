@@ -31,7 +31,13 @@ def test_shape_validation_preserves_all_supported_operation_families():
               "replacement": {**note, "text": "updated"}},
              {"op": "set_sample_style", "samples": ["A"], "style": {"width": "2pt"}},
              {"op": "set_style", "object_path": "/page1/graph1/series_1",
-              "setting_path": "/page1/graph1/series_1/PlotLine/color", "expected_value": "black", "value": "red"}]
+              "setting_path": "/page1/graph1/series_1/PlotLine/color", "expected_value": "black", "value": "red"},
+             {"op": "set_axis_range", "axis": "x", "unit": "nm", "expected_min": 400,
+              "expected_max": 500, "min": 425, "max": 475, "ticks": [425,450,475],
+              "allow_clipping": True},
+             {"op": "set_axis_range", "axis": "y", "unit": "a.u.", "expected_min": 0,
+              "expected_max": 10, "min": 0, "max": 20, "ticks": [0,10,20],
+              "allow_clipping": False}]
     before = copy.deepcopy(batch)
     validate_operation_batch(batch)
     assert batch == before  # No normalization or scientific interpretation here.

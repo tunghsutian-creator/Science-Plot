@@ -12,6 +12,7 @@ from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.native_settings import editable_fields, validate_native_setting
 from sciplot_core.render import render_to_dir
 from sciplot_core.veusz_runtime import veusz_worker_environment
+from sciplot_core.veusz_worker.widget_bindings import _visible_data_bindings
 from sciplot_gui.studio_assistant.selection import SelectionMixin
 
 
@@ -46,6 +47,51 @@ def test_safe_fields_are_a_subset_of_the_shared_catalog() -> None:
         "axis_label_size", "axis_label", "axis_min", "axis_log", "hidden",
     }
     assert safe == [item for item in all_fields if item["field_id"] == "axis_label_size"]
+
+
+def test_y_axis_visibility_is_bounded_and_preserves_axis_semantics() -> None:
+    parent = SimpleNamespace(children=[])
+    y = SimpleNamespace(path="/page1/graph1/y", typename="axis", parent=parent)
+    curve = SimpleNamespace(path="/page1/graph1/xy", typename="xy", parent=parent)
+    parent.children = [y, curve]
+    doc = Document({"/page1/graph1/y/hide":False, "/page1/graph1/y/label":"Intensity (%)",
+        "/page1/graph1/y/min":0, "/page1/graph1/xy/xData":"x",
+        "/page1/graph1/xy/yData":"y", "/page1/graph1/xy/Color/points":""})
+    field, = editable_fields(doc, y, safe_only=True)
+    assert field['setting_path'] == '/page1/graph1/y/hide'
+    assert validate_native_setting(doc, field, expected_value=False, value=True, safe_only=True) == (False,True)
+    with pytest.raises(ValueError, match='boolean'):
+        validate_native_setting(doc, field, expected_value=False, value='true', safe_only=True)
+    assert doc.settings['/page1/graph1/y/label'].get() == 'Intensity (%)'
+    parent.children.append(SimpleNamespace(typename='colorbar'))
+    assert editable_fields(doc, y, safe_only=True) == []
+
+
+@pytest.mark.parametrize("path,kind,parent_hidden,include,expected", [
+    ("/page1/graph1/y", "axis", False, True, True),
+    ("/page1/graph1/y", "axis", False, False, False),
+    ("/page1/graph1/y", "axis", True, True, False),
+    ("/page1/graph1/x", "axis", False, True, False),
+    ("/page1/graph2/y", "axis", False, True, False),
+    ("/page1/graph1/y", "xy", False, True, False),
+])
+def test_axis_audit_exception_never_exposes_hidden_data_or_ancestors(
+    path, kind, parent_hidden, include, expected,
+) -> None:
+    def settings(**values):
+        return SimpleNamespace(setdict={k: SimpleNamespace(val=v) for k, v in values.items()})
+    parent = SimpleNamespace(parent=None, settings=settings(hide=parent_hidden))
+    node = SimpleNamespace(
+        typename=kind, name=path.rsplit("/", 1)[-1], parent=parent,
+        settings=settings(hide=True, label="Original units"),
+    )
+    doc = SimpleNamespace(walkNodes=lambda collect, **kwargs: collect(path, node))
+    records = _visible_data_bindings(
+        doc, widget_type=kind, setting_names=("label",), include_hidden_y_axis=include,
+    )
+    assert bool(records) is expected
+    if expected:
+        assert records[0]["bindings"]["label"] == "Original units"
 
 
 @pytest.mark.parametrize("scalar,has_colorbar", [(True, False), (False, True)])

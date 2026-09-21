@@ -13,6 +13,7 @@ from sciplot_core.setting_catalog import specs_for_object_type
 # limits continue to come from the same specs used by the native inspector.
 _SAFE_SUFFIXES = {
     "axis": frozenset({
+        "hide",
         "Label/font", "Label/size", "Label/bold", "Label/italic",
         "TickLabels/font", "TickLabels/size", "TickLabels/bold", "TickLabels/italic",
         "TickLabels/rotate", "MajorTicks/manualTicks",
@@ -78,6 +79,13 @@ def editable_fields(
     for spec in specs_for_object_type(object_type):
         if spec.read_only or (safe_only and spec.suffix not in allowed):
             continue
+        if safe_only and object_type == "axis" and spec.suffix == "hide":
+            siblings = getattr(getattr(widget, "parent", None), "children", [])
+            if str(widget.path) != "/page1/graph1/y" or not any(
+                str(getattr(child, "typename", "")) == "xy" and _ordinary_curve(document, child)
+                for child in siblings
+            ):
+                continue
         path = f"{widget.path}/{spec.suffix}"
         try:
             setting = document.resolveSettingPath(None, path)

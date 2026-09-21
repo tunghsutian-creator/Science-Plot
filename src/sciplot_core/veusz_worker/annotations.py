@@ -59,6 +59,15 @@ def edit_native_annotations(
         audit_native_annotations(loaded, spec)
         native, style_actual = prepare_setting_batch(loaded, styles) if styles else ([], [])
         ops = import_module("veusz.document.operations")
+        for change in actual:
+            if change.get("op") != "set_axis_range":
+                continue
+            axis_path = f"/page1/graph1/{change['axis']}"
+            for bound in ("min", "max"):
+                if loaded.resolveSettingPath(None, f"{axis_path}/{bound}").get() != change["before"][bound]:
+                    raise ValueError("Current native axis bounds differ from the reviewed display-range baseline.")
+                native.append(ops.OperationSettingSet(f"{axis_path}/{bound}", change["after"][bound]))
+            native.append(ops.OperationSettingSet(f"{axis_path}/MajorTicks/manualTicks", change["after"]["ticks"]))
         for widget in annotation_widgets(spec):
             native.append(ops.OperationWidgetDelete(loaded.resolveWidgetPath(None, widget["path"])))
         for widget in annotation_widgets(new_spec):

@@ -60,6 +60,15 @@ def _spec_render_data_units(
             "y": dict(axes["y"]),
         }
     )
+    if any("display_window" in axes[name] for name in ("x", "y")):
+        from sciplot_core.studio_core.axis_data_visibility import validate_axis_data_visibility
+
+        validate_axis_data_visibility(spec)
+        # Native bounds are audited against the current display axis. The
+        # prepared-source signature still binds its complete original axis.
+        for name in ("x", "y"):
+            if "display_window" in axes[name]:
+                axis_contract[name] = json_safe(axes[name]["display_window"]["source_axis"])
     categorical = spec.get("categorical")
     categorical_groups = {
         str(group.get("y_name") or ""): group

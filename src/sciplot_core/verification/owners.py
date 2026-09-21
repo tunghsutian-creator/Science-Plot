@@ -358,6 +358,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/veusz_worker/spec_audit/coordinator.py",
                 "src/sciplot_core/veusz_worker/spec_audit/inventory.py",
                 "src/sciplot_core/veusz_worker/spec_audit/series.py",
+                "src/sciplot_core/veusz_worker/widget_bindings.py",
                 "src/sciplot_gui/studio_project/bridge.py",
                 "src/sciplot_gui/studio_project/dock.py",
                 "src/sciplot_gui/studio_project/export_action.py",

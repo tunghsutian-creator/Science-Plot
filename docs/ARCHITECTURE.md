@@ -319,7 +319,19 @@ the candidate refreshes only path-dependent peak provenance signatures after
 checking unchanged sample values, source hashes and observed points.
 
 `sample_style` exposes exact ordinary series labels and expands supported
-color/width batches using current advertised native fields. `document_edit_policy`
+color/width batches using current advertised native fields. The separate
+`set_axis_range` operation in `annotation_axes` changes only a linear numeric X or Y
+display window through the same native preview/apply transaction. It preserves
+all series values and the original source-axis contract, records actual clipping
+in `axis_data_visibility`, and requires explicit clipping authorization. Native
+audits bind the displayed bounds; prepared-source signatures bind the preserved
+source axis while rejecting changes to its labels, scales and other semantics.
+Out-of-window annotations require an explicit same-batch move or removal.
+The native setting catalog permits a boolean visibility edit for the canonical
+Y axis of bound ordinary Cartesian curves. It changes only axis drawing; the
+scientific label/unit, range, datasets and X-axis display remain bound. Scalar,
+categorical and performance figures do not expose this presentation exception.
+`document_edit_policy`
 binds visible marker colors and generated direct-label colors to ordinary series;
 sample colors expand to all those fields using each field's current value. Free
 annotations and semantic legends remain outside sample color edits. Duplicate labels

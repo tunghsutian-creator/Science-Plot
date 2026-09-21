@@ -117,6 +117,15 @@ def annotation_operation_capabilities() -> dict[str, Any]:
                     "items": {"type": "string", "minLength": 1},
                     "description": "Optional exact target subset. Default requires preset coverage for every ordinary target sample; no position matching."},
     }, ["preset", "expected_preset_sha256"])
+    add("set_axis_range", {
+        "axis": {"enum": ["x", "y"]}, "unit": string,
+        "expected_min": number, "expected_max": number,
+        "min": number, "max": number,
+        "ticks": {"type": "array", "minItems": 2, "maxItems": 32,
+                  "uniqueItems": True, "items": number},
+        "allow_clipping": {"type": "boolean"},
+    }, ["axis", "unit", "expected_min", "expected_max", "min", "max",
+        "ticks", "allow_clipping"])
     return {
         "kind": "sciplot_annotation_operations", "version": 1,
         "operations_schema": {"type": "array", "minItems": 1, "maxItems": 100,

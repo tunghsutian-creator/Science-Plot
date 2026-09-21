@@ -93,3 +93,56 @@ def test_native_semantic_batch_preview_commit_export_cold_resume_and_remove(tmp_
     assert "native_annotations" not in json.loads(spec_path.read_text())
     assert cli("studio", project, "--export", "pdf,tiff_300")["studio_run"]["ready_to_use"] is True
     assert source.read_bytes() == source_bytes
+
+
+@pytest.mark.comprehensive
+def test_native_display_window_preserves_measurements_through_export(tmp_path):
+    source = tmp_path / "UVvis.csv"
+    source.write_text("Wavelength,Absorbance\nnm,a.u.\nA,A\n400,1\n425,3\n450,1\n475,4\n500,2\n525,1\n")
+    source_bytes = source.read_bytes()
+    created = cli("studio", source, "--rule", "uvvis_spectrum", "--export", "pdf,tiff_300")
+    project = Path(created["project_dir"])
+    selected = resolve_project_figure(project, None)
+    document, spec_path = Path(selected['document']), Path(selected['spec'])
+    baseline = json.loads(spec_path.read_text())
+    before = edit_state(project)
+    axis = baseline['axes']['x']
+    operation = {'op':'set_axis_range','axis':'x','unit':'nm',
+        'expected_min':axis['min'],'expected_max':axis['max'],
+        'min':425,'max':500,'ticks':[425,450,475,500],'allow_clipping':True}
+    preview = preview_document_operations(project, [operation], figure_id=selected['figure_id'],
+        expected_document_sha256=file_sha256(document), output_dir=tmp_path/'window')
+    assert preview['scientific_audit']['status'] == 'passed'
+    assert edit_state(project) == before
+    apply_document_edit(project, preview)
+    after = json.loads(spec_path.read_text())
+    assert after['series'] == baseline['series']
+    assert after['axes']['y'] == baseline['axes']['y']
+    assert after['axis_data_visibility']['axes']['x']['clipped_coordinate_count'] == 2
+    assert after['axis_data_visibility']['finite_coordinate_count'] == 12
+    assert cli('studio', project, '--export', 'pdf,tiff_300')['studio_run']['ready_to_use'] is True
+    state = inspect_annotation_state(project, figure_id=selected['figure_id'])
+    assert (state['axes']['x']['min'],state['axes']['x']['max']) == (425,500)
+    assert source.read_bytes() == source_bytes
+    assert audit_edited_document(document,spec_path)['status'] == 'passed'
+    # A later amplitude-window edit must retain the already cropped X viewport
+    # and still pass prepared-source and native audits with every point intact.
+    y = state['axes']['y']
+    y_operation = {'op':'set_axis_range','axis':'y','unit':y['unit'],
+        'expected_min':y['min'],'expected_max':y['max'],
+        'min':-1,'max':9,'ticks':[-1,0,4,9],'allow_clipping':False}
+    label = {'op':'add_annotation','id':'height','parent_path':'/page1/graph1',
+        'text':'Peak','position':{'mode':'axes','x':475,'y':7,'x_unit':'nm','y_unit':y['unit']}}
+    preview = preview_document_operations(project, [y_operation,label], figure_id=selected['figure_id'],
+        expected_document_sha256=file_sha256(document), output_dir=tmp_path/'height')
+    assert preview['scientific_audit']['status'] == 'passed'
+    apply_document_edit(project, preview)
+    raised = json.loads(spec_path.read_text())
+    assert raised['series'] == baseline['series'] and raised['axes']['x'] == after['axes']['x']
+    assert raised['axes']['y']['display_window']['source_axis'] == baseline['axes']['y']
+    assert raised['axis_data_visibility']['axes']['y']['clipped_coordinate_count'] == 0
+    assert cli('studio', project, '--export', 'pdf,tiff_300')['studio_run']['ready_to_use'] is True
+    cold = cli('project', 'annotations', project, '--figure', selected['figure_id'])
+    assert (cold['axes']['y']['min'],cold['axes']['y']['max']) == (-1,9)
+    assert source.read_bytes() == source_bytes
+    assert audit_edited_document(document,spec_path)['status'] == 'passed'

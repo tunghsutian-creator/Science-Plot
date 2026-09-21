@@ -79,6 +79,25 @@ def validate_axis_data_visibility(spec: Mapping[str, Any]) -> None:
         raise ValueError(
             "Veusz axis data visibility evidence does not match its axes and data."
         )
+    axes = spec.get("axes", {})
+    for name in ("x", "y"):
+        axis = axes.get(name, {})
+        window = axis.get("display_window")
+        if window is None:
+            continue
+        if (not isinstance(window, Mapping)
+                or set(window) != {"min", "max", "allow_clipping", "source_axis"}
+                or not isinstance(window.get("allow_clipping"), bool)
+                or any(_finite_float(window.get(bound)) is None
+                       or window[bound] != axis.get(bound) for bound in ("min", "max"))
+                or (expected["axes"][name]["clipped_coordinate_count"] and not window["allow_clipping"])):
+            raise ValueError("Explicit axis display window differs from its bounds or clipping authorization.")
+        source_axis = window["source_axis"]
+        display_fields = {"min", "max", "ticks", "display_window"}
+        if (not isinstance(source_axis, Mapping) or "display_window" in source_axis
+                or {k: v for k, v in source_axis.items() if k not in display_fields}
+                != {k: v for k, v in axis.items() if k not in display_fields}):
+            raise ValueError("An axis display window cannot change source-axis labels, scales or other scientific settings.")
 
 
 def _axis_visibility_record(

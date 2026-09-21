@@ -659,6 +659,10 @@ Review the returned `actual_changes`, scientific audit and preview image.
 Current capability scope covers the advertised axis typography (including tick
 rotation), explicit numeric major-tick coordinates, ordinary sample
 line/marker/direct-label color, line width, and legend typography/placement fields.
+For bound ordinary Cartesian curves, the canonical Y axis also advertises its
+boolean `hide` field. This hides the axis line, ticks and displayed title without
+removing its unit/label contract, changing bounds or changing any curve values.
+The X axis and scalar/categorical axes do not advertise this visibility edit.
 Major-tick coordinates must be a finite, increasing, unique list of at most 32
 values; an empty list restores automatic ticks, and log axes require positive
 coordinates. Label axes do not advertise this numeric field. Tick positions do
@@ -674,6 +678,19 @@ when intent, scientific meaning or scope is unresolved. Keep the complete
 and candidate evidence and is the input to apply.
 
 ## Native reference lines, arrows and observed peaks
+
+The separate `set_axis_range` operation can change the display window of an
+ordinary linear numeric X or Y axis. One range operation is allowed per batch.
+Supply its exact inspected unit, `expected_min`
+and `expected_max`, new `min` and `max` in the same axis direction, increasing
+`ticks` including both endpoints, and a boolean `allow_clipping`. When the user
+explicitly requests a narrower display window, `allow_clipping:true` retains
+every original series value and records the number outside the window. It does
+not trim data or alter normalization. The original prepared axis remains bound
+to the source audit; current native bounds are audited against the new window.
+Move or remove annotations that fall outside the new window in the same batch,
+after the range operation. Logarithmic, broken and supplementary axes are
+outside this operation's scope. Do not use `set_style` to change axis bounds.
 
 For new frequency sweeps, the default fourth response is complex viscosity;
 missing values are derived by the registered local source owner only when the

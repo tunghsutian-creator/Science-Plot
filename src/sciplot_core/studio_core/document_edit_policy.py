@@ -112,6 +112,9 @@ def filter_editable_fields(
                     not _is_curve_shape(field.get("setting_path"))
                     or (widget.get("type") == "xy" and path in curves
                         and _curve_shape_target(path, field.get("setting_path")))
+                ) and (
+                    field.get("setting_path") != "/page1/graph1/y/hide"
+                    or (bool(curves) and widget.get("type") == "axis" and path == "/page1/graph1/y")
                 )
             ],
         }
@@ -132,6 +135,8 @@ def validate_edit_science_policy(
             raise ValueError("Each native setting change must be an object.")
         path = change.get("object_path")
         setting = change.get("setting_path")
+        if setting == "/page1/graph1/y/hide" and (not curves or path != "/page1/graph1/y"):
+            raise ValueError("Y-axis visibility editing requires a bound ordinary Cartesian curve.")
         if _is_curve_shape(setting) and (
             not isinstance(path, str) or path not in curves
             or not _curve_shape_target(path, setting)
