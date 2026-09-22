@@ -21,6 +21,39 @@ from sciplot_core.studio_core.registry_state import (
 )
 
 
+def _current_layout_issues(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """Keep generated diagnostics, distinguishing explicitly reviewed viewports."""
+    from sciplot_core.studio_core.annotation_axes import require_scope
+    from sciplot_core.studio_core.axis_data_visibility import validate_axis_data_visibility
+
+    issues = [dict(item) for item in spec.get("layout_issues", []) if isinstance(item, dict)]
+    axes = spec.get("axes", {})
+    authorized = {
+        name: axis["display_window"]
+        for name, axis in axes.items()
+        if name in {"x", "y"} and isinstance(axis, dict)
+        and axis.get("scale") == "linear" and axis.get("mode", "numeric") == "numeric"
+        and isinstance(axis.get("display_window"), dict)
+        and axis["display_window"].get("allow_clipping") is True
+    }
+    if not authorized:
+        return issues
+    require_scope(spec)
+    validate_axis_data_visibility(spec)
+    for item in issues:
+        axis_name = item.get("axis")
+        if item.get("id") != "visual_extent_outside_explicit_axis" or axis_name not in authorized:
+            continue
+        window = authorized[axis_name]
+        item.update(
+            severity="info",
+            original_severity=item.get("severity"),
+            message="The reviewed axis display window explicitly authorizes clipping on this axis.",
+            authorized_display_window={key: window[key] for key in ("min", "max", "allow_clipping")},
+        )
+    return issues
+
+
 def _run_studio_qa(
     output_dir: Path,
     *,
@@ -40,9 +73,7 @@ def _run_studio_qa(
         for document_path in veusz_documents or []:
             spec_path = _veusz_spec_path(document_path)
             spec = _read_json(spec_path) if spec_path.exists() else {}
-            issues = [
-                item for item in spec.get("layout_issues", []) if isinstance(item, dict)
-            ]
+            issues = _current_layout_issues(spec)
             layout_documents.append(
                 {
                     "document": str(document_path),
@@ -85,7 +116,7 @@ def _studio_layout_quality_from_spec(document_path: Path) -> dict[str, Any]:
     axes = spec.get("axes") if isinstance(spec.get("axes"), dict) else {}
     x_axis = axes.get("x") if isinstance(axes.get("x"), dict) else {}
     y_axis = axes.get("y") if isinstance(axes.get("y"), dict) else {}
-    issues = [item for item in spec.get("layout_issues", []) if isinstance(item, dict)]
+    issues = _current_layout_issues(spec)
     autofixes = [
         str(item) for item in spec.get("autofixes_applied", []) if isinstance(item, str)
     ]

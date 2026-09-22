@@ -9,7 +9,7 @@ from typing import Any
 
 
 SAMPLE_STYLE_FIELDS = {"color": "PlotLine/color", "width": "PlotLine/width"}
-_CURVE_SHAPE_SUFFIXES = ("PlotLine/style", "marker", "markerSize", "MarkerLine/hide", "MarkerFill/hide")
+_CURVE_SHAPE_SUFFIXES = ("PlotLine/style", "PlotLine/transparency", "marker", "markerSize", "MarkerLine/hide", "MarkerFill/hide")
 
 
 def ordinary_curve_paths(spec: dict[str, Any]) -> set[str]:

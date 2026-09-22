@@ -175,7 +175,7 @@ def test_curve_line_and_marker_shape_edits_require_a_proven_ordinary_series(tmp_
     spec = _spec(tmp_path, **contract)
     objects = _objects()
     paths = [f"{CURVE}/{suffix}" for suffix in (
-        "PlotLine/style", "marker", "markerSize", "MarkerLine/hide", "MarkerFill/hide")]
+        "PlotLine/style", "PlotLine/transparency", "marker", "markerSize", "MarkerLine/hide", "MarkerFill/hide")]
     objects[CURVE]["editable_fields"].extend({"setting_path": path} for path in paths)
     before = deepcopy(objects)
     advertised = {field["setting_path"] for field in filter_editable_fields(objects, spec)[CURVE]["editable_fields"]}

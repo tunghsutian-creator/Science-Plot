@@ -327,6 +327,10 @@ in `axis_data_visibility`, and requires explicit clipping authorization. Native
 audits bind the displayed bounds; prepared-source signatures bind the preserved
 source axis while rejecting changes to its labels, scales and other semantics.
 Out-of-window annotations require an explicit same-batch move or removal.
+Studio review retains generated clipping diagnostics and classifies them as
+informational only for an ordinary axis with a validated, explicitly authorized
+current display window. Other-axis, legend and scientific failures remain blocking;
+neither the saved diagnostic evidence nor the native document is rewritten by QA.
 The native setting catalog permits a boolean visibility edit for the canonical
 Y axis of bound ordinary Cartesian curves. It changes only axis drawing; the
 scientific label/unit, range, datasets and X-axis display remain bound. Scalar,
@@ -338,6 +342,11 @@ annotations and semantic legends remain outside sample color edits. Duplicate la
 remain ambiguous. The saved-project service binds both the document revision
 and specification hash before passing expanded operations to the existing
 transaction; workers do not interpret sample aliases or add another style policy.
+Ordinary line transparency shares that catalog and policy, with integer bounds
+and whole-batch visible-mark checks. A reviewed white-background color/opacity
+edit can retain visual tone while avoiding Qt's dense transparent-stroke PDF
+outlines. Export still uses the exact native document; no implicit color baking,
+path simplification, raster replacement or separate PDF renderer is installed.
 
 Candidate editing and candidate data audit share one native worker process.
 The source-coverage audit owner still creates private document/spec snapshots

@@ -48,6 +48,7 @@ TASK_CONTROL_OWNERS = (
             "src/sciplot_core/studio_core/sample_style_presets.py",
             "src/sciplot_core/veusz_worker/annotations.py",
             "src/sciplot_core/studio_core/axis_data_visibility.py",
+            "src/sciplot_core/studio_core/review_artifacts.py",
             "src/sciplot_core/veusz_worker/spec_audit/labels.py",
             "src/sciplot_core/veusz_worker/spec_audit/overlays.py",
         }),

@@ -146,3 +146,42 @@ def test_native_display_window_preserves_measurements_through_export(tmp_path):
     assert (cold['axes']['y']['min'],cold['axes']['y']['max']) == (-1,9)
     assert source.read_bytes() == source_bytes
     assert audit_edited_document(document,spec_path)['status'] == 'passed'
+
+
+@pytest.mark.comprehensive
+def test_initial_crop_can_be_reviewed_and_exported_without_regeneration(tmp_path):
+    source = tmp_path / 'spectrum.csv'
+    source.write_text('ppm,intensity\n10,1\n5,2\n4,30\n3,5\n2,50\n1,3\n0,100\n-2,1\n')
+    original = source.read_bytes()
+    project = tmp_path / 'project'
+    project.mkdir()
+    (project / 'plot_request.json').write_text(json.dumps({
+        'input': str(source), 'output': str(project), 'template': 'curve',
+        'delivery_output': str(tmp_path / 'delivery'), 'exports': ['pdf', 'tiff_300'],
+        'render_options': {'size': '120x55', 'reverse_x': True,
+            'x_min': -.5, 'x_max': 5, 'y_min': -3, 'y_max': 203,
+            'x_label_override': 'Chemical shift (ppm)', 'y_label_override': 'Intensity (%)'}}))
+    cli('studio', project)
+    selected = resolve_project_figure(project, None)
+    document, spec_path = Path(selected['document']), Path(selected['spec'])
+    baseline = json.loads(spec_path.read_text())
+    assert any(item['id'] == 'visual_extent_outside_explicit_axis'
+               for item in baseline['layout_issues'])
+    axis = baseline['axes']['x']
+    operation = {'op': 'set_axis_range', 'axis': 'x', 'unit': 'ppm',
+        'expected_min': axis['min'], 'expected_max': axis['max'],
+        'min': 5, 'max': -.5, 'ticks': [-.5,0,1,2,3,4,5], 'allow_clipping': True}
+    preview = preview_document_operations(project, [operation], figure_id=selected['figure_id'],
+        expected_document_sha256=file_sha256(document), output_dir=tmp_path/'review')
+    assert preview['scientific_audit']['status'] == 'passed'
+    apply_document_edit(project, preview)
+    final_hash = file_sha256(document)
+    result = cli('studio', project, '--export', 'pdf,tiff_300')['studio_run']
+    assert result['ready_to_use'] is True
+    issues = result['qa']['studio_layout']['documents'][0]['issues']
+    assert issues and all(item['severity'] == 'info' for item in issues)
+    assert file_sha256(document) == final_hash and source.read_bytes() == original
+    final_spec = json.loads(spec_path.read_text())
+    assert final_spec['series'] == baseline['series']
+    assert final_spec['layout_issues'] == baseline['layout_issues']
+    assert final_spec['axis_data_visibility']['axes']['x']['clipped_coordinate_count'] == 2

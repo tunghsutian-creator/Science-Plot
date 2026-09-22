@@ -140,7 +140,7 @@ def test_curve_shape_choices_are_native_and_keep_point_only_marks(line_hidden, l
     doc.settings["/g/xy/PlotLine/style"].vallist = ["solid", "dashed"]
     doc.settings["/g/xy/marker"].vallist = ["none", "circle", "diamond"]
     fields = {field["field_id"]: field for field in editable_fields(doc, widget, safe_only=True)}
-    assert set(fields) == {"series_line_style", "series_marker", "series_marker_size"}
+    assert set(fields) == {"series_line_style", "series_line_transparency", "series_marker", "series_marker_size"}
     marker = fields["series_marker"]
     assert marker["choices"] == (["none", "circle", "diamond"] if allow_none else ["circle", "diamond"])
     assert validate_native_setting(doc, marker, expected_value="circle", value="diamond", safe_only=True)[1] == "diamond"
@@ -150,6 +150,19 @@ def test_curve_shape_choices_are_native_and_keep_point_only_marks(line_hidden, l
     with pytest.raises(ValueError, match="positive physical size"):
         validate_native_setting(doc, fields["series_marker_size"], expected_value="3pt", value="0pt", safe_only=True)
     assert doc.settings["/g/xy/marker"].get() == "circle"
+
+
+@pytest.mark.parametrize("value", [-1, 101, 2.5, True, "0"])
+def test_curve_transparency_rejects_invalid_values(value):
+    widget = SimpleNamespace(path="/g/xy", typename="xy", parent=SimpleNamespace(children=[]))
+    doc = Document({f"/g/xy/{key}": val for key, val in {
+        "xData": "x", "yData": "y", "Color/points": "", "PlotLine/transparency": 8,
+    }.items()})
+    cap, = editable_fields(doc, widget, safe_only=True)
+    assert validate_native_setting(doc, cap, expected_value=8, value=0, safe_only=True) == (8, 0)
+    with pytest.raises(ValueError):
+        validate_native_setting(doc, cap, expected_value=8, value=value, safe_only=True)
+    assert doc.settings['/g/xy/PlotLine/transparency'].get() == 8
 
 
 @pytest.mark.parametrize("object_type,suffix,field_id", [
@@ -237,6 +250,52 @@ def _worker(*args: str, failed: bool = False) -> dict:
         return {"error": result.stderr}
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
+
+
+@pytest.mark.comprehensive
+def test_dense_opaque_curve_pdf_keeps_all_points_as_an_editable_stroke(tmp_path):
+    import fitz
+    import numpy as np
+
+    source = tmp_path / "dense.csv"
+    x = np.linspace(0, 10, 12000)
+    y = 2 + np.sin(x * 50)
+    source.write_text("Time,Force\ns,N\nA,A\n" + "".join(
+        f"{a:.15g},{b:.15g}\n" for a, b in zip(x, y, strict=True)))
+    raw = source.read_bytes()
+    rendered = render_to_dir(source, template="curve", output_dir=tmp_path / "render",
+        export_formats=("pdf",), options={"size": "120x110"})
+    document, spec = Path(rendered["veusz_documents"][0]), Path(rendered["veusz_specs"][0])
+    original_hash = file_sha256(document)
+    state = _worker("inspect-document-state", str(document))
+    path = "/page1/graph1/series_1"
+    fields = {f["setting_path"]: f for f in state["widgets"][path]["editable_fields"]}
+    changes = [{"object_path": path, "setting_path": path + "/" + suffix,
+        "expected_value": fields[path + "/" + suffix]["current_value"], "value": value}
+        for suffix, value in (("PlotLine/color", "#338933893389"), ("PlotLine/transparency", 0))]
+    request = tmp_path / "changes.json"
+    request.write_text(json.dumps(changes))
+    candidate = tmp_path / "candidate.vsz"
+    review = _worker("edit-document", str(document), "--changes", str(request),
+        "--output-document", str(candidate), "--preview-png", str(tmp_path / "preview.png"),
+        "--audit-spec", str(spec))
+    assert review["document_audit"]["status"] == "passed"
+    exported = _worker("export-document", str(candidate), "--formats", "pdf",
+        "--out", str(tmp_path / "export"))
+    with fitz.open(exported["exports"][0]["path"]) as pdf:
+        drawing = max(pdf[0].get_drawings(), key=lambda item: len(item["items"]))
+        assert drawing["type"] == "s" and drawing["width"] == pytest.approx(1.2)
+        assert len(drawing["items"]) == len(x) - 1
+        assert not pdf[0].get_images()
+    assert source.read_bytes() == raw and file_sha256(document) == original_hash
+    # Transparency 100 cannot erase the only remaining scientific mark channel.
+    changes[1]["value"] = 100
+    request.write_text(json.dumps(changes))
+    blocked = tmp_path / "invisible.vsz"
+    failure = _worker("edit-document", str(document), "--changes", str(request),
+        "--output-document", str(blocked), "--preview-png", str(tmp_path / "invisible.png"), failed=True)
+    assert "must keep a visible marker" in failure["error"]
+    assert not blocked.exists() and file_sha256(document) == original_hash
 
 
 @pytest.mark.comprehensive

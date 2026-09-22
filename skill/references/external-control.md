@@ -658,7 +658,13 @@ contents against the current spec. It does not replace the saved document.
 Review the returned `actual_changes`, scientific audit and preview image.
 Current capability scope covers the advertised axis typography (including tick
 rotation), explicit numeric major-tick coordinates, ordinary sample
-line/marker/direct-label color, line width, and legend typography/placement fields.
+line/marker/direct-label color, line width/transparency, and legend typography/placement fields.
+Line transparency is an integer from 0 to 100 for bound ordinary curves; a batch
+cannot make the final line/marker channel invisible. On a verified white
+background, an explicitly reviewed equivalent opaque color can avoid Qt's
+transparent-stroke expansion into very long filled PDF paths. This is a saved
+native presentation edit, never implicit source-data simplification or PDF
+rasterization; inspect the exported paths and the target editor before handoff.
 For bound ordinary Cartesian curves, the canonical Y axis also advertises its
 boolean `hide` field. This hides the axis line, ticks and displayed title without
 removing its unit/label contract, changing bounds or changing any curve values.

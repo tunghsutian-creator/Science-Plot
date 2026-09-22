@@ -83,6 +83,10 @@ XY_INSPECTOR_FIELDS = (
         immediate=True,
     ),
     _field(
+        "series_line_transparency", "Line", "Line transparency",
+        "PlotLine/transparency", "integer", minimum=0, maximum=100,
+    ),
+    _field(
         "series_interpolation",
         "Line",
         "Interpolation",

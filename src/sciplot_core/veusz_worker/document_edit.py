@@ -74,7 +74,7 @@ def _marker_visibility_changes(loaded: Any, actual: list[dict[str, Any]]) -> lis
     values = {change["setting_path"]: change["new_value"] for change in actual}
     affected = {change["object_path"] for change in actual if any(
         change["setting_path"] == f"{change['object_path']}/{suffix}"
-        for suffix in ("marker", "MarkerLine/hide", "MarkerFill/hide", "PlotLine/style")
+        for suffix in ("marker", "MarkerLine/hide", "MarkerFill/hide", "PlotLine/style", "PlotLine/transparency")
     )}
     companions = []
     for path in sorted(affected):

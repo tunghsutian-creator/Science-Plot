@@ -106,6 +106,46 @@ def test_display_range_keeps_all_data_and_records_actual_clipping(spec):
         validate_axis_data_visibility(after)
 
 
+def test_layout_review_preserves_diagnostics_and_honors_only_authorized_axis(spec):
+    from sciplot_core.studio_core.review_artifacts import _current_layout_issues
+
+    spec['layout_issues'] = [
+        {'id': 'visual_extent_outside_explicit_axis', 'severity': 'critical', 'axis': axis}
+        for axis in ['x', 'y']
+    ] + [{'id': 'legend_curve_clearance_below_target', 'severity': 'critical', 'axis': 'x'}]
+    assert _current_layout_issues(spec) == spec['layout_issues']
+    _, after, _ = compile_ops(spec, [display_range()])
+    baseline = copy.deepcopy(after)
+    issues = _current_layout_issues(after)
+    assert after == baseline
+    assert issues[0]['severity'] == 'info' and issues[0]['original_severity'] == 'critical'
+    assert issues[0]['authorized_display_window'] == {'min': 425, 'max': 475, 'allow_clipping': True}
+    assert issues[1:] == spec['layout_issues'][1:]
+
+
+@pytest.mark.parametrize('tamper', ['bounds', 'counts', 'consent', 'source_label', 'scope'])
+def test_layout_review_rejects_invalid_display_window_evidence(spec, tamper):
+    from sciplot_core.studio_core.review_artifacts import _current_layout_issues
+
+    spec['layout_issues'] = [
+        {'id': 'visual_extent_outside_explicit_axis', 'severity': 'critical', 'axis': 'x'}]
+    _, after, _ = compile_ops(spec, [display_range()])
+    if tamper == 'bounds':
+        after['axes']['x']['display_window']['max'] = 500
+    elif tamper == 'counts':
+        after['axis_data_visibility']['clipped_coordinate_count'] = 0
+    elif tamper == 'consent':
+        after['axes']['x']['display_window']['allow_clipping'] = False
+        assert _current_layout_issues(after) == spec['layout_issues']
+        return
+    elif tamper == 'source_label':
+        after['axes']['x']['display_window']['source_axis']['label'] = 'Wrong (nm)'
+    else:
+        after['template'] = 'heatmap'
+    with pytest.raises(ValueError):
+        _current_layout_issues(after)
+
+
 @pytest.mark.parametrize('patch,code', [
     ({'allow_clipping': False}, 'axis_clipping_not_authorized'),
     ({'expected_min': 399}, 'stale_axis_range'),
