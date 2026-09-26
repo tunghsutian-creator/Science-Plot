@@ -32,7 +32,7 @@ def build():
     cards = "\n".join(
         [
             chart(
-                "showcase/v2/spectra/spectra-rich.png",
+                "showcase/v2/curves/stacked-spectra.png",
                 790,
                 91,
                 330,
@@ -41,7 +41,7 @@ def build():
                 "#31EBC3",
             ),
             chart(
-                "showcase/v2/distributions/replicate-distributions.png",
+                "showcase/v2/curves/rheology-point-lines.png",
                 1170,
                 117,
                 320,
@@ -50,7 +50,7 @@ def build():
                 "#F768A1",
             ),
             chart(
-                "showcase/v2/performance/performance-scatter-rich.png",
+                "showcase/v2/performance/performance-radar-rich.png",
                 770,
                 441,
                 750,
@@ -75,8 +75,8 @@ def build():
     )
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
       width="1600" height="850" viewBox="0 0 1600 850" role="img" aria-labelledby="title desc">
-    <title id="title">SciPlot — Your data. Clearly plotted.</title>
-    <desc id="desc">Local scientific plotting with AI. Native-rendered spectra, distributions and performance comparisons using synthetic demonstration data.</desc>
+    <title id="title">SciPlot — One request. Ready for paper.</title>
+    <desc id="desc">AI-assisted scientific plotting. Native-rendered stacked spectra, rheology and five-metric comparisons using synthetic demonstration data.</desc>
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
         <stop stop-color="#080F20"/><stop offset=".6" stop-color="#151B3D"/><stop offset="1" stop-color="#312958"/>
@@ -101,9 +101,9 @@ def build():
       <rect x="76" y="292" width="495" height="6" rx="3" fill="url(#spectrum)"/>
     </g>
     <g font-family="Arial">
-      <text x="73" y="387" font-size="60" font-weight="600" fill="#FFFFFF">Your data.</text>
-      <text x="73" y="459" font-size="60" font-weight="600" fill="#FFFFFF">Clearly plotted.</text>
-      <text x="76" y="525" font-size="25" fill="#C4CCE4">Editable figures. Traceable data.</text>
+      <text x="73" y="387" font-size="60" font-weight="600" fill="#FFFFFF">One request.</text>
+      <text x="73" y="459" font-size="60" font-weight="600" fill="#FFFFFF">Ready for paper.</text>
+      <text x="76" y="525" font-size="25" fill="#C4CCE4">AI-assisted. Fully editable.</text>
       <text x="76" y="633" font-size="21" fill="#B5C1DF">Your data</text>
       <text x="212" y="633" font-size="24" fill="#736FBA">→</text>
       <text x="265" y="633" font-size="21" fill="#B5C1DF">Figures</text>

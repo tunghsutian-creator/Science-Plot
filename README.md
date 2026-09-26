@@ -10,7 +10,7 @@ Bring the result into your manuscript, then keep refining it as your research ev
 
 [**Download source ↓**](https://github.com/tunghsutian-creator/Science-Plot/archive/refs/heads/main.zip) · [Get started](#get-started) · [See the figures](#gallery) · [Connect your AI](#connect-your-ai)
 
-![SciPlot — AI-assisted scientific plotting with editable figures and traceable data](docs/assets/sciplot-banner.png)
+![SciPlot — One request. Ready for paper. Native stacked spectra, rheology curves, and a five-metric comparison](docs/assets/sciplot-banner.png)
 
 ## From experiment to manuscript
 
@@ -41,21 +41,48 @@ data. Standard figures use **60 × 55 mm**; performance comparisons use
 <table>
   <tr>
     <td width="50%" valign="top">
-      <b>Multi-sample spectra</b><br>
-      <a href="docs/assets/showcase/v2/spectra/spectra-rich.png"><img src="docs/assets/showcase/v2/spectra/spectra-rich.png" width="420" alt="Five synthetic spectra with distinct colors and labeled axes"></a><br>
-      Bring multiple samples into one consistent figure.
+      <b>Spectral fingerprints, clearly separated</b><br>
+      <a href="docs/assets/showcase/v2/curves/stacked-spectra.png"><img src="docs/assets/showcase/v2/curves/stacked-spectra.png" width="420" alt="Five color-matched synthetic FTIR spectra, stacked vertically with direct sample labels"></a><br>
+      Compare five spectra with direct labels and consistent sample colors.
+      Curves are offset for display; source values are preserved.
     </td>
     <td width="50%" valign="top">
-      <b>Rheology</b><br>
+      <b>Rheology, across five decades</b><br>
       <a href="docs/assets/showcase/v2/curves/rheology-point-lines.png"><img src="docs/assets/showcase/v2/curves/rheology-point-lines.png" width="420" alt="Five synthetic rheology curves with 16 supplied points per curve on logarithmic axes"></a><br>
-      Compare curves on logarithmic axes with every supplied point retained.
+      Distinct markers and a shared color palette make five rheology curves easy to follow.
     </td>
   </tr>
   <tr>
+    <td colspan="2" valign="top">
+      <b>Five properties. One comparison.</b><br>
+      <a href="docs/assets/showcase/v2/performance/performance-radar-rich.png"><img src="docs/assets/showcase/v2/performance/performance-radar-rich.png" width="860" alt="Three colored synthetic material profiles compared across five properties, with incomplete references shown as separate hollow markers"></a><br>
+      Compare the balance of properties across samples. Reference materials retain only
+      their available measurements; polygon area is not an overall performance score.
+    </td>
+  </tr>
+</table>
+
+<details>
+<summary><b>More examples: absorption spectra, distributions, composition, response maps, and scatter comparisons</b></summary>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <b>Absorption spectra</b><br>
+      <a href="docs/assets/showcase/v2/spectra/spectra-rich.png"><img src="docs/assets/showcase/v2/spectra/spectra-rich.png" width="420" alt="Five synthetic absorption spectra with distinct colors and labeled axes"></a><br>
+      Bring multiple samples into one consistent figure.
+    </td>
     <td width="50%" valign="top">
       <b>Replicate distributions</b><br>
       <a href="docs/assets/showcase/v2/distributions/replicate-distributions.png"><img src="docs/assets/showcase/v2/distributions/replicate-distributions.png" width="420" alt="Five synthetic sample groups, each shown as a box plot with all ten individual observations"></a><br>
       Show the distribution and the individual observations together.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <b>Composition</b><br>
+      <a href="docs/assets/showcase/v2/distributions/composition-bars.png"><img src="docs/assets/showcase/v2/distributions/composition-bars.png" width="420" alt="Five synthetic formulations with two components totaling 100 percent each"></a><br>
+      Compare the composition of five formulations at a glance.
     </td>
     <td width="50%" valign="top">
       <b>Response maps</b><br>
@@ -63,37 +90,11 @@ data. Standard figures use **60 × 55 mm**; performance comparisons use
       Make trends across two variables easy to read.
     </td>
   </tr>
-</table>
-
-<details>
-<summary><b>See more: stacked spectra, composition, and performance comparisons</b></summary>
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <b>Stacked spectra</b><br>
-      <a href="docs/assets/showcase/v2/curves/stacked-spectra.png"><img src="docs/assets/showcase/v2/curves/stacked-spectra.png" width="420" alt="Five synthetic spectra separated by vertical display offsets"></a><br>
-      Separate overlapping curves with a display offset; retain the source values.
-    </td>
-    <td width="50%" valign="top">
-      <b>Composition</b><br>
-      <a href="docs/assets/showcase/v2/distributions/composition-bars.png"><img src="docs/assets/showcase/v2/distributions/composition-bars.png" width="420" alt="Five synthetic formulations with two components totaling 100 percent each"></a><br>
-      Compare the composition of five formulations at a glance.
-    </td>
-  </tr>
   <tr>
     <td colspan="2">
       <b>Performance comparison</b><br>
       <a href="docs/assets/showcase/v2/performance/performance-scatter-rich.png"><img src="docs/assets/showcase/v2/performance/performance-scatter-rich.png" width="860" alt="Four synthetic samples compared with twelve references using filled and hollow markers"></a><br>
       Put your samples in context. Shading shows the sample range, not a confidence interval.
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2">
-      <b>Multi-metric comparison</b><br>
-      <a href="docs/assets/showcase/v2/performance/performance-radar-rich.png"><img src="docs/assets/showcase/v2/performance/performance-radar-rich.png" width="860" alt="Three complete synthetic sample profiles and three incomplete references on five radar axes"></a><br>
-      Compare complete profiles while keeping missing reference values missing.
-      Incomplete references appear as unconnected points.
     </td>
   </tr>
 </table>
