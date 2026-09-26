@@ -16,7 +16,7 @@ def write_executable(path: Path, text: str) -> None:
     path.chmod(0o755)
 
 
-def write_entrypoints(app: Path, version: str) -> None:
+def write_entrypoints(app: Path, version: str, *, app_version: str = "0.1.0") -> None:
     contents = app / "Contents"
     resources = contents / "Resources"
     script = r'''#!/bin/bash
@@ -64,7 +64,7 @@ exec "$APP_ROOT/../../MacOS/sciplot" "$@"
             "CFBundleDisplayName": "SciPlot 本地科研绘图",
             "CFBundleIdentifier": "local.sciplot.desktop",
             "CFBundleVersion": "1",
-            "CFBundleShortVersionString": "0.1.0",
+            "CFBundleShortVersionString": app_version,
             "CFBundleExecutable": "SciPlotLauncher",
             "CFBundlePackageType": "APPL",
             "LSUIElement": True,

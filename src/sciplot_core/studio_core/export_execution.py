@@ -118,6 +118,9 @@ def export_studio_document(
         with _capture_process_stderr(stderr_log):
             _prefer_offscreen_export_platform()
             _ensure_veusz_on_path()
+            from sciplot_core.studio_core.qt_compat import ensure_veusz_loader_compat
+
+            ensure_veusz_loader_compat()
             from PyQt6 import QtWidgets
             from veusz import dataimport, document, widgets
             from veusz.document import CommandInterface

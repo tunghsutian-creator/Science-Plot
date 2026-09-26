@@ -72,8 +72,8 @@ TASK_CONTROL_OWNERS = (
     ChangedOwner(
         owner_id="macos_distribution", path_prefixes=("distribution/",),
         exact_paths=frozenset({"src/sciplot_core/veusz_runtime.py", "src/sciplot_core/studio_core/runtime.py"}),
-        owned_test_paths=frozenset({"tests/test_macos_distribution.py", "tests/test_bundled_runtime.py"}),
-        pytest_targets=("tests/test_macos_distribution.py", "tests/test_bundled_runtime.py",
+        owned_test_paths=frozenset({"tests/test_macos_distribution.py", "tests/test_macos_release.py", "tests/test_bundled_runtime.py"}),
+        pytest_targets=("tests/test_macos_distribution.py", "tests/test_macos_release.py", "tests/test_bundled_runtime.py",
                         *ARCHITECTURE_CORE_TARGETS),
         mypy_required=True, handoff_gates=("doctor",),
         final_milestone_gates=("smoke",), release_gates=("full_pytest",),

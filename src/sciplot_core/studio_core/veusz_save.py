@@ -71,8 +71,10 @@ def _save_veusz_document_from_spec(
         from sciplot_core.studio_core.veusz_numeric_persistence import (
             FLOAT64_ENCODING, NUMERIC_ENCODING_KEY, ensure_veusz_numeric_precision,
         )
+        from sciplot_core.studio_core.veusz_line_joins import ensure_veusz_line_joins
 
         ensure_veusz_numeric_precision()
+        ensure_veusz_line_joins()
 
         _ = dataimport, widgets
         app = QtWidgets.QApplication.instance()

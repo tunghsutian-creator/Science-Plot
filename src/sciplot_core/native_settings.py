@@ -19,7 +19,7 @@ _SAFE_SUFFIXES = {
         "TickLabels/rotate", "MajorTicks/manualTicks",
     }),
     "xy": frozenset({
-        "PlotLine/color", "PlotLine/width", "PlotLine/style", "PlotLine/transparency", "marker", "markerSize",
+        "PlotLine/color", "PlotLine/width", "PlotLine/style", "PlotLine/transparency", "PlotLine/joinStyle", "marker", "markerSize",
         "MarkerFill/color", "MarkerLine/color", "MarkerFill/hide", "MarkerLine/hide",
     }),
     "label": frozenset({"Text/font", "Text/color", "Text/size", "Text/bold", "Text/italic"}),

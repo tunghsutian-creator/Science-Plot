@@ -23,6 +23,15 @@ def verify_mcp(command: Path, environment: dict[str, str]) -> dict:
                 raise RuntimeError("The bundled MCP capabilities call failed")
             if payload.get("model_configuration_required") is not False:
                 raise RuntimeError("The bundled MCP server unexpectedly requires a model")
-            return {"status": "passed", "tool_count": len(names), "transport": "mcp_stdio", "model_calls": 0}
+            if "sciplot_task_capabilities" not in names:
+                raise RuntimeError("The bundled MCP server has no task interface")
+            task_result = await client.call_tool("sciplot_task_capabilities", {})
+            task = task_result.structured_content
+            if task_result.is_error or task.get("kind") != "sciplot_task_capabilities" or not task.get("contract_sha256"):
+                raise RuntimeError("The bundled task capabilities call failed")
+            return {
+                "status": "passed", "tool_count": len(names), "transport": "mcp_stdio", "model_calls": 0,
+                "task_contract_sha256": task["contract_sha256"],
+            }
 
     return anyio.run(scenario)

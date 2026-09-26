@@ -52,8 +52,10 @@ def _ensure_veusz_loader_compat() -> None:
     """Keep Veusz script loading alive when optional import commands are absent."""
     from importlib import import_module
     from sciplot_core.studio_core.veusz_numeric_persistence import ensure_veusz_numeric_precision
+    from sciplot_core.studio_core.veusz_line_joins import ensure_veusz_line_joins
 
     ensure_veusz_numeric_precision()
+    ensure_veusz_line_joins()
 
     # The upstream Veusz application imports this package during its startup
     # thread.  SciPlot constructs MainWindow directly, so repeat the same

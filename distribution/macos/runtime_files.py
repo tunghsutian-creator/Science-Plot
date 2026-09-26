@@ -145,11 +145,12 @@ def copy_runtime(repo: Path, resources: Path) -> tuple[dict[Path, Path], list[di
         if source.is_file():
             shutil.copy2(source, app / "third_party" / "veusz" / name)
     roots[vendor.resolve()] = app / "third_party" / "veusz"
-    for name in ("pyproject.toml", "README.md"):
+    for name in ("pyproject.toml", "README.md", "LICENSE"):
         shutil.copy2(repo / name, app / name)
     notices = app / "docs"
     notices.mkdir()
     shutil.copy2(repo / "docs" / "THIRD_PARTY_NOTICES.md", notices)
+    shutil.copy2(repo / "docs" / "PUBLIC_BETA.md", notices)
     for parent in executable.parents:
         license_path = parent / "LICENSE"
         if license_path.is_file():

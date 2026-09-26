@@ -24,7 +24,9 @@ def test_compare_native_alternatives_from_one_baseline_then_select_only_one(tmp_
     original = source.read_bytes()
     created = task(tmp_path, 'create', {'version': 1, 'action': 'create', 'source': str(source)})
     project = Path(created['project'])
-    figure = cli('task', 'inspect', created['task_dir'])['current_project']['figures'][0]
+    # The data-integrity assertions below need the detailed spec path; the
+    # ordinary task receipt intentionally omits it from the compact response.
+    figure = cli('task', 'inspect', created['task_dir'], '--full')['current_project']['figures'][0]
     spec_before = json.loads(Path(figure['spec']).read_text())
     before = edit_state(project)
     request = {'version': 1, 'title': 'Native alternatives', 'project': str(project),

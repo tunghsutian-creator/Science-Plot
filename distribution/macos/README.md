@@ -35,6 +35,25 @@ Apple Command Line Tools；终端用户不需要编译器。
 窗口 smoke、欢迎页生成、官方 MCP 客户端的 stdio 发现与能力调用，以及显式选择的
 现有完整 runtime smoke。验证不调用模型。
 构建成功本身不等于验证通过，应查看 `verification.json`。
+验证在启动包内代码前检查源文件身份和原生依赖，并在结束后比较应用的完整文件内容、
+权限与内部链接。任何检查失败、异常退出或超时都会保留失败报告；退出码为零但 JSON
+状态失败同样不能通过。MCP 验证同时调用任务能力接口。欢迎页提供不含数据、路径、
+错误全文或密钥的 `feedback.json`；本地页面下载用内嵌内容，避免浏览器阻止 file 链接下载。
+
+公测候选归档使用独立的新目录：
+
+```bash
+.venv/bin/python -m distribution.macos.release \
+  --app .tmp_verify/macos_distribution/build/SciPlot.app \
+  --out .tmp_verify/macos_distribution/candidate
+```
+
+此命令复制应用、核对身份、在搬移后的副本执行全部本地验证和 runtime smoke，随后生成 ZIP，
+解压并逐文件复核，输出 `release.json`、`SHA256SUMS` 和新用户说明。失败记录不被重试覆盖。
+默认渠道是 candidate，不表示已具备公开分发身份。已由维护者完成签名/公证的应用可加
+`--public`，强制验证 Developer ID、附加公证票据和 Gatekeeper；不通过则不生成公开 ZIP。
+命令不会签名、上传或发布。公开包的技术门槛和独立用户/干净机器验收必须分别记录。
+完整边界与用户指南见 [PUBLIC_BETA.md](../../docs/PUBLIC_BETA.md)。
 
 要验证搬移后的包：
 

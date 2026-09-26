@@ -87,6 +87,10 @@ XY_INSPECTOR_FIELDS = (
         "PlotLine/transparency", "integer", minimum=0, maximum=100,
     ),
     _field(
+        "series_line_join", "Line", "Line join", "PlotLine/joinStyle",
+        "choice", immediate=True,
+    ),
+    _field(
         "series_interpolation",
         "Line",
         "Interpolation",

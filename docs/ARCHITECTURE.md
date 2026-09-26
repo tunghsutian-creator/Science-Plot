@@ -41,6 +41,15 @@ compliance are separate evidence claims.
 
 ## External control and native document boundary
 
+`studio_core/veusz_line_joins.py` installs the optional native XY
+`PlotLine/joinStyle` setting in SciPlot's Veusz creation, loading and export
+runtime. Existing curves keep the upstream bevel default; an explicit round
+selection changes the QPen join only, preserving coordinates, interpolation,
+caps and width. It is saved in VSZ and uses the shared ordinary-curve style
+catalog and scientific edit gate. Round-join documents require the SciPlot
+runtime extension when reopened; unmodified standalone Veusz is not a supported
+loader for that additional setting.
+
 External AI is the product task interface and the direction for further
 development. The public CLI is the reference adapter for source planning,
 saved-project queries, native edits, exact-current export and continuation.
@@ -359,6 +368,16 @@ field supplied by an external caller or a persisted cross-operation cache.
 `distribution/macos` builds a relocatable runtime from the installed dependency
 environment, audits bundled native dependencies and generates client connection
 instructions. It is build tooling outside the core wheel, not another plotting UI.
+`distribution/macos/identity.py` binds source snapshots and complete app trees,
+including executable modes and internal symlink targets. `verification.py` retains
+failed/unfinished checks, validates JSON outcome states and rechecks app identity
+after local runtime/MCP checks. `release.py` verifies a relocated copy, checks the
+extracted ZIP against that same identity, and records archive checksums. Its public
+channel additionally requires actual Developer ID, stapled-ticket and Gatekeeper
+checks; it does not sign, upload, or weaken host security. These are local technical
+gates, separate from independent-user and clean-machine acceptance. The welcome
+page emits a field-allowlisted feedback summary without source data, paths, logs
+or credentials. It never sends that summary or modifies client configuration.
 
 Veusz `MainWindow` remains a compatible native document tool. It owns its object
 tree, property editor, Datasets, canvas, menus, Save and Undo/Redo. External

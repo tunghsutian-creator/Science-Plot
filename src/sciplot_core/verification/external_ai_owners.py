@@ -81,6 +81,8 @@ EXTERNAL_AI_OWNERS = (
         exact_paths=frozenset(
             {
                 "src/sciplot_core/native_settings.py",
+                "src/sciplot_core/studio_core/veusz_line_joins.py",
+                "src/sciplot_core/studio_core/export_execution.py",
                 "src/sciplot_core/setting_catalog/specs/xy.py",
                 "src/sciplot_core/setting_catalog/specs/axis.py",
                 "src/sciplot_core/setting_catalog/specs/label.py",

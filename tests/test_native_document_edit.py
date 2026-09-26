@@ -135,12 +135,17 @@ def test_curve_shape_choices_are_native_and_keep_point_only_marks(line_hidden, l
         "xData": "x", "yData": "y", "Color/points": "",
         "PlotLine/style": line_style, "marker": "circle", "markerSize": "3pt",
         "PlotLine/interpType": "linear", "errorStyle": "bar", "PlotLine/hide": line_hidden,
-        "PlotLine/transparency": transparency,
+        "PlotLine/transparency": transparency, "PlotLine/joinStyle": "bevel",
     }.items()})
     doc.settings["/g/xy/PlotLine/style"].vallist = ["solid", "dashed"]
+    doc.settings["/g/xy/PlotLine/joinStyle"].vallist = ["bevel", "round"]
     doc.settings["/g/xy/marker"].vallist = ["none", "circle", "diamond"]
     fields = {field["field_id"]: field for field in editable_fields(doc, widget, safe_only=True)}
-    assert set(fields) == {"series_line_style", "series_line_transparency", "series_marker", "series_marker_size"}
+    assert set(fields) == {"series_line_style", "series_line_transparency", "series_line_join", "series_marker", "series_marker_size"}
+    join = fields["series_line_join"]
+    assert validate_native_setting(doc, join, expected_value="bevel", value="round", safe_only=True) == ("bevel", "round")
+    with pytest.raises(ValueError, match="advertised choices"):
+        validate_native_setting(doc, join, expected_value="bevel", value="invented", safe_only=True)
     marker = fields["series_marker"]
     assert marker["choices"] == (["none", "circle", "diamond"] if allow_none else ["circle", "diamond"])
     assert validate_native_setting(doc, marker, expected_value="circle", value="diamond", safe_only=True)[1] == "diamond"
@@ -270,6 +275,8 @@ def test_dense_opaque_curve_pdf_keeps_all_points_as_an_editable_stroke(tmp_path)
     state = _worker("inspect-document-state", str(document))
     path = "/page1/graph1/series_1"
     fields = {f["setting_path"]: f for f in state["widgets"][path]["editable_fields"]}
+    assert fields[path + "/PlotLine/joinStyle"]["current_value"] == "bevel"
+    assert fields[path + "/PlotLine/joinStyle"]["choices"] == ["bevel", "round"]
     changes = [{"object_path": path, "setting_path": path + "/" + suffix,
         "expected_value": fields[path + "/" + suffix]["current_value"], "value": value}
         for suffix, value in (("PlotLine/color", "#338933893389"), ("PlotLine/transparency", 0))]
@@ -285,8 +292,32 @@ def test_dense_opaque_curve_pdf_keeps_all_points_as_an_editable_stroke(tmp_path)
     with fitz.open(exported["exports"][0]["path"]) as pdf:
         drawing = max(pdf[0].get_drawings(), key=lambda item: len(item["items"]))
         assert drawing["type"] == "s" and drawing["width"] == pytest.approx(1.2)
+        assert drawing["lineJoin"] == 2 and drawing["stroke_opacity"] == 1
         assert len(drawing["items"]) == len(x) - 1
         assert not pdf[0].get_images()
+        original_text = pdf[0].get_text()
+    assert source.read_bytes() == raw and file_sha256(document) == original_hash
+    # A saved native join edit changes only pen joins, including after reopen.
+    request.write_text(json.dumps([{
+        "object_path": path, "setting_path": path + "/PlotLine/joinStyle",
+        "expected_value": "bevel", "value": "round",
+    }]))
+    rounded = tmp_path / "rounded.vsz"
+    review = _worker("edit-document", str(candidate), "--changes", str(request),
+        "--output-document", str(rounded), "--preview-png", str(tmp_path / "round.png"),
+        "--audit-spec", str(spec))
+    assert review["document_audit"]["status"] == "passed"
+    reopened = _worker("inspect-document-state", str(rounded))
+    settings = reopened["widgets"][path]["settings"]
+    assert settings["PlotLine/joinStyle"] == "round" and settings["PlotLine/interpType"] == "linear"
+    exported = _worker("export-document", str(rounded), "--formats", "pdf",
+        "--out", str(tmp_path / "round-export"))
+    with fitz.open(exported["exports"][0]["path"]) as pdf:
+        current = max(pdf[0].get_drawings(), key=lambda item: len(item["items"]))
+        assert current["lineJoin"] == 1
+        for key in ("items", "type", "width", "lineCap", "stroke_opacity", "color"):
+            assert current[key] == drawing[key]
+        assert pdf[0].get_text() == original_text and not pdf[0].get_images()
     assert source.read_bytes() == raw and file_sha256(document) == original_hash
     # Transparency 100 cannot erase the only remaining scientific mark channel.
     changes[1]["value"] = 100

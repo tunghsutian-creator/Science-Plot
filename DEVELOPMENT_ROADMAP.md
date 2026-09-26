@@ -1,11 +1,16 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-09-18. External AI is the task interface. Current behavior belongs
+Status: 2026-09-26. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
 
 ## 1. Independent beginner and installation acceptance
 
-Deferred by user request on 2026-09-10; outside the active development scope.
+Reactivated for the macOS public beta on 2026-09-26. The distribution tools now
+retain failed verification, bind the relocated app and its ZIP to exact file
+identities, exercise task capabilities over MCP, and reject public packaging
+without Developer ID, a stapled notarization ticket and Gatekeeper acceptance.
+The [beta guide](docs/PUBLIC_BETA.md) covers installation, current canvas editing,
+feedback and recovery. These automated gates do not close the independent checks.
 
 Recruit 3–5 people who did not develop SciPlot. On the first supported macOS
 configuration, have them install/connect, create a figure from their own data,
