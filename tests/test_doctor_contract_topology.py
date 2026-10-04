@@ -1,11 +1,47 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from sciplot_core.doctor import (
     _next_actions,
     _publication_foundation_available,
     _vsz_lifecycle_available,
     doctor_payload,
 )
+from sciplot_core.doctor import payload as doctor_module
+
+
+@pytest.mark.parametrize(
+    ("wrapper_kind", "expected_status"),
+    [("missing", "failed"), ("directory", "failed"),
+     ("non_executable", "failed"), ("executable", "passed")],
+)
+def test_doctor_requires_a_regular_executable_skill_wrapper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    wrapper_kind: str, expected_status: str,
+) -> None:
+    wrapper = tmp_path / "skill" / "scripts" / "sciplot"
+    wrapper.parent.mkdir(parents=True)
+    if wrapper_kind == "directory":
+        wrapper.mkdir()
+    elif wrapper_kind != "missing":
+        wrapper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        wrapper.chmod(0o755 if wrapper_kind == "executable" else 0o644)
+    (tmp_path / "pyproject.toml").touch()
+    monkeypatch.setattr(doctor_module, "REPO_ROOT", tmp_path)
+    original_mode = wrapper.stat().st_mode if wrapper.exists() else None
+
+    payload = doctor_payload()
+
+    check = next(item for item in payload["checks"] if item["id"] == "skill_wrapper")
+    assert check["status"] == expected_status
+    assert check["required"] is True
+    assert check["detail"] == str(wrapper)
+    if expected_status == "failed":
+        assert payload["status"] == "blocked"
+    assert (wrapper.stat().st_mode if wrapper.exists() else None) == original_mode
 
 
 def test_doctor_finds_lifecycle_symbols_through_package_facades() -> None:

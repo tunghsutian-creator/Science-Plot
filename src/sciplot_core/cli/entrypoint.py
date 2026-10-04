@@ -18,6 +18,7 @@ from sciplot_core.cli.dispatch import (
     dispatch_rendering,
 )
 from sciplot_core.cli.parsers import build_parser
+from sciplot_core.cli.dispatch.rheology import dispatch_rheology
 
 
 def main(
@@ -30,6 +31,7 @@ def main(
     args = parser.parse_args(argv)
     try:
         handlers = (
+            lambda: dispatch_rheology(args),
             lambda: dispatch_diagnostics(args, argv),
             lambda: dispatch_rendering(
                 args,

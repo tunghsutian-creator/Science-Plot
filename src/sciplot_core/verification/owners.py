@@ -7,6 +7,7 @@ from sciplot_core.verification.live_editor_owner import LIVE_EDITOR_OWNER
 from sciplot_core.verification.external_ai_owners import EXTERNAL_AI_OWNERS
 from sciplot_core.verification.task_control_owners import TASK_CONTROL_OWNERS
 from sciplot_core.verification.owner_model import ChangedOwner
+from sciplot_core.verification.rheology_tts_owner import RHEOLOGY_TTS_OWNER
 from sciplot_core.verification.project_integrity_owners import PROJECT_INTEGRITY_OWNERS
 from sciplot_core.verification.project_revision_owners import PROJECT_REVISION_OWNERS
 from sciplot_core.verification.terminal_owners import GENERIC_TERMINAL_PREPARATION_OWNER
@@ -25,6 +26,7 @@ from sciplot_core.verification.type_gate_owners import (
 )
 
 CHANGED_OWNERS = (
+    RHEOLOGY_TTS_OWNER,
     LIVE_EDITOR_OWNER,
     ChangedOwner(
         owner_id="documentation_contract",

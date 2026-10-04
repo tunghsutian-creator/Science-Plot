@@ -54,4 +54,7 @@ def task_capabilities(*, section: str | None = None, name: str | None = None,
         "read_schema": {"cli": "task capabilities --section SECTION --name NAME --expected-contract SHA --json",
                         "mcp": "sciplot_task_capabilities", "name_optional": True,
                         "full_cli": "task capabilities --full --json"},
+        "specialized_routes": {"rheology_tts": {
+            "cli": "rheology capabilities --json",
+            "scope": "AI-prepared source-bound TTS plotting, exact saved export and revision-bound native style restoration; analysis is a legacy compatibility route."}},
         "validation": "Each returned schema is standalone. Complete server validation and task/document/question/review revision guards remain required."}

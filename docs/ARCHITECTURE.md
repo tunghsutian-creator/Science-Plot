@@ -39,6 +39,46 @@ between two individually stable snapshots does not invalidate identical data.
 Lifecycle success, provenance, artifact QA, human review, and journal
 compliance are separate evidence claims.
 
+The explicit `rheology plot` suite is documented in `RHEOLOGY_TTS.md`.
+The external AI owns processing, calculations, scientific purpose and the prepared
+numerical plan with source bindings, units, transform ledger and series roles.
+The local plotting entry point validates that plan, applies governed templates
+and exports its coordinates faithfully; it must not call the TTS analysis or
+fitting owners. The older combined `rheology tts` utility remains a compatibility
+route. The separated plan distinguishes measured/derived
+point-line traces, marker-only TTS/shift estimates, line-only predictions,
+reference lines and native bars. Initial native audits verify resolved style
+and numerical bindings. Composition reuses shared Veusz primitives and exact
+export. `rheology capabilities` exposes the contract; style preview/apply binds
+current document SHA, sources and compiled specification before editing declared
+native settings without refitting or replacing data. Ordinary re-export records
+style deviations rather than restoring defaults. Visible suite VSZs remain
+editable authority, with hidden creation evidence; the existing managed browser
+editor/audit is not expanded or bypassed for this route.
+Prepared creation continuation is owned by its narrow workflow checkpoint and
+native per-figure creation receipt. Explicit `plot --resume` binds the original
+request, sources, prepared bytes and compiled template contract. Saving/saved/
+completed states prevent a missing or uncertain saved VSZ from being regenerated.
+Completed native figures are verified and reused; unfinished exact export uses
+the saved document. A complete sealed delivery is assembled privately with final
+path bindings and installed without replacing an existing destination. Unknown
+older partial workspaces and changed saved bytes require inspection. This is
+creation continuation only; later native edits use existing exact export.
+The first-failure repair projection shares those read-only continuation guards
+under the existing workflow lease. It attaches guidance to the original exception;
+unknown, changed, uncertain or busy evidence produces inspection guidance. A small
+closed private worker failure record carries only native project-busy status while
+retaining the original traceback. The projection neither acquires another lease nor
+allocates files, renders, exports or installs a package.
+Exact suite re-export uses one native worker for the same complete native audits
+and individual saved-document exports. The suite lifecycle owns hidden staging,
+whole-set source/specification/document fingerprints, inventory verification and
+publication through the existing presentation-storage replacement transaction.
+Failure before publication preserves the visible set; ordinary publication
+exceptions roll back replacements. The workspace lease serializes CLI operations,
+while native GUI saves are detected by fingerprints. This does not provide
+automatic process-crash recovery or a second document authority.
+
 ## External control and native document boundary
 
 `studio_core/veusz_line_joins.py` installs the optional native XY

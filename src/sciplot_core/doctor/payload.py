@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import Any
 from sciplot_core._paths import REPO_ROOT, VEUSZ_ROOT
@@ -31,6 +32,7 @@ from sciplot_core.doctor.actions import (
 
 
 def doctor_payload() -> dict[str, Any]:
+    skill_wrapper = REPO_ROOT / "skill" / "scripts" / "sciplot"
     rules = list(iter_rules())
     ready_rules = [rule for rule in rules if rule.fixture_status == "ready"]
     pending_rules = [rule for rule in rules if rule.fixture_status != "ready"]
@@ -104,8 +106,8 @@ def doctor_payload() -> dict[str, Any]:
         _check(
             "skill_wrapper",
             "Skill wrapper executable",
-            (REPO_ROOT / "skill" / "scripts" / "sciplot").exists(),
-            detail=str(REPO_ROOT / "skill" / "scripts" / "sciplot"),
+            skill_wrapper.is_file() and os.access(skill_wrapper, os.X_OK),
+            detail=str(skill_wrapper),
         ),
         _check(
             "ready_rules",

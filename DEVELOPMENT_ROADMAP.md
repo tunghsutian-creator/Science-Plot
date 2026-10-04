@@ -130,6 +130,17 @@ including 0.340 s conflict detection and 0.331 s bad-answer feedback (1,802 byte
 This used predetermined corrections, not measured AI inference.
 An unassisted matched client run and further native creation/export optimization
 remain needed before claiming second-scale end-to-end performance.
+A fresh-context prepared-rheology recovery client has now completed one saved
+64-coordinate figure with one resume and unchanged native identity. Its partial
+trace and four recorded CLI calls are documented in the measurement record.
+A separate fresh-context ordinary-task client has now completed the archived
+17-series FTIR workbook in six recorded CLI calls without parent correction or
+prefilled requests/mapping. All 126,973 original XY pairs and 34 native datasets
+passed, with the final TIFF viewed by client and parent. This closes one bounded
+raw-workbook client case; its tool trace remains partial. The old Downloads
+source/delivery remain absent and the new trial used a same-byte archive copy.
+Neither case establishes matched before/after token or time improvement; actual
+model telemetry and independent human/clean-machine acceptance remain open.
 
 Use the same real tasks to compare model rounds, tool calls, returned bytes,
 latency, failures and user questions. Report actual client token telemetry when

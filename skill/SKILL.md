@@ -19,6 +19,10 @@ renderer or a second document model. Never patch VSZ text or automate Veusz clic
 - `DEVELOPMENT_ROADMAP.md` lists unfinished priorities.
 - Development logs and Git are history, not current instructions.
 
+For an explicit AI-prepared rheology suite, go directly to the rheology route in
+Scientific and delivery boundaries below. Start that route with `doctor --json`
+and `rheology capabilities --json`; its request and continuation use that contract.
+
 For ordinary plotting, use the short loop below. Do not pre-read architecture,
 development history, all rule definitions or the entire advanced guide.
 For exact fields, request only the current capability section needed.
@@ -119,6 +123,47 @@ another experiment just to pass validation. `local_timing` measures local active
 calls only. Output bytes are not external AI token counts or end-to-end latency.
 
 ## Scientific and delivery boundaries
+
+For the explicit HDPE/LDPE UDC TTS suite, use the specialized
+`sciplot rheology plot --request REQUEST.json --json` route described in
+`docs/RHEOLOGY_TTS.md`. Read `rheology capabilities --json` for its live contract.
+AI owns data processing, calculations, scientific purposes and the source-bound
+prepared numerical plan, including units, transforms and series roles. The local
+program validates that plan and draws its supplied values with governed templates;
+the `plot` entry point must not run analysis or refit the data. Its request contains
+`version: 1`, an absolute `prepared_plan` JSON path, and optional `out` and
+`expected_contract_sha256`. Use the advertised closed request/plan contracts.
+Creation replies are compact by default; complete native evidence remains at
+`full_evidence_path`. Read that file when needed instead of creating the suite
+again. `rheology plot` and compatibility `rheology tts` accept `--full` for a
+full creation reply. Preview/apply replies retain their existing revision bindings.
+The older combined `rheology tts` utility remains for compatibility, not as the
+recommended new-work route. Measured/derived traces use points with guide
+lines, TTS observations use points, and regression predictions use lines.
+Do not suppress measured-point markers or hardcode physical sizes just because
+a generic curve example does so. Preserve intentional user encodings and the
+distinction between observations, fits, reference lines and bars.
+The separated plan creates independent documents and retains fit diagnostics;
+legacy combined documents remain supported. Its launchers use the native Veusz
+editor. For authorized style corrections, run `rheology style-preview WORKSPACE
+--json`, inspect the returned current-document/source/spec-bound preview, then
+`rheology style-apply WORKSPACE --preview PREVIEW_JSON --json`. An already
+authorized correction needs no additional human confirmation. Stale bindings
+require a fresh preview. Review the candidate native export images; apply publishes
+those exact accepted candidates as a bounded template-style migration, without
+arbitrary custom-style input. Do not regenerate data or reapply an accepted edit
+for an export retry. Use `rheology export` for exact saved re-export: it reports style
+deviations while preserving saved native edits. This route does not claim the
+ordinary browser canvas or strict thermorheological simplicity.
+For an interrupted new prepared creation, read the first failure’s `repair` guidance.
+When its action is `resume_prepared_creation`, run its returned command using the
+same request (`rheology plot --request REQUEST.json --resume --json`).
+For `inspect_creation_evidence`, preserve the indicated request/workspace/checkpoint
+and inspect the original error; do not issue a blind resume. Guidance validates
+existing evidence without saving/exporting or attempting recovery itself.
+Do not delete its workspace or recreate saved VSZ files. Resume rejects changed
+bindings, uncertain native saves, and unknown older partial workspaces. Completed
+or subsequently edited suites continue through exact saved `rheology export`.
 
 Preserve raw cells, per-curve order/counts, identities, units and provenance.
 Never invent measurements, average silently, pad/truncate ragged curves or

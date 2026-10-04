@@ -1,5 +1,22 @@
 # Task capability and local plotting measurements
 
+## 2026-10-03 — final bounded closeout review
+
+- Completed the remaining independent FTIR harness and report review at the user's requested stopping point. No runtime defect or relaxed scientific check was found. No product code changed, and no native Save, export, or full-suite replay was performed in this closeout.
+- Independently rechecked the existing source/CSV/native evidence for 17 samples, 126,973 XY pairs and 34 datasets, the reused single native audit's artifact/command/cwd/stream bindings, and six in-memory tamper rejection classes. Reproduced the retained Pillow IFDRational JSON serialization failure; float conversion affects DPI metadata only. Both earlier failed attempts and the original frozen harness remain unchanged.
+- Fresh original-entry Doctor reports ready. All 56 latest installation protections matched before documentation sync; 1,150 code/test/skill/configuration file hashes and the associated inventory matched the prior snapshot. The accepted installed 1,165-test / 36-smoke gate remains the runtime evidence; it was not rerun on unchanged code.
+- Corrected the final handoff summary's installation-record link to task-3/evidence/installation.json and clarified the earlier FTIR documentation sequence: two log/measurement files, followed by one separate roadmap update. Historical task-2/3 reports remain preserved; task-4/RESULT.md and PERSONAL_USE.md are the final closeout and daily-use pointers. This closeout synchronizes only this log and the measurement record, with compare-before-write hashes and backups.
+- Evidence: /Users/dongxutian/Documents/Codex/2026-10-03/task-4/evidence/{harness_review.md,report_review.md,protection_before.json,doctor_receipt.json,docs_sync_receipt.json}. Tool trace remains partial; actual model tokens/cost/service tier, independent human time and clean-machine acceptance are unknown. CLI byte counts do not include the separately retained native-audit diagnostic stream and do not establish token savings.
+- Current task is complete with no pending runtime fix. Further work requires a new user task or concrete failure evidence. No push, deployment, quota purchase or security/configuration edit.
+
+## 2026-10-03 — fresh ordinary FTIR client completed
+
+- A fresh-context GPT-6 Astra client independently constructed one ordinary task request and selected all 17 original samples from the current returned source evidence. Six recorded public CLI calls succeeded (Doctor, capability discovery, scoped request contract, start help, start, resume); no parent correction or prefilled mapping. Total CLI time was 21.241 seconds / 35,778 stdout bytes; parent-observed client wall time was 181.326 seconds including scheduling/notification. This is one bounded client observation, not a causal speedup or actual model-token/cost measurement.
+- The source is a new isolated copy of an archived original workbook, exact SHA 305b29a5003ee2a925c77f1ecb24ca886ee79b3d07f7b55245aa51eca3695bc2. The historical Downloads source and user delivery remain absent; they were not recreated. All 17 samples retain 7,469 points each, 126,973 XY pairs, original order, units and final zero values. CSV raw values and 34 saved-native datasets passed independent checks; display stacking alone does not change scientific values. PDF/TIFF/VSZ and executable editing entry were delivered; client and parent both viewed the final TIFF.
+- Final functional/integrity checks passed, with trace explicitly partial. A single read-only native audit was performed, with no postcheck Save/export. First harness failure confused the structured task-source fingerprint with raw-file SHA; its review independently reproduced the correct canonical fingerprint. A second report serialization failure involved TIFF DPI IFDRational metadata. Both failures and frozen original harness remain; final reporting normalized only DPI metadata and reused the same native audit after exact artifact/command/stream-hash checks, without redrawing.
+- Evidence: task-3 .tmp_verify/ftir_client_acceptance/installed_trial/postcheck_final/report.json, original postcheck/report.json, postcheck_revision/, and evidence/ftir_client_acceptance_revision/. Original code, 56 protected installation paths, archive and historical development delivery stayed unchanged throughout this trial. Complete platform tool count, actual model tokens/cost/service tier and independent human time remain unknown. No product runtime code changed for this case.
+
+
 ## 2026-09-17 second pass: repeated table cleanup and schema references
 
 Profiling a complete already-mapped Bath workbook task found 209 mapping-table
@@ -430,3 +447,153 @@ TIFF pixels are identical, all five existing user-delivery hashes and original
 workbook bytes are unchanged, and source/QA/delivery are current. Reproduction:
 `.tmp_verify/communication_20260918/replay.py`; final evidence:
 `real-workbook-compact/audit.json`; earlier full-question feedback: `real-workbook/audit.json`.
+
+## 2026-10-03: personal UDC prepared-plan replay and compact creation receipt
+
+This is a local development replay of the existing 50-figure UDC separated
+delivery, not a new scientific analysis or an independent human/client trial.
+The original six CSVs were copied byte-for-byte to an isolated source directory.
+Only `source_binding.sources[*].path` changed in the copied plan; all scientific
+coordinates, roles, labels, units and transformations came from the accepted
+plan (SHA256 `43c0a2a8658145fb20081e3bca3fac0ef81cb076796e7f74dc306833dfd93827`).
+The public `rheology plot` command generated each fresh source-adjacent package.
+
+| Local call | Wall time (s) | UTF-8 stdout bytes |
+| --- | ---: | ---: |
+| Fresh complete 50-figure creation, run 1 | 9.331 | 32,837 |
+| Fresh complete 50-figure creation, run 2 | 9.364 | 32,837 |
+| Existing per-document exact re-export, 50 figures | 66.938 | 170 |
+
+Both creations preserve 240 series and 3,245 coordinate pairs. The two fresh
+packages have identical CSV bytes and raster pixels. All 50 TIFF/PNG files match
+the original accepted delivery byte-for-byte. PDF page geometry and 300-dpi
+rendered pixels match for all 50; PDF bytes differ because of metadata. Fresh VSZ
+file bytes include different save times/import paths, while their numerical
+bindings agree. Exact re-export preserves every saved VSZ hash, CSV and raster.
+Against the original delivery, 25 CSVs differ only in the `series` display label:
+the earlier native temperature-label migration intentionally kept historical CSV
+labels. All 50 agree when comparing the remaining scientific fields. No numerical
+differences are hidden by this distinction.
+
+Default `plot`/compatibility `tts` creation replies now retain actionable paths,
+all figure IDs, published native hashes, PNG/TIFF review links, processing and
+scientific/audit scope, while linking the saved full manifest. `--full` retains
+the full creation response; failures or uncertain/stale evidence are not compacted.
+Style-preview/apply bindings and input/presentation contract hashes are unchanged.
+
+Using the CLI's exact JSON printer on the same fresh persisted creation result,
+the previous full response serializes to **1,336,618 bytes / 1,336,310 characters**;
+the compact response is **32,837 bytes / 32,837 characters**. The actual compact
+CLI output has the same payload and byte count (top-level JSON key order differs
+from the reconstructed comparison). This measures a 1,303,781-byte reduction in
+returned text. It is not a measured model-token or end-to-end latency reduction.
+The original full result remains on disk. The older 156,376-byte historical
+creation receipt correctly falls back to complete evidence after its visible
+documents have been restyled instead of attaching obsolete hashes to current files.
+
+All 1,274 original files in the source/active-workspace/delivery inventory retain
+their hashes, sizes and modification times. Nine contact sheets covering all
+50 native exports were visually reviewed. This is agent export review, not
+interactive mouse/keyboard acceptance by an independent user. Actual model token
+usage and active human seconds remain unknown; no API key, model call or new
+scientific processing is introduced by the local plotting path.
+
+Local retained evidence is in the delegated task workspace
+`/Users/dongxutian/Documents/Codex/2026-10-03/task-2/evidence/`: the resumable
+`replay/verify_replay.py` calls the public CLI and verifies native outputs;
+`replay/acceptance_report.json` records each call; `compact_rheology/measurement.json`
+records serialization; `VISUAL_REVIEW.md` records the export inspection.
+
+The observed 66.938-second saved export spent repeated startup work on one audit
+and one export worker per figure. The saved-suite path now batches the same
+native pre-audits and per-document export owner into one worker, stages the full
+set and publishes with rollback and unchanged-source/document guards. On the
+other already-created isolated package, one final 50-figure re-export took
+**10.139 seconds**, returning 170 stdout bytes with no stderr. Every VSZ, CSV,
+PNG and TIFF remained byte-identical; all PDF geometry and 300-dpi raster checks,
+native audits and receipt hashes passed. Original data remained unchanged.
+This is a one-run local comparison, not a three-run latency benchmark or an
+external-AI efficiency claim. The separate evidence is
+`replay/final_export_acceptance/acceptance_report.json`, bound to its tested source
+hashes. A subsequent inode-alias preflight guard is covered separately before
+the installed-source verification; do not present older hash-bound evidence as
+if it tested later code.
+After installing the final hard-link preflight guard in the actual project,
+one saved 50-figure export took **10.132 seconds** with the same 170-byte receipt.
+All 50 native/CSV/raster identities and PDF page/raster comparisons passed;
+all 1,274 original files and the complete installed Python source tree remained
+unchanged during the run. This final installed-code evidence is in
+`replay/installed_export_acceptance/acceptance_report.json` and supersedes the
+earlier export-owner hash for the final implementation claim.
+
+## Prepared creation continuation capability measurement
+
+The prepared-resume action adds one command entry to `rheology capabilities`.
+The same local wrapper emits 11,927 UTF-8 bytes from the first installed batch
+and 12,011 bytes from the staged continuation implementation. The closed
+request/presentation contract SHA remains
+`7e02cb3b06a5e588ca620bc97306c53b92243160d30e7dc747a97b45ca5a7d0b`.
+These are CLI text sizes, not measured external-model tokens or fees.
+Evidence: task-2 `evidence/resume_capabilities.json`, with explicit source roots.
+
+## 2026-10-03: prepared creation failure/resume replay
+
+A task-3 replay selected two unchanged figures from the prior accepted plan,
+with 18 series and 288 coordinate pairs. Six source copies retain their original
+bytes. The second figure's export was interrupted after native Save; the first
+figure remained completed. A same-request resume prohibited Save and exported
+only the second saved VSZ, then stopped just before delivery installation.
+The final unmodified CLI wrapper resume completed in 0.733 seconds and returned
+2,786 UTF-8 bytes. The two injected calls took 1.769 and 1.385 seconds; these are
+single local fault experiments, not a speed benchmark or model-token estimate.
+
+Both saved native files retained their SHA256, size, mtime, device and inode
+through both resumes. All 288 supplied coordinate pairs, their order, roles,
+CSV values and transform ledger match; PNG/TIFF bytes and PDF geometry plus
+300-dpi pixels match the previously accepted baseline. Native audit and compact
+review bindings pass, hidden and visible manifests agree, and all 1,274 protected
+original files are unchanged. Both raster previews were inspected. This does not
+prove arbitrary SIGKILL/power-loss recovery or independent human usability.
+
+Reproduction scripts: task-3 `evidence/recovery_acceptance/`; pass
+`--root /Users/dongxutian/Documents/Codex/2026-10-03/task-3/.tmp_verify/recovery_acceptance`.
+The completed source-bound report is `acceptance_report.json` under that root.
+The scripts refuse to overwrite prior execution evidence. Installation of this
+candidate and an original-source idempotent resume have separate verification
+records; the staged result is not misrepresented as installed evidence.
+
+
+## 2026-10-03 — installed prepared-recovery fresh-client observation
+
+A single fresh-context GPT-6 Astra client used the public installed skill and the
+first failure JSON to finish one already-saved LDPE Gdoubleprime figure. The test
+fixture contains 4 series / 64 XY and the complete original source/transform bindings.
+A process-only setup injection interrupted export after one real native Save; setup
+and postcheck operations are excluded from client CLI measurements.
+
+| Observation | Recorded result |
+|---|---|
+| Public CLI calls recorded | 4: Doctor, task capabilities, rheology capabilities, same-request plot --resume |
+| Resume / unflagged plot calls | 1 / 0 |
+| Resume CLI time | 1.498868083 s |
+| Sum of all recorded CLI time | 2.933114166 s |
+| Raw stdout bytes, all recorded CLI calls | 26,758 |
+| Parent-observed client wall time | 91.3843465 s, including scheduling/notification |
+| Parent corrective instructions | 0 recorded |
+| Actual tokens, cost, service tier, independent human time | Unknown |
+| Complete platform tool trace / total tool count | Unavailable; partial trace / unknown |
+
+Functional and integrity postchecks passed. The saved VSZ identity did not change;
+plan/compiled/CSV/native coordinates, sample roles, order and ledger matched. CSV,
+PNG and TIFF bytes and PDF page geometry/300-dpi pixels match the accepted reference.
+The new independently saved VSZ and PDF metadata are not byte-identical to the older
+reference. Original 1,274 files, six copies, prior two-figure package, active code and
+harness snapshots remained unchanged. The client reported viewing the final PNG;
+the parent independently displayed the same PNG and found legible labels/markers.
+
+Evidence: task-3 `.tmp_verify/batch3_client_acceptance/installed_trial/`, including
+raw per-call records, first-error JSON, source/code guards, partial trace declaration
+and `postcheck/report.json`. This is one functional client observation, not a matched
+old/new client experiment. It does not establish token savings or human usability.
+A later skill clarification routes explicit prepared rheology work directly to its
+own capabilities; the above observation predates that documentation edit.
