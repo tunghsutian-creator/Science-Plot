@@ -53,6 +53,10 @@ def dispatch_task(args: Any) -> int:
 
         result = task_capabilities(section=args.section, name=args.name,
                                    expected_contract_sha256=args.expected_contract, full=args.full)
+    elif action == "edit-context":
+        from sciplot_core.task_edit_context import edit_context
+
+        result = edit_context(args.target, operations=args.operation, figure_id=args.figure)
     elif action == "table-region":
         from sciplot_core.task_table_region import inspect_table_region
 

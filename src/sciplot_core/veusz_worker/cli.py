@@ -40,6 +40,7 @@ def _build_parser() -> argparse.ArgumentParser:
     export_document_parser.add_argument("document", type=Path)
     export_document_parser.add_argument("--formats", default="pdf,tiff_300")
     export_document_parser.add_argument("--out", type=Path)
+    export_document_parser.add_argument("--audit-spec", type=Path)
     audit_parser = subparsers.add_parser(
         "audit-documents", help="Audit exact current Veusz documents."
     )
@@ -108,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
             args.document,
             formats=_split_formats(args.formats),
             output_dir=args.out,
+            **({"audit_spec_path": args.audit_spec} if args.audit_spec is not None else {}),
         )
     elif args.command == "audit-documents":
         payload = audit_documents(args.documents)

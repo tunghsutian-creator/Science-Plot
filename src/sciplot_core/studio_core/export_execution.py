@@ -72,6 +72,7 @@ def export_studio_document(
     *,
     formats: list[str],
     output_dir: Path | None = None,
+    audit_spec_path: Path | None = None,
 ) -> dict[str, Any]:
     from sciplot_core.veusz_runtime import (
         needs_veusz_worker_process,
@@ -96,6 +97,8 @@ def export_studio_document(
         ]
         if resolved_output_dir is not None:
             command.extend(["--out", str(resolved_output_dir)])
+        if audit_spec_path is not None:
+            command.extend(["--audit-spec", str(audit_spec_path)])
         result = subprocess.run(
             command,
             text=True,
@@ -256,4 +259,14 @@ def export_studio_document(
         payload["stderr_log"] = str(stderr_log)
     if cleanup_warnings:
         payload["cleanup_warnings"] = cleanup_warnings
+    if audit_spec_path is not None:
+        from sciplot_core.source_coverage.document_audit import _audit_exact_document_data
+        from sciplot_core.veusz_worker.spec_audit import audit_spec_data
+
+        payload["document_audit"], _ = _audit_exact_document_data(
+            document_path=document_path, spec_path=audit_spec_path,
+            check_presentation=False, audit_runner=audit_spec_data,
+        )
+        if payload["document_audit"]["document"]["sha256"] != document_sha256_after:
+            raise RuntimeError("The Veusz document changed between export and scientific audit.")
     return payload

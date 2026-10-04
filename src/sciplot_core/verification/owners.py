@@ -40,6 +40,9 @@ CHANGED_OWNERS = (
                 "README.md",
                 "skill/references/external-control.md",
                 "skill/references/advanced-workflows.md",
+                "skill/references/saved-figure-edit.md",
+                "skill/references/ordinary-create.md",
+                "skill/references/rheology-prepared.md",
             }
         ),
         owned_test_paths=frozenset({"tests/test_documentation_contract.py"}),

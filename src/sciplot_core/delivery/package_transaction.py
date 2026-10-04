@@ -20,6 +20,10 @@ from sciplot_core.policy import (
     DELIVERY_TIFF_DIR,
 )
 from sciplot_core.delivery.package_validation import verify_delivery_package
+from sciplot_core.delivery.filesystem_metadata import (
+    FINDER_METADATA_NAME,
+    is_delivery_finder_metadata,
+)
 
 
 def _package_snapshot(root: Path) -> dict[str, str]:
@@ -37,7 +41,9 @@ def _package_snapshot(root: Path) -> dict[str, str]:
         DELIVERY_LAUNCHER,
         DELIVERY_EDITOR_LAUNCHER,
     }
-    unknown = {item.name for item in root.iterdir()} - allowed
+    unknown = {
+        item.name for item in root.iterdir() if not is_delivery_finder_metadata(item)
+    } - allowed
     if unknown:
         raise ValueError(
             "Refusing to replace a non-dedicated SciPlot output directory; "
@@ -49,6 +55,12 @@ def _package_snapshot(root: Path) -> dict[str, str]:
             raise ValueError(
                 f"Refusing to replace a delivery containing a symbolic link: {path}"
             )
+        if path.name == FINDER_METADATA_NAME:
+            if not is_delivery_finder_metadata(path):
+                raise ValueError(
+                    f"Refusing to replace a non-regular or linked Finder metadata entry: {path}"
+                )
+            continue
         if path.is_file():
             digest = existing_file_sha256(path)
             if not digest:
@@ -63,7 +75,8 @@ def _protect_editable_documents(root: Path, candidate: Path) -> None:
     if not root.exists():
         return
     existing = sorted(
-        path for path in (root / DELIVERY_PROJECT_DIR).rglob("*") if path.is_file()
+        path for path in (root / DELIVERY_PROJECT_DIR).rglob("*")
+        if path.is_file() and not is_delivery_finder_metadata(path)
     )
     launcher = root / DELIVERY_LAUNCHER
     try:
@@ -78,7 +91,8 @@ def _protect_editable_documents(root: Path, candidate: Path) -> None:
         ) from exc
     baseline = dict(binding.documents) if binding is not None else {}
     candidates = sorted(
-        path for path in (candidate / DELIVERY_PROJECT_DIR).rglob("*") if path.is_file()
+        path for path in (candidate / DELIVERY_PROJECT_DIR).rglob("*")
+        if path.is_file() and not is_delivery_finder_metadata(path)
     )
     # A single-figure package may change its filename with the new run number.
     # Exact reconciled bytes remain safe when the sole editable file is retained
@@ -111,6 +125,21 @@ def _protect_editable_documents(root: Path, candidate: Path) -> None:
             + ". Keep these edits by saving the visible package under another name, "
             "or incorporate them into the managed project before exporting again."
         )
+
+
+def _preserve_finder_metadata(previous: Path, candidate: Path) -> None:
+    # Preserve the latest incidental bytes after moving the previous package;
+    # Finder changes during rendering do not invalidate scientific artifacts.
+    for path in previous.rglob(FINDER_METADATA_NAME):
+        if not is_delivery_finder_metadata(path):
+            raise ValueError(f"Finder metadata is no longer a standalone regular file: {path}")
+        target = candidate / path.relative_to(previous)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if (target.exists() or target.is_symlink()) and not is_delivery_finder_metadata(target):
+            raise ValueError(f"Candidate Finder metadata is not a standalone regular file: {target}")
+        shutil.copy2(path, target, follow_symlinks=False)
+        if not is_delivery_finder_metadata(path) or not is_delivery_finder_metadata(target):
+            raise ValueError(f"Finder metadata changed identity during preservation: {path}")
 
 
 def _relocate_value(value: Any, source: Path, target: Path) -> Any:
@@ -175,6 +204,12 @@ def publish_delivery_transaction(
         if root.exists():
             root.replace(backup)
             moved_previous = True
+            _preserve_finder_metadata(backup, stage)
+            if _package_snapshot(backup) != before:
+                raise RuntimeError(
+                    "The visible delivery changed during metadata preservation; "
+                    "the previous package was restored."
+                )
         stage.replace(root)
         installed = True
         final_record["verification"] = verify_delivery_package(

@@ -11,19 +11,87 @@ with values read from the current command results, not literal arguments.
 
 ## Start or resume
 
-For a standard task, prefer the local runner described below. The lower-level
-commands later in this guide remain available for exact control and diagnostics.
+Read only the section needed for an operation detail or an actual failure;
+the daily routes are linked from `../SKILL.md`. Existing figures go directly to
+**Fast saved-figure edit** below. For ordinary creation, start with:
 
 ```bash
 skill/scripts/sciplot doctor --json
 skill/scripts/sciplot task capabilities --json
 ```
 
-Require Doctor `status=ready`. For an existing managed Studio project, start at
-**Read the saved project** below; do not rerun its raw source to make an edit. Before applying an
+Require Doctor `status=ready`; reuse that readiness within an unchanged session.
+Do not rerun a saved project's raw source to make an edit. Before applying an
 external edit, close every writable native Veusz window for that project,
 including a clean window with no unsaved changes. Save any intended native
 changes first. A blocked session is a conflict to resolve, not a lock to delete.
+
+## Fast saved-figure edit
+
+For a label, annotation, width, color or axis change, get the current context
+once, then preview one complete operation batch and accept/export it once:
+
+```bash
+skill/scripts/sciplot task edit-context TARGET --operation set_sample_style --json
+```
+
+TARGET can be the existing task, project, registered VSZ or bound delivery. Use
+`--figure FIGURE_ID` when selecting a particular figure. Repeat `--operation`
+for a mixed batch. This read-only result includes Doctor readiness, the current
+figure/document identity, requested operation schemas and request template.
+Require its runtime status to be ready. It replaces separate Doctor, capability
+index, project/task inspection and named-schema calls. Reuse already-returned
+current context within the same edit. An unfinished task returns continuation
+guidance instead; continue that task before starting another edit.
+
+Sample styles and managed annotation records do not require native object
+discovery. Generic `set_style` context includes current native editable fields.
+Use these exact records and the request template to write the complete batch.
+For example:
+
+```json
+{"version":1,"action":"edit","project":"/managed/project","figure_id":"CURRENT_FIGURE_ID","expected_document_sha256":"CURRENT_DOCUMENT_SHA256","operations":[{"op":"set_sample_style","samples":["Sample 5"],"style":{"width":"0.7pt"}}]}
+```
+
+```bash
+skill/scripts/sciplot task start --request EDIT_REQUEST.json --json
+```
+
+View `preview.image` and read the returned actual changes and scientific audit.
+Use the revision-bound `next_step.response_template` in an acceptance JSON file,
+then resume (the operation ID below is illustrative):
+
+```json
+{"accept_preview":true,"expected_operation_id":"CURRENT_OPERATION_ID"}
+```
+
+```bash
+skill/scripts/sciplot task resume TASK_DIRECTORY --response ACCEPT.json --json
+```
+
+The default continuation applies and exports once, then returns fresh
+`current_project` evidence. At `next_step.action=review_exports_and_deliver`,
+view its final TIFF `images` and deliver PDF/TIFF/VSZ with `next_step.manual_edit`.
+Require the returned current source/QA/delivery evidence and ready export result.
+Do not follow success with another project query, native audit, export, ad hoc
+data/hash script, or development test. The existing services own the scientific,
+source, saved-VSZ, QA and publication checks; this short route retains them.
+Further inspection is for a reported failure, missing/stale evidence or a visible
+defect. A saved-only edit with `"export":false` is not a publication receipt.
+
+At `resolve_current_evidence`, use the returned `evidence_gaps` and full
+`current_project` details. The query has already run; another unchanged query
+cannot recover a missing original-source fingerprint. Existing artifact paths
+in `result.figures` support visual review but do not establish current readiness.
+Resolve the reported cause while retaining unknown/stale status; do not redraw
+or export again solely to manufacture missing source evidence.
+
+For intended successive edits, use that saved-only mode and the returned SHA,
+then finish with one `action:"export"` task. On an export failure, resolve the
+reported cause and resume the same task with `{"retry":true}`; do not reapply.
+If the outcome is uncertain or the binding changed, follow its returned recovery
+guidance. Lower-level preview/apply/Studio commands below are available for
+diagnostics and do not form extra steps in a completed task edit.
 
 ## Complete local tasks and MCP
 
@@ -418,11 +486,15 @@ not authorize arbitrary scientific facts.
 The task interface does not accept arbitrary DataMapping answers beyond its
 advertised source-column choice schema.
 
-An edit request contains `version:1`, `action:"edit"`, `project`, optional
+### Edit details and recovery
+
+The normal loop is [Fast saved-figure edit](#fast-saved-figure-edit). An edit
+request contains `version:1`, `action:"edit"`, `project`, optional
 `figure_id`, `expected_document_sha256`, and `operations` from the shared
 annotation operation schema. It returns `needs_review` with `preview.image`,
 `preview.review_path`, actual changes and audit. Read the image and audit, then
-resume with `{"accept_preview":true}` to apply and export in one local continuation.
+resume with `{"accept_preview":true,"expected_operation_id":"CURRENT_OPERATION_ID"}`
+to apply and export in one local continuation.
 Use `false` to discard the proposed change without changing the document. The
 user's existing concrete instruction authorizes the edit; no redundant user
 permission is required for each mechanical step.
@@ -984,10 +1056,11 @@ continue the pending operation; do not recreate its source or reuse old resource
 URIs from another MCP connection.
 
 Retain PROJECT, the user's task, and any relevant operation ID or preview path.
-A new process or conversation repeats `project capabilities`, `project inspect`
-and, when editing, the explicit figure inspection. It reads the saved document
-and durable outcome; it does not need previous chat state, a GUI selection or
-an in-app AI provider. Continue from the current returned SHA, not a remembered one.
+A new session reads the current task/project once through the fast saved-edit
+route. Fetch only missing capability schemas and native object fields needed
+for the requested operation. A new CLI process within that same session does
+not require repeating discovery. Continue from the current returned SHA and
+durable outcome, not a remembered revision, GUI selection or in-app AI provider.
 
 Inspection `status=ok` means the query succeeded. Its `ready_to_use=null` and
 `readiness_evaluated=false` are deliberate. `last_run.recorded_ready_to_use`

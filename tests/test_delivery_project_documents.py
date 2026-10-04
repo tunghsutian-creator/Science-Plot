@@ -1065,3 +1065,191 @@ def test_delivery_preserves_unrecorded_nested_editable_copy(tmp_path: Path) -> N
     with pytest.raises(ValueError, match="edited or unverified"):
         build_delivery_package(run, manifest=manifest)
     assert _package_bytes(root) == before
+
+
+def test_delivery_finder_metadata_is_current_and_preserved_on_replacement(
+    tmp_path: Path,
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    metadata = {}
+    for directory in (root, *(path for path in root.iterdir() if path.is_dir()), root / "project" / "view"):
+        directory.mkdir(exist_ok=True)
+        path = directory / ".DS_Store"
+        path.write_bytes(f"Finder view for {directory.name}".encode())
+        metadata[str(path.relative_to(root))] = path.read_bytes()
+    before = _package_bytes(root)
+    verified = verify_delivery_package(first, expected_root=root, expected_manifest=manifest)
+    assert verified["passed"] is True
+    assert verified["top_level"]["ignored_finder_metadata"] == [".DS_Store"]
+    second = build_delivery_package(run, manifest=manifest)
+    assert second["verification"]["passed"] is True
+    assert _package_bytes(root) == before
+    assert all((root / name).read_bytes() == data for name, data in metadata.items())
+
+
+@pytest.mark.parametrize("location", ["", "project"])
+@pytest.mark.parametrize("kind", ["directory", "symlink", "hardlink"])
+def test_delivery_finder_metadata_name_does_not_hide_linked_or_directory_content(
+    tmp_path: Path, location: str, kind: str,
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    path = root / location / ".DS_Store"
+    target = tmp_path / "precious_content"
+    target.write_bytes(b"must remain untouched")
+    if kind == "directory":
+        path.mkdir()
+        (path / "real_file.txt").write_bytes(target.read_bytes())
+    elif kind == "symlink":
+        path.symlink_to(target)
+    else:
+        path.hardlink_to(target)
+    before = _package_bytes(root)
+    verified = verify_delivery_package(first, expected_root=root, expected_manifest=manifest)
+    assert verified["passed"] is False
+    assert "filesystem_metadata_safe" in verified["failed_checks"]
+    with pytest.raises(ValueError):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+    assert target.read_bytes() == b"must remain untouched"
+
+
+@pytest.mark.parametrize("location", ["", "project"])
+def test_delivery_finder_metadata_exception_does_not_hide_other_dotfiles(
+    tmp_path: Path, location: str,
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    (root / ".DS_Store").write_bytes(b"Finder state")
+    (root / location / ".my_notes").write_bytes(b"only copy of personal notes")
+    before = _package_bytes(root)
+    with pytest.raises(ValueError):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+
+
+@pytest.mark.parametrize("change_artifact", [False, True])
+def test_delivery_finder_metadata_changes_during_build_keep_artifact_snapshot_guard(
+    tmp_path: Path, monkeypatch, change_artifact: bool,
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    metadata = root / "project" / ".DS_Store"
+    metadata.write_bytes(b"old Finder state")
+    original = package_builder._build_staged_delivery
+    changed_bytes = {}
+
+    def build_with_finder_change(*args, **kwargs):
+        result = original(*args, **kwargs)
+        metadata.write_bytes(b"latest Finder state")
+        (root / ".DS_Store").write_bytes(b"new Finder state")
+        if change_artifact:
+            Path(first["figures"][0]["path"]).write_bytes(b"concurrent real artifact edit")
+        changed_bytes.update(_package_bytes(root))
+        return result
+
+    monkeypatch.setattr(package_builder, "_build_staged_delivery", build_with_finder_change)
+    if change_artifact:
+        with pytest.raises(RuntimeError, match="visible delivery changed"):
+            build_delivery_package(run, manifest=manifest)
+    else:
+        second = build_delivery_package(run, manifest=manifest)
+        assert second["verification"]["passed"] is True
+    assert _package_bytes(root) == changed_bytes
+
+
+def test_delivery_metadata_preservation_failure_restores_previous_package(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    (root / ".DS_Store").write_bytes(b"original Finder state")
+    before = _package_bytes(root)
+    original = package_transaction._preserve_finder_metadata
+
+    def fail_after_copy(previous, candidate):
+        original(previous, candidate)
+        raise OSError("simulated metadata preservation failure")
+
+    monkeypatch.setattr(package_transaction, "_preserve_finder_metadata", fail_after_copy)
+    with pytest.raises(OSError, match="metadata preservation failure"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+    assert not list(root.parent.glob(f".{root.name}.sciplot-previous-*"))
+
+
+def test_delivery_metadata_does_not_hide_edited_vsz_or_artifact_hash_drift(
+    tmp_path: Path,
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    (root / ".DS_Store").write_bytes(b"Finder state")
+    (root / "project" / ".DS_Store").write_bytes(b"Finder project state")
+    Path(first["project_documents"][0]["path"]).write_bytes(b"unique user edits")
+    Path(first["figures"][0]["path"]).write_bytes(b"changed figure bytes")
+    before = _package_bytes(root)
+    verified = verify_delivery_package(first, expected_root=root, expected_manifest=manifest)
+    assert verified["passed"] is False
+    assert verified["checks"]["minimal_top_level"] is True
+    assert verified["checks"]["project_files_current"] is False
+    with pytest.raises(ValueError, match="edited or unverified"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+
+
+def test_delivery_preservation_rechecks_real_artifacts_after_previous_package_moves(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    (root / ".DS_Store").write_bytes(b"original Finder state")
+    original = package_transaction._preserve_finder_metadata
+    changed_bytes = {}
+
+    def copy_with_concurrent_edit(previous, candidate):
+        original(previous, candidate)
+        document = previous / Path(first["project_documents"][0]["path"]).relative_to(root)
+        document.write_bytes(b"new user edit through the previous directory")
+        changed_bytes.update(_package_bytes(previous))
+
+    monkeypatch.setattr(package_transaction, "_preserve_finder_metadata", copy_with_concurrent_edit)
+    with pytest.raises(RuntimeError, match="changed during metadata preservation"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == changed_bytes
+    assert not list(root.parent.glob(f".{root.name}.sciplot-previous-*"))
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink"])
+def test_delivery_metadata_preservation_does_not_overwrite_linked_candidate_target(
+    tmp_path: Path, monkeypatch, kind,
+) -> None:
+    run, manifest, _ = _builder_manifest(tmp_path)
+    first = build_delivery_package(run, manifest=manifest)
+    root = Path(first["path"])
+    (root / ".DS_Store").write_bytes(b"original Finder state")
+    before = _package_bytes(root)
+    target = tmp_path / "precious_file"
+    target.write_bytes(b"outside content")
+    original = package_transaction._preserve_finder_metadata
+
+    def copy_with_linked_target(previous, candidate):
+        metadata = candidate / ".DS_Store"
+        if kind == "symlink":
+            metadata.symlink_to(target)
+        else:
+            metadata.hardlink_to(target)
+        original(previous, candidate)
+
+    monkeypatch.setattr(package_transaction, "_preserve_finder_metadata", copy_with_linked_target)
+    with pytest.raises(ValueError, match="Candidate Finder metadata"):
+        build_delivery_package(run, manifest=manifest)
+    assert _package_bytes(root) == before
+    assert target.read_bytes() == b"outside content"

@@ -53,6 +53,7 @@ VERIFICATION_POLICY_OWNER = ChangedOwner(
         {
             "pyproject.toml",
             "skill/SKILL.md",
+            "skill/references/development.md",
             "tests/conftest.py",
         }
     ),

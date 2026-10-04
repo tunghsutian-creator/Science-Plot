@@ -142,6 +142,22 @@ source/delivery remain absent and the new trial used a same-byte archive copy.
 Neither case establishes matched before/after token or time improvement; actual
 model telemetry and independent human/clean-machine acceptance remain open.
 
+The 2026-10-04 saved-edit review found minutes of user-visible time around tens
+of seconds of recorded local commands. Saved-edit routing now avoids redundant
+discovery/audit/export steps. Combining the primary export and scientific audit
+worker reduced a controlled dense-NMR re-export from 5.530 to 5.014 s (two-run
+medians), preserving exact data and raster pixels. Finder metadata no longer
+invalidates an otherwise current delivery. These bounded corrections do not
+close the matched external-client latency/telemetry work above; see the current
+measurement record for scope and unchanged creation timing.
+
+A follow-up edit-context entry now combines readiness, current figure identity,
+targets and selected schemas. An independent ordinary demo edit completed in
+three public CLI calls with both visual reviews and current source/QA/delivery.
+The skill entry routes to one task-specific guide. The client still used 16
+underlying tools including evidence capture and memory lookup; three CLI calls
+do not mean three tools or establish a matched end-to-end speedup.
+
 Use the same real tasks to compare model rounds, tool calls, returned bytes,
 latency, failures and user questions. Report actual client token telemetry when
 available; unknown is not zero. Improve compact results and orchestration from

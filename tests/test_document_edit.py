@@ -286,3 +286,73 @@ def test_apply_rejects_inventory_with_different_expected_document_revision(
     review["operation_id"] = preview_identity(review)
     with pytest.raises(ValueError, match="does not match its expected"):
         edits.apply_document_edit(project, review)
+
+
+@pytest.fixture
+def edit_case_with_delivery(edit_case, tmp_path):
+    project, document, candidate, review = edit_case
+    delivery = tmp_path / "visible"
+    visible_document = delivery / "project" / "document.vsz"
+    visible_document.parent.mkdir(parents=True)
+    visible_document.write_bytes(document.read_bytes())
+    request = json.loads((project / "plot_request.json").read_text())
+    request["delivery_output"] = str(delivery)
+    (project / "plot_request.json").write_text(json.dumps(request))
+    review["base_state"] = edit_state(project)
+    review["operation_id"] = preview_identity(review)
+    return project, document, candidate, review, delivery
+
+
+@pytest.mark.parametrize("location", ["", "project", "project/view"])
+def test_edit_acceptance_preserves_finder_changes_since_preview(
+    edit_case_with_delivery, location,
+):
+    project, document, candidate, review, delivery = edit_case_with_delivery
+    metadata = delivery / location / ".DS_Store"
+    metadata.parent.mkdir(parents=True, exist_ok=True)
+    metadata.write_bytes(b"Finder opened the delivery after preview")
+    assert edit_state(project) == review["base_state"]
+    metadata.write_bytes(b"Finder changed its view before acceptance")
+    result = commit.commit_document_edit(project, document, candidate, review)
+    assert result["status"] == "applied"
+    assert document.read_bytes() == candidate.read_bytes()
+    assert metadata.read_bytes() == b"Finder changed its view before acceptance"
+
+
+@pytest.mark.parametrize("changed", ["visible_vsz", "other_dotfile", "source_metadata", "project_metadata"])
+def test_edit_acceptance_finder_exception_keeps_real_revision_guards(
+    edit_case_with_delivery, changed,
+):
+    project, document, candidate, review, delivery = edit_case_with_delivery
+    (delivery / ".DS_Store").write_bytes(b"incidental Finder state")
+    target = {
+        "visible_vsz": delivery / "project" / "document.vsz",
+        "other_dotfile": delivery / ".personal_notes",
+        "source_metadata": project / "source" / ".DS_Store",
+        "project_metadata": project / ".DS_Store",
+    }[changed]
+    target.write_bytes(b"this change remains inside its strict baseline")
+    before = document.read_bytes()
+    with pytest.raises(ValueError, match="changed after preview"):
+        commit.commit_document_edit(project, document, candidate, review)
+    assert document.read_bytes() == before
+    assert not history_directory(project, review["operation_id"]).exists()
+
+
+@pytest.mark.parametrize("linked", ["symlink", "hardlink"])
+def test_edit_acceptance_never_ignores_linked_finder_name(
+    edit_case_with_delivery, tmp_path, linked,
+):
+    project, document, candidate, review, delivery = edit_case_with_delivery
+    target = tmp_path / "precious_file"
+    target.write_bytes(b"outside content")
+    metadata = delivery / "project" / ".DS_Store"
+    if linked == "symlink":
+        metadata.symlink_to(target)
+    else:
+        metadata.hardlink_to(target)
+    with pytest.raises(ValueError, match="symbolic links|changed after preview"):
+        commit.commit_document_edit(project, document, candidate, review)
+    assert document.read_bytes() == b"old native file"
+    assert target.read_bytes() == b"outside content"
+    assert not history_directory(project, review["operation_id"]).exists()

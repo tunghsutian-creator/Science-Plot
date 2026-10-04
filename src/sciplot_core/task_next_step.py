@@ -43,6 +43,7 @@ def task_next_step(state: dict[str, Any]) -> dict[str, Any]:
                     {"expected_operation_id": state["operation_id"]})
         return {"action": "view_preview_then_decide", "task": task,
                 "schema_query": {"section": "response", "name": name}, "response_bindings": bindings,
+                "response_template": {name: True, **bindings},
                 "message": "Inspect every returned before/candidate image and scientific audit before accepting this revision."}
     code = (state.get("blocker") or {}).get("reason_code")
     if phase == "exporting":

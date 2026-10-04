@@ -1,6 +1,6 @@
 # Advanced SciPlot workflows
 
-Read only the section needed for edits, source updates, groups, legacy diagnostics or development. The short ordinary plotting and one-reply recovery route in `../SKILL.md` takes precedence.
+Read only the section needed for source updates, groups, legacy diagnostics or development. The short creation and saved-edit routes in `../SKILL.md` take precedence.
 
 # SciPlot Materials Analysis
 
@@ -64,6 +64,15 @@ limited to the selected object; that GUI-specific restriction does not apply to
 the explicit saved-figure/object references in the external API.
 
 ## Source revisions, edits and related tasks
+
+For ordinary saved-figure presentation edits, use
+[Fast saved-figure edit](external-control.md#fast-saved-figure-edit): one current
+identity/target query, one batched task preview, visual/audit review, then one
+task resume that applies and exports. Its fresh completed receipt is sufficient
+for final TIFF review and delivery. The lower-level commands later in this
+section are diagnostic alternatives; do not append them to a successful task.
+Keep raw/source/native verification in the existing local owners. Ordinary
+edits do not require new analysis, inventory scripts or development tests.
 
    Use `action:"update_source"` with the saved project and explicit new source
    to review a data revision. Inspect every before/candidate PNG and the full
@@ -140,6 +149,11 @@ the explicit saved-figure/object references in the external API.
    offer reviewed peak rebinding and fixed-annotation retention; remove annotations
    explicitly only when removal is intended. The lower-level routes below remain
    available for diagnostics.
+
+### Low-level diagnostic alternatives
+
+Use only the command needed for a concrete failure or explicit low-level task.
+The normal creation and saved-edit loops already perform their lifecycle checks.
 
 3. For new raw data, inspect the source and ready rule invocation, then preserve
    a successful source-bound plan before execution:

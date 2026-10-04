@@ -11,6 +11,7 @@ from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.studio_core.export_execution import export_studio_document
 from sciplot_core.studio_core.publish_run import publish_studio_export_run
 from sciplot_core.studio_core.request_paths import _canonical_publish_paths
+from sciplot_core.studio_core.registry_state import _veusz_spec_path
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,8 @@ def export_project_document(
     )
     exporter = export_document or export_studio_document
     publisher = publish_export or publish_studio_export_run
-    exported = exporter(document, formats=formats)
+    export_options = {"audit_spec_path": _veusz_spec_path(document)} if export_document is None else {}
+    exported = exporter(document, formats=formats, **export_options)
     document_hash = str(exported["document_sha256"])
     run = publisher(
         project_dir=project,
@@ -63,6 +65,8 @@ def export_project_document(
         document_path=document,
         exports=exported["exports"],
         export_document_sha256=document_hash,
+        **({"primary_native_audit": exported["document_audit"]}
+           if "document_audit" in exported else {}),
     )
     return ProjectExportResult(
         document_sha256=document_hash,

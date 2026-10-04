@@ -19,7 +19,8 @@ from sciplot_core.source_coverage.spec_units import (
 
 
 def verify_managed_document_sources(
-    result: dict[str, Any], *, mapping_application: dict[str, Any] | None = None
+    result: dict[str, Any], *, mapping_application: dict[str, Any] | None = None,
+    native_audits: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Verify current values and identities, permitting source-preserving styling.
 
@@ -31,6 +32,8 @@ def verify_managed_document_sources(
     documents = _result_path_list(
         result, plural="veusz_documents", singular="veusz_document", label="VSZ files"
     )
+    if native_audits is not None and set(native_audits) - {str(path.resolve()) for path in documents}:
+        raise ValueError("Native scientific audits include a document outside this publication.")
     roots = _result_path_list(
         result,
         plural="data_snapshot_sources",
@@ -47,7 +50,8 @@ def verify_managed_document_sources(
             else document.with_suffix(".spec.json")
         )
         audit, spec = _audit_exact_document_data(
-            document_path=document, spec_path=spec_path, check_presentation=False
+            document_path=document, spec_path=spec_path, check_presentation=False,
+            native_audit=native_audits.get(str(document.resolve())) if native_audits is not None else None,
         )
         source_records = _source_records(spec)
         snapshots = []

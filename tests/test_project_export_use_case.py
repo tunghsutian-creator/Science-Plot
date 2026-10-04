@@ -55,6 +55,49 @@ def test_noncanonical_document_cannot_publish_to_a_project(tmp_path: Path) -> No
         )
 
 
+def test_managed_export_requests_inline_science_and_passes_only_this_call_evidence(tmp_path, monkeypatch):
+    from sciplot_core.studio_core import project_export
+
+    calls = []
+    native_audit = {"kind": "current call native evidence"}
+    def export(document, *, formats, audit_spec_path):
+        calls.append(("export", document, audit_spec_path))
+        return {"document_sha256": "a" * 64, "exports": [], "document_audit": native_audit}
+    def publish(**kwargs):
+        calls.append(("publish", kwargs))
+        return {"ready_to_use": True}
+    monkeypatch.setattr(project_export, "export_studio_document", export)
+    monkeypatch.setattr(project_export, "publish_studio_export_run", publish)
+    result = export_project_document(project_dir=tmp_path, formats=["pdf", "tiff_300"])
+    assert result.ready_to_use is True
+    assert calls[0] == ("export", tmp_path / "studio/document.vsz", tmp_path / "studio/spec.json")
+    assert calls[1][1]["primary_native_audit"] is native_audit
+
+
+def test_failed_inline_export_audit_never_enters_publication(tmp_path, monkeypatch):
+    from sciplot_core.studio_core import project_export
+
+    def export(*args, **kwargs):
+        raise ValueError("Exact-current Veusz data-consumption audit did not pass.")
+    monkeypatch.setattr(project_export, "export_studio_document", export)
+    monkeypatch.setattr(project_export, "publish_studio_export_run",
+                        lambda **kwargs: pytest.fail("failed audit published user artifacts"))
+    with pytest.raises(ValueError, match="audit did not pass"):
+        export_project_document(project_dir=tmp_path, formats=["pdf", "tiff_300"])
+
+
+def test_worker_export_forwards_optional_audit_without_changing_standalone_calls(tmp_path, monkeypatch):
+    from sciplot_core.veusz_worker import cli
+
+    calls = []
+    monkeypatch.setattr(cli, "export_document", lambda *args, **kwargs: calls.append((args, kwargs)) or {})
+    document, spec = tmp_path / "document.vsz", tmp_path / "spec.json"
+    assert cli.main(["export-document", str(document)]) == 0
+    assert "audit_spec_path" not in calls[-1][1]
+    assert cli.main(["export-document", str(document), "--audit-spec", str(spec)]) == 0
+    assert calls[-1][1]["audit_spec_path"] == spec
+
+
 def test_intake_creates_one_prepared_document_then_exports_it_once(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -73,10 +116,11 @@ def test_intake_creates_one_prepared_document_then_exports_it_once(
         document.write_bytes(b"prepared once from confirmed source")
         return {"studio": {"status": "ready", "document": str(document)}}
 
-    def export(document: Path, *, formats):
+    def export(document: Path, *, formats, audit_spec_path):
         calls.append(("export", document))
         assert document.read_bytes() == b"prepared once from confirmed source"
         assert formats == ["pdf", "tiff_300"]
+        assert audit_spec_path == document.with_name("spec.json")
         return {"document_sha256": existing_file_sha256(document), "exports": []}
 
     def publish(**kwargs):

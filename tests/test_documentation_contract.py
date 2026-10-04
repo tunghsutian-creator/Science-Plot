@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -104,7 +105,7 @@ def test_task_guidance_preserves_real_choices_and_separate_human_acceptance() ->
 
 
 def test_skill_defers_the_exact_mypy_scope_to_pyproject() -> None:
-    skill = _read(REPO_ROOT / "skill" / "SKILL.md")
+    skill = _read(REPO_ROOT / "skill/references/development.md")
     architecture = _read(REPO_ROOT / "docs" / "ARCHITECTURE.md")
 
     assert "declared under `[tool.mypy]` in `pyproject.toml`" in skill
@@ -114,6 +115,19 @@ def test_skill_defers_the_exact_mypy_scope_to_pyproject() -> None:
     assert "all strictness options belong only to `[tool.mypy]`" in architecture
     assert "without maintaining another scope list or file count" in architecture
     assert "Strict Python 3.11 baseline for `foundation/`" not in architecture
+
+
+def test_skill_entrypoint_is_bounded_and_its_routes_are_readable() -> None:
+    skill_path = REPO_ROOT / "skill" / "SKILL.md"
+    skill = _read(skill_path)
+
+    assert len(skill.splitlines()) <= 100
+    links = re.findall(r"\[[^\]]+\]\(([^)]+)\)", skill)
+    assert links
+    for link in links:
+        target = skill_path.parent / link.split("#", 1)[0]
+        assert target.is_file(), f"Unreadable skill route: {link}"
+        assert _read(target).strip(), f"Empty skill route: {link}"
 
 
 def test_self_use_edit_guidance_keeps_deferred_readiness_and_full_evidence():

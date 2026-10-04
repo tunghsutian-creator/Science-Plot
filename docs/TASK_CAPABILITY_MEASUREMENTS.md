@@ -1,5 +1,121 @@
 # Task capability and local plotting measurements
 
+## 2026-10-04 — fewer AI discovery steps for saved edits
+
+The follow-up targets unnecessary agent work. `task edit-context` composes
+Doctor, one current saved-project query and only the requested edit schemas.
+Managed annotations and sample style targets need no native object inspection;
+generic native settings retain that inspection. Preview responses now supply
+the operation/revision-bound acceptance template. Source uncertainty and all
+preview, native audit, QA and delivery checks remain explicit.
+
+The skill entry is 80 lines, routing to one self-contained workflow. For a saved
+edit, entry plus route total 158 lines / 8,665 UTF-8 bytes, compared with the
+previous 259-line / 15,940-byte entry. These are instruction-file sizes, not
+measured model tokens; development and rheology guidance are loaded only for
+their own tasks.
+
+A fresh-context client was given the skill, an existing isolated source-bound
+UV–Vis demo project, and the instruction to change all four curves to 0.7 pt.
+The parent supplied no request or mapping. A transparent wrapper recorded:
+
+| Observation | Result |
+| --- | --- |
+| Public CLI calls | 3: edit-context, start, resume |
+| Recorded CLI time / stdout | 6.4375 s / 14,446 bytes |
+| Client-reported tool use | 8 exec envelopes, 16 underlying tools: 13 shell, 2 image views, 1 patch |
+| Actual native changes | Four widths, 1.2 pt → 0.7 pt |
+| Candidate and final TIFF | Viewed by the client; scientific audit passed |
+| Current source / QA / delivery | All true; Doctor ready |
+| Original data / plotting CSV contents | Complete file hashes unchanged |
+| Extra CLI discovery, inspection, audit or export | None |
+
+The previous NMR client used seven CLI calls, including discovery and a repeated
+inspection. Different fixtures and contexts mean this is not a matched timing
+comparison. The new client still read saved JSON for evidence capture and made
+the developer-required memory pass; three CLI calls are not three total tools.
+Actual model tokens, cost and a matched end-to-end speedup remain unmeasured.
+
+Evidence: `.tmp_verify/ai_edit_flow_20261004/`, including immutable per-call
+`client_calls/*/{call.json,stdout,stderr}`, client requests and receipts,
+`client/client-report.json`, `acceptance_summary.json`, and the before-split
+skill. The parent compared source bytes and CSV contents; CSV filenames change
+with the export run number. User data and user deliveries were not modified.
+The owner gate passes 1,165 tests (65 deselected), Ruff, strict mypy on 190 files
+and whitespace; final smoke passes 36/36 and Doctor is ready. The initial gate
+found two stale assertions of the type-scope file count; the new typed module
+and corrected exact counts are retained.
+
+## 2026-10-04 — saved-edit latency and redundant export workers
+
+The user identified the NMR and UDC chats as the relevant slow workflows.
+The latest five turns of each were read through the app. In the NMR chat,
+removing `Sample 5` took 379.006 seconds wall time with 23 recorded shell
+commands totaling 27.879 seconds; changing widths to 0.7 pt took 347.959 seconds
+with 22 commands totaling 31.044 seconds. Shell durations exclude other tools,
+model work, transport and user waiting; the remainder is not a measured model
+latency. The UDC turns also included scientific preparation, missing-template
+development and its required tests, so their total time is not rendering time.
+
+The ordinary saved-edit skill now gives one direct route: query the current
+figure/required targets, submit the complete batch, review its native preview
+and scientific audit, accept and export in the same task, then review the final
+TIFF. A successful current receipt needs no duplicate audit/export/data script.
+This changes agent routing, not the transaction's validation obligations.
+
+Managed primary export now runs the existing exact-document scientific audit
+inside the export worker. Publication rechecks both live and archived VSZ/spec
+bytes, retains prepared-source derivation and QA, and uses only this invocation's
+audit. A traced NMR re-export starts two native workers instead of three.
+Standalone and injected GUI exporters, and secondary figure audits, retain
+their existing paths.
+
+Two paired public-CLI runs used the untouched 65,536-point 1H CSV in an isolated
+development copy. Both conditions use the same full-range initial display and
+supplied title addition; they do not reconstruct the historical clipped display.
+The previous source tree is frozen. No heavy tests ran during these measurements.
+
+| Local phase | Previous median | Revised median | Reduction |
+| --- | ---: | ---: | ---: |
+| Exact saved re-export | 5.530 s | 5.014 s | 9.3% |
+| Apply reviewed title and export | 7.399 s | 6.998 s | 5.4% |
+| Title preview | 3.489 s | 3.474 s | 0.4% |
+| Initial compatibility Studio creation | 6.295 s | 6.358 s | No improvement |
+
+All 65,536 source coordinates, the delivered CSV, TIFF pixels, and 300-dpi PDF
+pixels/page geometry agree across conditions. Fresh native numeric audits and
+current QA/package checks pass. Canonical request replay has no original Intake
+fingerprint, so its original-source indicator remains explicitly unknown; the
+source copy and CSV were independently compared to the original bytes/values.
+An exploratory third pair has the same fidelity result but is excluded from
+the table because the delivery metadata implementation was still changing.
+Failed harness setup/assumption attempts are retained and excluded as well.
+
+Finder `.DS_Store` entries caused additional failures in the historical NMR
+turns. Delivery handling now recognizes only standalone regular files with this
+exact name as incidental metadata, preserves them during replacement, and keeps
+real artifact/unknown-file/link guards. Its additional edit-state guard is
+covered separately, not counted as a measured speedup in this table.
+
+Evidence: `.tmp_verify/speed_20261004/{thread_observations.json,comparison.json,
+trace_before.json,trace_after.json,measure.py,check_results.py}` and the retained
+per-call receipts. These are local measurements, not a matched before/after
+external-client latency or token claim. Native startup reduction alone cannot
+explain or eliminate the minutes spent in the historical agent workflows.
+
+A fresh-context client then edited the development copy from 1.2 to 0.7 pt,
+reviewed both images and completed the native transaction with no parent
+correction. It reported seven public CLI calls; the two active edit calls totaled
+10.125306 s. The seventh call was an ineffective repeated inspection because
+this canonical replay lacks an original Intake fingerprint. QA and the package
+were current, while original-source readiness correctly remained unknown.
+This is not matched end-to-end acceptance. Its receipts remain in `client_trial/`.
+The observed repeat-inspection loop is now corrected separately: a completed
+export with unresolved fresh evidence returns `resolve_current_evidence` with
+the exact source/QA/delivery gaps. It preserves unknown/stale states and existing
+artifact paths without asking for an unchanged inspection or inventing a source
+binding. The earlier client observation does not measure this final guidance fix.
+
 ## 2026-10-03 — final bounded closeout review
 
 - Completed the remaining independent FTIR harness and report review at the user's requested stopping point. No runtime defect or relaxed scientific check was found. No product code changed, and no native Save, export, or full-suite replay was performed in this closeout.

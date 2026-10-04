@@ -109,3 +109,65 @@ def test_returned_native_audit_does_not_skip_prepared_source_verification(candid
     with pytest.raises(ValueError, match="prepared scientific values changed"):
         delivery_recovery._audit_candidate(document, spec, native_audit=evidence(document, spec))
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("fault", [None, "live_document", "live_spec", "snapshot_document", "snapshot_spec"])
+def test_export_audit_rebinding_requires_identical_live_and_snapshot_bytes(candidate, tmp_path, monkeypatch, fault):
+    from sciplot_core.studio_core.publish_run import _snapshot_native_audit
+
+    document, spec = candidate
+    # Managed non-primary document names use sibling .spec.json.
+    canonical_spec = document.with_suffix(".spec.json")
+    canonical_spec.write_bytes(spec.read_bytes())
+    snapshot = tmp_path / "run" / document.name
+    snapshot.parent.mkdir()
+    snapshot.write_bytes(document.read_bytes())
+    snapshot_spec = snapshot.with_suffix(".spec.json")
+    snapshot_spec.write_bytes(canonical_spec.read_bytes())
+    report = evidence(document, canonical_spec)
+    monkeypatch.setattr(audit.subprocess, "run", lambda *a, **k: pytest.fail("redundant audit worker"))
+    if fault is not None:
+        target = {"live_document": document, "live_spec": canonical_spec,
+                  "snapshot_document": snapshot, "snapshot_spec": snapshot_spec}[fault]
+        target.write_bytes(b'{}' if "spec" in fault else b"different native bytes")
+        with pytest.raises(ValueError, match="stale artifacts"):
+            _snapshot_native_audit(document, snapshot, report)
+    else:
+        rebound = _snapshot_native_audit(document, snapshot, report)
+        assert rebound == evidence(snapshot, snapshot_spec)
+        assert report == evidence(document, canonical_spec)
+
+
+def test_export_inline_audit_retains_managed_prepared_derivation(candidate, monkeypatch):
+    from sciplot_core.source_coverage import managed_documents as managed
+
+    document, original_spec = candidate
+    spec = document.with_suffix(".spec.json")
+    source = original_spec.with_name("prepared.csv")
+    source.write_text("x,y\n1,2\n")
+    spec.write_text(json.dumps({"series": [{"source_artifacts": [
+        {"path": str(source), "sha256": file_sha256(source)},
+    ]}]}))
+    monkeypatch.setattr(audit.subprocess, "run", lambda *a, **k: pytest.fail("redundant audit worker"))
+    calls = []
+    def prepared(specification, snapshots):
+        calls.append((specification, snapshots))
+        raise ValueError("prepared values must still reproduce")
+    monkeypatch.setattr(managed, "_verify_prepared_data", prepared)
+    with pytest.raises(ValueError, match="prepared values must still reproduce"):
+        managed.verify_managed_document_sources(
+            {"veusz_document": str(document), "data_snapshot_source": str(source)},
+            native_audits={str(document.resolve()): evidence(document, spec)},
+        )
+    assert len(calls) == 1
+
+
+def test_managed_inline_audit_rejects_an_unrelated_document(candidate):
+    from sciplot_core.source_coverage.managed_documents import verify_managed_document_sources
+
+    document, spec = candidate
+    with pytest.raises(ValueError, match="outside this publication"):
+        verify_managed_document_sources(
+            {"veusz_document": str(document)},
+            native_audits={str(document.with_name("unrelated.vsz")): evidence(document, spec)},
+        )

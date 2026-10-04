@@ -69,6 +69,14 @@ def _current_result(state: dict[str, Any]) -> dict[str, Any]:
                                for item in figure.get("exports", []) if item.get("format") == "tiff"],
                     "message": "Current source/QA/delivery were queried in this call. Review the exported images, then deliver; requery after later changes. No additional native preview or inspect is required for this unchanged result.",
                 }
+            elif (state["status"] == "complete"
+                  and (state.get("result", {}).get("studio_run") or {}).get("ready_to_use") is True):
+                summary["next_step"] = {
+                    "action": "resolve_current_evidence", "task": state["task_dir"],
+                    "evidence_gaps": [key for key in ("source", "qa", "delivery")
+                                      if (current.get(key) or {}).get("current") is not True],
+                    "message": "This call already inspected the current project. Resolve the missing or stale evidence in current_project; repeating inspect with unchanged files cannot repair it. Existing export paths remain in result.figures for visual review, not proof of current readiness. Do not regenerate data or re-export merely to replace an unknown source fingerprint with a claim of success.",
+                }
         except (ValueError, OSError, RuntimeError, TimeoutExpired) as exc:
             summary["current_project"] = {"status": "unknown", "message": str(exc)}
     return summary

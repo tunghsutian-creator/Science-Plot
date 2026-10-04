@@ -10,11 +10,33 @@ from sciplot_core.task_contract import TaskControlError, task_request_schema, ta
 from sciplot_core.task_schema_compaction import compact_schema
 
 
+def _schemas() -> dict[str, Any]:
+    return {"request": task_request_schema(), "response": task_response_schema(),
+            "table_region": table_region_schema(),
+            "operations": annotation_operation_capabilities()["operations_schema"]}
+
+
+def edit_context_capabilities(operations: list[str]) -> dict[str, Any]:
+    """Project only requested operations into the existing edit request schema."""
+    schemas = _schemas()
+    variants = {item["properties"]["op"]["const"]: item
+                for item in schemas["operations"]["items"]["oneOf"]}
+    if (not operations or any(not isinstance(name, str) or name not in variants for name in operations)):
+        raise TaskControlError("unknown_capability_name", "Choose one or more advertised edit operations.")
+    names = list(dict.fromkeys(operations))
+    request = deepcopy(next(item for item in schemas["request"]["oneOf"]
+                            if item["properties"]["action"]["const"] == "edit"))
+    request["properties"]["operations"]["items"]["oneOf"] = [variants[name] for name in names]
+    response = next(item for item in schemas["response"]["oneOf"] if "accept_preview" in item["required"])
+    return {"kind": "sciplot_task_capabilities", "version": 2,
+            "contract_sha256": canonical_json_sha256(schemas), "task_version": 1,
+            "operation_names": names, "request_schema": compact_schema(request),
+            "response_schema": compact_schema(response)}
+
+
 def task_capabilities(*, section: str | None = None, name: str | None = None,
                       expected_contract_sha256: str | None = None, full: bool = False) -> dict[str, Any]:
-    schemas = {"request": task_request_schema(), "response": task_response_schema(),
-               "table_region": table_region_schema(),
-               "operations": annotation_operation_capabilities()["operations_schema"]}
+    schemas = _schemas()
     digest = canonical_json_sha256(schemas)
     if expected_contract_sha256 is not None and expected_contract_sha256 != digest:
         raise TaskControlError("stale_task_capabilities", "能力定义已变化，请重新读取当前能力索引。")
@@ -54,6 +76,9 @@ def task_capabilities(*, section: str | None = None, name: str | None = None,
         "read_schema": {"cli": "task capabilities --section SECTION --name NAME --expected-contract SHA --json",
                         "mcp": "sciplot_task_capabilities", "name_optional": True,
                         "full_cli": "task capabilities --full --json"},
+        "saved_edit_context": {
+            "cli": "task edit-context TASK_OR_PROJECT --operation NAME [--operation NAME ...] [--figure FIGURE_ID] --json",
+            "scope": "Read runtime, current saved targets and selected edit schemas once; no task or project mutation."},
         "specialized_routes": {"rheology_tts": {
             "cli": "rheology capabilities --json",
             "scope": "AI-prepared source-bound TTS plotting, exact saved export and revision-bound native style restoration; analysis is a legacy compatibility route."}},

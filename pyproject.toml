@@ -176,6 +176,7 @@ files = [
   "src/sciplot_core/verification/external_ai_owners.py",
   "src/sciplot_core/task_contract.py",
   "src/sciplot_core/task_control.py",
+  "src/sciplot_core/task_edit_context.py",
   "src/sciplot_core/task_timing.py",
   "src/sciplot_core/task_initial_mapping.py",
   "src/sciplot_core/task_repair.py",

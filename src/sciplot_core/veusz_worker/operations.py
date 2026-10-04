@@ -41,6 +41,7 @@ def export_document(
     *,
     formats: list[str],
     output_dir: Path | None = None,
+    audit_spec_path: Path | None = None,
 ) -> dict[str, Any]:
     """Export the exact current VSZ without regenerating it."""
 
@@ -52,6 +53,7 @@ def export_document(
         output_dir=output_dir.expanduser().resolve()
         if output_dir is not None
         else None,
+        **({"audit_spec_path": audit_spec_path} if audit_spec_path is not None else {}),
     )
 
 

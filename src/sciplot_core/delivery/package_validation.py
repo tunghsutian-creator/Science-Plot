@@ -33,6 +33,9 @@ from sciplot_core.delivery.figure_pairing import (
 from sciplot_core.delivery.file_set_validation import (
     _recorded_file_set,
 )
+from sciplot_core.delivery.filesystem_metadata import (
+    inspect_delivery_metadata,
+)
 from sciplot_core.delivery.plan_binding import (
     DeliveryRecordsMatchPlanPayload,
     delivery_records_match_plan,
@@ -87,9 +90,7 @@ def verify_delivery_package(
     }
     if editor_recorded:
         expected_top_level.add(DELIVERY_EDITOR_LAUNCHER)
-    actual_top_level = (
-        {path.name for path in expected.iterdir()} if expected.is_dir() else set()
-    )
+    metadata = inspect_delivery_metadata(expected, expected_top_level=expected_top_level)
     data_check = _recorded_file_set(
         record.get("data_csvs"),
         directory=expected / DELIVERY_DATA_DIR,
@@ -353,7 +354,8 @@ def verify_delivery_package(
         "recorded_complete": record.get("complete") is True,
         "binding_policy_current": binding_policy_current,
         "canonical_root": root_ready,
-        "minimal_top_level": actual_top_level == expected_top_level,
+        "minimal_top_level": metadata["minimal_top_level"],
+        "filesystem_metadata_safe": metadata["filesystem_metadata_safe"],
         "data_files_current": data_check["passed"],
         "pdf_files_current": pdf_check["passed"],
         "tiff_files_current": tiff_check["passed"],
@@ -383,10 +385,8 @@ def verify_delivery_package(
         "failed_checks": [key for key, passed in checks.items() if not passed],
         "expected_root": str(expected),
         "recorded_root": str(recorded_root) if recorded_root is not None else None,
-        "top_level": {
-            "expected": sorted(expected_top_level),
-            "actual": sorted(actual_top_level),
-        },
+        "top_level": metadata["top_level"],
+        "invalid_finder_metadata": metadata["invalid_finder_metadata"],
         "data": data_check,
         "pdf": pdf_check,
         "tiff": tiff_check,

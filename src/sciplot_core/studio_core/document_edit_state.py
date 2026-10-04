@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.delivery.filesystem_metadata import is_delivery_finder_metadata
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.output_contract import requested_delivery_root
 from sciplot_core.source_coverage.managed_documents import _source_records
@@ -33,10 +34,21 @@ def edit_state(project: Path) -> dict[str, Any]:
     delivery = canonical_path(
         requested_delivery_root({"request": request}, run_output=project)
     )
+    # Keep the generic source/project inventory strict. Only incidental Finder
+    # files in this visible delivery are outside the reviewed artifact baseline.
+    delivery_files = (
+        {
+            name: digest
+            for name, digest in file_inventory(delivery).items()
+            if not is_delivery_finder_metadata(delivery / name)
+        }
+        if delivery.exists()
+        else None
+    )
     return {
         "project_files": inventory,
         "delivery": str(delivery),
-        "delivery_files": file_inventory(delivery) if delivery.exists() else None,
+        "delivery_files": delivery_files,
     }
 
 

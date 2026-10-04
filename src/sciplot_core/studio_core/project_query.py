@@ -69,6 +69,9 @@ def inspect_project(
     *,
     figure_id: str | None = None,
     object_path: str | None = None,
+    native: bool | None = None,
+    include_annotations: bool = False,
+    include_axes: bool = False,
 ) -> dict[str, Any]:
     """Return current byte identities and separately labelled historical evidence.
 
@@ -80,8 +83,25 @@ def inspect_project(
     request_sha = existing_file_sha256(request_path)
     registry_sha = existing_file_sha256(root / "studio" / "figure_set.json")
     request, primary, figures = project_snapshot(root)
+    selection_requested = (figure_id is not None or object_path is not None or native is not None
+                           or include_annotations or include_axes)
+    selected = select_figure(project, primary, figures, figure_id) if selection_requested else None
+    selected_metadata: dict[str, Any] = {}
     for figure in figures:
-        figure["sample_styles"] = sample_style_targets(json.loads(Path(figure["spec"]).read_text()))
+        spec = json.loads(Path(figure["spec"]).read_text())
+        figure["sample_styles"] = sample_style_targets(spec)
+        if figure is selected:
+            if include_annotations:
+                from sciplot_core.studio_core.annotation_contracts import annotation_records
+
+                selected_metadata["annotations"] = annotation_records(spec)
+            if include_axes:
+                from sciplot_core.studio_core.annotation_axes import axis_unit
+
+                selected_metadata["axes"] = {
+                    axis: {"unit": axis_unit(spec, axis), **{key: spec["axes"][axis][key]
+                            for key in ("label", "min", "max", "scale")}}
+                    for axis in ("x", "y")}
     source = source_indicators(root, request, figures)
     payload: dict[str, Any] = {
         "kind": "sciplot_project_inspection",
@@ -99,8 +119,11 @@ def inspect_project(
         "document_authority": "saved_vsz",
         "live_gui_state_evaluated": False,
     }
-    if figure_id is not None or object_path is not None:
-        figure = select_figure(project, primary, figures, figure_id)
+    if selected is not None:
+        payload["selected_figure"] = {**selected, **selected_metadata}
+    inspect_native = native if native is not None else (figure_id is not None or object_path is not None)
+    if inspect_native or object_path is not None:
+        figure = selected or select_figure(project, primary, figures, figure_id)
         state = _inspect_document(Path(figure["document"]))
         if state.get("document") != {
             "path": figure["document"],
@@ -118,6 +141,7 @@ def inspect_project(
             widgets = {object_path: widgets[object_path]}
         payload["selected_figure"] = {
             **figure,
+            **selected_metadata,
             "objects": {
                 path: {
                     **value,

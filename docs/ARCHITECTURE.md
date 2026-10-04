@@ -236,6 +236,12 @@ between CLI, tasks and MCP. Task creation checkpoints the prepared project befor
 export so an export failure can resume without re-preparing data. Profiles reuse
 only verified rule/template selections; actual header/unit evidence and a fresh
 source plan are required for each new input.
+Managed primary-document export runs its scientific audit in the same native
+worker as PDF/TIFF export. The existing private snapshots, current document/spec
+hash checks and prepared-source derivation remain required. Publication rechecks
+the returned audit against the live authority and its identical run snapshot;
+evidence is passed only within that export call, never recovered from a prior
+receipt. Secondary documents retain their existing exact-current audit path.
 
 `data_mapping/column_choice` retains the original single-pair CSV/TSV route.
 `data_mapping/table_choice` exposes original Excel worksheets and CSV/TSV rows,
@@ -311,6 +317,16 @@ standalone schema/tool root; it never weakens the server validators. `task_next_
 projects existing scientific-question, preview and recovery states into guidance,
 without performing recovery, accepting previews or replacing transaction archives.
 
+`task_edit_context` composes runtime readiness, a single saved-project query and
+only the requested edit operation schemas into a read-only entry for an external
+AI. It supplies a current document-bound request template and existing target
+records; it does not allocate a task, prepare data, accept a preview or export.
+Managed annotations and sample targets come from the guarded spec snapshot;
+generic native settings still require current native inspection. Unfinished
+tasks retain their original continuation, and unknown project evidence remains
+unknown. Preview receipts supply revision-bound response templates so callers
+can continue without a second schema-discovery round.
+
 `source_tables/read_session` owns a bounded 32 MiB, operation-local parse cache.
 Every hit rehashes actual source bytes; misses hash before and after parsing, and
 callers receive independent frames. Explicitly byte/format/options-only parsers
@@ -332,7 +348,9 @@ Full responses are opt-in; neither task storage nor native state is compacted.
 `task_timing` measures active local calls and phases under the existing task lease;
 external model/transport/user time remains unknown. Completed start/resume calls
 query fresh current project evidence before returning it, without persisting that
-query as future readiness authority. Question summaries omit redundant workbook
+query as future readiness authority. A complete export with unresolved current
+source/QA/delivery evidence lists those gaps instead of asking for the same
+unchanged inspection; unknown/stale indicators remain unresolved. Question summaries omit redundant workbook
 snapshots and bound initial previews; the complete hashed question stays on disk.
 
 `task_source_execution` checkpoints source-update preview, application and export.
@@ -556,7 +574,7 @@ a cross-session identity.
 | Low-level text, timestamp, hash, JSON and path primitives | `foundation/` | Leaf package; never imports ingestion, workflow, GUI, or rendering. |
 | Automation state vocabulary | `automation_states.py` | One closed owner for ready, confirmation, and repair states. Project editing/export states remain separate. |
 | External project command adapter | `cli/parsers/project.py`, `cli/dispatch/project.py`, `cli/dispatch/project_create.py` | Public create, capabilities, inspect, preview, edit-preview, edit-apply and operation commands call core services. Create validates a complete expected plan before allocating output, requires new visible/workspace paths and rechecks them under a workspace session lease, then invokes the ordinary Studio preparation/export lifecycle. Other commands address saved figures without preparation. No GUI selection, provider setup, alternative request model or renderer belongs here. |
-| Saved project queries | `studio_core/project_query.py`, `project_query_paths.py`, `project_query_evidence.py` | Resolve the current managed request, registered figures and still-bound delivery without preparing or mutating the project. Native settings are loaded only for explicit figure/object queries. Saved document hashes bind targets; historical run records and current source/QA/delivery byte indicators remain separate, with readiness explicitly unevaluated. |
+| Saved project queries | `studio_core/project_query.py`, `project_query_paths.py`, `project_query_evidence.py` | Resolve the current managed request, registered figures and still-bound delivery without preparing or mutating the project. Existing explicit figure/object queries load native settings; edit contexts may request only guarded spec metadata when native fields are unnecessary. Saved document hashes bind targets; historical run records and current source/QA/delivery byte indicators remain separate, with readiness explicitly unevaluated. |
 | Shared native editing capabilities | `native_settings.py`, `studio_core/document_edit_policy.py`, `veusz_worker/document_edit.py`, `veusz_worker/operations.py` | Read the existing setting catalog and native values, restrict external operations to the advertised scientific-safe subset, and check the entire batch before a native operation. Spec-aware policy excludes semantic curve-color encodings. The worker loads saved documents with unsafe commands/import recovery disabled, renders previews and saves candidates; it cannot install a managed project edit. |
 | Reviewed document edits | `studio_core/document_edit.py`, `document_edit_state.py`, `document_edit_commit.py` | Stage the native candidate and science audit outside the project, then re-execute and compare the reviewed operations under existing project/session locks. Preserve before/after VSZ and bounded operation outcomes, install one selected document with rollback, and query an interrupted or already-applied result. Source/request/spec and visible-package state participate in stale detection. Export remains a separate shared Studio use case. |
 | Native/external session exclusion | `studio_core/project_session.py`, native window integration | A writable native project window retains a shared process lease even when clean; an external commit requires an exclusive lease as well as the existing project lock. Open/Save As track the active project, close releases it, and process termination releases the OS lock. Read-only project queries do not acquire a nested project lock. |
@@ -633,6 +651,14 @@ a cross-session identity.
 | Explicit worksheet confirmation | `intake/table_preview.py`, `semantic_sources/table_selection.py`, paired-curve source readers | The preview retains original row/column indices. Explicit sheet selection is bound to current workbook bytes and consumed only by the registered paired-curve adapter. Preview-only metadata never silently narrows source coverage. Browser-local import settings contain configuration and must be checked against each current source. |
 | Runtime gates | `smoke/`, `acceptance/`, probes | Evidence only; never production rendering routes. |
 | Upstream Veusz | `third_party/veusz/` | Preserve upstream identity; SciPlot integration stays outside. |
+
+`delivery/filesystem_metadata.py` recognizes only a standalone regular `.DS_Store`
+as incidental Finder metadata within a visible delivery. Package validation,
+replacement snapshots and the delivery side of edit-state comparison share this
+exception; source and managed-project inventories do not. Replacement preserves
+metadata bytes and rechecks the backup's artifact inventory before installation.
+Same-named directories/links and other unknown files retain existing rejection
+and rollback guards. Metadata is never scientific or current-document evidence.
 
 Compatibility facades may preserve a public import or documented monkeypatch
 seam. They must not acquire business logic or become forwarding layers without
@@ -1040,4 +1066,5 @@ project directory.
     route for the same source and request options. All other named recipe/plan
     combinations fail before recipe execution.
 
-Verification requirements are defined once in `skill/SKILL.md`.
+Verification requirements are defined once in `skill/references/development.md`,
+reached through the task router in `skill/SKILL.md`.

@@ -289,6 +289,38 @@ def test_malformed_edit_is_rejected_before_task_directory_or_project_query(tmp_p
     assert not task.exists() and not list(tmp_path.iterdir())
 
 
+@pytest.mark.parametrize("uncertain", [None, False])
+def test_completed_export_explains_current_evidence_gap_without_inspection_loop(
+    tmp_path, monkeypatch, uncertain,
+):
+    from sciplot_core.task_result_projection import compact_task_result
+
+    project = tmp_path / "managed"
+    current = {"project": str(project), "figures": [{"figure_id": "primary"}],
+               "source": {"current": uncertain, "input": {"expected_sha256": None}},
+               "qa": {"current": True}, "delivery": {"current": uncertain,
+               "package_current": True}, "ready_to_use": None}
+    calls = []
+    def inspect(path):
+        calls.append(path)
+        return current
+    monkeypatch.setattr(control, "inspect_project", inspect)
+    exported = {**receipt(project), "kind": "sciplot_project_export_result",
+                "figures": [{"figure_id": "primary", "exports": [
+                    {"format": "tiff", "path": "/existing/result.tiff"}]}]}
+    state = {"kind": "sciplot_task", "status": "complete", "phase": "finished",
+             "project": str(project), "task_dir": str(tmp_path / "task"),
+             "request": {"action": "export"}, "result": exported}
+    result = compact_task_result(control._current_result(state))
+    assert calls == [project]
+    assert result["next_step"]["action"] == "resolve_current_evidence"
+    assert result["next_step"]["evidence_gaps"] == ["source", "delivery"]
+    assert result["current_project"]["source"] == current["source"]
+    assert result["current_project"]["ready_to_use"] is None
+    assert "manual_edit" not in result["next_step"]
+    assert result["result"]["figures"] == exported["figures"]
+
+
 def test_legacy_blocked_task_with_malformed_operations_stays_inspectable(tmp_path, monkeypatch):
     from sciplot_core.task_storage import load_task, save_task
     task, _ = _edit_task(tmp_path, monkeypatch)
