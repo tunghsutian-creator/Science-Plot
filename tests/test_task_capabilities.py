@@ -116,6 +116,9 @@ def test_next_steps_bind_current_question_review_and_recovery_boundaries():
     state.update(phase="creating", blocker={"reason_code": "creation_outcome_uncertain"})
     assert "response" not in task_next_step(state)
     state.update(phase="previewing", request={"action": "edit"}, edit_revisions=[{}])
+    assert task_next_step(state)["action"] == "inspect_blocker_and_saved_state"
+    assert "response_bindings" not in task_next_step(state)
+    state["blocker"] = {"reason_code": "invalid_operation"}
     assert task_next_step(state)["response_bindings"] == {"expected_preview_revision": 2}
     state.update(phase="applying", request={"action": "update_source"})
     assert "response" not in task_next_step(state)

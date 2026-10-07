@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from subprocess import TimeoutExpired
@@ -12,7 +13,7 @@ from sciplot_core.output_contract import resolve_user_output_layout
 from sciplot_core.policy import DELIVERY_EDITOR_LAUNCHER
 from sciplot_core.source_tables.read_session import with_table_reads
 from sciplot_core.task_timing import timed_task_call, finish_timing, observe_phase
-from sciplot_core.studio_core.annotation_schema import validate_operation_batch
+from sciplot_core.studio_core.annotation_schema import AnnotationOperationError, validate_operation_batch
 from sciplot_core.studio_core.project_query import inspect_project, resolve_project_path
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.project_session import external_project_session
@@ -86,16 +87,17 @@ def _current_result(state: dict[str, Any]) -> dict[str, Any]:
 @timed_task_call
 def start_task(
     request: dict[str, Any], *, task_dir: Path | None = None,
+    entry_intent: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     original_request = request
     try:
         request, task_dir, corrections = normalize_task_location(request, task_dir)
         request = validate_task_request(request)
-    except TaskControlError as exc:
+        if request["action"] == "edit":
+            validate_operation_batch(request["operations"])
+    except (TaskControlError, AnnotationOperationError) as exc:
         exc.repair = request_repair(original_request, exc)
         raise
-    if request["action"] == "edit":
-        validate_operation_batch(request["operations"])
     if request["action"] in {"create", "update_source"}:
         source = canonical_path(Path(request["source"]))
         digest = source_tree_sha256(source)
@@ -114,6 +116,13 @@ def start_task(
     with external_project_session(root):
         if root.exists():
             state = load_task(root)
+            if entry_intent is not None:
+                if state.get("entry_intent") != entry_intent:
+                    raise TaskControlError("task_intent_conflict", "This task directory belongs to a different or unrecorded typed intent.")
+                # Another caller may have completed this exact typed intent
+                # after the shortcut's initial read. Its original bound request
+                # remains authoritative; never replace it with today's SHA.
+                return _current_result(state) if state["status"] == "complete" else task_summary(state)
             if state["request"] != request:
                 raise TaskControlError("task_already_exists", "此任务目录已用于其他请求。")
             return _current_result(state) if state["status"] == "complete" else task_summary(state)
@@ -123,6 +132,7 @@ def start_task(
             "created_at": datetime.now(timezone.utc).isoformat(),
             "request": request, "source_sha256": digest,
             "status": "running", "phase": "starting",
+            **({"entry_intent": deepcopy(entry_intent)} if entry_intent is not None else {}),
             **({"automatic_corrections": corrections} if corrections else {}),
         }
         save_task(root, state)

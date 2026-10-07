@@ -134,11 +134,24 @@ only packaged UI assets and the current identified native frame.
 
 `task_repair` normalizes only the unambiguous misplaced `task_dir` transport alias,
 rejects conflicting locations, and projects bounded field/constraint errors from
-the shared schemas. CLI and MCP response failures include the saved current
+the shared schemas and explicit domain issues. Candidate IDs, selected-pair bounds
+and profile conflicts retain their semantic correction constraints. Stale preview
+replies carry the current image, audit and operation binding; MCP exposes that
+image through its existing immutable resources. CLI and MCP response failures include the saved current
 question and next step without a native query, state mutation or automatic retry.
 An exact matching question binding returns only its reference and correction
 constraints; absent/stale bindings return bounded evidence for a fresh decision.
 Source bytes and scientific evidence are still rechecked on resume.
+`task_error_feedback` bounds error narration while preserving full diagnostics in
+the durable task record or a private local file for long pre-task errors. Small
+errors require no diagnostic file. A diagnostic-write failure explicitly returns
+the full original error instead of replacing it with a new exception.
+`task_recovery_policy` classifies known failure codes by phase. Only a terminated,
+unaccepted preview may receive one automatic timeout retry; `task_execution`
+persists its lifetime budget before starting a new attempt directory. Creation,
+apply and export failures do not receive this automatic retry. Unknown failures
+request diagnostic inspection; valid operations are never rewritten to repair a
+worker timeout. Existing transaction owners retain mutation recovery authority.
 `task_output_choice` detects occupied output/workspace paths before planning. An
 explicit current-question-bound `out` answer records a separate output selection
 while retaining the original request. It reuses task/source/output overlap guards
@@ -159,7 +172,8 @@ intent and scientific validation remain with the existing task/native owners.
 to reject malformed wire shapes before new task allocation, pending-intent
 replacement or project preview I/O. The validator caches only immutable schema
 validators, never document state. Historical task parsing stays compatible;
-unit, sample, native-setting and scientific validation remain in their owners.
+physical widths share the pure `style_values` grammar with native settings;
+sample, scientific units and native-setting validation remain in their owners.
 Failed, unaccepted previews may be corrected with the current task-local
 preview_revision. Ready previews remain operation-ID-bound. These bindings are
 exclusive, checked under the existing task lease and retain original baseline,
@@ -324,8 +338,27 @@ records; it does not allocate a task, prepare data, accept a preview or export.
 Managed annotations and sample targets come from the guarded spec snapshot;
 generic native settings still require current native inspection. Unfinished
 tasks retain their original continuation, and unknown project evidence remains
-unknown. Preview receipts supply revision-bound response templates so callers
+unknown. An already-read source.current=False rejects the edit context; sample/
+preset preview uses the same guard after its existing query, including retries.
+Direct generic native edits retain their prepared-source audit boundary and do
+not gain an additional raw-source query. Preview receipts supply revision-bound response templates so callers
 can continue without a second schema-discovery round.
+
+`task_shortcuts` composes typed CLI intents with those same owners. `task create`
+performs Doctor and constructs an ordinary create request; scientific questions
+remain explicit. `task style` binds the current figure and exact sample labels,
+constructs only existing color/width operations and returns the normal preview.
+An explicit all-samples selection rejects empty or ambiguous inventories. CLI
+resume flags construct existing acceptance/retry responses; acceptance requires
+the caller's reviewed operation ID, never the latest ID inferred from storage.
+`next_step.cli_argv` supplies argument arrays without shell interpolation. These
+adapters add no renderer, mapping inference or automatic acceptance. For an
+explicit style task key, the task owner checkpoints the exact original typed
+intent before preview work. Replaying it returns the original task's current
+evidence, without rebinding the intent to a new document SHA or expanding a new
+all-samples inventory. Changed or unrecorded intent conflicts; it cannot authorize
+the old preview. Whitespace in a valid physical size may be normalized, never its
+value or unit.
 
 `source_tables/read_session` owns a bounded 32 MiB, operation-local parse cache.
 Every hit rehashes actual source bytes; misses hash before and after parsing, and
@@ -583,7 +616,7 @@ a cross-session identity.
 | Autoplot persisted evidence | `autoplot/evidence.py` | Typed aggregate over reported result, persisted one-step state, and manifest; public JSON remains unchanged. |
 | Autoplot user summary | `autoplot/summary.py` | One v2 result builder serves both the read-only projection of persisted evidence and a rule-repair preflight result. The normal projection reads publish integrity, delivery state, and the completed FigurePlan without reparsing or rehashing the plan; the preflight variant contains no invented run evidence and is never persisted. |
 | AI-callable rule invocation | `materials_rules/models.py`, `materials_rules/catalog.py`, `readiness/rule_certification.py`, `readiness/registry_io.py`, `cli/dispatch/governance.py`, `cli/dispatch/diagnostics.py`, `cli/parsers/rendering.py`, `cli/dispatch/rendering.py`, `plan_preview.py`, `autoplot/run.py`, `autoplot/summary.py`, `workflow/__init__.py`, `workflow/one_step_entry.py` | `SemanticRule` owns the static additive `invocation` shape: existing plan/autoplot operations, required input and template, fixed rule identity, and source-controlled template choices. The CLI governance composition layer loads the validated-envelope registry once and injects the same current-certification projector into both `rules list/show`; the catalog remains readiness-free so contract hashing has no reverse dependency or data recursion. Explicit `plan` and `autoplot` call that projector before source parsing or project creation: current continues, while missing/stale returns the same repair reasons. Expected plan rule/template/source errors use the existing blocked v1 payload. A current Autoplot invocation checks source existence once before the runner. Public rule/template identifiers still enter the existing top-level request and explicit-template marker, so preview and render cannot select different task sets. Human omission permits existing automatic classification. This surface adds no second catalog, request envelope, readiness schema, receipt, cache, classifier pass, or source hash. |
-| CLI JSON runtime failure envelope | `cli/value_io.py`, `cli/entrypoint.py` | After successful argument parsing, an explicit `--json` invocation emits one `sciplot_cli_runtime_error` v1 object to stdout and exits 1 on an uncaught runtime failure. Expected path, decoding, JSON, I/O, and explicit-value failures remain distinguishable from assertion, type, key, and other internal errors. Human-mode text and recovery hints remain unchanged; argparse usage remains exit 2; `plan` keeps its domain-specific blocked v1 projection. This presentation boundary does not become a request schema, error catalog, retry, source parser, project writer, cache, receipt, or hash gate. |
+| CLI machine failure envelope | `cli/parser_errors.py`, `cli/value_io.py`, `cli/entrypoint.py`, `task_error_feedback.py` | Exact argument names reject implicit abbreviations. An explicit `--json` parse failure returns one structured correction on stdout and exits 2; runtime failures use the same bounded presentation and exit 1. Human help and usage remain human-readable. Domain issues retain exact fields and constraints; long diagnostics stay local with a reference. This boundary does not infer scientific intent, retry work, or write projects. |
 | Source-bound scientific transform | `source_tables/raw_readers.py`, `semantic_sources/table_scanning.py`, `semantic_sources/panalytical_scan_metadata.py`, `semantic_sources/scientific_transform.py`, `semantic_sources/rheology_interval.py`, `semantic_sources/stress_relaxation_sources.py`, `semantic_sources/stress_relaxation_transform.py`, `semantic_sources/dma_temperature_transform.py`, `semantic_sources/registered_paired_curve_transform.py`, `semantic_sources/registered_paired_curve_contract.py`, `semantic_sources/paired_curve_table_metadata.py`, `semantic_sources/gpc_sources.py`, `semantic_sources/gpc_transform_contract.py`, `semantic_sources/swelling_identity.py`, `semantic_sources/swelling_pair_run.py`, `semantic_sources/swelling_sources.py`, `semantic_sources/swelling_table_selection.py`, `semantic_sources/swelling_transform.py`, `semantic_sources/tga_transform.py` | Returns one typed resolved object containing exact transformed series, a declarative column/unit/anchor/coordinate/axis/output contract, and selected source paths. Stress-relaxation interval units are selected-column evidence between the interval header and first numeric row, never a fixed row offset or default; missing, conflicting, or conversion-requiring units fail before transformation, while truly non-interval wide sources retain their separate explicit compatibility path. The registered paired-curve owner derives aliases, canonical labels/units, metric IDs, table metadata, scale-driven domain projection, and closed row evidence from the existing `SemanticRule`; DSC, DTG, UV-Vis, XRD, and SAXS consume that rule-driven owner directly while TGA retains only a compatibility wrapper. Quote-aware ragged CSV reading and the table scanner recognize PANalytical Data Collector metadata plus its exact `[Scan points]` schema, bind the declared point count and raw detector-count evidence, and fail closed on count mismatch. For XRD only, those raw count values may be presented unchanged on the registered `Intensity (a.u.)` axis; this is an explicit display policy with no numeric scaling or normalization. GPC contributes only an Agilent/canonical RT-RI reader and contract leaf: source sample text, `min`/`mV` detector evidence, row order, retained/excluded counts, and selected workbooks remain source-derived, with no normalization or molecular-weight inference. Swelling contributes one structurally labeled table reader: each Time/ratio pair owns its first numeric run, one structurally empty formatting row may bridge that run, and later disconnected values remain excluded with closed evidence; explicit s/min/h units alone authorize conversion to hours. Preview and preparation must consume that same domain resolver; the payload belongs inside the existing semantic-preparation lineage and must not create another ledger, digest, or cache. |
 | Scientific source transaction snapshot | `materials_rules/models.py`, domain `materials_rules/*_rules.py`, `semantic_sources/scientific_source.py`, `semantic_sources/scientific_source_models.py`, `semantic_sources/scientific_source_single_curve.py`, `semantic_sources/rheology_sweep_domain.py`, `semantic_sources/rheology_temperature_domain.py`, `workflow/scientific_source_resolution.py` | Each ready canonical rule may select one internal scientific-source adapter; stress relaxation, DMA temperature, registered DSC/TGA/DTG/UV-Vis/XRD/SAXS paired curves, GPC/SEC, swelling, rheology temperature, and directory rheology frequency are the first thin adapters and all other rules default to none. The shared resolver combines one rule/source identity, one typed domain, and the applicable already-resolved FigurePlan without raw rule-ID classification. `scientific_source_single_curve.py` is the only adapter-to-generic-plan binder for stress relaxation, paired tables, GPC, and swelling; preparation calls the same rule-owned transform dispatcher when no envelope was supplied. A domain may be a single-y `ResolvedScientificTransform` or the shared, non-serialized multi-metric `ResolvedRheologySweepDomain`; it must never be a dummy transform or generic object bag. Expected adapter failures use one internal `ScientificSourceResolutionError` while preserving the existing public reason/message; FigurePlan, preview, Studio, and Workflow do not rediscover the family. Broad `ValueError` fallbacks must not disguise snapshot invariants or programming errors as source failures. One Studio or Workflow transaction passes the typed envelope through planning, semantic materialization, named/direct/auto routing, and terminal adaptation. Pending/unadapted rules do not read the source through this seam. A family handler may parse only while creating the envelope; downstream orchestration may not reconstruct it from wire JSON or assign a plan hash to a transform after the fact. Domain variants and adapter IDs remain absent from public requests, previews, ledgers, rule payloads, and certification hashes. |
 | Swelling source grammar | `semantic_sources/swelling_identity.py`, `semantic_sources/swelling_pair_run.py`, `semantic_sources/swelling_sources.py`, `semantic_sources/swelling_table_selection.py`, `semantic_sources/swelling_transform.py` | One selected file and one labeled table own exact condition/sample cells, strict Time/ratio units, a closed first-run row selection, and the existing scientific-transform projection. Only a structurally empty isolated row may bridge; disconnected content cannot influence numeric-locale evidence or re-enter the curve. No sample alias, table ranking, point/value threshold, source-specific row, or second schema is permitted. |

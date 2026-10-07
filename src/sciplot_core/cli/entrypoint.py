@@ -18,6 +18,7 @@ from sciplot_core.cli.dispatch import (
     dispatch_rendering,
 )
 from sciplot_core.cli.parsers import build_parser
+from sciplot_core.cli.parser_errors import ArgumentParseError, requests_json
 from sciplot_core.cli.dispatch.rheology import dispatch_rheology
 
 
@@ -27,8 +28,13 @@ def main(
     run_autoplot_impl: Callable[..., dict[str, Any]],
     serve_intake_impl: Callable[..., None],
 ) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+    arguments = sys.argv[1:] if argv is None else argv
+    parser = build_parser(json_errors=requests_json(arguments))
+    try:
+        args = parser.parse_args(arguments)
+    except ArgumentParseError as exc:
+        _print_json(_cli_runtime_error_payload(exc))
+        return 2
     try:
         handlers = (
             lambda: dispatch_rheology(args),

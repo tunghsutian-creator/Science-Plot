@@ -16,11 +16,14 @@ the daily routes are linked from `../SKILL.md`. Existing figures go directly to
 **Fast saved-figure edit** below. For ordinary creation, start with:
 
 ```bash
-skill/scripts/sciplot doctor --json
-skill/scripts/sciplot task capabilities --json
+skill/scripts/sciplot task create /absolute/original --json
 ```
 
-Require Doctor `status=ready`; reuse that readiness within an unchanged session.
+This typed entry checks Doctor and constructs the ordinary request locally.
+It preserves scientific questions and accepts explicit `--rule`, `--template`,
+`--profile`, `--out` and `--task-dir`. Require returned Doctor `status=ready`;
+reuse that readiness within an unchanged session. Structured `task start` remains
+available for advanced known mappings; only then read missing named schemas.
 Do not rerun a saved project's raw source to make an edit. Before applying an
 external edit, close every writable native Veusz window for that project,
 including a clean window with no unsaved changes. Save any intended native
@@ -28,8 +31,29 @@ changes first. A blocked session is a conflict to resolve, not a lock to delete.
 
 ## Fast saved-figure edit
 
-For a label, annotation, width, color or axis change, get the current context
-once, then preview one complete operation batch and accept/export it once:
+For explicit sample width/color changes, start directly:
+
+```bash
+skill/scripts/sciplot task style TARGET --all-samples --width 0.7pt --json
+```
+
+Use `--all-samples` only for all requested curves, or repeated `--sample 'Exact
+label'` for a known subset. Optional `--color '#336699'` may be combined with
+width; `--figure FIGURE_ID` selects a figure. Runtime, current targets and SHA
+binding are handled locally. No schema query or request JSON file is necessary.
+Review the returned candidate image and scientific audit, then run the returned
+`next_step.cli_argv` with the normal SciPlot executable:
+
+```bash
+skill/scripts/sciplot task resume TASK_DIRECTORY --accept-preview --expected-operation-id CURRENT_ID --json
+```
+
+An export failure also has a file-free continuation, `task resume TASK --retry
+--json`, after resolving its reported cause. These flags construct the existing
+responses; they do not infer a preview ID or accept an unseen candidate.
+
+For other labels, annotations or axis changes, get the current context once,
+then preview one complete operation batch and accept/export it once:
 
 ```bash
 skill/scripts/sciplot task edit-context TARGET --operation set_sample_style --json
@@ -487,6 +511,20 @@ The task interface does not accept arbitrary DataMapping answers beyond its
 advertised source-column choice schema.
 
 ### Edit details and recovery
+
+Use the returned failure classification, not words guessed from exception text.
+CLI JSON argument errors exit 2 with `repair.action=correct_arguments`; file JSON
+errors give the exact line/column. Invalid physical widths and operation fields
+are rejected before allocating native work. The response includes field issues
+and exact current choices where available; do not re-read the entire schema.
+
+For a typed style request, an explicit `--task-dir` is its stable replay key.
+An identical original intent returns its current receipt without another preview
+or apply. A conflicting intent is rejected. One terminated preview worker may
+be retried locally in a new attempt directory, with a persisted lifetime limit.
+Creation/apply/export are outside that automatic retry. Preserve their returned
+phase and existing recovery. Full blocked diagnostics remain in `task.json`;
+long pre-task errors supply a separate local diagnostic reference.
 
 The normal loop is [Fast saved-figure edit](#fast-saved-figure-edit). An edit
 request contains `version:1`, `action:"edit"`, `project`, optional

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import math
-import re
 from typing import Any
 
 from sciplot_core.foundation.json_values import json_safe
 from sciplot_core.setting_catalog import specs_for_object_type
+from sciplot_core.style_values import validate_physical_size
 
 # This is an authority subset, not a second field catalog. Labels, types and
 # limits continue to come from the same specs used by the native inspector.
@@ -134,9 +134,7 @@ def _bounded_style_value(capability: dict[str, Any], value: Any) -> None:
         if any(a >= b for a, b in zip(value, value[1:], strict=False)):
             raise ValueError("Tick positions must be increasing and unique.")
     elif editor == "distance":
-        match = re.fullmatch(r"\s*(\d+(?:\.\d*)?|\.\d+)\s*(pt|mm|cm|in|inch)\s*", str(value))
-        if match is None or not 0 < float(match[1]) < math.inf:
-            raise ValueError("Use a positive physical size, such as 8pt or 0.3mm.")
+        validate_physical_size(value)
     elif editor == "color":
         from PyQt6.QtGui import QColor
 

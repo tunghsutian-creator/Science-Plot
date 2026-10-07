@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from sciplot_core.doctor import doctor_payload
+from sciplot_core.studio_core.annotation_operations import require_edit_source_current
 from sciplot_core.studio_core.control_results import compact_result
 from sciplot_core.studio_core.project_query import inspect_project
 from sciplot_core.studio_core.project_query_paths import canonical_path
@@ -47,6 +48,7 @@ def edit_context(target: Path, *, operations: list[str], figure_id: str | None =
         path, figure_id=figure_id, native=bool(names & {"set_style", "add_peak_label"}),
         include_annotations=annotations, include_axes=axes,
     )
+    require_edit_source_current(current)
     if "objects" in current["selected_figure"]:
         current = compact_result(current)
     selected = current["selected_figure"]

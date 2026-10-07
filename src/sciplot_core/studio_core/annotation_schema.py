@@ -3,17 +3,37 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from functools import lru_cache
 from typing import Any
 
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
 
 from sciplot_core.studio_core.document_edit_policy import SAMPLE_STYLE_FIELDS
+from sciplot_core.style_values import PHYSICAL_SIZE_UNITS, validate_physical_size
 
 class AnnotationOperationError(ValueError):
-    def __init__(self, reason_code: str, message: str, *, field: str = "") -> None:
+    def __init__(self, reason_code: str, message: str, *, field: str = "",
+                 issues: list[dict[str, Any]] | None = None) -> None:
         super().__init__(message)
         self.reason_code, self.field = reason_code, field
+        self.issues = issues or []
+        self.repair: dict[str, Any] | None = None
+
+
+def _wire_issue(error: ValidationError, field: str) -> dict[str, Any]:
+    issue: dict[str, Any] = {"path": "/" + field, "constraint": error.validator}
+    if (error.validator == "additionalProperties" and isinstance(error.instance, dict)
+            and isinstance(error.schema, Mapping)):
+        allowed = error.schema.get("properties", {})
+        issue.update(unsupported=sorted(set(error.instance) - set(allowed))[:16], allowed=sorted(allowed))
+    elif (error.validator == "required" and isinstance(error.instance, dict)
+          and isinstance(error.validator_value, list)):
+        issue["missing"] = [key for key in error.validator_value if key not in error.instance]
+    elif error.validator in {"type", "minItems", "maxItems", "minLength", "pattern", "const", "enum", "uniqueItems", "minProperties"}:
+        issue["expected"] = error.validator_value
+    return issue
 
 
 def object_schema(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
@@ -35,23 +55,36 @@ def validate_operation_batch(operations: Any) -> None:
     those still require the existing project/native owners and current evidence.
     """
     if not isinstance(operations, list) or not 1 <= len(operations) <= 100:
-        raise AnnotationOperationError("invalid_operations", "Provide 1–100 explicit operations.")
+        raise AnnotationOperationError("invalid_operations", "Provide 1–100 explicit operations.", field="operations",
+            issues=[{"path": "/operations", "constraint": "array_size", "minimum": 1, "maximum": 100}])
     try:
         json.dumps(operations, allow_nan=False)
     except (TypeError, ValueError) as exc:
-        raise AnnotationOperationError("invalid_operations", "Operations must contain finite JSON values.") from exc
+        raise AnnotationOperationError("invalid_operations", "Operations must contain finite JSON values.", field="operations",
+            issues=[{"path": "/operations", "constraint": "finite_json"}]) from exc
     validators = _operation_validators()
     for index, operation in enumerate(operations):
         location = f"operations/{index}"
         if not isinstance(operation, dict):
-            raise AnnotationOperationError("invalid_operation", f"{location} must be an object.", field=location)
+            raise AnnotationOperationError("invalid_operation", f"{location} must be an object.", field=location,
+                issues=[{"path": "/" + location, "constraint": "type", "expected": "object"}])
         kind = operation.get("op")
         if not isinstance(kind, str) or kind not in validators:
-            raise AnnotationOperationError("unsupported_operation", f"{location}/op is unsupported; use the advertised operations.", field=location + "/op")
+            raise AnnotationOperationError("unsupported_operation", f"{location}/op is unsupported; use the advertised operations.", field=location + "/op",
+                issues=[{"path": "/" + location + "/op", "constraint": "enum", "allowed": sorted(validators)}])
         error = next(validators[kind].iter_errors(operation), None)
         if error is not None:
             field = "/".join([location, *map(str, error.absolute_path)])
-            raise AnnotationOperationError("invalid_operation", f"{field}: {error.message[:500]}", field=field)
+            raise AnnotationOperationError("invalid_operation", f"{field}: {error.message[:500]}", field=field,
+                                           issues=[_wire_issue(error, field)])
+        if kind == "set_sample_style" and "width" in operation["style"]:
+            field = location + "/style/width"
+            try:
+                validate_physical_size(operation["style"]["width"])
+            except ValueError as exc:
+                raise AnnotationOperationError("invalid_sample_style", str(exc), field=field,
+                    issues=[{"path": "/" + field, "constraint": "positive_physical_size",
+                             "allowed_units": list(PHYSICAL_SIZE_UNITS), "example": "0.7pt"}]) from exc
 
 
 def annotation_operation_capabilities() -> dict[str, Any]:
@@ -108,7 +141,9 @@ def annotation_operation_capabilities() -> dict[str, Any]:
         "samples": {"type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": True,
                     "items": {"type": "string", "minLength": 1},
                     "description": "Exact unique labels from the selected figure's sample_styles inventory."},
-        "style": {**object_schema({name: string for name in SAMPLE_STYLE_FIELDS}, []),
+        "style": {**object_schema({name: ({**string, "description":
+                    "Positive physical line width with pt, mm, cm, in or inch; for example 0.7pt. No implicit unit."}
+                    if name == "width" else string) for name in SAMPLE_STYLE_FIELDS}, []),
                   "minProperties": 1},
     }, ["samples", "style"])
     add("apply_sample_style_preset", {

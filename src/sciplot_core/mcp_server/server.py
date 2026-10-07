@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 from contextlib import redirect_stdout
+from copy import deepcopy
 from importlib.metadata import version
 import json
 from pathlib import Path
@@ -79,6 +80,32 @@ class Adapter:
         self.resources = ResourceStore()
         self.lock = anyio.Lock()
 
+    def _repair_result(self, payload: dict[str, Any]) -> CallToolResult:
+        """A rejected old answer still exposes the current owner-bound review."""
+        payload = deepcopy(payload)
+        repair = payload.get("repair")
+        links: list[ResourceSnapshot] = []
+        if isinstance(repair, dict):
+            preview = _preview_artifact(repair)
+            artifacts = ([{"preview": preview}] if preview is not None else [])
+            artifacts.extend(repair.get("previews") or [])
+            for artifact in artifacts:
+                try:
+                    preview = artifact["preview"]
+                    snapshot = self.resources.add_preview(Path(preview["path"]), expected_sha256=preview.get("sha256"))
+                    if "previews" in repair:
+                        entry: dict[str, Any] = {key: artifact[key] for key in ("figure_id", "scope") if key in artifact}
+                        entry["uri"] = snapshot.uri
+                        repair.setdefault("preview_resources", []).append(entry)
+                    else:
+                        repair["preview_resource"] = snapshot.uri
+                    links.append(snapshot)
+                except (AdapterError, OSError) as exc:
+                    payload.setdefault("resource_warnings", []).append(str(exc))
+        result = _text_result(payload, is_error=True)
+        result.content.extend(ResourceLink(**item.metadata()) for item in links)
+        return result
+
     def _execute(self, name: str, arguments: dict[str, Any]) -> CallToolResult:
         # Native workers capture their own protocol output. Incidental prints
         # from domain owners must never corrupt the outer MCP stdio stream.
@@ -144,7 +171,8 @@ class Adapter:
                 repair = await anyio.to_thread.run_sync(adapter_repair, name, arguments, exc)
                 if repair is not None:
                     payload["repair"] = repair
-            return _text_result(payload, is_error=True)
+            async with self.lock:
+                return self._repair_result(payload)
 
 
 def create_server() -> Server[Any]:

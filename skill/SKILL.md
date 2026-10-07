@@ -36,8 +36,19 @@ it is not another prerequisite for ordinary work.
 - Follow the returned `next_step`. Use existing evidence first, then a named
   capability section for a missing field, then a relevant reference section.
   Do not repeat discovery merely to reconfirm a successful response.
+- On failure, use `reason_code` and the returned `repair.issues`/`issues`, then
+  follow the stated continuation. Do not change valid operations for a worker
+  timeout. Long diagnostics stay local; open their reference only when the short
+  response cannot explain the failure. Local preview timeout recovery is bounded.
 - Batch the complete authorized change. Let the local transaction own source,
   native document, scientific audit, QA and publication validation.
+- Use `task create` for ordinary raw-data plotting and `task style` for explicit
+  sample width/color changes. These entries construct requests and bind current
+  state locally; do not precede them with schema/context discovery or JSON files.
+  Use the returned continuation arguments after reviewing a pending preview.
+- Let a local task command finish within the tool's normal initial wait. For
+  `exec_command`, use 10–30 seconds instead of routinely yielding after one second;
+  premature backgrounding adds an AI round just to wait for a short native call.
 - At successful completion, view the returned final TIFF and deliver. Stop there:
   no extra inspect/audit/export, ad hoc hash or data reconstruction script, test,
   smoke or acceptance run for ordinary plotting. Investigate a reported failure,

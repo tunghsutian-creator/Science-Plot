@@ -4,29 +4,27 @@ Use this route for new ordinary plots from original data. The local task owns
 recognition, planning, native creation, QA and export. Separate inspect/rules/plan/
 project-create/Studio commands, repository reading and tests are not prerequisites.
 
-1. Reuse Doctor readiness and the compact capability index for the current session.
-   If missing, run `skill/scripts/sciplot doctor --json` and
-   `skill/scripts/sciplot task capabilities --json` together; require `status=ready`.
-   Inspect failed checks only. Fetch a missing schema with `--section`, `--name`
-   and `--expected-contract`; avoid `--full` unless a specific decision needs it.
-
-2. Save the create request as a JSON file and start one task:
-
-   ```json
-   {"version":1,"action":"create","source":"/absolute/original"}
-   ```
+1. Start directly with the original source:
 
    ```bash
-   skill/scripts/sciplot task start --request REQUEST.json --json
+   skill/scripts/sciplot task create /absolute/original --json
    ```
 
-   `out` is a request field; prefer CLI `--task-dir` for the task location.
-   A misplaced JSON `task_dir` is relocated unless it conflicts. Output conflicts
+   This checks Doctor readiness and constructs the ordinary create request locally.
+   Do not precede it with Doctor/capability/schema calls or a request JSON file.
+   `--rule RULE_ID` and `--template TEMPLATE` require known scientific intent;
+   do not select a different experiment to force recognition. `--profile PATH`
+   reuses an existing mapping profile through current-source validation.
+   Use `--out` only for a requested source-adjacent destination, and `--task-dir`
+   for a task-evidence location. Output conflicts
    return an `out` question: choose a new path in the same task or inspect the
-   existing project; never move old deliveries. Specify `rule_id` and `template`
-   only from known scientific intent. If the original table is already understood,
-   include `create.mapping` with its original file SHA, row selections, metadata
-   evidence and XY pairs rather than rediscovering the same table.
+   existing project; never move old deliveries.
+
+2. For an advanced structured request, use `task start --request REQUEST.json`.
+   Read only the missing named request/response schema from task capabilities.
+   If the original table is already understood, include `create.mapping` with
+   its original file SHA, row selections, metadata evidence and XY pairs rather
+   than rediscovering the same table. The typed entry does not invent mappings.
 
 3. For `needs_input`, use the returned original cells, dimensions, extents and
    rejection reasons. The program repairs a single explicit axis/unit/sample-row
@@ -54,7 +52,7 @@ project-create/Studio commands, repository reading and tests are not prerequisit
    ```
 
    Correct `mapping_error` in the same task. An interrupted pending answer accepts
-   `{"retry":true}`. Wire errors return `repair.issues` field paths/constraints;
+   `task resume TASK --retry --json`. Wire errors return `repair.issues` field paths/constraints;
    response errors include `repair.question` and `repair.next_step`. Correct those
    fields using the returned current bindings, without another inspect/help call.
    `repair.question_unchanged=true` reuses previously returned evidence and sends

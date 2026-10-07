@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 
+from sciplot_core.cli.parser_errors import ExactArgumentParser
 from sciplot_core.cli.parsers.diagnostics import register_diagnostics_commands
 from sciplot_core.cli.parsers.rendering import register_rendering_commands
 from sciplot_core.cli.parsers.governance import register_governance_commands
@@ -18,9 +19,10 @@ from sciplot_core.cli.parsers.quality_publication import (
 )
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
+    parser = ExactArgumentParser(
         prog="sciplot",
+        json_errors=json_errors,
         description=(
             "Local SciPlot plotting, Studio, recipe, QA, and optional "
             "assisted-cleanup CLI."

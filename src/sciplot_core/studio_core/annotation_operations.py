@@ -20,6 +20,31 @@ from sciplot_core.studio_core.sample_style_presets import expand_style_presets
 from sciplot_core.studio_core.annotation_batch import compile_annotation_operations as compile_annotation_operations
 
 
+def require_edit_source_current(query: dict[str, Any]) -> None:
+    """Reject an already-known source mismatch without another project read.
+
+    Unknown legacy evidence remains unknown; it does not become readiness.
+    """
+    source = query.get("source") or {}
+    if source.get("current") is not False:
+        return
+    changed: list[str] = []
+    for name in ("input", "raw", "prepared"):
+        item = source.get(name) or {}
+        if item.get("current") is False:
+            changed.extend(item.get("changed_paths") or ([item["path"]] if item.get("path") else []))
+    paths = list(dict.fromkeys(changed))
+    issues = [{"path": "/source", "constraint": "current_source_required", "current": False,
+               "changed_paths": paths[:16], "omitted_path_count": max(0, len(paths) - 16)}]
+    error = AnnotationOperationError(
+        "source_changed", "Recorded scientific sources changed. Resolve the source revision before editing; do not retry unchanged operations.",
+        field="source", issues=issues,
+    )
+    error.repair = {"action": "resolve_source_change", "issues": issues,
+                    "message": "Preserve raw files. Use an explicit source-update workflow for revised data, or restore the reviewed source. This attempt did not create or apply a candidate."}
+    raise error
+
+
 def inspect_annotation_state(project: Path, *, figure_id: str | None = None) -> dict[str, Any]:
     selected = resolve_project_figure(project, figure_id)
     document, spec_path = Path(selected["document"]), Path(selected["spec"])
@@ -49,6 +74,7 @@ def preview_document_operations(
     if any(operation.get("op") in {"set_sample_style", "apply_sample_style_preset"} for operation in operations):
         selected = resolve_project_figure(project, figure_id)
         query = inspect_project(project, figure_id=selected["figure_id"])
+        require_edit_source_current(query)
         selected = query["selected_figure"]
         if selected["document_sha256"] != expected_document_sha256:
             raise AnnotationOperationError("stale_revision", "Inspect the current saved document revision.")

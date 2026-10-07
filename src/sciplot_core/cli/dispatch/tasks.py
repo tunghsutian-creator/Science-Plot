@@ -9,13 +9,37 @@ from sciplot_core.task_control import (
     inspect_task, resume_task, start_task,
 )
 from sciplot_core.task_discovery import find_tasks
+from sciplot_core.task_contract import TaskControlError
 
 
 def _object(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.expanduser().read_text())
+    resolved = path.expanduser().resolve()
+    try:
+        payload = json.loads(resolved.read_text())
+    except json.JSONDecodeError as cause:
+        error = TaskControlError("invalid_json_file", "Correct the JSON syntax at the reported line and column.")
+        error.repair = {"action": "correct_json_file", "file": str(resolved),
+                        "issues": [{"path": "/", "constraint": "json_syntax",
+                                    "line": cause.lineno, "column": cause.colno,
+                                    "message": cause.msg}]}
+        raise error from cause
     if not isinstance(payload, dict):
-        raise ValueError("A complete JSON object is required.")
+        error = TaskControlError("invalid_json_file", "A complete JSON object is required.")
+        error.repair = {"action": "correct_json_file", "file": str(resolved),
+                        "issues": [{"path": "/", "constraint": "type", "expected": "object"}]}
+        raise error
     return payload
+
+
+def _resume_response(args: Any) -> dict[str, Any]:
+    expected = args.expected_operation_id
+    if args.accept_preview:
+        if not isinstance(expected, str) or len(expected) != 64 or any(c not in "0123456789abcdef" for c in expected):
+            raise TaskControlError("invalid_task_response", "--accept-preview requires the reviewed preview's 64-character --expected-operation-id.")
+        return {"accept_preview": True, "expected_operation_id": expected}
+    if expected is not None:
+        raise TaskControlError("invalid_task_response", "--expected-operation-id is used only with --accept-preview.")
+    return {"retry": True} if args.retry else _object(args.response)
 
 
 def dispatch_task(args: Any) -> int:
@@ -65,11 +89,21 @@ def dispatch_task(args: Any) -> int:
         result = find_tasks(args.source, tasks_root=args.tasks_root, limit=args.limit)
     elif action == "start":
         result = start_task(_object(args.request), task_dir=args.task_dir)
+    elif action == "create":
+        from sciplot_core.task_shortcuts import create_task
+
+        result = create_task(args.source, rule_id=args.rule_id, template=args.template,
+                             profile=args.profile, out=args.out, task_dir=args.task_dir)
+    elif action == "style":
+        from sciplot_core.task_shortcuts import style_task
+
+        result = style_task(args.target, samples=args.sample, all_samples=args.all_samples,
+                            width=args.width, color=args.color, figure_id=args.figure, task_dir=args.task_dir)
     elif action == "inspect":
         result = inspect_task(args.target)
     else:
-        result = resume_task(args.target, _object(args.response))
-    if action in {"start", "inspect", "resume"} and not args.full:
+        result = resume_task(args.target, _resume_response(args))
+    if action in {"start", "create", "style", "inspect", "resume"} and not args.full:
         from sciplot_core.task_result_projection import compact_task_result
 
         result = compact_task_result(result)

@@ -1,7 +1,10 @@
 """Small transport receipts; durable state and scientific questions stay complete."""
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
+
+from sciplot_core.task_error_feedback import short_error_message
 
 
 def compact_task_result(payload: dict[str, Any]) -> dict[str, Any]:
@@ -16,6 +19,18 @@ def compact_task_result(payload: dict[str, Any]) -> dict[str, Any]:
     timing = result.get("local_timing")
     if isinstance(timing, dict):
         timing.pop("last_call_phases_seconds", None)
+    if result.get("status") == "blocked" and isinstance(result.get("task_dir"), str):
+        # Full diagnostics are already durable. Only shorten narration, preserving
+        # failed scientific evidence, current identities and the exact recovery step.
+        result["diagnostics"] = {"path": str(Path(result["task_dir"]) / "task.json")}
+        blocker = result.get("blocker")
+        if isinstance(blocker, dict):
+            for key in ("message", "recovery"):
+                if isinstance(blocker.get(key), str):
+                    blocker[key] = short_error_message(blocker[key])
+        run = (result.get("result") or {}).get("studio_run")
+        if isinstance(run, dict) and isinstance(run.get("failure_reason"), str):
+            run["failure_reason"] = short_error_message(run["failure_reason"])
     if result.get("status") != "complete":
         return result
     if result.get("profile") is None:

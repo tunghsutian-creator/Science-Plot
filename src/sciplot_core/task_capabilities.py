@@ -79,6 +79,12 @@ def task_capabilities(*, section: str | None = None, name: str | None = None,
         "saved_edit_context": {
             "cli": "task edit-context TASK_OR_PROJECT --operation NAME [--operation NAME ...] [--figure FIGURE_ID] --json",
             "scope": "Read runtime, current saved targets and selected edit schemas once; no task or project mutation."},
+        "typed_entries": {
+            "create": "task create SOURCE [--rule RULE --template TEMPLATE --profile PATH --out PATH] --json",
+            "style": "task style TARGET (--all-samples | --sample EXACT ...) [--width WIDTH] [--color COLOR] [--figure FIGURE_ID] --json",
+            "accept_preview": "task resume TASK --accept-preview --expected-operation-id CURRENT_ID --json",
+            "retry": "task resume TASK --retry --json",
+            "scope": "Create/style include runtime readiness and use existing task contracts. Style returns a preview for review; scientific choices and revision guards remain unchanged."},
         "specialized_routes": {"rheology_tts": {
             "cli": "rheology capabilities --json",
             "scope": "AI-prepared source-bound TTS plotting, exact saved export and revision-bound native style restoration; analysis is a legacy compatibility route."}},

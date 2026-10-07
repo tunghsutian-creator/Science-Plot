@@ -486,16 +486,18 @@ def test_inspect_missing_source_without_json_keeps_human_error(
     assert captured.err == f"Error: Input not found: {source}\n"
 
 
-def test_json_flag_does_not_repackage_argparse_usage_errors(
+def test_json_flag_returns_structured_argparse_errors(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    with pytest.raises(SystemExit) as excinfo:
-        cli.main(["inspect", "--json"])
+    exit_code = cli.main(["inspect", "--json"])
 
     captured = capsys.readouterr()
-    assert excinfo.value.code == 2
-    assert captured.out == ""
-    assert "usage:" in captured.err
+    assert exit_code == 2
+    payload = json.loads(captured.out)
+    assert payload["reason_code"] == "cli_invalid_arguments"
+    assert payload["repair"]["action"] == "correct_arguments"
+    assert payload["repair"]["issues"] == [{"constraint": "required", "missing": ["input"]}]
+    assert captured.err == ""
 
 
 def test_plan_cli_explicit_performance_template_selects_the_same_single_task(

@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from sciplot_core.task_error_feedback import exception_feedback
+
 
 def _coerce_sheet(value: str) -> str | int:
     try:
@@ -51,7 +53,7 @@ def _cli_runtime_error_payload(
         "category": category,
         "reason_code": getattr(exc, "reason_code", f"cli_{category}"),
         "exception_type": type(exc).__name__,
-        "message": str(exc) or type(exc).__name__,
+        **exception_feedback(exc),
     }
     if recovery_hint:
         payload["recovery_hint"] = recovery_hint

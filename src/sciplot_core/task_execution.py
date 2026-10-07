@@ -16,6 +16,7 @@ from sciplot_core.task_editing import current_edit_request, unchanged_style_revi
 from sciplot_core.task_planning import plan_task, save_profile
 from sciplot_core.task_storage import save_task
 from sciplot_core.task_output_choice import creation_output, require_available_output
+from sciplot_core.task_recovery_policy import recovery_action
 
 
 def _phase(root: Path, state: dict[str, Any], value: str) -> None:
@@ -66,6 +67,26 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
 
 
 def run_edit_preview(root: Path, state: dict[str, Any]) -> None:
+    """Retry one terminated preview worker locally, never a write or bad operation."""
+    try:
+        _run_edit_preview(root, state)
+    except TimeoutExpired as exc:
+        if (state.get("preview_timeout_retries", 0) >= 1 or state["phase"] != "previewing"
+                or state.get("preview_accepted") is True or "applied_operation" in state):
+            raise
+        state["preview_timeout_retries"] = 1
+        state["automatic_repairs"] = [*state.get("automatic_repairs", []), {
+            "action": "retry_preview_after_timeout", "reason_code": "task_worker_timeout",
+            "failed_preview_attempt": state.get("preview_attempt"),
+            "timeout_seconds": exc.timeout, "retry_limit": 1, "message": str(exc),
+        }]
+        # Charge the lifetime budget before another worker starts. A process
+        # interruption or subsequent resume cannot silently reset it.
+        save_task(root, state)
+        _run_edit_preview(root, state)
+
+
+def _run_edit_preview(root: Path, state: dict[str, Any]) -> None:
     from sciplot_core.studio_core.annotation_operations import preview_document_operations
 
     _phase(root, state, "previewing")
@@ -145,16 +166,20 @@ def run_apply_export(root: Path, state: dict[str, Any]) -> None:
 
 def record_failure(root: Path, state: dict[str, Any], exc: Exception) -> None:
     timed_out = isinstance(exc, TimeoutExpired)
+    code = "task_worker_timeout" if timed_out else getattr(exc, "reason_code", "task_execution_failed")
+    action = recovery_action(state, code)
+    issues = getattr(exc, "issues", None)
     state.update({
         "status": "blocked",
         "blocker": {
-            "reason_code": "task_worker_timeout" if timed_out else getattr(exc, "reason_code", "task_execution_failed"),
-            "message": "本地工作进程超时，任务进度已保留；查询当前状态后可重试。" if timed_out else str(exc),
+            "reason_code": code,
+            "message": "本地工作进程超时；任务进度和重试记录已保存。" if timed_out else str(exc),
+            "recovery_action": action,
             **({"timeout_seconds": exc.timeout} if isinstance(exc, TimeoutExpired) else {}),
+            **({"issues": issues} if issues else {}),
             "recovery": (
                 "可重试原操作；需改正操作时，用当前 preview_revision 作为 expected_preview_revision 提交 revise_operations。"
-                if state["request"]["action"] == "edit" and state["phase"] == "previewing"
-                and state.get("preview_accepted") is not True and "applied_operation" not in state
+                if action == "revise_operations"
                 else "保留此任务；解决所述问题后查询或重试。原始数据不会自动修改。"
             ),
         },

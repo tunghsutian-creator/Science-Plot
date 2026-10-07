@@ -158,6 +158,13 @@ The skill entry routes to one task-specific guide. The client still used 16
 underlying tools including evidence capture and memory lookup; three CLI calls
 do not mean three tools or establish a matched end-to-end speedup.
 
+The 2026-10-07 typed entries move request construction into the program:
+recognized ordinary creation completed in one CLI call, and a fresh sample-style
+client completed preview/accept/export in two calls without caller-authored JSON.
+That client reported ten underlying tools, including two early-yield waits; the
+skill now recommends a normal initial wait. Final demo TIFF pixels match the
+earlier three-command result. End-to-end timing/token telemetry remains open.
+
 Use the same real tasks to compare model rounds, tool calls, returned bytes,
 latency, failures and user questions. Report actual client token telemetry when
 available; unknown is not zero. Improve compact results and orchestration from
@@ -165,3 +172,12 @@ observed friction, while retaining visual review and genuine scientific choices.
 
 Exit: publish a reproducible before/after record with matching task scope and
 quality checks. Do not equate fewer CLI calls with a measured token percentage.
+
+
+The 2026-10-07 protocol/recovery milestone adds exact JSON argument failures,
+shared width preflight, semantic correction fields, stable typed-style replay,
+one durable preview-timeout retry, phase-specific continuation and local full
+error references. The real-client normal-path record and injected native-failure
+record remain distinct. General no-op export reuse, broad automatic recovery and
+population-level error/token/latency evidence are not claimed complete. See the
+current task capability measurements for verification and observed boundaries.

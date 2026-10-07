@@ -1,5 +1,93 @@
 # Task capability and local plotting measurements
 
+## 2026-10-07 — bounded protocol failures and local recovery
+
+The entrypoint now returns structured JSON argument errors (exit 2) and rejects
+implicit option abbreviations. Shared native physical-width validation runs
+before context/native task allocation. CLI/MCP retain exact field constraints;
+semantic mapping mistakes receive candidate/range/conflict details. Stale-preview
+repair includes the actual current candidate/audit and MCP image resources.
+
+Explicit typed-style task keys persist the original intent before work. Matching
+replays return existing evidence, including a lock-protected race after another
+caller completed the edit; changed intent cannot accept the old preview. One
+terminated unaccepted preview may retry automatically, charging a durable lifetime
+budget before a fresh attempt directory. Other phases retain their existing
+transaction recovery. Known original-source mismatches stop existing-query edit
+context and sample/preset previews; generic native operations retain their
+prepared-source audit boundary. No-op export reuse was not added.
+
+Five real CLI error probes returned 475 / 748 / 590 / 809 / 652 stdout bytes and
+zero stderr bytes. A synthetic 50,014-character error produced a 50,357-byte full
+task payload and an 846-byte compact payload. CLI/MCP envelopes measured 701/645
+bytes; complete error text read back exactly from the private local diagnostic.
+These are message/transport measurements, not model-token or error-rate results.
+Scientific evidence and review images are never truncated to meet a byte target.
+
+A source-bound native probe injected an immediate TimeoutExpired on the first
+preview attempt and ran the real native preview on the second: one style entry,
+two attempts, 1.917 s and 3,206 output bytes. It did not wait 120 seconds and is not
+a timeout speed comparison. Source, saved VSZ, project and delivery bytes stayed
+unchanged before acceptance. After candidate/audit review, public-CLI acceptance
+and export completed in 2.543 s; final TIFF was reviewed. Identical explicit-key
+replay returned in 0.361 s with all 90 file hashes and mtimes unchanged and current
+source/QA/delivery true. These are single local fixture observations.
+
+Validation: 1,105 changed-owner tests passed (31 deselected), Ruff, strict mypy
+for 195 source files and whitespace passed; smoke 36/36; Doctor ready. Evidence,
+reproduction scripts and the Chinese end-to-end process/evaluation report are
+under `.tmp_verify/ai_protocol_recovery_20261007/`. Original failure records are
+retained: the first native harness bypassed the CLI Qt startup environment, and
+the initial regression run found one old recovery expectation. Both causes were
+corrected and verified. No user scientific input or delivery was edited.
+
+
+## 2026-10-07 — program-owned request construction
+
+`task create SOURCE` now performs runtime preflight and constructs an ordinary
+create request locally. It preserves source recognition, profiles and scientific
+questions; it does not select a mapping for the AI. `task style TARGET` accepts
+explicit all-sample or exact-label width/color intent, resolves current targets
+and document SHA, and calls the existing audited preview transaction. Typed
+resume flags plus returned `cli_argv` remove the caller's acceptance/retry JSON
+files. Existing structured commands and all native lifecycle checks remain.
+
+One public typed create call produced an isolated source-bound UV–Vis demo from
+the original showcase CSV. A fresh independent client then received only that
+project, the public skill and an instruction to change all four curves to 0.7 pt.
+The passive CLI recorder captured two plotting calls: `task style`, then `task
+resume --accept-preview --expected-operation-id`. No parent request, sample list,
+schema hint or operation ID was supplied.
+
+| Observation | Result |
+| --- | --- |
+| Client plotting CLI calls | 2, versus 3 in the prior demo observation |
+| Caller-authored request/response JSON files | 0 |
+| CLI stdout bytes | 7,840, versus 14,446 in the prior observation |
+| Recorded local CLI time | 5.0020 s; not end-to-end latency |
+| Client-reported tools | 8 exec envelopes / 10 underlying tools: 6 shell, 2 waits, 2 image views |
+| Visual and scientific review | Candidate and final TIFF viewed; audit passed 4/4 |
+| Current source / QA / delivery | All true; Doctor ready |
+| Original data / plotting CSV | Complete file hashes unchanged |
+| Final TIFF vs prior 0.7 pt demo | Identical dimensions, mode and pixels |
+
+The prior client reported 16 underlying tools and also wrote a trial report;
+this trial's recorder captured evidence passively. The tool counts therefore
+describe actual runs, not an isolated causal measurement. Neither run supplies
+complete model-token or end-to-end latency telemetry. This client yielded early
+on both short native calls, adding two waits; the skill now recommends the normal
+10–30 second initial tool wait. That documentation follow-up was not re-trialed.
+Validation and smoke ran independently during the trial, so local time is only
+diagnostic. Scientific ambiguity, preview review and final-image review remain
+AI/user responsibilities.
+
+Evidence: `.tmp_verify/typed_task_flow_20261007/` contains source/create receipts,
+passive `client_calls/*` records (one setup create and two client edit calls),
+`acceptance_summary.json`, verification, smoke and Doctor. No user source or user
+delivery was changed. The changed-owner gate passed 671 tests (13 deselected),
+Ruff, strict mypy over 191 source files and whitespace; smoke passed 36/36 and
+skill structural validation passed.
+
 ## 2026-10-04 — fewer AI discovery steps for saved edits
 
 The follow-up targets unnecessary agent work. `task edit-context` composes

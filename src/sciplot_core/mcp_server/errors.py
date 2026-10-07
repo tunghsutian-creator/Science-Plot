@@ -7,6 +7,8 @@ from typing import Any
 
 from jsonschema.exceptions import ValidationError
 
+from sciplot_core.task_error_feedback import exception_feedback, short_error_message
+
 
 class AdapterError(ValueError):
     def __init__(self, code: str, message: str) -> None:
@@ -44,12 +46,20 @@ def error_payload(exc: Exception) -> dict[str, Any]:
         logging.getLogger(__name__).exception("SciPlot MCP operation failed")
         code = "execution_failed"
         message = "The local operation failed. Inspect the task or project before retrying."
+    # ValidationError.__str__ repeats the whole public schema even for a tiny
+    # field typo. Its constraint message carries the actual rejected value.
+    feedback = exception_feedback(exc, summary=message if isinstance(exc, ValidationError) else None)
     repair = getattr(exc, "repair", None)
     return {
         "kind": "sciplot_control_error",
         "version": 1,
         "status": "error",
-        "error": {"code": code, "message": message[:1200]},
+        "error": {"code": code, "message": (feedback["message"] if "diagnostics_unavailable" in feedback
+                                              else short_error_message(message)),
+                  **({"field": feedback["field"]} if "field" in feedback else {})},
+        **({"diagnostics": feedback["diagnostics"]} if "diagnostics" in feedback else {}),
+        **({"diagnostics_unavailable": feedback["diagnostics_unavailable"]} if "diagnostics_unavailable" in feedback else {}),
+        **({"issues": feedback["issues"]} if "issues" in feedback else {}),
         **({"repair": repair} if repair is not None else {}),
         "ready_to_use": False,
     }

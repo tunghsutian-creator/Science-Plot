@@ -31,6 +31,16 @@ def _leaves(error: ValidationError) -> list[ValidationError]:
     branches: dict[Any, list[ValidationError]] = {}
     for child in error.context:
         branches.setdefault(child.schema_path[0], []).extend(_leaves(child))
+    # The operation's declared discriminator is authoritative for feedback too.
+    # A nearly valid unrelated branch must not report missing fields for another op.
+    if isinstance(error.instance, dict) and isinstance(error.schema, dict):
+        for discriminator in ("op", "mode", "action", "kind"):
+            if discriminator not in error.instance:
+                continue
+            for index, variant in enumerate(error.schema.get(error.validator, [])):
+                field = variant.get("properties", {}).get(discriminator, {})
+                if "const" in field and error.instance[discriminator] == field["const"]:
+                    return branches.get(index, [])
     return min(branches.values(), key=len)
 
 
@@ -66,8 +76,42 @@ def wire_issues(value: Any, *, section: str) -> list[dict[str, Any]]:
     return issues
 
 
+def _issues(value: Any, exc: Exception, *, section: str, state: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    supplied = getattr(exc, "issues", None)
+    if isinstance(supplied, list) and supplied:
+        return supplied[:8]
+    issues = wire_issues(value, section=section)
+    if issues:
+        return issues
+    code = getattr(exc, "reason_code", None)
+    if code == "profile_selection_conflict" and isinstance(value, dict):
+        fields = [key for key in ("rule_id", "template", "choose_columns") if value.get(key)]
+        return [{"path": "/profile", "constraint": "mutually_exclusive", "conflicts_with": fields}]
+    if code == "task_location_conflict":
+        return [{"path": "/task_dir", "constraint": "same_transport_location"}]
+    if code == "invalid_mapping_candidate" and isinstance(value, dict) and state is not None:
+        candidates = (state.get("question") or {}).get("mapping_candidates", [])
+        chosen = next((item for item in candidates if item["candidate_id"] == value.get("mapping_candidate_id")), None)
+        if chosen is None:
+            return [{"path": "/mapping_candidate_id", "constraint": "advertised_candidate",
+                     "expected": [item["candidate_id"] for item in candidates[:8]],
+                     **({"remaining_candidate_count": len(candidates) - 8} if len(candidates) > 8 else {})}]
+        count = len(chosen["mapping"]["column_mapping"]["pairs"])
+        return [{"path": f"/pair_indices/{index}", "constraint": "maximum", "expected": count - 1}
+                for index, pair in enumerate(value.get("pair_indices", [])) if pair >= count][:8]
+    if state is not None and code in {"stale_task_preview", "stale_source_review", "stale_task_question"}:
+        field, expected = (("expected_question_id", (state.get("question") or {}).get("question_id"))
+                           if code == "stale_task_question" else
+                           ("expected_revision_id", state.get("revision_id")) if code == "stale_source_review" else
+                           ("expected_operation_id", state.get("operation_id")) if state["status"] == "needs_review" else
+                           ("expected_preview_revision", len(state.get("edit_revisions") or []) + 1))
+        return [{"path": "/" + field, "constraint": "current_review_binding", "expected": expected}]
+    rejected_field = getattr(exc, "field", None)
+    return [{"path": "/" + str(rejected_field).lstrip("/"), "constraint": "rejected_value"}] if rejected_field else []
+
+
 def request_repair(request: Any, exc: Exception) -> dict[str, Any]:
-    return {"action": "correct_request", "issues": wire_issues(request, section="request"),
+    return {"action": "correct_request", "issues": _issues(request, exc, section="request"),
             "reason_code": getattr(exc, "reason_code", "invalid_arguments"),
             "message": "Correct only rejected fields; retain valid source/out/mapping. Resubmit task start. No task was created."}
 
@@ -84,10 +128,13 @@ def response_repair(state: dict[str, Any], response: Any, exc: Exception) -> dic
         # Bindings refer to evidence already returned for exactly this question.
         # Keep the generic shape: never silently remove invalid sample selections.
         next_step["message"] = "Correct only issues below using the already returned evidence for this question; no inspect/help call is needed."
+    review: dict[str, Any] = ({key: summary[key] for key in ("preview", "previews", "operation_id", "revision_id") if key in summary}
+                             if state["status"] == "needs_review" else {})
     return {"action": "correct_response", "task": state["task_dir"],
             "reason_code": getattr(exc, "reason_code", "invalid_arguments"),
-            "issues": wire_issues(response, section="response"),
+            "issues": _issues(response, exc, section="response", state=state),
             "question": question, "question_unchanged": unchanged, "next_step": next_step,
+            **review,
             "message": "Use this saved current question and next_step in the same task. Source bytes are rechecked on resume. Do not repeat an unchanged rejected answer or rewrite raw values."}
 
 
