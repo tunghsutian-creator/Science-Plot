@@ -37,6 +37,10 @@ ftir_output/
 # Historical design notes are local-only. Retain current architecture and legal notice.
 /docs/*
 !/docs/ARCHITECTURE.md
+!/docs/DESIGN_MANAGED_PLOTS.md
+!/docs/DESIGN_FIGURE_GRAMMAR.md
+!/docs/DESIGN_RENDERING_CONTRACT.md
+!/docs/RESEARCH_COMPATIBILITY_PROFILES.md
 !/docs/RHEOLOGY_TTS.md
 !/docs/INDEPENDENT_ACCEPTANCE.md
 !/docs/PUBLIC_BETA.md

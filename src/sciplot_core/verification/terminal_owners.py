@@ -35,6 +35,7 @@ GENERIC_TERMINAL_PREPARATION_OWNER = ChangedOwner(
             "src/sciplot_core/workflow/request_rendering.py",
             "src/sciplot_core/workflow/single_task_bundle.py",
             "src/sciplot_core/qa/artifacts.py",
+            "src/sciplot_core/qa/audit_support.py",
             "src/sciplot_core/semantic_sources/rheology_workbooks.py",
         }
     ),

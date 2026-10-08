@@ -2,6 +2,7 @@
 
 from typing import Any
 from sciplot_core.mapping_contract.table_metadata import metadata_confirmations_schema
+from sciplot_core.mapping_contract.table_selection import table_selection_schema as table_selection_schema
 
 
 def metadata_response_schema() -> dict[str, Any]:
@@ -34,19 +35,6 @@ def column_mapping_schema() -> dict[str, Any]:
     return {"oneOf": [pair, {"type": "object", "additionalProperties": False,
                              "properties": {"pairs": {"type": "array", "minItems": 1, "maxItems": 32, "items": pair}},
                              "required": ["pairs"]}]}
-
-
-def table_selection_schema() -> dict[str, Any]:
-    row = {"type": "integer", "minimum": 0}
-    return {"type": "object", "additionalProperties": False,
-            "description": "Original worksheet and this pair's own data rows (end exclusive). Omission on a pair inherits the current table selection.",
-            "properties": {"sheet": {"type": ["string", "null"]},
-                "header_rows": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": True, "items": row},
-                "data_start_row": row, "data_end_row": row,
-                "unit_row": {"type": ["integer", "null"], "minimum": 0},
-                "sample_row": {"type": ["integer", "null"], "minimum": 0},
-                "expand_merged_metadata": {"type": "boolean", "description": "Explicitly associate merged XLSX metadata with its original anchor; measurement cells are never expanded."}},
-            "required": ["sheet", "header_rows", "data_start_row", "data_end_row"]}
 
 
 def table_response_schema() -> dict[str, Any]:

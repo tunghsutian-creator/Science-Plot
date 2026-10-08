@@ -1,0 +1,731 @@
+{
+  "kind": "sciplot_rendering_style_contract",
+  "schema_version": 1,
+  "contract_id": "sciplot-house-style-v1",
+  "authority": "legacy_source_extraction",
+  "properties": {
+    "font.family": {
+      "status": "specified",
+      "value": "Arial",
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_FONT_FAMILY",
+      "notes": ""
+    },
+    "font.size_pt": {
+      "status": "specified",
+      "value": 7.0,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_FONT_SIZE_PT",
+      "notes": ""
+    },
+    "legend.font_size_pt": {
+      "status": "specified",
+      "value": 6.0,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_LEGEND_FONT_SIZE_PT",
+      "notes": ""
+    },
+    "legend.key_length_mm": {
+      "status": "specified",
+      "value": 4.0,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_LEGEND_KEY_LENGTH_MM",
+      "notes": ""
+    },
+    "panel_label.font_size_pt": {
+      "status": "specified",
+      "value": 7.0,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_PANEL_LABEL_SIZE_PT",
+      "notes": ""
+    },
+    "line.width_pt": {
+      "status": "specified",
+      "value": 1.2,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_LINE_WIDTH_PT",
+      "notes": ""
+    },
+    "axis.line_width_pt": {
+      "status": "specified",
+      "value": 0.8,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_AXIS_LINEWIDTH_PT",
+      "notes": ""
+    },
+    "axis.major_tick_width_pt": {
+      "status": "specified",
+      "value": 0.8,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_TICK_WIDTH_PT",
+      "notes": ""
+    },
+    "axis.major_tick_length_pt": {
+      "status": "specified",
+      "value": 2.8,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_TICK_LENGTH_PT",
+      "notes": ""
+    },
+    "axis.minor_tick_width_pt": {
+      "status": "specified",
+      "value": 0.8,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_MINOR_TICK_WIDTH_PT",
+      "notes": ""
+    },
+    "axis.minor_tick_length_pt": {
+      "status": "specified",
+      "value": 1.5,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_MINOR_TICK_LENGTH_PT",
+      "notes": ""
+    },
+    "marker.size_pt": {
+      "status": "specified",
+      "value": 2.0,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_MARKER_SIZE_PT",
+      "notes": ""
+    },
+    "marker.line_width_pt": {
+      "status": "specified",
+      "value": 0.8,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_MARKER_LINE_WIDTH_PT",
+      "notes": ""
+    },
+    "foreground.color": {
+      "status": "specified",
+      "value": "#111111",
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_FOREGROUND_COLOR",
+      "notes": ""
+    },
+    "frame.left_mm": {
+      "status": "specified",
+      "value": 14.0,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_LEFT_MARGIN_MM",
+      "notes": ""
+    },
+    "frame.right_mm": {
+      "status": "specified",
+      "value": 4.5,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_RIGHT_MARGIN_MM",
+      "notes": ""
+    },
+    "frame.top_mm": {
+      "status": "specified",
+      "value": 5.5,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_TOP_MARGIN_MM",
+      "notes": ""
+    },
+    "frame.bottom_mm": {
+      "status": "specified",
+      "value": 11.0,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "UNIFIED_BOTTOM_MARGIN_MM",
+      "notes": ""
+    },
+    "line.style_sequence": {
+      "status": "specified",
+      "value": [
+        "solid"
+      ],
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "DEFAULT_CURVE_LINE_STYLE_SEQUENCE",
+      "notes": ""
+    },
+    "export.formats": {
+      "status": "specified",
+      "value": [
+        "pdf",
+        "tiff_300"
+      ],
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "DEFAULT_EXPORT_FORMATS_POLICY",
+      "notes": ""
+    },
+    "axis.log_tick_format": {
+      "status": "specified",
+      "value": "%Ve",
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "DEFAULT_LOG_TICK_FORMAT",
+      "notes": ""
+    },
+    "axis.log_minor_tick_count": {
+      "status": "specified",
+      "value": 5,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "DEFAULT_LOG_MINOR_TICK_COUNT",
+      "notes": ""
+    },
+    "axis.log_minor_multipliers": {
+      "status": "specified",
+      "value": [
+        2.0,
+        4.0,
+        6.0,
+        8.0
+      ],
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "DEFAULT_LOG_MINOR_MULTIPLIERS",
+      "notes": ""
+    },
+    "legend.curve_clearance_mm": {
+      "status": "specified",
+      "value": 2.0,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "DEFAULT_LEGEND_CURVE_CLEARANCE_MM",
+      "notes": ""
+    },
+    "legend.edge_padding_mm": {
+      "status": "specified",
+      "value": 1.0,
+      "source_file": "src/sciplot_core/policy/frame_export.py",
+      "source_symbol": "DEFAULT_LEGEND_EDGE_PADDING_MM",
+      "notes": ""
+    },
+    "canvas.width_mm": {
+      "status": "specified",
+      "value": 60.0,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/global_frame/panel_width_mm",
+      "notes": ""
+    },
+    "canvas.height_mm": {
+      "status": "specified",
+      "value": 55.0,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/global_frame/panel_height_mm",
+      "notes": ""
+    },
+    "line.opacity": {
+      "status": "specified",
+      "value": 0.92,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/stroke/line_alpha",
+      "notes": ""
+    },
+    "marker.opacity": {
+      "status": "specified",
+      "value": 0.95,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/stroke/marker_alpha",
+      "notes": ""
+    },
+    "fill.opacity": {
+      "status": "specified",
+      "value": 0.34,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/stroke/fill_alpha",
+      "notes": ""
+    },
+    "fill.maximum_opacity": {
+      "status": "specified",
+      "value": 0.45,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/stroke/max_fill_alpha",
+      "notes": ""
+    },
+    "axis.label_padding_pt": {
+      "status": "specified",
+      "value": 2.0,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/spacing/axes_labelpad",
+      "notes": ""
+    },
+    "axis.x_tick_label_padding_pt": {
+      "status": "specified",
+      "value": 1.4,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/spacing/xtick_major_pad",
+      "notes": ""
+    },
+    "axis.y_tick_label_padding_pt": {
+      "status": "specified",
+      "value": 1.4,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/spacing/ytick_major_pad",
+      "notes": ""
+    },
+    "legend.inset_fraction": {
+      "status": "specified",
+      "value": 0.025,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/spacing/legend_inset_fraction",
+      "notes": ""
+    },
+    "legend.frame_visible": {
+      "status": "specified",
+      "value": false,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/annotation/legend_frameon",
+      "notes": ""
+    },
+    "panel_label.weight": {
+      "status": "specified",
+      "value": "bold",
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/typography/panel_label_weight",
+      "notes": ""
+    },
+    "axis.frame_sides": {
+      "status": "specified",
+      "value": {
+        "left": true,
+        "bottom": true,
+        "top": false,
+        "right": false
+      },
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/axis_frame",
+      "notes": ""
+    },
+    "palette.id": {
+      "status": "specified",
+      "value": "control_first_bright",
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/defaults/palette_preset",
+      "notes": ""
+    },
+    "palette.colors": {
+      "status": "specified",
+      "value": [
+        "#222222",
+        "#3568C0",
+        "#C83E4D",
+        "#2A9D8F",
+        "#D99A24",
+        "#7C9ED9",
+        "#7B61A8"
+      ],
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/palettes/control_first_bright/categorical",
+      "notes": ""
+    },
+    "canvas.size_presets": {
+      "status": "specified",
+      "value": {
+        "60x55": {
+          "label": "Single 60 x 55 mm",
+          "width_mm": 60.0,
+          "height_mm": 55.0
+        },
+        "120x55": {
+          "label": "Wide 120 x 55 mm",
+          "width_mm": 120.0,
+          "height_mm": 55.0
+        },
+        "180x55": {
+          "label": "Full row 180 x 55 mm",
+          "width_mm": 180.0,
+          "height_mm": 55.0
+        },
+        "60x110": {
+          "label": "Tall 60 x 110 mm",
+          "width_mm": 60.0,
+          "height_mm": 110.0
+        },
+        "120x110": {
+          "label": "Large 120 x 110 mm",
+          "width_mm": 120.0,
+          "height_mm": 110.0
+        },
+        "180x110": {
+          "label": "Full tall 180 x 110 mm",
+          "width_mm": 180.0,
+          "height_mm": 110.0
+        }
+      },
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/size_presets",
+      "notes": ""
+    },
+    "axis.domain_policy": {
+      "status": "specified",
+      "value": {
+        "linear_nice_steps": [
+          1.0,
+          2.0,
+          5.0
+        ],
+        "linear_outer_padding_fraction": 0.05,
+        "linear_force_visible_labeled_endpoints": true,
+        "log_display_steps": [
+          1.0,
+          2.0,
+          5.0
+        ],
+        "log_label_mode": "decade_only",
+        "log_allow_unlabeled_outer_padding": true,
+        "bar_zero_baseline_no_lower_padding": true,
+        "tensile_y_include_zero": true,
+        "stacked_x_use_standard_endpoint_policy": true
+      },
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/axis_policy",
+      "notes": ""
+    },
+    "special_layouts": {
+      "status": "specified",
+      "value": {
+        "heatmap": {
+          "frame_envelope_mode": "standard_graph",
+          "text_envelope_mode": "standard_text_safe_area",
+          "colorbar_x_offset_fraction": 0.44,
+          "colorbar_width_fraction": 0.56,
+          "colorbar_height_fraction": 0.08,
+          "colorbar_main_gap_fraction": 0.1,
+          "colorbar_top_edge_fraction": 1.0,
+          "label_position": "left_of_colorbar_inside_frame",
+          "label_font_size_pt": 7.0,
+          "tick_font_size_pt": 7.0,
+          "tick_length_pt": 2.8
+        },
+        "wide_nmr": {
+          "width_mm": 60.0,
+          "total_height_mm": 110.0,
+          "structure_reserved_mm": 18.0,
+          "spectrum_height_mm": 92.0
+        }
+      },
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/special_layouts",
+      "notes": ""
+    },
+    "export.preview_dpi": {
+      "status": "specified",
+      "value": 150,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/export/figure_dpi",
+      "notes": ""
+    },
+    "export.raster_dpi": {
+      "status": "specified",
+      "value": 300,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/export/savefig_dpi",
+      "notes": ""
+    },
+    "export.color_space": {
+      "status": "specified",
+      "value": "RGB",
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/export/color_space",
+      "notes": ""
+    },
+    "export.vector_preferred": {
+      "status": "specified",
+      "value": true,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/export/vector_preferred",
+      "notes": ""
+    },
+    "export.matplotlib_pdf_fonttype": {
+      "status": "specified",
+      "value": 42,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/export/pdf_fonttype",
+      "notes": "Policy intent; not a Veusz export option."
+    },
+    "export.matplotlib_ps_fonttype": {
+      "status": "specified",
+      "value": 42,
+      "source_file": "src/sciplot_core/policy/plot_contract.json",
+      "source_symbol": "/styles/nature/export/ps_fonttype",
+      "notes": "Policy intent; not a Veusz export option."
+    },
+    "marker.sequence": {
+      "status": "specified",
+      "value": [
+        "circle",
+        "square",
+        "diamond",
+        "triangle"
+      ],
+      "source_file": "src/sciplot_core/studio_render/models.py",
+      "source_symbol": "POINT_LINE_MARKERS",
+      "notes": "Point-line template sequence, not line-only spectra."
+    },
+    "canvas.background": {
+      "status": "specified",
+      "value": "white",
+      "source_file": "src/sciplot_core/studio_core/veusz_graph_setup.py",
+      "source_symbol": "create_veusz_page_and_graph:Set(Background/color)",
+      "notes": ""
+    },
+    "frame.border_hidden": {
+      "status": "specified",
+      "value": true,
+      "source_file": "src/sciplot_core/studio_core/veusz_graph_setup.py",
+      "source_symbol": "create_veusz_page_and_graph:Set(Border/hide)",
+      "notes": ""
+    },
+    "axis.outer_ticks": {
+      "status": "specified",
+      "value": true,
+      "source_file": "src/sciplot_core/studio_core/veusz_axis_apply.py",
+      "source_symbol": "_add_veusz_axis:Set(outerticks)",
+      "notes": ""
+    },
+    "axis.auto_mirror": {
+      "status": "specified",
+      "value": false,
+      "source_file": "src/sciplot_core/studio_core/veusz_axis_apply.py",
+      "source_symbol": "_add_veusz_axis:Set(autoMirror)",
+      "notes": ""
+    },
+    "axis.line_transparency": {
+      "status": "specified",
+      "value": 0,
+      "source_file": "src/sciplot_core/studio_core/veusz_axis_apply.py",
+      "source_symbol": "_add_veusz_axis:Set(Line/transparency)",
+      "notes": ""
+    },
+    "legend.margin_font_fraction": {
+      "status": "specified",
+      "value": 0.15,
+      "source_file": "src/sciplot_core/studio_core/veusz_graph_setup.py",
+      "source_symbol": "_add_native_veusz_key:Set(marginSize)",
+      "notes": ""
+    },
+    "line.unused_error_channel_hidden": {
+      "status": "specified",
+      "value": true,
+      "source_file": "src/sciplot_core/studio_core/veusz_primitives.py",
+      "source_symbol": "_add_veusz_xy_series:Set(ErrorBarLine/hide)",
+      "notes": ""
+    },
+    "marker.thin_factor": {
+      "status": "specified",
+      "value": 1,
+      "source_file": "src/sciplot_core/studio_core/series_request.py",
+      "source_symbol": "_marker_thin_factor:return",
+      "notes": "Every measured point remains marked."
+    },
+    "line.join": {
+      "status": "adapter_baseline",
+      "value": "bevel",
+      "source_file": "src/sciplot_core/studio_core/veusz_line_joins.py",
+      "source_symbol": "ensure_veusz_line_joins:Choice(joinStyle)",
+      "notes": "Explicit SciPlot adapter default preserves old native joins."
+    },
+    "export.veusz_pdf_dpi": {
+      "status": "specified",
+      "value": 72,
+      "source_file": "src/sciplot_core/studio_core/export_execution.py",
+      "source_symbol": "export_studio_document:kwargs[pdfdpi]",
+      "notes": ""
+    },
+    "legend.color": {
+      "status": "adapter_baseline",
+      "value": "#000000",
+      "source_file": "third_party/veusz/veusz/document/colors.py",
+      "source_symbol": "Colors.wipe:foreground",
+      "notes": "Old house rule unspecified; old key inherits backend foreground."
+    },
+    "font.weight": {
+      "status": "adapter_baseline",
+      "value": "normal",
+      "source_file": "third_party/veusz/veusz/setting/collections.py",
+      "source_symbol": "Text.__init__:Bool(bold)",
+      "notes": "Old house rule unspecified; pin inherited native weight."
+    },
+    "axis.linear_minor_tick_count": {
+      "status": "adapter_baseline",
+      "value": 20,
+      "source_file": "third_party/veusz/veusz/widgets/axis.py",
+      "source_symbol": "MinorTick.__init__:Int(number)",
+      "notes": "Matches explicit old _add_veusz_axis fallback of 20."
+    },
+    "axis.tick_color": {
+      "status": "adapter_baseline",
+      "value": "#000000",
+      "source_file": "third_party/veusz/veusz/setting/collections.py",
+      "source_symbol": "Line.__init__:color -> StyleSheet/Line/color -> Colors.foreground",
+      "notes": "Old major/minor ticks inherit backend foreground independently from the #111111 axis spine."
+    },
+    "axis.minor_ticks_visible": {
+      "status": "adapter_baseline",
+      "value": true,
+      "source_file": "third_party/veusz/veusz/setting/collections.py",
+      "source_symbol": "Line.__init__:hide",
+      "notes": "MinorTick inherits Line.hide=false unless explicitly hidden."
+    },
+    "axis.grid_visible": {
+      "status": "adapter_baseline",
+      "value": false,
+      "source_file": "third_party/veusz/veusz/widgets/axis.py",
+      "source_symbol": "GridLine.__init__:hide.newDefault",
+      "notes": "Old native default; no generic house override."
+    },
+    "axis.minor_grid_visible": {
+      "status": "adapter_baseline",
+      "value": false,
+      "source_file": "third_party/veusz/veusz/widgets/axis.py",
+      "source_symbol": "MinorGridLine.__init__:hide.newDefault",
+      "notes": "Old native default; no generic house override."
+    },
+    "text.align_h": {
+      "status": "adapter_baseline",
+      "value": "left",
+      "source_file": "third_party/veusz/veusz/widgets/textlabel.py",
+      "source_symbol": "TextLabel.addSettings:alignHorz",
+      "notes": "Old house rule unspecified; pin native label default."
+    },
+    "text.align_v": {
+      "status": "adapter_baseline",
+      "value": "bottom",
+      "source_file": "third_party/veusz/veusz/widgets/textlabel.py",
+      "source_symbol": "TextLabel.addSettings:alignVert",
+      "notes": "Old house rule unspecified; pin native label default."
+    },
+    "band.fill_color": {
+      "status": "adapter_baseline",
+      "value": "#000000",
+      "source_file": "third_party/veusz/veusz/setting/collections.py",
+      "source_symbol": "BrushExtended.__init__:color -> Colors.foreground",
+      "notes": "No old scientific-band house rule; pinned polygon adapter baseline."
+    },
+    "band.fill_opacity": {
+      "status": "adapter_baseline",
+      "value": 1.0,
+      "source_file": "third_party/veusz/veusz/setting/collections.py",
+      "source_symbol": "BrushExtended.__init__:transparency",
+      "notes": "Opacity = (100 - transparency) / 100."
+    },
+    "band.border_color": {
+      "status": "adapter_baseline",
+      "value": "#000000",
+      "source_file": "third_party/veusz/veusz/setting/collections.py",
+      "source_symbol": "Line.__init__:color -> StyleSheet/Line/color -> foreground",
+      "notes": "Inherited native polygon outline; not an old band-specific house rule."
+    },
+    "band.border_width_pt": {
+      "status": "adapter_baseline",
+      "value": 1.2,
+      "source_file": "src/sciplot_core/studio_core/veusz_graph_setup.py",
+      "source_symbol": "create_veusz_page_and_graph:StyleSheet/Line/width",
+      "notes": "Native polygon Line inherits explicit document line width."
+    },
+    "bar.fill_colors": {
+      "status": "specified",
+      "value": {
+        "#222222": "#B7B7B7",
+        "#3568C0": "#AFC6ED",
+        "#C83E4D": "#F0B4BA",
+        "#2A9D8F": "#A7D9D2",
+        "#D99A24": "#EED59F",
+        "#7C9ED9": "#CCD9EF",
+        "#7B61A8": "#D0C5E0"
+      },
+      "source_file": "src/sciplot_core/policy/categorical.py",
+      "source_symbol": "CATEGORICAL_FILL_COLORS_BY_BASE",
+      "notes": "Old categorical family convention; differs from generic stroke.fill_alpha policy."
+    },
+    "bar.border_colors": {
+      "status": "specified",
+      "value": {
+        "#222222": "#696969",
+        "#3568C0": "#7898D1",
+        "#C83E4D": "#D97D87",
+        "#2A9D8F": "#67B7AC",
+        "#D99A24": "#E0B761",
+        "#7C9ED9": "#A7BCE0",
+        "#7B61A8": "#A999C2"
+      },
+      "source_file": "src/sciplot_core/policy/categorical.py",
+      "source_symbol": "CATEGORICAL_KEYLINE_COLORS_BY_BASE",
+      "notes": "Old categorical family convention; differs from generic stroke.fill_alpha policy."
+    },
+    "bar.border_width_pt": {
+      "status": "specified",
+      "value": 0.7,
+      "source_file": "src/sciplot_core/policy/categorical.py",
+      "source_symbol": "CATEGORICAL_KEYLINE_WIDTH_PT",
+      "notes": "Old categorical family convention; differs from generic stroke.fill_alpha policy."
+    },
+    "bar.fill_transparency": {
+      "status": "specified",
+      "value": 0,
+      "source_file": "src/sciplot_core/policy/categorical.py",
+      "source_symbol": "CATEGORICAL_BAR_FILL_TRANSPARENCY",
+      "notes": "Old categorical family convention; differs from generic stroke.fill_alpha policy."
+    },
+    "errorbar.cap_to_bar_ratio": {
+      "status": "specified",
+      "value": 0.5,
+      "source_file": "src/sciplot_core/policy/categorical.py",
+      "source_symbol": "CATEGORICAL_ERROR_CAP_TO_BAR_RATIO",
+      "notes": "Old categorical family convention; differs from generic stroke.fill_alpha policy."
+    },
+    "bar.width_fraction": {
+      "status": "specified",
+      "value": 0.32,
+      "source_file": "src/sciplot_core/policy/categorical.py",
+      "source_symbol": "CATEGORICAL_BAR_WIDTH_FRACTION",
+      "notes": "Old categorical family convention; differs from generic stroke.fill_alpha policy."
+    },
+    "errorbar.adapter_cap_width_pt": {
+      "status": "adapter_baseline",
+      "value": 4.0,
+      "source_file": "third_party/veusz/veusz/setting/collections.py",
+      "source_symbol": "ErrorBarLine.__init__:endsize",
+      "notes": "Old categorical physical cap unspecified; native XY cap spans +/- markerSize * endsize. Project markerSize comes from UNIFIED_MARKER_SIZE_PT. Actual categorical data-relative caps need explicit conversion."
+    },
+    "title.position": {
+      "status": "unspecified",
+      "value": "unspecified",
+      "source_file": "",
+      "source_symbol": "",
+      "notes": "No universal title position; existing label/direct-label conventions are figure-specific."
+    },
+    "title.font_weight": {
+      "status": "unspecified",
+      "value": "unspecified",
+      "source_file": "",
+      "source_symbol": "",
+      "notes": "No universal title weight explicitly set by generic native creation."
+    },
+    "annotation.anchor": {
+      "status": "unspecified",
+      "value": "unspecified",
+      "source_file": "",
+      "source_symbol": "",
+      "notes": "Anchors and alignment belong to each annotation; no universal override."
+    },
+    "errorbar.cap_width_pt": {
+      "status": "unspecified",
+      "value": "unspecified",
+      "source_file": "",
+      "source_symbol": "",
+      "notes": "Old categorical caps are data-width-relative, not a universal physical pt width."
+    },
+    "export.tiff_compression": {
+      "status": "unspecified",
+      "value": "unspecified",
+      "source_file": "",
+      "source_symbol": "",
+      "notes": "No compression override in old interface.Export call."
+    },
+    "export.veusz_pdf_font_embedding": {
+      "status": "unspecified",
+      "value": "unspecified",
+      "source_file": "",
+      "source_symbol": "",
+      "notes": "No explicit old Veusz font-embedding override; PDF fonttype=42 is Matplotlib policy only."
+    },
+    "composition.multi_panel": {
+      "status": "unspecified",
+      "value": "unspecified",
+      "source_file": "",
+      "source_symbol": "",
+      "notes": "No generic old multi-panel rule; use the separately named composition policy."
+    }
+  },
+  "content_hash": "cb9d4af22f1905ede7acc956ccbc9d664f4d9171a4dad9afb2ca878cf96cd821"
+}

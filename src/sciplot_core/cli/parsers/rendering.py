@@ -26,7 +26,7 @@ def register_rendering_commands(subparsers: Any) -> None:
     render_parser.add_argument(
         "--auto",
         action="store_true",
-        help="Apply the inspected recommendation's scientific defaults (template, axis scales, reversed axes). Explicit --options still win.",
+        help="Use the recognized scientific rule and existing production workflow, including its figure plan and family defaults. Explicit --options still win.",
     )
 
     render_parser.add_argument("--out", type=Path, required=True)

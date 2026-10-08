@@ -160,19 +160,39 @@ def _semantic_only_inspection_payload(
     inspection_error: Exception,
 ) -> dict[str, Any]:
     rule_id = str(semantics.get("rule_id") or "")
-    if rule_id == "performance_comparison":
+    directory_plan = None
+    failed_directory_plan = None
+    if source.is_dir():
+        # Directory names are only candidates. Let the existing scientific
+        # owner validate the actual files without preparing or rendering them.
+        from sciplot_core.plan_preview import build_plan_preview
+
+        try:
+            candidate_plan = build_plan_preview(source, request={"rule_id": rule_id})
+            if candidate_plan["status"] == "planned" and candidate_plan.get("blocker") is None:
+                directory_plan = candidate_plan
+            else:
+                if candidate_plan["status"] == "blocked":
+                    failed_directory_plan = candidate_plan
+                inspection_error = ValueError(str(candidate_plan.get("blocker") or "No validated directory plan."))
+        except (OSError, TypeError, ValueError) as exc:
+            inspection_error = exc
+    if (rule_id == "performance_comparison" and not source.is_dir()) or directory_plan is not None:
         recommendation = _material_rule_recommendation(semantics)
-        warning = (
+        family = str(semantics.get("semantic_family") or rule_id)
+        warning = ("The generic table reader handles files; the existing scientific "
+                   "owner validated this directory and its source-bound FigurePlan."
+                   if directory_plan is not None else
             "The generic table reader does not implement the explicit "
             "performance-comparison long-table shape; the validated SciPlot "
             "source contract is authoritative."
         )
         return {
             "source": str(source),
-            "model": "performance_comparison",
-            "model_label": "performance_comparison (performance_comparison)",
+            "model": family,
+            "model_label": f"{family} ({rule_id})",
             "recommendations": [recommendation],
-            "canonical_templates": ["scatter", "polar_curve"],
+            "canonical_templates": ([recommendation] if directory_plan is not None else ["scatter", "polar_curve"]),
             "advanced_templates": [],
             "recommendation_confidence": float(semantics.get("confidence") or 0.0),
             "recommendation_summary": str(semantics.get("reason") or ""),
@@ -181,7 +201,8 @@ def _semantic_only_inspection_payload(
                 "status": "ready_rule_authoritative",
                 "authoritative_source": "sciplot_material_rule",
                 "rule_id": rule_id,
-                "generic_inspection_status": "unsupported_explicit_shape",
+                "generic_inspection_status": ("validated_scientific_directory" if directory_plan is not None
+                                              else "unsupported_explicit_shape"),
             },
             "inspection_warning_provenance": [
                 {
@@ -219,6 +240,7 @@ def _semantic_only_inspection_payload(
     )
     return {
         "source": str(source),
+        **({"scientific_plan": failed_directory_plan} if failed_directory_plan is not None else {}),
         "model": semantic_family,
         "model_label": f"{semantic_family} ({rule_id}; unverified candidate)",
         # Keep executable recommendation surfaces empty.  Consumers such as

@@ -20,6 +20,7 @@ from sciplot_core.studio_core.source_update_commit import (
     project_inventory,
 )
 from sciplot_core.veusz_runtime import veusz_worker_environment
+from sciplot_core.native_process import run_worker
 
 
 def value_digest(value: object) -> str:
@@ -75,12 +76,12 @@ def new_preview_directory(project: Path, target: Path) -> Path:
 
 
 def run_document_worker(*arguments: object) -> dict[str, Any]:
-    completed = subprocess.run(
+    completed = run_worker(
         [sys.executable, "-m", "sciplot_core.veusz_worker", *map(str, arguments)],
         capture_output=True,
         text=True,
         timeout=120,
-        env=veusz_worker_environment(),
+        env=veusz_worker_environment(), cold_runner=subprocess.run,
     )
     if completed.returncode:
         detail = completed.stderr.strip().splitlines()

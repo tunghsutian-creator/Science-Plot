@@ -1,0 +1,713 @@
+{
+  "idempotency_key": "mechanical-v1",
+  "rule_id": "tensile_curve",
+  "template_definition": {
+    "kind": "sciplot_figure_template",
+    "schema_version": 2,
+    "template_id": "mechanical-v1",
+    "figure_spec": {
+      "kind": "sciplot_figure_spec",
+      "schema_version": 2,
+      "id": "figure:mechanical",
+      "scales": [
+        {
+          "id": "scale:x",
+          "dimension": "x",
+          "transform": "linear",
+          "domain": [
+            0.5,
+            4.5
+          ],
+          "unit": "1",
+          "quantity": "category_position",
+          "direction": "ascending"
+        },
+        {
+          "id": "scale:y",
+          "dimension": "y",
+          "transform": "linear",
+          "domain": [
+            0.0,
+            59.40923076923077
+          ],
+          "unit": "MPa",
+          "quantity": "tensile_strength",
+          "direction": "ascending"
+        }
+      ],
+      "views": [
+        {
+          "id": "view:main",
+          "panel_label": null,
+          "style": {},
+          "layers": [
+            {
+              "id": "layer:E0",
+              "dataset_id": "summary:E0",
+              "mappings": {
+                "x": "column:0",
+                "y": "column:1",
+                "y_low": "column:2",
+                "y_high": "column:3"
+              },
+              "mapping_semantics": {
+                "x": "category_position",
+                "y": "tensile_strength"
+              },
+              "x_scale": "scale:x",
+              "y_scale": "scale:y",
+              "role": "mean_sample_sd",
+              "label": "E0",
+              "legend": {
+                "visible": false,
+                "label": "E0"
+              },
+              "z_order": 0,
+              "style": {},
+              "marks": [
+                {
+                  "id": "mark:E0:bar",
+                  "type": "bar",
+                  "baseline": 0,
+                  "width_data": 0.32,
+                  "style": {
+                    "fill_color": "#B7B7B7",
+                    "fill_opacity": 1,
+                    "border_color": "#696969",
+                    "border_width_pt": 0.7,
+                    "baseline_border_visible": false
+                  }
+                },
+                {
+                  "id": "mark:E0:error",
+                  "type": "errorbar",
+                  "style": {
+                    "line_color": "#111111",
+                    "line_width_pt": 1.2,
+                    "cap_width_pt": 4.705511811023623
+                  }
+                }
+              ]
+            },
+            {
+              "id": "layer:E2",
+              "dataset_id": "summary:E2",
+              "mappings": {
+                "x": "column:0",
+                "y": "column:1",
+                "y_low": "column:2",
+                "y_high": "column:3"
+              },
+              "mapping_semantics": {
+                "x": "category_position",
+                "y": "tensile_strength"
+              },
+              "x_scale": "scale:x",
+              "y_scale": "scale:y",
+              "role": "mean_sample_sd",
+              "label": "E2",
+              "legend": {
+                "visible": false,
+                "label": "E2"
+              },
+              "z_order": -1,
+              "style": {},
+              "marks": [
+                {
+                  "id": "mark:E2:bar",
+                  "type": "bar",
+                  "baseline": 0,
+                  "width_data": 0.32,
+                  "style": {
+                    "fill_color": "#AFC6ED",
+                    "fill_opacity": 1,
+                    "border_color": "#7898D1",
+                    "border_width_pt": 0.7,
+                    "baseline_border_visible": false
+                  }
+                },
+                {
+                  "id": "mark:E2:error",
+                  "type": "errorbar",
+                  "style": {
+                    "line_color": "#111111",
+                    "line_width_pt": 1.2,
+                    "cap_width_pt": 4.705511811023623
+                  }
+                }
+              ]
+            },
+            {
+              "id": "layer:E3",
+              "dataset_id": "summary:E3",
+              "mappings": {
+                "x": "column:0",
+                "y": "column:1",
+                "y_low": "column:2",
+                "y_high": "column:3"
+              },
+              "mapping_semantics": {
+                "x": "category_position",
+                "y": "tensile_strength"
+              },
+              "x_scale": "scale:x",
+              "y_scale": "scale:y",
+              "role": "mean_sample_sd",
+              "label": "E3",
+              "legend": {
+                "visible": false,
+                "label": "E3"
+              },
+              "z_order": -2,
+              "style": {},
+              "marks": [
+                {
+                  "id": "mark:E3:bar",
+                  "type": "bar",
+                  "baseline": 0,
+                  "width_data": 0.32,
+                  "style": {
+                    "fill_color": "#F0B4BA",
+                    "fill_opacity": 1,
+                    "border_color": "#D97D87",
+                    "border_width_pt": 0.7,
+                    "baseline_border_visible": false
+                  }
+                },
+                {
+                  "id": "mark:E3:error",
+                  "type": "errorbar",
+                  "style": {
+                    "line_color": "#111111",
+                    "line_width_pt": 1.2,
+                    "cap_width_pt": 4.705511811023623
+                  }
+                }
+              ]
+            },
+            {
+              "id": "layer:E4",
+              "dataset_id": "summary:E4",
+              "mappings": {
+                "x": "column:0",
+                "y": "column:1",
+                "y_low": "column:2",
+                "y_high": "column:3"
+              },
+              "mapping_semantics": {
+                "x": "category_position",
+                "y": "tensile_strength"
+              },
+              "x_scale": "scale:x",
+              "y_scale": "scale:y",
+              "role": "mean_sample_sd",
+              "label": "E4",
+              "legend": {
+                "visible": false,
+                "label": "E4"
+              },
+              "z_order": -3,
+              "style": {},
+              "marks": [
+                {
+                  "id": "mark:E4:bar",
+                  "type": "bar",
+                  "baseline": 0,
+                  "width_data": 0.32,
+                  "style": {
+                    "fill_color": "#A7D9D2",
+                    "fill_opacity": 1,
+                    "border_color": "#67B7AC",
+                    "border_width_pt": 0.7,
+                    "baseline_border_visible": false
+                  }
+                },
+                {
+                  "id": "mark:E4:error",
+                  "type": "errorbar",
+                  "style": {
+                    "line_color": "#111111",
+                    "line_width_pt": 1.2,
+                    "cap_width_pt": 4.705511811023623
+                  }
+                }
+              ]
+            }
+          ],
+          "axes": [
+            {
+              "id": "axis:x",
+              "scale_id": "scale:x",
+              "side": "bottom",
+              "label": "Sample",
+              "visible": true,
+              "label_visible": true,
+              "ticks": [
+                1.0,
+                2.0,
+                3.0,
+                4.0
+              ],
+              "style": {},
+              "tick_labels": [
+                "E0",
+                "E2",
+                "E3",
+                "E4"
+              ]
+            },
+            {
+              "id": "axis:y",
+              "scale_id": "scale:y",
+              "side": "left",
+              "label": "Tensile strength (MPa)",
+              "visible": true,
+              "label_visible": true,
+              "ticks": [
+                0.0,
+                10.0,
+                20.0,
+                30.0,
+                40.0,
+                50.0
+              ],
+              "style": {}
+            }
+          ]
+        }
+      ],
+      "composition": {
+        "kind": "single",
+        "rows": 1,
+        "columns": 1,
+        "cells": [
+          {
+            "view_id": "view:main",
+            "row": 0,
+            "column": 0,
+            "row_span": 1,
+            "column_span": 1
+          }
+        ],
+        "column_weights": [
+          1
+        ],
+        "row_weights": [
+          1
+        ],
+        "resolve": []
+      },
+      "layout": {
+        "width_mm": 60,
+        "height_mm": 55
+      },
+      "theme": {
+        "project": {},
+        "figure": {}
+      },
+      "guides": [],
+      "annotations": []
+    }
+  },
+  "data_binding": {
+    "kind": "sciplot_binding",
+    "schema_version": 1,
+    "template_id": "mechanical-v1",
+    "data_sources": [
+      {
+        "source_id": "summary:E0",
+        "path": "sources/E0-summary.csv",
+        "sha256": "20d0d1f349af230e397dca29b97d1f52104b200cacc0dc49e6104323faf1f37d",
+        "table_selection": {
+          "sheet": null,
+          "header_rows": [
+            0
+          ],
+          "unit_row": 1,
+          "sample_row": 2,
+          "data_start_row": 3,
+          "data_end_row": 8
+        }
+      },
+      {
+        "source_id": "summary:E2",
+        "path": "sources/E2-summary.csv",
+        "sha256": "1c5fe61c24ec89ca0b2afeda54898eecb9a1382972c989cd9a1f2abfbbb9aa6b",
+        "table_selection": {
+          "sheet": null,
+          "header_rows": [
+            0
+          ],
+          "unit_row": 1,
+          "sample_row": 2,
+          "data_start_row": 3,
+          "data_end_row": 8
+        }
+      },
+      {
+        "source_id": "summary:E3",
+        "path": "sources/E3-summary.csv",
+        "sha256": "c291eab83f44e699fefd70e2cae0edb74a1736ed8cb3f130280208c851504796",
+        "table_selection": {
+          "sheet": null,
+          "header_rows": [
+            0
+          ],
+          "unit_row": 1,
+          "sample_row": 2,
+          "data_start_row": 3,
+          "data_end_row": 8
+        }
+      },
+      {
+        "source_id": "summary:E4",
+        "path": "sources/E4-summary.csv",
+        "sha256": "5f372220d2d00c88b0724978434dd88cdd01869878f2eaa8ec2cab5a97a769d9",
+        "table_selection": {
+          "sheet": null,
+          "header_rows": [
+            0
+          ],
+          "unit_row": 1,
+          "sample_row": 2,
+          "data_start_row": 3,
+          "data_end_row": 8
+        }
+      }
+    ],
+    "slots": {
+      "E0": {
+        "series_id": "layer:E0",
+        "sample": "E0",
+        "x": {
+          "source_id": "summary:E0",
+          "column": "Category position",
+          "column_index": 0
+        },
+        "y": {
+          "source_id": "summary:E0",
+          "column": "Tensile strength mean",
+          "column_index": 1
+        },
+        "x_unit": "1",
+        "y_unit": "MPa"
+      },
+      "E2": {
+        "series_id": "layer:E2",
+        "sample": "E2",
+        "x": {
+          "source_id": "summary:E2",
+          "column": "Category position",
+          "column_index": 0
+        },
+        "y": {
+          "source_id": "summary:E2",
+          "column": "Tensile strength mean",
+          "column_index": 1
+        },
+        "x_unit": "1",
+        "y_unit": "MPa"
+      },
+      "E3": {
+        "series_id": "layer:E3",
+        "sample": "E3",
+        "x": {
+          "source_id": "summary:E3",
+          "column": "Category position",
+          "column_index": 0
+        },
+        "y": {
+          "source_id": "summary:E3",
+          "column": "Tensile strength mean",
+          "column_index": 1
+        },
+        "x_unit": "1",
+        "y_unit": "MPa"
+      },
+      "E4": {
+        "series_id": "layer:E4",
+        "sample": "E4",
+        "x": {
+          "source_id": "summary:E4",
+          "column": "Category position",
+          "column_index": 0
+        },
+        "y": {
+          "source_id": "summary:E4",
+          "column": "Tensile strength mean",
+          "column_index": 1
+        },
+        "x_unit": "1",
+        "y_unit": "MPa"
+      }
+    },
+    "transforms": [],
+    "guards": {},
+    "provenance": {
+      "profile_id": "mechanical-v1",
+      "historical_transform": {
+        "operation": "literal_projection_of_legacy_scientific_owner_outputs",
+        "reexecuted": false,
+        "original_operation": "arithmetic_mean_and_sample_standard_deviation_n_minus_1",
+        "prepared_replicates": {
+          "path": "sources/replicates.csv",
+          "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8"
+        },
+        "original_workbooks": [
+          {
+            "path": "raw/E0 2mm.xlsx",
+            "sha256": "9454641afddc15d995bf5cac9099f04b44a35fe08bf1c1678a1e10133b007bed"
+          },
+          {
+            "path": "raw/E2 2mm.xlsx",
+            "sha256": "0fa7cd800ac2485184436427f8b1c0bf2bd131a1e3765bd54da630316188ad10"
+          },
+          {
+            "path": "raw/E3 2mm.xlsx",
+            "sha256": "b37b9ba6aaba9539f962762657fade4d3d3338cde5af475a56f1c59f36e822b3"
+          },
+          {
+            "path": "raw/E4 2mm.xlsx",
+            "sha256": "5eb5177fc53b86ce950e81c34950a9f0041952f030ebd8ba290c831163b194a1"
+          }
+        ],
+        "historical_ledger": {
+          "path": "provenance/transform-ledger.json",
+          "sha256": "96fc47760723331ef2f792d79c692e20a9c6dc98d486af15ba708a5b16d844ee"
+        },
+        "legacy_spec": {
+          "path": "legacy/spec.json",
+          "sha256": "88a8447aa37418e7b175094a91c18be889a43fc635c0d7272c0c8d28586d7f69"
+        },
+        "native_snapshot": {
+          "path": "accepted.vsz",
+          "sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb"
+        },
+        "summary_projection": [
+          {
+            "sample": "E0",
+            "summary_source": "sources/E0-summary.csv",
+            "summary_sha256": "20d0d1f349af230e397dca29b97d1f52104b200cacc0dc49e6104323faf1f37d",
+            "source_owner_group": "legacy/spec.json#categorical/groups/0",
+            "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_1_1",
+            "raw_replicate_column_zero_based": 0,
+            "raw_count": 5,
+            "mean": 34.078,
+            "sd": 1.2417205804849973,
+            "values": [
+              1.0,
+              34.078,
+              32.83627941951501,
+              35.319720580485
+            ],
+            "auxiliary_raw_column_zero_based": 4,
+            "raw_values": [
+              34.13,
+              32.67,
+              36.0,
+              33.39,
+              34.2
+            ],
+            "summary_missing_rows": [
+              4,
+              5,
+              6,
+              7
+            ],
+            "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+            "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+          },
+          {
+            "sample": "E2",
+            "summary_source": "sources/E2-summary.csv",
+            "summary_sha256": "1c5fe61c24ec89ca0b2afeda54898eecb9a1382972c989cd9a1f2abfbbb9aa6b",
+            "source_owner_group": "legacy/spec.json#categorical/groups/1",
+            "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_2_1",
+            "raw_replicate_column_zero_based": 1,
+            "raw_count": 5,
+            "mean": 35.538,
+            "sd": 0.6279888534042614,
+            "values": [
+              2.0,
+              35.538,
+              34.910011146595735,
+              36.16598885340426
+            ],
+            "auxiliary_raw_column_zero_based": 4,
+            "raw_values": [
+              34.95,
+              35.16,
+              35.51,
+              36.58,
+              35.49
+            ],
+            "summary_missing_rows": [
+              4,
+              5,
+              6,
+              7
+            ],
+            "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+            "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+          },
+          {
+            "sample": "E3",
+            "summary_source": "sources/E3-summary.csv",
+            "summary_sha256": "c291eab83f44e699fefd70e2cae0edb74a1736ed8cb3f130280208c851504796",
+            "source_owner_group": "legacy/spec.json#categorical/groups/2",
+            "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_3_1",
+            "raw_replicate_column_zero_based": 2,
+            "raw_count": 5,
+            "mean": 35.484,
+            "sd": 0.8302891062756409,
+            "values": [
+              3.0,
+              35.484,
+              34.65371089372436,
+              36.314289106275645
+            ],
+            "auxiliary_raw_column_zero_based": 4,
+            "raw_values": [
+              35.03,
+              36.49,
+              36.03,
+              34.37,
+              35.5
+            ],
+            "summary_missing_rows": [
+              4,
+              5,
+              6,
+              7
+            ],
+            "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+            "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+          },
+          {
+            "sample": "E4",
+            "summary_source": "sources/E4-summary.csv",
+            "summary_sha256": "5f372220d2d00c88b0724978434dd88cdd01869878f2eaa8ec2cab5a97a769d9",
+            "source_owner_group": "legacy/spec.json#categorical/groups/3",
+            "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_4_1",
+            "raw_replicate_column_zero_based": 3,
+            "raw_count": 5,
+            "mean": 38.616,
+            "sd": 0.7982042345164566,
+            "values": [
+              4.0,
+              38.616,
+              37.817795765483545,
+              39.414204234516454
+            ],
+            "auxiliary_raw_column_zero_based": 4,
+            "raw_values": [
+              37.23,
+              39.13,
+              38.64,
+              39.0,
+              39.08
+            ],
+            "summary_missing_rows": [
+              4,
+              5,
+              6,
+              7
+            ],
+            "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+            "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+          }
+        ],
+        "historical_owner": "sciplot_core.semantic.prepare_semantic_source / existing categorical mean-and-sample-SD owner",
+        "current_owner_reference": [
+          {
+            "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/semantic_sources/tensile_workbooks.py",
+            "symbol": "_read_tensile_workbook_directory",
+            "file_sha256": "c7a6e55d4acd30ecad83c7d907dd07900fb8d4c6065b446f3782a3be56739958"
+          },
+          {
+            "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/studio_render/replicate_distribution_contract.py",
+            "symbol": "_replicate_distribution_contract",
+            "file_sha256": "9fd806bce132bc051cccbbc5901831387750e549bb09adb919e3a582486d87e3"
+          },
+          {
+            "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/studio_render/categorical_values.py",
+            "symbol": "_mean_and_sample_sd",
+            "file_sha256": "02afb05feba1be80ef55d7adf71f571dd2aba39b840fd0d2ef25bd586ecd2508"
+          },
+          {
+            "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/studio_core/veusz_bar_error.py",
+            "symbol": "add_veusz_error_bars",
+            "file_sha256": "1060487be2c648ab711230f45a4f31a9458e54c59e4c2dd49815ee29f5340a0b"
+          }
+        ],
+        "owner_reference_scope": "Current source hash documents available shared owner only; not asserted to be exact 2026-07-24 implementation bytes.",
+        "raw_values": [
+          {
+            "label": "E0",
+            "position": 1.0,
+            "replicate_count": 5,
+            "raw_values": [
+              34.13,
+              32.67,
+              36.0,
+              33.39,
+              34.2
+            ],
+            "bar_mean": 34.078,
+            "bar_error": 1.2417205804849973,
+            "bar_error_statistic": "sd",
+            "raw_points_visible": false
+          },
+          {
+            "label": "E2",
+            "position": 2.0,
+            "replicate_count": 5,
+            "raw_values": [
+              34.95,
+              35.16,
+              35.51,
+              36.58,
+              35.49
+            ],
+            "bar_mean": 35.538,
+            "bar_error": 0.6279888534042614,
+            "bar_error_statistic": "sd",
+            "raw_points_visible": false
+          },
+          {
+            "label": "E3",
+            "position": 3.0,
+            "replicate_count": 5,
+            "raw_values": [
+              35.03,
+              36.49,
+              36.03,
+              34.37,
+              35.5
+            ],
+            "bar_mean": 35.484,
+            "bar_error": 0.8302891062756409,
+            "bar_error_statistic": "sd",
+            "raw_points_visible": false
+          },
+          {
+            "label": "E4",
+            "position": 4.0,
+            "replicate_count": 5,
+            "raw_values": [
+              37.23,
+              39.13,
+              38.64,
+              39.0,
+              39.08
+            ],
+            "bar_mean": 38.616,
+            "bar_error": 0.7982042345164566,
+            "bar_error_statistic": "sd",
+            "raw_points_visible": false
+          }
+        ]
+      }
+    }
+  }
+}

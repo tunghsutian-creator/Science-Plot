@@ -11,6 +11,22 @@ from sciplot_core.setting_catalog import (
 from sciplot_core.assistant_provider import (
     AssistantRequest,
 )
+from sciplot_core.assistant_provider.contracts import _MAX_CAPABILITY_CHOICES
+
+
+def _bounded_font_choices(field: dict[str, Any]) -> dict[str, Any]:
+    """Keep large installed font inventories inside the existing Assistant contract.
+
+    The native Inspector still gets the full catalog. Current native state is
+    never changed, and the selected installed font remains an advertised option.
+    """
+    choices = field["choices"]
+    if not field["setting_path"].endswith("/font") or len(choices) <= _MAX_CAPABILITY_CHOICES:
+        return field
+    preferred = [value for value in (field["current_value"], "Arial", "Helvetica", "Times New Roman") if value in choices]
+    bounded = list(dict.fromkeys([*preferred, *choices]))[:_MAX_CAPABILITY_CHOICES]
+    note = "Font choices are bounded here; the native Inspector retains all installed fonts."
+    return {**field, "choices": bounded, "help_text": field["help_text"][:900] + " " + note}
 
 
 class SelectionMixin:
@@ -81,7 +97,7 @@ class SelectionMixin:
     def _editing_capabilities(self, widget: Any) -> dict[str, Any]:
         target_id = self._object_id(widget)
         operations = [
-            {"operation_type": "set_setting", "target_id": target_id, **field}
+            {"operation_type": "set_setting", "target_id": target_id, **_bounded_font_choices(field)}
             for field in editable_fields(self.document, widget)
         ]
         return {

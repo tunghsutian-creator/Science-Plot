@@ -132,6 +132,22 @@ def test_workflow_single_curve_labels_come_from_the_resolved_source() -> None:
     assert bound["render_options"]["y_label_override"] == "Transmittance (%)"
 
 
+def test_legacy_workflow_preserves_explicit_provenance_before_family_defaults_merge() -> None:
+    from sciplot_core.studio_core.figure_requests import _rheology_frequency_figure_request
+
+    for options, expected_scale in (({}, "linear"), ({"yscale": "log"}, "log")):
+        bound = bind_workflow_semantic_render_options(
+            request={"rule_id": "rheology_frequency_sweep", "render_options": options},
+            semantic={"template": "point_line", "render_options": {
+                "yscale": "log", "xscale": "log", "y_tick_format": "%Ve"}},
+            figure_plan=None,
+        )
+        assert bound["explicit_render_option_keys"] == sorted(options)
+        metric = _rheology_frequency_figure_request(bound, {
+            "x_metric": "angular_frequency", "y_metric": "loss_factor", "default_template": "point_line"})
+        assert metric["render_options"]["yscale"] == expected_scale
+
+
 def test_workflow_render_contract_ignores_non_object_option_payloads() -> None:
     bound = bind_workflow_semantic_render_options(
         request={"render_options": ["size", "60x55"]},

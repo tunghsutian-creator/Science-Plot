@@ -1,0 +1,12 @@
+{
+  "status": "applied",
+  "document_relative": "studio/figures/loss_modulus_vs_frequency.vsz",
+  "base_sha256": "3329d36ae6901ad984d880630d2b25bde649376d8506df24e0a7036b73fb2edc",
+  "result_sha256": "3314c6bd844ddc00f078ac7c3819ec5449a4d56e1ef6c48a31dfe4bff9c5dbee",
+  "companion": {
+    "relative": "studio/figures/loss_modulus_vs_frequency.spec.json",
+    "base_sha256": "eb62c9a000445e59718484c49d33c62338337811d5aa9987a751cf8c5f950ecf",
+    "result_sha256": "8730292a84fd5cc44458be993b4292d1e6baabd7ed06fbdea867097b91386610",
+    "mode": 420
+  }
+}

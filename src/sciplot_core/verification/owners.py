@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sciplot_core.verification.axis_owners import GENERIC_AXIS_OWNERS
 from sciplot_core.verification.live_editor_owner import LIVE_EDITOR_OWNER
+from sciplot_core.verification.plot_owners import PLOT_OWNER
 from sciplot_core.verification.external_ai_owners import EXTERNAL_AI_OWNERS
 from sciplot_core.verification.task_control_owners import TASK_CONTROL_OWNERS
 from sciplot_core.verification.owner_model import ChangedOwner
@@ -28,6 +29,7 @@ from sciplot_core.verification.type_gate_owners import (
 CHANGED_OWNERS = (
     RHEOLOGY_TTS_OWNER,
     LIVE_EDITOR_OWNER,
+    PLOT_OWNER,
     ChangedOwner(
         owner_id="documentation_contract",
         path_prefixes=("docs/", "third_party/tavotto-ui/"),
@@ -37,6 +39,8 @@ CHANGED_OWNERS = (
                 ".gitignore",
                 "DEVELOPMENT_LOG.md",
                 "DEVELOPMENT_ROADMAP.md",
+                "OLD_RENDERING_CONTRACT.md",
+                "visual_drift_report.md",
                 "README.md",
                 "skill/references/external-control.md",
                 "skill/references/advanced-workflows.md",
@@ -224,6 +228,7 @@ CHANGED_OWNERS = (
                 "src/sciplot_core/semantic_sources/tga_transform.py",
                 "src/sciplot_core/semantic_sources/tensile_export_identity.py",
                 "src/sciplot_core/semantic_sources/tensile_workbooks.py",
+                "src/sciplot_core/semantic_sources/tensile_exports.py",
                 "src/sciplot_core/source_tables/raw_readers.py",
                 "src/sciplot_core/source_tables/read_session.py",
                 "src/sciplot_core/source_tables/__init__.py",
@@ -299,6 +304,7 @@ CHANGED_OWNERS = (
             "tests/test_scientific_transform_contract.py",
             "tests/test_semantic_multitest_contract.py",
             "tests/test_tensile_workbook_directory.py",
+            "tests/test_source_recognition_contract.py",
             "tests/test_semantic_preparation_dispatch.py",
             "tests/test_studio_project_context.py",
             "tests/test_workflow_figure_plan_spine.py",

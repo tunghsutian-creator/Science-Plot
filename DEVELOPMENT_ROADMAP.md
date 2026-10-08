@@ -1,7 +1,56 @@
 # SciPlot unfinished development priorities
 
-Status: 2026-09-26. External AI is the task interface. Current behavior belongs
+Status: 2026-10-08. External AI is the task interface. Current behavior belongs
 in README and live capabilities; this file lists unfinished, closable work.
+
+## Semantic document migration after the verified presentation slice
+
+The 2026-10-07 slice introduces a versioned scientific/presentation model, stable
+semantic patches, durable revisions/recovery, audited Veusz shadow import and a
+persistent CLI/MCP service. Its A–G acceptance covers safe title/width edits,
+scientific/stale-revision rejection, source invalidation, idempotency and separate
+export recovery. This changes the ordinary supported-edit entry; it does not mean
+every scientific plot or native setting has been migrated.
+
+The supported ManagedPlot contracts now have document authority,
+resolved PlotIR, disposable backend artifacts, typed deterministic transforms,
+fixed-file external executors, per-source/transform dependency invalidation and
+ExternalMutation classification. Real rebuild acceptance includes the public CLI
+and MCP path. Legacy imports and source-only task creation remain compatibility;
+no automatic promotion is intended.
+
+FigureSpec/PlotIR v2 now covers generic multiple scales/views, seven typed marks,
+weighted physical layout, scoped themes, guides and actual native-text bounds QA.
+Real dual-Y rheology, 2x2 mixed research data, impact uncertainty/points and spectrum
+annotation slices pass full rebuild. This closes the bounded grammar slice, not
+arbitrary native feature parity or journal acceptance.
+
+The visual compatibility gate now compares retained production legacy rendering
+against new contract-bound FigureTemplate v2, independently of self-rebuild.
+Five real single-panel line/point/spectrum cases match effective structure and
+native pixels; immutable extracted house style and a separate composition policy
+replace unrecorded visual defaults. See the root rendering-contract/drift reports.
+Real historical mechanical bars/errorbar caps and separate PP frequency-sweep
+G′/G″ now have fixed three-way golden profiles; existing FTIR/NMR remain green.
+See [research compatibility profiles](docs/RESEARCH_COMPATIBILITY_PROFILES.md).
+Remaining visual acceptance includes mechanical visible individual points/legends,
+a historically delivered dual-Y golden, other legacy families, multi-panel quality,
+additional font/runtime environments and hidden channels before exposing them.
+Historical unbound revisions and explicit v1 templates are not silently restyled.
+
+Remaining expansion requires equivalent full-rebuild evidence: symlog/other scale
+transforms, facets/repeat, spanning/sparse grids, multiple figure legends, colorbars,
+image/area marks, broader named scientific templates, explicitly pinned additional
+resources and resolved font-file identities, richer continuous geometry collision
+checks, known managed external-delta adoption and explicit authority conversion.
+Non-deterministic executor adoption and uncertain external-execution reconciliation
+need their own durable contracts. Background file observation remains separate;
+current exact byte checks run when requests use files.
+
+Exit: each added capability has a real native round-trip and failure-recovery
+case; template instantiation preserves supplied data/units and requested style;
+new scientific nodes carry an explicit versioned execution/decision contract.
+Keep local timings separate from external-model tokens and end-to-end user time.
 
 ## 1. Independent beginner and installation acceptance
 

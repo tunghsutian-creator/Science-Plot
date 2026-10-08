@@ -17,6 +17,8 @@ from sciplot_core.figure_plan import (
 )
 from sciplot_core.preparation_source_attestation import PreparationSourceAttestation
 from sciplot_core.render import render_to_dir
+from sciplot_core.studio_core.figure_requests import _rheology_frequency_figure_request
+from sciplot_core.studio_core.figure_task_evidence import figure_queue_item_from_task
 
 from sciplot_core.workflow.bundle_exports import _rename_metric_exports
 from sciplot_core.workflow.rheology_task_sources import (
@@ -145,6 +147,16 @@ def _render_veusz_sweep_bundle(
                     "source has no exact selected FigureTask."
                 )
             task_request = request_for_figure_task(request, task) if task else request
+            if prefix == "freq":
+                figure = (figure_queue_item_from_task(task) if task else {
+                    "x_metric": record.render_options["x_metric"],
+                    "y_metric": record.render_options["y_metric"],
+                    "default_template": str(request.get("template") or "point_line"),
+                })
+                task_request = _rheology_frequency_figure_request(
+                    {**task_request, "render_options": metric_render_options}, figure,
+                )
+                metric_render_options = task_request["render_options"]
             request_context = {
                 **task_request,
                 "explicit_render_option_keys": request.get(

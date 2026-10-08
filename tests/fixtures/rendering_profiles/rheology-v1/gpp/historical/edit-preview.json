@@ -1,0 +1,170 @@
+{
+  "kind": "sciplot_document_edit_preview",
+  "version": 2,
+  "status": "ready",
+  "project": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描",
+  "figure_id": "loss_modulus_vs_frequency",
+  "document": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/studio/figures/loss_modulus_vs_frequency.vsz",
+  "document_sha256": "3329d36ae6901ad984d880630d2b25bde649376d8506df24e0a7036b73fb2edc",
+  "base_state": {
+    "project_files": {
+      "Export_Edited_Veusz.command": "31ac67a316063362a2e8ce77994419b534039608951cdbac0b69dcdc3219392d",
+      "FS_频率扫描.sciplot.json": "d30bb1c6d2c254047f68130fd6e1cb0c99f1e3630307da0a8368171a5a347340",
+      "Open_in_SciPlot_Studio.command": "520877c253140880d3c9ea7c05f28974e4de9e48383529a9ae2c40ddbd5d9804",
+      "Open_in_Veusz.command": "72d15504eeb1d55709ad9fc6a35bc16c90101e7d533d9a9b7cef20bde16b727d",
+      "intake_manifest.json": "d30bb1c6d2c254047f68130fd6e1cb0c99f1e3630307da0a8368171a5a347340",
+      "plot_request.json": "57ca5bb34d62a9c92d5f6d23e1a4e584fa6f529141443ba1a0982c89b9c3f8a1",
+      "raw/PP-5UDC/PP-5UDC.csv": "c6a570000b8198d003133b1e904aa05cb99c166b8f2a50fac986b23e6f4e36b9",
+      "raw/PP_3155/PP 3155.csv": "2c1d320760fa96b425b757abbf8564ce4d797ba09691120d1c3735427b244295",
+      "source/PP 3155__PP 3155.csv": "2c1d320760fa96b425b757abbf8564ce4d797ba09691120d1c3735427b244295",
+      "source/PP-5UDC__PP-5UDC.csv": "c6a570000b8198d003133b1e904aa05cb99c166b8f2a50fac986b23e6f4e36b9",
+      "studio/document.vsz": "e56adc7001fb98ec239d6e983ba02cc973ed63e4d43a356173d99febafd491f7",
+      "studio/exports/document.pdf": "2b7b891055cd76be3b354c090a06d92c6e26036b66b38dcd6fe419089c08d50a",
+      "studio/exports/document_300dpi.tiff": "3ed33e865497a6d8026001def6269539cfeda75c8b895f95f7fb1f8c7cdfbd19",
+      "studio/exports/figure_set/complex_viscosity_vs_frequency.pdf": "dcdd7c63013e5536c96e3f1e68c5028525d332a55bd49fd047de8cf11c65a159",
+      "studio/exports/figure_set/complex_viscosity_vs_frequency_300dpi.tiff": "6b91894b54c08035a5cbeaf6797db4616a54971d9d53db61a65118f59328aa4d",
+      "studio/exports/figure_set/loss_factor_vs_frequency.pdf": "048635491fdf13055d58384e560592f08e8c1a1a3cd7b3901c6c308a88f3130c",
+      "studio/exports/figure_set/loss_factor_vs_frequency_300dpi.tiff": "02d4f91ccafe65535e91c6823cf15360c07ae83a182d37847fe6957dda06284b",
+      "studio/exports/figure_set/loss_modulus_vs_frequency.pdf": "5f41041d0b90b3df62104f4273651e657befbb7d3e2006204cf82b0d7f245ca7",
+      "studio/exports/figure_set/loss_modulus_vs_frequency_300dpi.tiff": "8fb10143f26be37d306ac27226fd0a0843c6a15f559590deea00996db52f1481",
+      "studio/exports/logs/veusz_export_stderr.log": "f1b730bf7200441888362f862a4f7d11289ca7b36a3ccd3c3765cbecd4ee7de9",
+      "studio/figure_set.json": "03ff7b67734c222089c30b86e993d09a87a93a91d2fe8bd3acd04ca203bfaede",
+      "studio/figures/complex_viscosity_vs_frequency.spec.json": "db09deb4153ca780dab3c12cd9281ce2ec374addd300290d8d0d63a3a544372c",
+      "studio/figures/complex_viscosity_vs_frequency.vsz": "99bbd088cd3df484e84143471b49063ef2a15a019580f5b8c233fa71f36d877e",
+      "studio/figures/logs/veusz_generate_stderr.log": "f1b730bf7200441888362f862a4f7d11289ca7b36a3ccd3c3765cbecd4ee7de9",
+      "studio/figures/loss_factor_vs_frequency.spec.json": "b52e7f1b863b8d90d2c4dc1cd6cadbf4e493dec46a5b899ace7506abff268f97",
+      "studio/figures/loss_factor_vs_frequency.vsz": "e8fcd407d8aeccda17566daac4351c8cbd7323a575795963468f78ac3d34def8",
+      "studio/figures/loss_modulus_vs_frequency.spec.json": "eb62c9a000445e59718484c49d33c62338337811d5aa9987a751cf8c5f950ecf",
+      "studio/figures/loss_modulus_vs_frequency.vsz": "3329d36ae6901ad984d880630d2b25bde649376d8506df24e0a7036b73fb2edc",
+      "studio/logs/veusz_export_stderr.log": "f1b730bf7200441888362f862a4f7d11289ca7b36a3ccd3c3765cbecd4ee7de9",
+      "studio/logs/veusz_generate_stderr.log": "f1b730bf7200441888362f862a4f7d11289ca7b36a3ccd3c3765cbecd4ee7de9",
+      "studio/processed/rheology_frequency_comparison.xlsx": "86c3c0ca81b3a4f1f8739c429e48f8dfb4d7f13ec76ec483179499b279cf7bc2",
+      "studio/spec.json": "be05ae5524f38f3739ca7556d2956457a576717bbce9c1746c63318dc645bf0d"
+    },
+    "delivery": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/FS_SciPlot_修正_20260918",
+    "delivery_files": {
+      "Open_in_Veusz.command": "8de374aee4fcde5387d41c90472019c012d41cbc02606647be27b31ba555a84e",
+      "data/studio_003_02_plot_data.csv": "1526848e70bf3e42ab30539f376fac691153b8a644d1d6b87b1bcb46caa9f26a",
+      "data/studio_003_03_plot_data.csv": "643d54fd88e2f39ee2a12afa1f64fc59eddb412f8868f05233d3b4abb12b9ab3",
+      "data/studio_003_04_plot_data.csv": "e98cd254dfad220a9355e9b4f0f6b75b62dfab31efeee5a5d8cbbc76cbd6f3af",
+      "data/studio_003_plot_data.csv": "7260a394633e8439b3730b0566a2ad0b7f7a80bed0cb24c5b98b42045b186bf7",
+      "figures/complex_viscosity_vs_frequency.pdf": "dcdd7c63013e5536c96e3f1e68c5028525d332a55bd49fd047de8cf11c65a159",
+      "figures/complex_viscosity_vs_frequency_300dpi.tiff": "6b91894b54c08035a5cbeaf6797db4616a54971d9d53db61a65118f59328aa4d",
+      "figures/loss_factor_vs_frequency.pdf": "048635491fdf13055d58384e560592f08e8c1a1a3cd7b3901c6c308a88f3130c",
+      "figures/loss_factor_vs_frequency_300dpi.tiff": "02d4f91ccafe65535e91c6823cf15360c07ae83a182d37847fe6957dda06284b",
+      "figures/loss_modulus_vs_frequency.pdf": "5f41041d0b90b3df62104f4273651e657befbb7d3e2006204cf82b0d7f245ca7",
+      "figures/loss_modulus_vs_frequency_300dpi.tiff": "8fb10143f26be37d306ac27226fd0a0843c6a15f559590deea00996db52f1481",
+      "figures/storage_modulus_vs_frequency.pdf": "2b7b891055cd76be3b354c090a06d92c6e26036b66b38dcd6fe419089c08d50a",
+      "figures/storage_modulus_vs_frequency_300dpi.tiff": "3ed33e865497a6d8026001def6269539cfeda75c8b895f95f7fb1f8c7cdfbd19",
+      "project/complex_viscosity_vs_frequency.vsz": "99bbd088cd3df484e84143471b49063ef2a15a019580f5b8c233fa71f36d877e",
+      "project/loss_factor_vs_frequency.vsz": "e8fcd407d8aeccda17566daac4351c8cbd7323a575795963468f78ac3d34def8",
+      "project/loss_modulus_vs_frequency.vsz": "3329d36ae6901ad984d880630d2b25bde649376d8506df24e0a7036b73fb2edc",
+      "project/studio_003.vsz": "e56adc7001fb98ec239d6e983ba02cc973ed63e4d43a356173d99febafd491f7"
+    }
+  },
+  "changes": [],
+  "actual_changes": [
+    {
+      "object_path": "/page1/graph1/series_2",
+      "setting_path": "/page1/graph1/series_2/PlotLine/color",
+      "old_value": "#3568C0",
+      "new_value": "#222222"
+    },
+    {
+      "object_path": "/page1/graph1/series_2",
+      "setting_path": "/page1/graph1/series_2/MarkerFill/color",
+      "old_value": "#3568C0",
+      "new_value": "#222222"
+    },
+    {
+      "object_path": "/page1/graph1/series_2",
+      "setting_path": "/page1/graph1/series_2/MarkerLine/color",
+      "old_value": "#3568C0",
+      "new_value": "#222222"
+    },
+    {
+      "object_path": "/page1/graph1/series_1",
+      "setting_path": "/page1/graph1/series_1/PlotLine/color",
+      "old_value": "#222222",
+      "new_value": "#3568C0"
+    },
+    {
+      "object_path": "/page1/graph1/series_1",
+      "setting_path": "/page1/graph1/series_1/MarkerFill/color",
+      "old_value": "#222222",
+      "new_value": "#3568C0"
+    },
+    {
+      "object_path": "/page1/graph1/series_1",
+      "setting_path": "/page1/graph1/series_1/MarkerLine/color",
+      "old_value": "#222222",
+      "new_value": "#3568C0"
+    }
+  ],
+  "candidate": {
+    "path": "/Users/dongxutian/Documents/research-plots/.tmp_verify/rheology_fix_20260918/loss_modulus_vs_frequency-sequential-task/preview_001/document.vsz",
+    "sha256": "7bd9f508e8f6d338fb744d4f48f7e2dec4307c6085560ff6fc35e0982d04a273"
+  },
+  "preview": {
+    "path": "/Users/dongxutian/Documents/research-plots/.tmp_verify/rheology_fix_20260918/loss_modulus_vs_frequency-sequential-task/preview_001/candidate.png",
+    "sha256": "2f64917dc71248d0a0c287b9412df57ac65561511be06e58453a013ba3e12d06",
+    "width": 354,
+    "height": 324
+  },
+  "scientific_audit": {
+    "status": "passed",
+    "unit_count": 2,
+    "prepared_unit_count": 2
+  },
+  "ready_to_use": false,
+  "operations": [
+    {
+      "op": "set_style",
+      "object_path": "/page1/graph1/series_2",
+      "setting_path": "/page1/graph1/series_2/PlotLine/color",
+      "expected_value": "#3568C0",
+      "value": "#222222"
+    },
+    {
+      "op": "set_style",
+      "object_path": "/page1/graph1/series_2",
+      "setting_path": "/page1/graph1/series_2/MarkerFill/color",
+      "expected_value": "#3568C0",
+      "value": "#222222"
+    },
+    {
+      "op": "set_style",
+      "object_path": "/page1/graph1/series_2",
+      "setting_path": "/page1/graph1/series_2/MarkerLine/color",
+      "expected_value": "#3568C0",
+      "value": "#222222"
+    },
+    {
+      "op": "set_style",
+      "object_path": "/page1/graph1/series_1",
+      "setting_path": "/page1/graph1/series_1/PlotLine/color",
+      "expected_value": "#222222",
+      "value": "#3568C0"
+    },
+    {
+      "op": "set_style",
+      "object_path": "/page1/graph1/series_1",
+      "setting_path": "/page1/graph1/series_1/MarkerFill/color",
+      "expected_value": "#222222",
+      "value": "#3568C0"
+    },
+    {
+      "op": "set_style",
+      "object_path": "/page1/graph1/series_1",
+      "setting_path": "/page1/graph1/series_1/MarkerLine/color",
+      "expected_value": "#222222",
+      "value": "#3568C0"
+    }
+  ],
+  "spec": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/studio/figures/loss_modulus_vs_frequency.spec.json",
+  "candidate_spec": {
+    "path": "/Users/dongxutian/Documents/research-plots/.tmp_verify/rheology_fix_20260918/loss_modulus_vs_frequency-sequential-task/preview_001/spec.json",
+    "sha256": "8730292a84fd5cc44458be993b4292d1e6baabd7ed06fbdea867097b91386610"
+  },
+  "operation_id": "af1990d5732923ee33b0ddae713840cf04ecf0e1e3efbf83d706b15ce26f7d83"
+}

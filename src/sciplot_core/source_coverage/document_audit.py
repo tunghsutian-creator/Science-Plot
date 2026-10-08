@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 from sciplot_core.veusz_runtime import veusz_worker_environment
+from sciplot_core.native_process import run_worker
 
 from sciplot_core.source_coverage.file_snapshots import (
     _stable_file_snapshot,
@@ -111,7 +112,7 @@ def _audit_exact_document_data(
 
 
 def _run_audit_worker(document: Path, spec: Path, check_presentation: bool) -> dict[str, Any]:
-    completed = subprocess.run(
+    completed = run_worker(
         [
             sys.executable,
             "-m",
@@ -125,7 +126,7 @@ def _run_audit_worker(document: Path, spec: Path, check_presentation: bool) -> d
         capture_output=True,
         check=False,
         timeout=120,
-        env=veusz_worker_environment(),
+        env=veusz_worker_environment(), cold_runner=subprocess.run,
     )
     if completed.returncode != 0:
         detail = completed.stderr.strip().splitlines()

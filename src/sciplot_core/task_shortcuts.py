@@ -100,6 +100,12 @@ def style_task(
         from sciplot_core.style_values import normalize_physical_size
 
         style["width"] = normalize_physical_size(style["width"])
+    from sciplot_core.plot_engine.compat import migrated_style
+
+    migrated = migrated_style(target, samples=samples, all_samples=all_samples, style=style,
+                              figure_id=figure_id, task_dir=task_dir)
+    if migrated is not None:
+        return migrated
     intent = {"kind": "sciplot_style_intent", "version": 1,
               "target": str(canonical_path(target)), "figure_id": figure_id,
               "all_samples": all_samples, "samples": list(samples) if samples is not None else None,

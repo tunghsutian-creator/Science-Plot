@@ -32,6 +32,61 @@ Once the data and intent are clear, one local task carries the figure through to
 export. If samples, units, or worksheet choices are ambiguous, SciPlot asks for
 clarification before proceeding.
 
+Saved ordinary figures also support a persistent semantic editing engine. Open a
+project once with `sciplot plot open TARGET --json`, then send `plot.patch` using
+the returned plot ID, revision and stable series IDs. A safe width/color/title
+visibility edit validates, commits and exports in one transaction; the program
+owns native paths and recovery. Repeating its idempotency key resumes the same
+work. Structural changes return a bound preview when needed. CLI and MCP share
+this engine; existing projects retain their native VSZ and explicit partial-import
+coverage. See the [saved-figure route](skill/references/saved-figure-edit.md).
+
+The same patch surface covers supported axis limits, legend placement/visibility
+and managed annotations. Template creation separates the format, theme and explicit
+data binding, then produces one final export. A saved native-only change can return
+one audited reimport preview; source or mapping changes still require their
+scientific workflow. The local service reuses its native worker between operations.
+
+Template-based `plot.create` now creates a **ManagedPlot** by default for the
+supported Cartesian and FigureSpec v2 contracts. Its SciPlotDocument is authoritative:
+resolved PlotIR compiles into disposable VSZ, previews and PDF/TIFF. Keeping raw
+sources and `.sciplot_documents` is sufficient to rebuild deleted artifacts with
+`plot export`. Source/transform/executor updates require explicit scientific
+intent; theme edits preserve scientific identity. Fixed-file external scientific
+executors carry interpreter/script hashes and provenance. Unknown manual Veusz
+changes block rather than enter the canonical document.
+
+Existing VSZ imports, source-only task creation and explicit `mode: legacy` remain
+**LegacyPlot** compatibility workflows. FigureSpec v2 adds physical single/concat/grid
+composition, independent scientific Scales and visual Axes, seven generic Marks,
+scoped themes, semantic legends and data/view/figure annotations. Dual Y and
+multipanel scientific figures use this common grammar. Native text bounds and
+scientific mapping checks gate export; soft layout warnings remain explicit.
+Arbitrary native features and non-deterministic execution remain unsupported.
+New FigureTemplate documents pin the extracted `sciplot-house-style-v1` visual
+contract. Omitted layout uses the original 60 × 55 mm panel and fixed physical
+margins; theme/figure/view/layer/mark overrides stay explicit. Existing unbound
+Managed revisions and fully explicit Cartesian v1 templates retain their saved
+presentation. Old-versus-new visual regression is independent of rebuild QA.
+See [rendering contract](docs/DESIGN_RENDERING_CONTRACT.md),
+[Figure grammar, schemas and capabilities](docs/DESIGN_FIGURE_GRAMMAR.md) and
+[managed authority guarantees](docs/DESIGN_MANAGED_PLOTS.md).
+
+Real historical mechanical and PP frequency-sweep deliveries now have independent
+golden-master profiles: frozen accepted artifacts, fresh legacy production replay,
+and ManagedPlot must pass native structure, data, environment and raster checks.
+See [research compatibility profiles and evidence](docs/RESEARCH_COMPATIBILITY_PROFILES.md)
+for exact coverage, the bounded mechanical antialias difference, and unsupported cases.
+
+Ordinary raw-data entry (`task create`, source-only `plot.create`, and their MCP
+routes) keeps the existing production workflow: scientific recognition, the
+family's FigurePlan and templates, then shared house policy plus family rules and
+supported explicit overrides. `render --auto` uses that same workflow; plain
+`render --template` remains a low-level plot-ready operation. FigureTemplate v2
+is an explicitly composed Managed route, not the automatic raw-data default.
+Its RenderingStyleContract is extracted from production policy; unverified
+family compatibility is not a reason to silently switch ordinary plots to it.
+
 ## Gallery
 
 These figures were rendered by **SciPlot / Veusz** from synthetic demonstration

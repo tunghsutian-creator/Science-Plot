@@ -38,11 +38,13 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         spec.get("categorical") if isinstance(spec.get("categorical"), dict) else None
     )
     series = spec["series"]
-    import_veusz_spec_data(
+    label_dataset = import_veusz_spec_data(
         interface,
         series=series,
         axes=axes,
         categorical=categorical,
+        style=style,
+        size_mm=size_mm,
     )
     create_veusz_page_and_graph(
         interface,
@@ -74,8 +76,13 @@ def _apply_veusz_spec(interface: Any, spec: dict[str, Any]) -> None:
         if item.get("presentation_kind") in CATEGORICAL_SERIES_KINDS:
             continue
         _add_veusz_xy_series(interface, item, style)
-    add_veusz_categorical_axis_provider(interface, categorical)
+    add_veusz_categorical_axis_provider(interface, categorical, label_dataset=label_dataset)
 
     # Add guides after data plotters so reverse painting puts them behind data.
     _add_veusz_reference_guides(interface, spec)
     finish_veusz_export_canvas(interface)
+    if label_dataset == "category_axis_display_labels":
+        from sciplot_core.studio_core.veusz_axis_apply import validate_category_display
+
+        validate_category_display(interface.document, list(interface.document.data[label_dataset].data),
+                                  str(axes["x"]["label"]), size_mm)

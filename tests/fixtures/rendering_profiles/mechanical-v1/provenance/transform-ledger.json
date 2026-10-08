@@ -1,0 +1,117 @@
+{
+  "kind": "sciplot_transform_ledger",
+  "version": 1,
+  "status": "runtime_recorded",
+  "source_root": "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm",
+  "replicate_policy": {
+    "mode": "representative",
+    "default_mode": "representative",
+    "available_modes": [
+      {
+        "id": "mean",
+        "label": "Mean",
+        "description": "Average compatible replicate files into one sample trace or metric."
+      },
+      {
+        "id": "representative",
+        "label": "Representative",
+        "description": "Keep one representative replicate for the sample."
+      },
+      {
+        "id": "individual",
+        "label": "All",
+        "description": "Render each replicate trace or metric without averaging."
+      }
+    ]
+  },
+  "column_confirmations": [],
+  "steps": [
+    {
+      "id": "semantic_preparation",
+      "operation": "extract_tensile_workbook_directory",
+      "implementation_ref": "sciplot_core.semantic.prepare_semantic_source",
+      "input_refs": [
+        "semantic_preparation_input"
+      ],
+      "output_refs": [
+        "semantic_preparation_output",
+        "semantic_preparation_output_2"
+      ],
+      "input_artifacts": [
+        {
+          "id": "semantic_preparation_input",
+          "role": "input",
+          "kind": "directory",
+          "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm",
+          "exists": true,
+          "size_bytes": 2024704,
+          "sha256": "14fd8afa155c4b8fad932de0e9f882508426c2bdc0713ea925e6cd81e3b8639a",
+          "member_count": 4,
+          "table_shape": null
+        }
+      ],
+      "output_artifacts": [
+        {
+          "id": "semantic_preparation_output",
+          "role": "output",
+          "kind": "file",
+          "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/tensile_2mm_tensile_curves.csv",
+          "exists": true,
+          "size_bytes": 353293,
+          "sha256": "5e617593a0ac7f9fee943f101acfd1037c1b5390a469fc177f8fb18cbf989e0f",
+          "table_shape": [
+            15463,
+            8
+          ]
+        },
+        {
+          "id": "semantic_preparation_output_2",
+          "role": "supporting_output",
+          "kind": "file",
+          "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/tensile_2mm_tensile_curves_summary.csv",
+          "exists": true,
+          "size_bytes": 5407,
+          "sha256": "af0a9220575e56295ef940039d9ec8e994b47b42ef5280358dbd14ef5b035d87",
+          "table_shape": [
+            21,
+            7
+          ]
+        }
+      ],
+      "parameters": {
+        "input_workbooks": [
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm/E0 2mm.xlsx",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm/E2 2mm.xlsx",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm/E3 2mm.xlsx",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm/E4 2mm.xlsx"
+        ],
+        "output_series_labels": [
+          "E0",
+          "E2",
+          "E3",
+          "E4"
+        ],
+        "representative_definition": "Representative_Curve sheet from each workbook",
+        "summary_metric_source": "All_Specimens sheet from each workbook",
+        "summary_replicate_count": 20
+      },
+      "input_shape": null,
+      "output_shape": [
+        15463,
+        8
+      ],
+      "confirmation_status": "runtime_recorded",
+      "silent_omission_allowed": false,
+      "outcome_strength_gate_applied": false
+    }
+  ],
+  "unresolved_step_ids": [],
+  "policy": {
+    "raw_sources_preserved": true,
+    "silent_data_omission_allowed": false,
+    "selection_must_be_recorded": true,
+    "unit_conversion_must_be_recorded": true,
+    "input_output_shape_preferred": true,
+    "scientific_outcome_agnostic": true
+  }
+}

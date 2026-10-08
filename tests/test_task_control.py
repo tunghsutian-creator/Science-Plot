@@ -39,6 +39,74 @@ def test_create_locally_plans_publishes_and_same_task_never_creates_twice(tmp_pa
     assert len(calls) == 1
 
 
+@pytest.mark.parametrize("family,rule,directory", [
+    ("rheology-v1", "rheology_frequency_sweep", "FS"),
+])
+def test_original_research_directory_selects_production_without_ai_style_request(tmp_path, monkeypatch, family, rule, directory):
+    import shutil
+
+    raw = Path(__file__).parent / "fixtures/rendering_profiles" / family / "raw"
+    source = tmp_path / directory
+    shutil.copytree(raw, source)
+    calls = []
+    monkeypatch.setattr(execution, "create_project", lambda *a, **k: calls.append(k) or receipt(tmp_path / "project"))
+    result = control.start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=tmp_path / "task")
+    assert result["status"] == "complete", result.get("question", result.get("blocker"))
+    assert len(calls) == 1
+    assert calls[0]["expected_plan"]["rule_id"] == rule
+    assert calls[0]["expected_plan"]["status"] == "planned"
+    assert result["model_calls_by_sciplot"] == 0
+    assert {p.name: p.read_bytes() for p in source.iterdir()} == {p.name: p.read_bytes() for p in raw.iterdir()}
+
+
+def test_directory_name_cannot_authorize_invalid_scientific_data(tmp_path, monkeypatch):
+    from sciplot_core.render import inspect_payload
+
+    source = tmp_path / "Tensile_2mm"
+    source.mkdir()
+    (source / "junk.csv").write_text("not a tensile experiment\n")
+    inspection = inspect_payload(source)
+    assert inspection["recommendations"] == []
+    assert inspection["inspection_resolution"]["status"] == "generic_inspection_failed"
+    monkeypatch.setattr(execution, "create_project", lambda *a, **k: pytest.fail("Invalid source reached renderer"))
+    result = control.start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=tmp_path / "task")
+    assert result["status"] == "blocked"
+    assert result["blocker"]["reason_code"] == "mechanical_source_contract_invalid"
+
+
+def test_old_reduced_mechanical_source_reports_missing_metrics_not_rule_question(tmp_path, monkeypatch):
+    import shutil
+
+    raw = Path(__file__).parent / "fixtures/rendering_profiles/mechanical-v1/raw"
+    source = tmp_path / "Tensile_2mm"
+    shutil.copytree(raw, source)
+    monkeypatch.setattr(execution, "create_project", lambda *a, **k: pytest.fail("Missing metrics reached renderer"))
+    result = control.start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=tmp_path / "task")
+    assert result["status"] == "blocked"
+    assert result["blocker"]["reason_code"] == "mechanical_summary_metric_missing"
+    assert "toughness_MJ_m3" in result["blocker"]["message"]
+    assert "question" not in result
+
+
+def test_performance_directory_cannot_bypass_failed_plan_via_file_only_exception(tmp_path, monkeypatch):
+    from sciplot_core.render import inspect_payload
+
+    source = tmp_path / "performance"
+    source.mkdir()
+    fixture = Path(__file__).parent / "fixtures/performance_comparison/material_performance_long.csv"
+    (source / "empty.csv").write_text(fixture.read_text().splitlines()[0] + "\n")
+    inspection = inspect_payload(source)
+    assert inspection["inspection_resolution"]["candidate_rule_id"] == "performance_comparison"
+    assert inspection["inspection_resolution"]["status"] == "generic_inspection_failed"
+    assert inspection["recommendations"] == []
+    blocker = inspection["scientific_plan"]["blocker"]
+    monkeypatch.setattr(execution, "create_project", lambda *a, **k: pytest.fail("Empty source reached renderer"))
+    result = control.start_task({"version": 1, "action": "create", "source": str(source)}, task_dir=tmp_path / "task")
+    assert result["status"] == "blocked"
+    assert result["blocker"] == blocker
+    assert "question" not in result
+
+
 def test_unknown_experiment_pauses_and_resumes_only_with_current_source(tmp_path, monkeypatch):
     path = source(tmp_path)
     monkeypatch.setattr(task_planning, "inspect_payload", lambda _: {})

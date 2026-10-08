@@ -1,0 +1,12 @@
+{
+  "status": "applied",
+  "document_relative": "studio/document.vsz",
+  "base_sha256": "17b48d227c8e4d98302485b876bbcf3ac67d621c71ee4b5d565e2cac60c03a19",
+  "result_sha256": "e56adc7001fb98ec239d6e983ba02cc973ed63e4d43a356173d99febafd491f7",
+  "companion": {
+    "relative": "studio/spec.json",
+    "base_sha256": "325b15372cc225d3a3c1cbb100b02385520039aa5e77b08873d0c92ab10102a9",
+    "result_sha256": "be05ae5524f38f3739ca7556d2956457a576717bbce9c1746c63318dc645bf0d",
+    "mode": 420
+  }
+}

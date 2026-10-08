@@ -11,12 +11,17 @@ GENERIC_AXIS_OWNERS = (
         exact_paths=frozenset(
             {
                 "src/sciplot_core/source_inspection/intent_recognition.py",
+                "src/sciplot_core/render/inspection.py",
                 "src/sciplot_core/studio_core/request_overrides.py",
+                "src/sciplot_core/studio_core/veusz_axis_apply.py",
+                "src/sciplot_core/studio_core/veusz_apply.py",
+                "src/sciplot_core/studio_core/veusz_canvas_finish.py",
                 "src/sciplot_core/studio_render/axis_contract.py",
                 "src/sciplot_core/studio_render/axis_limits.py",
                 "src/sciplot_core/studio_render/domain_defaults.py",
                 "src/sciplot_core/studio_render/metric_columns.py",
                 "src/sciplot_core/studio_render/readability_defaults.py",
+                "src/sciplot_core/studio_render/legend_placement.py",
             }
         ),
         owned_test_paths=frozenset(
@@ -30,7 +35,10 @@ GENERIC_AXIS_OWNERS = (
             }
         ),
         pytest_targets=(
+            "tests/test_task_control.py",
+            "tests/test_plan_preview.py",
             "tests/test_generic_axis_policy.py",
+            "tests/test_mechanical_rendering_profile_native.py",
             "tests/test_registered_single_curve_figure_plan.py",
             "tests/test_semantic_validation.py",
             "tests/test_source_recognition_contract.py",

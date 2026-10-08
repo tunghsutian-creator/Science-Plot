@@ -13,6 +13,11 @@ from sciplot_core.foundation.text_values import (
 from sciplot_core.materials_rules import (
     ELONGATION_AT_BREAK_METRIC,
 )
+from sciplot_core.materials_rules.catalog_axes import (
+    TENSILE_STRAIN_AXIS,
+    TENSILE_STRESS_AXIS,
+)
+from sciplot_core.materials_rules.models import AxisSpec
 
 
 from sciplot_core.semantic_sources.models import (
@@ -39,6 +44,15 @@ def _read_tensile_workbook_series(source: Path) -> list[CurveSeriesPayload]:
     if not series_list:
         raise ValueError("No tensile curves found by structure scan.")
     return series_list
+
+
+def _curated_axis_label(label: str, axis: AxisSpec) -> str:
+    # Curated sheets retain their original headers below; only the rule's exact
+    # aliases may acquire its scientific identity. Never use substring matching.
+    accepted = {value.casefold() for value in (axis.canonical_label, *axis.aliases)}
+    if label and label.casefold() not in accepted:
+        raise ValueError(f"Unrecognized {axis.canonical_label} header: {label!r}.")
+    return axis.canonical_label
 
 
 def _read_tensile_workbook_directory(
@@ -104,18 +118,26 @@ def _read_tensile_workbook_directory(
                         break
             except (KeyError, ValueError, IndexError):
                 pass
+            source_x_label = _clean_text(representative.iat[0, 0])
+            source_y_label = _clean_text(representative.iat[0, 1])
+            source_x_unit = _clean_text(representative.iat[1, 0])
+            source_y_unit = _clean_text(representative.iat[1, 1])
             representatives.append(
                 CurveSeriesPayload(
                     sample=sample,
-                    x_label=_clean_text(representative.iat[0, 0]) or "Tensile strain",
-                    x_unit=_clean_text(representative.iat[1, 0]) or "%",
-                    y_label=_clean_text(representative.iat[0, 1]) or "Tensile stress",
-                    y_unit=_clean_text(representative.iat[1, 1]) or "MPa",
+                    x_label=_curated_axis_label(source_x_label, TENSILE_STRAIN_AXIS),
+                    x_unit=source_x_unit or "%",
+                    y_label=_curated_axis_label(source_y_label, TENSILE_STRESS_AXIS),
+                    y_unit=source_y_unit or "MPa",
                     points=points,
                     diagnostics={
                         "source_file": str(workbook_path),
                         "source_table": "Representative_Curve",
                         "representative_source": "workbook Representative_Curve sheet",
+                        "source_x_label": source_x_label,
+                        "source_y_label": source_y_label,
+                        "source_x_unit": source_x_unit,
+                        "source_y_unit": source_y_unit,
                     },
                 )
             )

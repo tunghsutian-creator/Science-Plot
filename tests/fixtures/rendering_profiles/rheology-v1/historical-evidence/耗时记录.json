@@ -1,0 +1,50 @@
+{
+  "recorded_start": "2026-09-18T08:18:13+00:00",
+  "delivery_prepared": "2026-09-18T08:40:22.205041+00:00",
+  "whole_turn_seconds": 1329.205041,
+  "fresh_creation": [
+    {
+      "case": "Creep",
+      "seconds": 3.249828708008863,
+      "status": "complete",
+      "returncode": 0,
+      "local_timing": {
+        "scope": "local_active_calls_only; excludes external AI, transport and user waiting",
+        "calls": 1,
+        "total_seconds": 2.690155,
+        "last_call_seconds": 2.690155,
+        "external_model_seconds": null
+      }
+    },
+    {
+      "case": "FS",
+      "seconds": 8.556420000037178,
+      "status": "complete",
+      "returncode": 0,
+      "local_timing": {
+        "scope": "local_active_calls_only; excludes external AI, transport and user waiting",
+        "calls": 1,
+        "total_seconds": 8.19981,
+        "last_call_seconds": 8.19981,
+        "external_model_seconds": null
+      }
+    }
+  ],
+  "original_task": {
+    "thread_id": "01a0b389-60bb-7e03-b234-79eb2b010e15",
+    "title": "绘制pp3155 UDC图表",
+    "turn_duration_seconds": 743.384,
+    "command_count": 50,
+    "reported_command_duration_sum_seconds": 32.159,
+    "note": "Reported per-command durations include zero values; their sum is not total model or tool time.",
+    "repeated_error": "Veusz document changed during exact-current audit.",
+    "current_reproduction": {
+      "metadata_changed": [
+        "ctime_ns"
+      ],
+      "bytes_changed": false
+    },
+    "external_tokens": null
+  },
+  "note": "Fresh local timing measures two sequential complete task-create CLI calls using original source files and development-only outputs, without concurrent tests; excludes external AI, network, development, preview review and later color edits. This is not a matched end-to-end before/after comparison."
+}

@@ -34,6 +34,30 @@ from sciplot_core.verification.type_gate_owners import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize("path", [
+    "src/sciplot_core/plot_document/patch.py",
+    "src/sciplot_core/native_process/session.py", "src/sciplot_core/veusz_worker/persistent.py",
+    "src/sciplot_core/plot_backends/veusz.py",
+    "src/sciplot_core/plot_engine/storage.py",
+    "src/sciplot_core/plot_protocol/rpc.py",
+    "src/sciplot_core/cli/parsers/plots.py",
+    "src/sciplot_core/cli/dispatch/plots.py",
+    "tests/test_plot_document.py", "tests/test_plot_cache.py", "tests/test_plot_content_store.py", "tests/test_plot_backend.py", "tests/test_plot_backend_native.py",
+    "tests/test_plot_backend_semantics.py", "tests/test_plot_backend_semantics_native.py",
+    "tests/test_native_process.py", "tests/test_native_process_native.py",
+    "tests/test_plot_protocol.py", "tests/test_plot_engine.py", "tests/test_plot_engine_native.py",
+])
+def test_semantic_plot_sources_and_tests_select_transaction_and_native_evidence(path):
+    payload = build_changed_verification_plan([path], repo_root=REPO_ROOT)
+    assert payload["unowned_paths"] == []
+    checks = {check["check_id"]: check["command"] for check in payload["checks"]}
+    assert checks["mypy_owned_scope"] == [sys.executable, "-m", "mypy"]
+    assert {"tests/test_plot_document.py", "tests/test_plot_backend.py", "tests/test_plot_backend_native.py", "tests/test_plot_protocol.py",
+            "tests/test_plot_engine.py", "tests/test_plot_engine_native.py"} <= set(checks["pytest_changed_owners"])
+    assert payload["required_later"]["handoff"] == ["doctor"]
+    assert payload["required_later"]["final_milestone"] == ["smoke"]
+
+
 def test_tavotto_ui_license_selects_documentation_contract() -> None:
     path = "third_party/tavotto-ui/LICENSE"
     assert (REPO_ROOT / path).is_file()
@@ -368,7 +392,7 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
     )
 
     assert SCIENTIFIC_TRANSACTION_TYPE_PATHS
-    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 109
+    assert len(SCIENTIFIC_TRANSACTION_TYPE_PATHS) == 116
     assert "src/sciplot_core/task_edit_context.py" in SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert "src/sciplot_core/task_shortcuts.py" in SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert {
@@ -383,6 +407,9 @@ def test_scientific_transaction_type_owner_has_the_exact_scoped_paths() -> None:
         "src/sciplot_core/style_values.py",
         "src/sciplot_core/cli/parser_errors.py",
         "src/sciplot_core/task_output_choice.py",
+        "src/sciplot_core/cli/parsers/plots.py",
+        "src/sciplot_core/cli/dispatch/plots.py",
+        "src/sciplot_core/veusz_worker/managed.py",
     } <= SCIENTIFIC_TRANSACTION_TYPE_PATHS
     assert SCIENTIFIC_TRANSACTION_TYPE_PATHS == frozenset(
         path
@@ -736,7 +763,7 @@ def test_explicit_type_gate_scopes_are_pairwise_disjoint() -> None:
         STUDIO_FIGURE_SET_EXECUTION_TYPE_PATHS,
     )
 
-    assert tuple(map(len, scopes)) == (109, 4, 7, 10, 5, 5)
+    assert tuple(map(len, scopes)) == (116, 4, 7, 10, 5, 5)
     assert all(
         scope.isdisjoint(other)
         for index, scope in enumerate(scopes)

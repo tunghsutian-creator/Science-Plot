@@ -118,6 +118,7 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
     if saved:
         summary.pop("edit_outcome", None)
     unchanged = saved and state["result"].get("status") == "unchanged"
+    prepared = (state.get("result") or {}).get("kind") == "sciplot_project_prepared_result"
     if state["request"]["action"] == "edit":
         summary["preview_revision"] = len(state.get("edit_revisions") or []) + 1
     return {
@@ -125,9 +126,10 @@ def task_summary(state: dict[str, Any]) -> dict[str, Any]:
         "next_step": task_next_step(state),
         "model_calls_by_sciplot": 0,
         "external_model_tokens": None,
-        "ready_to_use": None,
+        "ready_to_use": False if prepared else None,
         "readiness_evaluated": False,
         "completion_scope": (
+            "prepared_project" if prepared else
             "Requested styles already matched; no document write or export. See current_project for fresh evidence."
             if unchanged else
             "Saved edit only; export was deferred. See current_project for fresh evidence."

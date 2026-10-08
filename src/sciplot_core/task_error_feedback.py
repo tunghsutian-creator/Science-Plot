@@ -22,6 +22,11 @@ def exception_feedback(exc: Exception, *, summary: str | None = None) -> dict[st
     message = str(exc) or type(exc).__name__
     display = message if summary is None else summary
     result: dict[str, Any] = {"message": short_error_message(display)}
+    # A transport may already carry the original owner's saved diagnostics.
+    # Preserve that reference even when its human-readable message is short.
+    existing_diagnostics = getattr(exc, "diagnostics", None)
+    if isinstance(existing_diagnostics, dict):
+        result["diagnostics"] = deepcopy(existing_diagnostics)
     field = getattr(exc, "field", None)
     if field:
         result["field"] = "/" + str(field).lstrip("/")
@@ -32,7 +37,7 @@ def exception_feedback(exc: Exception, *, summary: str | None = None) -> dict[st
             result["issues"].append({"remaining_issue_count": len(issues) - 8})
     if len(display) <= MESSAGE_LIMIT:
         return result
-    diagnostic = getattr(exc, "_sciplot_diagnostic", None)
+    diagnostic = existing_diagnostics or getattr(exc, "_sciplot_diagnostic", None)
     if diagnostic is None:
         name: str | None = None
         try:

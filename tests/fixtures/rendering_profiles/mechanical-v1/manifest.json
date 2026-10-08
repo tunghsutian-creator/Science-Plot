@@ -1,0 +1,711 @@
+{
+  "schema_version": 1,
+  "profile_id": "mechanical-v1",
+  "family": "mechanical",
+  "files": {
+    "accepted_vsz": {
+      "path": "accepted.vsz",
+      "sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb"
+    },
+    "accepted_pdf": {
+      "path": "delivered.pdf",
+      "sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747"
+    },
+    "accepted_tiff": {
+      "path": "delivered_300dpi.tiff",
+      "sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c"
+    },
+    "legacy_spec": {
+      "path": "legacy/spec.json",
+      "sha256": "88a8447aa37418e7b175094a91c18be889a43fc635c0d7272c0c8d28586d7f69"
+    },
+    "legacy_request": {
+      "path": "legacy/plot_request.json",
+      "sha256": "5a9074c5ea342e774f27b772ef40bbf290ba06b4e5221be6081f277248275c46"
+    },
+    "prepared_replicates": {
+      "path": "sources/replicates.csv",
+      "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8"
+    },
+    "delivery_receipt": {
+      "path": "provenance/delivery-receipt.json",
+      "sha256": "0ece02fa70a523ba65fad1d935606b713a100f1916d0e36a02069a871690e960"
+    },
+    "historical_transform_ledger": {
+      "path": "provenance/transform-ledger.json",
+      "sha256": "96fc47760723331ef2f792d79c692e20a9c6dc98d486af15ba708a5b16d844ee"
+    },
+    "historical_summary": {
+      "path": "provenance/tensile-summary.csv",
+      "sha256": "af0a9220575e56295ef940039d9ec8e994b47b42ef5280358dbd14ef5b035d87"
+    },
+    "source_audit": {
+      "path": "provenance/source-audit.json",
+      "sha256": "0e00876b4d0b246db5a9068962600f4b7bcf35f2525f47a84693cbd98be9fa18"
+    },
+    "native_explicit_settings": {
+      "path": "provenance/native-explicit-settings.json",
+      "sha256": "0ca2b271b26122ed0525e3faf2d6d05f99e9ae4657601bf906a70d041384f9f5"
+    },
+    "raw_0": {
+      "path": "raw/E0 2mm.xlsx",
+      "sha256": "9454641afddc15d995bf5cac9099f04b44a35fe08bf1c1678a1e10133b007bed"
+    },
+    "raw_1": {
+      "path": "raw/E2 2mm.xlsx",
+      "sha256": "0fa7cd800ac2485184436427f8b1c0bf2bd131a1e3765bd54da630316188ad10"
+    },
+    "raw_2": {
+      "path": "raw/E3 2mm.xlsx",
+      "sha256": "b37b9ba6aaba9539f962762657fade4d3d3338cde5af475a56f1c59f36e822b3"
+    },
+    "raw_3": {
+      "path": "raw/E4 2mm.xlsx",
+      "sha256": "5eb5177fc53b86ce950e81c34950a9f0041952f030ebd8ba290c831163b194a1"
+    },
+    "summary_E0": {
+      "path": "sources/E0-summary.csv",
+      "sha256": "20d0d1f349af230e397dca29b97d1f52104b200cacc0dc49e6104323faf1f37d"
+    },
+    "summary_E2": {
+      "path": "sources/E2-summary.csv",
+      "sha256": "1c5fe61c24ec89ca0b2afeda54898eecb9a1382972c989cd9a1f2abfbbb9aa6b"
+    },
+    "summary_E3": {
+      "path": "sources/E3-summary.csv",
+      "sha256": "c291eab83f44e699fefd70e2cae0edb74a1736ed8cb3f130280208c851504796"
+    },
+    "summary_E4": {
+      "path": "sources/E4-summary.csv",
+      "sha256": "5f372220d2d00c88b0724978434dd88cdd01869878f2eaa8ec2cab5a97a769d9"
+    },
+    "mapped_request": {
+      "path": "mapped_request.json",
+      "sha256": "d23e12badffcdaff80c06e803d1fa96f584ddb695b97ff42c73d3f03e07701ec"
+    },
+    "golden_png": {
+      "path": "golden/native.png",
+      "sha256": "a7675d61d9c2bdcbf628a6225841b897f13ca44fa357409a2e623dfd01ae6a4e"
+    },
+    "golden_structure": {
+      "path": "golden/structure.json",
+      "sha256": "a47b52ba93c3cbd6b83167f55b8f83a5facbbf4976e9586059e5f8d33b9c9f33"
+    },
+    "golden_environment": {
+      "path": "golden/environment.json",
+      "sha256": "0ef4023dc4129da7c47988c6ddb4b058d317fea65025a688defa3c7dcd20e783"
+    },
+    "golden_capture": {
+      "path": "golden/capture.json",
+      "sha256": "ed35fa0e7566905ccbc5ad811d56e87285d17a7e1ad0758adf2d999a38d01983"
+    },
+    "golden_producer": {
+      "path": "golden/producer-identity.json",
+      "sha256": "060c2f4e923c8ddb76939df4e2f6f6df6abe073824df7ef6475d1a43ac7b9a3b"
+    }
+  },
+  "roles": {
+    "accepted": {
+      "graph": "/page1/graph1",
+      "axes": {
+        "x": "/page1/graph1/x",
+        "y": "/page1/graph1/y"
+      },
+      "categorical_bar": "/page1/graph1/categorical_bar",
+      "groups": [
+        {
+          "id": "E0",
+          "index_one_based": 1,
+          "error_prefix": "/page1/graph1/categorical_bar_error_1_",
+          "outline_prefix": "/page1/graph1/categorical_bar_outline_1_"
+        },
+        {
+          "id": "E2",
+          "index_one_based": 2,
+          "error_prefix": "/page1/graph1/categorical_bar_error_2_",
+          "outline_prefix": "/page1/graph1/categorical_bar_outline_2_"
+        },
+        {
+          "id": "E3",
+          "index_one_based": 3,
+          "error_prefix": "/page1/graph1/categorical_bar_error_3_",
+          "outline_prefix": "/page1/graph1/categorical_bar_outline_3_"
+        },
+        {
+          "id": "E4",
+          "index_one_based": 4,
+          "error_prefix": "/page1/graph1/categorical_bar_error_4_",
+          "outline_prefix": "/page1/graph1/categorical_bar_outline_4_"
+        }
+      ]
+    },
+    "managed": {
+      "view_id": "view:main",
+      "layer_ids": [
+        "layer:E0",
+        "layer:E2",
+        "layer:E3",
+        "layer:E4"
+      ]
+    },
+    "individual_points": "absent in accepted visible presentation",
+    "legend": "absent"
+  },
+  "identity": {
+    "selection": [
+      {
+        "sample": "E0",
+        "summary_source": "sources/E0-summary.csv",
+        "summary_sha256": "20d0d1f349af230e397dca29b97d1f52104b200cacc0dc49e6104323faf1f37d",
+        "source_owner_group": "legacy/spec.json#categorical/groups/0",
+        "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_1_1",
+        "raw_replicate_column_zero_based": 0,
+        "raw_count": 5,
+        "mean": 34.078,
+        "sd": 1.2417205804849973,
+        "values": [
+          1.0,
+          34.078,
+          32.83627941951501,
+          35.319720580485
+        ],
+        "auxiliary_raw_column_zero_based": 4,
+        "raw_values": [
+          34.13,
+          32.67,
+          36.0,
+          33.39,
+          34.2
+        ],
+        "summary_missing_rows": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+        "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+      },
+      {
+        "sample": "E2",
+        "summary_source": "sources/E2-summary.csv",
+        "summary_sha256": "1c5fe61c24ec89ca0b2afeda54898eecb9a1382972c989cd9a1f2abfbbb9aa6b",
+        "source_owner_group": "legacy/spec.json#categorical/groups/1",
+        "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_2_1",
+        "raw_replicate_column_zero_based": 1,
+        "raw_count": 5,
+        "mean": 35.538,
+        "sd": 0.6279888534042614,
+        "values": [
+          2.0,
+          35.538,
+          34.910011146595735,
+          36.16598885340426
+        ],
+        "auxiliary_raw_column_zero_based": 4,
+        "raw_values": [
+          34.95,
+          35.16,
+          35.51,
+          36.58,
+          35.49
+        ],
+        "summary_missing_rows": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+        "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+      },
+      {
+        "sample": "E3",
+        "summary_source": "sources/E3-summary.csv",
+        "summary_sha256": "c291eab83f44e699fefd70e2cae0edb74a1736ed8cb3f130280208c851504796",
+        "source_owner_group": "legacy/spec.json#categorical/groups/2",
+        "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_3_1",
+        "raw_replicate_column_zero_based": 2,
+        "raw_count": 5,
+        "mean": 35.484,
+        "sd": 0.8302891062756409,
+        "values": [
+          3.0,
+          35.484,
+          34.65371089372436,
+          36.314289106275645
+        ],
+        "auxiliary_raw_column_zero_based": 4,
+        "raw_values": [
+          35.03,
+          36.49,
+          36.03,
+          34.37,
+          35.5
+        ],
+        "summary_missing_rows": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+        "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+      },
+      {
+        "sample": "E4",
+        "summary_source": "sources/E4-summary.csv",
+        "summary_sha256": "5f372220d2d00c88b0724978434dd88cdd01869878f2eaa8ec2cab5a97a769d9",
+        "source_owner_group": "legacy/spec.json#categorical/groups/3",
+        "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_4_1",
+        "raw_replicate_column_zero_based": 3,
+        "raw_count": 5,
+        "mean": 38.616,
+        "sd": 0.7982042345164566,
+        "values": [
+          4.0,
+          38.616,
+          37.817795765483545,
+          39.414204234516454
+        ],
+        "auxiliary_raw_column_zero_based": 4,
+        "raw_values": [
+          37.23,
+          39.13,
+          38.64,
+          39.0,
+          39.08
+        ],
+        "summary_missing_rows": [
+          4,
+          5,
+          6,
+          7
+        ],
+        "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+        "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+      }
+    ],
+    "scientific_identity": {
+      "metric": "tensile strength",
+      "unit": "MPa",
+      "thickness_mm": 2,
+      "sample_order": [
+        "E0",
+        "E2",
+        "E3",
+        "E4"
+      ],
+      "mean_definition": "arithmetic mean",
+      "spread_definition": "sample standard deviation (n-1)",
+      "values_source": "exact historical resolved spec and prepared metric CSV; no newly recomputed summary replaces them",
+      "groups": [
+        {
+          "label": "E0",
+          "position": 1.0,
+          "replicate_count": 5,
+          "raw_values": [
+            34.13,
+            32.67,
+            36.0,
+            33.39,
+            34.2
+          ],
+          "bar_mean": 34.078,
+          "bar_error": 1.2417205804849973,
+          "bar_error_statistic": "sd",
+          "raw_points_visible": false
+        },
+        {
+          "label": "E2",
+          "position": 2.0,
+          "replicate_count": 5,
+          "raw_values": [
+            34.95,
+            35.16,
+            35.51,
+            36.58,
+            35.49
+          ],
+          "bar_mean": 35.538,
+          "bar_error": 0.6279888534042614,
+          "bar_error_statistic": "sd",
+          "raw_points_visible": false
+        },
+        {
+          "label": "E3",
+          "position": 3.0,
+          "replicate_count": 5,
+          "raw_values": [
+            35.03,
+            36.49,
+            36.03,
+            34.37,
+            35.5
+          ],
+          "bar_mean": 35.484,
+          "bar_error": 0.8302891062756409,
+          "bar_error_statistic": "sd",
+          "raw_points_visible": false
+        },
+        {
+          "label": "E4",
+          "position": 4.0,
+          "replicate_count": 5,
+          "raw_values": [
+            37.23,
+            39.13,
+            38.64,
+            39.0,
+            39.08
+          ],
+          "bar_mean": 38.616,
+          "bar_error": 0.7982042345164566,
+          "bar_error_statistic": "sd",
+          "raw_points_visible": false
+        }
+      ]
+    },
+    "scientific_identity_sha256": "28e35478101f5b21a089bbda2a5c2a4c8b5d1d3bf24ca2adadfe807e21106bba",
+    "historical_transform": {
+      "operation": "literal_projection_of_legacy_scientific_owner_outputs",
+      "reexecuted": false,
+      "original_operation": "arithmetic_mean_and_sample_standard_deviation_n_minus_1",
+      "prepared_replicates": {
+        "path": "sources/replicates.csv",
+        "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8"
+      },
+      "original_workbooks": [
+        {
+          "path": "raw/E0 2mm.xlsx",
+          "sha256": "9454641afddc15d995bf5cac9099f04b44a35fe08bf1c1678a1e10133b007bed"
+        },
+        {
+          "path": "raw/E2 2mm.xlsx",
+          "sha256": "0fa7cd800ac2485184436427f8b1c0bf2bd131a1e3765bd54da630316188ad10"
+        },
+        {
+          "path": "raw/E3 2mm.xlsx",
+          "sha256": "b37b9ba6aaba9539f962762657fade4d3d3338cde5af475a56f1c59f36e822b3"
+        },
+        {
+          "path": "raw/E4 2mm.xlsx",
+          "sha256": "5eb5177fc53b86ce950e81c34950a9f0041952f030ebd8ba290c831163b194a1"
+        }
+      ],
+      "historical_ledger": {
+        "path": "provenance/transform-ledger.json",
+        "sha256": "96fc47760723331ef2f792d79c692e20a9c6dc98d486af15ba708a5b16d844ee"
+      },
+      "legacy_spec": {
+        "path": "legacy/spec.json",
+        "sha256": "88a8447aa37418e7b175094a91c18be889a43fc635c0d7272c0c8d28586d7f69"
+      },
+      "native_snapshot": {
+        "path": "accepted.vsz",
+        "sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb"
+      },
+      "summary_projection": [
+        {
+          "sample": "E0",
+          "summary_source": "sources/E0-summary.csv",
+          "summary_sha256": "20d0d1f349af230e397dca29b97d1f52104b200cacc0dc49e6104323faf1f37d",
+          "source_owner_group": "legacy/spec.json#categorical/groups/0",
+          "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_1_1",
+          "raw_replicate_column_zero_based": 0,
+          "raw_count": 5,
+          "mean": 34.078,
+          "sd": 1.2417205804849973,
+          "values": [
+            1.0,
+            34.078,
+            32.83627941951501,
+            35.319720580485
+          ],
+          "auxiliary_raw_column_zero_based": 4,
+          "raw_values": [
+            34.13,
+            32.67,
+            36.0,
+            33.39,
+            34.2
+          ],
+          "summary_missing_rows": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+          "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+        },
+        {
+          "sample": "E2",
+          "summary_source": "sources/E2-summary.csv",
+          "summary_sha256": "1c5fe61c24ec89ca0b2afeda54898eecb9a1382972c989cd9a1f2abfbbb9aa6b",
+          "source_owner_group": "legacy/spec.json#categorical/groups/1",
+          "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_2_1",
+          "raw_replicate_column_zero_based": 1,
+          "raw_count": 5,
+          "mean": 35.538,
+          "sd": 0.6279888534042614,
+          "values": [
+            2.0,
+            35.538,
+            34.910011146595735,
+            36.16598885340426
+          ],
+          "auxiliary_raw_column_zero_based": 4,
+          "raw_values": [
+            34.95,
+            35.16,
+            35.51,
+            36.58,
+            35.49
+          ],
+          "summary_missing_rows": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+          "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+        },
+        {
+          "sample": "E3",
+          "summary_source": "sources/E3-summary.csv",
+          "summary_sha256": "c291eab83f44e699fefd70e2cae0edb74a1736ed8cb3f130280208c851504796",
+          "source_owner_group": "legacy/spec.json#categorical/groups/2",
+          "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_3_1",
+          "raw_replicate_column_zero_based": 2,
+          "raw_count": 5,
+          "mean": 35.484,
+          "sd": 0.8302891062756409,
+          "values": [
+            3.0,
+            35.484,
+            34.65371089372436,
+            36.314289106275645
+          ],
+          "auxiliary_raw_column_zero_based": 4,
+          "raw_values": [
+            35.03,
+            36.49,
+            36.03,
+            34.37,
+            35.5
+          ],
+          "summary_missing_rows": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+          "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+        },
+        {
+          "sample": "E4",
+          "summary_source": "sources/E4-summary.csv",
+          "summary_sha256": "5f372220d2d00c88b0724978434dd88cdd01869878f2eaa8ec2cab5a97a769d9",
+          "source_owner_group": "legacy/spec.json#categorical/groups/3",
+          "bound_source": "accepted.vsz#page1/graph1/categorical_bar_error_4_1",
+          "raw_replicate_column_zero_based": 3,
+          "raw_count": 5,
+          "mean": 38.616,
+          "sd": 0.7982042345164566,
+          "values": [
+            4.0,
+            38.616,
+            37.817795765483545,
+            39.414204234516454
+          ],
+          "auxiliary_raw_column_zero_based": 4,
+          "raw_values": [
+            37.23,
+            39.13,
+            38.64,
+            39.0,
+            39.08
+          ],
+          "summary_missing_rows": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "missing_row_semantics": "No additional summary observations; auxiliary original replicate values remain present.",
+          "operation": "Literal projection of existing scientific owner outputs, without recomputing summaries."
+        }
+      ],
+      "historical_owner": "sciplot_core.semantic.prepare_semantic_source / existing categorical mean-and-sample-SD owner",
+      "current_owner_reference": [
+        {
+          "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/semantic_sources/tensile_workbooks.py",
+          "symbol": "_read_tensile_workbook_directory",
+          "file_sha256": "c7a6e55d4acd30ecad83c7d907dd07900fb8d4c6065b446f3782a3be56739958"
+        },
+        {
+          "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/studio_render/replicate_distribution_contract.py",
+          "symbol": "_replicate_distribution_contract",
+          "file_sha256": "9fd806bce132bc051cccbbc5901831387750e549bb09adb919e3a582486d87e3"
+        },
+        {
+          "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/studio_render/categorical_values.py",
+          "symbol": "_mean_and_sample_sd",
+          "file_sha256": "02afb05feba1be80ef55d7adf71f571dd2aba39b840fd0d2ef25bd586ecd2508"
+        },
+        {
+          "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/studio_core/veusz_bar_error.py",
+          "symbol": "add_veusz_error_bars",
+          "file_sha256": "1060487be2c648ab711230f45a4f31a9458e54c59e4c2dd49815ee29f5340a0b"
+        }
+      ],
+      "owner_reference_scope": "Current source hash documents available shared owner only; not asserted to be exact 2026-07-24 implementation bytes.",
+      "raw_values": [
+        {
+          "label": "E0",
+          "position": 1.0,
+          "replicate_count": 5,
+          "raw_values": [
+            34.13,
+            32.67,
+            36.0,
+            33.39,
+            34.2
+          ],
+          "bar_mean": 34.078,
+          "bar_error": 1.2417205804849973,
+          "bar_error_statistic": "sd",
+          "raw_points_visible": false
+        },
+        {
+          "label": "E2",
+          "position": 2.0,
+          "replicate_count": 5,
+          "raw_values": [
+            34.95,
+            35.16,
+            35.51,
+            36.58,
+            35.49
+          ],
+          "bar_mean": 35.538,
+          "bar_error": 0.6279888534042614,
+          "bar_error_statistic": "sd",
+          "raw_points_visible": false
+        },
+        {
+          "label": "E3",
+          "position": 3.0,
+          "replicate_count": 5,
+          "raw_values": [
+            35.03,
+            36.49,
+            36.03,
+            34.37,
+            35.5
+          ],
+          "bar_mean": 35.484,
+          "bar_error": 0.8302891062756409,
+          "bar_error_statistic": "sd",
+          "raw_points_visible": false
+        },
+        {
+          "label": "E4",
+          "position": 4.0,
+          "replicate_count": 5,
+          "raw_values": [
+            37.23,
+            39.13,
+            38.64,
+            39.0,
+            39.08
+          ],
+          "bar_mean": 38.616,
+          "bar_error": 0.7982042345164566,
+          "bar_error_statistic": "sd",
+          "raw_points_visible": false
+        }
+      ]
+    },
+    "golden_status": "actual_source_adjacent_delivery_with_matching_historical_delivery_hashes",
+    "acceptance_boundary": "No independent human acceptance statement was located. Actual delivered files, historical complete delivery receipt and byte equality are verified; this is not a claim of publication or explicit aesthetic approval.",
+    "delivery_hash_matches": [
+      {
+        "artifact": "tensile_strength_by_sample.vsz",
+        "sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+        "historical_delivery_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+        "matches": true,
+        "historical_record": {
+          "kind": "sciplot_delivery_project_file",
+          "id": "tensile_strength_by_sample",
+          "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/tensile_strength_by_sample/single/studio/document.vsz",
+          "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_strength_by_sample.vsz",
+          "relative_path": "project/tensile_strength_by_sample.vsz",
+          "format": "vsz",
+          "source_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+          "delivery_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+          "copy_hash_matches": true,
+          "hash_matches_export": true,
+          "exists": true
+        }
+      },
+      {
+        "artifact": "tensile_strength_by_sample.pdf",
+        "sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+        "historical_delivery_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+        "matches": true,
+        "historical_record": {
+          "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_strength_by_sample.pdf",
+          "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_strength_by_sample.pdf",
+          "relative_path": "figures/tensile_strength_by_sample.pdf",
+          "format": "pdf",
+          "export_format": "pdf",
+          "source_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+          "delivery_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+          "copy_hash_matches": true,
+          "exists": true
+        }
+      },
+      {
+        "artifact": "tensile_strength_by_sample_300dpi.tiff",
+        "sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+        "historical_delivery_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+        "matches": true,
+        "historical_record": {
+          "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_strength_by_sample_300dpi.tiff",
+          "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_strength_by_sample_300dpi.tiff",
+          "relative_path": "figures/tensile_strength_by_sample_300dpi.tiff",
+          "format": "tiff",
+          "export_format": "tiff_300",
+          "source_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+          "delivery_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+          "copy_hash_matches": true,
+          "exists": true
+        }
+      }
+    ],
+    "cap_conversion": {
+      "width_data": 0.16,
+      "plot_width_mm": 41.5,
+      "x_domain_span": 4.0,
+      "cap_width_pt": 4.705511811023623,
+      "formula": "width_data * plot_width_mm / x_domain_span * 72 / 25.4"
+    },
+    "golden_creation": {
+      "kind": "first_completed_native_capture_of_immutable_delivered_vsz",
+      "document_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+      "structure_projection": "tests/rendering_profile_mechanical_projection.py",
+      "snapshot_update_mode": false,
+      "historical_artifact_changed": false
+    }
+  },
+  "unsupported": [
+    "No claim of individual-point overlay compatibility; golden hides points.",
+    "No legend in this actual historical figure.",
+    "No claim for all mechanical families or grouped bars."
+  ],
+  "capture_status": "awaiting_initial_native_golden_capture_by_root"
+}

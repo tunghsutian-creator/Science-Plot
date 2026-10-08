@@ -801,3 +801,67 @@ and `postcheck/report.json`. This is one functional client observation, not a ma
 old/new client experiment. It does not establish token savings or human usability.
 A later skill clarification routes explicit prepared rheology work directly to its
 own capabilities; the above observation predates that documentation edit.
+# 2026-10-07 semantic document vertical slice
+
+The corrected architecture now has real A–G acceptance over one durable semantic
+patch engine, native numerical audit, separate commit/export recovery, persistent
+UNIX-socket CLI/MCP and explicit legacy-shadow import coverage. Scientific content
+and current native/export bytes are checked independently of model hashes.
+
+Three matched sequential width edits on identical isolated E2/E4 UV–Vis fixtures:
+
+| Median local observation | Legacy style + resume | Semantic patch |
+| --- | ---: | ---: |
+| Complete profiled CLI execution | 5.461 s | 4.404 s |
+| Public calls | 2 | 1 |
+| Returned stdout | 7,141 bytes | 3,742 bytes |
+| Total processes | 8 | 6 |
+| Candidate renders / export workers / scientific preparation | 2 / 1 / 0 | 2 / 1 / 0 |
+
+Cold semantic import is separately 1.612 s; a repeated completed request including
+a fresh CLI is 0.432 s with zero native processes. Both paths retain six native
+project inventory reads; the new path adds complete publication-cache evidence.
+Do not infer that all state reads or rendering work disappeared. The roughly
+19.4% time and 47.6% stdout reductions apply to this small n=3 fixture only.
+
+A separate real persistent CLI/official-MCP case reused one daemon PID: creation
+2.654 s, patch/export 2.667 s, MCP idempotent replay 0.017 s, warm RPC describe
+0.006 s. This is not a matched before/after daemon benchmark. External-model tokens,
+inference and user end-to-end time remain unmeasured. Dense NMR/TTS costs and full
+semantic recompilation are not established by the small fixture. The full report,
+raw measurements and reproduction harness are in
+`.tmp_verify/document_migration_20261007/`.
+
+
+## 2026-10-07: semantic transactions with a persistent native worker
+
+Three matched, profiled, fresh-CLI width edits compare legacy task style + resume
+with one direct semantic patch. Median local time is 5.213898 s versus 2.533515 s
+(51.4% lower); stdout 7,296 versus 3,838 bytes; public calls 2 versus 1; actual
+process starts 8 versus 2, including the client CLI. The semantic path executes
+five native commands in one child, retaining two candidate renders, one final
+export and zero scientific data preparations. Native state checks remain in place.
+Cold import is separately 1.259445 s; identical replay including fresh CLI is
+0.478052 s with zero native process starts. Setup, request authoring, RPC transport,
+external model and human review are excluded; n=3 small UV-Vis figures does not
+measure user waiting, tokens or large-spectrum rendering.
+
+Template creation now retains a guarded prepared checkpoint and exports once,
+including when its requested style is unchanged. Actual original-table cell
+bindings, stable series IDs, native style, source bytes and replay are tested.
+The two creation worker-count records confirm one export and zero native calls
+on identical replay. Do not combine their single observations into the matched
+width-edit percentage.
+
+A separate 65,000-point synthetic storage benchmark measures seven journal stages
+plus revision: 697.03 ms inline versus 4.43 ms using immutable scientific content
+references, with a 77.17 ms one-time intern and 0.718 ms full-byte guard. This is
+storage-only, not end-to-end plot timing.
+
+Evidence: `.tmp_verify/document_migration_20261007/phase2_warm_performance.json`,
+`benchmark_phase2_warm/`, `template_export_count_*.json`, and
+`.tmp_verify/scientific_content_store_20261007/run-9e6c2556/measurement.json`.
+First-slice measurements are preserved separately. Warm native tests verify exact
+PNG/TIFF pixels and scientific audit, fresh-document reload, timeout/disconnect
+termination and code/runtime drift rejection; process reuse does not reuse stale
+native document state.

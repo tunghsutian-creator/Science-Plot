@@ -727,3 +727,104 @@ def test_autoplot_cli_reaches_rule_preflight_before_missing_source_check(
     assert captured["template"] == "bar"
     assert output.err == ""
     assert json.loads(output.out) == payload
+
+
+@pytest.mark.parametrize("rule_id,template", [("tensile_curve", "curve"), ("rheology_frequency_sweep", "point_line")])
+def test_render_auto_preserves_scientific_workflow_and_explicit_options(
+    tmp_path, monkeypatch, capsys, rule_id, template,
+) -> None:
+    from sciplot_core import render, workflow
+
+    source = tmp_path / "source.csv"
+    source.write_text("x,y\n1,2\n")
+    output = tmp_path / "rendered"
+    captured = {}
+    monkeypatch.setattr(render, "inspect_payload", lambda _path: {
+        "inspection_resolution": {"status": "ready_rule_authoritative", "rule_id": rule_id},
+        "recommendations": [{"template_id": "heatmap", "default_render_overrides": {"size": "180x55"}}],
+    })
+    monkeypatch.setattr(render, "render_to_dir", lambda *_a, **_k: pytest.fail("Automatic raw data bypassed its scientific workflow."))
+
+    def run(path):
+        captured.update(json.loads(path.read_text()))
+        return {"state": "ready", "ready_to_use": True, "request_path": str(path)}
+
+    monkeypatch.setattr(workflow, "run_request", run)
+    assert cli.main(["render", str(source), "--auto", "--out", str(output),
+                     "--options", '{"palette_preset":"npg_modern","x_min":0.1}']) == 0
+    assert captured["recipe"] == "auto"
+    assert captured["rule_id"] == rule_id
+    assert captured["template"] == template
+    assert captured["input"] == str(source)
+    assert captured["output"] == str(output)
+    assert captured["exports"] == ["pdf", "tiff_300"]
+    assert captured["explicit_render_option_keys"] == ["palette_preset", "x_min"]
+    assert captured["render_options"]["palette_preset"] == "npg_modern"
+    assert captured["render_options"]["x_min"] == 0.1
+    assert captured["render_options"]["size"] == "60x55"
+    assert "explicit_template_selection" not in captured
+    result = json.loads(capsys.readouterr().out)
+    assert Path(result["request_path"]).is_file()
+
+
+@pytest.mark.parametrize("resolution", [None, {}, {"status": "ready_rule_authoritative"},
+    {"status": "generic_inspection_failed", "rule_id": "tensile_curve"},
+    {"status": "ready_rule_authoritative", "rule_id": "unknown_rule"}])
+def test_render_auto_rejects_unverified_or_unknown_rule_before_output(tmp_path, monkeypatch, resolution):
+    from sciplot_core import render, workflow
+
+    source = tmp_path / "source.csv"
+    source.write_text("x,y\n1,2\n")
+    output = tmp_path / "rendered"
+    monkeypatch.setattr(render, "inspect_payload", lambda _path: {
+        "inspection_resolution": resolution, "recommendations": [{"template_id": "curve"}]})
+    monkeypatch.setattr(workflow, "run_request", lambda *_a: pytest.fail("Unverified rule executed."))
+    assert cli.main(["render", str(source), "--auto", "--out", str(output)]) == 1
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("extra", [["--sheet", "1"], ["--sheet", "other"], ["--template", "heatmap"], ["--options", "[]"]])
+def test_render_auto_rejects_unsupported_selection_before_output(tmp_path, monkeypatch, extra):
+    from sciplot_core import render, workflow
+
+    source = tmp_path / "source.csv"
+    source.write_text("x,y\n1,2\n")
+    output = tmp_path / "rendered"
+    monkeypatch.setattr(render, "inspect_payload", lambda _path: {
+        "inspection_resolution": {"status": "ready_rule_authoritative", "rule_id": "rheology_frequency_sweep"}})
+    monkeypatch.setattr(workflow, "run_request", lambda *_a: pytest.fail("Unsupported selection executed."))
+    assert cli.main(["render", str(source), "--auto", "--out", str(output), *extra]) == 1
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("ready_to_use,expected", [(True, 0), (False, 1), (None, 1), (1, 1)])
+def test_render_auto_exit_code_and_supported_explicit_template(tmp_path, monkeypatch, ready_to_use, expected):
+    from sciplot_core import render, workflow
+
+    source = tmp_path / "source.csv"
+    source.write_text("x,y\n1,2\n")
+    monkeypatch.setattr(render, "inspect_payload", lambda _path: {
+        "inspection_resolution": {"status": "ready_rule_authoritative", "rule_id": "impact_metric"}})
+
+    def run(path):
+        request = json.loads(path.read_text())
+        assert request["template"] == "bar"
+        assert request["explicit_template_selection"] is True
+        return {"state": "ready", "ready_to_use": ready_to_use}
+
+    monkeypatch.setattr(workflow, "run_request", run)
+    assert cli.main(["render", str(source), "--auto", "--template", "bar", "--out", str(tmp_path / "out")]) == expected
+
+
+def test_direct_render_keeps_existing_plot_ready_renderer(tmp_path, monkeypatch):
+    from sciplot_core import render, workflow
+
+    source = tmp_path / "source.csv"
+    source.write_text("x,y\n1,2\n")
+    calls = []
+    monkeypatch.setattr(render, "inspect_payload", lambda *_a: pytest.fail("Explicit primitive unexpectedly classified."))
+    monkeypatch.setattr(workflow, "run_request", lambda *_a: pytest.fail("Explicit primitive unexpectedly changed lifecycle."))
+    monkeypatch.setattr(render, "render_to_dir", lambda path, **kwargs: calls.append((path, kwargs)) or {"outputs": []})
+    assert cli.main(["render", str(source), "--template", "curve", "--out", str(tmp_path / "out")]) == 0
+    assert calls[0][0] == source
+    assert calls[0][1]["template"] == "curve"

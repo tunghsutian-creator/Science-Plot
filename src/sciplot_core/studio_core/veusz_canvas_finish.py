@@ -8,6 +8,7 @@ from typing import Any
 def add_veusz_categorical_axis_provider(
     interface: Any,
     categorical: dict[str, Any] | None,
+    *, label_dataset: str = "category_axis_labels",
 ) -> None:
     """Provide native label-mode tick lookup without visible data marks."""
 
@@ -17,7 +18,7 @@ def add_veusz_categorical_axis_provider(
     interface.To("category_axis_label_provider")
     interface.Set("xData", "category_axis_x")
     interface.Set("yData", "category_axis_y")
-    interface.Set("labels", "category_axis_labels")
+    interface.Set("labels", label_dataset)
     interface.Set("marker", "none")
     interface.Set("PlotLine/hide", True)
     label_provider_style_hidden = categorical.get("presentation_kind") not in {

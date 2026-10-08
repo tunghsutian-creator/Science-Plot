@@ -1,0 +1,765 @@
+{
+  "canvas_mm": [
+    60.0,
+    55.0
+  ],
+  "plot_rectangle_mm": [
+    14.0,
+    5.5,
+    55.5,
+    44.0
+  ],
+  "margins_mm": {
+    "left": 14.0,
+    "right": 4.5,
+    "top": 5.5,
+    "bottom": 11.0
+  },
+  "graph": {
+    "Background/color": {
+      "rgba16": [
+        65535,
+        65535,
+        65535,
+        65535
+      ]
+    },
+    "Background/style": "solid",
+    "Background/hide": false,
+    "Background/transparency": 0,
+    "Background/linewidth": {
+      "pt": 0.5
+    },
+    "Background/linestyle": "solid",
+    "Background/patternspacing": {
+      "pt": 5.0
+    },
+    "Background/backcolor": {
+      "rgba16": [
+        65535,
+        65535,
+        65535,
+        65535
+      ]
+    },
+    "Background/backtransparency": 0,
+    "Background/backhide": true,
+    "Border/hide": true
+  },
+  "axes": {
+    "x": {
+      "hide": false,
+      "label": "\\omega (rad s⁻¹)",
+      "direction": "horizontal",
+      "min": 0.049999999999999996,
+      "max": 200.00000000000003,
+      "log": true,
+      "autoMirror": false,
+      "outerticks": true,
+      "otherPosition": 0.0,
+      "mode": "numeric",
+      "reflect": false,
+      "Line/color": {
+        "rgba16": [
+          4369,
+          4369,
+          4369,
+          65535
+        ]
+      },
+      "Line/width": {
+        "pt": 0.8
+      },
+      "Line/style": "solid",
+      "Line/transparency": 0,
+      "Line/hide": false,
+      "Label/font": "Arial",
+      "Label/size": {
+        "pt": 7.0
+      },
+      "Label/color": {
+        "rgba16": [
+          4369,
+          4369,
+          4369,
+          65535
+        ]
+      },
+      "Label/style": "",
+      "Label/italic": false,
+      "Label/bold": false,
+      "Label/underline": false,
+      "Label/hide": false,
+      "Label/atEdge": false,
+      "Label/rotate": "0",
+      "Label/offset": {
+        "pt": 2.0
+      },
+      "Label/position": "centre",
+      "TickLabels/font": "Arial",
+      "TickLabels/size": {
+        "pt": 7.0
+      },
+      "TickLabels/color": {
+        "rgba16": [
+          4369,
+          4369,
+          4369,
+          65535
+        ]
+      },
+      "TickLabels/style": "",
+      "TickLabels/italic": false,
+      "TickLabels/bold": false,
+      "TickLabels/underline": false,
+      "TickLabels/hide": false,
+      "TickLabels/rotate": "0",
+      "TickLabels/format": "%Ve",
+      "TickLabels/scale": 1.0,
+      "TickLabels/offset": {
+        "pt": 1.4
+      },
+      "MajorTicks/color": {
+        "rgba16": [
+          0,
+          0,
+          0,
+          65535
+        ]
+      },
+      "MajorTicks/width": {
+        "pt": 0.8
+      },
+      "MajorTicks/style": "solid",
+      "MajorTicks/transparency": 0,
+      "MajorTicks/hide": false,
+      "MajorTicks/length": {
+        "pt": 2.8
+      },
+      "MajorTicks/number": 6,
+      "MajorTicks/manualTicks": [
+        0.1,
+        1.0,
+        10.0,
+        100.0
+      ],
+      "MinorTicks/color": {
+        "rgba16": [
+          0,
+          0,
+          0,
+          65535
+        ]
+      },
+      "MinorTicks/width": {
+        "pt": 0.8
+      },
+      "MinorTicks/style": "solid",
+      "MinorTicks/transparency": 0,
+      "MinorTicks/hide": false,
+      "MinorTicks/length": {
+        "pt": 1.5
+      },
+      "MinorTicks/number": 5,
+      "MinorTicks/manualTicks": [
+        0.2,
+        0.4,
+        0.6000000000000001,
+        0.8,
+        2.0,
+        4.0,
+        6.0,
+        8.0,
+        20.0,
+        40.0,
+        60.0,
+        80.0
+      ],
+      "GridLines/hide": true,
+      "MinorGridLines/hide": true
+    },
+    "y": {
+      "hide": false,
+      "label": "\\italic{G}′ (Pa)",
+      "direction": "vertical",
+      "min": 0.4007348141324154,
+      "max": 16932.12703447185,
+      "log": true,
+      "autoMirror": false,
+      "outerticks": true,
+      "otherPosition": 0.0,
+      "mode": "numeric",
+      "reflect": false,
+      "Line/color": {
+        "rgba16": [
+          4369,
+          4369,
+          4369,
+          65535
+        ]
+      },
+      "Line/width": {
+        "pt": 0.8
+      },
+      "Line/style": "solid",
+      "Line/transparency": 0,
+      "Line/hide": false,
+      "Label/font": "Arial",
+      "Label/size": {
+        "pt": 7.0
+      },
+      "Label/color": {
+        "rgba16": [
+          4369,
+          4369,
+          4369,
+          65535
+        ]
+      },
+      "Label/style": "",
+      "Label/italic": false,
+      "Label/bold": false,
+      "Label/underline": false,
+      "Label/hide": false,
+      "Label/atEdge": false,
+      "Label/rotate": "0",
+      "Label/offset": {
+        "pt": 2.0
+      },
+      "Label/position": "centre",
+      "TickLabels/font": "Arial",
+      "TickLabels/size": {
+        "pt": 7.0
+      },
+      "TickLabels/color": {
+        "rgba16": [
+          4369,
+          4369,
+          4369,
+          65535
+        ]
+      },
+      "TickLabels/style": "",
+      "TickLabels/italic": false,
+      "TickLabels/bold": false,
+      "TickLabels/underline": false,
+      "TickLabels/hide": false,
+      "TickLabels/rotate": "0",
+      "TickLabels/format": "%Ve",
+      "TickLabels/scale": 1.0,
+      "TickLabels/offset": {
+        "pt": 1.4
+      },
+      "MajorTicks/color": {
+        "rgba16": [
+          0,
+          0,
+          0,
+          65535
+        ]
+      },
+      "MajorTicks/width": {
+        "pt": 0.8
+      },
+      "MajorTicks/style": "solid",
+      "MajorTicks/transparency": 0,
+      "MajorTicks/hide": false,
+      "MajorTicks/length": {
+        "pt": 2.8
+      },
+      "MajorTicks/number": 6,
+      "MajorTicks/manualTicks": [
+        1.0,
+        10.0,
+        100.0,
+        1000.0,
+        10000.0
+      ],
+      "MinorTicks/color": {
+        "rgba16": [
+          0,
+          0,
+          0,
+          65535
+        ]
+      },
+      "MinorTicks/width": {
+        "pt": 0.8
+      },
+      "MinorTicks/style": "solid",
+      "MinorTicks/transparency": 0,
+      "MinorTicks/hide": false,
+      "MinorTicks/length": {
+        "pt": 1.5
+      },
+      "MinorTicks/number": 5,
+      "MinorTicks/manualTicks": [
+        2.0,
+        4.0,
+        6.0,
+        8.0,
+        20.0,
+        40.0,
+        60.0,
+        80.0,
+        200.0,
+        400.0,
+        600.0,
+        800.0,
+        2000.0,
+        4000.0,
+        6000.0,
+        8000.0
+      ],
+      "GridLines/hide": true,
+      "MinorGridLines/hide": true
+    }
+  },
+  "series": [
+    {
+      "id": "series:pp5udc",
+      "coordinates_hash": "fe5b15c45bf6f997afaee7627bb1c48361420cf2fa39a08f75921b8ff94d9acd",
+      "point_count": 16,
+      "line": {
+        "PlotLine/color": {
+          "rgba16": [
+            13621,
+            26728,
+            49344,
+            65535
+          ]
+        },
+        "PlotLine/width": {
+          "pt": 1.2
+        },
+        "PlotLine/style": "solid",
+        "PlotLine/transparency": 8,
+        "PlotLine/hide": false,
+        "PlotLine/steps": "off",
+        "PlotLine/interpType": "linear",
+        "PlotLine/bezierJoin": "linear",
+        "PlotLine/joinStyle": "bevel"
+      },
+      "marker": {
+        "marker": "circle",
+        "markerSize": {
+          "pt": 2.0
+        },
+        "thinfactor": 1,
+        "MarkerLine/color": {
+          "rgba16": [
+            13621,
+            26728,
+            49344,
+            65535
+          ]
+        },
+        "MarkerLine/width": {
+          "pt": 0.8
+        },
+        "MarkerLine/style": "solid",
+        "MarkerLine/transparency": 5,
+        "MarkerLine/hide": false,
+        "MarkerLine/scaleLine": true,
+        "MarkerFill/color": {
+          "rgba16": [
+            13621,
+            26728,
+            49344,
+            65535
+          ]
+        },
+        "MarkerFill/style": "solid",
+        "MarkerFill/transparency": 5,
+        "MarkerFill/hide": false,
+        "MarkerFill/colorMap": "grey",
+        "MarkerFill/colorMapInvert": false,
+        "MarkerFill/newMarkerSizes": false
+      },
+      "errors_visible": false
+    },
+    {
+      "id": "series:pp3155",
+      "coordinates_hash": "8b95ca270d9a5757f8173d7e8f0ba51f723415eda2ae67e34bf8704ba66e29b3",
+      "point_count": 16,
+      "line": {
+        "PlotLine/color": {
+          "rgba16": [
+            8738,
+            8738,
+            8738,
+            65535
+          ]
+        },
+        "PlotLine/width": {
+          "pt": 1.2
+        },
+        "PlotLine/style": "solid",
+        "PlotLine/transparency": 8,
+        "PlotLine/hide": false,
+        "PlotLine/steps": "off",
+        "PlotLine/interpType": "linear",
+        "PlotLine/bezierJoin": "linear",
+        "PlotLine/joinStyle": "bevel"
+      },
+      "marker": {
+        "marker": "square",
+        "markerSize": {
+          "pt": 2.0
+        },
+        "thinfactor": 1,
+        "MarkerLine/color": {
+          "rgba16": [
+            8738,
+            8738,
+            8738,
+            65535
+          ]
+        },
+        "MarkerLine/width": {
+          "pt": 0.8
+        },
+        "MarkerLine/style": "solid",
+        "MarkerLine/transparency": 5,
+        "MarkerLine/hide": false,
+        "MarkerLine/scaleLine": true,
+        "MarkerFill/color": {
+          "rgba16": [
+            8738,
+            8738,
+            8738,
+            65535
+          ]
+        },
+        "MarkerFill/style": "solid",
+        "MarkerFill/transparency": 5,
+        "MarkerFill/hide": false,
+        "MarkerFill/colorMap": "grey",
+        "MarkerFill/colorMapInvert": false,
+        "MarkerFill/newMarkerSizes": false
+      },
+      "errors_visible": false
+    }
+  ],
+  "legends": [
+    {
+      "horzPosn": "manual",
+      "vertPosn": "manual",
+      "horzManual": 0.6183775180722892,
+      "vertManual": 0.025974025974025976,
+      "keyLength": {
+        "pt": 11.338582677165356
+      },
+      "marginSize": 0.15,
+      "columns": 1,
+      "symbolswap": false,
+      "Text/font": "Arial",
+      "Text/size": {
+        "pt": 6.0
+      },
+      "Text/color": {
+        "rgba16": [
+          0,
+          0,
+          0,
+          65535
+        ]
+      },
+      "Text/style": "",
+      "Text/italic": false,
+      "Text/bold": false,
+      "Text/underline": false,
+      "Text/hide": false,
+      "Background/hide": true,
+      "Border/hide": true
+    }
+  ],
+  "painted_text": [
+    {
+      "text": "10^{0}",
+      "bounds_mm": [
+        8.232083333333334,
+        39.767299538653575,
+        11.899208333333332,
+        41.62202870532025
+      ],
+      "anchor_mm": [
+        11.899208333333332,
+        40.69466412198691
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "text": "10^{0}",
+      "bounds_mm": [
+        27.15584493631254,
+        46.10079166666667,
+        30.822969936312543,
+        48.400020833333336
+      ],
+      "anchor_mm": [
+        28.98940743631254,
+        46.10079166666667
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "text": "10^{1}",
+      "bounds_mm": [
+        8.232083333333334,
+        31.444512805385166,
+        11.899208333333332,
+        33.29924197205183
+      ],
+      "anchor_mm": [
+        11.899208333333332,
+        32.3718773887185
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "text": "10^{1}",
+      "bounds_mm": [
+        38.67703006368747,
+        46.10079166666667,
+        42.34415506368747,
+        48.400020833333336
+      ],
+      "anchor_mm": [
+        40.510592563687474,
+        46.10079166666667
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "text": "10^{2}",
+      "bounds_mm": [
+        8.232083333333334,
+        23.121726072116754,
+        11.899208333333332,
+        24.97645523878342
+      ],
+      "anchor_mm": [
+        11.899208333333332,
+        24.049090655450083
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "text": "10^{2}",
+      "bounds_mm": [
+        50.19821519106241,
+        46.10079166666667,
+        53.86534019106241,
+        48.400020833333336
+      ],
+      "anchor_mm": [
+        52.03177769106241,
+        46.10079166666667
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "text": "10^{3}",
+      "bounds_mm": [
+        8.232083333333334,
+        14.79893933884834,
+        11.899208333333332,
+        16.653668505515007
+      ],
+      "anchor_mm": [
+        11.899208333333332,
+        15.726303922181675
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "text": "10^{4}",
+      "bounds_mm": [
+        8.232083333333334,
+        6.476152605579923,
+        11.899208333333332,
+        8.33088177224659
+      ],
+      "anchor_mm": [
+        11.899208333333332,
+        7.4035171889132565
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "text": "10^{−1}",
+      "bounds_mm": [
+        15.190159808937603,
+        46.10079166666667,
+        19.746284808937606,
+        48.400020833333336
+      ],
+      "anchor_mm": [
+        17.468222308937605,
+        46.10079166666667
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "text": "PP 3155",
+      "bounds_mm": [
+        46.12064616666668,
+        40.54202083333334,
+        54.51322950000001,
+        42.534333333333336
+      ],
+      "anchor_mm": [
+        46.12064616666668,
+        40.54202083333334
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 6.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "text": "PP-5UDC",
+      "bounds_mm": [
+        46.12064616666668,
+        38.08404166666667,
+        55.770000333333336,
+        40.076354166666675
+      ],
+      "anchor_mm": [
+        46.12064616666668,
+        38.08404166666667
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 6.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "text": "\\italic{G}′ (Pa)",
+      "bounds_mm": [
+        3.451944444444444,
+        20.77728125,
+        6.288277777777779,
+        28.722718750000002
+      ],
+      "anchor_mm": [
+        6.288277777777779,
+        24.750000000000004
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 270.0
+    },
+    {
+      "text": "\\omega (rad s⁻¹)",
+      "bounds_mm": [
+        29.11172916666667,
+        50.34382638888889,
+        40.38827083333334,
+        53.18015972222223
+      ],
+      "anchor_mm": [
+        34.75000000000001,
+        50.34382638888889
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    }
+  ],
+  "export": {
+    "tiff_size_px": [
+      708,
+      649
+    ],
+    "tiff_dpi": [
+      300.0,
+      300.0
+    ],
+    "tiff_compression": "tiff_lzw",
+    "tiff_mode": "RGB",
+    "preview_dpi": 150,
+    "pdfdpi": 72,
+    "pdf_pages": 1,
+    "pdf_page_pt": [
+      0.0,
+      0.0,
+      170.0,
+      156.0
+    ],
+    "pdf_fonts": [
+      "Arial-ItalicMT",
+      "ArialMT",
+      "Helvetica"
+    ]
+  }
+}

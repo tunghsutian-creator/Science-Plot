@@ -31,9 +31,13 @@ from sciplot_core.mcp_server.services import invoke_owner
 
 INSTRUCTIONS = (
     "SciPlot executes local scientific plotting without calling a model. Prefer "
-    "task_start/task_resume for a complete authorized task. Inspect existing saved "
-    "projects instead of creating them again. Query real figure/object IDs and "
-    "the saved SHA before edits. Read candidate PNG resources and scientific "
+    "project_open then plot_patch for semantic saved-figure edits, or plot_create "
+    "for source-bound creation. Use returned stable object IDs and revision; "
+    "keep idempotency_key unchanged on retry. Follow local decision and export "
+    "receipts instead of reapplying committed work. Existing task_start/task_resume "
+    "remain supported for their advertised workflows. Inspect existing saved "
+    "projects instead of creating them again. Compatibility native-edit tools "
+    "require real figure/object IDs and the saved SHA. Read candidate PNG resources and scientific "
     "audits before accepting previews. Keep raw values, units and sample identities. "
     "Ask only for unresolved meaning or scope. Queries and edits do not certify "
     "delivery; handoff requires ready export evidence. Resource URIs are immutable "

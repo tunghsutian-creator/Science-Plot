@@ -27,7 +27,7 @@ from sciplot_core.studio_render.label_density import (
 )
 
 from sciplot_core.studio_render.legend_placement import (
-    _auto_inside_legend_placement,
+    _auto_inside_legend_placement, manual_anchor_fraction,
 )
 
 from sciplot_core.studio_render.legend_clearance import (
@@ -295,32 +295,9 @@ def _apply_readability_render_defaults(
             autofixes.append(
                 f"legend_axis_reserve_{placement['axis_reserve']['side']}"
             )
-        footprint = placement["footprint"]
-        graph_width_mm = max(float(footprint["graph_width_mm"]), 1.0)
-        graph_height_mm = max(float(footprint["graph_height_mm"]), 1.0)
-        box_width_mm = min(float(footprint["box_width_mm"]), graph_width_mm)
-        box_height_mm = min(float(footprint["box_height_mm"]), graph_height_mm)
-        edge_padding_mm = max(float(placement.get("edge_padding_mm") or 0.0), 0.0)
-        horizontal_pad = min(
-            edge_padding_mm / graph_width_mm,
-            max(0.0, 1.0 - box_width_mm / graph_width_mm),
-        )
-        vertical_pad = min(
-            edge_padding_mm / graph_height_mm,
-            max(0.0, 1.0 - box_height_mm / graph_height_mm),
-        )
         updated["legend_horz_position"] = "manual"
         updated["legend_vert_position"] = "manual"
-        updated["legend_horz_manual"] = (
-            horizontal_pad
-            if position.endswith("left")
-            else max(0.0, 1.0 - horizontal_pad - box_width_mm / graph_width_mm)
-        )
-        updated["legend_vert_manual"] = (
-            vertical_pad
-            if position.startswith("lower")
-            else max(0.0, 1.0 - vertical_pad - box_height_mm / graph_height_mm)
-        )
+        updated["legend_horz_manual"], updated["legend_vert_manual"] = manual_anchor_fraction(placement)
         placement["manual_anchor_fraction"] = {
             "x": round(float(updated["legend_horz_manual"]), 6),
             "y": round(float(updated["legend_vert_manual"]), 6),

@@ -161,6 +161,14 @@ def annotation_operation_capabilities() -> dict[str, Any]:
         "allow_clipping": {"type": "boolean"},
     }, ["axis", "unit", "expected_min", "expected_max", "min", "max",
         "ticks", "allow_clipping"])
+    add("set_axis_limits", {
+        "axis": {"enum": ["x", "y"]}, "unit": string,
+        "expected_min": number, "expected_max": number, "min": number, "max": number,
+        "allow_clipping": {"const": False},
+    }, ["axis", "unit", "expected_min", "expected_max", "min", "max", "allow_clipping"])
+    add("set_legend_visibility", {"expected_visible": {"type": "boolean"},
+                                   "visible": {"type": "boolean"}},
+        ["expected_visible", "visible"])
     return {
         "kind": "sciplot_annotation_operations", "version": 1,
         "operations_schema": {"type": "array", "minItems": 1, "maxItems": 100,

@@ -164,7 +164,7 @@ def build_plan_preview(
     else:
         template = str(requested_template or semantic.get("template") or "curve")
     inspection_error = semantic.get("vendor_error")
-    if inspection_error:
+    if inspection_error and not source.is_dir():
         return _blocked_preview(
             source=source,
             rule_id=rule_id,
@@ -221,6 +221,13 @@ def build_plan_preview(
             reason_code=exc.reason_code,
             message=str(exc),
             scientific_transform=scientific_transform,
+        )
+    if inspection_error and plan is None:
+        # A generic file reader cannot validate a directory. Only a complete
+        # plan from its existing scientific owner can supersede that failure.
+        return _blocked_preview(
+            source=source, rule_id=rule_id, template=template,
+            reason_code="plan_source_inspection_failed", message=str(inspection_error),
         )
     try:
         source_still_current = (

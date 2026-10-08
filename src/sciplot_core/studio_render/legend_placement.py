@@ -326,3 +326,18 @@ def _auto_inside_legend_placement(
         "footprint": {key: round(float(value), 6) for key, value in footprint.items()},
         "candidates": metrics,
     }
+
+
+def manual_anchor_fraction(placement: dict[str, Any]) -> list[float]:
+    """Shared old key-edge placement, in graph-local bottom-left fractions."""
+    footprint = placement["footprint"]
+    graph_width = max(float(footprint["graph_width_mm"]), 1.0)
+    graph_height = max(float(footprint["graph_height_mm"]), 1.0)
+    width = min(float(footprint["box_width_mm"]), graph_width)
+    height = min(float(footprint["box_height_mm"]), graph_height)
+    edge = max(float(placement.get("edge_padding_mm") or 0.0), 0.0)
+    horizontal = min(edge / graph_width, max(0.0, 1.0 - width / graph_width))
+    vertical = min(edge / graph_height, max(0.0, 1.0 - height / graph_height))
+    position = str(placement["position"])
+    return [horizontal if position.endswith("left") else max(0.0, 1.0 - horizontal - width / graph_width),
+            vertical if position.startswith("lower") else max(0.0, 1.0 - vertical - height / graph_height)]

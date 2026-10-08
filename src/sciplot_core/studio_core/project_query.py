@@ -22,6 +22,7 @@ from sciplot_core.studio_core.project_query_paths import (
     select_figure,
 )
 from sciplot_core.veusz_runtime import veusz_worker_environment
+from sciplot_core.native_process import run_worker
 
 
 def resolve_project_figure(
@@ -34,7 +35,7 @@ def resolve_project_figure(
 
 
 def _inspect_document(document: Path) -> dict[str, Any]:
-    completed = subprocess.run(
+    completed = run_worker(
         [
             sys.executable,
             "-m",
@@ -42,7 +43,7 @@ def _inspect_document(document: Path) -> dict[str, Any]:
             "inspect-document-state",
             str(document),
         ],
-        env=veusz_worker_environment(),
+        env=veusz_worker_environment(), cold_runner=subprocess.run,
         capture_output=True,
         text=True,
         timeout=120,

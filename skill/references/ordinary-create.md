@@ -4,6 +4,12 @@ Use this route for new ordinary plots from original data. The local task owns
 recognition, planning, native creation, QA and export. Separate inspect/rules/plan/
 project-create/Studio commands, repository reading and tests are not prerequisites.
 
+Ordinary creation stays on the existing production renderer and its shared house
+policy, family templates and supported explicit overrides. Do not translate raw
+input into a FigureTemplate merely to recreate defaults in an AI request.
+Instrument directories are validated by their scientific owner; missing metrics
+remain a source error, not a request for AI to select the same rule again.
+
 1. Start directly with the original source:
 
    ```bash
@@ -83,3 +89,24 @@ creation must not silently overwrite or trigger a second creation.
 Shared XY recovery supports ordinary paired curves and FTIR. Specialized scientific
 adapters retain their own contracts; never convert their data into another
 experiment to pass validation. Preserve raw rows, units and provenance throughout.
+
+## Declarative ManagedPlot figures
+
+For an explicitly composed multi-view, multiple-scale or layered figure, use the
+existing `plot create --request REQUEST.json --json` (MCP `sciplot_plot_create`)
+with `sciplot_figure_template` v2 plus explicit original-source Binding. Its live
+create schema is also the MCP tool input schema. The [Figure grammar contract](../../docs/DESIGN_FIGURE_GRAMMAR.md#implemented-wire-contracts-and-use)
+defines fields, precedence and supported capabilities. Source-only `task create`
+above remains the ordinary compatibility route; it does not promote native state.
+
+Declare semantic Scale IDs, layer/dataset/column bindings and physical layout
+constraints; let the local compiler solve panel coordinates and native objects.
+Preserve source hashes, sample/units and raw rows. Reuse immutable transform outputs
+when scientific preparation is already complete. Unsupported capabilities and
+hard layout errors return explicit constraints rather than native fallbacks.
+After creation, `plot describe` returns the exact FigureSpec and typed
+`figure_edit_contract`; batch edits through the same `plot patch` transaction.
+Retain raw source and `.sciplot_documents`; `plot export` reconstructs deleted
+VSZ/IR/render/export products. Deliver only `ready_to_use` exports with passed hard
+QA; inspect soft warnings separately. No Veusz path discovery or per-chart CLI is
+needed for this route.

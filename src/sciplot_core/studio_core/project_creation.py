@@ -52,6 +52,7 @@ def create_project(
     expected_plan: dict[str, Any],
     output_dir: Path | None = None,
     on_prepared: Callable[[dict[str, Any]], None] | None = None,
+    publish: bool = True,
 ) -> dict[str, Any]:
     source = canonical_path(source)
     if (expected_plan.get("rule_id") is not None
@@ -83,6 +84,10 @@ def create_project(
             )
         if on_prepared is not None:
             on_prepared({key: payload[key] for key in ("project_dir", "document", "request")})
+        if not publish:
+            return {"kind": "sciplot_project_prepared_result", "version": 1, "status": "prepared",
+                    **{key: payload[key] for key in ("project_dir", "document", "request")},
+                    "ready_to_use": False, "export_performed": False}
         return _publish(payload)
 
 

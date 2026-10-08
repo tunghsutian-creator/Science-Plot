@@ -40,11 +40,20 @@ def _finished_call(root: Path, state: dict[str, Any]) -> dict[str, Any]:
     result = _current_result(state) if state["status"] == "complete" else None
     finish_timing(state)
     save_task(root, state)
-    return {**task_summary(state), **({key: result[key] for key in ("current_project", "next_step") if key in result} if result else {})}
+    return {**task_summary(state), **({key: result[key] for key in ("status", "blocker", "current_project", "next_step") if key in result} if result else {})}
 
 
 def _current_result(state: dict[str, Any]) -> dict[str, Any]:
     summary = task_summary(state)
+    if state.get("defer_creation_export") is True and "prepared_creation" in state:
+        from sciplot_core.task_prepared_creation import require_prepared_current
+
+        try:
+            require_prepared_current(state)
+        except (ValueError, OSError) as exc:
+            summary.update(status="blocked", blocker={"reason_code": getattr(exc, "reason_code", "prepared_project_changed"),
+                           "message": str(exc)}, next_step={"action": "resolve_prepared_conflict"})
+        return summary
     if state.get("project"):
         try:
             current = inspect_project(Path(state["project"]))
@@ -88,11 +97,14 @@ def _current_result(state: dict[str, Any]) -> dict[str, Any]:
 def start_task(
     request: dict[str, Any], *, task_dir: Path | None = None,
     entry_intent: dict[str, Any] | None = None,
+    defer_creation_export: bool = False,
 ) -> dict[str, Any]:
     original_request = request
     try:
         request, task_dir, corrections = normalize_task_location(request, task_dir)
         request = validate_task_request(request)
+        if type(defer_creation_export) is not bool or (defer_creation_export and request["action"] != "create"):
+            raise TaskControlError("invalid_creation_mode", "Deferred native preparation is an internal create-only mode.")
         if request["action"] == "edit":
             validate_operation_batch(request["operations"])
     except (TaskControlError, AnnotationOperationError) as exc:
@@ -116,6 +128,8 @@ def start_task(
     with external_project_session(root):
         if root.exists():
             state = load_task(root)
+            if bool(state.get("defer_creation_export", False)) != defer_creation_export:
+                raise TaskControlError("task_creation_mode_conflict", "This task has a different frozen creation publication mode.")
             if entry_intent is not None:
                 if state.get("entry_intent") != entry_intent:
                     raise TaskControlError("task_intent_conflict", "This task directory belongs to a different or unrecorded typed intent.")
@@ -133,6 +147,7 @@ def start_task(
             "request": request, "source_sha256": digest,
             "status": "running", "phase": "starting",
             **({"entry_intent": deepcopy(entry_intent)} if entry_intent is not None else {}),
+            **({"defer_creation_export": True} if defer_creation_export else {}),
             **({"automatic_corrections": corrections} if corrections else {}),
         }
         save_task(root, state)
@@ -157,6 +172,11 @@ def inspect_task(task: Path) -> dict[str, Any]:
 
 
 def _resume(root: Path, state: dict[str, Any], response: dict[str, Any]) -> None:
+    if state.get("defer_creation_export") is True and "prepared_creation" in state and response == {"retry": True}:
+        from sciplot_core.task_prepared_creation import complete_prepared
+
+        complete_prepared(root, state)
+        return
     if "revise_operations" in response:
         if begin_preview_revision(state, response):
             run_edit_preview(root, state)

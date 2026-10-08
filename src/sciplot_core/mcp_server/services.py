@@ -22,6 +22,16 @@ def _preview_output(arguments: dict[str, Any]) -> Path:
 
 
 def invoke_owner(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    semantic_methods = {
+        "sciplot_project_open": "project.open", "sciplot_plot_describe": "plot.describe",
+        "sciplot_plot_create": "plot.create", "sciplot_plot_patch": "plot.patch",
+        "sciplot_plot_render": "plot.render", "sciplot_plot_export": "plot.export",
+        "sciplot_plot_rollback": "plot.rollback", "sciplot_plot_decide": "plot.decide",
+    }
+    if name in semantic_methods:
+        from sciplot_core.plot_protocol.client import call
+
+        return call(semantic_methods[name], arguments)
     if name == "sciplot_task_capabilities":
         from sciplot_core.task_capabilities import task_capabilities
 

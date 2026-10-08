@@ -22,7 +22,11 @@ raw files + hashes
 
 - raw files are data truth;
 - the confirmed request/study model is semantic truth;
-- the saved VSZ is visual truth;
+- the saved VSZ is the complete legacy visual baseline; an imported semantic
+  document owns only its explicitly covered properties, with exact native binding;
+- new `ManagedPlot` documents own all represented scientific/presentation state;
+  PlotIR, VSZ and render/export products are rebuildable derivatives (the supported
+  contract and exclusions are defined below);
 - versioned policy and request contracts define constraints;
 - QA reports only checks it actually performs.
 
@@ -80,6 +84,174 @@ while native GUI saves are detected by fingerprints. This does not provide
 automatic process-crash recovery or a second document authority.
 
 ## External control and native document boundary
+
+### Semantic document engine
+
+The implemented authority boundary is specified in [Managed plot design](DESIGN_MANAGED_PLOTS.md).
+`LegacyPlot` retains native authority; `ManagedPlot` owns its complete supported
+state and compiles through backend-neutral resolved PlotIR. Public CLI creation
+and MCP export have passed deletion of the entire artifact directory and IR cache,
+followed by recreation with identical semantic IDs, data, scientific/IR hashes
+and full native state. A shadow import never acquires managed authority by relabeling.
+
+`plot_document/` is renderer-independent: closed versioned scientific and
+presentation domains, stable object IDs, independent content hashes, atomic
+semantic patches and engine-computed risk. Pure Template / Binding / Theme
+composition and dependency planning are separately validated. These model hashes
+prove represented content only; they never replace compiled/native numerical
+audits. Scientific transformations cannot be smuggled into presentation patches.
+Figure scientific projection is inline control state under provenance.figure_spec;
+presentation projection lives under layout.figure_spec. Lossless rejoining is
+validated, bindings must match every layer, and no second mutable figure store is
+introduced. Scale-domain changes invalidate compile/render/export without rerunning
+data transforms. plot.describe publishes typed grammar edit schemas by semantic ID.
+The existing scientific executors remain the owners of calculation and preparation.
+
+The implemented additive grammar contract is recorded in [Figure Grammar v2](DESIGN_FIGURE_GRAMMAR.md).
+`plot_grammar/` owns Figure/View/Layer/Mark semantics, independent Scale/Axis,
+explicit resolution groups and theme precedence. `plot_layout/` owns physical
+constraints and hard/soft layout QA. Resolved PlotIR v2 is separate from v1; the
+existing document/transaction/data owners remain authoritative. Grammar backend
+lowering dispatches on generic marks, never scientific-family names. A-F native
+acceptance covers actual rheology, NIST impact data and UV-Vis source data, complete
+artifact/IR-cache deletion, theme identity and data-anchored annotations. Native
+text bounds are measured before clipping; hard failures block export and soft
+heuristics remain warnings. This is bounded layout QA, not journal certification.
+
+New FigureTemplate creation pins `sciplot-house-style-v1` in canonical presentation.
+`rendering_contract/` owns extracted immutable resources, their source evidence and
+content bindings; grammar resolves them below explicit themes and overrides.
+Single-panel defaults use the old fixed 60 x 55 mm frame and absolute margins.
+`sciplot-figure-composition-v1` separately owns new inter-panel placement. The
+solver rejects impossible constraints; native text fitting never resizes the
+prescribed frame. Historical unbound revisions retain their previous compiler
+interpretation and are not automatically restyled.
+
+Metric-flow axes and simple legends carry complete typography, physical padding,
+frame and explicit legend membership into PlotIR. Native text metrics are measured
+by QA; metric flow does not retain ignored hand-positioned text coordinates.
+`plot_backends/house_guides.py` maps only resolved IR to native axis/key primitives.
+`qa/rendering_regression.py` independently compares old/new structure and native
+pixels, with environment matching and discriminating negative controls. This is
+separate from rebuild equality. See [rendering design](DESIGN_RENDERING_CONTRACT.md)
+and the root old-contract/drift reports for the exact compatibility scope.
+
+`plot_ir/` owns version dispatch, the existing v1 Cartesian contract and document
+projection integration; `plot_grammar/` owns closed FigureSpec and PlotIR v2.
+`SemanticCompiler` dispatches explicitly by the canonical grammar version.
+It expands bindings and theme overrides into explicit dataset references/values,
+axes/scales/ticks, styles, dimensions, legend and annotations. It imports no Veusz
+object paths. `plot_backends/managed*.py` and `veusz_worker/managed.py` only lower
+this resolved IR into a fresh native document and compare its complete native
+state, including data/reference/custom-definition state. Unsupported backend
+capabilities fail explicitly. Scientific/IR identity excludes renderer timestamps;
+compiler/runtime fingerprints and actual artifact byte seals are separate.
+
+`plot_transforms/` owns typed select/rename/scale/normalize nodes and a fixed-file
+external executor protocol. Node intent and execution provenance jointly record
+stable IDs, parameters, input/output dataset IDs and hashes, executor identity,
+determinism and status. External execution binds interpreter/script bytes and
+closed parameters; existing scientific algorithms remain external owners.
+Non-deterministic declarations are representable but execution is unsupported.
+There is no client-supplied code-string evaluation. Original sample/column/row
+lineage is checked through supported transforms, with missing values retained.
+
+`plot_backends/` owns current-native import and the Veusz translation. Imported
+projects are `legacy_shadow`, never falsely fully represented: unmodeled objects,
+layout and native state remain in the saved VSZ. Actual native style is imported,
+not regenerated from an older spec. Managed title/annotation state retains its
+semantic ID when hidden. Linear axis bounds preserve ticks, units and direction
+and reject clipping. Legend visibility updates native and specification together;
+placement retains its original preset for rollback. Ordinary managed annotations
+retain coordinate mode and arrow anchors. All native paths stay in a private binding. Saved-file/source
+drift invalidates that binding and prevents writes or cache reuse. Source coverage
+is limited to recorded source paths; an old project cannot acquire nonexistent
+original-source provenance through inference. A selected-VSZ-only external save
+can be imported through a frozen `plot.decide` offer, actual native scientific
+audit and one visual review. Stable IDs follow unique existing native bindings;
+source/specification or structural identity changes are not guessed. Acceptance
+appends a revision and exports without rewriting the manually saved VSZ.
+
+`plot_engine/` owns immutable revision snapshots, atomic head pointers, durable
+idempotency journals, independent commit/export statuses and compact receipts.
+Its sibling `.sciplot_documents/` storage is outside the native project inventory.
+Each new patch validates its entire batch and base revision before reserving work.
+Safe presentation changes with passed native scientific audit commit automatically;
+review-risk changes return one frozen preview. Apply recovery delegates to the
+existing native transaction, then commits the semantic head once. Export failures
+leave the revision committed; retries never reapply it. Only known transient
+preview/export failures get one durable extra attempt. Undo appends a revision.
+This is recoverable logical execution, not a claim of atomic multi-file filesystem
+replacement across power loss. Full candidate/native evidence stays local.
+
+Large imported scientific provenance values are interned once into immutable
+content-addressed JSON blobs before revision zero. References seal exact bytes;
+revision/journal writes retain their hashes rather than copying numerical arrays.
+Every use and pre-apply boundary verifies the full referenced bytes. Existing
+inline history is not silently rewritten into a different hash representation.
+
+Byte-sealed render/export caches reuse exact current inputs; export reuse checks
+the complete publication evidence and file inventory, including added/removed
+visible files. Source changes invalidate dependent compile/render/export nodes.
+Presentation patches do not invoke scientific preparation. Managed graphs use
+source -> transform -> mapping -> compile -> render -> export content identities,
+and each binding seals only its own source/executor closure. Unrelated plot
+artifacts never enter this fingerprint. Explicit scientific patches can refresh
+a source hash, transform parameters or a registered executor identity; only
+affected transform cache keys execute. A changed file alone does not execute work.
+
+`plot_protocol/` owns serialized local JSON-RPC over a private UNIX socket. The
+daemon serves `project.open` and `plot.describe/create/patch/render/rollback/export/decide`.
+CLI and MCP are thin clients of the same service, with no provider/model calls.
+The backend owns a persistent native child through `native_process/`, routing
+existing worker commands under an explicit scope. Each command reloads a fresh
+Veusz document; Qt/imports are reused, not unchecked document state. A timeout or
+disconnect terminates the child without blindly repeating a mutation. Full source,
+runtime and relevant environment drift fails closed before cache identity can
+bless output from an old loaded worker. A source/config/interpreter digest
+separates daemon versions; an active mutation is never hot-reloaded. Connection
+loss carries the original request identity and never silently resends a mutation.
+Files are verified when a request uses them; there is no background source
+recomputation or claim of a general live filesystem watcher.
+
+The `task style` compatibility facade routes already-imported figures through the
+semantic engine; unimported projects and other retained task operations continue
+through their existing owners. Native preparation, audit and publication are shared,
+not duplicated. Template creation binds explicit original-table cells, units and
+stable series IDs through the current mapping/preparation owners. A private
+prepared-only checkpoint saves one guarded native baseline without publication;
+one semantic transaction then applies the theme and exports once. Interrupted
+preparation resumes its sealed checkpoint; changed inputs/output conflicts block.
+Unsupported template transforms, layout or custom guards are rejected explicitly.
+`mapping_contract/table_selection.py` owns the shared pure selection schema;
+`task_prepared_creation.py` owns the prepared checkpoint and never claims delivery.
+That prepared-native creation path is retained only as explicit `mode: legacy`
+compatibility. Template-based `plot.create` now defaults to ManagedPlot, requiring
+a fully represented Cartesian v1 or FigureTemplate v2; source-only task/CLI creation remains
+the existing compatibility workflow. No automatic conversion of legacy VSZ occurs.
+Managed creation commits document/revision before compiling disposable artifacts.
+`managed_backend.py` reuses the same transaction state machine: a durable compile
+intent plus exact full-state inspection recovers a VSZ saved before its build
+receipt. A byte-sealed product from an obsolete compiler can be rebuilt; unknown
+native changes cannot. Export-pending resumes without scientific re-execution.
+An external executor interrupted before durable output storage is marked uncertain
+and is not blindly repeated. Complete managed presentation rollback restores
+theme/layout/export intent as well as represented object properties.
+
+`external_mutation.py` records before/after identity and semantic diffs. Legacy
+known-style classification requires an exact baseline and a closed transcript
+comparison; concurrent unrepresented changes remain opaque. Managed inspection
+requires complete candidate native equivalence. Both known and unknown manual
+managed changes currently block automatic adoption; the latter cannot become
+canonical state. Managed external-delta adoption and explicit managed-to-legacy
+conversion are not yet implemented.
+
+Managed scope is one Cartesian XY figure, supported deterministic transforms,
+explicit layout, ordinary labels and PDF/TIFF exports. Multipanel and arbitrary
+Veusz features remain unsupported. Managed export readiness proves exact native
+fidelity and sealed nonempty output; it does not imply complete publication QA,
+arbitrary-theme text-overflow checks or cross-machine font-pixel determinism.
+Existing legacy publication owners retain their original QA boundaries.
 
 `studio_core/veusz_line_joins.py` installs the optional native XY
 `PlotLine/joinStyle` setting in SciPlot's Veusz creation, loading and export

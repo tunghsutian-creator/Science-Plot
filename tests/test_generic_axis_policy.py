@@ -11,6 +11,74 @@ from sciplot_core.studio_render.models import StudioSeries
 _OBSERVED_X = (3.5, 10.0, 41.0)
 
 
+def test_category_wrapping_uses_native_width_preserving_names_and_frame(monkeypatch) -> None:
+    import sciplot_core.studio_core.veusz_axis_apply as axis_apply
+
+    long_labels = ["6-66 2 ADR", "E0 2MM", "E3 2MM", "E4 2MM"]
+    widths = dict(zip(long_labels, [13.0, 9.0, 9.0, 9.0], strict=True))
+    widths.update({label: 3.0 for label in ("E0", "E2", "E3", "E4")})
+    widths.update({"6-66": 5.0, "2 ADR": 6.0, "6-66 2": 8.0, "ADR": 4.0})
+    measured = []
+
+    def measure(labels, *, family, size_pt):
+        measured.append((family, size_pt))
+        return [widths[label] for label in labels]
+
+    monkeypatch.setattr(axis_apply, "_category_label_widths_mm", measure)
+    axis = {"category_labels": long_labels, "category_positions": [1, 2, 3, 4],
+            "min": 0.5, "max": 4.5, "tick_label_size_pt": 7.0}
+    style = {"font_family": "Arial"}
+    lines = axis_apply.category_label_lines(axis, style, 41.5)
+    assert lines == [["6-66", "2 ADR"], ["E0 2MM"], ["E3 2MM"], ["E4 2MM"]]
+    assert [" ".join(parts) for parts in lines] == long_labels
+    assert axis_apply.category_label_lines(axis, style, 101.5) == [[name] for name in long_labels]
+    assert axis_apply.category_label_lines(
+        {**axis, "category_labels": ["E0", "E2", "E3", "E4"]}, style, 41.5
+    ) == [[name] for name in ["E0", "E2", "E3", "E4"]]
+    assert measured and set(measured) == {("Arial", 7.0)}
+    assert axis["category_labels"] == long_labels
+
+
+def test_existing_large_category_rotation_does_not_depend_on_new_measurement(monkeypatch) -> None:
+    import sciplot_core.studio_core.veusz_axis_apply as axis_apply
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("The existing >4 category rotation policy must remain unchanged")
+
+    monkeypatch.setattr(axis_apply, "_category_label_widths_mm", unexpected)
+    assert axis_apply.category_label_lines({"category_labels": ["A", "B", "C", "D", "E"]}, {}, 41.5) == [[name] for name in "ABCDE"]
+    assert axis_apply.category_label_lines({"category_labels": ["A"]}, {}, 41.5) == [["A"]]
+
+
+def test_unbreakable_colliding_category_blocks_instead_of_dropping_text(monkeypatch) -> None:
+    import sciplot_core.studio_core.veusz_axis_apply as axis_apply
+
+    monkeypatch.setattr(axis_apply, "_category_label_widths_mm", lambda labels, **kwargs: [20.0] * len(labels))
+    axis = {"category_labels": ["unbreakable", "E0"], "category_positions": [1, 2],
+            "min": 0.5, "max": 2.5, "tick_label_size_pt": 7.0}
+    with pytest.raises(ValueError, match="cannot fit the fixed frame in two lines"):
+        axis_apply.category_label_lines(axis, {"font_family": "Arial"}, 20.0)
+
+
+@pytest.mark.parametrize("display", [None, ["forged", "E0"]])
+def test_category_audit_rejects_missing_or_forged_required_display(monkeypatch, display) -> None:
+    from types import SimpleNamespace
+    import sciplot_core.studio_core.veusz_data_import as data_import
+    import sciplot_core.veusz_worker.spec_audit.categorical_axis as audit
+
+    original = ["long label", "E0"]
+    datasets = {"category_axis_labels": original}
+    if display is not None:
+        datasets["category_axis_display_labels"] = display
+    monkeypatch.setattr(audit, "_text_dataset_values", lambda _document, *, dataset_name: datasets.get(dataset_name))
+    monkeypatch.setattr(data_import, "category_display_labels", lambda *args: [r"long\\label", "E0"])
+    inventory = SimpleNamespace(loaded_document=SimpleNamespace(data=datasets), categorical={"groups": []})
+    spec = {"axes": {"x": {"category_labels": original, "category_positions": [1, 2]}},
+            "style": {}, "size_mm": [60, 55]}
+    with pytest.raises(ValueError, match="display labels differ"):
+        audit.audit_categorical_axis(inventory, spec)
+
+
 def test_generic_linear_axis_padding_uses_the_observed_span() -> None:
     limits = compute_axis_limits(
         [[1.0, 2.0, 3.0]],

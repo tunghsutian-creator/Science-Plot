@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from sciplot_core.cli.value_io import (
@@ -12,36 +13,66 @@ from sciplot_core.cli.value_io import (
 )
 
 
+def _render_auto(source: Path, args: Any, options: dict[str, Any]) -> dict[str, Any]:
+    """Keep automatic selection on the existing scientific production workflow."""
+    from sciplot_core.foundation.json_io import atomic_write_json
+    from sciplot_core.foundation.path_names import reserve_unique_file
+    from sciplot_core.materials_rules.catalog import resolve_rule_template
+    from sciplot_core.policy import AUTOPLOT_RENDER_OPTIONS, DEFAULT_EXPORT_FORMATS_POLICY
+    from sciplot_core.render import inspect_payload
+    from sciplot_core.request_contract import normalize_render_options
+    from sciplot_core.workflow import run_request
+
+    if _coerce_sheet(args.sheet) != 0:
+        raise ValueError(
+            "render --auto cannot bind a non-default worksheet. Use task create/start "
+            "and its source-bound table selection; no worksheet is chosen silently."
+        )
+    inspection = inspect_payload(source)
+    resolution = inspection.get("inspection_resolution")
+    if (not isinstance(resolution, dict)
+            or resolution.get("status") != "ready_rule_authoritative"
+            or not isinstance(resolution.get("rule_id"), str)):
+        raise ValueError(
+            "--auto requires an authoritative ready material rule; use task create "
+            "to resolve scientific choices. A generic recommendation cannot select a renderer."
+        )
+    rule_id = resolution["rule_id"]
+    template = resolve_rule_template(rule_id, args.template)
+    explicit = normalize_render_options(options, template=template)
+    source, output = source.resolve(), args.out.expanduser().resolve()
+    if source.is_relative_to(output) or (source.is_dir() and output.is_relative_to(source)):
+        raise ValueError("Automatic output and original source must be separate; choose --out outside the source tree.")
+    request: dict[str, Any] = {
+        "recipe": "auto", "input": str(source), "output": str(output),
+        "rule_id": rule_id, "template": template,
+        "exports": list(DEFAULT_EXPORT_FORMATS_POLICY),
+        "render_options": {**normalize_render_options(AUTOPLOT_RENDER_OPTIONS), **explicit},
+        "explicit_render_option_keys": sorted(explicit),
+    }
+    if args.template is not None:
+        request["explicit_template_selection"] = True
+    request_path = reserve_unique_file(output, "render_auto_request.json")
+    atomic_write_json(request_path, request)
+    return run_request(request_path)
+
+
 def dispatch_rendering(
     args: Any, argv: list[str] | None, *, run_autoplot
 ) -> int | None:
     if args.command == "render":
-        from sciplot_core.render import inspect_payload, render_to_dir
+        from sciplot_core.render import render_to_dir
 
         source = _resolve_input(args.input)
         sheet = _coerce_sheet(args.sheet)
         template = args.template
         options = _load_options(args.options)
         if args.auto:
-            inspection = inspect_payload(source, sheet=sheet)
-            resolution = inspection.get("inspection_resolution")
-            if (
-                isinstance(resolution, dict)
-                and resolution.get("status") != "ready_rule_authoritative"
-            ):
-                raise ValueError(
-                    "--auto refused an unverified material-rule candidate; inspect or repair the source, or pass --template and --options explicitly."
-                )
-            recommendations = inspection.get("recommendations") or []
-            if not recommendations:
-                raise ValueError(
-                    "--auto could not recommend a template; pass --template and --options explicitly."
-                )
-            top = recommendations[0]
-            template = template or str(top.get("template_id"))
-            defaults = top.get("default_render_overrides")
-            if isinstance(defaults, dict):
-                options = {**defaults, **options}
+            if not isinstance(options, dict):
+                raise ValueError("render --auto --options requires a JSON object.")
+            payload = _render_auto(source, args, options)
+            _print_json(payload)
+            return 0 if payload.get("state") == "ready" and payload.get("ready_to_use") is True else 1
         if not template:
             raise ValueError(
                 "render needs a template: pass --template NAME, or --auto to choose one."

@@ -156,6 +156,13 @@ def plan_task(root: Path, state: dict[str, Any]) -> dict[str, Any] | None:
             selected["rule_id"] = resolution["rule_id"]
         else:
             atomic_write_json(root / "inspection.json", inspection)
+            failed_plan = inspection.get("scientific_plan")
+            if isinstance(failed_plan, dict) and failed_plan.get("status") == "blocked" and failed_plan.get("blocker"):
+                # Preserve the scientific owner's real source error; asking AI
+                # to choose the same rule again cannot supply missing data.
+                atomic_write_json(root / "plan.json", failed_plan)
+                state.update(status="blocked", phase="planning", blocker=failed_plan["blocker"])
+                return None
             _needs_rule_choice(state, reason_code="rule_selection_required",
                 message="尚不能确定实验类型。请选择与原始数据实际含义一致的实验。",
                 evidence=str(root / "inspection.json"), source=source)

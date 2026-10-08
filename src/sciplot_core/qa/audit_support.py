@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 from sciplot_core.foundation.json_io import read_json_object
+from sciplot_core.native_process import run_worker
 from sciplot_core.policy import canonical_figure_stem
 
 
@@ -202,8 +203,9 @@ def _run_veusz_audit(paths: list[Path]) -> tuple[dict[str, Any] | None, str | No
         *(str(path) for path in paths),
     ]
     try:
-        completed = subprocess.run(
+        completed = run_worker(
             command,
+            cold_runner=subprocess.run,
             text=True,
             capture_output=True,
             check=True,

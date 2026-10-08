@@ -1,0 +1,68 @@
+{
+  "raw_files_unchanged": true,
+  "frequency": [
+    {
+      "sample": "PP-5UDC",
+      "quantity": "Loss Modulus",
+      "points": 16,
+      "values_verified": true
+    },
+    {
+      "sample": "PP 3155",
+      "quantity": "Loss Modulus",
+      "points": 16,
+      "values_verified": true
+    },
+    {
+      "sample": "PP-5UDC",
+      "quantity": "Storage Modulus",
+      "points": 16,
+      "values_verified": true
+    },
+    {
+      "sample": "PP 3155",
+      "quantity": "Storage Modulus",
+      "points": 16,
+      "values_verified": true
+    },
+    {
+      "sample": "PP-5UDC",
+      "quantity": "Complex Viscosity",
+      "points": 16,
+      "values_verified": true
+    },
+    {
+      "sample": "PP 3155",
+      "quantity": "Complex Viscosity",
+      "points": 16,
+      "values_verified": true
+    },
+    {
+      "sample": "PP-5UDC",
+      "quantity": "Loss Factor",
+      "points": 16,
+      "values_verified": true
+    },
+    {
+      "sample": "PP 3155",
+      "quantity": "Loss Factor",
+      "points": 16,
+      "values_verified": true
+    }
+  ],
+  "creep": [
+    {
+      "sample": "PP 3155",
+      "quantity": "Shear strain (%) vs Time (s)",
+      "points": 108,
+      "all_original_selected_values_exact": true
+    },
+    {
+      "sample": "PP-5UDC",
+      "quantity": "Shear strain (%) vs Time (s)",
+      "points": 109,
+      "all_original_selected_values_exact": true
+    }
+  ],
+  "canonical_and_delivered_vsz_hashes_match": true
+}

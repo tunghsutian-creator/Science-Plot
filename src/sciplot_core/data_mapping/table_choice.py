@@ -88,7 +88,9 @@ def select_table(snapshot: dict[str, Any], selection: dict[str, Any],
                  metadata_confirmations: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Bind explicit metadata/data rows without filling blanks or guessing samples."""
     source = Path(snapshot["source"])
-    fresh = table_choice_snapshot(source, snapshot["rule_id"])
+    # Selection validates original evidence. Discovery/proposal callers retain
+    # their rule-adapter eligibility gate in table_choice_snapshot itself.
+    fresh = source_table_snapshot(source, rule_id=snapshot["rule_id"])
     if fresh != snapshot:
         raise ValueError("Table-choice original evidence changed.")
     required = {"sheet", "header_rows", "data_start_row", "data_end_row"}

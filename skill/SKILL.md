@@ -42,7 +42,11 @@ it is not another prerequisite for ordinary work.
   response cannot explain the failure. Local preview timeout recovery is bounded.
 - Batch the complete authorized change. Let the local transaction own source,
   native document, scientific audit, QA and publication validation.
-- Use `task create` for ordinary raw-data plotting and `task style` for explicit
+- For saved ordinary figures, prefer the persistent semantic `plot` API described
+  in the saved-figure route. Reuse its plot ID/revision, batch supported edits in
+  one patch and let the engine perform safe review, commit and export locally.
+  `task style` delegates already-imported figures to this same engine.
+- Use `task create` for ordinary raw-data plotting and legacy `task style` for explicit
   sample width/color changes. These entries construct requests and bind current
   state locally; do not precede them with schema/context discovery or JSON files.
   Use the returned continuation arguments after reviewing a pending preview.
@@ -66,9 +70,14 @@ interpolate missing references. Unit conversion requires its scientific contract
 Merged metadata expansion is explicit and applies only above data. Do not turn
 scientific ambiguity into an automatic mapping or a different experiment.
 
-The saved `studio/document.vsz` is visual authority. Use native operations; never
-patch VSZ text, automate Veusz clicks, replace raw files, create a one-off plotting
-script, or introduce another renderer or document model.
+For legacy figures, the saved `studio/document.vsz` remains the complete visual
+baseline. An imported SciPlotDocument owns only its explicitly covered semantic
+properties; its `legacy_shadow` coverage preserves opaque native state. New edits use that versioned document and the Veusz adapter, with both scientific hashes and
+actual native audits. External native saves invalidate the binding. Never patch
+VSZ text, automate Veusz clicks, replace raw files, create a one-off plotting script,
+or silently promote an incomplete import to full semantic authority.
+
+Managed Template/Binding/Theme creation uses document authority. FigureTemplate v2 composes Views/Scales/Layers/Marks in physical mm; `plot.describe` returns its typed edit contract. Retain raw inputs and `.sciplot_documents`; rebuild disposable artifacts with `plot.export`. Source/transform/executor or scale-domain edits need scientific intent. Reject unknown native state; source-only `task create` remains compatibility.
 
 For raw-input plotting, omit `--out` by default. Deliveries belong beside the
 original source in `SOURCE_SciPlot/`; hidden `.sciplot/` holds internal evidence.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from sciplot_core.native_process import active_worker, run_worker
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -85,7 +86,7 @@ def export_studio_document(
     resolved_output_dir = (
         output_dir.expanduser().resolve() if output_dir is not None else None
     )
-    if needs_veusz_worker_process():
+    if active_worker() is not None or needs_veusz_worker_process():
         command = [
             sys.executable,
             "-m",
@@ -99,12 +100,12 @@ def export_studio_document(
             command.extend(["--out", str(resolved_output_dir)])
         if audit_spec_path is not None:
             command.extend(["--audit-spec", str(audit_spec_path)])
-        result = subprocess.run(
+        result = run_worker(
             command,
             text=True,
             capture_output=True,
             check=True,
-            env=veusz_worker_environment(),
+            env=veusz_worker_environment(), cold_runner=subprocess.run,
         )
         return json.loads(result.stdout)
     export_dir = resolved_output_dir or document_path.parent / "exports"

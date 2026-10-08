@@ -240,6 +240,19 @@ def _tensile_export_files(input_path: Path) -> list[Path]:
     return [input_path]
 
 
+def _tensile_export_group(path: Path, source: Path) -> str:
+    """Retain the nearest explicit instrument group within the imported root."""
+    if not source.is_dir():
+        return ""
+    root, parent = source.resolve(), path.resolve().parent
+    for candidate in (parent, *parent.parents):
+        if candidate != root and root not in candidate.parents:
+            break
+        if is_tensile_export_dir(candidate):
+            return tensile_export_sample_name(candidate)
+    return ""
+
+
 def _read_tensile_export_series_list(source: Path) -> list[CurveSeriesPayload]:
     if source.is_file():
         structured = _scan_curve_series_source(
@@ -271,15 +284,13 @@ def _read_tensile_export_series_list(source: Path) -> list[CurveSeriesPayload]:
             ]
     series_list: list[CurveSeriesPayload] = []
     errors: list[str] = []
-    direct_export_group = (
-        tensile_export_sample_name(source) if is_tensile_export_dir(source) else ""
-    )
     for path in _tensile_export_files(source):
         try:
             series = _read_tensile_export_series(path)
-            if direct_export_group and "__" not in series.sample:
+            export_group = _tensile_export_group(path, source)
+            if export_group and "__" not in series.sample:
                 series = _with_series_sample(
-                    series, f"{direct_export_group}__{series.sample}"
+                    series, f"{export_group}__{series.sample}"
                 )
             series_list.append(series)
         except ValueError as exc:

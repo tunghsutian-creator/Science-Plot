@@ -1,0 +1,835 @@
+{
+  "kind": "sciplot_veusz_plot_spec",
+  "version": 1,
+  "created_at": "2026-07-24T10:10:47.152101+00:00",
+  "render_engine": "veusz",
+  "qa_target": "veusz_export",
+  "template": "bar",
+  "source_request": {
+    "input": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+    "output": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_tensile_strength_by_sample_render",
+    "exports": [
+      "pdf",
+      "tiff_300"
+    ],
+    "template": "bar",
+    "render_options": {
+      "legend_position": "none",
+      "series_label_mode": "none",
+      "visual_theme_id": "clean_light",
+      "style_preset": "nature",
+      "size": "60x55",
+      "palette_preset": "control_first_bright",
+      "font_size_pt": 7.0,
+      "legend_font_size_pt": 6.0,
+      "axis_linewidth_pt": 0.8,
+      "tick_width_pt": 0.8,
+      "tick_length_pt": 2.8,
+      "minor_tick_width_pt": 0.8,
+      "minor_tick_length_pt": 1.5,
+      "line_width_pt": 1.2,
+      "marker_size": 2.0,
+      "marker_line_width_pt": 0.8,
+      "marker_sequence": [
+        "circle"
+      ],
+      "marker_fill_mode": "filled",
+      "raw_point_jitter_fraction": 0.14,
+      "line_alpha": 1.0,
+      "marker_alpha": 0.8,
+      "box_line_mode": "series_color",
+      "x_label_override": "Sample",
+      "y_label_override": "Tensile strength (MPa)",
+      "summary_statistic": "median_iqr",
+      "y_min": 0.0,
+      "y_max": 39.912600000000005,
+      "y_ticks": [
+        0.0,
+        10.0,
+        20.0,
+        30.0
+      ]
+    },
+    "explicit_render_option_keys": [],
+    "x_metric": "strain",
+    "y_metric": "stress",
+    "review_notes": [],
+    "series_order": [
+      "E0",
+      "E2",
+      "E3",
+      "E4"
+    ],
+    "study_model": {
+      "kind": "sciplot_study_model",
+      "version": 2,
+      "samples": [],
+      "figure_queue": [],
+      "scientific_integrity": {
+        "scientific_outcome_agnostic": true,
+        "significance_required": false,
+        "silent_data_omission_allowed": false,
+        "statistics_must_be_explicit": true
+      },
+      "publication_intent_ref": "publication_intent.json"
+    },
+    "publication_intent": {
+      "kind": "sciplot_publication_intent",
+      "version": 1,
+      "id": "publication_intent_1",
+      "status": "draft",
+      "scientific_question": "",
+      "question_status": "pending",
+      "core_claim": "",
+      "claim_status": "pending",
+      "target_profile_id": "sciplot_single_panel_v1",
+      "target_status": "inferred",
+      "layout_id": null,
+      "layout_status": "pending",
+      "figure_layout": null,
+      "figure_contracts": [],
+      "panels": [],
+      "exact_labels": {},
+      "caption_contract": {
+        "status": "pending",
+        "define_symbols_and_colors": true,
+        "define_n_and_error_representation": true,
+        "state_data_transformations": true
+      },
+      "palette_policy": {
+        "palette_id": "control_first_bright",
+        "non_color_distinction_required": true,
+        "grayscale_review_required": true,
+        "library_default_palette_allowed": false
+      },
+      "integrity_policy": {
+        "scientific_outcome_agnostic": true,
+        "significance_required": false,
+        "silent_data_omission_allowed": false,
+        "statistics_must_be_explicit": true
+      },
+      "review_risk": {
+        "status": "pending",
+        "missing_question": true,
+        "missing_claim": true,
+        "panel_count_mismatch": false,
+        "pending_statistics_panels": [],
+        "pending_statistics_figures": []
+      },
+      "transform_ledger_ref": "transform_ledger.json"
+    },
+    "transform_ledger": {
+      "kind": "sciplot_transform_ledger",
+      "version": 1,
+      "status": "runtime_recorded",
+      "source_root": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+      "replicate_policy": {},
+      "column_confirmations": [],
+      "steps": [
+        {
+          "id": "identity_source",
+          "operation": "identity",
+          "implementation_ref": "sciplot_core.workflow.run_request",
+          "input_refs": [
+            "identity_source_input"
+          ],
+          "output_refs": [
+            "identity_source_output"
+          ],
+          "input_artifacts": [
+            {
+              "id": "identity_source_input",
+              "role": "input",
+              "kind": "file",
+              "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+              "exists": true,
+              "size_bytes": 236,
+              "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8",
+              "table_shape": [
+                8,
+                4
+              ]
+            }
+          ],
+          "output_artifacts": [
+            {
+              "id": "identity_source_output",
+              "role": "output",
+              "kind": "file",
+              "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+              "exists": true,
+              "size_bytes": 236,
+              "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8",
+              "table_shape": [
+                8,
+                4
+              ]
+            }
+          ],
+          "parameters": {
+            "reason": "No deterministic data transformation was applied before rendering."
+          },
+          "input_shape": [
+            8,
+            4
+          ],
+          "output_shape": [
+            8,
+            4
+          ],
+          "confirmation_status": "runtime_recorded",
+          "silent_omission_allowed": false,
+          "outcome_strength_gate_applied": false
+        }
+      ],
+      "unresolved_step_ids": [],
+      "policy": {
+        "raw_sources_preserved": true,
+        "silent_data_omission_allowed": false,
+        "selection_must_be_recorded": true,
+        "unit_conversion_must_be_recorded": true,
+        "input_output_shape_preferred": true,
+        "scientific_outcome_agnostic": true
+      }
+    }
+  },
+  "render_options": {
+    "size": "60x55",
+    "style_preset": "nature",
+    "palette_preset": "control_first_bright",
+    "visual_theme_id": "clean_light",
+    "legend_position": "none",
+    "series_label_mode": "none",
+    "font_size_pt": 7.0,
+    "legend_font_size_pt": 6.0,
+    "axis_linewidth_pt": 0.8,
+    "tick_width_pt": 0.8,
+    "tick_length_pt": 2.8,
+    "minor_tick_width_pt": 0.8,
+    "minor_tick_length_pt": 1.5,
+    "line_width_pt": 1.2,
+    "marker_size": 2.0,
+    "marker_line_width_pt": 0.8,
+    "marker_sequence": [
+      "circle"
+    ],
+    "marker_fill_mode": "filled",
+    "raw_point_jitter_fraction": 0.14,
+    "line_alpha": 1.0,
+    "marker_alpha": 0.8,
+    "box_line_mode": "series_color",
+    "x_label_override": "Sample",
+    "y_label_override": "Tensile strength (MPa)",
+    "summary_statistic": "median_iqr",
+    "y_min": 0.0,
+    "y_max": 59.40923076923077,
+    "y_ticks": [
+      0.0,
+      10.0,
+      20.0,
+      30.0,
+      40.0,
+      50.0
+    ],
+    "x_min": 0.5,
+    "x_max": 4.5,
+    "x_ticks": [
+      1.0,
+      2.0,
+      3.0,
+      4.0
+    ],
+    "_categorical_box_fill_fraction": 0.42666666666666664,
+    "_categorical_box_native_fill_scale": 0.5,
+    "_categorical_slot_width_mm": 10.375,
+    "_categorical_box_width_mm": 4.426666666666667,
+    "_categorical_raw_point_layout": "adaptive",
+    "_autofixes_applied": [
+      "categorical_bar_mean_and_error_headroom"
+    ],
+    "_visual_extent_axis_diagnostics": {
+      "kind": "sciplot_physical_visual_extent_axis_clearance",
+      "version": 1,
+      "minimum_extra_clearance_mm": 0.25,
+      "expanded_axes": [],
+      "violations": [],
+      "axes": {
+        "x": {
+          "scale": "linear",
+          "original_bounds": [
+            0.5,
+            4.5
+          ],
+          "final_bounds": [
+            0.5,
+            4.5
+          ],
+          "visual_anchor_bounds": [
+            0.84,
+            4.16
+          ],
+          "required_extent_mm": 0.46166666666666667,
+          "lower_clearance_mm": 3.5275,
+          "upper_clearance_mm": 3.5274999999999985,
+          "lower_bound_explicit": false,
+          "upper_bound_explicit": false,
+          "status": "safe"
+        },
+        "y": {
+          "scale": "linear",
+          "original_bounds": [
+            0.0,
+            59.40923076923077
+          ],
+          "final_bounds": [
+            0.0,
+            59.40923076923077
+          ],
+          "visual_anchor_bounds": [
+            32.67,
+            39.414204234516454
+          ],
+          "required_extent_mm": 0.46166666666666667,
+          "lower_clearance_mm": 21.171709912989435,
+          "upper_clearance_mm": 12.957725788047071,
+          "lower_bound_explicit": false,
+          "upper_bound_explicit": false,
+          "status": "safe"
+        }
+      }
+    }
+  },
+  "size_mm": [
+    60,
+    55
+  ],
+  "frame_alignment": {
+    "status": "locked",
+    "margin_mode": "fixed_mm",
+    "outside_legend_allowed": false,
+    "auxiliary_frame_envelope": "standard_graph_frame",
+    "auxiliary_text_envelope": "standard_text_safe_area",
+    "margins_mm": {
+      "left": 14.0,
+      "right": 4.5,
+      "bottom": 11.0,
+      "top": 5.5
+    }
+  },
+  "autofixes_applied": [
+    "categorical_bar_mean_and_error_headroom"
+  ],
+  "visual_extent_axis_clearance": {
+    "kind": "sciplot_physical_visual_extent_axis_clearance",
+    "version": 1,
+    "minimum_extra_clearance_mm": 0.25,
+    "expanded_axes": [],
+    "violations": [],
+    "axes": {
+      "x": {
+        "scale": "linear",
+        "original_bounds": [
+          0.5,
+          4.5
+        ],
+        "final_bounds": [
+          0.5,
+          4.5
+        ],
+        "visual_anchor_bounds": [
+          0.84,
+          4.16
+        ],
+        "required_extent_mm": 0.46166666666666667,
+        "lower_clearance_mm": 3.5275,
+        "upper_clearance_mm": 3.5274999999999985,
+        "lower_bound_explicit": false,
+        "upper_bound_explicit": false,
+        "status": "safe"
+      },
+      "y": {
+        "scale": "linear",
+        "original_bounds": [
+          0.0,
+          59.40923076923077
+        ],
+        "final_bounds": [
+          0.0,
+          59.40923076923077
+        ],
+        "visual_anchor_bounds": [
+          32.67,
+          39.414204234516454
+        ],
+        "required_extent_mm": 0.46166666666666667,
+        "lower_clearance_mm": 21.171709912989435,
+        "upper_clearance_mm": 12.957725788047071,
+        "lower_bound_explicit": false,
+        "upper_bound_explicit": false,
+        "status": "safe"
+      }
+    }
+  },
+  "layout_issues": [],
+  "visual_data_transforms": [],
+  "provenance": {
+    "veusz": {
+      "name": "Veusz",
+      "path": "/Users/dongxutian/Documents/research-plots/third_party/veusz",
+      "commit": "264084b06eb306d860c7757c637f37b78bb2333f",
+      "license": "GPL-2.0-or-later",
+      "vendored": true
+    }
+  },
+  "style": {
+    "font_family": "Arial",
+    "font_size_pt": 7.0,
+    "legend_font_size_pt": 6.0,
+    "axis_linewidth_pt": 0.8,
+    "tick_width_pt": 0.8,
+    "tick_length_pt": 2.8,
+    "minor_tick_width_pt": 0.8,
+    "minor_tick_length_pt": 1.5,
+    "line_width_pt": 1.2,
+    "line_alpha": 0.92,
+    "marker_alpha": 0.8,
+    "marker_size_pt": 2.0,
+    "marker_line_width_pt": 0.8,
+    "axes_labelpad_pt": 2.0,
+    "xtick_major_pad_pt": 1.4,
+    "ytick_major_pad_pt": 1.4,
+    "legend_frameon": false,
+    "margins_mm": {
+      "left": 14.0,
+      "right": 4.5,
+      "bottom": 11.0,
+      "top": 5.5
+    }
+  },
+  "axes": {
+    "x": {
+      "label": "Sample",
+      "scale": "linear",
+      "tick_format": "Auto",
+      "minor_tick_count": 20,
+      "minor_ticks": [],
+      "min": 0.5,
+      "max": 4.5,
+      "ticks": [
+        1.0,
+        2.0,
+        3.0,
+        4.0
+      ],
+      "reverse": false,
+      "foreground_color": "#111111",
+      "label_size_pt": 7.0,
+      "tick_label_size_pt": 7.0,
+      "line_width_pt": 0.8,
+      "major_tick_width_pt": 0.8,
+      "major_tick_length_pt": 2.8,
+      "minor_tick_width_pt": 0.8,
+      "minor_tick_length_pt": 1.5,
+      "mode": "labels",
+      "category_labels": [
+        "E0",
+        "E2",
+        "E3",
+        "E4"
+      ],
+      "category_positions": [
+        1.0,
+        2.0,
+        3.0,
+        4.0
+      ]
+    },
+    "y": {
+      "label": "Tensile strength (MPa)",
+      "scale": "linear",
+      "tick_format": "Auto",
+      "minor_tick_count": 20,
+      "minor_ticks": [],
+      "min": 0.0,
+      "max": 59.40923076923077,
+      "ticks": [
+        0.0,
+        10.0,
+        20.0,
+        30.0,
+        40.0,
+        50.0
+      ],
+      "show_ticks": true,
+      "foreground_color": "#111111",
+      "label_size_pt": 7.0,
+      "tick_label_size_pt": 7.0,
+      "line_width_pt": 0.8,
+      "major_tick_width_pt": 0.8,
+      "major_tick_length_pt": 2.8,
+      "minor_tick_width_pt": 0.8,
+      "minor_tick_length_pt": 1.5
+    }
+  },
+  "legend": {
+    "show": false,
+    "columns": 1,
+    "mode": "none",
+    "horz_position": null,
+    "vert_position": null,
+    "horz_manual": null,
+    "vert_manual": null
+  },
+  "categorical": {
+    "kind": "sciplot_categorical_replicate_contract",
+    "version": 2,
+    "presentation_kind": "bar_error",
+    "summary_statistic": "median_iqr",
+    "minimum_box_replicates": 2,
+    "quartile_method": "linear_interpolation_at_(n_minus_1)_times_p",
+    "box_definition": "q1_to_q3_middle_50_percent_interval",
+    "box_whisker_mode": "1.5IQR",
+    "box_aspect_constraint": null,
+    "mean_marker_visible": false,
+    "bar_error_statistic": "sd",
+    "native_veusz_boxplot": false,
+    "raw_values_preserved": true,
+    "raw_replicate_count": 20,
+    "visual_style": {
+      "palette_policy": "relaxed_multi_category",
+      "palette_preset": "control_first_bright",
+      "box_fill_mode": "series_color",
+      "box_fill_transparency": 0,
+      "box_fill_fraction": 0.42666666666666664,
+      "box_native_fill_scale": 0.5,
+      "box_width_policy": "min(categorical_bar_width_times_4_over_3,data_iqr_physical_aspect_cap)",
+      "category_count": 4,
+      "category_slot_width_mm": 10.375,
+      "box_width_mm": 4.426666666666667,
+      "raw_marker_diameter_mm": 1.411111111111111,
+      "raw_point_band_policy": "min(box_ratio_log2_replicates,box_width_minus_one_marker_diameter)",
+      "raw_point_position_policy": "stable_hash_shuffled_even_slots",
+      "raw_point_layout": "adaptive",
+      "box_line_mode": "series_color",
+      "raw_point_color_mode": "series_color",
+      "raw_point_alpha": 0.8,
+      "box_line_width_pt": 0.7,
+      "bar_width_fraction": 0.32,
+      "bar_fill_transparency": 0,
+      "bar_line_width_pt": 0.7,
+      "error_cap_to_bar_ratio": 0.5,
+      "error_line_width_pt": 1.2
+    },
+    "groups": [
+      {
+        "label": "E0",
+        "color": "#222222",
+        "fill_color": "#B7B7B7",
+        "keyline_color": "#696969",
+        "position": 1.0,
+        "y_name": "category_y_1",
+        "raw_values": [
+          34.13,
+          32.67,
+          36.0,
+          33.39,
+          34.2
+        ],
+        "replicate_count": 5,
+        "raw_point_half_spread": 0.14532797858099067,
+        "raw_point_band_fraction": 0.29065595716198134,
+        "raw_point_band_width_mm": 3.015555555555556,
+        "raw_point_box_width_ratio": 0.6812248995983938,
+        "raw_points_within_box_width": true,
+        "raw_marker_glyphs_within_box_width": true,
+        "inside_iqr_count": 3,
+        "inside_iqr_fraction": 0.6,
+        "boxplot_eligible": true,
+        "summary_status": "bar_error",
+        "descriptive_statistics": {
+          "minimum": 32.67,
+          "q1": 33.39,
+          "median": 34.13,
+          "q3": 34.2,
+          "maximum": 36.0
+        },
+        "bar_mean": 34.078,
+        "bar_error": 1.2417205804849973,
+        "bar_error_statistic": "sd",
+        "raw_points_visible": false
+      },
+      {
+        "label": "E2",
+        "color": "#3568C0",
+        "fill_color": "#AFC6ED",
+        "keyline_color": "#7898D1",
+        "position": 2.0,
+        "y_name": "category_y_2",
+        "raw_values": [
+          34.95,
+          35.16,
+          35.51,
+          36.58,
+          35.49
+        ],
+        "replicate_count": 5,
+        "raw_point_half_spread": 0.14532797858099067,
+        "raw_point_band_fraction": 0.29065595716198134,
+        "raw_point_band_width_mm": 3.015555555555556,
+        "raw_point_box_width_ratio": 0.6812248995983938,
+        "raw_points_within_box_width": true,
+        "raw_marker_glyphs_within_box_width": true,
+        "inside_iqr_count": 3,
+        "inside_iqr_fraction": 0.6,
+        "boxplot_eligible": true,
+        "summary_status": "bar_error",
+        "descriptive_statistics": {
+          "minimum": 34.95,
+          "q1": 35.16,
+          "median": 35.49,
+          "q3": 35.51,
+          "maximum": 36.58
+        },
+        "bar_mean": 35.538,
+        "bar_error": 0.6279888534042614,
+        "bar_error_statistic": "sd",
+        "raw_points_visible": false
+      },
+      {
+        "label": "E3",
+        "color": "#C83E4D",
+        "fill_color": "#F0B4BA",
+        "keyline_color": "#D97D87",
+        "position": 3.0,
+        "y_name": "category_y_3",
+        "raw_values": [
+          35.03,
+          36.49,
+          36.03,
+          34.37,
+          35.5
+        ],
+        "replicate_count": 5,
+        "raw_point_half_spread": 0.14532797858099045,
+        "raw_point_band_fraction": 0.2906559571619809,
+        "raw_point_band_width_mm": 3.0155555555555518,
+        "raw_point_box_width_ratio": 0.6812248995983927,
+        "raw_points_within_box_width": true,
+        "raw_marker_glyphs_within_box_width": true,
+        "inside_iqr_count": 3,
+        "inside_iqr_fraction": 0.6,
+        "boxplot_eligible": true,
+        "summary_status": "bar_error",
+        "descriptive_statistics": {
+          "minimum": 34.37,
+          "q1": 35.03,
+          "median": 35.5,
+          "q3": 36.03,
+          "maximum": 36.49
+        },
+        "bar_mean": 35.484,
+        "bar_error": 0.8302891062756409,
+        "bar_error_statistic": "sd",
+        "raw_points_visible": false
+      },
+      {
+        "label": "E4",
+        "color": "#2A9D8F",
+        "fill_color": "#A7D9D2",
+        "keyline_color": "#67B7AC",
+        "position": 4.0,
+        "y_name": "category_y_4",
+        "raw_values": [
+          37.23,
+          39.13,
+          38.64,
+          39.0,
+          39.08
+        ],
+        "replicate_count": 5,
+        "raw_point_half_spread": 0.14532797858099045,
+        "raw_point_band_fraction": 0.2906559571619809,
+        "raw_point_band_width_mm": 3.0155555555555518,
+        "raw_point_box_width_ratio": 0.6812248995983927,
+        "raw_points_within_box_width": true,
+        "raw_marker_glyphs_within_box_width": true,
+        "inside_iqr_count": 3,
+        "inside_iqr_fraction": 0.6,
+        "boxplot_eligible": true,
+        "summary_status": "bar_error",
+        "descriptive_statistics": {
+          "minimum": 37.23,
+          "q1": 38.64,
+          "median": 39.0,
+          "q3": 39.08,
+          "maximum": 39.13
+        },
+        "bar_mean": 38.616,
+        "bar_error": 0.7982042345164566,
+        "bar_error_statistic": "sd",
+        "raw_points_visible": false
+      }
+    ],
+    "insufficient_replicate_groups": []
+  },
+  "scalar_field": null,
+  "reference_guides": [],
+  "series": [
+    {
+      "name": "series_1",
+      "label": "E0",
+      "x_name": "category_x_1",
+      "y_name": "category_y_1",
+      "x_values": [
+        1.0,
+        0.9273360107095047,
+        1.0726639892904952,
+        1.1453279785809907,
+        0.8546720214190093
+      ],
+      "y_values": [
+        34.13,
+        32.67,
+        36.0,
+        33.39,
+        34.2
+      ],
+      "color": "#222222",
+      "line_width_pt": 1.2,
+      "line_style": "solid",
+      "marker": "circle",
+      "marker_size_pt": 2.0,
+      "marker_thin_factor": 1,
+      "marker_fill_color": "#222222",
+      "presentation_kind": "categorical_replicates",
+      "category_position": 1.0,
+      "plot_line_hide": true,
+      "marker_line_hide": true,
+      "raw_points_visible": false,
+      "source_artifacts": [
+        {
+          "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+          "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8"
+        }
+      ]
+    },
+    {
+      "name": "series_2",
+      "label": "E2",
+      "x_name": "category_x_2",
+      "y_name": "category_y_2",
+      "x_values": [
+        2.0726639892904952,
+        2.1453279785809904,
+        1.8546720214190093,
+        2.0,
+        1.9273360107095048
+      ],
+      "y_values": [
+        34.95,
+        35.16,
+        35.51,
+        36.58,
+        35.49
+      ],
+      "color": "#3568C0",
+      "line_width_pt": 1.2,
+      "line_style": "solid",
+      "marker": "circle",
+      "marker_size_pt": 2.0,
+      "marker_thin_factor": 1,
+      "marker_fill_color": "#3568C0",
+      "presentation_kind": "categorical_replicates",
+      "category_position": 2.0,
+      "plot_line_hide": true,
+      "marker_line_hide": true,
+      "raw_points_visible": false,
+      "source_artifacts": [
+        {
+          "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+          "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8"
+        }
+      ]
+    },
+    {
+      "name": "series_3",
+      "label": "E3",
+      "x_name": "category_x_3",
+      "y_name": "category_y_3",
+      "x_values": [
+        3.0726639892904952,
+        3.0,
+        3.1453279785809904,
+        2.8546720214190096,
+        2.9273360107095048
+      ],
+      "y_values": [
+        35.03,
+        36.49,
+        36.03,
+        34.37,
+        35.5
+      ],
+      "color": "#C83E4D",
+      "line_width_pt": 1.2,
+      "line_style": "solid",
+      "marker": "circle",
+      "marker_size_pt": 2.0,
+      "marker_thin_factor": 1,
+      "marker_fill_color": "#C83E4D",
+      "presentation_kind": "categorical_replicates",
+      "category_position": 3.0,
+      "plot_line_hide": true,
+      "marker_line_hide": true,
+      "raw_points_visible": false,
+      "source_artifacts": [
+        {
+          "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+          "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8"
+        }
+      ]
+    },
+    {
+      "name": "series_4",
+      "label": "E4",
+      "x_name": "category_x_4",
+      "y_name": "category_y_4",
+      "x_values": [
+        4.072663989290495,
+        3.8546720214190096,
+        4.0,
+        3.9273360107095048,
+        4.1453279785809904
+      ],
+      "y_values": [
+        37.23,
+        39.13,
+        38.64,
+        39.0,
+        39.08
+      ],
+      "color": "#2A9D8F",
+      "line_width_pt": 1.2,
+      "line_style": "solid",
+      "marker": "circle",
+      "marker_size_pt": 2.0,
+      "marker_thin_factor": 1,
+      "marker_fill_color": "#2A9D8F",
+      "presentation_kind": "categorical_replicates",
+      "category_position": 4.0,
+      "plot_line_hide": true,
+      "marker_line_hide": true,
+      "raw_points_visible": false,
+      "source_artifacts": [
+        {
+          "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+          "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8"
+        }
+      ]
+    }
+  ],
+  "direct_labels": [],
+  "stderr_logs": {
+    "generate": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_tensile_strength_by_sample_render/_veusz/single/studio/logs/veusz_generate_stderr.log"
+  }
+}

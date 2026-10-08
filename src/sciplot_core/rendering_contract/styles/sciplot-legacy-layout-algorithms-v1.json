@@ -1,0 +1,40 @@
+{
+  "kind": "sciplot_compiler_algorithm_binding",
+  "schema_version": 1,
+  "algorithm_id": "sciplot-legacy-layout-algorithms-v1",
+  "rendering_contract": {
+    "contract_id": "sciplot-house-style-v1",
+    "content_hash": "cb9d4af22f1905ede7acc956ccbc9d664f4d9171a4dad9afb2ca878cf96cd821"
+  },
+  "roots": [
+    "sciplot_core.studio_render.legend_placement",
+    "sciplot_core.studio_render.value_parsing"
+  ],
+  "sources": {
+    "contract.py": "31b06d4a018a0a560847d578630d11c23d10acf10e5002f279168daa9d20ebff",
+    "policy/__init__.py": "158c5a906f5da5f898362796ad77341cf881e48f6415bd62d6aeff09e4881945",
+    "policy/axis_defaults.py": "56470fe5126bf2320c00551aaff407ec4790e908562cf5becefa778d4613b3c1",
+    "policy/categorical.py": "2e8b89c5b44c884bf7e8bf8374cb7ca52a0ee67a0a614910e08d9c167a8e7f5c",
+    "policy/contract_loader.py": "ef9354dce162b2b87714c49fe98d484bd06ca1a888e21d41c960cabd05ec5b93",
+    "policy/contract_models.py": "8e795bab9ba2c87758b2248ca9f8abd935ae3712c58df8ede7c5842ef6db40f6",
+    "policy/contract_queries.py": "dc8a9b1c3cdd57181906ebc982c2e6133998d9f52230f912b6f2f1066e9df519",
+    "policy/contract_reporting.py": "c8b176f2296e7b9404b81a5867b2d9b7e21efcaec6faf5a3fa4a1ee5c3c26f65",
+    "policy/frame_export.py": "ebff78daaae7610af40f2f25b20348074bc68db5349453578164eb36d5f01171",
+    "policy/layout_policy.py": "c02e17c7c754c07cc75daca50cffa50fd5df24a0a5b2b1a5c60866a2b92882c9",
+    "policy/palette_authority.py": "784a6aab764ac37dfd25cb492dd0b600cb098154804e3a9d5b64f6a4041e659c",
+    "policy/plot_contract.json": "9cb294b7ae4b9068a2cd7d69c0dab1351bf99048e5b9c4644ef161aac51bfbc6",
+    "policy/render_options.py": "9722cc962df52955e10c5e148bba42bcf393afc8f35d8d34c4eecae1a98ad337",
+    "policy/template_defaults.py": "371c45a28839b74c2fa5af53bc39444d2b1090a19dff2794036505f427568a75",
+    "policy/visual_identity.py": "17964e3321329e06080f85c5dad31767d1eb638e42c4f3d57fc5ebfda8a3fd32",
+    "studio_render/axis_contract.py": "324eed29f609a72a543d37c521ba2589da969783606d6f6d4a6c0f78cfaafc92",
+    "studio_render/axis_limits.py": "9805ec6e51f2ea750f961507a35318eeea21af4729a2c0a1687d6b30f4441e4e",
+    "studio_render/axis_scale.py": "01fdfc86892698ff16a98a2c39628353675d6e911d30a444acaaf41f4ea027df",
+    "studio_render/label_density.py": "71730f0ebd67b5be518e38c9086f9d6b1ffec4dfb4b8641da8e4ced89e7dd7e3",
+    "studio_render/legend_placement.py": "210e8821f9ffe47fa2ec3378388ebaa9734684767f063d86ab277bd39d9ad366",
+    "studio_render/legend_visibility.py": "e3cd797b6be48bcbd71fc933573944f79a2f767bdd3a88ab5ae99a50d80baec0",
+    "studio_render/models.py": "87d0534bff6d535317a313d4ecb8201f3e4f5c26626f84de4aa0abd2f18015b2",
+    "studio_render/style_contract.py": "97b2e4db749057a81993dcd84540bf0a60fdb23db6d7006d77acae05f1f1f051",
+    "studio_render/value_parsing.py": "7eaf6a9d494906b72e4e9fc5d7a85ee00971749b868140c7da67ef8df02fa8cb"
+  },
+  "content_hash": "2e9d099a3643b86cdb86239b52395356e1b8660d1ecc7dc719e3e889ad0ff279"
+}

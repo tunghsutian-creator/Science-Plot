@@ -1,0 +1,1689 @@
+{
+  "kind": "sciplot_veusz_plot_spec",
+  "version": 1,
+  "native_1d_numeric_encoding": "float64_round_trip_v1",
+  "created_at": "2026-09-18T08:23:48.165422+00:00",
+  "render_engine": "veusz",
+  "qa_target": "veusz_export",
+  "template": "point_line",
+  "source_request": {
+    "recipe": "auto",
+    "input": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/source",
+    "output": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/runs/run_001",
+    "exports": [
+      "pdf",
+      "tiff_300"
+    ],
+    "replicate_mode": "mean",
+    "review_notes": [
+      "Prepared by SciPlot from the selected data mapping."
+    ],
+    "render_options": {
+      "legend_position": "auto",
+      "series_label_mode": "legend",
+      "visual_theme_id": "clean_light",
+      "style_preset": "nature",
+      "size": "60x55",
+      "palette_preset": "control_first_bright",
+      "font_size_pt": 7.0,
+      "legend_font_size_pt": 6.0,
+      "axis_linewidth_pt": 0.8,
+      "tick_width_pt": 0.8,
+      "tick_length_pt": 2.8,
+      "minor_tick_width_pt": 0.8,
+      "minor_tick_length_pt": 1.5,
+      "line_width_pt": 1.2,
+      "marker_size": 2.0,
+      "marker_line_width_pt": 0.8,
+      "line_alpha": 1.0,
+      "legend_curve_clearance_mm": 2.0,
+      "legend_edge_padding_mm": 1.0,
+      "marker_sequence": [
+        "circle",
+        "square",
+        "diamond",
+        "triangle"
+      ],
+      "marker_fill_mode": "filled",
+      "marker_alpha": 1.0,
+      "xscale": "log",
+      "yscale": "log",
+      "reverse_x": false,
+      "x_label_override": "\\omega (rad s^{-1})",
+      "x_tick_format": "%Ve",
+      "y_tick_format": "%Ve",
+      "minor_tick_count": 5,
+      "y_label_override": "\\italic{G}′ (Pa)"
+    },
+    "explicit_render_option_keys": [],
+    "template": "point_line",
+    "explicit_template_selection": true,
+    "rule_id": "rheology_frequency_sweep",
+    "delivery_output": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/FS_SciPlot_修正_20260918",
+    "study_model": {
+      "kind": "sciplot_study_model",
+      "version": 2,
+      "experiment": {
+        "data_type_id": "rheology_dma",
+        "data_type_label": "流变 / DMA",
+        "experiment_type_id": "rheology_frequency_sweep",
+        "experiment_label": "频率扫描",
+        "rule_id": "rheology_frequency_sweep",
+        "chart": "point_line",
+        "template": "point_line"
+      },
+      "replicate_policy": {
+        "mode": "mean",
+        "default_mode": "mean",
+        "available_modes": [
+          {
+            "id": "mean",
+            "label": "Mean",
+            "description": "Average compatible replicate files into one sample trace or metric."
+          },
+          {
+            "id": "representative",
+            "label": "Representative",
+            "description": "Keep one representative replicate for the sample."
+          },
+          {
+            "id": "individual",
+            "label": "All",
+            "description": "Render each replicate trace or metric without averaging."
+          }
+        ]
+      },
+      "sample_order": [
+        "PP 3155",
+        "PP-5UDC"
+      ],
+      "samples": [
+        {
+          "id": "sample_pp_3155",
+          "name": "PP 3155",
+          "order": 1,
+          "replicate_mode": "mean",
+          "replicates": [
+            {
+              "id": "sample_pp_3155_replicate_pp_3155",
+              "name": "PP 3155",
+              "order": 1,
+              "source_file": {
+                "original_name": "PP 3155.csv",
+                "raw_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/raw/PP_3155/PP 3155.csv",
+                "source_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/source/PP 3155__PP 3155.csv",
+                "size_bytes": 2944,
+                "sha256": "2c1d320760fa96b425b757abbf8564ce4d797ba09691120d1c3735427b244295"
+              }
+            }
+          ]
+        },
+        {
+          "id": "sample_pp_5udc",
+          "name": "PP-5UDC",
+          "order": 2,
+          "replicate_mode": "mean",
+          "replicates": [
+            {
+              "id": "sample_pp_5udc_replicate_pp_5udc",
+              "name": "PP-5UDC",
+              "order": 1,
+              "source_file": {
+                "original_name": "PP-5UDC.csv",
+                "raw_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/raw/PP-5UDC/PP-5UDC.csv",
+                "source_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/source/PP-5UDC__PP-5UDC.csv",
+                "size_bytes": 2918,
+                "sha256": "c6a570000b8198d003133b1e904aa05cb99c166b8f2a50fac986b23e6f4e36b9"
+              }
+            }
+          ]
+        }
+      ],
+      "metrics": [
+        {
+          "id": "storage_modulus",
+          "label": "Storage modulus vs frequency",
+          "role": "figure_metric"
+        },
+        {
+          "id": "loss_modulus",
+          "label": "Loss modulus vs frequency",
+          "role": "figure_metric"
+        },
+        {
+          "id": "loss_factor",
+          "label": "tan delta vs frequency",
+          "role": "figure_metric"
+        },
+        {
+          "id": "complex_viscosity",
+          "label": "Complex viscosity vs frequency",
+          "role": "figure_metric"
+        }
+      ],
+      "figure_queue": [
+        {
+          "id": "storage_modulus_vs_frequency",
+          "title": "Storage modulus vs frequency",
+          "default_template": "point_line",
+          "order": 1,
+          "status": "planned",
+          "evidence_contract": {
+            "kind": "sciplot_panel_evidence_contract",
+            "version": 1,
+            "panel_id": "storage_modulus_vs_frequency",
+            "role": "primary_evidence",
+            "claim_refs": [],
+            "source_refs": [
+              "sample_pp_3155_replicate_pp_3155",
+              "sample_pp_5udc_replicate_pp_5udc"
+            ],
+            "sample_refs": [
+              "sample_pp_3155",
+              "sample_pp_5udc"
+            ],
+            "metric_refs": [
+              "storage_modulus"
+            ],
+            "transform_step_refs": [],
+            "confirmation_status": "inferred"
+          },
+          "statistics_method": {
+            "kind": "sciplot_statistics_method_contract",
+            "version": 1,
+            "status": "not_requested",
+            "auto_inference_allowed": false,
+            "significance_required": false,
+            "method_id": null,
+            "method_version": null,
+            "source": null,
+            "n_definition": null,
+            "center": null,
+            "spread_or_interval": null,
+            "test": null,
+            "multiple_comparisons": null,
+            "parameters": {}
+          },
+          "x_metric": "angular_frequency",
+          "y_metric": "storage_modulus",
+          "metric": "storage_modulus",
+          "artifact_stem": "freq_storage_modulus",
+          "document_stem": "storage_modulus_vs_frequency",
+          "resolved_figure_task": {
+            "kind": "sciplot_figure_task",
+            "version": 1,
+            "figure_id": "storage_modulus_vs_frequency",
+            "order": 1,
+            "selected": true,
+            "title": "Storage modulus vs frequency",
+            "x_metric": "angular_frequency",
+            "y_metric": "storage_modulus",
+            "template": "point_line",
+            "artifact_stem": "freq_storage_modulus",
+            "document_stem": "storage_modulus_vs_frequency",
+            "conditions": [],
+            "condition_labels": [],
+            "sample_order": [
+              "PP-5UDC",
+              "PP 3155"
+            ],
+            "replicate_counts": [
+              {
+                "sample": "PP-5UDC",
+                "count": 1
+              },
+              {
+                "sample": "PP 3155",
+                "count": 1
+              }
+            ]
+          }
+        }
+      ],
+      "render_defaults": {
+        "legend_position": "auto",
+        "series_label_mode": "legend",
+        "visual_theme_id": "clean_light",
+        "style_preset": "nature",
+        "size": "60x55",
+        "palette_preset": "control_first_bright",
+        "font_size_pt": 7.0,
+        "legend_font_size_pt": 6.0,
+        "axis_linewidth_pt": 0.8,
+        "tick_width_pt": 0.8,
+        "tick_length_pt": 2.8,
+        "minor_tick_width_pt": 0.8,
+        "minor_tick_length_pt": 1.5,
+        "line_width_pt": 1.2,
+        "marker_size": 2.0,
+        "marker_line_width_pt": 0.8,
+        "line_alpha": 1.0,
+        "legend_curve_clearance_mm": 2.0,
+        "legend_edge_padding_mm": 1.0,
+        "marker_sequence": [
+          "circle",
+          "square",
+          "diamond",
+          "triangle"
+        ],
+        "marker_fill_mode": "filled",
+        "marker_alpha": 1.0,
+        "xscale": "log",
+        "yscale": "log",
+        "reverse_x": false,
+        "x_label_override": "\\omega (rad s^{-1})",
+        "x_tick_format": "%Ve",
+        "y_tick_format": "%Ve",
+        "minor_tick_count": 5,
+        "y_label_override": "Storage modulus, G′ (Pa)"
+      },
+      "column_confirmation_required": false,
+      "scientific_integrity": {
+        "scientific_outcome_agnostic": true,
+        "significance_required": false,
+        "silent_data_omission_allowed": false,
+        "statistics_must_be_explicit": true
+      },
+      "publication_intent_ref": null
+    },
+    "publication_intent": {
+      "kind": "sciplot_publication_intent",
+      "version": 1,
+      "id": "publication_intent_1",
+      "status": "draft",
+      "scientific_question": "",
+      "question_status": "pending",
+      "core_claim": "",
+      "claim_status": "pending",
+      "target_profile_id": "sciplot_single_panel_v1",
+      "target_status": "inferred",
+      "layout_id": null,
+      "layout_status": "pending",
+      "figure_layout": null,
+      "figure_contracts": [
+        {
+          "figure_id": "storage_modulus_vs_frequency",
+          "order": 1,
+          "title": "Storage modulus vs frequency",
+          "role": "independent_figure_candidate",
+          "question": "",
+          "supported_claim_refs": [],
+          "metric_refs": [
+            "storage_modulus"
+          ],
+          "sample_refs": [
+            "sample_pp_3155",
+            "sample_pp_5udc"
+          ],
+          "source_refs": [
+            "sample_pp_3155_replicate_pp_3155",
+            "sample_pp_5udc_replicate_pp_5udc"
+          ],
+          "transform_step_refs": [],
+          "confirmation_status": "inferred",
+          "statistics_method": {
+            "kind": "sciplot_statistics_method_contract",
+            "version": 1,
+            "status": "not_requested",
+            "auto_inference_allowed": false,
+            "significance_required": false,
+            "method_id": null,
+            "method_version": null,
+            "source": null,
+            "n_definition": null,
+            "center": null,
+            "spread_or_interval": null,
+            "test": null,
+            "multiple_comparisons": null,
+            "parameters": {}
+          },
+          "transform_binding_status": "pending_explicit_binding"
+        },
+        {
+          "figure_id": "loss_modulus_vs_frequency",
+          "order": 2,
+          "title": "Loss modulus vs frequency",
+          "role": "independent_figure_candidate",
+          "question": "",
+          "supported_claim_refs": [],
+          "metric_refs": [
+            "loss_modulus"
+          ],
+          "sample_refs": [
+            "sample_pp_3155",
+            "sample_pp_5udc"
+          ],
+          "source_refs": [
+            "sample_pp_3155_replicate_pp_3155",
+            "sample_pp_5udc_replicate_pp_5udc"
+          ],
+          "transform_step_refs": [],
+          "confirmation_status": "inferred",
+          "statistics_method": {
+            "kind": "sciplot_statistics_method_contract",
+            "version": 1,
+            "status": "not_requested",
+            "auto_inference_allowed": false,
+            "significance_required": false,
+            "method_id": null,
+            "method_version": null,
+            "source": null,
+            "n_definition": null,
+            "center": null,
+            "spread_or_interval": null,
+            "test": null,
+            "multiple_comparisons": null,
+            "parameters": {}
+          },
+          "transform_binding_status": "pending_explicit_binding"
+        },
+        {
+          "figure_id": "loss_factor_vs_frequency",
+          "order": 3,
+          "title": "tan delta vs frequency",
+          "role": "independent_figure_candidate",
+          "question": "",
+          "supported_claim_refs": [],
+          "metric_refs": [
+            "loss_factor"
+          ],
+          "sample_refs": [
+            "sample_pp_3155",
+            "sample_pp_5udc"
+          ],
+          "source_refs": [
+            "sample_pp_3155_replicate_pp_3155",
+            "sample_pp_5udc_replicate_pp_5udc"
+          ],
+          "transform_step_refs": [],
+          "confirmation_status": "inferred",
+          "statistics_method": {
+            "kind": "sciplot_statistics_method_contract",
+            "version": 1,
+            "status": "not_requested",
+            "auto_inference_allowed": false,
+            "significance_required": false,
+            "method_id": null,
+            "method_version": null,
+            "source": null,
+            "n_definition": null,
+            "center": null,
+            "spread_or_interval": null,
+            "test": null,
+            "multiple_comparisons": null,
+            "parameters": {}
+          },
+          "transform_binding_status": "pending_explicit_binding"
+        },
+        {
+          "figure_id": "complex_viscosity_vs_frequency",
+          "order": 4,
+          "title": "Complex viscosity vs frequency",
+          "role": "independent_figure_candidate",
+          "question": "",
+          "supported_claim_refs": [],
+          "metric_refs": [
+            "complex_viscosity"
+          ],
+          "sample_refs": [
+            "sample_pp_3155",
+            "sample_pp_5udc"
+          ],
+          "source_refs": [
+            "sample_pp_3155_replicate_pp_3155",
+            "sample_pp_5udc_replicate_pp_5udc"
+          ],
+          "transform_step_refs": [],
+          "confirmation_status": "inferred",
+          "statistics_method": {
+            "kind": "sciplot_statistics_method_contract",
+            "version": 1,
+            "status": "not_requested",
+            "auto_inference_allowed": false,
+            "significance_required": false,
+            "method_id": null,
+            "method_version": null,
+            "source": null,
+            "n_definition": null,
+            "center": null,
+            "spread_or_interval": null,
+            "test": null,
+            "multiple_comparisons": null,
+            "parameters": {}
+          },
+          "transform_binding_status": "pending_explicit_binding"
+        }
+      ],
+      "panels": [],
+      "exact_labels": {},
+      "caption_contract": {
+        "status": "pending",
+        "define_symbols_and_colors": true,
+        "define_n_and_error_representation": true,
+        "state_data_transformations": true
+      },
+      "palette_policy": {
+        "palette_id": "control_first_bright",
+        "non_color_distinction_required": true,
+        "grayscale_review_required": true,
+        "library_default_palette_allowed": false,
+        "resolution": {
+          "kind": "sciplot_palette_resolution",
+          "version": 1,
+          "palette_id": "control_first_bright",
+          "colors": [
+            "#222222",
+            "#3568C0",
+            "#C83E4D",
+            "#2A9D8F",
+            "#D99A24",
+            "#7C9ED9",
+            "#7B61A8"
+          ],
+          "source": "shared_project_default",
+          "explicit": false,
+          "template_id": "point_line",
+          "custom_colors": false,
+          "authority_order": [
+            "explicit_render_option",
+            "direct_render_option",
+            "shared_project_default"
+          ],
+          "shared_project_default": "control_first_bright"
+        }
+      },
+      "integrity_policy": {
+        "scientific_outcome_agnostic": true,
+        "significance_required": false,
+        "silent_data_omission_allowed": false,
+        "statistics_must_be_explicit": true
+      },
+      "review_risk": {
+        "status": "pending",
+        "missing_question": true,
+        "missing_claim": true,
+        "panel_count_mismatch": false,
+        "pending_statistics_panels": [],
+        "pending_statistics_figures": []
+      },
+      "transform_ledger_ref": "transform_ledger.json"
+    },
+    "transform_ledger": {
+      "kind": "sciplot_transform_ledger",
+      "version": 1,
+      "status": "runtime_recorded",
+      "source_root": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/source",
+      "replicate_policy": {
+        "mode": "mean",
+        "default_mode": "mean",
+        "available_modes": [
+          {
+            "id": "mean",
+            "label": "Mean",
+            "description": "Average compatible replicate files into one sample trace or metric."
+          },
+          {
+            "id": "representative",
+            "label": "Representative",
+            "description": "Keep one representative replicate for the sample."
+          },
+          {
+            "id": "individual",
+            "label": "All",
+            "description": "Render each replicate trace or metric without averaging."
+          }
+        ]
+      },
+      "column_confirmations": [],
+      "steps": [
+        {
+          "id": "semantic_preparation",
+          "operation": "aggregate_rheology_frequency_replicates",
+          "implementation_ref": "sciplot_core.semantic.prepare_semantic_source",
+          "input_refs": [
+            "semantic_preparation_input"
+          ],
+          "output_refs": [
+            "semantic_preparation_output"
+          ],
+          "input_artifacts": [
+            {
+              "id": "semantic_preparation_input",
+              "role": "input",
+              "kind": "directory",
+              "path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/source",
+              "exists": true,
+              "size_bytes": 5862,
+              "sha256": "da5615aeee6e3c70b71f7d2f4ad8c2e74e85b820a4c1a5110f504f938f769e8e",
+              "member_count": 2,
+              "table_shape": null
+            }
+          ],
+          "output_artifacts": [
+            {
+              "id": "semantic_preparation_output",
+              "role": "output",
+              "kind": "file",
+              "path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/studio/processed/rheology_frequency_comparison.xlsx",
+              "exists": true,
+              "size_bytes": 9917,
+              "sha256": "86c3c0ca81b3a4f1f8739c429e48f8dfb4d7f13ec76ec483179499b279cf7bc2",
+              "table_shape": [
+                19,
+                12
+              ]
+            }
+          ],
+          "parameters": {
+            "replicate_mode": "mean",
+            "source_sample_count": 2,
+            "output_sample_count": 2,
+            "source_sample_files": [
+              "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/source/PP-5UDC__PP-5UDC.csv",
+              "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/source/PP 3155__PP 3155.csv"
+            ],
+            "output_sample_labels": [
+              "PP-5UDC",
+              "PP 3155"
+            ],
+            "available_metrics": [
+              "storage_modulus",
+              "loss_modulus",
+              "loss_factor",
+              "complex_viscosity",
+              "complex_modulus"
+            ],
+            "unit_conversions": [
+              {
+                "sample": "PP-5UDC",
+                "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/source/PP-5UDC__PP-5UDC.csv",
+                "x": {
+                  "source_unit": "rad s⁻¹",
+                  "output_unit": "rad s⁻¹",
+                  "factor": 1.0,
+                  "method": "identity"
+                },
+                "metrics": {
+                  "storage_modulus": {
+                    "source_unit": "Pa",
+                    "output_unit": "Pa",
+                    "factor": 1.0,
+                    "method": "identity"
+                  },
+                  "loss_modulus": {
+                    "source_unit": "Pa",
+                    "output_unit": "Pa",
+                    "factor": 1.0,
+                    "method": "identity"
+                  },
+                  "loss_factor": {
+                    "source_unit": "1",
+                    "output_unit": "1",
+                    "factor": 1.0,
+                    "method": "identity"
+                  },
+                  "complex_modulus": {
+                    "method": "derived_from_storage_and_loss_modulus",
+                    "expression": "hypot(storage_modulus, loss_modulus)",
+                    "source_unit": "Pa",
+                    "output_unit": "Pa",
+                    "factor": 1.0
+                  },
+                  "complex_viscosity": {
+                    "method": "derived_complex_modulus_over_angular_frequency",
+                    "expression": "complex_modulus / angular_frequency * 1000",
+                    "source_unit": "Pa / (rad/s)",
+                    "output_unit": "mPa·s",
+                    "factor": 1000.0,
+                    "input_metrics": [
+                      "complex_modulus",
+                      "angular_frequency"
+                    ]
+                  }
+                }
+              },
+              {
+                "sample": "PP 3155",
+                "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/source/PP 3155__PP 3155.csv",
+                "x": {
+                  "source_unit": "rad s⁻¹",
+                  "output_unit": "rad s⁻¹",
+                  "factor": 1.0,
+                  "method": "identity"
+                },
+                "metrics": {
+                  "storage_modulus": {
+                    "source_unit": "Pa",
+                    "output_unit": "Pa",
+                    "factor": 1.0,
+                    "method": "identity"
+                  },
+                  "loss_modulus": {
+                    "source_unit": "Pa",
+                    "output_unit": "Pa",
+                    "factor": 1.0,
+                    "method": "identity"
+                  },
+                  "loss_factor": {
+                    "source_unit": "1",
+                    "output_unit": "1",
+                    "factor": 1.0,
+                    "method": "identity"
+                  },
+                  "complex_modulus": {
+                    "method": "derived_from_storage_and_loss_modulus",
+                    "expression": "hypot(storage_modulus, loss_modulus)",
+                    "source_unit": "Pa",
+                    "output_unit": "Pa",
+                    "factor": 1.0
+                  },
+                  "complex_viscosity": {
+                    "method": "derived_complex_modulus_over_angular_frequency",
+                    "expression": "complex_modulus / angular_frequency * 1000",
+                    "source_unit": "Pa / (rad/s)",
+                    "output_unit": "mPa·s",
+                    "factor": 1000.0,
+                    "input_metrics": [
+                      "complex_modulus",
+                      "angular_frequency"
+                    ]
+                  }
+                }
+              }
+            ],
+            "mean_definition": "arithmetic mean at exactly matching x values",
+            "representative_definition": "longest trace then closest terminal storage modulus to group median",
+            "series_order": [
+              "PP-5UDC",
+              "PP 3155"
+            ]
+          },
+          "input_shape": null,
+          "output_shape": [
+            19,
+            12
+          ],
+          "confirmation_status": "runtime_recorded",
+          "silent_omission_allowed": false,
+          "outcome_strength_gate_applied": false
+        }
+      ],
+      "unresolved_step_ids": [],
+      "policy": {
+        "raw_sources_preserved": true,
+        "silent_data_omission_allowed": false,
+        "selection_must_be_recorded": true,
+        "unit_conversion_must_be_recorded": true,
+        "input_output_shape_preferred": true,
+        "scientific_outcome_agnostic": true
+      },
+      "pending_reason": "Runtime transform steps are recorded when SciPlot prepares the Veusz document or executes the request."
+    },
+    "studio_rule_contract_binding": {
+      "kind": "sciplot_studio_rule_contract_binding",
+      "version": 1,
+      "rule_id": "rheology_frequency_sweep",
+      "prepared_rule_contract_sha256": "8e1b57ec0b786f86a06b4988e90cbe170a5f4aeb5f9fa28535b175523076a79d",
+      "prepared_rule_semantic_contract_sha256": "7c190b8ac51488b5d2ce8fc8fbdbeec807c0503cdea645d9a2cb025f1b1648f0",
+      "certification_status": "current",
+      "certified_rule_contract_sha256": "8e1b57ec0b786f86a06b4988e90cbe170a5f4aeb5f9fa28535b175523076a79d",
+      "certified_rule_semantic_contract_sha256": "7c190b8ac51488b5d2ce8fc8fbdbeec807c0503cdea645d9a2cb025f1b1648f0",
+      "certification_reasons": []
+    },
+    "resolved_figure_plan": {
+      "kind": "sciplot_resolved_figure_plan",
+      "version": 1,
+      "plan_id": "rfp_5663fa4100a96064",
+      "plan_sha256": "5663fa4100a96064553a59b52416baeaa63aeed028e3ebc7bdd1b27b6c90b17b",
+      "rule_id": "rheology_frequency_sweep",
+      "selection_policy": "parser_selected_metrics_from_study_model_queue",
+      "primary_figure_id": "storage_modulus_vs_frequency",
+      "source_sha256": "6b1279d19dad57a08381ddd639242a2618a147835e5bc5c03adcbc1c1b8fd9c2",
+      "selected_figure_ids": [
+        "storage_modulus_vs_frequency",
+        "loss_modulus_vs_frequency",
+        "loss_factor_vs_frequency",
+        "complex_viscosity_vs_frequency"
+      ],
+      "tasks": [
+        {
+          "kind": "sciplot_figure_task",
+          "version": 1,
+          "figure_id": "storage_modulus_vs_frequency",
+          "order": 1,
+          "selected": true,
+          "title": "Storage modulus vs frequency",
+          "x_metric": "angular_frequency",
+          "y_metric": "storage_modulus",
+          "template": "point_line",
+          "artifact_stem": "freq_storage_modulus",
+          "document_stem": "storage_modulus_vs_frequency",
+          "conditions": [],
+          "condition_labels": [],
+          "sample_order": [
+            "PP-5UDC",
+            "PP 3155"
+          ],
+          "replicate_counts": [
+            {
+              "sample": "PP-5UDC",
+              "count": 1
+            },
+            {
+              "sample": "PP 3155",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "kind": "sciplot_figure_task",
+          "version": 1,
+          "figure_id": "loss_modulus_vs_frequency",
+          "order": 2,
+          "selected": true,
+          "title": "Loss modulus vs frequency",
+          "x_metric": "angular_frequency",
+          "y_metric": "loss_modulus",
+          "template": "point_line",
+          "artifact_stem": "freq_loss_modulus",
+          "document_stem": "loss_modulus_vs_frequency",
+          "conditions": [],
+          "condition_labels": [],
+          "sample_order": [
+            "PP-5UDC",
+            "PP 3155"
+          ],
+          "replicate_counts": [
+            {
+              "sample": "PP-5UDC",
+              "count": 1
+            },
+            {
+              "sample": "PP 3155",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "kind": "sciplot_figure_task",
+          "version": 1,
+          "figure_id": "loss_factor_vs_frequency",
+          "order": 3,
+          "selected": true,
+          "title": "tan delta vs frequency",
+          "x_metric": "angular_frequency",
+          "y_metric": "loss_factor",
+          "template": "point_line",
+          "artifact_stem": "freq_loss_factor",
+          "document_stem": "loss_factor_vs_frequency",
+          "conditions": [],
+          "condition_labels": [],
+          "sample_order": [
+            "PP-5UDC",
+            "PP 3155"
+          ],
+          "replicate_counts": [
+            {
+              "sample": "PP-5UDC",
+              "count": 1
+            },
+            {
+              "sample": "PP 3155",
+              "count": 1
+            }
+          ]
+        },
+        {
+          "kind": "sciplot_figure_task",
+          "version": 1,
+          "figure_id": "complex_viscosity_vs_frequency",
+          "order": 4,
+          "selected": true,
+          "title": "Complex viscosity vs frequency",
+          "x_metric": "angular_frequency",
+          "y_metric": "complex_viscosity",
+          "template": "point_line",
+          "artifact_stem": "freq_complex_viscosity",
+          "document_stem": "complex_viscosity_vs_frequency",
+          "conditions": [],
+          "condition_labels": [],
+          "sample_order": [
+            "PP-5UDC",
+            "PP 3155"
+          ],
+          "replicate_counts": [
+            {
+              "sample": "PP-5UDC",
+              "count": 1
+            },
+            {
+              "sample": "PP 3155",
+              "count": 1
+            }
+          ]
+        }
+      ],
+      "outcomes": [
+        {
+          "kind": "sciplot_figure_outcome",
+          "version": 1,
+          "figure_id": "storage_modulus_vs_frequency",
+          "status": "pending",
+          "artifacts": [],
+          "reason_code": null,
+          "message": null
+        },
+        {
+          "kind": "sciplot_figure_outcome",
+          "version": 1,
+          "figure_id": "loss_modulus_vs_frequency",
+          "status": "pending",
+          "artifacts": [],
+          "reason_code": null,
+          "message": null
+        },
+        {
+          "kind": "sciplot_figure_outcome",
+          "version": 1,
+          "figure_id": "loss_factor_vs_frequency",
+          "status": "pending",
+          "artifacts": [],
+          "reason_code": null,
+          "message": null
+        },
+        {
+          "kind": "sciplot_figure_outcome",
+          "version": 1,
+          "figure_id": "complex_viscosity_vs_frequency",
+          "status": "pending",
+          "artifacts": [],
+          "reason_code": null,
+          "message": null
+        }
+      ],
+      "status": "planned",
+      "complete": false
+    },
+    "x_metric": "angular_frequency",
+    "y_metric": "storage_modulus",
+    "resolved_figure_task": {
+      "kind": "sciplot_figure_task",
+      "version": 1,
+      "figure_id": "storage_modulus_vs_frequency",
+      "order": 1,
+      "selected": true,
+      "title": "Storage modulus vs frequency",
+      "x_metric": "angular_frequency",
+      "y_metric": "storage_modulus",
+      "template": "point_line",
+      "artifact_stem": "freq_storage_modulus",
+      "document_stem": "storage_modulus_vs_frequency",
+      "conditions": [],
+      "condition_labels": [],
+      "sample_order": [
+        "PP-5UDC",
+        "PP 3155"
+      ],
+      "replicate_counts": [
+        {
+          "sample": "PP-5UDC",
+          "count": 1
+        },
+        {
+          "sample": "PP 3155",
+          "count": 1
+        }
+      ]
+    },
+    "series_order": [
+      "PP-5UDC",
+      "PP 3155"
+    ]
+  },
+  "render_options": {
+    "size": "60x55",
+    "xscale": "log",
+    "yscale": "log",
+    "reverse_x": false,
+    "series_label_mode": "legend",
+    "style_preset": "nature",
+    "palette_preset": "control_first_bright",
+    "visual_theme_id": "clean_light",
+    "legend_position": "lower_right",
+    "font_size_pt": 7.0,
+    "legend_font_size_pt": 6.0,
+    "axis_linewidth_pt": 0.8,
+    "tick_width_pt": 0.8,
+    "tick_length_pt": 2.8,
+    "minor_tick_width_pt": 0.8,
+    "minor_tick_length_pt": 1.5,
+    "line_width_pt": 1.2,
+    "marker_size": 2.0,
+    "marker_line_width_pt": 0.8,
+    "line_alpha": 1.0,
+    "legend_curve_clearance_mm": 2.0,
+    "legend_edge_padding_mm": 1.0,
+    "marker_sequence": [
+      "circle",
+      "square",
+      "diamond",
+      "triangle"
+    ],
+    "marker_fill_mode": "filled",
+    "marker_alpha": 1.0,
+    "x_label_override": "\\omega (rad s^{-1})",
+    "x_tick_format": "%Ve",
+    "y_tick_format": "%Ve",
+    "minor_tick_count": 5,
+    "y_label_override": "\\italic{G}′ (Pa)",
+    "_legend_placement_diagnostics": {
+      "position": "lower_right",
+      "method": "final_size_physical_clearance_v1",
+      "required_curve_clearance_mm": 2.0,
+      "edge_padding_mm": 1.0,
+      "minimum_curve_clearance_mm": 13.4048,
+      "clearance_status": "safe",
+      "footprint": {
+        "columns": 1.0,
+        "rows": 2.0,
+        "font_height_mm": 2.54,
+        "graph_width_mm": 41.5,
+        "graph_height_mm": 38.5,
+        "box_width_mm": 14.837333,
+        "box_height_mm": 5.08
+      },
+      "candidates": {
+        "upper_right": {
+          "rectangle_fraction": [
+            0.618378,
+            0.975904,
+            0.842078,
+            0.974026
+          ],
+          "overlap_samples": 0,
+          "near_samples": 16,
+          "minimum_curve_clearance_mm": 0.020686,
+          "clearance_deficit_mm": 1.979314,
+          "proximity_load": 7.605363
+        },
+        "lower_right": {
+          "rectangle_fraction": [
+            0.618378,
+            0.975904,
+            0.025974,
+            0.157922
+          ],
+          "overlap_samples": 0,
+          "near_samples": 0,
+          "minimum_curve_clearance_mm": 13.4048,
+          "clearance_deficit_mm": 0.0,
+          "proximity_load": 0
+        },
+        "upper_left": {
+          "rectangle_fraction": [
+            0.024096,
+            0.381622,
+            0.842078,
+            0.974026
+          ],
+          "overlap_samples": 0,
+          "near_samples": 0,
+          "minimum_curve_clearance_mm": 10.57078,
+          "clearance_deficit_mm": 0.0,
+          "proximity_load": 0
+        },
+        "lower_left": {
+          "rectangle_fraction": [
+            0.024096,
+            0.381622,
+            0.025974,
+            0.157922
+          ],
+          "overlap_samples": 8,
+          "near_samples": 13,
+          "minimum_curve_clearance_mm": 0.0,
+          "clearance_deficit_mm": 2.0,
+          "proximity_load": 10.909425
+        }
+      },
+      "manual_anchor_fraction": {
+        "x": 0.618378,
+        "y": 0.025974
+      }
+    },
+    "legend_horz_position": "manual",
+    "legend_vert_position": "manual",
+    "legend_horz_manual": 0.6183775180722892,
+    "legend_vert_manual": 0.025974025974025976,
+    "_autofixes_applied": [
+      "legend_auto_lower_right",
+      "legend_corner_edge_reclaimed",
+      "physical_visual_extent_axis_clearance"
+    ],
+    "_visual_extent_axis_diagnostics": {
+      "kind": "sciplot_physical_visual_extent_axis_clearance",
+      "version": 1,
+      "minimum_extra_clearance_mm": 0.25,
+      "expanded_axes": [
+        "y"
+      ],
+      "violations": [],
+      "axes": {
+        "x": {
+          "scale": "log",
+          "original_bounds": [
+            0.05,
+            200.0
+          ],
+          "final_bounds": [
+            0.049999999999999996,
+            200.00000000000003
+          ],
+          "visual_anchor_bounds": [
+            0.1,
+            100.0
+          ],
+          "required_extent_mm": 1.0966666666666667,
+          "lower_clearance_mm": 3.468222308937601,
+          "upper_clearance_mm": 3.468222308937601,
+          "lower_bound_explicit": false,
+          "upper_bound_explicit": false,
+          "status": "safe"
+        },
+        "y": {
+          "scale": "log",
+          "original_bounds": [
+            0.4934363636363636,
+            13751.1
+          ],
+          "final_bounds": [
+            0.4007348141324154,
+            16932.12703447185
+          ],
+          "visual_anchor_bounds": [
+            0.54278,
+            12501.0
+          ],
+          "required_extent_mm": 1.0966666666666667,
+          "lower_clearance_mm": 1.0966666666530662,
+          "upper_clearance_mm": 1.0966666666666636,
+          "lower_bound_explicit": false,
+          "upper_bound_explicit": false,
+          "status": "safe"
+        }
+      }
+    }
+  },
+  "palette_resolution": {
+    "kind": "sciplot_palette_resolution",
+    "version": 1,
+    "palette_id": "control_first_bright",
+    "colors": [
+      "#222222",
+      "#3568C0",
+      "#C83E4D",
+      "#2A9D8F",
+      "#D99A24",
+      "#7C9ED9",
+      "#7B61A8"
+    ],
+    "source": "shared_project_default",
+    "explicit": false,
+    "template_id": "point_line",
+    "custom_colors": false,
+    "authority_order": [
+      "explicit_render_option",
+      "direct_render_option",
+      "shared_project_default"
+    ],
+    "shared_project_default": "control_first_bright"
+  },
+  "series_encoding_contract": {
+    "kind": "sciplot_series_encoding_contract",
+    "version": 1,
+    "series_count": 2,
+    "series_names": [
+      "series_1",
+      "series_2"
+    ],
+    "audit_policy": "request_bound_fields_must_match_exact_current_vsz",
+    "supported_request_bound_fields": [
+      "line.color",
+      "line.style",
+      "marker.fill_color",
+      "marker.line_color",
+      "marker.shape"
+    ]
+  },
+  "axis_data_visibility": {
+    "kind": "sciplot_axis_data_visibility",
+    "version": 1,
+    "status": "all_finite_coordinates_visible",
+    "finite_coordinate_count": 64,
+    "clipped_coordinate_count": 0,
+    "axes": {
+      "x": {
+        "finite_coordinate_count": 32,
+        "data_min": 0.1,
+        "data_max": 100.0,
+        "configured_min": null,
+        "configured_max": null,
+        "effective_min": 0.049999999999999996,
+        "effective_max": 200.00000000000003,
+        "below_configured_min_count": 0,
+        "above_configured_max_count": 0,
+        "below_effective_min_count": 0,
+        "above_effective_max_count": 0,
+        "clipped_coordinate_count": 0,
+        "configured_min_relaxed": false,
+        "configured_max_relaxed": false
+      },
+      "y": {
+        "finite_coordinate_count": 32,
+        "data_min": 0.54278,
+        "data_max": 12501.0,
+        "configured_min": null,
+        "configured_max": null,
+        "effective_min": 0.4007348141324154,
+        "effective_max": 16932.12703447185,
+        "below_configured_min_count": 0,
+        "above_configured_max_count": 0,
+        "below_effective_min_count": 0,
+        "above_effective_max_count": 0,
+        "clipped_coordinate_count": 0,
+        "configured_min_relaxed": false,
+        "configured_max_relaxed": false
+      }
+    }
+  },
+  "size_mm": [
+    60,
+    55
+  ],
+  "frame_alignment": {
+    "status": "locked",
+    "margin_mode": "fixed_mm",
+    "outside_legend_allowed": false,
+    "auxiliary_frame_envelope": "standard_graph_frame",
+    "auxiliary_text_envelope": "standard_text_safe_area",
+    "margins_mm": {
+      "left": 14.0,
+      "right": 4.5,
+      "bottom": 11.0,
+      "top": 5.5
+    }
+  },
+  "autofixes_applied": [
+    "legend_auto_lower_right",
+    "legend_corner_edge_reclaimed",
+    "physical_visual_extent_axis_clearance"
+  ],
+  "visual_extent_axis_clearance": {
+    "kind": "sciplot_physical_visual_extent_axis_clearance",
+    "version": 1,
+    "minimum_extra_clearance_mm": 0.25,
+    "expanded_axes": [
+      "y"
+    ],
+    "violations": [],
+    "axes": {
+      "x": {
+        "scale": "log",
+        "original_bounds": [
+          0.05,
+          200.0
+        ],
+        "final_bounds": [
+          0.049999999999999996,
+          200.00000000000003
+        ],
+        "visual_anchor_bounds": [
+          0.1,
+          100.0
+        ],
+        "required_extent_mm": 1.0966666666666667,
+        "lower_clearance_mm": 3.468222308937601,
+        "upper_clearance_mm": 3.468222308937601,
+        "lower_bound_explicit": false,
+        "upper_bound_explicit": false,
+        "status": "safe"
+      },
+      "y": {
+        "scale": "log",
+        "original_bounds": [
+          0.4934363636363636,
+          13751.1
+        ],
+        "final_bounds": [
+          0.4007348141324154,
+          16932.12703447185
+        ],
+        "visual_anchor_bounds": [
+          0.54278,
+          12501.0
+        ],
+        "required_extent_mm": 1.0966666666666667,
+        "lower_clearance_mm": 1.0966666666530662,
+        "upper_clearance_mm": 1.0966666666666636,
+        "lower_bound_explicit": false,
+        "upper_bound_explicit": false,
+        "status": "safe"
+      }
+    }
+  },
+  "layout_issues": [],
+  "visual_data_transforms": [],
+  "provenance": {
+    "veusz": {
+      "name": "Veusz",
+      "path": "/Users/dongxutian/Documents/research-plots/third_party/veusz",
+      "commit": "264084b06eb306d860c7757c637f37b78bb2333f",
+      "license": "GPL-2.0-or-later",
+      "vendored": true
+    }
+  },
+  "style": {
+    "font_family": "Arial",
+    "font_size_pt": 7.0,
+    "legend_font_size_pt": 6.0,
+    "axis_linewidth_pt": 0.8,
+    "tick_width_pt": 0.8,
+    "tick_length_pt": 2.8,
+    "minor_tick_width_pt": 0.8,
+    "minor_tick_length_pt": 1.5,
+    "line_width_pt": 1.2,
+    "line_alpha": 0.92,
+    "marker_alpha": 0.95,
+    "marker_size_pt": 2.0,
+    "marker_line_width_pt": 0.8,
+    "axes_labelpad_pt": 2.0,
+    "xtick_major_pad_pt": 1.4,
+    "ytick_major_pad_pt": 1.4,
+    "legend_frameon": false,
+    "margins_mm": {
+      "left": 14.0,
+      "right": 4.5,
+      "bottom": 11.0,
+      "top": 5.5
+    }
+  },
+  "axes": {
+    "x": {
+      "label": "\\omega (rad s⁻¹)",
+      "scale": "log",
+      "tick_format": "%Ve",
+      "minor_tick_count": 5,
+      "minor_ticks": [
+        0.2,
+        0.4,
+        0.6000000000000001,
+        0.8,
+        2.0,
+        4.0,
+        6.0,
+        8.0,
+        20.0,
+        40.0,
+        60.0,
+        80.0
+      ],
+      "min": 0.049999999999999996,
+      "max": 200.00000000000003,
+      "ticks": [
+        0.1,
+        1.0,
+        10.0,
+        100.0
+      ],
+      "reverse": false,
+      "foreground_color": "#111111",
+      "label_size_pt": 7.0,
+      "tick_label_size_pt": 7.0,
+      "line_width_pt": 0.8,
+      "major_tick_width_pt": 0.8,
+      "major_tick_length_pt": 2.8,
+      "minor_tick_width_pt": 0.8,
+      "minor_tick_length_pt": 1.5,
+      "mode": "numeric",
+      "category_labels": [],
+      "category_positions": []
+    },
+    "y": {
+      "label": "\\italic{G}′ (Pa)",
+      "scale": "log",
+      "tick_format": "%Ve",
+      "minor_tick_count": 5,
+      "minor_ticks": [
+        2.0,
+        4.0,
+        6.0,
+        8.0,
+        20.0,
+        40.0,
+        60.0,
+        80.0,
+        200.0,
+        400.0,
+        600.0,
+        800.0,
+        2000.0,
+        4000.0,
+        6000.0,
+        8000.0
+      ],
+      "min": 0.4007348141324154,
+      "max": 16932.12703447185,
+      "ticks": [
+        1.0,
+        10.0,
+        100.0,
+        1000.0,
+        10000.0
+      ],
+      "show_ticks": true,
+      "foreground_color": "#111111",
+      "label_size_pt": 7.0,
+      "tick_label_size_pt": 7.0,
+      "line_width_pt": 0.8,
+      "major_tick_width_pt": 0.8,
+      "major_tick_length_pt": 2.8,
+      "minor_tick_width_pt": 0.8,
+      "minor_tick_length_pt": 1.5
+    }
+  },
+  "legend": {
+    "show": true,
+    "columns": 1,
+    "mode": "lower_right",
+    "horz_position": "manual",
+    "vert_position": "manual",
+    "horz_manual": 0.6183775180722892,
+    "vert_manual": 0.025974025974025976,
+    "placement_diagnostics": {
+      "position": "lower_right",
+      "method": "final_size_physical_clearance_v1",
+      "required_curve_clearance_mm": 2.0,
+      "edge_padding_mm": 1.0,
+      "minimum_curve_clearance_mm": 13.4048,
+      "clearance_status": "safe",
+      "footprint": {
+        "columns": 1.0,
+        "rows": 2.0,
+        "font_height_mm": 2.54,
+        "graph_width_mm": 41.5,
+        "graph_height_mm": 38.5,
+        "box_width_mm": 14.837333,
+        "box_height_mm": 5.08
+      },
+      "candidates": {
+        "upper_right": {
+          "rectangle_fraction": [
+            0.618378,
+            0.975904,
+            0.842078,
+            0.974026
+          ],
+          "overlap_samples": 0,
+          "near_samples": 16,
+          "minimum_curve_clearance_mm": 0.020686,
+          "clearance_deficit_mm": 1.979314,
+          "proximity_load": 7.605363
+        },
+        "lower_right": {
+          "rectangle_fraction": [
+            0.618378,
+            0.975904,
+            0.025974,
+            0.157922
+          ],
+          "overlap_samples": 0,
+          "near_samples": 0,
+          "minimum_curve_clearance_mm": 13.4048,
+          "clearance_deficit_mm": 0.0,
+          "proximity_load": 0
+        },
+        "upper_left": {
+          "rectangle_fraction": [
+            0.024096,
+            0.381622,
+            0.842078,
+            0.974026
+          ],
+          "overlap_samples": 0,
+          "near_samples": 0,
+          "minimum_curve_clearance_mm": 10.57078,
+          "clearance_deficit_mm": 0.0,
+          "proximity_load": 0
+        },
+        "lower_left": {
+          "rectangle_fraction": [
+            0.024096,
+            0.381622,
+            0.025974,
+            0.157922
+          ],
+          "overlap_samples": 8,
+          "near_samples": 13,
+          "minimum_curve_clearance_mm": 0.0,
+          "clearance_deficit_mm": 2.0,
+          "proximity_load": 10.909425
+        }
+      },
+      "manual_anchor_fraction": {
+        "x": 0.618378,
+        "y": 0.025974
+      }
+    },
+    "label_load": {
+      "series_count": 2,
+      "max_label_length": 7,
+      "total_label_length": 14,
+      "duplicate_count": 0
+    }
+  },
+  "categorical": null,
+  "scalar_field": null,
+  "reference_guides": [],
+  "series": [
+    {
+      "name": "series_1",
+      "label": "PP-5UDC",
+      "legend_key": "PP-5UDC",
+      "x_name": "x_1_1",
+      "y_name": "y_1_1",
+      "x_values": [
+        100.0,
+        63.1,
+        39.8,
+        25.1,
+        15.8,
+        10.0,
+        6.31,
+        3.98,
+        2.51,
+        1.58,
+        1.0,
+        0.631,
+        0.398,
+        0.251,
+        0.158,
+        0.1
+      ],
+      "y_values": [
+        10669.0,
+        7536.7,
+        5236.8,
+        3578.5,
+        2404.7,
+        1587.2,
+        1028.1,
+        652.44,
+        404.76,
+        244.74,
+        144.81,
+        84.757,
+        48.918,
+        27.102,
+        15.089,
+        8.3663
+      ],
+      "error_values": [],
+      "encoding": {
+        "kind": "sciplot_series_encoding",
+        "version": 1,
+        "line": {
+          "visible": true,
+          "color": "#3568C0",
+          "style": "solid",
+          "width_pt": 1.2,
+          "alpha": 0.92
+        },
+        "marker": {
+          "shape": "circle",
+          "size_pt": 2.0,
+          "thin_factor": 1,
+          "fill_visible": true,
+          "fill_color": "#3568C0",
+          "fill_alpha": 0.95,
+          "line_visible": true,
+          "line_color": "#3568C0",
+          "line_width_pt": 0.8,
+          "line_alpha": 0.95
+        },
+        "sources": {
+          "line.color": "palette_shared_project_default",
+          "line.style": "template_default",
+          "marker.shape": "inherited_render_option",
+          "marker.fill_color": "palette_shared_project_default",
+          "marker.line_color": "palette_shared_project_default"
+        },
+        "request_bound_fields": [],
+        "audit_policy": "request_bound_fields_must_match_exact_current_vsz"
+      },
+      "color": "#3568C0",
+      "line_width_pt": 1.2,
+      "line_style": "solid",
+      "marker": "circle",
+      "marker_size_pt": 2.0,
+      "marker_thin_factor": 1,
+      "marker_fill_color": "#3568C0",
+      "marker_line_color": "#3568C0",
+      "marker_line_width_pt": 0.8,
+      "marker_alpha": 0.95,
+      "presentation_kind": "curve",
+      "category_position": null,
+      "component_labels": [],
+      "plot_line_hide": false,
+      "marker_line_hide": false,
+      "raw_points_visible": true,
+      "source_artifacts": [
+        {
+          "path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/studio/processed/rheology_frequency_comparison.xlsx",
+          "sha256": "86c3c0ca81b3a4f1f8739c429e48f8dfb4d7f13ec76ec483179499b279cf7bc2"
+        }
+      ]
+    },
+    {
+      "name": "series_2",
+      "label": "PP 3155",
+      "legend_key": "PP 3155",
+      "x_name": "x_1_2",
+      "y_name": "y_1_2",
+      "x_values": [
+        100.0,
+        63.1,
+        39.8,
+        25.1,
+        15.8,
+        10.0,
+        6.31,
+        3.98,
+        2.51,
+        1.58,
+        1.0,
+        0.631,
+        0.398,
+        0.251,
+        0.158,
+        0.1
+      ],
+      "y_values": [
+        12501.0,
+        8200.9,
+        5161.0,
+        3110.4,
+        1793.3,
+        988.24,
+        520.77,
+        262.12,
+        126.95,
+        58.895,
+        26.454,
+        11.173,
+        5.0527,
+        2.0399,
+        1.1024,
+        0.54278
+      ],
+      "error_values": [],
+      "encoding": {
+        "kind": "sciplot_series_encoding",
+        "version": 1,
+        "line": {
+          "visible": true,
+          "color": "#222222",
+          "style": "solid",
+          "width_pt": 1.2,
+          "alpha": 0.92
+        },
+        "marker": {
+          "shape": "square",
+          "size_pt": 2.0,
+          "thin_factor": 1,
+          "fill_visible": true,
+          "fill_color": "#222222",
+          "fill_alpha": 0.95,
+          "line_visible": true,
+          "line_color": "#222222",
+          "line_width_pt": 0.8,
+          "line_alpha": 0.95
+        },
+        "sources": {
+          "line.color": "palette_shared_project_default",
+          "line.style": "template_default",
+          "marker.shape": "inherited_render_option",
+          "marker.fill_color": "palette_shared_project_default",
+          "marker.line_color": "palette_shared_project_default"
+        },
+        "request_bound_fields": [],
+        "audit_policy": "request_bound_fields_must_match_exact_current_vsz"
+      },
+      "color": "#222222",
+      "line_width_pt": 1.2,
+      "line_style": "solid",
+      "marker": "square",
+      "marker_size_pt": 2.0,
+      "marker_thin_factor": 1,
+      "marker_fill_color": "#222222",
+      "marker_line_color": "#222222",
+      "marker_line_width_pt": 0.8,
+      "marker_alpha": 0.95,
+      "presentation_kind": "curve",
+      "category_position": null,
+      "component_labels": [],
+      "plot_line_hide": false,
+      "marker_line_hide": false,
+      "raw_points_visible": true,
+      "source_artifacts": [
+        {
+          "path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/studio/processed/rheology_frequency_comparison.xlsx",
+          "sha256": "86c3c0ca81b3a4f1f8739c429e48f8dfb4d7f13ec76ec483179499b279cf7bc2"
+        }
+      ]
+    }
+  ],
+  "direct_labels": [],
+  "stderr_logs": {
+    "generate": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/studio/logs/veusz_generate_stderr.log"
+  }
+}

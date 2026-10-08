@@ -7,13 +7,25 @@ from typing import Any
 from sciplot_core.studio_core.series_request import _veusz_literal_text
 
 
+def category_display_labels(axes: dict[str, Any], style: dict[str, Any], size_mm: list[float]) -> list[str]:
+    """Resolve native-only line breaks; source/category identities stay literal."""
+    from sciplot_core.studio_core.veusz_axis_apply import category_label_lines
+
+    margins = style["margins_mm"]
+    width = float(size_mm[0]) - float(margins["left"]) - float(margins["right"])
+    return [r"\\".join(_veusz_literal_text(part) for part in lines)
+            for lines in category_label_lines(axes["x"], style, width)]
+
+
 def import_veusz_spec_data(
     interface: Any,
     *,
     series: list[dict[str, Any]],
     axes: dict[str, Any],
     categorical: dict[str, Any] | None,
-) -> None:
+    style: dict[str, Any] | None = None,
+    size_mm: list[float] | None = None,
+) -> str:
     """Create all numeric and text datasets referenced by plot widgets."""
 
     for item in series:
@@ -22,7 +34,7 @@ def import_veusz_spec_data(
         interface.ImportString(f"{item['x_name']}(numeric)", x_data)
         interface.ImportString(f"{item['y_name']}(numeric)", y_data)
     if categorical is None:
-        return
+        return "category_axis_labels"
 
     groups = [
         group for group in categorical.get("groups", []) if isinstance(group, dict)
@@ -39,10 +51,14 @@ def import_veusz_spec_data(
         else []
     )
     grouped_bar = categorical.get("presentation_kind") == "grouped_bar_error"
-    interface.SetDataText(
-        "category_axis_labels",
-        [_veusz_literal_text(str(label)) for label in category_labels],
-    )
+    original_labels = [_veusz_literal_text(str(label)) for label in category_labels]
+    interface.SetDataText("category_axis_labels", original_labels)
+    label_dataset = "category_axis_labels"
+    if style is not None and size_mm is not None:
+        display = category_display_labels(axes, style, size_mm)
+        if display != original_labels:
+            label_dataset = "category_axis_display_labels"
+            interface.SetDataText(label_dataset, display)
     interface.ImportString(
         "category_axis_x(numeric)",
         "\n".join(
@@ -70,6 +86,7 @@ def import_veusz_spec_data(
         _import_bar_error_data(interface, groups)
     elif presentation_kind == "stacked_components":
         _import_stacked_component_data(interface, groups)
+    return label_dataset
 
 
 def _import_bar_error_data(

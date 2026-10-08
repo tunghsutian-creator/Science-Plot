@@ -97,12 +97,27 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     for name in ("previous", "current", "previous_spec", "current_spec"):
         transfer_parser.add_argument(name, type=Path)
+    managed_compile = subparsers.add_parser("compile-plot-ir")
+    managed_compile.add_argument("ir", type=Path)
+    managed_compile.add_argument("document", type=Path)
+    managed_compile.add_argument("--preview", type=Path, required=True)
+    managed_inspect = subparsers.add_parser("inspect-plot-ir")
+    managed_inspect.add_argument("ir", type=Path)
+    managed_inspect.add_argument("document", type=Path)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    if args.command == "export":
+    if args.command == "compile-plot-ir":
+        from sciplot_core.veusz_worker.managed import compile_plot_ir
+
+        payload = compile_plot_ir(args.ir, args.document, args.preview)
+    elif args.command == "inspect-plot-ir":
+        from sciplot_core.veusz_worker.managed import inspect_plot_ir
+
+        payload = inspect_plot_ir(args.ir, args.document)
+    elif args.command == "export":
         payload = export_request(args.request, formats=_split_formats(args.formats))
     elif args.command == "export-document":
         payload = export_document(

@@ -1,0 +1,16 @@
+{
+  "kind":"sciplot_figure_spec","schema_version":2,"id":"figure:main",
+  "scales":[
+    {"id":"scale:x","dimension":"x","transform":"linear","domain":[0,10],"unit":"Hz","quantity":"frequency","direction":"ascending"},
+    {"id":"scale:y","dimension":"y","transform":"linear","domain":[0,20],"unit":"Pa","quantity":"modulus","direction":"ascending"}
+  ],
+  "views":[{"id":"view:A","panel_label":"A","style":{},"axes":[
+    {"id":"axis:xb","scale_id":"scale:x","side":"bottom","label":"Frequency (Hz)","visible":true,"label_visible":true,"ticks":[0,5,10],"style":{}},
+    {"id":"axis:yl","scale_id":"scale:y","side":"left","label":"Modulus (Pa)","visible":true,"label_visible":true,"ticks":[0,10,20],"style":{}}
+  ],"layers":[{"id":"layer:modulus","dataset_id":"raw:A","mappings":{"x":"column:0","y":"column:1"},"mapping_semantics":{"x":"frequency","y":"modulus"},"x_scale":"scale:x","y_scale":"scale:y","marks":[{"id":"mark:line","type":"line","style":{}},{"id":"mark:point","type":"point","style":{}}],"role":"measurement","label":"Gprime","legend":{"visible":true,"label":"Gprime"},"z_order":0,"style":{}}]}],
+  "composition":{"kind":"single","rows":1,"columns":1,"cells":[{"view_id":"view:A","row":0,"column":0,"row_span":1,"column_span":1}],"column_weights":[1],"row_weights":[1],"resolve":[]},
+  "layout":{"width_mm":90,"height_mm":"auto","gap_x_mm":4,"gap_y_mm":4,"outer_margins_mm":{"left":2,"right":2,"top":2,"bottom":2},"panel_min_height_mm":35,"panel_label_height_mm":6},
+  "theme":{"project":{},"figure":{}},
+  "guides":[{"id":"guide:legend","type":"legend","scope":"view","view_id":"view:A","layer_ids":["layer:modulus"],"order":["layer:modulus"],"labels":{},"visible":true,"location":"top-right","columns":1,"style":{}}],
+  "annotations":[]
+}

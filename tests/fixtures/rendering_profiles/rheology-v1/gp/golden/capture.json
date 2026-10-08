@@ -1,0 +1,4488 @@
+{
+  "document_sha256": "e56adc7001fb98ec239d6e983ba02cc973ed63e4d43a356173d99febafd491f7",
+  "inventory": {
+    "/": {
+      "type": "document",
+      "settings": {
+        "width": {
+          "pt": 170.07874015748033
+        },
+        "height": {
+          "pt": 155.90551181102364
+        },
+        "englishlocale": false,
+        "colorTheme": "black",
+        "notes": "",
+        "StyleSheet/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/Line/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/Font/font": "Arial",
+        "StyleSheet/Font/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/Font/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/Font/style": "",
+        "StyleSheet/axis/hide": false,
+        "StyleSheet/axis/label": "",
+        "StyleSheet/axis/min": "Auto",
+        "StyleSheet/axis/max": "Auto",
+        "StyleSheet/axis/log": false,
+        "StyleSheet/axis/autoRange": "next-tick",
+        "StyleSheet/axis/mode": "numeric",
+        "StyleSheet/axis/autoExtend": "next-tick",
+        "StyleSheet/axis/autoExtendZero": true,
+        "StyleSheet/axis/autoMirror": true,
+        "StyleSheet/axis/reflect": false,
+        "StyleSheet/axis/outerticks": false,
+        "StyleSheet/axis/datascale": 1.0,
+        "StyleSheet/axis/direction": "horizontal",
+        "StyleSheet/axis/lowerPosition": 0.0,
+        "StyleSheet/axis/upperPosition": 1.0,
+        "StyleSheet/axis/otherPosition": 0.0,
+        "StyleSheet/axis/match": "",
+        "StyleSheet/axis/Line/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis/Line/style": "solid",
+        "StyleSheet/axis/Line/transparency": 0,
+        "StyleSheet/axis/Line/hide": false,
+        "StyleSheet/axis/Label/font": "Arial",
+        "StyleSheet/axis/Label/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/axis/Label/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis/Label/style": "",
+        "StyleSheet/axis/Label/italic": false,
+        "StyleSheet/axis/Label/bold": false,
+        "StyleSheet/axis/Label/underline": false,
+        "StyleSheet/axis/Label/hide": false,
+        "StyleSheet/axis/Label/atEdge": false,
+        "StyleSheet/axis/Label/rotate": "0",
+        "StyleSheet/axis/Label/offset": {
+          "pt": 0.0
+        },
+        "StyleSheet/axis/Label/position": "centre",
+        "StyleSheet/axis/TickLabels/font": "Arial",
+        "StyleSheet/axis/TickLabels/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/axis/TickLabels/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis/TickLabels/style": "",
+        "StyleSheet/axis/TickLabels/italic": false,
+        "StyleSheet/axis/TickLabels/bold": false,
+        "StyleSheet/axis/TickLabels/underline": false,
+        "StyleSheet/axis/TickLabels/hide": false,
+        "StyleSheet/axis/TickLabels/rotate": "0",
+        "StyleSheet/axis/TickLabels/format": "Auto",
+        "StyleSheet/axis/TickLabels/scale": 1.0,
+        "StyleSheet/axis/TickLabels/offset": {
+          "pt": 0.0
+        },
+        "StyleSheet/axis/MajorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis/MajorTicks/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis/MajorTicks/style": "solid",
+        "StyleSheet/axis/MajorTicks/transparency": 0,
+        "StyleSheet/axis/MajorTicks/hide": false,
+        "StyleSheet/axis/MajorTicks/length": {
+          "pt": 6.0
+        },
+        "StyleSheet/axis/MajorTicks/number": 6,
+        "StyleSheet/axis/MajorTicks/manualTicks": [],
+        "StyleSheet/axis/MinorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis/MinorTicks/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis/MinorTicks/style": "solid",
+        "StyleSheet/axis/MinorTicks/transparency": 0,
+        "StyleSheet/axis/MinorTicks/hide": false,
+        "StyleSheet/axis/MinorTicks/length": {
+          "pt": 3.0
+        },
+        "StyleSheet/axis/MinorTicks/number": 20,
+        "StyleSheet/axis/MinorTicks/manualTicks": [],
+        "StyleSheet/axis/GridLines/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/axis/GridLines/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis/GridLines/style": "dotted",
+        "StyleSheet/axis/GridLines/transparency": 0,
+        "StyleSheet/axis/GridLines/hide": true,
+        "StyleSheet/axis/GridLines/onTop": false,
+        "StyleSheet/axis/MinorGridLines/color": {
+          "rgba16": [
+            54227,
+            54227,
+            54227,
+            65535
+          ]
+        },
+        "StyleSheet/axis/MinorGridLines/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis/MinorGridLines/style": "dotted",
+        "StyleSheet/axis/MinorGridLines/transparency": 0,
+        "StyleSheet/axis/MinorGridLines/hide": true,
+        "StyleSheet/axis-broken/hide": false,
+        "StyleSheet/axis-broken/label": "",
+        "StyleSheet/axis-broken/min": "Auto",
+        "StyleSheet/axis-broken/max": "Auto",
+        "StyleSheet/axis-broken/breakPoints": [],
+        "StyleSheet/axis-broken/log": false,
+        "StyleSheet/axis-broken/autoRange": "next-tick",
+        "StyleSheet/axis-broken/mode": "numeric",
+        "StyleSheet/axis-broken/autoExtend": "next-tick",
+        "StyleSheet/axis-broken/autoExtendZero": true,
+        "StyleSheet/axis-broken/autoMirror": true,
+        "StyleSheet/axis-broken/reflect": false,
+        "StyleSheet/axis-broken/outerticks": false,
+        "StyleSheet/axis-broken/datascale": 1.0,
+        "StyleSheet/axis-broken/direction": "horizontal",
+        "StyleSheet/axis-broken/lowerPosition": 0.0,
+        "StyleSheet/axis-broken/upperPosition": 1.0,
+        "StyleSheet/axis-broken/otherPosition": 0.0,
+        "StyleSheet/axis-broken/match": "",
+        "StyleSheet/axis-broken/Line/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis-broken/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis-broken/Line/style": "solid",
+        "StyleSheet/axis-broken/Line/transparency": 0,
+        "StyleSheet/axis-broken/Line/hide": false,
+        "StyleSheet/axis-broken/Label/font": "Arial",
+        "StyleSheet/axis-broken/Label/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/axis-broken/Label/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis-broken/Label/style": "",
+        "StyleSheet/axis-broken/Label/italic": false,
+        "StyleSheet/axis-broken/Label/bold": false,
+        "StyleSheet/axis-broken/Label/underline": false,
+        "StyleSheet/axis-broken/Label/hide": false,
+        "StyleSheet/axis-broken/Label/atEdge": false,
+        "StyleSheet/axis-broken/Label/rotate": "0",
+        "StyleSheet/axis-broken/Label/offset": {
+          "pt": 0.0
+        },
+        "StyleSheet/axis-broken/Label/position": "centre",
+        "StyleSheet/axis-broken/TickLabels/font": "Arial",
+        "StyleSheet/axis-broken/TickLabels/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/axis-broken/TickLabels/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis-broken/TickLabels/style": "",
+        "StyleSheet/axis-broken/TickLabels/italic": false,
+        "StyleSheet/axis-broken/TickLabels/bold": false,
+        "StyleSheet/axis-broken/TickLabels/underline": false,
+        "StyleSheet/axis-broken/TickLabels/hide": false,
+        "StyleSheet/axis-broken/TickLabels/rotate": "0",
+        "StyleSheet/axis-broken/TickLabels/format": "Auto",
+        "StyleSheet/axis-broken/TickLabels/scale": 1.0,
+        "StyleSheet/axis-broken/TickLabels/offset": {
+          "pt": 0.0
+        },
+        "StyleSheet/axis-broken/MajorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis-broken/MajorTicks/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis-broken/MajorTicks/style": "solid",
+        "StyleSheet/axis-broken/MajorTicks/transparency": 0,
+        "StyleSheet/axis-broken/MajorTicks/hide": false,
+        "StyleSheet/axis-broken/MajorTicks/length": {
+          "pt": 6.0
+        },
+        "StyleSheet/axis-broken/MajorTicks/number": 6,
+        "StyleSheet/axis-broken/MajorTicks/manualTicks": [],
+        "StyleSheet/axis-broken/MinorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis-broken/MinorTicks/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis-broken/MinorTicks/style": "solid",
+        "StyleSheet/axis-broken/MinorTicks/transparency": 0,
+        "StyleSheet/axis-broken/MinorTicks/hide": false,
+        "StyleSheet/axis-broken/MinorTicks/length": {
+          "pt": 3.0
+        },
+        "StyleSheet/axis-broken/MinorTicks/number": 20,
+        "StyleSheet/axis-broken/MinorTicks/manualTicks": [],
+        "StyleSheet/axis-broken/GridLines/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/axis-broken/GridLines/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis-broken/GridLines/style": "dotted",
+        "StyleSheet/axis-broken/GridLines/transparency": 0,
+        "StyleSheet/axis-broken/GridLines/hide": true,
+        "StyleSheet/axis-broken/GridLines/onTop": false,
+        "StyleSheet/axis-broken/MinorGridLines/color": {
+          "rgba16": [
+            54227,
+            54227,
+            54227,
+            65535
+          ]
+        },
+        "StyleSheet/axis-broken/MinorGridLines/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis-broken/MinorGridLines/style": "dotted",
+        "StyleSheet/axis-broken/MinorGridLines/transparency": 0,
+        "StyleSheet/axis-broken/MinorGridLines/hide": true,
+        "StyleSheet/axis-broken/breakPosns": [],
+        "StyleSheet/axis-function/linked": false,
+        "StyleSheet/axis-function/function": "t",
+        "StyleSheet/axis-function/hide": false,
+        "StyleSheet/axis-function/label": "",
+        "StyleSheet/axis-function/min": "Auto",
+        "StyleSheet/axis-function/max": "Auto",
+        "StyleSheet/axis-function/linkedaxis": "",
+        "StyleSheet/axis-function/mint": "Auto",
+        "StyleSheet/axis-function/maxt": "Auto",
+        "StyleSheet/axis-function/log": false,
+        "StyleSheet/axis-function/autoRange": "next-tick",
+        "StyleSheet/axis-function/mode": "numeric",
+        "StyleSheet/axis-function/autoExtend": "next-tick",
+        "StyleSheet/axis-function/autoExtendZero": true,
+        "StyleSheet/axis-function/autoMirror": true,
+        "StyleSheet/axis-function/reflect": false,
+        "StyleSheet/axis-function/outerticks": false,
+        "StyleSheet/axis-function/datascale": 1.0,
+        "StyleSheet/axis-function/direction": "horizontal",
+        "StyleSheet/axis-function/lowerPosition": 0.0,
+        "StyleSheet/axis-function/upperPosition": 1.0,
+        "StyleSheet/axis-function/otherPosition": 0.0,
+        "StyleSheet/axis-function/match": "",
+        "StyleSheet/axis-function/Line/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis-function/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis-function/Line/style": "solid",
+        "StyleSheet/axis-function/Line/transparency": 0,
+        "StyleSheet/axis-function/Line/hide": false,
+        "StyleSheet/axis-function/Label/font": "Arial",
+        "StyleSheet/axis-function/Label/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/axis-function/Label/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis-function/Label/style": "",
+        "StyleSheet/axis-function/Label/italic": false,
+        "StyleSheet/axis-function/Label/bold": false,
+        "StyleSheet/axis-function/Label/underline": false,
+        "StyleSheet/axis-function/Label/hide": false,
+        "StyleSheet/axis-function/Label/atEdge": false,
+        "StyleSheet/axis-function/Label/rotate": "0",
+        "StyleSheet/axis-function/Label/offset": {
+          "pt": 0.0
+        },
+        "StyleSheet/axis-function/Label/position": "centre",
+        "StyleSheet/axis-function/TickLabels/font": "Arial",
+        "StyleSheet/axis-function/TickLabels/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/axis-function/TickLabels/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis-function/TickLabels/style": "",
+        "StyleSheet/axis-function/TickLabels/italic": false,
+        "StyleSheet/axis-function/TickLabels/bold": false,
+        "StyleSheet/axis-function/TickLabels/underline": false,
+        "StyleSheet/axis-function/TickLabels/hide": false,
+        "StyleSheet/axis-function/TickLabels/rotate": "0",
+        "StyleSheet/axis-function/TickLabels/format": "Auto",
+        "StyleSheet/axis-function/TickLabels/scale": 1.0,
+        "StyleSheet/axis-function/TickLabels/offset": {
+          "pt": 0.0
+        },
+        "StyleSheet/axis-function/MajorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis-function/MajorTicks/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis-function/MajorTicks/style": "solid",
+        "StyleSheet/axis-function/MajorTicks/transparency": 0,
+        "StyleSheet/axis-function/MajorTicks/hide": false,
+        "StyleSheet/axis-function/MajorTicks/length": {
+          "pt": 6.0
+        },
+        "StyleSheet/axis-function/MajorTicks/number": 6,
+        "StyleSheet/axis-function/MajorTicks/manualTicks": [],
+        "StyleSheet/axis-function/MinorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis-function/MinorTicks/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis-function/MinorTicks/style": "solid",
+        "StyleSheet/axis-function/MinorTicks/transparency": 0,
+        "StyleSheet/axis-function/MinorTicks/hide": false,
+        "StyleSheet/axis-function/MinorTicks/length": {
+          "pt": 3.0
+        },
+        "StyleSheet/axis-function/MinorTicks/number": 20,
+        "StyleSheet/axis-function/MinorTicks/manualTicks": [],
+        "StyleSheet/axis-function/GridLines/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/axis-function/GridLines/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis-function/GridLines/style": "dotted",
+        "StyleSheet/axis-function/GridLines/transparency": 0,
+        "StyleSheet/axis-function/GridLines/hide": true,
+        "StyleSheet/axis-function/GridLines/onTop": false,
+        "StyleSheet/axis-function/MinorGridLines/color": {
+          "rgba16": [
+            54227,
+            54227,
+            54227,
+            65535
+          ]
+        },
+        "StyleSheet/axis-function/MinorGridLines/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/axis-function/MinorGridLines/style": "dotted",
+        "StyleSheet/axis-function/MinorGridLines/transparency": 0,
+        "StyleSheet/axis-function/MinorGridLines/hide": true,
+        "StyleSheet/axis3d/hide": false,
+        "StyleSheet/axis3d/label": "",
+        "StyleSheet/axis3d/min": "Auto",
+        "StyleSheet/axis3d/max": "Auto",
+        "StyleSheet/axis3d/log": false,
+        "StyleSheet/axis3d/autoRange": "next-tick",
+        "StyleSheet/axis3d/mode": "numeric",
+        "StyleSheet/axis3d/autoMirror": true,
+        "StyleSheet/axis3d/datascale": 1.0,
+        "StyleSheet/axis3d/direction": "x",
+        "StyleSheet/axis3d/lowerPosition": 0.0,
+        "StyleSheet/axis3d/upperPosition": 1.0,
+        "StyleSheet/axis3d/otherPosition1": 0.0,
+        "StyleSheet/axis3d/otherPosition2": 0.0,
+        "StyleSheet/axis3d/Line/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis3d/Line/width": 1.0,
+        "StyleSheet/axis3d/Line/style": "solid",
+        "StyleSheet/axis3d/Line/transparency": 0.0,
+        "StyleSheet/axis3d/Line/reflectivity": 0.0,
+        "StyleSheet/axis3d/Line/hide": false,
+        "StyleSheet/axis3d/Label/font": "Arial",
+        "StyleSheet/axis3d/Label/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/axis3d/Label/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis3d/Label/style": "",
+        "StyleSheet/axis3d/Label/italic": false,
+        "StyleSheet/axis3d/Label/bold": false,
+        "StyleSheet/axis3d/Label/underline": false,
+        "StyleSheet/axis3d/Label/hide": false,
+        "StyleSheet/axis3d/Label/position": "centre",
+        "StyleSheet/axis3d/TickLabels/font": "Arial",
+        "StyleSheet/axis3d/TickLabels/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/axis3d/TickLabels/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/axis3d/TickLabels/style": "",
+        "StyleSheet/axis3d/TickLabels/italic": false,
+        "StyleSheet/axis3d/TickLabels/bold": false,
+        "StyleSheet/axis3d/TickLabels/underline": false,
+        "StyleSheet/axis3d/TickLabels/hide": false,
+        "StyleSheet/axis3d/TickLabels/format": "Auto",
+        "StyleSheet/axis3d/TickLabels/scale": 1.0,
+        "StyleSheet/axis3d/MajorTicks/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/axis3d/MajorTicks/width": 1.0,
+        "StyleSheet/axis3d/MajorTicks/style": "solid",
+        "StyleSheet/axis3d/MajorTicks/transparency": 0.0,
+        "StyleSheet/axis3d/MajorTicks/reflectivity": 0.0,
+        "StyleSheet/axis3d/MajorTicks/hide": false,
+        "StyleSheet/axis3d/MajorTicks/length": 20.0,
+        "StyleSheet/axis3d/MajorTicks/number": 6,
+        "StyleSheet/axis3d/MajorTicks/manualTicks": [],
+        "StyleSheet/axis3d/MinorTicks/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/axis3d/MinorTicks/width": 1.0,
+        "StyleSheet/axis3d/MinorTicks/style": "solid",
+        "StyleSheet/axis3d/MinorTicks/transparency": 0.0,
+        "StyleSheet/axis3d/MinorTicks/reflectivity": 0.0,
+        "StyleSheet/axis3d/MinorTicks/hide": false,
+        "StyleSheet/axis3d/MinorTicks/length": 10.0,
+        "StyleSheet/axis3d/MinorTicks/number": 20,
+        "StyleSheet/axis3d/GridLines/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/axis3d/GridLines/width": 1.0,
+        "StyleSheet/axis3d/GridLines/style": "solid",
+        "StyleSheet/axis3d/GridLines/transparency": 0.0,
+        "StyleSheet/axis3d/GridLines/reflectivity": 0.0,
+        "StyleSheet/axis3d/GridLines/hide": true,
+        "StyleSheet/axis3d/MinorGridLines/color": {
+          "rgba16": [
+            54227,
+            54227,
+            54227,
+            65535
+          ]
+        },
+        "StyleSheet/axis3d/MinorGridLines/width": 1.0,
+        "StyleSheet/axis3d/MinorGridLines/style": "solid",
+        "StyleSheet/axis3d/MinorGridLines/transparency": 0.0,
+        "StyleSheet/axis3d/MinorGridLines/reflectivity": 0.0,
+        "StyleSheet/axis3d/MinorGridLines/hide": true,
+        "StyleSheet/bar/lengths": [
+          "y"
+        ],
+        "StyleSheet/bar/posn": "",
+        "StyleSheet/bar/direction": "vertical",
+        "StyleSheet/bar/mode": "grouped",
+        "StyleSheet/bar/keys": [
+          ""
+        ],
+        "StyleSheet/bar/hide": false,
+        "StyleSheet/bar/xAxis": "x",
+        "StyleSheet/bar/yAxis": "y",
+        "StyleSheet/bar/labels": "",
+        "StyleSheet/bar/barfill": 0.75,
+        "StyleSheet/bar/groupfill": 0.9,
+        "StyleSheet/bar/errorstyle": "bar",
+        "StyleSheet/bar/BarFill/fills": [
+          [
+            "solid",
+            "auto",
+            false
+          ]
+        ],
+        "StyleSheet/bar/BarLine/lines": [
+          [
+            "solid",
+            {
+              "pt": 0.5
+            },
+            "black",
+            false
+          ]
+        ],
+        "StyleSheet/bar/ErrorBarLine/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/bar/ErrorBarLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/bar/ErrorBarLine/style": "solid",
+        "StyleSheet/bar/ErrorBarLine/transparency": 0,
+        "StyleSheet/bar/ErrorBarLine/hide": false,
+        "StyleSheet/bar/ErrorBarLine/endsize": 1.0,
+        "StyleSheet/bar/ErrorBarLine/hideHorz": false,
+        "StyleSheet/bar/ErrorBarLine/hideVert": false,
+        "StyleSheet/boxplot/calculate": true,
+        "StyleSheet/boxplot/mean": "",
+        "StyleSheet/boxplot/median": "",
+        "StyleSheet/boxplot/boxmin": "",
+        "StyleSheet/boxplot/boxmax": "",
+        "StyleSheet/boxplot/whiskermin": "",
+        "StyleSheet/boxplot/whiskermax": "",
+        "StyleSheet/boxplot/values": [
+          "data"
+        ],
+        "StyleSheet/boxplot/posn": "",
+        "StyleSheet/boxplot/labels": "",
+        "StyleSheet/boxplot/direction": "vertical",
+        "StyleSheet/boxplot/whiskermode": "1.5IQR",
+        "StyleSheet/boxplot/hide": false,
+        "StyleSheet/boxplot/xAxis": "x",
+        "StyleSheet/boxplot/yAxis": "y",
+        "StyleSheet/boxplot/fillfraction": 0.75,
+        "StyleSheet/boxplot/outliersmarker": "circle",
+        "StyleSheet/boxplot/meanmarker": "linecross",
+        "StyleSheet/boxplot/markerSize": {
+          "pt": 3.0
+        },
+        "StyleSheet/boxplot/Fill/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/boxplot/Fill/style": "solid",
+        "StyleSheet/boxplot/Fill/hide": false,
+        "StyleSheet/boxplot/Fill/transparency": 0,
+        "StyleSheet/boxplot/Fill/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/boxplot/Fill/linestyle": "solid",
+        "StyleSheet/boxplot/Fill/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/boxplot/Fill/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/boxplot/Fill/backtransparency": 0,
+        "StyleSheet/boxplot/Fill/backhide": true,
+        "StyleSheet/boxplot/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/boxplot/Border/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/boxplot/Border/style": "solid",
+        "StyleSheet/boxplot/Border/transparency": 0,
+        "StyleSheet/boxplot/Border/hide": false,
+        "StyleSheet/boxplot/Whisker/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/boxplot/Whisker/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/boxplot/Whisker/style": "solid",
+        "StyleSheet/boxplot/Whisker/transparency": 0,
+        "StyleSheet/boxplot/Whisker/hide": false,
+        "StyleSheet/boxplot/MarkersLine/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/boxplot/MarkersLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/boxplot/MarkersLine/style": "solid",
+        "StyleSheet/boxplot/MarkersLine/transparency": 0,
+        "StyleSheet/boxplot/MarkersLine/hide": false,
+        "StyleSheet/boxplot/MarkersFill/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/boxplot/MarkersFill/style": "solid",
+        "StyleSheet/boxplot/MarkersFill/transparency": 0,
+        "StyleSheet/boxplot/MarkersFill/hide": false,
+        "StyleSheet/colorbar/widgetName": "",
+        "StyleSheet/colorbar/hide": false,
+        "StyleSheet/colorbar/label": "",
+        "StyleSheet/colorbar/min": "Auto",
+        "StyleSheet/colorbar/max": "Auto",
+        "StyleSheet/colorbar/log": false,
+        "StyleSheet/colorbar/autoRange": "next-tick",
+        "StyleSheet/colorbar/mode": "numeric",
+        "StyleSheet/colorbar/autoExtend": "next-tick",
+        "StyleSheet/colorbar/autoExtendZero": true,
+        "StyleSheet/colorbar/autoMirror": true,
+        "StyleSheet/colorbar/reflect": false,
+        "StyleSheet/colorbar/outerticks": false,
+        "StyleSheet/colorbar/datascale": 1.0,
+        "StyleSheet/colorbar/direction": "horizontal",
+        "StyleSheet/colorbar/lowerPosition": 0.0,
+        "StyleSheet/colorbar/upperPosition": 1.0,
+        "StyleSheet/colorbar/otherPosition": 0.0,
+        "StyleSheet/colorbar/match": "",
+        "StyleSheet/colorbar/Line/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/colorbar/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/colorbar/Line/style": "solid",
+        "StyleSheet/colorbar/Line/transparency": 0,
+        "StyleSheet/colorbar/Line/hide": false,
+        "StyleSheet/colorbar/Label/font": "Arial",
+        "StyleSheet/colorbar/Label/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/colorbar/Label/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/colorbar/Label/style": "",
+        "StyleSheet/colorbar/Label/italic": false,
+        "StyleSheet/colorbar/Label/bold": false,
+        "StyleSheet/colorbar/Label/underline": false,
+        "StyleSheet/colorbar/Label/hide": false,
+        "StyleSheet/colorbar/Label/atEdge": false,
+        "StyleSheet/colorbar/Label/rotate": "0",
+        "StyleSheet/colorbar/Label/offset": {
+          "pt": 0.0
+        },
+        "StyleSheet/colorbar/Label/position": "centre",
+        "StyleSheet/colorbar/TickLabels/font": "Arial",
+        "StyleSheet/colorbar/TickLabels/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/colorbar/TickLabels/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/colorbar/TickLabels/style": "",
+        "StyleSheet/colorbar/TickLabels/italic": false,
+        "StyleSheet/colorbar/TickLabels/bold": false,
+        "StyleSheet/colorbar/TickLabels/underline": false,
+        "StyleSheet/colorbar/TickLabels/hide": false,
+        "StyleSheet/colorbar/TickLabels/rotate": "0",
+        "StyleSheet/colorbar/TickLabels/format": "Auto",
+        "StyleSheet/colorbar/TickLabels/scale": 1.0,
+        "StyleSheet/colorbar/TickLabels/offset": {
+          "pt": 0.0
+        },
+        "StyleSheet/colorbar/MajorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/colorbar/MajorTicks/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/colorbar/MajorTicks/style": "solid",
+        "StyleSheet/colorbar/MajorTicks/transparency": 0,
+        "StyleSheet/colorbar/MajorTicks/hide": false,
+        "StyleSheet/colorbar/MajorTicks/length": {
+          "pt": 6.0
+        },
+        "StyleSheet/colorbar/MajorTicks/number": 6,
+        "StyleSheet/colorbar/MajorTicks/manualTicks": [],
+        "StyleSheet/colorbar/MinorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/colorbar/MinorTicks/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/colorbar/MinorTicks/style": "solid",
+        "StyleSheet/colorbar/MinorTicks/transparency": 0,
+        "StyleSheet/colorbar/MinorTicks/hide": false,
+        "StyleSheet/colorbar/MinorTicks/length": {
+          "pt": 3.0
+        },
+        "StyleSheet/colorbar/MinorTicks/number": 20,
+        "StyleSheet/colorbar/MinorTicks/manualTicks": [],
+        "StyleSheet/colorbar/GridLines/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/colorbar/GridLines/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/colorbar/GridLines/style": "dotted",
+        "StyleSheet/colorbar/GridLines/transparency": 0,
+        "StyleSheet/colorbar/GridLines/hide": true,
+        "StyleSheet/colorbar/GridLines/onTop": false,
+        "StyleSheet/colorbar/MinorGridLines/color": {
+          "rgba16": [
+            54227,
+            54227,
+            54227,
+            65535
+          ]
+        },
+        "StyleSheet/colorbar/MinorGridLines/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/colorbar/MinorGridLines/style": "dotted",
+        "StyleSheet/colorbar/MinorGridLines/transparency": 0,
+        "StyleSheet/colorbar/MinorGridLines/hide": true,
+        "StyleSheet/colorbar/horzPosn": "right",
+        "StyleSheet/colorbar/vertPosn": "bottom",
+        "StyleSheet/colorbar/width": "Auto",
+        "StyleSheet/colorbar/height": "Auto",
+        "StyleSheet/colorbar/horzManual": 0.0,
+        "StyleSheet/colorbar/vertManual": 0.0,
+        "StyleSheet/colorbar/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/colorbar/Border/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/colorbar/Border/style": "solid",
+        "StyleSheet/colorbar/Border/transparency": 0,
+        "StyleSheet/colorbar/Border/hide": false,
+        "StyleSheet/colorbar/image": "",
+        "StyleSheet/contour/data": "",
+        "StyleSheet/contour/min": "Auto",
+        "StyleSheet/contour/max": "Auto",
+        "StyleSheet/contour/numLevels": 5,
+        "StyleSheet/contour/scaling": "linear",
+        "StyleSheet/contour/manualLevels": [],
+        "StyleSheet/contour/keyLevels": false,
+        "StyleSheet/contour/levelsOut": [],
+        "StyleSheet/contour/hide": false,
+        "StyleSheet/contour/xAxis": "x",
+        "StyleSheet/contour/yAxis": "y",
+        "StyleSheet/contour/ContourLabels/font": "Arial",
+        "StyleSheet/contour/ContourLabels/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/contour/ContourLabels/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/contour/ContourLabels/style": "",
+        "StyleSheet/contour/ContourLabels/italic": false,
+        "StyleSheet/contour/ContourLabels/bold": false,
+        "StyleSheet/contour/ContourLabels/underline": false,
+        "StyleSheet/contour/ContourLabels/hide": true,
+        "StyleSheet/contour/ContourLabels/format": "%.3Vg",
+        "StyleSheet/contour/ContourLabels/scale": 1.0,
+        "StyleSheet/contour/ContourLabels/rotate": true,
+        "StyleSheet/contour/Lines/lines": [
+          [
+            "solid",
+            {
+              "pt": 1.0
+            },
+            "black",
+            false
+          ]
+        ],
+        "StyleSheet/contour/Lines/hide": false,
+        "StyleSheet/contour/Fills/fills": [],
+        "StyleSheet/contour/Fills/hide": false,
+        "StyleSheet/contour/SubLines/lines": [
+          [
+            "dot1",
+            {
+              "pt": 1.0
+            },
+            "black",
+            false
+          ]
+        ],
+        "StyleSheet/contour/SubLines/numLevels": 5,
+        "StyleSheet/contour/SubLines/hide": true,
+        "StyleSheet/contour/lines": [
+          [
+            "solid",
+            {
+              "pt": 1.0
+            },
+            "black",
+            false
+          ]
+        ],
+        "StyleSheet/contour/fills": [],
+        "StyleSheet/covariance/xData": "x",
+        "StyleSheet/covariance/yData": "y",
+        "StyleSheet/covariance/covxx": "",
+        "StyleSheet/covariance/covyx": "",
+        "StyleSheet/covariance/covxy": "",
+        "StyleSheet/covariance/covyy": "",
+        "StyleSheet/covariance/hide": false,
+        "StyleSheet/covariance/key": "",
+        "StyleSheet/covariance/xAxis": "x",
+        "StyleSheet/covariance/yAxis": "y",
+        "StyleSheet/covariance/Line/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/covariance/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/covariance/Line/style": "solid",
+        "StyleSheet/covariance/Line/transparency": 0,
+        "StyleSheet/covariance/Line/hide": false,
+        "StyleSheet/covariance/Line/steps": 25,
+        "StyleSheet/covariance/Fill/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/covariance/Fill/style": "solid",
+        "StyleSheet/covariance/Fill/hide": true,
+        "StyleSheet/covariance/Fill/transparency": 0,
+        "StyleSheet/covariance/Fill/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/covariance/Fill/linestyle": "solid",
+        "StyleSheet/covariance/Fill/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/covariance/Fill/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/covariance/Fill/backtransparency": 0,
+        "StyleSheet/covariance/Fill/backhide": true,
+        "StyleSheet/document/width": {
+          "pt": 425.19685039370086
+        },
+        "StyleSheet/document/height": {
+          "pt": 425.19685039370086
+        },
+        "StyleSheet/document/englishlocale": false,
+        "StyleSheet/document/colorTheme": "black",
+        "StyleSheet/document/notes": "",
+        "StyleSheet/ellipse/hide": false,
+        "StyleSheet/ellipse/xPos": [
+          0.5
+        ],
+        "StyleSheet/ellipse/yPos": [
+          0.5
+        ],
+        "StyleSheet/ellipse/width": [
+          0.1
+        ],
+        "StyleSheet/ellipse/height": [
+          0.1
+        ],
+        "StyleSheet/ellipse/rotate": [
+          0.0
+        ],
+        "StyleSheet/ellipse/positioning": "relative",
+        "StyleSheet/ellipse/xAxis": "x",
+        "StyleSheet/ellipse/yAxis": "y",
+        "StyleSheet/ellipse/Fill/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/ellipse/Fill/style": "solid",
+        "StyleSheet/ellipse/Fill/hide": true,
+        "StyleSheet/ellipse/Fill/transparency": 0,
+        "StyleSheet/ellipse/Fill/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/ellipse/Fill/linestyle": "solid",
+        "StyleSheet/ellipse/Fill/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/ellipse/Fill/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/ellipse/Fill/backtransparency": 0,
+        "StyleSheet/ellipse/Fill/backhide": true,
+        "StyleSheet/ellipse/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/ellipse/Border/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/ellipse/Border/style": "solid",
+        "StyleSheet/ellipse/Border/transparency": 0,
+        "StyleSheet/ellipse/Border/hide": false,
+        "StyleSheet/ellipse/clip": false,
+        "StyleSheet/fit/xData": "x",
+        "StyleSheet/fit/yData": "y",
+        "StyleSheet/fit/function": "a + b*x",
+        "StyleSheet/fit/values": "{'a': 0.0, 'b': 1.0}",
+        "StyleSheet/fit/fitRange": false,
+        "StyleSheet/fit/outLabel": "",
+        "StyleSheet/fit/outExpr": "",
+        "StyleSheet/fit/chi2": -1.0,
+        "StyleSheet/fit/dof": -1,
+        "StyleSheet/fit/redchi2": -1.0,
+        "StyleSheet/fit/variable": "x",
+        "StyleSheet/fit/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/fit/steps": 50,
+        "StyleSheet/fit/hide": false,
+        "StyleSheet/fit/key": "",
+        "StyleSheet/fit/xAxis": "x",
+        "StyleSheet/fit/yAxis": "y",
+        "StyleSheet/fit/min": "Auto",
+        "StyleSheet/fit/max": "Auto",
+        "StyleSheet/fit/Line/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/fit/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/fit/Line/style": "solid",
+        "StyleSheet/fit/Line/transparency": 0,
+        "StyleSheet/fit/Line/hide": false,
+        "StyleSheet/fit/FillBelow/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/fit/FillBelow/style": "solid",
+        "StyleSheet/fit/FillBelow/hide": true,
+        "StyleSheet/fit/FillBelow/transparency": 0,
+        "StyleSheet/fit/FillBelow/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/fit/FillBelow/linestyle": "solid",
+        "StyleSheet/fit/FillBelow/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/fit/FillBelow/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/fit/FillBelow/backtransparency": 0,
+        "StyleSheet/fit/FillBelow/backhide": true,
+        "StyleSheet/fit/FillAbove/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/fit/FillAbove/style": "solid",
+        "StyleSheet/fit/FillAbove/hide": true,
+        "StyleSheet/fit/FillAbove/transparency": 0,
+        "StyleSheet/fit/FillAbove/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/fit/FillAbove/linestyle": "solid",
+        "StyleSheet/fit/FillAbove/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/fit/FillAbove/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/fit/FillAbove/backtransparency": 0,
+        "StyleSheet/fit/FillAbove/backhide": true,
+        "StyleSheet/fit/defErrType": "absolute",
+        "StyleSheet/fit/defErr": 0.05,
+        "StyleSheet/fit/fitMin": "Auto",
+        "StyleSheet/fit/fitMax": "Auto",
+        "StyleSheet/function/function": "x",
+        "StyleSheet/function/variable": "x",
+        "StyleSheet/function/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/function/steps": 50,
+        "StyleSheet/function/hide": false,
+        "StyleSheet/function/key": "",
+        "StyleSheet/function/xAxis": "x",
+        "StyleSheet/function/yAxis": "y",
+        "StyleSheet/function/min": "Auto",
+        "StyleSheet/function/max": "Auto",
+        "StyleSheet/function/Line/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/function/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/function/Line/style": "solid",
+        "StyleSheet/function/Line/transparency": 0,
+        "StyleSheet/function/Line/hide": false,
+        "StyleSheet/function/FillBelow/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/function/FillBelow/style": "solid",
+        "StyleSheet/function/FillBelow/hide": true,
+        "StyleSheet/function/FillBelow/transparency": 0,
+        "StyleSheet/function/FillBelow/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/function/FillBelow/linestyle": "solid",
+        "StyleSheet/function/FillBelow/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/function/FillBelow/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/function/FillBelow/backtransparency": 0,
+        "StyleSheet/function/FillBelow/backhide": true,
+        "StyleSheet/function/FillAbove/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/function/FillAbove/style": "solid",
+        "StyleSheet/function/FillAbove/hide": true,
+        "StyleSheet/function/FillAbove/transparency": 0,
+        "StyleSheet/function/FillAbove/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/function/FillAbove/linestyle": "solid",
+        "StyleSheet/function/FillAbove/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/function/FillAbove/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/function/FillAbove/backtransparency": 0,
+        "StyleSheet/function/FillAbove/backhide": true,
+        "StyleSheet/function3d/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/function3d/mode": "x,y,z=fns(t)",
+        "StyleSheet/function3d/fnx": "",
+        "StyleSheet/function3d/fny": "",
+        "StyleSheet/function3d/fnz": "",
+        "StyleSheet/function3d/fncolor": "",
+        "StyleSheet/function3d/hide": false,
+        "StyleSheet/function3d/xAxis": "x",
+        "StyleSheet/function3d/yAxis": "y",
+        "StyleSheet/function3d/zAxis": "z",
+        "StyleSheet/function3d/linesteps": 50,
+        "StyleSheet/function3d/surfacesteps": 20,
+        "StyleSheet/function3d/Line/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/function3d/Line/width": 1.0,
+        "StyleSheet/function3d/Line/style": "solid",
+        "StyleSheet/function3d/Line/transparency": 0.0,
+        "StyleSheet/function3d/Line/reflectivity": 20.0,
+        "StyleSheet/function3d/Line/hide": false,
+        "StyleSheet/function3d/Line/colorMap": "grey",
+        "StyleSheet/function3d/Line/colorMapInvert": false,
+        "StyleSheet/function3d/GridLine/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/function3d/GridLine/width": 1.0,
+        "StyleSheet/function3d/GridLine/style": "solid",
+        "StyleSheet/function3d/GridLine/transparency": 0.0,
+        "StyleSheet/function3d/GridLine/reflectivity": 0.0,
+        "StyleSheet/function3d/GridLine/hide": false,
+        "StyleSheet/function3d/GridLine/hidehorz": false,
+        "StyleSheet/function3d/GridLine/hidevert": false,
+        "StyleSheet/function3d/Surface/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/function3d/Surface/transparency": 0.0,
+        "StyleSheet/function3d/Surface/reflectivity": 50.0,
+        "StyleSheet/function3d/Surface/hide": false,
+        "StyleSheet/function3d/Surface/colorMap": "grey",
+        "StyleSheet/function3d/Surface/colorMapInvert": false,
+        "StyleSheet/graph/hide": false,
+        "StyleSheet/graph/leftMargin": {
+          "pt": 48.18897637795276
+        },
+        "StyleSheet/graph/rightMargin": {
+          "pt": 5.669291338582678
+        },
+        "StyleSheet/graph/topMargin": {
+          "pt": 5.669291338582678
+        },
+        "StyleSheet/graph/bottomMargin": {
+          "pt": 48.18897637795276
+        },
+        "StyleSheet/graph/aspect": "Auto",
+        "StyleSheet/graph/notes": "",
+        "StyleSheet/graph/Background/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/graph/Background/style": "solid",
+        "StyleSheet/graph/Background/hide": false,
+        "StyleSheet/graph/Background/transparency": 0,
+        "StyleSheet/graph/Background/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/graph/Background/linestyle": "solid",
+        "StyleSheet/graph/Background/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/graph/Background/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/graph/Background/backtransparency": 0,
+        "StyleSheet/graph/Background/backhide": true,
+        "StyleSheet/graph/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/graph/Border/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/graph/Border/style": "solid",
+        "StyleSheet/graph/Border/transparency": 0,
+        "StyleSheet/graph/Border/hide": false,
+        "StyleSheet/graph3d/hide": false,
+        "StyleSheet/graph3d/xSize": 1.0,
+        "StyleSheet/graph3d/ySize": 1.0,
+        "StyleSheet/graph3d/zSize": 1.0,
+        "StyleSheet/graph3d/xPos": 0.0,
+        "StyleSheet/graph3d/yPos": 0.0,
+        "StyleSheet/graph3d/zPos": 0.0,
+        "StyleSheet/graph3d/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/graph3d/Border/width": 1.0,
+        "StyleSheet/graph3d/Border/style": "solid",
+        "StyleSheet/graph3d/Border/transparency": 0.0,
+        "StyleSheet/graph3d/Border/reflectivity": 0.0,
+        "StyleSheet/graph3d/Border/hide": false,
+        "StyleSheet/graph3d/Back/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/graph3d/Back/transparency": 0.0,
+        "StyleSheet/graph3d/Back/reflectivity": 0.0,
+        "StyleSheet/graph3d/Back/hide": true,
+        "StyleSheet/grid/hide": false,
+        "StyleSheet/grid/rows": 2,
+        "StyleSheet/grid/columns": 2,
+        "StyleSheet/grid/scaleRows": [],
+        "StyleSheet/grid/scaleCols": [],
+        "StyleSheet/grid/leftMargin": {
+          "pt": 48.18897637795276
+        },
+        "StyleSheet/grid/rightMargin": {
+          "pt": 5.669291338582678
+        },
+        "StyleSheet/grid/topMargin": {
+          "pt": 5.669291338582678
+        },
+        "StyleSheet/grid/bottomMargin": {
+          "pt": 48.18897637795276
+        },
+        "StyleSheet/grid/internalMargin": {
+          "pt": 0.0
+        },
+        "StyleSheet/histo/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/histo/style": "step",
+        "StyleSheet/histo/marker": "none",
+        "StyleSheet/histo/markerSize": {
+          "pt": 3.0
+        },
+        "StyleSheet/histo/errorStyle": "none",
+        "StyleSheet/histo/hide": false,
+        "StyleSheet/histo/data": "",
+        "StyleSheet/histo/key": "",
+        "StyleSheet/histo/weights": "",
+        "StyleSheet/histo/calcmode": "counts",
+        "StyleSheet/histo/binning": "constant",
+        "StyleSheet/histo/minval": "Auto",
+        "StyleSheet/histo/maxval": "Auto",
+        "StyleSheet/histo/xAxis": "x",
+        "StyleSheet/histo/numbins": 10,
+        "StyleSheet/histo/manual": [],
+        "StyleSheet/histo/errormode": "gehrels",
+        "StyleSheet/histo/direction": "vertical",
+        "StyleSheet/histo/scaling": "linear",
+        "StyleSheet/histo/yAxis": "y",
+        "StyleSheet/histo/Line/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/histo/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/histo/Line/style": "solid",
+        "StyleSheet/histo/Line/transparency": 0,
+        "StyleSheet/histo/Line/hide": false,
+        "StyleSheet/histo/Fill1/mode": "tozero",
+        "StyleSheet/histo/Fill1/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/histo/Fill1/style": "solid",
+        "StyleSheet/histo/Fill1/hide": false,
+        "StyleSheet/histo/Fill1/transparency": 0,
+        "StyleSheet/histo/Fill1/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/histo/Fill1/linestyle": "solid",
+        "StyleSheet/histo/Fill1/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/histo/Fill1/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/histo/Fill1/backtransparency": 0,
+        "StyleSheet/histo/Fill1/backhide": true,
+        "StyleSheet/histo/Fill1/hideerror": false,
+        "StyleSheet/histo/Fill2/mode": "over",
+        "StyleSheet/histo/Fill2/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/histo/Fill2/style": "solid",
+        "StyleSheet/histo/Fill2/hide": true,
+        "StyleSheet/histo/Fill2/transparency": 0,
+        "StyleSheet/histo/Fill2/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/histo/Fill2/linestyle": "solid",
+        "StyleSheet/histo/Fill2/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/histo/Fill2/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/histo/Fill2/backtransparency": 0,
+        "StyleSheet/histo/Fill2/backhide": true,
+        "StyleSheet/histo/Fill2/hideerror": false,
+        "StyleSheet/histo/PostLine/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/histo/PostLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/histo/PostLine/style": "solid",
+        "StyleSheet/histo/PostLine/transparency": 0,
+        "StyleSheet/histo/PostLine/hide": true,
+        "StyleSheet/histo/MarkerLine/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/histo/MarkerLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/histo/MarkerLine/style": "solid",
+        "StyleSheet/histo/MarkerLine/transparency": 0,
+        "StyleSheet/histo/MarkerLine/scaleLine": true,
+        "StyleSheet/histo/MarkerLine/hide": false,
+        "StyleSheet/histo/MarkerFill/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/histo/MarkerFill/style": "solid",
+        "StyleSheet/histo/MarkerFill/transparency": 0,
+        "StyleSheet/histo/MarkerFill/hide": false,
+        "StyleSheet/histo/ErrorBarLine/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/histo/ErrorBarLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/histo/ErrorBarLine/style": "solid",
+        "StyleSheet/histo/ErrorBarLine/transparency": 0,
+        "StyleSheet/histo/ErrorBarLine/hide": false,
+        "StyleSheet/histo/ErrorBarLine/endsize": 1.0,
+        "StyleSheet/histo/ErrorBarLine/hideHorz": false,
+        "StyleSheet/histo/ErrorBarLine/hideVert": false,
+        "StyleSheet/image/data": "",
+        "StyleSheet/image/min": "Auto",
+        "StyleSheet/image/max": "Auto",
+        "StyleSheet/image/colorScaling": "linear",
+        "StyleSheet/image/transparencyData": "",
+        "StyleSheet/image/colorMap": "grey",
+        "StyleSheet/image/colorInvert": false,
+        "StyleSheet/image/transparency": 0,
+        "StyleSheet/image/mapping": "pixels",
+        "StyleSheet/image/hide": false,
+        "StyleSheet/image/key": "",
+        "StyleSheet/image/xAxis": "x",
+        "StyleSheet/image/yAxis": "y",
+        "StyleSheet/image/drawMode": "default",
+        "StyleSheet/image/smooth": "default",
+        "StyleSheet/imagefile/aspect": true,
+        "StyleSheet/imagefile/filename": "",
+        "StyleSheet/imagefile/hide": false,
+        "StyleSheet/imagefile/xPos": [
+          0.5
+        ],
+        "StyleSheet/imagefile/yPos": [
+          0.5
+        ],
+        "StyleSheet/imagefile/width": [
+          0.1
+        ],
+        "StyleSheet/imagefile/height": [
+          0.1
+        ],
+        "StyleSheet/imagefile/rotate": [
+          0.0
+        ],
+        "StyleSheet/imagefile/positioning": "relative",
+        "StyleSheet/imagefile/xAxis": "x",
+        "StyleSheet/imagefile/yAxis": "y",
+        "StyleSheet/imagefile/Fill/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/imagefile/Fill/style": "solid",
+        "StyleSheet/imagefile/Fill/hide": true,
+        "StyleSheet/imagefile/Fill/transparency": 0,
+        "StyleSheet/imagefile/Fill/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/imagefile/Fill/linestyle": "solid",
+        "StyleSheet/imagefile/Fill/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/imagefile/Fill/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/imagefile/Fill/backtransparency": 0,
+        "StyleSheet/imagefile/Fill/backhide": true,
+        "StyleSheet/imagefile/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/imagefile/Border/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/imagefile/Border/style": "solid",
+        "StyleSheet/imagefile/Border/transparency": 0,
+        "StyleSheet/imagefile/Border/hide": true,
+        "StyleSheet/imagefile/clip": false,
+        "StyleSheet/imagefile/embeddedImageData": "",
+        "StyleSheet/key/title": "",
+        "StyleSheet/key/hide": false,
+        "StyleSheet/key/Text/font": "Arial",
+        "StyleSheet/key/Text/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/key/Text/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/key/Text/style": "",
+        "StyleSheet/key/Text/italic": false,
+        "StyleSheet/key/Text/bold": false,
+        "StyleSheet/key/Text/underline": false,
+        "StyleSheet/key/Text/hide": false,
+        "StyleSheet/key/order": "",
+        "StyleSheet/key/exclude": "",
+        "StyleSheet/key/Background/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/key/Background/style": "solid",
+        "StyleSheet/key/Background/hide": false,
+        "StyleSheet/key/Background/transparency": 0,
+        "StyleSheet/key/Background/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/key/Background/linestyle": "solid",
+        "StyleSheet/key/Background/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/key/Background/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/key/Background/backtransparency": 0,
+        "StyleSheet/key/Background/backhide": true,
+        "StyleSheet/key/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/key/Border/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/key/Border/style": "solid",
+        "StyleSheet/key/Border/transparency": 0,
+        "StyleSheet/key/Border/hide": false,
+        "StyleSheet/key/horzPosn": "right",
+        "StyleSheet/key/vertPosn": "bottom",
+        "StyleSheet/key/keyLength": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/key/keyAlign": "top",
+        "StyleSheet/key/horzManual": 0.0,
+        "StyleSheet/key/vertManual": 0.0,
+        "StyleSheet/key/marginSize": 1.0,
+        "StyleSheet/key/columns": 1,
+        "StyleSheet/key/symbolswap": false,
+        "StyleSheet/key/orderswap": false,
+        "StyleSheet/label/label": "",
+        "StyleSheet/label/hide": false,
+        "StyleSheet/label/xPos": [
+          0.5
+        ],
+        "StyleSheet/label/yPos": [
+          0.5
+        ],
+        "StyleSheet/label/positioning": "relative",
+        "StyleSheet/label/xAxis": "x",
+        "StyleSheet/label/yAxis": "y",
+        "StyleSheet/label/alignHorz": "left",
+        "StyleSheet/label/alignVert": "bottom",
+        "StyleSheet/label/angle": 0.0,
+        "StyleSheet/label/margin": {
+          "pt": 4.0
+        },
+        "StyleSheet/label/clip": false,
+        "StyleSheet/label/Text/font": "Arial",
+        "StyleSheet/label/Text/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/label/Text/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/label/Text/style": "",
+        "StyleSheet/label/Text/italic": false,
+        "StyleSheet/label/Text/bold": false,
+        "StyleSheet/label/Text/underline": false,
+        "StyleSheet/label/Text/hide": false,
+        "StyleSheet/label/Background/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/label/Background/style": "solid",
+        "StyleSheet/label/Background/hide": true,
+        "StyleSheet/label/Background/transparency": 0,
+        "StyleSheet/label/Background/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/label/Background/linestyle": "solid",
+        "StyleSheet/label/Background/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/label/Background/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/label/Background/backtransparency": 0,
+        "StyleSheet/label/Background/backhide": true,
+        "StyleSheet/label/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/label/Border/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/label/Border/style": "solid",
+        "StyleSheet/label/Border/transparency": 0,
+        "StyleSheet/label/Border/hide": true,
+        "StyleSheet/line/arrowleft": "none",
+        "StyleSheet/line/arrowright": "none",
+        "StyleSheet/line/arrowSize": {
+          "pt": 5.0
+        },
+        "StyleSheet/line/clip": false,
+        "StyleSheet/line/mode": "length-angle",
+        "StyleSheet/line/hide": false,
+        "StyleSheet/line/xPos": [
+          0.5
+        ],
+        "StyleSheet/line/yPos": [
+          0.5
+        ],
+        "StyleSheet/line/length": [
+          0.2
+        ],
+        "StyleSheet/line/angle": [
+          0.0
+        ],
+        "StyleSheet/line/xPos2": [
+          1.0
+        ],
+        "StyleSheet/line/yPos2": [
+          1.0
+        ],
+        "StyleSheet/line/positioning": "relative",
+        "StyleSheet/line/xAxis": "x",
+        "StyleSheet/line/yAxis": "y",
+        "StyleSheet/line/Line/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/line/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/line/Line/style": "solid",
+        "StyleSheet/line/Line/transparency": 0,
+        "StyleSheet/line/Line/hide": false,
+        "StyleSheet/line/Fill/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/line/Fill/style": "solid",
+        "StyleSheet/line/Fill/transparency": 0,
+        "StyleSheet/line/Fill/hide": false,
+        "StyleSheet/nonorthfunc/steps": 50,
+        "StyleSheet/nonorthfunc/hide": false,
+        "StyleSheet/nonorthfunc/function": "a",
+        "StyleSheet/nonorthfunc/variable": "a",
+        "StyleSheet/nonorthfunc/min": "Auto",
+        "StyleSheet/nonorthfunc/max": "Auto",
+        "StyleSheet/nonorthfunc/PlotLine/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/nonorthfunc/PlotLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/nonorthfunc/PlotLine/style": "solid",
+        "StyleSheet/nonorthfunc/PlotLine/transparency": 0,
+        "StyleSheet/nonorthfunc/PlotLine/hide": false,
+        "StyleSheet/nonorthfunc/Fill1/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/nonorthfunc/Fill1/style": "solid",
+        "StyleSheet/nonorthfunc/Fill1/hide": true,
+        "StyleSheet/nonorthfunc/Fill1/transparency": 0,
+        "StyleSheet/nonorthfunc/Fill1/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/nonorthfunc/Fill1/linestyle": "solid",
+        "StyleSheet/nonorthfunc/Fill1/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/nonorthfunc/Fill1/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/nonorthfunc/Fill1/backtransparency": 0,
+        "StyleSheet/nonorthfunc/Fill1/backhide": true,
+        "StyleSheet/nonorthfunc/Fill1/filltype": "center",
+        "StyleSheet/nonorthfunc/Fill2/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/nonorthfunc/Fill2/style": "solid",
+        "StyleSheet/nonorthfunc/Fill2/hide": true,
+        "StyleSheet/nonorthfunc/Fill2/transparency": 0,
+        "StyleSheet/nonorthfunc/Fill2/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/nonorthfunc/Fill2/linestyle": "solid",
+        "StyleSheet/nonorthfunc/Fill2/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/nonorthfunc/Fill2/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/nonorthfunc/Fill2/backtransparency": 0,
+        "StyleSheet/nonorthfunc/Fill2/backhide": true,
+        "StyleSheet/nonorthfunc/Fill2/filltype": "center",
+        "StyleSheet/nonorthpoint/marker": "circle",
+        "StyleSheet/nonorthpoint/markerSize": {
+          "pt": 3.0
+        },
+        "StyleSheet/nonorthpoint/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/nonorthpoint/hide": false,
+        "StyleSheet/nonorthpoint/data1": "x",
+        "StyleSheet/nonorthpoint/data2": "y",
+        "StyleSheet/nonorthpoint/labels": "",
+        "StyleSheet/nonorthpoint/scalePoints": "",
+        "StyleSheet/nonorthpoint/Color/points": "",
+        "StyleSheet/nonorthpoint/Color/min": 0.0,
+        "StyleSheet/nonorthpoint/Color/max": 1.0,
+        "StyleSheet/nonorthpoint/Color/scaling": "linear",
+        "StyleSheet/nonorthpoint/PlotLine/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/nonorthpoint/PlotLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/nonorthpoint/PlotLine/style": "solid",
+        "StyleSheet/nonorthpoint/PlotLine/transparency": 0,
+        "StyleSheet/nonorthpoint/PlotLine/hide": false,
+        "StyleSheet/nonorthpoint/MarkerLine/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/nonorthpoint/MarkerLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/nonorthpoint/MarkerLine/style": "solid",
+        "StyleSheet/nonorthpoint/MarkerLine/transparency": 0,
+        "StyleSheet/nonorthpoint/MarkerLine/scaleLine": true,
+        "StyleSheet/nonorthpoint/MarkerLine/hide": false,
+        "StyleSheet/nonorthpoint/MarkerFill/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/nonorthpoint/MarkerFill/style": "solid",
+        "StyleSheet/nonorthpoint/MarkerFill/transparency": 0,
+        "StyleSheet/nonorthpoint/MarkerFill/hide": false,
+        "StyleSheet/nonorthpoint/MarkerFill/colorMap": "grey",
+        "StyleSheet/nonorthpoint/MarkerFill/colorMapInvert": false,
+        "StyleSheet/nonorthpoint/MarkerFill/newMarkerSizes": false,
+        "StyleSheet/nonorthpoint/Fill1/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/nonorthpoint/Fill1/style": "solid",
+        "StyleSheet/nonorthpoint/Fill1/hide": true,
+        "StyleSheet/nonorthpoint/Fill1/transparency": 0,
+        "StyleSheet/nonorthpoint/Fill1/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/nonorthpoint/Fill1/linestyle": "solid",
+        "StyleSheet/nonorthpoint/Fill1/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/nonorthpoint/Fill1/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/nonorthpoint/Fill1/backtransparency": 0,
+        "StyleSheet/nonorthpoint/Fill1/backhide": true,
+        "StyleSheet/nonorthpoint/Fill1/filltype": "center",
+        "StyleSheet/nonorthpoint/Fill2/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/nonorthpoint/Fill2/style": "solid",
+        "StyleSheet/nonorthpoint/Fill2/hide": true,
+        "StyleSheet/nonorthpoint/Fill2/transparency": 0,
+        "StyleSheet/nonorthpoint/Fill2/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/nonorthpoint/Fill2/linestyle": "solid",
+        "StyleSheet/nonorthpoint/Fill2/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/nonorthpoint/Fill2/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/nonorthpoint/Fill2/backtransparency": 0,
+        "StyleSheet/nonorthpoint/Fill2/backhide": true,
+        "StyleSheet/nonorthpoint/Fill2/filltype": "center",
+        "StyleSheet/nonorthpoint/Label/posnHorz": "right",
+        "StyleSheet/nonorthpoint/Label/posnVert": "centre",
+        "StyleSheet/nonorthpoint/Label/angle": 0.0,
+        "StyleSheet/nonorthpoint/Label/font": "Arial",
+        "StyleSheet/nonorthpoint/Label/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/nonorthpoint/Label/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/nonorthpoint/Label/style": "",
+        "StyleSheet/nonorthpoint/Label/italic": false,
+        "StyleSheet/nonorthpoint/Label/bold": false,
+        "StyleSheet/nonorthpoint/Label/underline": false,
+        "StyleSheet/nonorthpoint/Label/hide": false,
+        "StyleSheet/page/hide": false,
+        "StyleSheet/page/width": {
+          "pt": 170.07874015748033
+        },
+        "StyleSheet/page/height": {
+          "pt": 155.90551181102364
+        },
+        "StyleSheet/page/notes": "",
+        "StyleSheet/page/Background/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/page/Background/style": "solid",
+        "StyleSheet/page/Background/hide": true,
+        "StyleSheet/page/Background/transparency": 0,
+        "StyleSheet/page/Background/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/page/Background/linestyle": "solid",
+        "StyleSheet/page/Background/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/page/Background/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/page/Background/backtransparency": 0,
+        "StyleSheet/page/Background/backhide": true,
+        "StyleSheet/point3d/marker": "circle",
+        "StyleSheet/point3d/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/point3d/markerSize": 10.0,
+        "StyleSheet/point3d/scalePersp": true,
+        "StyleSheet/point3d/xData": "x",
+        "StyleSheet/point3d/yData": "y",
+        "StyleSheet/point3d/zData": "z",
+        "StyleSheet/point3d/hide": false,
+        "StyleSheet/point3d/xAxis": "x",
+        "StyleSheet/point3d/yAxis": "y",
+        "StyleSheet/point3d/scalePoints": "",
+        "StyleSheet/point3d/zAxis": "z",
+        "StyleSheet/point3d/Color/points": "",
+        "StyleSheet/point3d/Color/min": 0.0,
+        "StyleSheet/point3d/Color/max": 1.0,
+        "StyleSheet/point3d/Color/scaling": "linear",
+        "StyleSheet/point3d/PlotLine/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/point3d/PlotLine/width": 1.0,
+        "StyleSheet/point3d/PlotLine/style": "solid",
+        "StyleSheet/point3d/PlotLine/transparency": 0.0,
+        "StyleSheet/point3d/PlotLine/reflectivity": 20.0,
+        "StyleSheet/point3d/PlotLine/hide": true,
+        "StyleSheet/point3d/PlotLine/colorMap": "none",
+        "StyleSheet/point3d/PlotLine/colorMapInvert": false,
+        "StyleSheet/point3d/MarkerFill/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/point3d/MarkerFill/transparency": 0.0,
+        "StyleSheet/point3d/MarkerFill/reflectivity": 50.0,
+        "StyleSheet/point3d/MarkerFill/hide": false,
+        "StyleSheet/point3d/MarkerFill/colorMap": "grey",
+        "StyleSheet/point3d/MarkerFill/colorMapInvert": false,
+        "StyleSheet/point3d/MarkerLine/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/point3d/MarkerLine/width": 1.0,
+        "StyleSheet/point3d/MarkerLine/style": "solid",
+        "StyleSheet/point3d/MarkerLine/transparency": 0.0,
+        "StyleSheet/point3d/MarkerLine/scale": true,
+        "StyleSheet/point3d/MarkerLine/reflectivity": 0.0,
+        "StyleSheet/point3d/MarkerLine/hide": false,
+        "StyleSheet/point3d/Error/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/point3d/Error/width": 1.0,
+        "StyleSheet/point3d/Error/style": "solid",
+        "StyleSheet/point3d/Error/transparency": 0.0,
+        "StyleSheet/point3d/Error/reflectivity": 0.0,
+        "StyleSheet/point3d/Error/hide": false,
+        "StyleSheet/polar/hide": false,
+        "StyleSheet/polar/leftMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/polar/rightMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/polar/topMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/polar/bottomMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/polar/Background/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/polar/Background/style": "solid",
+        "StyleSheet/polar/Background/hide": false,
+        "StyleSheet/polar/Background/transparency": 0,
+        "StyleSheet/polar/Background/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/polar/Background/linestyle": "solid",
+        "StyleSheet/polar/Background/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/polar/Background/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/polar/Background/backtransparency": 0,
+        "StyleSheet/polar/Background/backhide": true,
+        "StyleSheet/polar/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/polar/Border/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/polar/Border/style": "solid",
+        "StyleSheet/polar/Border/transparency": 0,
+        "StyleSheet/polar/Border/hide": false,
+        "StyleSheet/polar/minradius": "Auto",
+        "StyleSheet/polar/maxradius": "Auto",
+        "StyleSheet/polar/units": "degrees",
+        "StyleSheet/polar/direction": "anticlockwise",
+        "StyleSheet/polar/position0": "right",
+        "StyleSheet/polar/log": false,
+        "StyleSheet/polar/TickLabels/font": "Arial",
+        "StyleSheet/polar/TickLabels/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/polar/TickLabels/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/polar/TickLabels/style": "",
+        "StyleSheet/polar/TickLabels/italic": false,
+        "StyleSheet/polar/TickLabels/bold": false,
+        "StyleSheet/polar/TickLabels/underline": false,
+        "StyleSheet/polar/TickLabels/format": "Auto",
+        "StyleSheet/polar/TickLabels/scale": 1.0,
+        "StyleSheet/polar/TickLabels/hideradial": false,
+        "StyleSheet/polar/TickLabels/hidetangential": false,
+        "StyleSheet/polar/Tick/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/polar/Tick/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/polar/Tick/style": "solid",
+        "StyleSheet/polar/Tick/transparency": 0,
+        "StyleSheet/polar/Tick/hide": false,
+        "StyleSheet/polar/Tick/number": 6,
+        "StyleSheet/polar/Tick/hidespokes": null,
+        "StyleSheet/polar/Tick/hideannuli": null,
+        "StyleSheet/polar/SpokeLine/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/polar/SpokeLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/polar/SpokeLine/style": "solid",
+        "StyleSheet/polar/SpokeLine/transparency": 0,
+        "StyleSheet/polar/SpokeLine/hide": false,
+        "StyleSheet/polar/SpokeLine/number": 12,
+        "StyleSheet/polar/RadiiLine/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/polar/RadiiLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/polar/RadiiLine/style": "solid",
+        "StyleSheet/polar/RadiiLine/transparency": 0,
+        "StyleSheet/polar/RadiiLine/hide": false,
+        "StyleSheet/polar/RadiiLine/number": 6,
+        "StyleSheet/polygon/hide": false,
+        "StyleSheet/polygon/xPos": [
+          0.5
+        ],
+        "StyleSheet/polygon/yPos": [
+          0.5
+        ],
+        "StyleSheet/polygon/positioning": "relative",
+        "StyleSheet/polygon/xAxis": "x",
+        "StyleSheet/polygon/yAxis": "y",
+        "StyleSheet/polygon/Line/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/polygon/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/polygon/Line/style": "solid",
+        "StyleSheet/polygon/Line/transparency": 0,
+        "StyleSheet/polygon/Line/hide": false,
+        "StyleSheet/polygon/Fill/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/polygon/Fill/style": "solid",
+        "StyleSheet/polygon/Fill/hide": false,
+        "StyleSheet/polygon/Fill/transparency": 0,
+        "StyleSheet/polygon/Fill/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/polygon/Fill/linestyle": "solid",
+        "StyleSheet/polygon/Fill/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/polygon/Fill/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/polygon/Fill/backtransparency": 0,
+        "StyleSheet/polygon/Fill/backhide": true,
+        "StyleSheet/rect/hide": false,
+        "StyleSheet/rect/xPos": [
+          0.5
+        ],
+        "StyleSheet/rect/yPos": [
+          0.5
+        ],
+        "StyleSheet/rect/width": [
+          0.1
+        ],
+        "StyleSheet/rect/height": [
+          0.1
+        ],
+        "StyleSheet/rect/rotate": [
+          0.0
+        ],
+        "StyleSheet/rect/positioning": "relative",
+        "StyleSheet/rect/xAxis": "x",
+        "StyleSheet/rect/yAxis": "y",
+        "StyleSheet/rect/Fill/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/rect/Fill/style": "solid",
+        "StyleSheet/rect/Fill/hide": true,
+        "StyleSheet/rect/Fill/transparency": 0,
+        "StyleSheet/rect/Fill/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/rect/Fill/linestyle": "solid",
+        "StyleSheet/rect/Fill/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/rect/Fill/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/rect/Fill/backtransparency": 0,
+        "StyleSheet/rect/Fill/backhide": true,
+        "StyleSheet/rect/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/rect/Border/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/rect/Border/style": "solid",
+        "StyleSheet/rect/Border/transparency": 0,
+        "StyleSheet/rect/Border/hide": false,
+        "StyleSheet/rect/clip": false,
+        "StyleSheet/rect/rounding": 0,
+        "StyleSheet/scene3d/hide": false,
+        "StyleSheet/scene3d/xRotation": 0.0,
+        "StyleSheet/scene3d/yRotation": 35.0,
+        "StyleSheet/scene3d/zRotation": 0.0,
+        "StyleSheet/scene3d/distance": 5.0,
+        "StyleSheet/scene3d/size": "Auto",
+        "StyleSheet/scene3d/rendermode": "painters",
+        "StyleSheet/scene3d/leftMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/scene3d/rightMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/scene3d/topMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/scene3d/bottomMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/scene3d/Lighting1/enable": true,
+        "StyleSheet/scene3d/Lighting1/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/scene3d/Lighting1/intensity": 100.0,
+        "StyleSheet/scene3d/Lighting1/x": 0.0,
+        "StyleSheet/scene3d/Lighting1/y": 0.0,
+        "StyleSheet/scene3d/Lighting1/z": 0.0,
+        "StyleSheet/scene3d/Lighting2/enable": false,
+        "StyleSheet/scene3d/Lighting2/color": {
+          "rgba16": [
+            65535,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/scene3d/Lighting2/intensity": 100.0,
+        "StyleSheet/scene3d/Lighting2/x": 2.0,
+        "StyleSheet/scene3d/Lighting2/y": 0.0,
+        "StyleSheet/scene3d/Lighting2/z": 0.0,
+        "StyleSheet/scene3d/Lighting3/enable": false,
+        "StyleSheet/scene3d/Lighting3/color": {
+          "rgba16": [
+            0,
+            0,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/scene3d/Lighting3/intensity": 100.0,
+        "StyleSheet/scene3d/Lighting3/x": -2.0,
+        "StyleSheet/scene3d/Lighting3/y": 0.0,
+        "StyleSheet/scene3d/Lighting3/z": 0.0,
+        "StyleSheet/surface3d/mode": "z(x,y)",
+        "StyleSheet/surface3d/data": "",
+        "StyleSheet/surface3d/DataColor/points": "",
+        "StyleSheet/surface3d/DataColor/min": 0.0,
+        "StyleSheet/surface3d/DataColor/max": 1.0,
+        "StyleSheet/surface3d/DataColor/scaling": "linear",
+        "StyleSheet/surface3d/hide": false,
+        "StyleSheet/surface3d/xAxis": "x",
+        "StyleSheet/surface3d/yAxis": "y",
+        "StyleSheet/surface3d/zAxis": "z",
+        "StyleSheet/surface3d/highres": false,
+        "StyleSheet/surface3d/Line/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/surface3d/Line/width": 1.0,
+        "StyleSheet/surface3d/Line/style": "solid",
+        "StyleSheet/surface3d/Line/transparency": 0.0,
+        "StyleSheet/surface3d/Line/reflectivity": 0.0,
+        "StyleSheet/surface3d/Line/hide": false,
+        "StyleSheet/surface3d/Line/hidehorz": false,
+        "StyleSheet/surface3d/Line/hidevert": false,
+        "StyleSheet/surface3d/Surface/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/surface3d/Surface/transparency": 0.0,
+        "StyleSheet/surface3d/Surface/reflectivity": 50.0,
+        "StyleSheet/surface3d/Surface/hide": false,
+        "StyleSheet/surface3d/Surface/colorMap": "grey",
+        "StyleSheet/surface3d/Surface/colorMapInvert": false,
+        "StyleSheet/svgfile/aspect": true,
+        "StyleSheet/svgfile/filename": "",
+        "StyleSheet/svgfile/hide": false,
+        "StyleSheet/svgfile/xPos": [
+          0.5
+        ],
+        "StyleSheet/svgfile/yPos": [
+          0.5
+        ],
+        "StyleSheet/svgfile/width": [
+          0.1
+        ],
+        "StyleSheet/svgfile/height": [
+          0.1
+        ],
+        "StyleSheet/svgfile/rotate": [
+          0.0
+        ],
+        "StyleSheet/svgfile/positioning": "relative",
+        "StyleSheet/svgfile/xAxis": "x",
+        "StyleSheet/svgfile/yAxis": "y",
+        "StyleSheet/svgfile/Fill/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/svgfile/Fill/style": "solid",
+        "StyleSheet/svgfile/Fill/hide": true,
+        "StyleSheet/svgfile/Fill/transparency": 0,
+        "StyleSheet/svgfile/Fill/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/svgfile/Fill/linestyle": "solid",
+        "StyleSheet/svgfile/Fill/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/svgfile/Fill/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/svgfile/Fill/backtransparency": 0,
+        "StyleSheet/svgfile/Fill/backhide": true,
+        "StyleSheet/svgfile/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/svgfile/Border/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/svgfile/Border/style": "solid",
+        "StyleSheet/svgfile/Border/transparency": 0,
+        "StyleSheet/svgfile/Border/hide": true,
+        "StyleSheet/svgfile/clip": false,
+        "StyleSheet/svgfile/embeddedSVGData": "",
+        "StyleSheet/ternary/hide": false,
+        "StyleSheet/ternary/leftMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/ternary/rightMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/ternary/topMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/ternary/bottomMargin": {
+          "pt": 28.34645669291339
+        },
+        "StyleSheet/ternary/Background/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/ternary/Background/style": "solid",
+        "StyleSheet/ternary/Background/hide": false,
+        "StyleSheet/ternary/Background/transparency": 0,
+        "StyleSheet/ternary/Background/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/ternary/Background/linestyle": "solid",
+        "StyleSheet/ternary/Background/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/ternary/Background/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/ternary/Background/backtransparency": 0,
+        "StyleSheet/ternary/Background/backhide": true,
+        "StyleSheet/ternary/Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/ternary/Border/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/ternary/Border/style": "solid",
+        "StyleSheet/ternary/Border/transparency": 0,
+        "StyleSheet/ternary/Border/hide": false,
+        "StyleSheet/ternary/mode": "percentage",
+        "StyleSheet/ternary/coords": "bottom-left",
+        "StyleSheet/ternary/labelbottom": "",
+        "StyleSheet/ternary/labelleft": "",
+        "StyleSheet/ternary/labelright": "",
+        "StyleSheet/ternary/originleft": 0.0,
+        "StyleSheet/ternary/originbottom": 0.0,
+        "StyleSheet/ternary/fracsize": 1.0,
+        "StyleSheet/ternary/reverse": false,
+        "StyleSheet/ternary/Label/font": "Arial",
+        "StyleSheet/ternary/Label/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/ternary/Label/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/ternary/Label/style": "",
+        "StyleSheet/ternary/Label/italic": false,
+        "StyleSheet/ternary/Label/bold": false,
+        "StyleSheet/ternary/Label/underline": false,
+        "StyleSheet/ternary/Label/hide": false,
+        "StyleSheet/ternary/Label/atEdge": false,
+        "StyleSheet/ternary/Label/rotate": "0",
+        "StyleSheet/ternary/Label/offset": {
+          "pt": 0.0
+        },
+        "StyleSheet/ternary/Label/position": "centre",
+        "StyleSheet/ternary/TickLabels/font": "Arial",
+        "StyleSheet/ternary/TickLabels/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/ternary/TickLabels/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/ternary/TickLabels/style": "",
+        "StyleSheet/ternary/TickLabels/italic": false,
+        "StyleSheet/ternary/TickLabels/bold": false,
+        "StyleSheet/ternary/TickLabels/underline": false,
+        "StyleSheet/ternary/TickLabels/hide": false,
+        "StyleSheet/ternary/TickLabels/format": "Auto",
+        "StyleSheet/ternary/TickLabels/scale": 1.0,
+        "StyleSheet/ternary/TickLabels/offset": {
+          "pt": 0.0
+        },
+        "StyleSheet/ternary/MajorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/ternary/MajorTicks/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/ternary/MajorTicks/style": "solid",
+        "StyleSheet/ternary/MajorTicks/transparency": 0,
+        "StyleSheet/ternary/MajorTicks/hide": false,
+        "StyleSheet/ternary/MajorTicks/length": {
+          "pt": 6.0
+        },
+        "StyleSheet/ternary/MajorTicks/number": 10,
+        "StyleSheet/ternary/MajorTicks/manualTicks": [],
+        "StyleSheet/ternary/MinorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/ternary/MinorTicks/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/ternary/MinorTicks/style": "solid",
+        "StyleSheet/ternary/MinorTicks/transparency": 0,
+        "StyleSheet/ternary/MinorTicks/hide": false,
+        "StyleSheet/ternary/MinorTicks/length": {
+          "pt": 3.0
+        },
+        "StyleSheet/ternary/MinorTicks/number": 50,
+        "StyleSheet/ternary/MinorTicks/manualTicks": [],
+        "StyleSheet/ternary/GridLines/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/ternary/GridLines/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/ternary/GridLines/style": "dotted",
+        "StyleSheet/ternary/GridLines/transparency": 0,
+        "StyleSheet/ternary/GridLines/hide": false,
+        "StyleSheet/ternary/GridLines/onTop": false,
+        "StyleSheet/ternary/MinorGridLines/color": {
+          "rgba16": [
+            54227,
+            54227,
+            54227,
+            65535
+          ]
+        },
+        "StyleSheet/ternary/MinorGridLines/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/ternary/MinorGridLines/style": "dotted",
+        "StyleSheet/ternary/MinorGridLines/transparency": 0,
+        "StyleSheet/ternary/MinorGridLines/hide": true,
+        "StyleSheet/vectorfield/baselength": {
+          "pt": 10.0
+        },
+        "StyleSheet/vectorfield/arrowsize": {
+          "pt": 2.0
+        },
+        "StyleSheet/vectorfield/scalearrow": true,
+        "StyleSheet/vectorfield/arrowfront": "none",
+        "StyleSheet/vectorfield/arrowback": "none",
+        "StyleSheet/vectorfield/data1": "",
+        "StyleSheet/vectorfield/data2": "",
+        "StyleSheet/vectorfield/mode": "cartesian",
+        "StyleSheet/vectorfield/rotate": 0.0,
+        "StyleSheet/vectorfield/reflectx": false,
+        "StyleSheet/vectorfield/reflecty": false,
+        "StyleSheet/vectorfield/hide": false,
+        "StyleSheet/vectorfield/key": "",
+        "StyleSheet/vectorfield/xAxis": "x",
+        "StyleSheet/vectorfield/yAxis": "y",
+        "StyleSheet/vectorfield/Line/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/vectorfield/Line/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/vectorfield/Line/style": "solid",
+        "StyleSheet/vectorfield/Line/transparency": 0,
+        "StyleSheet/vectorfield/Line/hide": false,
+        "StyleSheet/vectorfield/Fill/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/vectorfield/Fill/style": "solid",
+        "StyleSheet/vectorfield/Fill/transparency": 0,
+        "StyleSheet/vectorfield/Fill/hide": false,
+        "StyleSheet/volume3d/colorMap": "grey",
+        "StyleSheet/volume3d/colorInvert": false,
+        "StyleSheet/volume3d/transparency": 50,
+        "StyleSheet/volume3d/reflectivity": 0,
+        "StyleSheet/volume3d/fillfactor": 1.0,
+        "StyleSheet/volume3d/DataColor/points": "v",
+        "StyleSheet/volume3d/DataColor/min": 0.0,
+        "StyleSheet/volume3d/DataColor/max": 1.0,
+        "StyleSheet/volume3d/DataColor/scaling": "linear",
+        "StyleSheet/volume3d/xData": "x",
+        "StyleSheet/volume3d/yData": "y",
+        "StyleSheet/volume3d/zData": "z",
+        "StyleSheet/volume3d/transData": "",
+        "StyleSheet/volume3d/hide": false,
+        "StyleSheet/volume3d/xAxis": "x",
+        "StyleSheet/volume3d/yAxis": "y",
+        "StyleSheet/volume3d/zAxis": "z",
+        "StyleSheet/volume3d/Line/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/volume3d/Line/width": 1.0,
+        "StyleSheet/volume3d/Line/style": "solid",
+        "StyleSheet/volume3d/Line/transparency": 0.0,
+        "StyleSheet/volume3d/Line/reflectivity": 0.0,
+        "StyleSheet/volume3d/Line/hide": false,
+        "StyleSheet/xy/marker": "circle",
+        "StyleSheet/xy/markerSize": {
+          "pt": 3.0
+        },
+        "StyleSheet/xy/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/xy/thinfactor": 1,
+        "StyleSheet/xy/errorthin": 1,
+        "StyleSheet/xy/xData": "x",
+        "StyleSheet/xy/yData": "y",
+        "StyleSheet/xy/hide": false,
+        "StyleSheet/xy/key": "",
+        "StyleSheet/xy/xAxis": "x",
+        "StyleSheet/xy/yAxis": "y",
+        "StyleSheet/xy/labels": "",
+        "StyleSheet/xy/scalePoints": "",
+        "StyleSheet/xy/Color/points": "",
+        "StyleSheet/xy/Color/min": 0.0,
+        "StyleSheet/xy/Color/max": 1.0,
+        "StyleSheet/xy/Color/scaling": "linear",
+        "StyleSheet/xy/nanHandling": "break-on",
+        "StyleSheet/xy/errorStyle": "bar",
+        "StyleSheet/xy/PlotLine/steps": "off",
+        "StyleSheet/xy/PlotLine/interpType": "linear",
+        "StyleSheet/xy/PlotLine/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/xy/PlotLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/xy/PlotLine/style": "solid",
+        "StyleSheet/xy/PlotLine/transparency": 0,
+        "StyleSheet/xy/PlotLine/hide": false,
+        "StyleSheet/xy/PlotLine/bezierJoin": "linear",
+        "StyleSheet/xy/PlotLine/joinStyle": "bevel",
+        "StyleSheet/xy/MarkerLine/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/xy/MarkerLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/xy/MarkerLine/style": "solid",
+        "StyleSheet/xy/MarkerLine/transparency": 0,
+        "StyleSheet/xy/MarkerLine/scaleLine": true,
+        "StyleSheet/xy/MarkerLine/hide": false,
+        "StyleSheet/xy/MarkerFill/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/xy/MarkerFill/style": "solid",
+        "StyleSheet/xy/MarkerFill/transparency": 0,
+        "StyleSheet/xy/MarkerFill/hide": false,
+        "StyleSheet/xy/MarkerFill/colorMap": "grey",
+        "StyleSheet/xy/MarkerFill/colorMapInvert": false,
+        "StyleSheet/xy/MarkerFill/newMarkerSizes": false,
+        "StyleSheet/xy/ErrorBarLine/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "StyleSheet/xy/ErrorBarLine/width": {
+          "pt": 1.2
+        },
+        "StyleSheet/xy/ErrorBarLine/style": "solid",
+        "StyleSheet/xy/ErrorBarLine/transparency": 0,
+        "StyleSheet/xy/ErrorBarLine/hide": false,
+        "StyleSheet/xy/ErrorBarLine/endsize": 1.0,
+        "StyleSheet/xy/ErrorBarLine/hideHorz": false,
+        "StyleSheet/xy/ErrorBarLine/hideVert": false,
+        "StyleSheet/xy/FillBelow/fillto": "bottom",
+        "StyleSheet/xy/FillBelow/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/xy/FillBelow/style": "solid",
+        "StyleSheet/xy/FillBelow/hide": true,
+        "StyleSheet/xy/FillBelow/transparency": 0,
+        "StyleSheet/xy/FillBelow/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/xy/FillBelow/linestyle": "solid",
+        "StyleSheet/xy/FillBelow/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/xy/FillBelow/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/xy/FillBelow/backtransparency": 0,
+        "StyleSheet/xy/FillBelow/backhide": true,
+        "StyleSheet/xy/FillBelow/hideerror": false,
+        "StyleSheet/xy/FillAbove/fillto": "top",
+        "StyleSheet/xy/FillAbove/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "StyleSheet/xy/FillAbove/style": "solid",
+        "StyleSheet/xy/FillAbove/hide": true,
+        "StyleSheet/xy/FillAbove/transparency": 0,
+        "StyleSheet/xy/FillAbove/linewidth": {
+          "pt": 0.5
+        },
+        "StyleSheet/xy/FillAbove/linestyle": "solid",
+        "StyleSheet/xy/FillAbove/patternspacing": {
+          "pt": 5.0
+        },
+        "StyleSheet/xy/FillAbove/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "StyleSheet/xy/FillAbove/backtransparency": 0,
+        "StyleSheet/xy/FillAbove/backhide": true,
+        "StyleSheet/xy/FillAbove/hideerror": false,
+        "StyleSheet/xy/Label/posnHorz": "right",
+        "StyleSheet/xy/Label/posnVert": "centre",
+        "StyleSheet/xy/Label/angle": 0.0,
+        "StyleSheet/xy/Label/font": "Arial",
+        "StyleSheet/xy/Label/size": {
+          "pt": 7.0
+        },
+        "StyleSheet/xy/Label/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "StyleSheet/xy/Label/style": "",
+        "StyleSheet/xy/Label/italic": false,
+        "StyleSheet/xy/Label/bold": false,
+        "StyleSheet/xy/Label/underline": false,
+        "StyleSheet/xy/Label/hide": false
+      }
+    },
+    "/page1": {
+      "type": "page",
+      "settings": {
+        "hide": false,
+        "width": {
+          "pt": 170.07874015748033
+        },
+        "height": {
+          "pt": 155.90551181102364
+        },
+        "notes": "",
+        "Background/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "Background/style": "solid",
+        "Background/hide": false,
+        "Background/transparency": 0,
+        "Background/linewidth": {
+          "pt": 0.5
+        },
+        "Background/linestyle": "solid",
+        "Background/patternspacing": {
+          "pt": 5.0
+        },
+        "Background/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "Background/backtransparency": 0,
+        "Background/backhide": true
+      }
+    },
+    "/page1/graph1": {
+      "type": "graph",
+      "settings": {
+        "hide": false,
+        "leftMargin": {
+          "pt": 39.68503937007874
+        },
+        "rightMargin": {
+          "pt": 12.755905511811026
+        },
+        "topMargin": {
+          "pt": 15.590551181102365
+        },
+        "bottomMargin": {
+          "pt": 31.18110236220473
+        },
+        "aspect": "Auto",
+        "notes": "",
+        "Background/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "Background/style": "solid",
+        "Background/hide": false,
+        "Background/transparency": 0,
+        "Background/linewidth": {
+          "pt": 0.5
+        },
+        "Background/linestyle": "solid",
+        "Background/patternspacing": {
+          "pt": 5.0
+        },
+        "Background/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "Background/backtransparency": 0,
+        "Background/backhide": true,
+        "Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "Border/width": {
+          "pt": 1.2
+        },
+        "Border/style": "solid",
+        "Border/transparency": 0,
+        "Border/hide": true
+      }
+    },
+    "/page1/graph1/x": {
+      "type": "axis",
+      "settings": {
+        "hide": false,
+        "label": "\\omega (rad s⁻¹)",
+        "min": 0.049999999999999996,
+        "max": 200.00000000000003,
+        "log": true,
+        "autoRange": "next-tick",
+        "mode": "numeric",
+        "autoExtend": "next-tick",
+        "autoExtendZero": true,
+        "autoMirror": false,
+        "reflect": false,
+        "outerticks": true,
+        "datascale": 1.0,
+        "direction": "horizontal",
+        "lowerPosition": 0.0,
+        "upperPosition": 1.0,
+        "otherPosition": 0.0,
+        "match": "",
+        "Line/color": {
+          "rgba16": [
+            4369,
+            4369,
+            4369,
+            65535
+          ]
+        },
+        "Line/width": {
+          "pt": 0.8
+        },
+        "Line/style": "solid",
+        "Line/transparency": 0,
+        "Line/hide": false,
+        "Label/font": "Arial",
+        "Label/size": {
+          "pt": 7.0
+        },
+        "Label/color": {
+          "rgba16": [
+            4369,
+            4369,
+            4369,
+            65535
+          ]
+        },
+        "Label/style": "",
+        "Label/italic": false,
+        "Label/bold": false,
+        "Label/underline": false,
+        "Label/hide": false,
+        "Label/atEdge": false,
+        "Label/rotate": "0",
+        "Label/offset": {
+          "pt": 2.0
+        },
+        "Label/position": "centre",
+        "TickLabels/font": "Arial",
+        "TickLabels/size": {
+          "pt": 7.0
+        },
+        "TickLabels/color": {
+          "rgba16": [
+            4369,
+            4369,
+            4369,
+            65535
+          ]
+        },
+        "TickLabels/style": "",
+        "TickLabels/italic": false,
+        "TickLabels/bold": false,
+        "TickLabels/underline": false,
+        "TickLabels/hide": false,
+        "TickLabels/rotate": "0",
+        "TickLabels/format": "%Ve",
+        "TickLabels/scale": 1.0,
+        "TickLabels/offset": {
+          "pt": 1.4
+        },
+        "MajorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "MajorTicks/width": {
+          "pt": 0.8
+        },
+        "MajorTicks/style": "solid",
+        "MajorTicks/transparency": 0,
+        "MajorTicks/hide": false,
+        "MajorTicks/length": {
+          "pt": 2.8
+        },
+        "MajorTicks/number": 6,
+        "MajorTicks/manualTicks": [
+          0.1,
+          1.0,
+          10.0,
+          100.0
+        ],
+        "MinorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "MinorTicks/width": {
+          "pt": 0.8
+        },
+        "MinorTicks/style": "solid",
+        "MinorTicks/transparency": 0,
+        "MinorTicks/hide": false,
+        "MinorTicks/length": {
+          "pt": 1.5
+        },
+        "MinorTicks/number": 5,
+        "MinorTicks/manualTicks": [
+          0.2,
+          0.4,
+          0.6000000000000001,
+          0.8,
+          2.0,
+          4.0,
+          6.0,
+          8.0,
+          20.0,
+          40.0,
+          60.0,
+          80.0
+        ],
+        "GridLines/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "GridLines/width": {
+          "pt": 1.2
+        },
+        "GridLines/style": "dotted",
+        "GridLines/transparency": 0,
+        "GridLines/hide": true,
+        "GridLines/onTop": false,
+        "MinorGridLines/color": {
+          "rgba16": [
+            54227,
+            54227,
+            54227,
+            65535
+          ]
+        },
+        "MinorGridLines/width": {
+          "pt": 1.2
+        },
+        "MinorGridLines/style": "dotted",
+        "MinorGridLines/transparency": 0,
+        "MinorGridLines/hide": true
+      }
+    },
+    "/page1/graph1/y": {
+      "type": "axis",
+      "settings": {
+        "hide": false,
+        "label": "\\italic{G}′ (Pa)",
+        "min": 0.4007348141324154,
+        "max": 16932.12703447185,
+        "log": true,
+        "autoRange": "next-tick",
+        "mode": "numeric",
+        "autoExtend": "next-tick",
+        "autoExtendZero": true,
+        "autoMirror": false,
+        "reflect": false,
+        "outerticks": true,
+        "datascale": 1.0,
+        "direction": "vertical",
+        "lowerPosition": 0.0,
+        "upperPosition": 1.0,
+        "otherPosition": 0.0,
+        "match": "",
+        "Line/color": {
+          "rgba16": [
+            4369,
+            4369,
+            4369,
+            65535
+          ]
+        },
+        "Line/width": {
+          "pt": 0.8
+        },
+        "Line/style": "solid",
+        "Line/transparency": 0,
+        "Line/hide": false,
+        "Label/font": "Arial",
+        "Label/size": {
+          "pt": 7.0
+        },
+        "Label/color": {
+          "rgba16": [
+            4369,
+            4369,
+            4369,
+            65535
+          ]
+        },
+        "Label/style": "",
+        "Label/italic": false,
+        "Label/bold": false,
+        "Label/underline": false,
+        "Label/hide": false,
+        "Label/atEdge": false,
+        "Label/rotate": "0",
+        "Label/offset": {
+          "pt": 2.0
+        },
+        "Label/position": "centre",
+        "TickLabels/font": "Arial",
+        "TickLabels/size": {
+          "pt": 7.0
+        },
+        "TickLabels/color": {
+          "rgba16": [
+            4369,
+            4369,
+            4369,
+            65535
+          ]
+        },
+        "TickLabels/style": "",
+        "TickLabels/italic": false,
+        "TickLabels/bold": false,
+        "TickLabels/underline": false,
+        "TickLabels/hide": false,
+        "TickLabels/rotate": "0",
+        "TickLabels/format": "%Ve",
+        "TickLabels/scale": 1.0,
+        "TickLabels/offset": {
+          "pt": 1.4
+        },
+        "MajorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "MajorTicks/width": {
+          "pt": 0.8
+        },
+        "MajorTicks/style": "solid",
+        "MajorTicks/transparency": 0,
+        "MajorTicks/hide": false,
+        "MajorTicks/length": {
+          "pt": 2.8
+        },
+        "MajorTicks/number": 6,
+        "MajorTicks/manualTicks": [
+          1.0,
+          10.0,
+          100.0,
+          1000.0,
+          10000.0
+        ],
+        "MinorTicks/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "MinorTicks/width": {
+          "pt": 0.8
+        },
+        "MinorTicks/style": "solid",
+        "MinorTicks/transparency": 0,
+        "MinorTicks/hide": false,
+        "MinorTicks/length": {
+          "pt": 1.5
+        },
+        "MinorTicks/number": 5,
+        "MinorTicks/manualTicks": [
+          2.0,
+          4.0,
+          6.0,
+          8.0,
+          20.0,
+          40.0,
+          60.0,
+          80.0,
+          200.0,
+          400.0,
+          600.0,
+          800.0,
+          2000.0,
+          4000.0,
+          6000.0,
+          8000.0
+        ],
+        "GridLines/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "GridLines/width": {
+          "pt": 1.2
+        },
+        "GridLines/style": "dotted",
+        "GridLines/transparency": 0,
+        "GridLines/hide": true,
+        "GridLines/onTop": false,
+        "MinorGridLines/color": {
+          "rgba16": [
+            54227,
+            54227,
+            54227,
+            65535
+          ]
+        },
+        "MinorGridLines/width": {
+          "pt": 1.2
+        },
+        "MinorGridLines/style": "dotted",
+        "MinorGridLines/transparency": 0,
+        "MinorGridLines/hide": true
+      }
+    },
+    "/page1/graph1/key1": {
+      "type": "key",
+      "settings": {
+        "hide": false,
+        "Text/font": "Arial",
+        "Text/size": {
+          "pt": 6.0
+        },
+        "Text/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "Text/style": "",
+        "Text/italic": false,
+        "Text/bold": false,
+        "Text/underline": false,
+        "Text/hide": false,
+        "order": "",
+        "exclude": "",
+        "title": "",
+        "Background/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "Background/style": "solid",
+        "Background/hide": true,
+        "Background/transparency": 0,
+        "Background/linewidth": {
+          "pt": 0.5
+        },
+        "Background/linestyle": "solid",
+        "Background/patternspacing": {
+          "pt": 5.0
+        },
+        "Background/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "Background/backtransparency": 0,
+        "Background/backhide": true,
+        "Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "Border/width": {
+          "pt": 1.2
+        },
+        "Border/style": "solid",
+        "Border/transparency": 0,
+        "Border/hide": true,
+        "horzPosn": "manual",
+        "vertPosn": "manual",
+        "keyLength": {
+          "pt": 11.338582677165356
+        },
+        "keyAlign": "top",
+        "horzManual": 0.6183775180722892,
+        "vertManual": 0.025974025974025976,
+        "marginSize": 0.15,
+        "columns": 1,
+        "symbolswap": false,
+        "orderswap": false
+      }
+    },
+    "/page1/graph1/series_1": {
+      "type": "xy",
+      "settings": {
+        "hide": false,
+        "key": "PP-5UDC",
+        "xAxis": "x",
+        "yAxis": "y",
+        "yData": "y_1_1",
+        "xData": "x_1_1",
+        "labels": "",
+        "scalePoints": "",
+        "Color/points": "",
+        "Color/min": 0.0,
+        "Color/max": 1.0,
+        "Color/scaling": "linear",
+        "nanHandling": "break-on",
+        "errorthin": 1,
+        "thinfactor": 1,
+        "color": "auto",
+        "markerSize": {
+          "pt": 2.0
+        },
+        "marker": "circle",
+        "errorStyle": "bar",
+        "PlotLine/color": {
+          "rgba16": [
+            13621,
+            26728,
+            49344,
+            65535
+          ]
+        },
+        "PlotLine/width": {
+          "pt": 1.2
+        },
+        "PlotLine/style": "solid",
+        "PlotLine/transparency": 8,
+        "PlotLine/hide": false,
+        "PlotLine/steps": "off",
+        "PlotLine/interpType": "linear",
+        "PlotLine/bezierJoin": "linear",
+        "PlotLine/joinStyle": "bevel",
+        "MarkerLine/color": {
+          "rgba16": [
+            13621,
+            26728,
+            49344,
+            65535
+          ]
+        },
+        "MarkerLine/width": {
+          "pt": 0.8
+        },
+        "MarkerLine/style": "solid",
+        "MarkerLine/transparency": 5,
+        "MarkerLine/hide": false,
+        "MarkerLine/scaleLine": true,
+        "MarkerFill/color": {
+          "rgba16": [
+            13621,
+            26728,
+            49344,
+            65535
+          ]
+        },
+        "MarkerFill/style": "solid",
+        "MarkerFill/transparency": 5,
+        "MarkerFill/hide": false,
+        "MarkerFill/colorMap": "grey",
+        "MarkerFill/colorMapInvert": false,
+        "MarkerFill/newMarkerSizes": false,
+        "ErrorBarLine/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "ErrorBarLine/width": {
+          "pt": 1.2
+        },
+        "ErrorBarLine/style": "solid",
+        "ErrorBarLine/transparency": 0,
+        "ErrorBarLine/hide": true,
+        "ErrorBarLine/endsize": 1.0,
+        "ErrorBarLine/hideHorz": false,
+        "ErrorBarLine/hideVert": false,
+        "FillBelow/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "FillBelow/style": "solid",
+        "FillBelow/hide": true,
+        "FillBelow/transparency": 0,
+        "FillBelow/linewidth": {
+          "pt": 0.5
+        },
+        "FillBelow/linestyle": "solid",
+        "FillBelow/patternspacing": {
+          "pt": 5.0
+        },
+        "FillBelow/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "FillBelow/backtransparency": 0,
+        "FillBelow/backhide": true,
+        "FillBelow/fillto": "bottom",
+        "FillBelow/hideerror": false,
+        "FillAbove/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "FillAbove/style": "solid",
+        "FillAbove/hide": true,
+        "FillAbove/transparency": 0,
+        "FillAbove/linewidth": {
+          "pt": 0.5
+        },
+        "FillAbove/linestyle": "solid",
+        "FillAbove/patternspacing": {
+          "pt": 5.0
+        },
+        "FillAbove/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "FillAbove/backtransparency": 0,
+        "FillAbove/backhide": true,
+        "FillAbove/fillto": "top",
+        "FillAbove/hideerror": false,
+        "Label/font": "Arial",
+        "Label/size": {
+          "pt": 7.0
+        },
+        "Label/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "Label/style": "",
+        "Label/italic": false,
+        "Label/bold": false,
+        "Label/underline": false,
+        "Label/hide": false,
+        "Label/angle": 0.0,
+        "Label/posnVert": "centre",
+        "Label/posnHorz": "right"
+      }
+    },
+    "/page1/graph1/series_2": {
+      "type": "xy",
+      "settings": {
+        "hide": false,
+        "key": "PP 3155",
+        "xAxis": "x",
+        "yAxis": "y",
+        "yData": "y_1_2",
+        "xData": "x_1_2",
+        "labels": "",
+        "scalePoints": "",
+        "Color/points": "",
+        "Color/min": 0.0,
+        "Color/max": 1.0,
+        "Color/scaling": "linear",
+        "nanHandling": "break-on",
+        "errorthin": 1,
+        "thinfactor": 1,
+        "color": "auto",
+        "markerSize": {
+          "pt": 2.0
+        },
+        "marker": "square",
+        "errorStyle": "bar",
+        "PlotLine/color": {
+          "rgba16": [
+            8738,
+            8738,
+            8738,
+            65535
+          ]
+        },
+        "PlotLine/width": {
+          "pt": 1.2
+        },
+        "PlotLine/style": "solid",
+        "PlotLine/transparency": 8,
+        "PlotLine/hide": false,
+        "PlotLine/steps": "off",
+        "PlotLine/interpType": "linear",
+        "PlotLine/bezierJoin": "linear",
+        "PlotLine/joinStyle": "bevel",
+        "MarkerLine/color": {
+          "rgba16": [
+            8738,
+            8738,
+            8738,
+            65535
+          ]
+        },
+        "MarkerLine/width": {
+          "pt": 0.8
+        },
+        "MarkerLine/style": "solid",
+        "MarkerLine/transparency": 5,
+        "MarkerLine/hide": false,
+        "MarkerLine/scaleLine": true,
+        "MarkerFill/color": {
+          "rgba16": [
+            8738,
+            8738,
+            8738,
+            65535
+          ]
+        },
+        "MarkerFill/style": "solid",
+        "MarkerFill/transparency": 5,
+        "MarkerFill/hide": false,
+        "MarkerFill/colorMap": "grey",
+        "MarkerFill/colorMapInvert": false,
+        "MarkerFill/newMarkerSizes": false,
+        "ErrorBarLine/color": {
+          "rgba16": [
+            12593,
+            12850,
+            13107,
+            13364
+          ]
+        },
+        "ErrorBarLine/width": {
+          "pt": 1.2
+        },
+        "ErrorBarLine/style": "solid",
+        "ErrorBarLine/transparency": 0,
+        "ErrorBarLine/hide": true,
+        "ErrorBarLine/endsize": 1.0,
+        "ErrorBarLine/hideHorz": false,
+        "ErrorBarLine/hideVert": false,
+        "FillBelow/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "FillBelow/style": "solid",
+        "FillBelow/hide": true,
+        "FillBelow/transparency": 0,
+        "FillBelow/linewidth": {
+          "pt": 0.5
+        },
+        "FillBelow/linestyle": "solid",
+        "FillBelow/patternspacing": {
+          "pt": 5.0
+        },
+        "FillBelow/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "FillBelow/backtransparency": 0,
+        "FillBelow/backhide": true,
+        "FillBelow/fillto": "bottom",
+        "FillBelow/hideerror": false,
+        "FillAbove/color": {
+          "rgba16": [
+            32896,
+            32896,
+            32896,
+            65535
+          ]
+        },
+        "FillAbove/style": "solid",
+        "FillAbove/hide": true,
+        "FillAbove/transparency": 0,
+        "FillAbove/linewidth": {
+          "pt": 0.5
+        },
+        "FillAbove/linestyle": "solid",
+        "FillAbove/patternspacing": {
+          "pt": 5.0
+        },
+        "FillAbove/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "FillAbove/backtransparency": 0,
+        "FillAbove/backhide": true,
+        "FillAbove/fillto": "top",
+        "FillAbove/hideerror": false,
+        "Label/font": "Arial",
+        "Label/size": {
+          "pt": 7.0
+        },
+        "Label/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "Label/style": "",
+        "Label/italic": false,
+        "Label/bold": false,
+        "Label/underline": false,
+        "Label/hide": false,
+        "Label/angle": 0.0,
+        "Label/posnVert": "centre",
+        "Label/posnHorz": "right"
+      }
+    },
+    "/page1/page_export_background": {
+      "type": "rect",
+      "settings": {
+        "hide": false,
+        "xPos": [
+          0.5
+        ],
+        "yPos": [
+          0.5
+        ],
+        "positioning": "relative",
+        "xAxis": "x",
+        "yAxis": "y",
+        "Fill/color": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "Fill/style": "solid",
+        "Fill/hide": false,
+        "Fill/transparency": 0,
+        "Fill/linewidth": {
+          "pt": 0.5
+        },
+        "Fill/linestyle": "solid",
+        "Fill/patternspacing": {
+          "pt": 5.0
+        },
+        "Fill/backcolor": {
+          "rgba16": [
+            65535,
+            65535,
+            65535,
+            65535
+          ]
+        },
+        "Fill/backtransparency": 0,
+        "Fill/backhide": true,
+        "Border/color": {
+          "rgba16": [
+            0,
+            0,
+            0,
+            65535
+          ]
+        },
+        "Border/width": {
+          "pt": 1.2
+        },
+        "Border/style": "solid",
+        "Border/transparency": 0,
+        "Border/hide": true,
+        "clip": true,
+        "width": [
+          1.0
+        ],
+        "height": [
+          1.0
+        ],
+        "rotate": [
+          0.0
+        ],
+        "rounding": 0
+      }
+    }
+  },
+  "datasets": {
+    "x_1_1": {
+      "type": "Dataset",
+      "data": [
+        100.0,
+        63.1,
+        39.8,
+        25.1,
+        15.8,
+        10.0,
+        6.31,
+        3.98,
+        2.51,
+        1.58,
+        1.0,
+        0.631,
+        0.398,
+        0.251,
+        0.158,
+        0.1
+      ],
+      "serr": null,
+      "nerr": null,
+      "perr": null
+    },
+    "x_1_2": {
+      "type": "Dataset",
+      "data": [
+        100.0,
+        63.1,
+        39.8,
+        25.1,
+        15.8,
+        10.0,
+        6.31,
+        3.98,
+        2.51,
+        1.58,
+        1.0,
+        0.631,
+        0.398,
+        0.251,
+        0.158,
+        0.1
+      ],
+      "serr": null,
+      "nerr": null,
+      "perr": null
+    },
+    "y_1_1": {
+      "type": "Dataset",
+      "data": [
+        10669.0,
+        7536.7,
+        5236.8,
+        3578.5,
+        2404.7,
+        1587.2,
+        1028.1,
+        652.44,
+        404.76,
+        244.74,
+        144.81,
+        84.757,
+        48.918,
+        27.102,
+        15.089,
+        8.3663
+      ],
+      "serr": null,
+      "nerr": null,
+      "perr": null
+    },
+    "y_1_2": {
+      "type": "Dataset",
+      "data": [
+        12501.0,
+        8200.9,
+        5161.0,
+        3110.4,
+        1793.3,
+        988.24,
+        520.77,
+        262.12,
+        126.95,
+        58.895,
+        26.454,
+        11.173,
+        5.0527,
+        2.0399,
+        1.1024,
+        0.54278
+      ],
+      "serr": null,
+      "nerr": null,
+      "perr": null
+    }
+  },
+  "geometry": {
+    "pages": [
+      {
+        "page": 1,
+        "path": "/page1",
+        "size_mm": [
+          60.0,
+          55.0
+        ],
+        "bounds_mm": [
+          0.0,
+          0.0,
+          60.0,
+          55.0
+        ]
+      }
+    ],
+    "graphs": [
+      {
+        "path": "/page1/graph1",
+        "page": 1,
+        "parent_path": "/page1",
+        "parent_type": "page",
+        "plot_bounds_mm": [
+          14.0,
+          5.5,
+          55.5,
+          44.0
+        ],
+        "slot_bounds_mm": [
+          0.0,
+          0.0,
+          60.0,
+          55.0
+        ],
+        "margins_mm": {
+          "left": 14.0,
+          "right": 4.5,
+          "top": 5.5,
+          "bottom": 11.0
+        },
+        "aspect": "Auto"
+      }
+    ],
+    "grids": [],
+    "auxiliaries": [],
+    "axes": [
+      {
+        "path": "/page1/graph1/x",
+        "name": "x",
+        "page": 1,
+        "graph_path": "/page1/graph1",
+        "label": "\\omega (rad s⁻¹)",
+        "scale": "log",
+        "min": 0.049999999999999996,
+        "max": 200.00000000000003,
+        "direction": "horizontal",
+        "mode": "numeric",
+        "hidden": false
+      },
+      {
+        "path": "/page1/graph1/y",
+        "name": "y",
+        "page": 1,
+        "graph_path": "/page1/graph1",
+        "label": "\\italic{G}′ (Pa)",
+        "scale": "log",
+        "min": 0.4007348141324154,
+        "max": 16932.12703447185,
+        "direction": "vertical",
+        "mode": "numeric",
+        "hidden": false
+      }
+    ]
+  },
+  "painted_text": [
+    {
+      "widget_path": "/page1/graph1/y",
+      "text": "10^{0}",
+      "bounds_mm": [
+        8.232083333333334,
+        39.767299538653575,
+        11.899208333333332,
+        41.62202870532025
+      ],
+      "anchor_mm": [
+        11.899208333333332,
+        40.69466412198691
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "widget_path": "/page1/graph1/x",
+      "text": "10^{0}",
+      "bounds_mm": [
+        27.15584493631254,
+        46.10079166666667,
+        30.822969936312543,
+        48.400020833333336
+      ],
+      "anchor_mm": [
+        28.98940743631254,
+        46.10079166666667
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "widget_path": "/page1/graph1/y",
+      "text": "10^{1}",
+      "bounds_mm": [
+        8.232083333333334,
+        31.444512805385166,
+        11.899208333333332,
+        33.29924197205183
+      ],
+      "anchor_mm": [
+        11.899208333333332,
+        32.3718773887185
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "widget_path": "/page1/graph1/x",
+      "text": "10^{1}",
+      "bounds_mm": [
+        38.67703006368747,
+        46.10079166666667,
+        42.34415506368747,
+        48.400020833333336
+      ],
+      "anchor_mm": [
+        40.510592563687474,
+        46.10079166666667
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "widget_path": "/page1/graph1/y",
+      "text": "10^{2}",
+      "bounds_mm": [
+        8.232083333333334,
+        23.121726072116754,
+        11.899208333333332,
+        24.97645523878342
+      ],
+      "anchor_mm": [
+        11.899208333333332,
+        24.049090655450083
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "widget_path": "/page1/graph1/x",
+      "text": "10^{2}",
+      "bounds_mm": [
+        50.19821519106241,
+        46.10079166666667,
+        53.86534019106241,
+        48.400020833333336
+      ],
+      "anchor_mm": [
+        52.03177769106241,
+        46.10079166666667
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "widget_path": "/page1/graph1/y",
+      "text": "10^{3}",
+      "bounds_mm": [
+        8.232083333333334,
+        14.79893933884834,
+        11.899208333333332,
+        16.653668505515007
+      ],
+      "anchor_mm": [
+        11.899208333333332,
+        15.726303922181675
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "widget_path": "/page1/graph1/y",
+      "text": "10^{4}",
+      "bounds_mm": [
+        8.232083333333334,
+        6.476152605579923,
+        11.899208333333332,
+        8.33088177224659
+      ],
+      "anchor_mm": [
+        11.899208333333332,
+        7.4035171889132565
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "widget_path": "/page1/graph1/x",
+      "text": "10^{−1}",
+      "bounds_mm": [
+        15.190159808937603,
+        46.10079166666667,
+        19.746284808937606,
+        48.400020833333336
+      ],
+      "anchor_mm": [
+        17.468222308937605,
+        46.10079166666667
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "widget_path": "/page1/graph1/key1",
+      "text": "PP 3155",
+      "bounds_mm": [
+        46.12064616666668,
+        40.54202083333334,
+        54.51322950000001,
+        42.534333333333336
+      ],
+      "anchor_mm": [
+        46.12064616666668,
+        40.54202083333334
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 6.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "widget_path": "/page1/graph1/key1",
+      "text": "PP-5UDC",
+      "bounds_mm": [
+        46.12064616666668,
+        38.08404166666667,
+        55.770000333333336,
+        40.076354166666675
+      ],
+      "anchor_mm": [
+        46.12064616666668,
+        38.08404166666667
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 6.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    },
+    {
+      "widget_path": "/page1/graph1/y",
+      "text": "\\italic{G}′ (Pa)",
+      "bounds_mm": [
+        3.451944444444444,
+        20.77728125,
+        6.288277777777779,
+        28.722718750000002
+      ],
+      "anchor_mm": [
+        6.288277777777779,
+        24.750000000000004
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 270.0
+    },
+    {
+      "widget_path": "/page1/graph1/x",
+      "text": "\\omega (rad s⁻¹)",
+      "bounds_mm": [
+        29.11172916666667,
+        50.34382638888889,
+        40.38827083333334,
+        53.18015972222223
+      ],
+      "anchor_mm": [
+        34.75000000000001,
+        50.34382638888889
+      ],
+      "font_family": "Arial",
+      "resolved_font_family": "Arial",
+      "font_size_pt": 7.0,
+      "font_pixel_size": -1,
+      "font_weight": 400,
+      "italic": false,
+      "angle": 0.0
+    }
+  ],
+  "export": {
+    "tiff_size_px": [
+      708,
+      649
+    ],
+    "tiff_dpi": [
+      300.0,
+      300.0
+    ],
+    "tiff_compression": "tiff_lzw",
+    "tiff_mode": "RGB",
+    "preview_dpi": 150,
+    "pdfdpi": 72,
+    "pdf_pages": 1,
+    "pdf_page_pt": [
+      0.0,
+      0.0,
+      170.0,
+      156.0
+    ],
+    "pdf_fonts": [
+      "Arial-ItalicMT",
+      "ArialMT",
+      "Helvetica"
+    ]
+  }
+}

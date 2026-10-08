@@ -8,6 +8,7 @@ from typing import Any
 from sciplot_core.studio_core.annotation_contracts import annotation_records, normalize_annotation, _closed
 from sciplot_core.studio_core.annotation_schema import AnnotationOperationError
 from sciplot_core.studio_core.annotation_axes import change_display_range
+from sciplot_core.studio_core.annotation_legend import change_legend_visibility
 
 
 def compile_annotation_operations(
@@ -19,16 +20,23 @@ def compile_annotation_operations(
     items = copy.deepcopy(annotation_records(spec))
     styles, actual = [], []
     touched: set[str] = set()
-    range_axis = None
+    range_axes: set[str] = set()
+    legend_touched = False
     for index, operation in enumerate(operations):
         if not isinstance(operation, dict):
             raise AnnotationOperationError("invalid_operation", f"Operation {index} must be an object.")
         kind = operation.get("op")
-        if kind == "set_axis_range":
-            if range_axis is not None:
-                raise AnnotationOperationError("duplicate_axis_range", "Set one axis display range only once per batch.")
+        if kind in {"set_axis_range", "set_axis_limits"}:
+            if operation.get("axis") in range_axes:
+                raise AnnotationOperationError("duplicate_axis_range", "Set each axis display range only once per batch.")
             actual.append(change_display_range(result, operation))
-            range_axis = operation["axis"]
+            range_axes.add(operation["axis"])
+            continue
+        if kind == "set_legend_visibility":
+            if legend_touched:
+                raise AnnotationOperationError("duplicate_legend_visibility", "Set legend visibility only once per batch.")
+            actual.append(change_legend_visibility(result, operation))
+            legend_touched = True
             continue
         if kind == "set_style":
             _closed(operation, {"op", "object_path", "setting_path", "expected_value", "value"})
@@ -64,8 +72,8 @@ def compile_annotation_operations(
         actual.append({"op": kind, "id": identifier, "before": existing, "after": normalized})
     if len(items) > 100:
         raise AnnotationOperationError("annotation_limit", "At most 100 annotations per figure are supported.")
-    if range_axis is not None and any(change["setting_path"] == f"/page1/graph1/{range_axis}/MajorTicks/manualTicks"
-                             for change in styles):
+    if any(change["setting_path"] == f"/page1/graph1/{axis}/MajorTicks/manualTicks"
+           for change in styles for axis in range_axes):
         raise AnnotationOperationError("duplicate_axis_range", "Set axis ticks in the display-range operation, not in a second style edit.")
     if items:
         result["native_annotations"] = {"version": 1, "items": items}

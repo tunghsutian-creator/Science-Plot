@@ -1,0 +1,224 @@
+# Veusz saved document (version 4.2.1)
+# Saved at 2026-09-18T08:38:08.678866
+
+SetCompatLevel(0)
+AddImportPath('/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/.sciplot-edit-q6p5395b')
+ImportString('x_1_1(numeric)','''
+100
+63.100000000000001
+39.799999999999997
+25.100000000000001
+15.800000000000001
+10
+6.3099999999999996
+3.98
+2.5099999999999998
+1.5800000000000001
+1
+0.63100000000000001
+0.39800000000000002
+0.251
+0.158
+0.10000000000000001
+''')
+ImportString('x_1_2(numeric)','''
+100
+63.100000000000001
+39.799999999999997
+25.100000000000001
+15.800000000000001
+10
+6.3099999999999996
+3.98
+2.5099999999999998
+1.5800000000000001
+1
+0.63100000000000001
+0.39800000000000002
+0.251
+0.158
+0.10000000000000001
+''')
+ImportString('y_1_1(numeric)','''
+14464
+11252
+8605.2999999999993
+6477.6999999999998
+4802.1999999999998
+3509
+2527.5
+1794.8
+1256
+865.70000000000005
+590.34000000000003
+399.97000000000003
+269.19
+177.38999999999999
+116.2
+75.233999999999995
+''')
+ImportString('y_1_2(numeric)','''
+19633
+15089
+11272
+8188.3000000000002
+5791.5
+3996.5999999999999
+2698.6999999999998
+1788.3
+1167
+752.28999999999996
+479.93000000000001
+304.43000000000001
+192.72
+121.56
+76.599000000000004
+48.213000000000001
+''')
+Set('width', '60mm')
+Set('height', '55mm')
+Set('StyleSheet/Line/width', '1.2pt')
+Set('StyleSheet/Font/font', 'Arial')
+Set('StyleSheet/Font/size', '7pt')
+Set('StyleSheet/axis-function/autoRange', 'next-tick')
+Add('page', name='page1', autoadd=False)
+To('page1')
+Set('width', '60mm')
+Set('height', '55mm')
+Set('Background/color', 'white')
+Set('Background/hide', False)
+Add('graph', name='graph1', autoadd=False)
+To('graph1')
+Set('leftMargin', '1.4cm')
+Set('rightMargin', '0.45cm')
+Set('topMargin', '0.55cm')
+Set('bottomMargin', '1.1cm')
+Set('Border/hide', True)
+Add('axis', name='x', autoadd=False)
+To('x')
+Set('label', '\\omega (rad s⁻¹)')
+Set('min', 0.049999999999999996)
+Set('max', 200.00000000000003)
+Set('log', True)
+Set('autoMirror', False)
+Set('outerticks', True)
+Set('Line/color', '#111111')
+Set('Line/width', '0.8pt')
+Set('Line/transparency', 0)
+Set('Line/hide', False)
+Set('Label/size', '7pt')
+Set('Label/color', '#111111')
+Set('Label/hide', False)
+Set('Label/offset', '2pt')
+Set('TickLabels/size', '7pt')
+Set('TickLabels/color', '#111111')
+Set('TickLabels/format', '%Ve')
+Set('TickLabels/offset', '1.4pt')
+Set('MajorTicks/width', '0.8pt')
+Set('MajorTicks/transparency', 0)
+Set('MajorTicks/length', '2.8pt')
+Set('MajorTicks/manualTicks', [0.1, 1.0, 10.0, 100.0])
+Set('MinorTicks/width', '0.8pt')
+Set('MinorTicks/transparency', 0)
+Set('MinorTicks/hide', False)
+Set('MinorTicks/length', '1.5pt')
+Set('MinorTicks/number', 5)
+Set('MinorTicks/manualTicks', [0.2, 0.4, 0.6000000000000001, 0.8, 2.0, 4.0, 6.0, 8.0, 20.0, 40.0, 60.0, 80.0])
+To('..')
+Add('axis', name='y', autoadd=False)
+To('y')
+Set('label', '\\italic{G}″ (Pa)')
+Set('min', 10.0)
+Set('max', 24520.940178179095)
+Set('log', True)
+Set('autoMirror', False)
+Set('outerticks', True)
+Set('direction', 'vertical')
+Set('Line/color', '#111111')
+Set('Line/width', '0.8pt')
+Set('Line/transparency', 0)
+Set('Line/hide', False)
+Set('Label/size', '7pt')
+Set('Label/color', '#111111')
+Set('Label/hide', False)
+Set('Label/offset', '2pt')
+Set('TickLabels/size', '7pt')
+Set('TickLabels/color', '#111111')
+Set('TickLabels/format', '%Ve')
+Set('TickLabels/offset', '1.4pt')
+Set('MajorTicks/width', '0.8pt')
+Set('MajorTicks/transparency', 0)
+Set('MajorTicks/length', '2.8pt')
+Set('MajorTicks/manualTicks', [10.0, 100.0, 1000.0, 10000.0])
+Set('MinorTicks/width', '0.8pt')
+Set('MinorTicks/transparency', 0)
+Set('MinorTicks/hide', False)
+Set('MinorTicks/length', '1.5pt')
+Set('MinorTicks/number', 5)
+Set('MinorTicks/manualTicks', [20.0, 40.0, 60.0, 80.0, 200.0, 400.0, 600.0, 800.0, 2000.0, 4000.0, 6000.0, 8000.0])
+To('..')
+Add('key', name='key1', autoadd=False)
+To('key1')
+Set('title', '')
+Set('Text/size', '6pt')
+Set('Background/hide', True)
+Set('Border/hide', True)
+Set('horzPosn', 'manual')
+Set('vertPosn', 'manual')
+Set('keyLength', '0.40cm')
+Set('horzManual', 0.6183775180722892)
+Set('vertManual', 0.025974025974025976)
+Set('marginSize', 0.15)
+Set('columns', 1)
+To('..')
+Add('xy', name='series_1', autoadd=False)
+To('series_1')
+Set('marker', 'circle')
+Set('markerSize', '2pt')
+Set('xData', 'x_1_1')
+Set('yData', 'y_1_1')
+Set('key', 'PP-5UDC')
+Set('PlotLine/color', '#3568C0')
+Set('PlotLine/width', '1.2pt')
+Set('PlotLine/style', 'solid')
+Set('PlotLine/transparency', 8)
+Set('MarkerLine/color', '#3568C0')
+Set('MarkerLine/width', '0.8pt')
+Set('MarkerLine/transparency', 5)
+Set('MarkerFill/color', '#3568C0')
+Set('MarkerFill/transparency', 5)
+Set('ErrorBarLine/hide', True)
+To('..')
+Add('xy', name='series_2', autoadd=False)
+To('series_2')
+Set('marker', 'square')
+Set('markerSize', '2pt')
+Set('xData', 'x_1_2')
+Set('yData', 'y_1_2')
+Set('key', 'PP 3155')
+Set('PlotLine/color', '#222222')
+Set('PlotLine/width', '1.2pt')
+Set('PlotLine/style', 'solid')
+Set('PlotLine/transparency', 8)
+Set('MarkerLine/color', '#222222')
+Set('MarkerLine/width', '0.8pt')
+Set('MarkerLine/transparency', 5)
+Set('MarkerFill/color', '#222222')
+Set('MarkerFill/transparency', 5)
+Set('ErrorBarLine/hide', True)
+To('..')
+To('..')
+Add('rect', name='page_export_background', autoadd=False)
+To('page_export_background')
+Set('xPos', [0.5])
+Set('yPos', [0.5])
+Set('width', [1.0])
+Set('height', [1.0])
+Set('positioning', 'relative')
+Set('Fill/color', 'white')
+Set('Fill/hide', False)
+Set('Fill/transparency', 0)
+Set('Border/hide', True)
+Set('clip', True)
+To('..')
+To('..')

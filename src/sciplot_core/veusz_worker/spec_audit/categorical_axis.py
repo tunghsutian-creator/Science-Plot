@@ -38,6 +38,17 @@ def audit_categorical_axis(
             raise ValueError(
                 "Exact-current Veusz category text dataset does not match the ordered series labels."
             )
+        from sciplot_core.studio_core.veusz_data_import import category_display_labels
+        from sciplot_core.studio_core.veusz_axis_apply import validate_category_display
+
+        expected_display = category_display_labels(spec["axes"], spec["style"], spec["size_mm"])
+        if expected_display != expected_category_labels:
+            display = _text_dataset_values(loaded_document, dataset_name="category_axis_display_labels")
+            if display != expected_display:
+                raise ValueError("Categorical display labels differ from the exact source names and fixed-frame layout.")
+            validate_category_display(loaded_document, display, str(x_axis["label"]), spec["size_mm"])
+        elif "category_axis_display_labels" in loaded_document.data:
+            raise ValueError("Categorical display dataset is not required by the exact fixed-frame layout.")
         _dataset_evidence(
             loaded_document,
             dataset_name="category_axis_x",

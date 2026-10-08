@@ -1,0 +1,188 @@
+{
+  "input": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+  "output": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_tensile_strength_by_sample_render",
+  "exports": [
+    "pdf",
+    "tiff_300"
+  ],
+  "template": "bar",
+  "render_options": {
+    "legend_position": "none",
+    "series_label_mode": "none",
+    "visual_theme_id": "clean_light",
+    "style_preset": "nature",
+    "size": "60x55",
+    "palette_preset": "control_first_bright",
+    "font_size_pt": 7.0,
+    "legend_font_size_pt": 6.0,
+    "axis_linewidth_pt": 0.8,
+    "tick_width_pt": 0.8,
+    "tick_length_pt": 2.8,
+    "minor_tick_width_pt": 0.8,
+    "minor_tick_length_pt": 1.5,
+    "line_width_pt": 1.2,
+    "marker_size": 2.0,
+    "marker_line_width_pt": 0.8,
+    "marker_sequence": [
+      "circle"
+    ],
+    "marker_fill_mode": "filled",
+    "raw_point_jitter_fraction": 0.14,
+    "line_alpha": 1.0,
+    "marker_alpha": 0.8,
+    "box_line_mode": "series_color",
+    "x_label_override": "Sample",
+    "y_label_override": "Tensile strength (MPa)",
+    "summary_statistic": "median_iqr",
+    "y_min": 0.0,
+    "y_max": 39.912600000000005,
+    "y_ticks": [
+      0.0,
+      10.0,
+      20.0,
+      30.0
+    ]
+  },
+  "explicit_render_option_keys": [],
+  "x_metric": "strain",
+  "y_metric": "stress",
+  "review_notes": [],
+  "series_order": [
+    "E0",
+    "E2",
+    "E3",
+    "E4"
+  ],
+  "study_model": {
+    "kind": "sciplot_study_model",
+    "version": 2,
+    "samples": [],
+    "figure_queue": [],
+    "scientific_integrity": {
+      "scientific_outcome_agnostic": true,
+      "significance_required": false,
+      "silent_data_omission_allowed": false,
+      "statistics_must_be_explicit": true
+    },
+    "publication_intent_ref": "publication_intent.json"
+  },
+  "publication_intent": {
+    "kind": "sciplot_publication_intent",
+    "version": 1,
+    "id": "publication_intent_1",
+    "status": "draft",
+    "scientific_question": "",
+    "question_status": "pending",
+    "core_claim": "",
+    "claim_status": "pending",
+    "target_profile_id": "sciplot_single_panel_v1",
+    "target_status": "inferred",
+    "layout_id": null,
+    "layout_status": "pending",
+    "figure_layout": null,
+    "figure_contracts": [],
+    "panels": [],
+    "exact_labels": {},
+    "caption_contract": {
+      "status": "pending",
+      "define_symbols_and_colors": true,
+      "define_n_and_error_representation": true,
+      "state_data_transformations": true
+    },
+    "palette_policy": {
+      "palette_id": "control_first_bright",
+      "non_color_distinction_required": true,
+      "grayscale_review_required": true,
+      "library_default_palette_allowed": false
+    },
+    "integrity_policy": {
+      "scientific_outcome_agnostic": true,
+      "significance_required": false,
+      "silent_data_omission_allowed": false,
+      "statistics_must_be_explicit": true
+    },
+    "review_risk": {
+      "status": "pending",
+      "missing_question": true,
+      "missing_claim": true,
+      "panel_count_mismatch": false,
+      "pending_statistics_panels": [],
+      "pending_statistics_figures": []
+    },
+    "transform_ledger_ref": "transform_ledger.json"
+  },
+  "transform_ledger": {
+    "kind": "sciplot_transform_ledger",
+    "version": 1,
+    "status": "runtime_recorded",
+    "source_root": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+    "replicate_policy": {},
+    "column_confirmations": [],
+    "steps": [
+      {
+        "id": "identity_source",
+        "operation": "identity",
+        "implementation_ref": "sciplot_core.workflow.run_request",
+        "input_refs": [
+          "identity_source_input"
+        ],
+        "output_refs": [
+          "identity_source_output"
+        ],
+        "input_artifacts": [
+          {
+            "id": "identity_source_input",
+            "role": "input",
+            "kind": "file",
+            "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+            "exists": true,
+            "size_bytes": 236,
+            "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8",
+            "table_shape": [
+              8,
+              4
+            ]
+          }
+        ],
+        "output_artifacts": [
+          {
+            "id": "identity_source_output",
+            "role": "output",
+            "kind": "file",
+            "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+            "exists": true,
+            "size_bytes": 236,
+            "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8",
+            "table_shape": [
+              8,
+              4
+            ]
+          }
+        ],
+        "parameters": {
+          "reason": "No deterministic data transformation was applied before rendering."
+        },
+        "input_shape": [
+          8,
+          4
+        ],
+        "output_shape": [
+          8,
+          4
+        ],
+        "confirmation_status": "runtime_recorded",
+        "silent_omission_allowed": false,
+        "outcome_strength_gate_applied": false
+      }
+    ],
+    "unresolved_step_ids": [],
+    "policy": {
+      "raw_sources_preserved": true,
+      "silent_data_omission_allowed": false,
+      "selection_must_be_recorded": true,
+      "unit_conversion_must_be_recorded": true,
+      "input_output_shape_preferred": true,
+      "scientific_outcome_agnostic": true
+    }
+  }
+}

@@ -8,6 +8,9 @@ from sciplot_core.task_recovery_policy import recovery_action, refresh_context_a
 def task_next_step(state: dict[str, Any]) -> dict[str, Any]:
     status, phase = state["status"], state["phase"]
     task = state.get("task_dir")
+    if state.get("defer_creation_export") is True and phase == "prepared" and status == "complete":
+        return {"action": "continue_template_creation", "task": task,
+                "message": "The exact native project is prepared but has not been published; its semantic creation owner must continue styling/export."}
     if status in {"complete", "cancelled"}:
         return {"action": "inspect_current_project", "task": task,
                 "message": "Inspect current source, QA and delivery before handoff or another edit."}

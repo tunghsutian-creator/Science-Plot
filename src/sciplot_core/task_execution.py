@@ -42,6 +42,11 @@ def _completed(root: Path, state: dict[str, Any], result: dict[str, Any]) -> Non
 
 
 def run_creation(root: Path, state: dict[str, Any]) -> None:
+    from sciplot_core.task_prepared_creation import checkpoint_prepared, complete_prepared, is_prepared
+
+    if is_prepared(state):
+        complete_prepared(root, state)
+        return
     if not require_available_output(state):
         save_task(root, state)
         return
@@ -54,15 +59,22 @@ def run_creation(root: Path, state: dict[str, Any]) -> None:
     _phase(root, state, "creating")
     request = state["request"]
     def checkpoint(prepared: dict[str, Any]) -> None:
+        if state.get("defer_creation_export") is True:
+            checkpoint_prepared(root, state, prepared)
+            return
         state["project"] = prepared["project_dir"]
         _phase(root, state, "exporting")
 
     out = creation_output(state)
-    result = create_project(
-        Path(request["source"]), expected_plan=plan,
-        output_dir=Path(out) if out is not None else None,
-        on_prepared=checkpoint,
-    )
+    options: dict[str, Any] = {"expected_plan": plan, "output_dir": Path(out) if out is not None else None,
+                               "on_prepared": checkpoint}
+    if state.get("defer_creation_export") is True:
+        options["publish"] = False
+    result = create_project(Path(request["source"]), **options)
+    if state.get("defer_creation_export") is True:
+        if result.get("kind") != "sciplot_project_prepared_result" or not is_prepared(state):
+            raise TaskControlError("prepared_creation_missing", "Native preparation returned without its durable checkpoint.")
+        return
     _completed(root, state, result)
 
 

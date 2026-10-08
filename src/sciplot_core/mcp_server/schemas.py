@@ -20,6 +20,8 @@ def tool_definitions() -> list[Tool]:
     from sciplot_core.task_choice_schema import table_region_schema
     from sciplot_core.task_group_contract import group_request_schema, group_responses_schema
     from sciplot_core.task_comparison_contract import comparison_request_schema, comparison_selection_schema
+    from sciplot_core.plot_document.schema import patch_schema
+    from sciplot_core.plot_engine.contracts import create_schema, rollback_schema, decide_schema
 
     string = {"type": "string", "minLength": 1}
     sha = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
@@ -30,18 +32,37 @@ def tool_definitions() -> list[Tool]:
     output = {"output_dir": {**string, "description": "Optional new preview directory outside the source and project."}}
     definitions: list[Tool] = []
 
-    def add(name: str, description: str, properties: dict[str, Any], required: list[str], *, read_only: bool = False) -> None:
+    def add(name: str, description: str, properties: dict[str, Any], required: list[str], *,
+            read_only: bool = False, idempotent: bool = False, destructive: bool = False) -> None:
         definitions.append(Tool(
             name=f"sciplot_{name}", description=description,
             input_schema=compact_schema(object_schema(properties, required)),
             output_schema={"type": "object"},
             annotations=ToolAnnotations(
                 read_only_hint=read_only,
-                destructive_hint=name in {"task_start", "task_resume", "group_start", "group_resume", "comparison_resume", "comparison_select", "edit_apply", "export"},
-                idempotent_hint=read_only, open_world_hint=False,
+                destructive_hint=destructive or name in {"task_start", "task_resume", "group_start", "group_resume", "comparison_resume", "comparison_select", "edit_apply", "export"},
+                idempotent_hint=read_only or idempotent, open_world_hint=False,
             ),
         ))
 
+    semantic_path = {**string, "pattern": "^/"}
+    semantic_plot = {"plot": {**semantic_path, "description": "Stable absolute local plot document directory returned by project_open or plot_create."}}
+    add("project_open", "Open one existing saved figure as a persistent semantic document. Returns stable object IDs, exact revision, current capabilities and legacy coverage. Does not overwrite the native figure.",
+        {"target": semantic_path, "figure_id": string}, ["target"], idempotent=True)
+    add("plot_describe", "Read current semantic objects, scientific and presentation hashes, dependency status and the next decision. Reuses the durable document without rebuilding scientific data.",
+        semantic_plot, ["plot"], read_only=True)
+    add("plot_create", "Create a source-bound semantic plot from an exact source and explicit optional rule/template/profile. Keep idempotency_key unchanged when retrying; unresolved scientific choices return a decision.",
+        {"request": create_schema()}, ["request"], idempotent=True, destructive=True)
+    add("plot_patch", "Apply one atomic semantic change batch to exact stable object IDs and base_revision. Local engine classifies risk, checks scientific invariants and compiles/exports. Reuse the identical idempotency_key after a lost reply; never swap data bindings through a presentation patch.",
+        {**semantic_plot, "request": patch_schema()}, ["plot", "request"], idempotent=True, destructive=True)
+    add("plot_render", "Render the current semantic document through its native backend; reuses valid current cache and preserves the saved scientific state.",
+        semantic_plot, ["plot"], idempotent=True)
+    add("plot_export", "Export the committed semantic revision. A prior export failure resumes export without applying a patch again. Handoff requires ready delivery evidence.",
+        semantic_plot, ["plot"], idempotent=True, destructive=True)
+    add("plot_rollback", "Restore an explicit historical presentation as a new revision, bound to base_revision and idempotency_key. Preserves revision history and scientific state.",
+        {**semantic_plot, "request": rollback_schema()}, ["plot", "request"], idempotent=True, destructive=True)
+    add("plot_decide", "Answer the specific current local decision. A review uses decision_id and base_revision; a creation question carries its existing source-bound response. Never invent scientific choices.",
+        {**semantic_plot, "request": decide_schema()}, ["plot", "request"], idempotent=True, destructive=True)
     add("capabilities", "Read the versioned local control contract. No model or provider is started.", {}, [], read_only=True)
     add("task_capabilities", "Read a small task capability index or one exact schema. Pass its contract_sha256 as expected_contract_sha256 when fetching sections; server validation remains complete.",
         {"section": {"enum": ["request", "response", "operations", "table_region"]}, "name": string,

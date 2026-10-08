@@ -100,6 +100,9 @@ def bind_workflow_semantic_render_options(
     )
     merged.update({key: request_options[key] for key in explicit_keys})
     effective["render_options"] = merged
+    # Persist the pre-merge intent: terminal family requests must not mistake
+    # inherited scientific defaults for user overrides (or lose legacy ones).
+    effective["explicit_render_option_keys"] = sorted(explicit_keys)
     return effective
 
 

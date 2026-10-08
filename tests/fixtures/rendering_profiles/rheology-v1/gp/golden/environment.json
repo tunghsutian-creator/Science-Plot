@@ -1,0 +1,50 @@
+{
+  "python": "3.14.7",
+  "python_binary_sha256": "87d4df53fd91304be5bac391fb204643c36b7df2023c04a0953bcbc7d4fdf634",
+  "platform": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64"
+  },
+  "packages": {
+    "PyQt6": "6.11.0",
+    "PyQt6-Qt6": "6.11.1",
+    "PyQt6-sip": "13.11.1",
+    "numpy": "2.4.6",
+    "Pillow": "12.2.0",
+    "PyMuPDF": "1.27.2.3"
+  },
+  "qt_compiled": "6.11.0",
+  "qt_runtime": "6.11.2",
+  "qt_platform": "offscreen",
+  "renderer_python_sha256": "dd7c3e4e71dbfa124746d74d4d6634876abbba404a5d3d09e9787195fbf80c2c",
+  "qt_modules_sha256": {
+    "QtCore": "a8bb3622dfdc06b2ac038e80f473b1cdb8b014472271c2e98d9b514151f52d61",
+    "QtGui": "95d4673b64182a8b79a723b1c5083924c0c26ec1d1021e6b95117305020d8fa4",
+    "QtWidgets": "b82d7ec05f36625856058234d5f0d3256c59d9ceb557ba6e25a3afa39afb0da4",
+    "QtSvg": "d5c1ae61d14180eed8ac3e7b25d32807a7280609b95bd01e7b5e25fb69bcafd7",
+    "QtPrintSupport": "5da8b3a9080e94adda0caa12aa87ceead3d106c02a4d4c9c37f1439611cacecc"
+  },
+  "font_files_sha256": {
+    "Arial Black.ttf": "7d7db3ad96a31373c1437c6ab14266f6605495544c8e663558b047521174c42e",
+    "Arial Bold Italic.ttf": "374b0190a9844343110d8f8ed1818117a4591803d022bbb2bd189d63a681e731",
+    "Arial Bold.ttf": "d72db21f9242aedd6b917d8549ad5921766b24d5f8d0becfda2ff4c620b3c2e0",
+    "Arial Italic.ttf": "ce1d2f1ab89db45f9796100eee960f5702a40e84c225c2b48c3ec3e81d153f98",
+    "Arial Narrow Bold Italic.ttf": "035cfb8b776e7ce27f4c0ea0dc3ca3ccf85c8da5d59595cecddf02de966fb985",
+    "Arial Narrow Bold.ttf": "fcf34b330033e26c06e9bd466bea5a3e4b2f39272972275369beb7d8b257ed57",
+    "Arial Narrow Italic.ttf": "f3d0827024939f01f134668c1d25709e56c5a085bd560e33dc598e86203d31d9",
+    "Arial Narrow.ttf": "9e1d881c4e43b51868f5e235ea5a12c838e23cc8df6277df1a3c94e158999826",
+    "Arial Rounded Bold.ttf": "a74ea71c366f15c81f9ce00a757cefb938cda21c0d32e51037d9a038e5ebc14b",
+    "Arial Unicode.ttf": "876af2cd4854644e7f3e7feb2f688997fdb3343c6df6693611209c9dfb47ccec",
+    "Arial.ttf": "525979822591a3447cfc49d943d6f7683508e25543407871c0ed8fed05fd2bd9"
+  },
+  "resolved_font_families": [
+    "Arial"
+  ],
+  "export": {
+    "preview_dpi": 150,
+    "tiff_dpi": 300,
+    "pdfdpi": 72,
+    "preview_background": "white"
+  }
+}

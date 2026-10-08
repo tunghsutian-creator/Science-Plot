@@ -1,0 +1,864 @@
+{
+  "kind": "sciplot_one_step_project",
+  "version": 2,
+  "created_at": "2026-07-24T10:10:53.132078+00:00",
+  "project": "tensile_2mm",
+  "state": "ready",
+  "state_reasons": [
+    "all_programmatic_gates_passed"
+  ],
+  "source_package": {
+    "kind": "sciplot_source_package",
+    "version": 1,
+    "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm",
+    "source_kind": "directory",
+    "file_count": 4,
+    "folder_count": 0,
+    "instrument_family": "tensile_curve",
+    "rule_id": "tensile_curve",
+    "confidence": 80.0,
+    "confidence_band": "high",
+    "raw_archive": {
+      "kind": "directory",
+      "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm",
+      "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/raw/tensile_2mm"
+    }
+  },
+  "mapping_package": {
+    "kind": "sciplot_mapping_package",
+    "version": 1,
+    "status": "auto",
+    "experiment_type": "tensile_curve",
+    "semantic_family": "tensile_curve",
+    "rule_id": "tensile_curve",
+    "confidence": 80.0,
+    "confidence_band": "high",
+    "reason": "Matched material rule `tensile_curve`.",
+    "sample_order": [
+      "tensile_2mm"
+    ],
+    "column_confirmations": []
+  },
+  "render_request": {
+    "kind": "sciplot_render_request",
+    "version": 1,
+    "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/plot_request.json",
+    "rule_id": null,
+    "recipe": "auto",
+    "template": null,
+    "exports": [
+      "pdf",
+      "tiff_300"
+    ],
+    "render_engine": "veusz",
+    "figure_size": "60x55",
+    "render_options": {
+      "visual_theme_id": "clean_light",
+      "style_preset": "nature",
+      "size": "60x55",
+      "palette_preset": "control_first_bright"
+    },
+    "split_policy": {},
+    "series_order": [],
+    "explicit_render_option_keys": []
+  },
+  "layout_policy": {
+    "kind": "sciplot_layout_policy",
+    "version": 1,
+    "policy_id": "default_curve",
+    "figure_size": "60x55",
+    "allowed_legend_positions": [
+      "upper_right",
+      "lower_right",
+      "upper_left",
+      "lower_left"
+    ],
+    "forbid_outside_legend": true,
+    "inside_legend_max_series": 4,
+    "prefer_inline_min_series": null,
+    "max_blank_area_ratio": 0.22,
+    "min_axes_area_ratio": 0.35,
+    "tick_policy": {},
+    "stack_spacing_policy": {},
+    "frame_alignment_policy": {
+      "margin_mode": "fixed_mm",
+      "outside_legend_allowed": false,
+      "auxiliary_frame_envelope": "standard_graph_frame",
+      "auxiliary_text_envelope": "standard_text_safe_area"
+    },
+    "stroke_policy": {
+      "default_line_width_pt": 1.2,
+      "min_line_width_pt": 1.0,
+      "max_line_width_pt": 1.6,
+      "min_line_to_tick_ratio": 0.9,
+      "max_line_to_tick_ratio": 1.8
+    }
+  },
+  "figure_qa_report": {
+    "kind": "sciplot_figure_qa_report",
+    "version": 1,
+    "status": "passed",
+    "qa_status": "passed",
+    "layout_review_mode": "structured_qa_only",
+    "needs_ai_intervention": false,
+    "issue_ids": [],
+    "autofixes_applied": [
+      "categorical_bar_mean_and_error_headroom",
+      "legend_auto_lower_right",
+      "legend_corner_edge_reclaimed",
+      "tensile_two_sided_axis_whitespace"
+    ],
+    "quality_actions": [],
+    "summary_count": 4,
+    "split_plan": {},
+    "delivery_complete": true,
+    "export_visual_qa": [
+      {
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/elongation_at_break_by_sample.pdf",
+        "visual_qa": {
+          "raster_width_px": 170,
+          "raster_height_px": 156,
+          "ink_fraction": 0.12994,
+          "content_bbox_fraction": 0.74359,
+          "content_bbox_px": [
+            13,
+            14,
+            157,
+            149
+          ]
+        }
+      },
+      {
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/stress_vs_strain.pdf",
+        "visual_qa": {
+          "raster_width_px": 170,
+          "raster_height_px": 156,
+          "ink_fraction": 0.092949,
+          "content_bbox_fraction": 0.738122,
+          "content_bbox_px": [
+            13,
+            15,
+            157,
+            149
+          ]
+        }
+      },
+      {
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_modulus_by_sample.pdf",
+        "visual_qa": {
+          "raster_width_px": 170,
+          "raster_height_px": 156,
+          "ink_fraction": 0.164027,
+          "content_bbox_fraction": 0.773756,
+          "content_bbox_px": [
+            6,
+            15,
+            157,
+            149
+          ]
+        }
+      },
+      {
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_strength_by_sample.pdf",
+        "visual_qa": {
+          "raster_width_px": 170,
+          "raster_height_px": 156,
+          "ink_fraction": 0.158145,
+          "content_bbox_fraction": 0.738122,
+          "content_bbox_px": [
+            13,
+            15,
+            157,
+            149
+          ]
+        }
+      }
+    ],
+    "image_review_required": false,
+    "image_review_triggers": [
+      "qa_failure",
+      "low_confidence_semantics",
+      "explicit_user_request"
+    ]
+  },
+  "validated_envelope": {
+    "kind": "sciplot_validated_envelope_evaluation",
+    "version": 2,
+    "state": "inside_validated_envelope",
+    "ready_without_ai": true,
+    "rule_id": "tensile_curve",
+    "semantic_family": "tensile_curve",
+    "current_contract_sha256": "0bc341e796fa354c70959a6e920c421ccf1cc0c2e22c174a96b7df76d00af09a",
+    "certified_contract_sha256": "0bc341e796fa354c70959a6e920c421ccf1cc0c2e22c174a96b7df76d00af09a",
+    "presented_semantic_contract_sha256": "f36079dbf80e2c81626502c5d7ebe997c4a1cdfc2b742c9d6492d32dfcc5ca6f",
+    "current_semantic_contract_sha256": "f36079dbf80e2c81626502c5d7ebe997c4a1cdfc2b742c9d6492d32dfcc5ca6f",
+    "certified_semantic_contract_sha256": "f36079dbf80e2c81626502c5d7ebe997c4a1cdfc2b742c9d6492d32dfcc5ca6f",
+    "presented_render_request_sha256": "d07e3bf9546edc23cf4b0667c5e90bbfb3d9327e4eab9d61f37e60996d23dbe5",
+    "request_policy_version": 2,
+    "request_contract_current": true,
+    "contract_current": true,
+    "mapping_state": "auto",
+    "confidence": 80.0,
+    "repair_reasons": [],
+    "confirmation_reasons": [],
+    "accepted_evidence": {
+      "tier": "user_authorized_real_excerpt",
+      "strength": "computed_fixture_hash",
+      "authorization_status": "user_authorized",
+      "fixture_hash_status": "computed_unregistered",
+      "source_hash_status": "unregistered",
+      "unit_status": "canonical_contract_only",
+      "acceptance_generated_at": "2026-07-24T09:48:00.060020+00:00",
+      "accepted_manifest_sha256": "4ceb4b74a4fdb58066f0af61751d7514d16806c7166df037fa8a35ff9f2264f1",
+      "limitations": [
+        "The accepted fixture hash was computed but was not registered in its provenance record.",
+        "The upstream source hash was not registered; the accepted fixture tree remains hash-bound.",
+        "Source-unit metadata was not registered; runtime parsing must still satisfy the rule's canonical axis contract."
+      ]
+    },
+    "authority": {
+      "provider_ready_flags_are_ignored": true,
+      "current_rule_contract_must_match_acceptance": true,
+      "render_request_must_match_versioned_policy": true,
+      "new_input_mapping_and_qa_still_required": true
+    }
+  },
+  "intervention_package": {
+    "kind": "sciplot_intervention_package",
+    "version": 1,
+    "required": false,
+    "reason": "",
+    "request": {},
+    "codex_review_policy": {
+      "default": "structured_qa_summary",
+      "image_review_required": false,
+      "image_review_triggers": [
+        "qa_failure",
+        "low_confidence_semantics",
+        "explicit_user_request"
+      ]
+    }
+  },
+  "delivery_package": {
+    "kind": "sciplot_user_delivery_package",
+    "version": 5,
+    "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm",
+    "project": "tensile_2mm",
+    "data_dir": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/data",
+    "data_csvs": [
+      {
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/data/run_001_plot_data.csv",
+        "relative_path": "data/run_001_plot_data.csv",
+        "format": "csv",
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/tensile_2mm_tensile_curves.csv",
+        "source_kind": "processed_source",
+        "exists": true,
+        "sha256": "5e617593a0ac7f9fee943f101acfd1037c1b5390a469fc177f8fb18cbf989e0f"
+      }
+    ],
+    "pdf_dir": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures",
+    "tiff_dir": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures",
+    "figures": [
+      {
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/stress_vs_strain.pdf",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/stress_vs_strain.pdf",
+        "relative_path": "figures/stress_vs_strain.pdf",
+        "format": "pdf",
+        "export_format": "pdf",
+        "source_sha256": "4bc63fc11bc895cbfa4b6c3895035d01b8836c09d80460b3bd1b5abbc58a483c",
+        "delivery_sha256": "4bc63fc11bc895cbfa4b6c3895035d01b8836c09d80460b3bd1b5abbc58a483c",
+        "copy_hash_matches": true,
+        "exists": true
+      },
+      {
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/stress_vs_strain_300dpi.tiff",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/stress_vs_strain_300dpi.tiff",
+        "relative_path": "figures/stress_vs_strain_300dpi.tiff",
+        "format": "tiff",
+        "export_format": "tiff_300",
+        "source_sha256": "5766388fd35949fd44db1c5015c77e5a92c269d4d08a59d867020c49ce46a71f",
+        "delivery_sha256": "5766388fd35949fd44db1c5015c77e5a92c269d4d08a59d867020c49ce46a71f",
+        "copy_hash_matches": true,
+        "exists": true
+      },
+      {
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_strength_by_sample.pdf",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_strength_by_sample.pdf",
+        "relative_path": "figures/tensile_strength_by_sample.pdf",
+        "format": "pdf",
+        "export_format": "pdf",
+        "source_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+        "delivery_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+        "copy_hash_matches": true,
+        "exists": true
+      },
+      {
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_strength_by_sample_300dpi.tiff",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_strength_by_sample_300dpi.tiff",
+        "relative_path": "figures/tensile_strength_by_sample_300dpi.tiff",
+        "format": "tiff",
+        "export_format": "tiff_300",
+        "source_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+        "delivery_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+        "copy_hash_matches": true,
+        "exists": true
+      },
+      {
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/elongation_at_break_by_sample.pdf",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/elongation_at_break_by_sample.pdf",
+        "relative_path": "figures/elongation_at_break_by_sample.pdf",
+        "format": "pdf",
+        "export_format": "pdf",
+        "source_sha256": "89fa1119bb140564de4b4b6f4197a32ea49e017ef64b2048e11e5f7b7030e267",
+        "delivery_sha256": "89fa1119bb140564de4b4b6f4197a32ea49e017ef64b2048e11e5f7b7030e267",
+        "copy_hash_matches": true,
+        "exists": true
+      },
+      {
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/elongation_at_break_by_sample_300dpi.tiff",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/elongation_at_break_by_sample_300dpi.tiff",
+        "relative_path": "figures/elongation_at_break_by_sample_300dpi.tiff",
+        "format": "tiff",
+        "export_format": "tiff_300",
+        "source_sha256": "adc971f515ff4e3986d3e2b723d0c6e64bc62a5aa68ab29589bf1d404a46ff97",
+        "delivery_sha256": "adc971f515ff4e3986d3e2b723d0c6e64bc62a5aa68ab29589bf1d404a46ff97",
+        "copy_hash_matches": true,
+        "exists": true
+      },
+      {
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_modulus_by_sample.pdf",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_modulus_by_sample.pdf",
+        "relative_path": "figures/tensile_modulus_by_sample.pdf",
+        "format": "pdf",
+        "export_format": "pdf",
+        "source_sha256": "5c9781f807699db89e7efce496ebd897d3236df240e0c0265df4114f92658bf7",
+        "delivery_sha256": "5c9781f807699db89e7efce496ebd897d3236df240e0c0265df4114f92658bf7",
+        "copy_hash_matches": true,
+        "exists": true
+      },
+      {
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_modulus_by_sample_300dpi.tiff",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_modulus_by_sample_300dpi.tiff",
+        "relative_path": "figures/tensile_modulus_by_sample_300dpi.tiff",
+        "format": "tiff",
+        "export_format": "tiff_300",
+        "source_sha256": "890e4668f9020c27b4a39fcb908e4d1ac21277749fb3bd2b0572f8523adcbbf9",
+        "delivery_sha256": "890e4668f9020c27b4a39fcb908e4d1ac21277749fb3bd2b0572f8523adcbbf9",
+        "copy_hash_matches": true,
+        "exists": true
+      }
+    ],
+    "project_dir": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project",
+    "project_file": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/stress_vs_strain.vsz",
+    "project_documents": [
+      {
+        "kind": "sciplot_delivery_project_file",
+        "id": "stress_vs_strain",
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/stress_vs_strain/single/studio/document.vsz",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/stress_vs_strain.vsz",
+        "relative_path": "project/stress_vs_strain.vsz",
+        "format": "vsz",
+        "source_sha256": "5ea3269fe6cd49bf4185fa517cfbb3599a2cf641f5741de0805264cc579dcdd6",
+        "delivery_sha256": "5ea3269fe6cd49bf4185fa517cfbb3599a2cf641f5741de0805264cc579dcdd6",
+        "copy_hash_matches": true,
+        "hash_matches_export": true,
+        "exists": true
+      },
+      {
+        "kind": "sciplot_delivery_project_file",
+        "id": "tensile_strength_by_sample",
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/tensile_strength_by_sample/single/studio/document.vsz",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_strength_by_sample.vsz",
+        "relative_path": "project/tensile_strength_by_sample.vsz",
+        "format": "vsz",
+        "source_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+        "delivery_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+        "copy_hash_matches": true,
+        "hash_matches_export": true,
+        "exists": true
+      },
+      {
+        "kind": "sciplot_delivery_project_file",
+        "id": "elongation_at_break_by_sample",
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/elongation_at_break_by_sample/single/studio/document.vsz",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/elongation_at_break_by_sample.vsz",
+        "relative_path": "project/elongation_at_break_by_sample.vsz",
+        "format": "vsz",
+        "source_sha256": "82593928ef35e8dbca204a01ea1d621cbec3d5ddc9b2b5c144e26ae07c259138",
+        "delivery_sha256": "82593928ef35e8dbca204a01ea1d621cbec3d5ddc9b2b5c144e26ae07c259138",
+        "copy_hash_matches": true,
+        "hash_matches_export": true,
+        "exists": true
+      },
+      {
+        "kind": "sciplot_delivery_project_file",
+        "id": "tensile_modulus_by_sample",
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/tensile_modulus_by_sample/single/studio/document.vsz",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_modulus_by_sample.vsz",
+        "relative_path": "project/tensile_modulus_by_sample.vsz",
+        "format": "vsz",
+        "source_sha256": "2a18c09b2e63e44957c179071ca6efc20b95422bdf7ec15ba2f715ad52dc29c7",
+        "delivery_sha256": "2a18c09b2e63e44957c179071ca6efc20b95422bdf7ec15ba2f715ad52dc29c7",
+        "copy_hash_matches": true,
+        "hash_matches_export": true,
+        "exists": true
+      }
+    ],
+    "open_in_veusz": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/Open_in_Veusz.command",
+    "open_in_veusz_sha256": "67a528e3295eb47e743585238fc980b9837c85f61386e4e6d1723590eb9a8675",
+    "launcher_contract": {
+      "kind": "sciplot_delivery_launcher_contract",
+      "version": 1,
+      "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/Open_in_Veusz.command",
+      "name": "Open_in_Veusz.command",
+      "exists": true,
+      "executable": true,
+      "canonical_structure": true,
+      "uses_portable_sciplot_resolution": true,
+      "required_command_present": true,
+      "content_sha256": "67a528e3295eb47e743585238fc980b9837c85f61386e4e6d1723590eb9a8675",
+      "structure_sha256": "bb26b1e306c048393fc0b9f00571cd52b78d7b54d67ddfacc514af83be1cba52",
+      "expected_structure_sha256": "bb26b1e306c048393fc0b9f00571cd52b78d7b54d67ddfacc514af83be1cba52",
+      "validation_errors": [],
+      "ready": true
+    },
+    "editable": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project",
+    "editable_vsz": {
+      "kind": "sciplot_delivery_editable_vsz",
+      "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/stress_vs_strain.vsz",
+      "relative_path": "project/stress_vs_strain.vsz",
+      "exists": true,
+      "authority": null,
+      "manual_edit_detected": false,
+      "expected_hash": "5ea3269fe6cd49bf4185fa517cfbb3599a2cf641f5741de0805264cc579dcdd6",
+      "actual_hash": "5ea3269fe6cd49bf4185fa517cfbb3599a2cf641f5741de0805264cc579dcdd6",
+      "hash_matches_export": true
+    },
+    "editable_vsz_projects": [
+      {
+        "kind": "sciplot_delivery_project_file",
+        "id": "stress_vs_strain",
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/stress_vs_strain/single/studio/document.vsz",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/stress_vs_strain.vsz",
+        "relative_path": "project/stress_vs_strain.vsz",
+        "format": "vsz",
+        "source_sha256": "5ea3269fe6cd49bf4185fa517cfbb3599a2cf641f5741de0805264cc579dcdd6",
+        "delivery_sha256": "5ea3269fe6cd49bf4185fa517cfbb3599a2cf641f5741de0805264cc579dcdd6",
+        "copy_hash_matches": true,
+        "hash_matches_export": true,
+        "exists": true
+      },
+      {
+        "kind": "sciplot_delivery_project_file",
+        "id": "tensile_strength_by_sample",
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/tensile_strength_by_sample/single/studio/document.vsz",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_strength_by_sample.vsz",
+        "relative_path": "project/tensile_strength_by_sample.vsz",
+        "format": "vsz",
+        "source_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+        "delivery_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+        "copy_hash_matches": true,
+        "hash_matches_export": true,
+        "exists": true
+      },
+      {
+        "kind": "sciplot_delivery_project_file",
+        "id": "elongation_at_break_by_sample",
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/elongation_at_break_by_sample/single/studio/document.vsz",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/elongation_at_break_by_sample.vsz",
+        "relative_path": "project/elongation_at_break_by_sample.vsz",
+        "format": "vsz",
+        "source_sha256": "82593928ef35e8dbca204a01ea1d621cbec3d5ddc9b2b5c144e26ae07c259138",
+        "delivery_sha256": "82593928ef35e8dbca204a01ea1d621cbec3d5ddc9b2b5c144e26ae07c259138",
+        "copy_hash_matches": true,
+        "hash_matches_export": true,
+        "exists": true
+      },
+      {
+        "kind": "sciplot_delivery_project_file",
+        "id": "tensile_modulus_by_sample",
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/tensile_modulus_by_sample/single/studio/document.vsz",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_modulus_by_sample.vsz",
+        "relative_path": "project/tensile_modulus_by_sample.vsz",
+        "format": "vsz",
+        "source_sha256": "2a18c09b2e63e44957c179071ca6efc20b95422bdf7ec15ba2f715ad52dc29c7",
+        "delivery_sha256": "2a18c09b2e63e44957c179071ca6efc20b95422bdf7ec15ba2f715ad52dc29c7",
+        "copy_hash_matches": true,
+        "hash_matches_export": true,
+        "exists": true
+      }
+    ],
+    "artifacts": [
+      {
+        "id": "plot_data_csv",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/data",
+        "exists": true,
+        "details": [
+          {
+            "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/data/run_001_plot_data.csv",
+            "relative_path": "data/run_001_plot_data.csv",
+            "format": "csv",
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/tensile_2mm_tensile_curves.csv",
+            "source_kind": "processed_source",
+            "exists": true,
+            "sha256": "5e617593a0ac7f9fee943f101acfd1037c1b5390a469fc177f8fb18cbf989e0f"
+          }
+        ]
+      },
+      {
+        "id": "pdf_exports",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures",
+        "exists": true
+      },
+      {
+        "id": "tiff_exports",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures",
+        "exists": true
+      },
+      {
+        "id": "canonical_pdf_tiff_pairs",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm",
+        "exists": true,
+        "details": {
+          "passed": true,
+          "pdf_stems": [
+            "elongation_at_break_by_sample",
+            "stress_vs_strain",
+            "tensile_modulus_by_sample",
+            "tensile_strength_by_sample"
+          ],
+          "tiff_stems": [
+            "elongation_at_break_by_sample",
+            "stress_vs_strain",
+            "tensile_modulus_by_sample",
+            "tensile_strength_by_sample"
+          ],
+          "missing_tiffs": [],
+          "orphan_tiffs": [],
+          "duplicate_pdfs": {},
+          "duplicate_tiffs": {},
+          "invalid_tiff_names": []
+        }
+      },
+      {
+        "id": "project_files",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project",
+        "exists": true,
+        "details": [
+          {
+            "kind": "sciplot_delivery_project_file",
+            "id": "stress_vs_strain",
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/stress_vs_strain/single/studio/document.vsz",
+            "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/stress_vs_strain.vsz",
+            "relative_path": "project/stress_vs_strain.vsz",
+            "format": "vsz",
+            "source_sha256": "5ea3269fe6cd49bf4185fa517cfbb3599a2cf641f5741de0805264cc579dcdd6",
+            "delivery_sha256": "5ea3269fe6cd49bf4185fa517cfbb3599a2cf641f5741de0805264cc579dcdd6",
+            "copy_hash_matches": true,
+            "hash_matches_export": true,
+            "exists": true
+          },
+          {
+            "kind": "sciplot_delivery_project_file",
+            "id": "tensile_strength_by_sample",
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/tensile_strength_by_sample/single/studio/document.vsz",
+            "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_strength_by_sample.vsz",
+            "relative_path": "project/tensile_strength_by_sample.vsz",
+            "format": "vsz",
+            "source_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+            "delivery_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+            "copy_hash_matches": true,
+            "hash_matches_export": true,
+            "exists": true
+          },
+          {
+            "kind": "sciplot_delivery_project_file",
+            "id": "elongation_at_break_by_sample",
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/elongation_at_break_by_sample/single/studio/document.vsz",
+            "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/elongation_at_break_by_sample.vsz",
+            "relative_path": "project/elongation_at_break_by_sample.vsz",
+            "format": "vsz",
+            "source_sha256": "82593928ef35e8dbca204a01ea1d621cbec3d5ddc9b2b5c144e26ae07c259138",
+            "delivery_sha256": "82593928ef35e8dbca204a01ea1d621cbec3d5ddc9b2b5c144e26ae07c259138",
+            "copy_hash_matches": true,
+            "hash_matches_export": true,
+            "exists": true
+          },
+          {
+            "kind": "sciplot_delivery_project_file",
+            "id": "tensile_modulus_by_sample",
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/tensile_modulus_by_sample/single/studio/document.vsz",
+            "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_modulus_by_sample.vsz",
+            "relative_path": "project/tensile_modulus_by_sample.vsz",
+            "format": "vsz",
+            "source_sha256": "2a18c09b2e63e44957c179071ca6efc20b95422bdf7ec15ba2f715ad52dc29c7",
+            "delivery_sha256": "2a18c09b2e63e44957c179071ca6efc20b95422bdf7ec15ba2f715ad52dc29c7",
+            "copy_hash_matches": true,
+            "hash_matches_export": true,
+            "exists": true
+          }
+        ]
+      },
+      {
+        "id": "open_in_veusz",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/Open_in_Veusz.command",
+        "exists": true,
+        "details": {
+          "kind": "sciplot_delivery_launcher_contract",
+          "version": 1,
+          "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/Open_in_Veusz.command",
+          "name": "Open_in_Veusz.command",
+          "exists": true,
+          "executable": true,
+          "canonical_structure": true,
+          "uses_portable_sciplot_resolution": true,
+          "required_command_present": true,
+          "content_sha256": "67a528e3295eb47e743585238fc980b9837c85f61386e4e6d1723590eb9a8675",
+          "structure_sha256": "bb26b1e306c048393fc0b9f00571cd52b78d7b54d67ddfacc514af83be1cba52",
+          "expected_structure_sha256": "bb26b1e306c048393fc0b9f00571cd52b78d7b54d67ddfacc514af83be1cba52",
+          "validation_errors": [],
+          "ready": true
+        }
+      },
+      {
+        "id": "qa_passed",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/manifest.json",
+        "exists": true
+      },
+      {
+        "id": "qa_artifact_hashes_match_delivery",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm",
+        "exists": true,
+        "details": [
+          {
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/stress_vs_strain.pdf",
+            "qa_sha256": "4bc63fc11bc895cbfa4b6c3895035d01b8836c09d80460b3bd1b5abbc58a483c",
+            "source_sha256": "4bc63fc11bc895cbfa4b6c3895035d01b8836c09d80460b3bd1b5abbc58a483c",
+            "delivery_sha256": "4bc63fc11bc895cbfa4b6c3895035d01b8836c09d80460b3bd1b5abbc58a483c"
+          },
+          {
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/stress_vs_strain_300dpi.tiff",
+            "qa_sha256": "5766388fd35949fd44db1c5015c77e5a92c269d4d08a59d867020c49ce46a71f",
+            "source_sha256": "5766388fd35949fd44db1c5015c77e5a92c269d4d08a59d867020c49ce46a71f",
+            "delivery_sha256": "5766388fd35949fd44db1c5015c77e5a92c269d4d08a59d867020c49ce46a71f"
+          },
+          {
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_strength_by_sample.pdf",
+            "qa_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+            "source_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+            "delivery_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747"
+          },
+          {
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_strength_by_sample_300dpi.tiff",
+            "qa_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+            "source_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+            "delivery_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c"
+          },
+          {
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/elongation_at_break_by_sample.pdf",
+            "qa_sha256": "89fa1119bb140564de4b4b6f4197a32ea49e017ef64b2048e11e5f7b7030e267",
+            "source_sha256": "89fa1119bb140564de4b4b6f4197a32ea49e017ef64b2048e11e5f7b7030e267",
+            "delivery_sha256": "89fa1119bb140564de4b4b6f4197a32ea49e017ef64b2048e11e5f7b7030e267"
+          },
+          {
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/elongation_at_break_by_sample_300dpi.tiff",
+            "qa_sha256": "adc971f515ff4e3986d3e2b723d0c6e64bc62a5aa68ab29589bf1d404a46ff97",
+            "source_sha256": "adc971f515ff4e3986d3e2b723d0c6e64bc62a5aa68ab29589bf1d404a46ff97",
+            "delivery_sha256": "adc971f515ff4e3986d3e2b723d0c6e64bc62a5aa68ab29589bf1d404a46ff97"
+          },
+          {
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_modulus_by_sample.pdf",
+            "qa_sha256": "5c9781f807699db89e7efce496ebd897d3236df240e0c0265df4114f92658bf7",
+            "source_sha256": "5c9781f807699db89e7efce496ebd897d3236df240e0c0265df4114f92658bf7",
+            "delivery_sha256": "5c9781f807699db89e7efce496ebd897d3236df240e0c0265df4114f92658bf7"
+          },
+          {
+            "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_modulus_by_sample_300dpi.tiff",
+            "qa_sha256": "890e4668f9020c27b4a39fcb908e4d1ac21277749fb3bd2b0572f8523adcbbf9",
+            "source_sha256": "890e4668f9020c27b4a39fcb908e4d1ac21277749fb3bd2b0572f8523adcbbf9",
+            "delivery_sha256": "890e4668f9020c27b4a39fcb908e4d1ac21277749fb3bd2b0572f8523adcbbf9"
+          }
+        ]
+      },
+      {
+        "id": "editable_vsz_hash_match",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/stress_vs_strain.vsz",
+        "exists": true
+      },
+      {
+        "id": "publication_intent_valid_json",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/publication_intent.json",
+        "exists": true
+      },
+      {
+        "id": "publication_intent_valid_contract",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/publication_intent.json",
+        "exists": true
+      },
+      {
+        "id": "transform_ledger_valid_json",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/transform_ledger.json",
+        "exists": true
+      },
+      {
+        "id": "transform_ledger_valid_contract",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/transform_ledger.json",
+        "exists": true
+      },
+      {
+        "id": "journal_profile_valid_json",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/journal_profile.json",
+        "exists": true
+      },
+      {
+        "id": "journal_profile_valid_contract",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/journal_profile.json",
+        "exists": true
+      },
+      {
+        "id": "publication_qa_valid_json",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/publication_qa.json",
+        "exists": true
+      },
+      {
+        "id": "publication_qa_valid_contract",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/publication_qa.json",
+        "exists": true
+      }
+    ],
+    "complete": true,
+    "verification": {
+      "kind": "sciplot_delivery_verification",
+      "version": 1,
+      "passed": true,
+      "checks": {
+        "record_kind_current": true,
+        "recorded_complete": true,
+        "canonical_root": true,
+        "minimal_top_level": true,
+        "data_files_current": true,
+        "pdf_files_current": true,
+        "tiff_files_current": true,
+        "project_files_current": true,
+        "canonical_pdf_tiff_pairs": true,
+        "launcher_path_current": true,
+        "launcher_hash_current": true,
+        "launcher_structure_current": true,
+        "launcher_contract_current": true,
+        "launcher_current": true,
+        "artifact_records_current": true
+      },
+      "failed_checks": [],
+      "expected_root": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm",
+      "recorded_root": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm",
+      "top_level": {
+        "expected": [
+          "Open_in_Veusz.command",
+          "data",
+          "figures",
+          "project"
+        ],
+        "actual": [
+          "Open_in_Veusz.command",
+          "data",
+          "figures",
+          "project"
+        ]
+      },
+      "data": {
+        "passed": true,
+        "live_files": [
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/data/run_001_plot_data.csv"
+        ],
+        "recorded_files": [
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/data/run_001_plot_data.csv"
+        ],
+        "invalid": []
+      },
+      "pdf": {
+        "passed": true,
+        "live_files": [
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/elongation_at_break_by_sample.pdf",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/stress_vs_strain.pdf",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_modulus_by_sample.pdf",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_strength_by_sample.pdf"
+        ],
+        "recorded_files": [
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/elongation_at_break_by_sample.pdf",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/stress_vs_strain.pdf",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_modulus_by_sample.pdf",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_strength_by_sample.pdf"
+        ],
+        "invalid": []
+      },
+      "tiff": {
+        "passed": true,
+        "live_files": [
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/elongation_at_break_by_sample_300dpi.tiff",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/stress_vs_strain_300dpi.tiff",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_modulus_by_sample_300dpi.tiff",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_strength_by_sample_300dpi.tiff"
+        ],
+        "recorded_files": [
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/elongation_at_break_by_sample_300dpi.tiff",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/stress_vs_strain_300dpi.tiff",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_modulus_by_sample_300dpi.tiff",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_strength_by_sample_300dpi.tiff"
+        ],
+        "invalid": []
+      },
+      "project": {
+        "passed": true,
+        "live_files": [
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/elongation_at_break_by_sample.vsz",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/stress_vs_strain.vsz",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_modulus_by_sample.vsz",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_strength_by_sample.vsz"
+        ],
+        "recorded_files": [
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/elongation_at_break_by_sample.vsz",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/stress_vs_strain.vsz",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_modulus_by_sample.vsz",
+          "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_strength_by_sample.vsz"
+        ],
+        "invalid": []
+      },
+      "pairing": {
+        "passed": true,
+        "pdf_stems": [
+          "elongation_at_break_by_sample",
+          "stress_vs_strain",
+          "tensile_modulus_by_sample",
+          "tensile_strength_by_sample"
+        ],
+        "tiff_stems": [
+          "elongation_at_break_by_sample",
+          "stress_vs_strain",
+          "tensile_modulus_by_sample",
+          "tensile_strength_by_sample"
+        ],
+        "missing_tiffs": [],
+        "orphan_tiffs": [],
+        "duplicate_pdfs": {},
+        "duplicate_tiffs": {},
+        "invalid_tiff_names": []
+      },
+      "launcher": {
+        "kind": "sciplot_delivery_launcher_contract",
+        "version": 1,
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/Open_in_Veusz.command",
+        "name": "Open_in_Veusz.command",
+        "exists": true,
+        "executable": true,
+        "canonical_structure": true,
+        "uses_portable_sciplot_resolution": true,
+        "required_command_present": true,
+        "content_sha256": "67a528e3295eb47e743585238fc980b9837c85f61386e4e6d1723590eb9a8675",
+        "structure_sha256": "bb26b1e306c048393fc0b9f00571cd52b78d7b54d67ddfacc514af83be1cba52",
+        "expected_structure_sha256": "bb26b1e306c048393fc0b9f00571cd52b78d7b54d67ddfacc514af83be1cba52",
+        "validation_errors": [],
+        "ready": true
+      }
+    }
+  }
+}

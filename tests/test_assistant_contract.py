@@ -88,3 +88,19 @@ def test_setting_catalog_exposes_specs_without_legacy_inspector_models() -> None
     assert not hasattr(setting_catalog, "INSPECTOR_MODEL_VERSION")
     assert setting_catalog.specs_for_object_type("axis")
     assert setting_catalog.specs_for_object_type("unsupported") == ()
+
+
+def test_large_installed_font_catalog_keeps_current_font_and_native_choices():
+    from sciplot_gui.studio_assistant.selection import _bounded_font_choices
+    from sciplot_core.assistant_provider.contracts import _MAX_CAPABILITY_CHOICES
+
+    fonts = [f'Font-{index:03}' for index in range(400)]
+    field = {'choices': fonts, 'setting_path': '/page1/graph1/x/Label/font',
+             'current_value': 'Font-399', 'help_text': 'Native font family.'}
+    bounded = _bounded_font_choices(field)
+    assert len(bounded['choices']) == _MAX_CAPABILITY_CHOICES
+    assert 'Font-399' in bounded['choices']
+    assert set(bounded['choices']) <= set(fonts)
+    assert field['choices'] == fonts and len(fonts) == 400
+    assert bounded['current_value'] == field['current_value']
+    assert _bounded_font_choices({**field, 'choices': ['Font-399']})['choices'] == ['Font-399']

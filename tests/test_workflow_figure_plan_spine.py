@@ -42,6 +42,64 @@ def _multi_metric_frequency_source(path: Path) -> None:
     ).to_excel(path, header=False, index=False)
 
 
+@pytest.mark.parametrize("explicit", [False, True])
+def test_frequency_workflow_uses_production_metric_axes_without_private_defaults(tmp_path, explicit):
+    from sciplot_core.materials_rules import get_rule, semantic_payload_from_rule
+
+    source = tmp_path / "frequency.xlsx"
+    pd.DataFrame([
+        ["Angular Frequency", "Storage Modulus", "Loss Modulus", "Loss Factor", "Complex Viscosity"],
+        ["Sample A"] * 5,
+        ["rad/s", "Pa", "Pa", "1", "mPa·s"],
+        [0.1, 100.0, 80.0, 0.8, 128000.0],
+        [100.0, 120.0, 90.0, 0.75, 15000.0],
+    ]).to_excel(source, header=False, index=False)
+    plan = resolve_frequency_plan(study_model={}, input_path=source, request={})
+    assert plan is not None
+    options = semantic_payload_from_rule(get_rule("rheology_frequency_sweep"), confidence=100.0)["render_options"]
+    overrides = {"yscale": "log", "y_ticks": [0.1, 1.0, 10.0], "y_max": 200000.0,
+                 "legend_position": "lower_left"} if explicit else {}
+    options.update(overrides)
+    request = {"rule_id": "rheology_frequency_sweep", "template": "point_line",
+               "render_options": options, "explicit_render_option_keys": list(overrides),
+               "resolved_figure_plan": plan.to_payload()}
+    rendered = {}
+
+    def renderer(path, **kwargs):
+        context = kwargs["request_context"]
+        metric = context["y_metric"]
+        rendered[metric] = kwargs["options"]
+        assert context["explicit_render_option_keys"] == list(overrides)
+        assert context["resolved_figure_task"]["y_metric"] == metric
+        target = kwargs["output_dir"] / "plot.pdf"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"renderer seam")
+        return {"exports": [{"path": str(target), "format": "pdf"}],
+                "outputs": [str(target)], "qa_reports": [], "veusz_documents": [],
+                "veusz_specs": [], "terminal_render_requests": [project_terminal_render_request(
+                    template=kwargs["template"], render_options=kwargs["options"], request_context=context)]}
+
+    result = rheology_bundle._render_veusz_sweep_bundle(
+        source, output_dir=tmp_path / "out", options=options, export_formats=("pdf",),
+        request=request, _resolved_figure_plan=plan, _renderer=renderer,
+    )
+    assert result is not None
+    assert set(rendered) == {"storage_modulus", "loss_modulus", "loss_factor", "complex_viscosity"}
+    for metric, values in rendered.items():
+        assert values["size"] == "60x55"
+        assert values["xscale"] == "log"
+        if explicit:
+            for key, value in overrides.items():
+                assert values[key] == value
+        else:
+            assert "y_max" not in values
+            assert "y_ticks" not in values
+            assert values["legend_position"] == "auto"
+            assert values["yscale"] == ("linear" if metric == "loss_factor" else "log")
+    assert rendered["loss_factor"]["y_tick_format"] == ("%Ve" if explicit else "Auto")
+    assert rendered["complex_viscosity"]["y_label_override"] == "|\\eta^{*}| (mPa·s)"
+
+
 def test_frequency_render_spine_reuses_one_typed_plan_and_parses_once_on_fallback(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

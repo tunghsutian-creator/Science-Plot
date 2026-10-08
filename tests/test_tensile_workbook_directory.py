@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from sciplot_core.materials_rules import tensile_curve_metric_values
+from sciplot_core.foundation.file_hashing import file_sha256
+from sciplot_core.plan_preview import build_plan_preview
 from sciplot_core.semantic import _read_tensile_workbook_directory
 from sciplot_core.study_model import experiment_recommendation_payload
 
@@ -38,11 +41,81 @@ def test_tensile_workbook_directory_uses_representative_and_specimen_sheets(
     curves, summary_rows = _read_tensile_workbook_directory(tmp_path)
 
     assert [(curve.sample, len(curve.points)) for curve in curves] == [("E0", 2)]
+    assert (curves[0].x_label, curves[0].y_label) == ("Tensile strain", "Tensile stress")
+    assert curves[0].points == ((0.0, 0.1), (1.0, 10.0))
+    assert curves[0].diagnostics["source_x_label"] == "Strain"
+    assert curves[0].diagnostics["source_y_label"] == "Stress"
+    assert curves[0].diagnostics["source_x_unit"] == "%"
+    assert curves[0].diagnostics["source_y_unit"] == "MPa"
     assert len(summary_rows) == 2
     assert {row["sample"] for row in summary_rows} == {"E0"}
     assert {row["strength_MPa"] for row in summary_rows} == {10.0, 12.0}
     assert {row["elongation_at_break_percent"] for row in summary_rows} == {20.0, 22.0}
     assert all("strain_at_break_percent" not in row for row in summary_rows)
+
+
+def _curated_workbook(path, *, labels=("Strain", "Stress"), units=("%", "MPa")):
+    with pd.ExcelWriter(path) as writer:
+        pd.DataFrame([labels, units, (path.stem, path.stem), (0.0, 0.0), (1.0, 10.0)]).to_excel(
+            writer, sheet_name="Representative_Curve", header=False, index=False
+        )
+        pd.DataFrame(
+            [["specimen", 10.0, 100.0, 20.0]],
+            columns=["Filename", "Strength (MPa)", "Modulus (MPa)", "Elongation (%)"],
+        ).to_excel(writer, sheet_name="All_Specimens", index=False)
+
+
+@pytest.mark.parametrize("labels", [
+    ("Tensile strain", "Tensile stress"), ("STRAIN", "stress"),
+    ("拉伸应变", "拉伸应力"), ("strain", "σ"),
+])
+def test_curated_tensile_aliases_preserve_source_metadata_and_values(tmp_path, labels):
+    _curated_workbook(tmp_path / "A.xlsx", labels=labels)
+    curves, _ = _read_tensile_workbook_directory(tmp_path)
+    curve = curves[0]
+    assert (curve.x_label, curve.y_label) == ("Tensile strain", "Tensile stress")
+    assert (curve.x_unit, curve.y_unit) == ("%", "MPa")
+    assert curve.points == ((0.0, 0.0), (1.0, 10.0))
+    assert (curve.diagnostics["source_x_label"], curve.diagnostics["source_y_label"]) == labels
+
+
+@pytest.mark.parametrize("labels,units,reason", [
+    (("Shear strain", "Stress"), ("%", "MPa"), "mechanical_source_contract_invalid"),
+    (("Strain", "Compressive stress"), ("%", "MPa"), "mechanical_source_contract_invalid"),
+    (("strain rate", "Stress"), ("%", "MPa"), "mechanical_source_contract_invalid"),
+    (("Strain", "Stress"), ("1", "MPa"), "mechanical_curve_unit_or_points_invalid"),
+    (("Strain", "Stress"), ("%", "kPa"), "mechanical_curve_unit_or_points_invalid"),
+])
+def test_curated_tensile_second_workbook_cannot_bypass_label_or_unit_guards(
+    tmp_path, labels, units, reason,
+):
+    _curated_workbook(tmp_path / "A.xlsx")
+    _curated_workbook(tmp_path / "B.xlsx", labels=labels, units=units)
+    result = build_plan_preview(tmp_path, request={"rule_id": "tensile_curve"})
+    assert result["status"] == "blocked"
+    assert result["blocker"]["reason_code"] == reason
+
+
+def test_real_curated_tensile_source_reaches_metric_gate_without_changing_data():
+    source = Path(__file__).parent / "fixtures/rendering_profiles/mechanical-v1/raw"
+    before = {path: file_sha256(path) for path in source.glob("*.xlsx")}
+    assert len(before) == 4
+    curves, summary = _read_tensile_workbook_directory(source)
+    assert [curve.sample for curve in curves] == ["E0", "E2", "E3", "E4"]
+    assert len(summary) == 20
+    for curve in curves:
+        raw = pd.read_excel(curve.diagnostics["source_file"], sheet_name="Representative_Curve", header=None)
+        assert curve.points == tuple(tuple(map(float, row)) for row in raw.iloc[3:].itertuples(index=False, name=None))
+        assert (curve.x_label, curve.y_label, curve.x_unit, curve.y_unit) == (
+            "Tensile strain", "Tensile stress", "%", "MPa"
+        )
+    result = build_plan_preview(source, request={"rule_id": "tensile_curve"})
+    # The historical curated export has no specimen toughness measurements.
+    # Recognizing its headers must not manufacture them to pass the complete plan.
+    assert result["status"] == "blocked"
+    assert result["blocker"]["reason_code"] == "mechanical_summary_metric_missing"
+    assert "toughness_MJ_m3" in result["blocker"]["message"]
+    assert all(file_sha256(path) == sha for path, sha in before.items())
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,70 @@
+{
+  "kind": "sciplot_rendering_style_contract",
+  "schema_version": 1,
+  "contract_id": "sciplot-figure-composition-v1",
+  "authority": "new_composition_policy",
+  "properties": {
+    "gap_x_mm": {
+      "status": "specified",
+      "value": 6.0,
+      "source_file": "src/sciplot_core/rendering_contract/composition.py",
+      "source_symbol": "COMPOSITION_VALUES[gap_x_mm]",
+      "notes": "New explicit composition policy; not a legacy multi-panel compatibility claim."
+    },
+    "gap_y_mm": {
+      "status": "specified",
+      "value": 6.0,
+      "source_file": "src/sciplot_core/rendering_contract/composition.py",
+      "source_symbol": "COMPOSITION_VALUES[gap_y_mm]",
+      "notes": "New explicit composition policy; not a legacy multi-panel compatibility claim."
+    },
+    "outer_margins_mm": {
+      "status": "specified",
+      "value": {
+        "left": 0.0,
+        "right": 0.0,
+        "top": 0.0,
+        "bottom": 0.0
+      },
+      "source_file": "src/sciplot_core/rendering_contract/composition.py",
+      "source_symbol": "COMPOSITION_VALUES[outer_margins_mm]",
+      "notes": "New explicit composition policy; not a legacy multi-panel compatibility claim."
+    },
+    "panel_width_mm": {
+      "status": "specified",
+      "value": 60.0,
+      "source_file": "src/sciplot_core/rendering_contract/composition.py",
+      "source_symbol": "COMPOSITION_VALUES[panel_width_mm]",
+      "notes": "New explicit composition policy; not a legacy multi-panel compatibility claim."
+    },
+    "panel_height_mm": {
+      "status": "specified",
+      "value": 55.0,
+      "source_file": "src/sciplot_core/rendering_contract/composition.py",
+      "source_symbol": "COMPOSITION_VALUES[panel_height_mm]",
+      "notes": "New explicit composition policy; not a legacy multi-panel compatibility claim."
+    },
+    "shared_decoration_policy": {
+      "status": "specified",
+      "value": "explicit_resolution_groups",
+      "source_file": "src/sciplot_core/rendering_contract/composition.py",
+      "source_symbol": "COMPOSITION_VALUES[shared_decoration_policy]",
+      "notes": "New explicit composition policy; not a legacy multi-panel compatibility claim."
+    },
+    "panel_label_policy": {
+      "status": "specified",
+      "value": "explicit_labels_in_reserved_top_margin",
+      "source_file": "src/sciplot_core/rendering_contract/composition.py",
+      "source_symbol": "COMPOSITION_VALUES[panel_label_policy]",
+      "notes": "New explicit composition policy; not a legacy multi-panel compatibility claim."
+    },
+    "dimension_policy": {
+      "status": "specified",
+      "value": "fixed_panel_dimensions_plus_explicit_gaps",
+      "source_file": "src/sciplot_core/rendering_contract/composition.py",
+      "source_symbol": "COMPOSITION_VALUES[dimension_policy]",
+      "notes": "New explicit composition policy; not a legacy multi-panel compatibility claim."
+    }
+  },
+  "content_hash": "345c47f305fc9e2b57defd08662abad0e6232a1ac00d649725ea20e8829bf283"
+}

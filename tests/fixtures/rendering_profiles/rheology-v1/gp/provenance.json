@@ -1,0 +1,161 @@
+{
+  "case": "gp",
+  "files": {
+    "raw_PP-5UDC": {
+      "path": "raw/PP-5UDC.csv",
+      "sha256": "c6a570000b8198d003133b1e904aa05cb99c166b8f2a50fac986b23e6f4e36b9",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/FS/PP-5UDC.csv"
+    },
+    "raw_PP 3155": {
+      "path": "raw/PP 3155.csv",
+      "sha256": "2c1d320760fa96b425b757abbf8564ce4d797ba09691120d1c3735427b244295",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/FS/PP 3155.csv"
+    },
+    "说明.md": {
+      "path": "historical-evidence/说明.md",
+      "sha256": "3c6b52b84eee802accbdd984f1f62f61573a36f85579dc7d388f70df98f11c0e",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/绘图修正_20260918/说明.md"
+    },
+    "原始数据核对.json": {
+      "path": "historical-evidence/原始数据核对.json",
+      "sha256": "35532487e94fb5cfedbaec61ac5bc15d0424246078e4995cc0a59940683f8829",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/绘图修正_20260918/原始数据核对.json"
+    },
+    "耗时记录.json": {
+      "path": "historical-evidence/耗时记录.json",
+      "sha256": "a83923c5b077a547a918250285bfdeeb6846d3a2b9535e0c8555d72ee89bf401",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/绘图修正_20260918/耗时记录.json"
+    },
+    "historical_request": {
+      "path": "historical-evidence/plot_request.json",
+      "sha256": "57ca5bb34d62a9c92d5f6d23e1a4e584fa6f529141443ba1a0982c89b9c3f8a1",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/plot_request.json"
+    },
+    "accepted_vsz": {
+      "path": "gp/accepted/accepted.vsz",
+      "sha256": "e56adc7001fb98ec239d6e983ba02cc973ed63e4d43a356173d99febafd491f7",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/FS_SciPlot_修正_20260918/project/studio_004.vsz"
+    },
+    "accepted_pdf": {
+      "path": "gp/accepted/delivered.pdf",
+      "sha256": "d51f351d508ca96bd6b2577af26ac891336a8eba970142b95c2dc5b4f6deb1e8",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/FS_SciPlot_修正_20260918/figures/storage_modulus_vs_frequency.pdf"
+    },
+    "accepted_tiff": {
+      "path": "gp/accepted/delivered_300dpi.tiff",
+      "sha256": "3ed33e865497a6d8026001def6269539cfeda75c8b895f95f7fb1f8c7cdfbd19",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/FS_SciPlot_修正_20260918/figures/storage_modulus_vs_frequency_300dpi.tiff"
+    },
+    "historical_spec": {
+      "path": "gp/historical/spec.json",
+      "sha256": "be05ae5524f38f3739ca7556d2956457a576717bbce9c1746c63318dc645bf0d",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/FS_频率扫描/studio/spec.json"
+    },
+    "historical_edit": {
+      "path": "gp/historical/edit-preview.json",
+      "sha256": "c473e163edadf2bdc153bcc3e1cdf699a640144afa6a9e3c1eb79c578bc2bd1a",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/.document_edit_history/FS_频率扫描/d95831f8eb7b4738332250a8a866e678bfe2a5b615688d63ff2f81ade8b011f5/preview.json"
+    },
+    "historical_edit_outcome": {
+      "path": "gp/historical/edit-outcome.json",
+      "sha256": "f5670dc28906d7284343af6ec67b7cb3777bebe07356f426735a64421a50f94a",
+      "original_path": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/4 UDC/pp3155 udc/.sciplot/fs_sciplot_修正_20260918/projects/.document_edit_history/FS_频率扫描/d95831f8eb7b4738332250a8a866e678bfe2a5b615688d63ff2f81ade8b011f5/outcome.json"
+    },
+    "paired_1": {
+      "path": "gp/sources/series-1.csv",
+      "sha256": "bb549c5d20be7294ddcd65d7b4afebc69fd162bf62d98ad6bc055b1fd29ac89c"
+    },
+    "paired_2": {
+      "path": "gp/sources/series-2.csv",
+      "sha256": "e31b923c172791d9aa013f1ad66446a2e0a79fbf72d336aedbd4450aaec4475e"
+    }
+  },
+  "selection": [
+    {
+      "sample": "PP-5UDC",
+      "raw": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/rheology/raw/PP-5UDC.csv",
+      "raw_sha256": "c6a570000b8198d003133b1e904aa05cb99c166b8f2a50fac986b23e6f4e36b9",
+      "raw_rows_zero_based": [
+        10,
+        26
+      ],
+      "raw_columns_zero_based": [
+        3,
+        4
+      ],
+      "points": 16,
+      "table": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/rheology/gp/sources/series-1.csv",
+      "table_sha256": "bb549c5d20be7294ddcd65d7b4afebc69fd162bf62d98ad6bc055b1fd29ac89c",
+      "operation": "Literal numeric selection; original order, values, units, and count retained."
+    },
+    {
+      "sample": "PP 3155",
+      "raw": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/rheology/raw/PP 3155.csv",
+      "raw_sha256": "2c1d320760fa96b425b757abbf8564ce4d797ba09691120d1c3735427b244295",
+      "raw_rows_zero_based": [
+        10,
+        26
+      ],
+      "raw_columns_zero_based": [
+        3,
+        4
+      ],
+      "points": 16,
+      "table": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/rheology/gp/sources/series-2.csv",
+      "table_sha256": "e31b923c172791d9aa013f1ad66446a2e0a79fbf72d336aedbd4450aaec4475e",
+      "operation": "Literal numeric selection; original order, values, units, and count retained."
+    }
+  ],
+  "replay": {
+    "compiler": "sciplot_core.studio_core.veusz_save.save_veusz_document_from_spec",
+    "base": "historical/spec.json",
+    "delta": "historical/edit-preview.json#actual_changes",
+    "changes": [
+      {
+        "object_path": "/page1/graph1/series_2",
+        "setting_path": "/page1/graph1/series_2/PlotLine/color",
+        "old_value": "#3568C0",
+        "new_value": "#222222"
+      },
+      {
+        "object_path": "/page1/graph1/series_2",
+        "setting_path": "/page1/graph1/series_2/MarkerFill/color",
+        "old_value": "#3568C0",
+        "new_value": "#222222"
+      },
+      {
+        "object_path": "/page1/graph1/series_2",
+        "setting_path": "/page1/graph1/series_2/MarkerLine/color",
+        "old_value": "#3568C0",
+        "new_value": "#222222"
+      },
+      {
+        "object_path": "/page1/graph1/series_1",
+        "setting_path": "/page1/graph1/series_1/PlotLine/color",
+        "old_value": "#222222",
+        "new_value": "#3568C0"
+      },
+      {
+        "object_path": "/page1/graph1/series_1",
+        "setting_path": "/page1/graph1/series_1/MarkerFill/color",
+        "old_value": "#222222",
+        "new_value": "#3568C0"
+      },
+      {
+        "object_path": "/page1/graph1/series_1",
+        "setting_path": "/page1/graph1/series_1/MarkerLine/color",
+        "old_value": "#222222",
+        "new_value": "#3568C0"
+      }
+    ],
+    "spec_sha256": "98ba4e30b4dc1d7644602974bea11881af9f1a80f6a7bb6a0cf633995c44a063",
+    "reason": "Saved native correction is authoritative; historical companion spec did not synchronize its color fields."
+  },
+  "golden_status": "Actual historical user delivery; original delivered VSZ/PDF/TIFF frozen without modification.",
+  "acceptance_evidence": {
+    "note": "historical-evidence/说明.md",
+    "audit": "historical-evidence/原始数据核对.json",
+    "edit_chain": "Historical edit outcome matches the complete SHA of the delivered VSZ.",
+    "qualification": "Actual delivery evidence, not a fabricated explicit approval quote."
+  }
+}

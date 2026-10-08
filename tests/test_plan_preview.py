@@ -59,6 +59,26 @@ def test_plan_preview_activates_registered_real_tensile_plan() -> None:
     assert all(not outcome["artifacts"] for outcome in plan["outcomes"])
 
 
+def test_source_only_tensile_directory_uses_same_validated_scientific_plan() -> None:
+    rule = get_rule("tensile_curve")
+    source = resolve_fixture_path(str(rule.fixture_path or ""))
+    implicit = preview_module.build_plan_preview(source, request={})
+    explicit = preview_module.build_plan_preview(source, request={"rule_id": rule.rule_id})
+    assert implicit["status"] == "planned"
+    assert implicit["resolved_figure_plan"] == explicit["resolved_figure_plan"]
+    assert implicit["preview_identity"] == explicit["preview_identity"]
+
+
+def test_directory_inspection_error_without_scientific_plan_stays_blocked(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(preview_module, "classify_source", lambda *a, **k: {
+        "template": "curve", "vendor_error": "generic reader requires a file"})
+    monkeypatch.setattr(preview_module, "resolve_scientific_source", lambda *a, **k: None)
+    monkeypatch.setattr(preview_module, "resolve_figure_plan", lambda *a, **k: None)
+    result = preview_module.build_plan_preview(tmp_path, request={})
+    assert result["status"] == "blocked"
+    assert result["blocker"]["reason_code"] == "plan_source_inspection_failed"
+
+
 def test_temperature_preview_keeps_plan_shape_without_fabricating_transform() -> None:
     rule = get_rule("rheology_temperature_sweep")
     source = resolve_fixture_path(str(rule.fixture_path or ""))

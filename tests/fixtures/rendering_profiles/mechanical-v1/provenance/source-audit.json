@@ -1,0 +1,674 @@
+{
+  "kind": "real_mechanical_historical_golden_audit",
+  "version": 1,
+  "figure_id": "tensile_strength_by_sample",
+  "selected_golden": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/golden/tensile_strength_by_sample.vsz",
+  "legacy_spec": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/spec.json",
+  "prepared_metric_source": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/tensile_strength_by_sample.csv",
+  "source_adjacent_delivery": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/Tensile_2mm",
+  "historical_run": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001",
+  "evidence_tier": "actual_source_adjacent_delivery_with_matching_historical_delivery_hashes",
+  "approval_boundary": "No independent human acceptance statement was located. Actual delivered files, historical complete delivery receipt and byte equality are verified; this is not a claim of publication or explicit aesthetic approval.",
+  "discovery": "Bounded rg --files -uu on project .tmp_verify and known OneDrive PA ADR study; no broad session scan.",
+  "historical_created_at": "2026-07-24T10:10:53.132078+00:00",
+  "historical_delivery_complete": true,
+  "delivery_hash_matches": [
+    {
+      "artifact": "tensile_strength_by_sample.vsz",
+      "sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+      "historical_delivery_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+      "matches": true,
+      "historical_record": {
+        "kind": "sciplot_delivery_project_file",
+        "id": "tensile_strength_by_sample",
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/tensile_strength_by_sample/single/studio/document.vsz",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/project/tensile_strength_by_sample.vsz",
+        "relative_path": "project/tensile_strength_by_sample.vsz",
+        "format": "vsz",
+        "source_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+        "delivery_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+        "copy_hash_matches": true,
+        "hash_matches_export": true,
+        "exists": true
+      }
+    },
+    {
+      "artifact": "tensile_strength_by_sample.pdf",
+      "sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+      "historical_delivery_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+      "matches": true,
+      "historical_record": {
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_strength_by_sample.pdf",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_strength_by_sample.pdf",
+        "relative_path": "figures/tensile_strength_by_sample.pdf",
+        "format": "pdf",
+        "export_format": "pdf",
+        "source_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+        "delivery_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+        "copy_hash_matches": true,
+        "exists": true
+      }
+    },
+    {
+      "artifact": "tensile_strength_by_sample_300dpi.tiff",
+      "sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+      "historical_delivery_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+      "matches": true,
+      "historical_record": {
+        "source": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/tensile_strength_by_sample_300dpi.tiff",
+        "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/Tensile_2mm/figures/tensile_strength_by_sample_300dpi.tiff",
+        "relative_path": "figures/tensile_strength_by_sample_300dpi.tiff",
+        "format": "tiff",
+        "export_format": "tiff_300",
+        "source_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+        "delivery_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+        "copy_hash_matches": true,
+        "exists": true
+      }
+    }
+  ],
+  "files": [
+    {
+      "role": "delivered_artifact",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/Tensile_2mm/project/tensile_strength_by_sample.vsz",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/golden/tensile_strength_by_sample.vsz",
+      "size_bytes": 21045,
+      "sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb",
+      "snapshot_sha256": "3f407f68a55ad18af74042b80fdb2468757360dcd6b13600b3f85431872575cb"
+    },
+    {
+      "role": "delivered_artifact",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/Tensile_2mm/figures/tensile_strength_by_sample.pdf",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/golden/tensile_strength_by_sample.pdf",
+      "size_bytes": 10145,
+      "sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747",
+      "snapshot_sha256": "78cc394d85bac5dbea2ba141c4aa9589de00ddb17e83fdbf780abcffe0b10747"
+    },
+    {
+      "role": "delivered_artifact",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/Tensile_2mm/figures/tensile_strength_by_sample_300dpi.tiff",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/golden/tensile_strength_by_sample_300dpi.tiff",
+      "size_bytes": 33536,
+      "sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c",
+      "snapshot_sha256": "dd382c7001f31d9e9c3de4d8e79b048e029c55c05c0aee360950ad1a9100373c"
+    },
+    {
+      "role": "resolved_legacy_spec",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/tensile_strength_by_sample/single/studio/spec.json",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/spec.json",
+      "size_bytes": 24584,
+      "sha256": "88a8447aa37418e7b175094a91c18be889a43fc635c0d7272c0c8d28586d7f69",
+      "snapshot_sha256": "88a8447aa37418e7b175094a91c18be889a43fc635c0d7272c0c8d28586d7f69"
+    },
+    {
+      "role": "legacy_request_with_historical_paths",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/figures/_veusz/tensile_strength_by_sample/single/plot_request.json",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/plot_request.json",
+      "size_bytes": 5954,
+      "sha256": "5a9074c5ea342e774f27b772ef40bbf290ba06b4e5221be6081f277248275c46",
+      "snapshot_sha256": "5a9074c5ea342e774f27b772ef40bbf290ba06b4e5221be6081f277248275c46"
+    },
+    {
+      "role": "exact_prepared_metric_source",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/veusz_metric_sources/tensile_strength_by_sample.csv",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/tensile_strength_by_sample.csv",
+      "size_bytes": 236,
+      "sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8",
+      "snapshot_sha256": "ee6225db600f7bcd6f2fe2cfad7855dc9c1b96d899608f33e8c562a49c0c3bd8"
+    },
+    {
+      "role": "historical_provenance",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/manifest.json",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/manifest.json",
+      "size_bytes": 1510046,
+      "sha256": "10c5c0528e0928d0af004b766e885773604cbef82fb3331514074f8d33494c89",
+      "snapshot_sha256": "10c5c0528e0928d0af004b766e885773604cbef82fb3331514074f8d33494c89"
+    },
+    {
+      "role": "historical_provenance",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/one_step_status.json",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/one_step_status.json",
+      "size_bytes": 43237,
+      "sha256": "0ece02fa70a523ba65fad1d935606b713a100f1916d0e36a02069a871690e960",
+      "snapshot_sha256": "0ece02fa70a523ba65fad1d935606b713a100f1916d0e36a02069a871690e960"
+    },
+    {
+      "role": "historical_provenance",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/transform_ledger.json",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/transform_ledger.json",
+      "size_bytes": 4009,
+      "sha256": "96fc47760723331ef2f792d79c692e20a9c6dc98d486af15ba708a5b16d844ee",
+      "snapshot_sha256": "96fc47760723331ef2f792d79c692e20a9c6dc98d486af15ba708a5b16d844ee"
+    },
+    {
+      "role": "historical_provenance",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/request_snapshot.json",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/request_snapshot.json",
+      "size_bytes": 549,
+      "sha256": "f57669ea9280e4800b63f193c8adf56537745885ad4b360d637b0efe4736f973",
+      "snapshot_sha256": "f57669ea9280e4800b63f193c8adf56537745885ad4b360d637b0efe4736f973"
+    },
+    {
+      "role": "historical_provenance",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/publication_qa.json",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/publication_qa.json",
+      "size_bytes": 369100,
+      "sha256": "abcd97340db4bfdc047c6b7e27c910347d47069898f61d8026f491c9ddab21fb",
+      "snapshot_sha256": "abcd97340db4bfdc047c6b7e27c910347d47069898f61d8026f491c9ddab21fb"
+    },
+    {
+      "role": "historical_scientific_preparation",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/tensile_2mm_tensile_curves.csv",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/tensile_2mm_tensile_curves.csv",
+      "size_bytes": 353293,
+      "sha256": "5e617593a0ac7f9fee943f101acfd1037c1b5390a469fc177f8fb18cbf989e0f",
+      "snapshot_sha256": "5e617593a0ac7f9fee943f101acfd1037c1b5390a469fc177f8fb18cbf989e0f"
+    },
+    {
+      "role": "historical_scientific_preparation",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/tensile_2mm_tensile_curves_summary.csv",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/legacy/tensile_2mm_tensile_curves_summary.csv",
+      "size_bytes": 5407,
+      "sha256": "af0a9220575e56295ef940039d9ec8e994b47b42ef5280358dbd14ef5b035d87",
+      "snapshot_sha256": "af0a9220575e56295ef940039d9ec8e994b47b42ef5280358dbd14ef5b035d87"
+    },
+    {
+      "role": "render_time_raw_source_snapshot",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/raw/tensile_2mm/E0 2mm.xlsx",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/raw/E0 2mm.xlsx",
+      "size_bytes": 56563,
+      "sha256": "9454641afddc15d995bf5cac9099f04b44a35fe08bf1c1678a1e10133b007bed",
+      "snapshot_sha256": "9454641afddc15d995bf5cac9099f04b44a35fe08bf1c1678a1e10133b007bed"
+    },
+    {
+      "role": "render_time_raw_source_snapshot",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/raw/tensile_2mm/E2 2mm.xlsx",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/raw/E2 2mm.xlsx",
+      "size_bytes": 1664004,
+      "sha256": "0fa7cd800ac2485184436427f8b1c0bf2bd131a1e3765bd54da630316188ad10",
+      "snapshot_sha256": "0fa7cd800ac2485184436427f8b1c0bf2bd131a1e3765bd54da630316188ad10"
+    },
+    {
+      "role": "render_time_raw_source_snapshot",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/raw/tensile_2mm/E3 2mm.xlsx",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/raw/E3 2mm.xlsx",
+      "size_bytes": 145369,
+      "sha256": "b37b9ba6aaba9539f962762657fade4d3d3338cde5af475a56f1c59f36e822b3",
+      "snapshot_sha256": "b37b9ba6aaba9539f962762657fade4d3d3338cde5af475a56f1c59f36e822b3"
+    },
+    {
+      "role": "render_time_raw_source_snapshot",
+      "source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/raw/tensile_2mm/E4 2mm.xlsx",
+      "snapshot": "/Users/dongxutian/Documents/research-plots/.tmp_verify/family_compatibility_20261008/mechanical/raw/E4 2mm.xlsx",
+      "size_bytes": 158768,
+      "sha256": "5eb5177fc53b86ce950e81c34950a9f0041952f030ebd8ba290c831163b194a1",
+      "snapshot_sha256": "5eb5177fc53b86ce950e81c34950a9f0041952f030ebd8ba290c831163b194a1"
+    }
+  ],
+  "raw_source_checks": [
+    {
+      "snapshot": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/raw/tensile_2mm/E0 2mm.xlsx",
+      "snapshot_sha256": "9454641afddc15d995bf5cac9099f04b44a35fe08bf1c1678a1e10133b007bed",
+      "live_source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/tensile/Plot data/2mm/E0 2mm.xlsx",
+      "live_source_exists": true,
+      "live_source_sha256": "fb4f6a3c3a84bc4aedaf8ca6107b2bae659a0cf913bdd0286164a83b233963fd",
+      "snapshot_equals_live_source": false,
+      "sheet": "All_Specimens",
+      "metric_column": "Strength (MPa)",
+      "specimen_filenames": [
+        "E0 2MM_1_1.csv",
+        "E0 2MM_3_1.csv",
+        "E0 2MM_4_1.csv",
+        "E0 2MM_6_1.csv",
+        "E0 2MM_9_1.csv"
+      ],
+      "values": [
+        34.13,
+        32.67,
+        36.0,
+        33.39,
+        34.2
+      ],
+      "values_equal_legacy_group": true,
+      "live_metric_values_equal_historical": true
+    },
+    {
+      "snapshot": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/raw/tensile_2mm/E2 2mm.xlsx",
+      "snapshot_sha256": "0fa7cd800ac2485184436427f8b1c0bf2bd131a1e3765bd54da630316188ad10",
+      "live_source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/tensile/Plot data/2mm/E2 2mm.xlsx",
+      "live_source_exists": true,
+      "live_source_sha256": "0fa7cd800ac2485184436427f8b1c0bf2bd131a1e3765bd54da630316188ad10",
+      "snapshot_equals_live_source": true,
+      "sheet": "All_Specimens",
+      "metric_column": "Strength (MPa)",
+      "specimen_filenames": [
+        "6-66 2 ADR_8_1.csv",
+        "6-66 2 ADR_12_1.csv",
+        "6-66 2 ADR_14_1.csv",
+        "6-66 2 ADR_16_1.csv",
+        "6-66 2 ADR_18_1.csv"
+      ],
+      "values": [
+        34.95,
+        35.16,
+        35.51,
+        36.58,
+        35.49
+      ],
+      "values_equal_legacy_group": true,
+      "live_metric_values_equal_historical": true
+    },
+    {
+      "snapshot": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/raw/tensile_2mm/E3 2mm.xlsx",
+      "snapshot_sha256": "b37b9ba6aaba9539f962762657fade4d3d3338cde5af475a56f1c59f36e822b3",
+      "live_source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/tensile/Plot data/2mm/E3 2mm.xlsx",
+      "live_source_exists": true,
+      "live_source_sha256": "2d02fac800fa81f5057de6b271b323963c9eac34667ef03403a457388654b441",
+      "snapshot_equals_live_source": false,
+      "sheet": "All_Specimens",
+      "metric_column": "Strength (MPa)",
+      "specimen_filenames": [
+        "E3 2MM_1_1.csv",
+        "E3 2MM_8_1.csv",
+        "E3 2MM_9_1.csv",
+        "E3 2MM_10_1.csv",
+        "E3 2MM_11_1.csv"
+      ],
+      "values": [
+        35.03,
+        36.49,
+        36.03,
+        34.37,
+        35.5
+      ],
+      "values_equal_legacy_group": true,
+      "live_metric_values_equal_historical": true
+    },
+    {
+      "snapshot": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/plot/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/raw/tensile_2mm/E4 2mm.xlsx",
+      "snapshot_sha256": "5eb5177fc53b86ce950e81c34950a9f0041952f030ebd8ba290c831163b194a1",
+      "live_source": "/Users/dongxutian/Library/CloudStorage/OneDrive-HKUST(Guangzhou)/1 PhD/2 PA ADR Recycle/新料 1.14/tensile/Plot data/2mm/E4 2mm.xlsx",
+      "live_source_exists": true,
+      "live_source_sha256": "5eb5177fc53b86ce950e81c34950a9f0041952f030ebd8ba290c831163b194a1",
+      "snapshot_equals_live_source": true,
+      "sheet": "All_Specimens",
+      "metric_column": "Strength (MPa)",
+      "specimen_filenames": [
+        "E4 2MM_2_1.csv",
+        "E4 2MM_5_1.csv",
+        "E4 2MM_8_1.csv",
+        "E4 2MM_9_1.csv",
+        "E4 2MM_10_1.csv"
+      ],
+      "values": [
+        37.23,
+        39.13,
+        38.64,
+        39.0,
+        39.08
+      ],
+      "values_equal_legacy_group": true,
+      "live_metric_values_equal_historical": true
+    }
+  ],
+  "scientific_identity": {
+    "metric": "tensile strength",
+    "unit": "MPa",
+    "thickness_mm": 2,
+    "sample_order": [
+      "E0",
+      "E2",
+      "E3",
+      "E4"
+    ],
+    "mean_definition": "arithmetic mean",
+    "spread_definition": "sample standard deviation (n-1)",
+    "values_source": "exact historical resolved spec and prepared metric CSV; no newly recomputed summary replaces them",
+    "groups": [
+      {
+        "label": "E0",
+        "position": 1.0,
+        "replicate_count": 5,
+        "raw_values": [
+          34.13,
+          32.67,
+          36.0,
+          33.39,
+          34.2
+        ],
+        "bar_mean": 34.078,
+        "bar_error": 1.2417205804849973,
+        "bar_error_statistic": "sd",
+        "raw_points_visible": false
+      },
+      {
+        "label": "E2",
+        "position": 2.0,
+        "replicate_count": 5,
+        "raw_values": [
+          34.95,
+          35.16,
+          35.51,
+          36.58,
+          35.49
+        ],
+        "bar_mean": 35.538,
+        "bar_error": 0.6279888534042614,
+        "bar_error_statistic": "sd",
+        "raw_points_visible": false
+      },
+      {
+        "label": "E3",
+        "position": 3.0,
+        "replicate_count": 5,
+        "raw_values": [
+          35.03,
+          36.49,
+          36.03,
+          34.37,
+          35.5
+        ],
+        "bar_mean": 35.484,
+        "bar_error": 0.8302891062756409,
+        "bar_error_statistic": "sd",
+        "raw_points_visible": false
+      },
+      {
+        "label": "E4",
+        "position": 4.0,
+        "replicate_count": 5,
+        "raw_values": [
+          37.23,
+          39.13,
+          38.64,
+          39.0,
+          39.08
+        ],
+        "bar_mean": 38.616,
+        "bar_error": 0.7982042345164566,
+        "bar_error_statistic": "sd",
+        "raw_points_visible": false
+      }
+    ]
+  },
+  "scientific_identity_sha256": "28e35478101f5b21a089bbda2a5c2a4c8b5d1d3bf24ca2adadfe807e21106bba",
+  "scientific_identity_hash_scope": "Audit-specific canonical science payload; not a replacement for ManagedPlot scientific_hash.",
+  "historical_provenance": {
+    "semantic_preparation": [
+      {
+        "id": "semantic_preparation",
+        "operation": "extract_tensile_workbook_directory",
+        "implementation_ref": "sciplot_core.semantic.prepare_semantic_source",
+        "input_refs": [
+          "semantic_preparation_input"
+        ],
+        "output_refs": [
+          "semantic_preparation_output",
+          "semantic_preparation_output_2"
+        ],
+        "input_artifacts": [
+          {
+            "id": "semantic_preparation_input",
+            "role": "input",
+            "kind": "directory",
+            "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm",
+            "exists": true,
+            "size_bytes": 2024704,
+            "sha256": "14fd8afa155c4b8fad932de0e9f882508426c2bdc0713ea925e6cd81e3b8639a",
+            "member_count": 4,
+            "table_shape": null
+          }
+        ],
+        "output_artifacts": [
+          {
+            "id": "semantic_preparation_output",
+            "role": "output",
+            "kind": "file",
+            "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/tensile_2mm_tensile_curves.csv",
+            "exists": true,
+            "size_bytes": 353293,
+            "sha256": "5e617593a0ac7f9fee943f101acfd1037c1b5390a469fc177f8fb18cbf989e0f",
+            "table_shape": [
+              15463,
+              8
+            ]
+          },
+          {
+            "id": "semantic_preparation_output_2",
+            "role": "supporting_output",
+            "kind": "file",
+            "path": "/private/tmp/sciplot_mechanical_update_hRgPUQ/deliveries/new/.sciplot/tensile_2mm/autoplot_projects/tensile_2mm/runs/run_001/processed/tensile_2mm_tensile_curves_summary.csv",
+            "exists": true,
+            "size_bytes": 5407,
+            "sha256": "af0a9220575e56295ef940039d9ec8e994b47b42ef5280358dbd14ef5b035d87",
+            "table_shape": [
+              21,
+              7
+            ]
+          }
+        ],
+        "parameters": {
+          "input_workbooks": [
+            "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm/E0 2mm.xlsx",
+            "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm/E2 2mm.xlsx",
+            "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm/E3 2mm.xlsx",
+            "/private/tmp/sciplot_mechanical_update_hRgPUQ/inputs/new/tensile_2mm/E4 2mm.xlsx"
+          ],
+          "output_series_labels": [
+            "E0",
+            "E2",
+            "E3",
+            "E4"
+          ],
+          "representative_definition": "Representative_Curve sheet from each workbook",
+          "summary_metric_source": "All_Specimens sheet from each workbook",
+          "summary_replicate_count": 20
+        },
+        "input_shape": null,
+        "output_shape": [
+          15463,
+          8
+        ],
+        "confirmation_status": "runtime_recorded",
+        "silent_omission_allowed": false,
+        "outcome_strength_gate_applied": false
+      }
+    ],
+    "native_spec_bar_owner": "categorical.groups[].bar_mean/bar_error/bar_error_statistic=sd",
+    "preserved_legacy_metadata_caveat": "categorical.summary_statistic=median_iqr and experiment default box_strip are historical generic distribution metadata; this actual selected figure template=bar and presentation_kind=bar_error, group values explicitly mean and SD. Do not reinterpret as boxplot.",
+    "current_owner_locations": [
+      {
+        "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/semantic_sources/tensile_workbooks.py",
+        "symbol": "_read_tensile_workbook_directory",
+        "file_sha256": "c7a6e55d4acd30ecad83c7d907dd07900fb8d4c6065b446f3782a3be56739958"
+      },
+      {
+        "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/studio_render/replicate_distribution_contract.py",
+        "symbol": "_replicate_distribution_contract",
+        "file_sha256": "9fd806bce132bc051cccbbc5901831387750e549bb09adb919e3a582486d87e3"
+      },
+      {
+        "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/studio_render/categorical_values.py",
+        "symbol": "_mean_and_sample_sd",
+        "file_sha256": "02afb05feba1be80ef55d7adf71f571dd2aba39b840fd0d2ef25bd586ecd2508"
+      },
+      {
+        "path": "/Users/dongxutian/Documents/research-plots/src/sciplot_core/studio_core/veusz_bar_error.py",
+        "symbol": "add_veusz_error_bars",
+        "file_sha256": "1060487be2c648ab711230f45a4f31a9458e54c59e4c2dd49815ee29f5340a0b"
+      }
+    ],
+    "current_owner_hash_scope": "Current source hash documents available shared owner only; not asserted to be exact 2026-07-24 implementation bytes."
+  },
+  "visual_contract": {
+    "page_mm": [
+      60,
+      55
+    ],
+    "margins_mm": {
+      "left": 14.0,
+      "right": 4.5,
+      "bottom": 11.0,
+      "top": 5.5
+    },
+    "axes": {
+      "x": {
+        "label": "Sample",
+        "scale": "linear",
+        "tick_format": "Auto",
+        "minor_tick_count": 20,
+        "minor_ticks": [],
+        "min": 0.5,
+        "max": 4.5,
+        "ticks": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "reverse": false,
+        "foreground_color": "#111111",
+        "label_size_pt": 7.0,
+        "tick_label_size_pt": 7.0,
+        "line_width_pt": 0.8,
+        "major_tick_width_pt": 0.8,
+        "major_tick_length_pt": 2.8,
+        "minor_tick_width_pt": 0.8,
+        "minor_tick_length_pt": 1.5,
+        "mode": "labels",
+        "category_labels": [
+          "E0",
+          "E2",
+          "E3",
+          "E4"
+        ],
+        "category_positions": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ]
+      },
+      "y": {
+        "label": "Tensile strength (MPa)",
+        "scale": "linear",
+        "tick_format": "Auto",
+        "minor_tick_count": 20,
+        "minor_ticks": [],
+        "min": 0.0,
+        "max": 59.40923076923077,
+        "ticks": [
+          0.0,
+          10.0,
+          20.0,
+          30.0,
+          40.0,
+          50.0
+        ],
+        "show_ticks": true,
+        "foreground_color": "#111111",
+        "label_size_pt": 7.0,
+        "tick_label_size_pt": 7.0,
+        "line_width_pt": 0.8,
+        "major_tick_width_pt": 0.8,
+        "major_tick_length_pt": 2.8,
+        "minor_tick_width_pt": 0.8,
+        "minor_tick_length_pt": 1.5
+      }
+    },
+    "legend": {
+      "show": false,
+      "columns": 1,
+      "mode": "none",
+      "horz_position": null,
+      "vert_position": null,
+      "horz_manual": null,
+      "vert_manual": null
+    },
+    "legend_native_key_count": 0,
+    "raw_points_visible": false,
+    "raw_points_preserved": true,
+    "native_class_counts": {
+      "root": 1,
+      "page": 1,
+      "graph": 1,
+      "axis": 2,
+      "xy": 5,
+      "line": 24,
+      "bar": 1,
+      "rect": 1
+    },
+    "error_line_count": 12,
+    "bar_outline_line_count": 12,
+    "bar_width_data": 0.32,
+    "cap_width_data": 0.16,
+    "categorical_visual_style": {
+      "palette_policy": "relaxed_multi_category",
+      "palette_preset": "control_first_bright",
+      "box_fill_mode": "series_color",
+      "box_fill_transparency": 0,
+      "box_fill_fraction": 0.42666666666666664,
+      "box_native_fill_scale": 0.5,
+      "box_width_policy": "min(categorical_bar_width_times_4_over_3,data_iqr_physical_aspect_cap)",
+      "category_count": 4,
+      "category_slot_width_mm": 10.375,
+      "box_width_mm": 4.426666666666667,
+      "raw_marker_diameter_mm": 1.411111111111111,
+      "raw_point_band_policy": "min(box_ratio_log2_replicates,box_width_minus_one_marker_diameter)",
+      "raw_point_position_policy": "stable_hash_shuffled_even_slots",
+      "raw_point_layout": "adaptive",
+      "box_line_mode": "series_color",
+      "raw_point_color_mode": "series_color",
+      "raw_point_alpha": 0.8,
+      "box_line_width_pt": 0.7,
+      "bar_width_fraction": 0.32,
+      "bar_fill_transparency": 0,
+      "bar_line_width_pt": 0.7,
+      "error_cap_to_bar_ratio": 0.5,
+      "error_line_width_pt": 1.2
+    },
+    "category_colors": [
+      {
+        "label": "E0",
+        "color": "#222222",
+        "fill_color": "#B7B7B7",
+        "keyline_color": "#696969"
+      },
+      {
+        "label": "E2",
+        "color": "#3568C0",
+        "fill_color": "#AFC6ED",
+        "keyline_color": "#7898D1"
+      },
+      {
+        "label": "E3",
+        "color": "#C83E4D",
+        "fill_color": "#F0B4BA",
+        "keyline_color": "#D97D87"
+      },
+      {
+        "label": "E4",
+        "color": "#2A9D8F",
+        "fill_color": "#A7D9D2",
+        "keyline_color": "#67B7AC"
+      }
+    ],
+    "tiff_header": {
+      "size_pixels": [
+        708,
+        649
+      ],
+      "mode": "RGB",
+      "dpi": [
+        300.0,
+        300.0
+      ]
+    }
+  },
+  "replay": {
+    "preferred": "Use copied legacy spec with existing native backend for old replay, without scientific re-preparation.",
+    "request_caveat": "Copied legacy request/spec/manifest retain historical /private/tmp absolute references. Resolve only artifact paths to copied evidence before executing; preserve all presentation and scientific values.",
+    "scientific_source_caveat": "E0 and E3 live workbook bytes differ from render-time snapshots; use pinned raw copies. Individual metric-value comparisons are recorded separately.",
+    "no_source_or_production_mutation": true
+  }
+}

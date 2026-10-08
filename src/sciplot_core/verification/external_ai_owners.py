@@ -105,6 +105,7 @@ EXTERNAL_AI_OWNERS = (
                 "tests/test_document_edit_native.py",
                 "tests/test_document_edit_policy.py",
                 "tests/test_native_document_edit.py",
+                "tests/test_assistant_contract.py",
             }
         ),
         pytest_targets=(

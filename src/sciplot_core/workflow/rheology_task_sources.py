@@ -366,16 +366,9 @@ def _metric_render_options(
             options["yscale"] = "log" if spans_two_decades else "linear"
             if spans_two_decades:
                 options["y_ticks"] = list(anchored_log_decade_ticks(positive_values))
-    if prefix == "freq" and metric_key == "storage_modulus":
-        if not plotted_values.empty and float(plotted_values.max()) <= 5e5:
-            options.update(
-                {
-                    "y_max": 5e5,
-                    "y_ticks": [1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0],
-                }
-            )
-    elif prefix == "freq" and metric_key in {"loss_factor", "complex_viscosity"}:
-        options["y_ticks"] = list(anchored_log_decade_ticks(plotted_values))
+    # Frequency presentation belongs to the existing Studio per-metric request
+    # owner. Temporary task tables must not inject another axis policy before
+    # legend placement or override an explicit request's bounds/ticks.
     return options
 
 

@@ -63,6 +63,22 @@ markers = [
 [tool.mypy]
 python_version = "3.11"
 files = [
+  "src/sciplot_core/native_process/",
+  "src/sciplot_core/veusz_worker/persistent.py",
+  "src/sciplot_core/studio_core/annotation_legend.py",
+  "src/sciplot_core/plot_document/",
+  "src/sciplot_core/plot_ir/",
+  "src/sciplot_core/plot_grammar/",
+  "src/sciplot_core/rendering_contract/",
+  "src/sciplot_core/qa/rendering_regression.py",
+  "src/sciplot_core/plot_layout/",
+  "src/sciplot_core/plot_transforms/",
+  "src/sciplot_core/veusz_worker/managed.py",
+  "src/sciplot_core/plot_backends/",
+  "src/sciplot_core/plot_engine/",
+  "src/sciplot_core/plot_protocol/",
+  "src/sciplot_core/cli/parsers/plots.py",
+  "src/sciplot_core/cli/dispatch/plots.py",
   "src/sciplot_core/live_editor/",
   "src/sciplot_core/veusz_worker/live_session.py",
   "src/sciplot_core/foundation",
@@ -194,6 +210,7 @@ files = [
   "src/sciplot_core/data_mapping/merged_metadata.py",
   "src/sciplot_core/studio_core/source_update_recovery.py",
   "src/sciplot_core/task_execution.py",
+  "src/sciplot_core/task_prepared_creation.py",
   "src/sciplot_core/task_editing.py",
   "src/sciplot_core/task_discovery.py",
   "src/sciplot_core/task_planning.py",
@@ -240,4 +257,5 @@ sciplot_core = [
   "live_editor_assets/*",
   "live_editor_assets/assets/*",
   "policy/plot_contract.json",
+  "rendering_contract/styles/*.json",
 ]

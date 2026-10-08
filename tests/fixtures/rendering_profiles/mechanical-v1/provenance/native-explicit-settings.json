@@ -1,0 +1,999 @@
+{
+  "": {
+    "width": "60mm",
+    "height": "55mm",
+    "StyleSheet/Line/width": "1.2pt",
+    "StyleSheet/Font/font": "Arial",
+    "StyleSheet/Font/size": "7pt",
+    "StyleSheet/axis-function/autoRange": "next-tick"
+  },
+  "page1": {
+    "class": "page",
+    "width": "60mm",
+    "height": "55mm",
+    "Background/color": "white",
+    "Background/hide": false
+  },
+  "page1/graph1": {
+    "class": "graph",
+    "leftMargin": "1.4cm",
+    "rightMargin": "0.45cm",
+    "topMargin": "0.55cm",
+    "bottomMargin": "1.1cm",
+    "Border/hide": true
+  },
+  "page1/graph1/x": {
+    "class": "axis",
+    "label": "Sample",
+    "min": 0.5,
+    "max": 4.5,
+    "mode": "labels",
+    "autoMirror": false,
+    "outerticks": true,
+    "Line/color": "#111111",
+    "Line/width": "0.8pt",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Label/size": "7pt",
+    "Label/color": "#111111",
+    "Label/hide": false,
+    "Label/offset": "2pt",
+    "TickLabels/size": "7pt",
+    "TickLabels/color": "#111111",
+    "TickLabels/format": "Auto",
+    "TickLabels/offset": "1.4pt",
+    "MajorTicks/width": "0.8pt",
+    "MajorTicks/transparency": 0,
+    "MajorTicks/length": "2.8pt",
+    "MajorTicks/manualTicks": [
+      1.0,
+      2.0,
+      3.0,
+      4.0
+    ],
+    "MinorTicks/width": "0.8pt",
+    "MinorTicks/transparency": 0,
+    "MinorTicks/length": "1.5pt",
+    "MinorTicks/number": 20
+  },
+  "page1/graph1/y": {
+    "class": "axis",
+    "label": "Tensile strength (MPa)",
+    "min": 0.0,
+    "max": 59.40923076923077,
+    "autoMirror": false,
+    "outerticks": true,
+    "direction": "vertical",
+    "Line/color": "#111111",
+    "Line/width": "0.8pt",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Label/size": "7pt",
+    "Label/color": "#111111",
+    "Label/hide": false,
+    "Label/offset": "2pt",
+    "TickLabels/size": "7pt",
+    "TickLabels/color": "#111111",
+    "TickLabels/format": "Auto",
+    "TickLabels/offset": "1.4pt",
+    "MajorTicks/width": "0.8pt",
+    "MajorTicks/transparency": 0,
+    "MajorTicks/length": "2.8pt",
+    "MajorTicks/manualTicks": [
+      0.0,
+      10.0,
+      20.0,
+      30.0,
+      40.0,
+      50.0
+    ],
+    "MinorTicks/width": "0.8pt",
+    "MinorTicks/transparency": 0,
+    "MinorTicks/length": "1.5pt",
+    "MinorTicks/number": 20
+  },
+  "page1/graph1/series_1": {
+    "class": "xy",
+    "marker": "circle",
+    "markerSize": "2pt",
+    "xData": "category_x_1",
+    "yData": "category_y_1",
+    "key": "E0",
+    "PlotLine/color": "#222222",
+    "PlotLine/width": "1.2pt",
+    "PlotLine/style": "solid",
+    "PlotLine/transparency": 8,
+    "PlotLine/hide": true,
+    "MarkerLine/color": "#222222",
+    "MarkerLine/width": "0.8pt",
+    "MarkerLine/transparency": 20,
+    "MarkerLine/hide": true,
+    "MarkerFill/color": "#222222",
+    "MarkerFill/transparency": 20,
+    "MarkerFill/hide": true,
+    "ErrorBarLine/hide": true
+  },
+  "page1/graph1/series_2": {
+    "class": "xy",
+    "marker": "circle",
+    "markerSize": "2pt",
+    "xData": "category_x_2",
+    "yData": "category_y_2",
+    "key": "E2",
+    "PlotLine/color": "#3568C0",
+    "PlotLine/width": "1.2pt",
+    "PlotLine/style": "solid",
+    "PlotLine/transparency": 8,
+    "PlotLine/hide": true,
+    "MarkerLine/color": "#3568C0",
+    "MarkerLine/width": "0.8pt",
+    "MarkerLine/transparency": 20,
+    "MarkerLine/hide": true,
+    "MarkerFill/color": "#3568C0",
+    "MarkerFill/transparency": 20,
+    "MarkerFill/hide": true,
+    "ErrorBarLine/hide": true
+  },
+  "page1/graph1/series_3": {
+    "class": "xy",
+    "marker": "circle",
+    "markerSize": "2pt",
+    "xData": "category_x_3",
+    "yData": "category_y_3",
+    "key": "E3",
+    "PlotLine/color": "#C83E4D",
+    "PlotLine/width": "1.2pt",
+    "PlotLine/style": "solid",
+    "PlotLine/transparency": 8,
+    "PlotLine/hide": true,
+    "MarkerLine/color": "#C83E4D",
+    "MarkerLine/width": "0.8pt",
+    "MarkerLine/transparency": 20,
+    "MarkerLine/hide": true,
+    "MarkerFill/color": "#C83E4D",
+    "MarkerFill/transparency": 20,
+    "MarkerFill/hide": true,
+    "ErrorBarLine/hide": true
+  },
+  "page1/graph1/series_4": {
+    "class": "xy",
+    "marker": "circle",
+    "markerSize": "2pt",
+    "xData": "category_x_4",
+    "yData": "category_y_4",
+    "key": "E4",
+    "PlotLine/color": "#2A9D8F",
+    "PlotLine/width": "1.2pt",
+    "PlotLine/style": "solid",
+    "PlotLine/transparency": 8,
+    "PlotLine/hide": true,
+    "MarkerLine/color": "#2A9D8F",
+    "MarkerLine/width": "0.8pt",
+    "MarkerLine/transparency": 20,
+    "MarkerLine/hide": true,
+    "MarkerFill/color": "#2A9D8F",
+    "MarkerFill/transparency": 20,
+    "MarkerFill/hide": true,
+    "ErrorBarLine/hide": true
+  },
+  "page1/graph1/categorical_bar_error_1_1": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      1.0
+    ],
+    "yPos": [
+      32.83627941951501
+    ],
+    "xPos2": [
+      1.0
+    ],
+    "yPos2": [
+      35.319720580485
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_error_1_2": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      0.92
+    ],
+    "yPos": [
+      35.319720580485
+    ],
+    "xPos2": [
+      1.08
+    ],
+    "yPos2": [
+      35.319720580485
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_error_1_3": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      0.92
+    ],
+    "yPos": [
+      32.83627941951501
+    ],
+    "xPos2": [
+      1.08
+    ],
+    "yPos2": [
+      32.83627941951501
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_error_2_1": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      2.0
+    ],
+    "yPos": [
+      34.910011146595735
+    ],
+    "xPos2": [
+      2.0
+    ],
+    "yPos2": [
+      36.16598885340426
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_error_2_2": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      1.92
+    ],
+    "yPos": [
+      36.16598885340426
+    ],
+    "xPos2": [
+      2.08
+    ],
+    "yPos2": [
+      36.16598885340426
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_error_2_3": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      1.92
+    ],
+    "yPos": [
+      34.910011146595735
+    ],
+    "xPos2": [
+      2.08
+    ],
+    "yPos2": [
+      34.910011146595735
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_error_3_1": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      3.0
+    ],
+    "yPos": [
+      34.65371089372436
+    ],
+    "xPos2": [
+      3.0
+    ],
+    "yPos2": [
+      36.314289106275645
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_error_3_2": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      2.92
+    ],
+    "yPos": [
+      36.314289106275645
+    ],
+    "xPos2": [
+      3.08
+    ],
+    "yPos2": [
+      36.314289106275645
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_error_3_3": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      2.92
+    ],
+    "yPos": [
+      34.65371089372436
+    ],
+    "xPos2": [
+      3.08
+    ],
+    "yPos2": [
+      34.65371089372436
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_error_4_1": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      4.0
+    ],
+    "yPos": [
+      37.817795765483545
+    ],
+    "xPos2": [
+      4.0
+    ],
+    "yPos2": [
+      39.414204234516454
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_error_4_2": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      3.92
+    ],
+    "yPos": [
+      39.414204234516454
+    ],
+    "xPos2": [
+      4.08
+    ],
+    "yPos2": [
+      39.414204234516454
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_error_4_3": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      3.92
+    ],
+    "yPos": [
+      37.817795765483545
+    ],
+    "xPos2": [
+      4.08
+    ],
+    "yPos2": [
+      37.817795765483545
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#111111",
+    "Line/width": "1.2pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_1_1": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      0.84
+    ],
+    "yPos": [
+      0.0
+    ],
+    "xPos2": [
+      0.84
+    ],
+    "yPos2": [
+      34.078
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#696969",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_1_2": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      1.16
+    ],
+    "yPos": [
+      0.0
+    ],
+    "xPos2": [
+      1.16
+    ],
+    "yPos2": [
+      34.078
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#696969",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_1_3": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      0.84
+    ],
+    "yPos": [
+      34.078
+    ],
+    "xPos2": [
+      1.16
+    ],
+    "yPos2": [
+      34.078
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#696969",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_2_1": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      1.84
+    ],
+    "yPos": [
+      0.0
+    ],
+    "xPos2": [
+      1.84
+    ],
+    "yPos2": [
+      35.538
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#7898D1",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_2_2": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      2.16
+    ],
+    "yPos": [
+      0.0
+    ],
+    "xPos2": [
+      2.16
+    ],
+    "yPos2": [
+      35.538
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#7898D1",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_2_3": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      1.84
+    ],
+    "yPos": [
+      35.538
+    ],
+    "xPos2": [
+      2.16
+    ],
+    "yPos2": [
+      35.538
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#7898D1",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_3_1": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      2.84
+    ],
+    "yPos": [
+      0.0
+    ],
+    "xPos2": [
+      2.84
+    ],
+    "yPos2": [
+      35.484
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#D97D87",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_3_2": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      3.16
+    ],
+    "yPos": [
+      0.0
+    ],
+    "xPos2": [
+      3.16
+    ],
+    "yPos2": [
+      35.484
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#D97D87",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_3_3": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      2.84
+    ],
+    "yPos": [
+      35.484
+    ],
+    "xPos2": [
+      3.16
+    ],
+    "yPos2": [
+      35.484
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#D97D87",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_4_1": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      3.84
+    ],
+    "yPos": [
+      0.0
+    ],
+    "xPos2": [
+      3.84
+    ],
+    "yPos2": [
+      38.616
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#67B7AC",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_4_2": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      4.16
+    ],
+    "yPos": [
+      0.0
+    ],
+    "xPos2": [
+      4.16
+    ],
+    "yPos2": [
+      38.616
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#67B7AC",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar_outline_4_3": {
+    "class": "line",
+    "arrowleft": "none",
+    "arrowright": "none",
+    "clip": true,
+    "mode": "point-to-point",
+    "hide": false,
+    "xPos": [
+      3.84
+    ],
+    "yPos": [
+      38.616
+    ],
+    "xPos2": [
+      4.16
+    ],
+    "yPos2": [
+      38.616
+    ],
+    "positioning": "axes",
+    "xAxis": "x",
+    "yAxis": "y",
+    "Line/color": "#67B7AC",
+    "Line/width": "0.7pt",
+    "Line/style": "solid",
+    "Line/transparency": 0,
+    "Line/hide": false,
+    "Fill/hide": true
+  },
+  "page1/graph1/categorical_bar": {
+    "class": "bar",
+    "lengths": [
+      "category_bar_mean_1",
+      "category_bar_mean_2",
+      "category_bar_mean_3",
+      "category_bar_mean_4"
+    ],
+    "posn": "category_bar_positions",
+    "direction": "vertical",
+    "mode": "stacked",
+    "barfill": 0.32,
+    "groupfill": 0.75,
+    "errorstyle": "none",
+    "BarFill/fills": [
+      [
+        "solid",
+        "#B7B7B7",
+        false,
+        0,
+        "0.5pt",
+        "solid",
+        "5pt",
+        "white",
+        0,
+        true
+      ],
+      [
+        "solid",
+        "#AFC6ED",
+        false,
+        0,
+        "0.5pt",
+        "solid",
+        "5pt",
+        "white",
+        0,
+        true
+      ],
+      [
+        "solid",
+        "#F0B4BA",
+        false,
+        0,
+        "0.5pt",
+        "solid",
+        "5pt",
+        "white",
+        0,
+        true
+      ],
+      [
+        "solid",
+        "#A7D9D2",
+        false,
+        0,
+        "0.5pt",
+        "solid",
+        "5pt",
+        "white",
+        0,
+        true
+      ]
+    ],
+    "BarLine/lines": [
+      [
+        "solid",
+        "0.7pt",
+        "#696969",
+        true
+      ],
+      [
+        "solid",
+        "0.7pt",
+        "#7898D1",
+        true
+      ],
+      [
+        "solid",
+        "0.7pt",
+        "#D97D87",
+        true
+      ],
+      [
+        "solid",
+        "0.7pt",
+        "#67B7AC",
+        true
+      ]
+    ]
+  },
+  "page1/graph1/category_axis_label_provider": {
+    "class": "xy",
+    "marker": "none",
+    "xData": "category_axis_x",
+    "yData": "category_axis_y",
+    "labels": "category_axis_labels",
+    "PlotLine/hide": true,
+    "MarkerLine/hide": false,
+    "MarkerFill/hide": false,
+    "ErrorBarLine/hide": true,
+    "Label/hide": true
+  },
+  "page1/page_export_background": {
+    "class": "rect",
+    "xPos": [
+      0.5
+    ],
+    "yPos": [
+      0.5
+    ],
+    "width": [
+      1.0
+    ],
+    "height": [
+      1.0
+    ],
+    "positioning": "relative",
+    "Fill/color": "white",
+    "Fill/hide": false,
+    "Fill/transparency": 0,
+    "Border/hide": true,
+    "clip": true
+  }
+}

@@ -46,7 +46,9 @@ def audit_closed_document_inventory(
         allowed_dataset_paths = {"xData", "yData"}
         if record["name"] == "category_axis_label_provider":
             allowed_dataset_paths.add("labels")
-            expected_provider_labels = "category_axis_labels"
+            expected_provider_labels = ("category_axis_display_labels"
+                                        if "category_axis_display_labels" in loaded_document.data
+                                        else "category_axis_labels")
             if bindings["labels"] != expected_provider_labels:
                 raise ValueError(
                     "Categorical axis provider does not consume its exact label dataset."

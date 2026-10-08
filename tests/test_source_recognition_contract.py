@@ -12,6 +12,58 @@ from sciplot_core.semantic import (
     tensile_export_csv_files,
     tensile_export_sample_name,
 )
+from sciplot_core.semantic_sources.mechanical_facts import load_mechanical_source_facts
+from sciplot_core.semantic_sources.tensile_exports import _read_tensile_export_series_list
+
+
+def _write_tensile_curve(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("拉伸应变,拉伸应力\n%,MPa\n0,0\n0.1,1\n0.2,2\n", encoding="utf-8")
+
+
+def test_nested_instrument_groups_match_direct_group_import_without_relabeling(tmp_path: Path) -> None:
+    groups = [tmp_path / "date_a/Sample A.is_tens_Exports", tmp_path / "date_b/data/6-66 2 ADR.IS_TENS_EXPORTS"]
+    for group in groups:
+        for number in (1, 3):
+            _write_tensile_curve(group / f"original_{number}_1.csv")
+    combined = _read_tensile_export_series_list(tmp_path)
+    expected = [series for group in groups for series in _read_tensile_export_series_list(group)]
+    assert combined == expected
+    assert [series.sample for series in combined] == [
+        "Sample A__original_1_1", "Sample A__original_3_1",
+        "6-66 2 ADR__original_1_1", "6-66 2 ADR__original_3_1",
+    ]
+    facts = load_mechanical_source_facts(tmp_path, rule_id="tensile_curve")
+    assert facts.replicate_counts == (("Sample A", 2), ("6-66 2 ADR", 2))
+    for group in groups:
+        direct = load_mechanical_source_facts(group, rule_id="tensile_curve")
+        sample = direct.sample_order[0]
+        assert tuple(series for series in facts.raw_series if series.sample.startswith(sample + "__")) == direct.raw_series
+        assert tuple(row for row in facts.summary_rows if row.sample == sample) == direct.summary_rows
+
+
+def test_tensile_group_uses_nearest_explicit_directory_only_within_source(tmp_path: Path) -> None:
+    outer = tmp_path / "Outer.is_tens_Exports"
+    inner = outer / "Inner.is_tens_Exports"
+    ordinary = outer / "ordinary"
+    _write_tensile_curve(inner / "original.csv")
+    _write_tensile_curve(ordinary / "other_1.csv")
+    _write_tensile_curve(ordinary / "other_2.csv")
+    grouped = _read_tensile_export_series_list(tmp_path)
+    assert [series.sample for series in grouped] == [
+        "Inner__original", "Outer__other_1", "Outer__other_2",
+    ]
+    # Importing only the ordinary folder cannot borrow identity from its parent.
+    ungrouped = load_mechanical_source_facts(ordinary, rule_id="tensile_curve")
+    assert ungrouped.replicate_counts == (("other_1", 1), ("other_2", 1))
+
+
+def test_instrument_directory_does_not_replace_explicit_curve_group(tmp_path: Path) -> None:
+    group = tmp_path / "instrument.is_tens_Exports"
+    _write_tensile_curve(group / "declared__repeat_1.csv")
+    direct = _read_tensile_export_series_list(group)
+    assert direct[0].sample == "declared__repeat_1"
+    assert _read_tensile_export_series_list(tmp_path) == direct
 
 
 def test_tensile_export_directory_recognition_is_shared_across_surfaces(
