@@ -2,9 +2,10 @@
 
 from importlib import import_module
 from typing import Any
+from weakref import ref
 
+from sciplot_core.plot_backends.figure_marks import coordinates, fraction
 from sciplot_core.plot_backends.figure_plan import drawing_plan
-from sciplot_core.plot_backends.figure_marks import fraction, coordinates
 
 
 def native_publication_qa(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
@@ -23,12 +24,19 @@ def native_publication_qa(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
         widget = getattr(painter, "widget", None)
         path = widget.path if widget is not None else ""
         meta = metadata.get(path)
-        render = renderer.render
+        # Renderers retain their Qt painter.  An instance override that closes
+        # over the renderer (or one of its bound methods) forms a cycle and can
+        # postpone painter destruction until a later garbage-collection pass.
+        renderer_ref = ref(renderer)
+        render = type(renderer).render
 
         def measured() -> Any:
-            result = render()
+            live_renderer = renderer_ref()
+            if live_renderer is None:
+                raise RuntimeError("The native text renderer expired before measurement.")
+            result = render(live_renderer)
             if meta is not None:
-                bounds = renderer.getBounds()
+                bounds = live_renderer.getBounds()
                 factor = 25.4 / dpi
                 record: dict[str, Any] = {key: meta[key] for key in ("semantic_id", "role", "view_id", "allowed_bounds_mm") if key in meta}
                 record["bounds_mm"] = [float(bounds[0]) * factor, float(bounds[1]) * factor,

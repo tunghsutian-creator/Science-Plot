@@ -45,7 +45,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
     "tests/test_plot_backend_semantics.py", "tests/test_plot_backend_semantics_native.py",
     "tests/test_native_process.py", "tests/test_native_process_native.py",
     "tests/test_plot_protocol.py", "tests/test_plot_typed_intent_recovery.py",
-    "tests/test_managed_rebuild_explanation.py",
+    "tests/test_managed_rebuild_explanation.py", "tests/test_figure_qa_renderer_lifetime.py",
     "tests/test_plot_engine.py", "tests/test_plot_engine_native.py",
 ])
 def test_semantic_plot_sources_and_tests_select_transaction_and_native_evidence(path):
