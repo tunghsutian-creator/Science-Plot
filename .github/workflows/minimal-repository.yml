@@ -24,9 +24,9 @@ jobs:
               examples example tmp tools outputs figures ftir_output .tmp_verify \
               .superpowers sciplot-main .DS_Store AGENTS.md DEVELOPMENT_LOG.md Makefile \
               Launch_SciPlot_App.command
-            git ls-files docs | grep -Ev \
-              '^docs/(ARCHITECTURE|THIRD_PARTY_NOTICES)\.md$' \
-              || true
+            # The curated docs and public showcase are explicitly unignored in
+            # .gitignore. The tracked-ignored check above still rejects any
+            # local-only docs without duplicating that allowlist here.
             git ls-files \
               third_party/veusz/tests \
               third_party/veusz/examples \
