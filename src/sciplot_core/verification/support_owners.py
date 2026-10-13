@@ -1,0 +1,37 @@
+"""Changed owners for documentation and vendored native build support."""
+
+from sciplot_core.verification.owner_model import ChangedOwner
+
+VEUSZ_NATIVE_BUILD_OWNER = ChangedOwner(
+    owner_id="veusz_native_build",
+    exact_paths=frozenset({"third_party/veusz/pyqt_setuptools.py"}),
+    owned_test_paths=frozenset({"tests/test_veusz_build_recovery.py"}),
+    pytest_targets=("tests/test_veusz_build_recovery.py",),
+    handoff_gates=("doctor",),
+    final_milestone_gates=("smoke",),
+    release_gates=("full_pytest",),
+)
+
+DOCUMENTATION_OWNER = ChangedOwner(
+    owner_id="documentation_contract",
+    path_prefixes=("docs/", "third_party/tavotto-ui/"),
+    exact_paths=frozenset(
+        {
+            "AGENTS.md",
+            ".github/workflows/minimal-repository.yml",
+            ".gitignore",
+            "DEVELOPMENT_LOG.md",
+            "DEVELOPMENT_ROADMAP.md",
+            "OLD_RENDERING_CONTRACT.md",
+            "visual_drift_report.md",
+            "README.md",
+            "skill/references/external-control.md",
+            "skill/references/advanced-workflows.md",
+            "skill/references/saved-figure-edit.md",
+            "skill/references/ordinary-create.md",
+            "skill/references/rheology-prepared.md",
+        }
+    ),
+    owned_test_paths=frozenset({"tests/test_documentation_contract.py", "tests/test_repository_policy.py"}),
+    pytest_targets=("tests/test_documentation_contract.py", "tests/test_repository_policy.py"),
+)

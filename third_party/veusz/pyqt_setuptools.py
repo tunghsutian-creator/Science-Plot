@@ -212,27 +212,43 @@ class sip_build_ext(build_ext):
         generated_sources = []
 
         for sip in sip_sources:
-            sip_basename = os.path.basename(sip)[:-4]
-            sip_builddir = os.path.join(self.build_temp, 'sip-' + sip_basename)
-            if not os.path.exists(sip_builddir) or self.force:
-                os.makedirs(sip_builddir, exist_ok=True)
-                self._sip_compile(sip, sip_builddir)
-
-            # files get put in sip_builddir + modulename
-            modulename = os.path.splitext(os.path.basename(sip))[0]
-            dirname = os.path.join(sip_builddir, 'output', modulename)
-            if not os.path.exists(dirname) or self.force:
-                os.makedirs(dirname, exist_ok=True)
-
-            source_files = [
-                os.path.join(dirname, fn)
-                for fn in sorted(os.listdir(dirname))
-                if fn.endswith(".cpp") or fn.endswith(".c")
-            ]
-
-            generated_sources.extend(source_files)
+            generated_sources.extend(self._sip_sources(sip))
 
         return generated_sources + other_sources
+
+    def _sip_sources(self, source):
+        """Reuse only a completed binding generation, including its module entry."""
+        modulename = os.path.splitext(os.path.basename(source))[0]
+        builddir = os.path.join(self.build_temp, 'sip-' + modulename)
+        dirname = os.path.join(builddir, 'output', modulename)
+        complete = os.path.join(builddir, '.sciplot-sip-complete')
+
+        def generated():
+            if not os.path.isdir(dirname):
+                return []
+            return [os.path.join(dirname, name) for name in sorted(os.listdir(dirname))
+                    if name.endswith(('.cpp', '.c'))]
+
+        def has_module(files):
+            return any(os.path.basename(path) in (
+                'sip' + modulename + 'cmodule.cpp', 'sip' + modulename + 'cmodule.c')
+                for path in files)
+
+        files = generated()
+        if self.force or not os.path.isfile(complete) or not has_module(files):
+            # A failed SIP invocation may leave a directory and partial files.
+            # Invalidate completion before retrying so another failure cannot
+            # turn the next build into a link without Python's module entry.
+            if os.path.exists(complete):
+                os.unlink(complete)
+            os.makedirs(builddir, exist_ok=True)
+            self._sip_compile(source, builddir)
+            files = generated()
+            if not has_module(files):
+                raise RuntimeError('SIP did not generate the module entry for ' + modulename)
+            with open(complete, 'w') as marker:
+                marker.write(modulename + '\n')
+        return files
 
     def _sip_compile(self, source, sip_builddir):
         """Compile sip file to sources."""
@@ -258,7 +274,7 @@ class sip_build_ext(build_ext):
 
         # location of sip output files
         output_dir = os.path.abspath(os.path.join(sip_builddir, 'output'))
-        os.makedirs(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
 
         def toml_esc(s):
             s = s.replace("\\", "\\\\").replace('"', r'\"')
