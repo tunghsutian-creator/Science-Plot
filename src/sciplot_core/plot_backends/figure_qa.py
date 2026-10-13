@@ -16,10 +16,14 @@ def native_publication_qa(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
     observations: list[dict[str, Any]] = []
     utils: Any = import_module("veusz.utils")
     original = utils.Renderer
+    live_renderers: list[Any] = []
     dpi = 150
 
     def factory(*args: Any, **kwargs: Any) -> Any:
         renderer = original(*args, **kwargs)
+        # Veusz sometimes calls Renderer(...).render() inline.  Keep that
+        # temporary alive through painting without a renderer -> self cycle.
+        live_renderers.append(renderer)
         painter = args[0]
         widget = getattr(painter, "widget", None)
         path = widget.path if widget is not None else ""
@@ -52,6 +56,7 @@ def native_publication_qa(ir: dict[str, Any], loaded: Any) -> dict[str, Any]:
         loaded.paintTo(helper, 0)
     finally:
         utils.Renderer = original
+        live_renderers.clear()
     expected_ids = sorted({node["semantic_id"] for node in nodes if node["type"] in {"label", "axis", "key"} and "semantic_id" in node})
     scales = {scale["id"]: scale for scale in ir["scales"]}
     points = []
