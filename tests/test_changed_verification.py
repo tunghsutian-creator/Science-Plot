@@ -3,8 +3,8 @@ from __future__ import annotations
 import subprocess
 import sys
 import tomllib
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import pytest
 
@@ -30,7 +30,6 @@ from sciplot_core.verification.type_gate_owners import (
     WORKFLOW_EXPORT_FORMAT_TYPE_PATHS,
 )
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -45,7 +44,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
     "tests/test_plot_document.py", "tests/test_plot_cache.py", "tests/test_plot_content_store.py", "tests/test_plot_backend.py", "tests/test_plot_backend_native.py",
     "tests/test_plot_backend_semantics.py", "tests/test_plot_backend_semantics_native.py",
     "tests/test_native_process.py", "tests/test_native_process_native.py",
-    "tests/test_plot_protocol.py", "tests/test_plot_engine.py", "tests/test_plot_engine_native.py",
+    "tests/test_plot_protocol.py", "tests/test_plot_typed_intent_recovery.py",
+    "tests/test_plot_engine.py", "tests/test_plot_engine_native.py",
 ])
 def test_semantic_plot_sources_and_tests_select_transaction_and_native_evidence(path):
     payload = build_changed_verification_plan([path], repo_root=REPO_ROOT)
@@ -53,6 +53,7 @@ def test_semantic_plot_sources_and_tests_select_transaction_and_native_evidence(
     checks = {check["check_id"]: check["command"] for check in payload["checks"]}
     assert checks["mypy_owned_scope"] == [sys.executable, "-m", "mypy"]
     assert {"tests/test_plot_document.py", "tests/test_plot_backend.py", "tests/test_plot_backend_native.py", "tests/test_plot_protocol.py",
+            "tests/test_plot_typed_intent_recovery.py",
             "tests/test_plot_engine.py", "tests/test_plot_engine_native.py"} <= set(checks["pytest_changed_owners"])
     assert payload["required_later"]["handoff"] == ["doctor"]
     assert payload["required_later"]["final_milestone"] == ["smoke"]
