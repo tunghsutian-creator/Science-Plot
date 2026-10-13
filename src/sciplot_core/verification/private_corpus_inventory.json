@@ -310,10 +310,6 @@
         "reason": "The helper is called with default real=False; it writes a synthetic source."
       },
       {
-        "nodeid": "tests/test_task_mapping_plan.py::test_mapped_native_creation_retains_original_archive_and_passes_source_audit",
-        "reason": "The helper is called with default real=False; it writes a synthetic source."
-      },
-      {
         "nodeid": "tests/test_task_mapping_plan.py::test_mapping_does_not_allow_rule_override_or_a_foreign_task_source",
         "reason": "The helper is called with default real=False; it writes a synthetic source."
       },
@@ -1291,6 +1287,15 @@
         }
       ],
       "evidence": "first_observed_failure_and_test_source"
+    },
+    {
+      "nodeid": "tests/test_task_mapping_plan.py::test_mapped_native_creation_retains_original_archive_and_passes_source_audit",
+      "dependencies": [
+        {
+          "rule_id": "uvvis_spectrum"
+        }
+      ],
+      "evidence": "test_source_inspection_and_observed_private_access"
     },
     {
       "nodeid": "tests/test_temperature_workflow_repair.py::test_real_temperature_task_sources_keep_default_four_sample_contract",

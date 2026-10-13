@@ -52,7 +52,7 @@ remain unchanged. Original JSON bytes, upstream originals and unregistered
 metadata were not invented or certified by this recovery.
 
 The full 3,840-node test collection and transitive fixture use were independently
-reviewed: 203 candidates resolve to 164 private cases and 39 synthetic branches.
+reviewed: 203 candidates resolve to 165 private cases and 38 synthetic branches.
 The preflight checks profile manifest members and all four allowed fixture roots.
 Its checked-in completeness flag remains false; a full local access receipt bound
 to the current collection, test/implementation bytes and inventory is required
@@ -60,6 +60,15 @@ before computed completeness can become true. A subset or stale receipt cannot
 close this gate. Python file access and static native fixture dependencies have
 separate recorded scopes. Public CI cannot substitute for local private evidence;
 no private data is uploaded to make it green.
+
+At the frozen `bddc230` snapshot, Mac focused (3,645), comprehensive (195)
+and the unfiltered suite (3,840) all pass with zero failures/errors/skips. A
+complete access review then exposed one wrongly excluded native UVVis mapping
+case: its helper explicitly selects real data. The final inventory declares that
+dependency; executable and test source bytes are unchanged. The correction is
+verified before final publication. Exact-snapshot Linux CI has the same 111
+private-input failures, each matching a same-SHA Mac pass, and no new failing
+nodes; toolchain, lint/types, native build/import and wheel checks pass.
 
 Independent Mac visual review found automatic axes reserved a circle radius for
 diamond/triangle markers, leaving temperature endpoint corners clipped. The

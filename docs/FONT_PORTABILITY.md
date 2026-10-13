@@ -93,7 +93,7 @@ a whole font-file identity or proof of fallback glyph selection. See
 
 Before claiming font-resource portability, capture actual native export
 device/glyph evidence and resolved font-file bytes on each target environment,
-then compare those resources with native pixels and PDF resources. The current
-cloud checkout cannot perform that acceptance: it lacks the compiled vendored
-Veusz Qt helpers and the macOS Arial font corpus used by the pinned golden
-profiles.
+then compare those resources with native pixels and PDF resources. The restored Mac
+environment passes all four immutable native golden nodes with matching local
+Arial observations. Those passes establish the pinned Mac comparison; selected
+font-file/glyph identity across other target environments remains unverified.
