@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from sciplot_core.verification.axis_owners import GENERIC_AXIS_OWNERS
-from sciplot_core.verification.live_editor_owner import LIVE_EDITOR_OWNER
-from sciplot_core.verification.plot_owners import PLOT_OWNER
 from sciplot_core.verification.external_ai_owners import EXTERNAL_AI_OWNERS
-from sciplot_core.verification.task_control_owners import TASK_CONTROL_OWNERS
+from sciplot_core.verification.live_editor_owner import LIVE_EDITOR_OWNER
 from sciplot_core.verification.owner_model import ChangedOwner
-from sciplot_core.verification.rheology_tts_owner import RHEOLOGY_TTS_OWNER
+from sciplot_core.verification.plot_owners import PLOT_OWNER
 from sciplot_core.verification.project_integrity_owners import PROJECT_INTEGRITY_OWNERS
 from sciplot_core.verification.project_revision_owners import PROJECT_REVISION_OWNERS
+from sciplot_core.verification.rheology_tts_owner import RHEOLOGY_TTS_OWNER
+from sciplot_core.verification.task_control_owners import TASK_CONTROL_OWNERS
 from sciplot_core.verification.terminal_owners import GENERIC_TERMINAL_PREPARATION_OWNER
 from sciplot_core.verification.type_gate_owners import (
     ARCHITECTURE_CORE_TARGETS,
@@ -36,6 +36,7 @@ CHANGED_OWNERS = (
         exact_paths=frozenset(
             {
                 "AGENTS.md",
+                ".github/workflows/minimal-repository.yml",
                 ".gitignore",
                 "DEVELOPMENT_LOG.md",
                 "DEVELOPMENT_ROADMAP.md",
@@ -49,8 +50,8 @@ CHANGED_OWNERS = (
                 "skill/references/rheology-prepared.md",
             }
         ),
-        owned_test_paths=frozenset({"tests/test_documentation_contract.py"}),
-        pytest_targets=("tests/test_documentation_contract.py",),
+        owned_test_paths=frozenset({"tests/test_documentation_contract.py", "tests/test_repository_policy.py"}),
+        pytest_targets=("tests/test_documentation_contract.py", "tests/test_repository_policy.py"),
     ),
     ChangedOwner(
         owner_id="validated_readiness_registry",

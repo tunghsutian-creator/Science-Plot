@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from sciplot_core.verification.changed import build_changed_verification_plan
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -45,3 +47,12 @@ def test_curated_docs_are_allowed_by_repository_policy() -> None:
 def test_local_only_documentation_stays_ignored(path: str) -> None:
     ignored = _git("check-ignore", "--no-index", "-q", "--", path)
     assert ignored.returncode == 0, f"local-only path is not ignored: {path}"
+
+
+@pytest.mark.focused
+def test_distribution_policy_changes_select_policy_regressions() -> None:
+    paths = [".github/workflows/minimal-repository.yml", ".gitignore", "tests/test_repository_policy.py"]
+    plan = build_changed_verification_plan(paths, repo_root=ROOT)
+    assert plan["unowned_paths"] == []
+    selected = next(check["command"] for check in plan["checks"] if check["check_id"] == "pytest_changed_owners")
+    assert "tests/test_repository_policy.py" in selected
