@@ -295,6 +295,7 @@ def private_corpus_preflight(*, repo_root: Path,
             inventory=inventory, inventory_path=inventory_path, repo_root=repo_root,
             collected_nodeids=collected_nodeids, dependencies=event_dependencies,
             access_audit_path=access_audit_path,
+            fixture_roots=FIXTURE_ROOTS,
         )
         issues.extend(_issue(code, why, nodeid=nodeid) for code, why, nodeid in audit_issues)
     if not complete:

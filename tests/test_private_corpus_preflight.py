@@ -255,6 +255,9 @@ def test_checked_in_inventory_is_explicitly_preliminary() -> None:
     assert len(nodeids) == len(set(nodeids))
     assert NODE in nodeids and PUBLIC_SIBLING not in nodeids
     assert any(case["evidence"] == "test_source_inspection" for case in payload["cases"])
+    dsc_case = next(case for case in payload["cases"] if case["nodeid"] ==
+                    "tests/test_dsc_figure_plan_activation.py::test_dsc_workflow_uses_its_bound_snapshot_after_render")
+    assert {"path": "tests/fixtures/real_world/dsc_curve/digitization_provenance.json", "kind": "file"} in dsc_case["dependencies"]
 
 
 def test_cli_collection_failure_is_json_blocked_and_nonzero(
@@ -387,3 +390,63 @@ def test_profile_manifest_members_are_checked_before_native_execution(tmp_path: 
     outside.write_bytes(b"mock")
     (manifest.parent / "raw/data.csv").symlink_to(outside)
     assert _run(tmp_path, inventory)["status"] == "BLOCKED"
+
+
+@pytest.mark.parametrize("mutation", [
+    "scan", "listdir", "escape", "outside_namespace", "unbound_open", "symlink_escape", "bound_nodeid",
+])
+def test_collection_directory_events_are_bounded_and_never_allow_data_open(
+    tmp_path: Path, mutation: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SCIPLOT_REFERENCE_DATA", str(tmp_path / "reference"))
+    source = tmp_path / "reference" / "real_world" / "uvvis_spectrum" / FIXTURE.name
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"mock structural input only")
+    inventory = _inventory(tmp_path, complete=False, dependencies=[{"rule_id": "uvvis_spectrum"}])
+    receipt_path = _review_and_receipt(tmp_path, inventory)
+    receipt = json.loads(receipt_path.read_text())
+    event = {"classification": "collector-directory-enumeration", "nodeid": "",
+             "event": "os.listdir" if mutation == "listdir" else "os.scandir",
+             "path": "tests/fixtures/real_world"}
+    if mutation == "escape":
+        event["path"] = "tests/fixtures/real_world/../../outside"
+    elif mutation == "outside_namespace":
+        event["path"] = "tests/fixtures/unapproved"
+    elif mutation == "unbound_open":
+        event.update(event="open", path=FIXTURE.as_posix())
+    elif mutation == "bound_nodeid":
+        event["nodeid"] = NODE
+    elif mutation == "symlink_escape":
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (tmp_path / "reference/real_world/escaped").symlink_to(outside, target_is_directory=True)
+        event["path"] = "tests/fixtures/real_world/escaped"
+    receipt["collection_events"] = [event]
+    receipt_path.write_text(json.dumps(receipt))
+    result = private_corpus_preflight(
+        repo_root=tmp_path, inventory_path=inventory, collected_nodeids={NODE, PUBLIC_SIBLING},
+        access_audit_path=receipt_path,
+    )
+    assert (result["status"] == "READY_FOR_SELECTED_TESTS") is (mutation in {"scan", "listdir"})
+    assert json.loads(receipt_path.read_text())["collection_events"] == [event]
+    assert result["scientific_acceptance"] is False
+
+
+def test_unbound_data_open_remains_blocked_outside_collection_bucket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SCIPLOT_REFERENCE_DATA", str(tmp_path / "reference"))
+    source = tmp_path / "reference" / "real_world" / "uvvis_spectrum" / FIXTURE.name
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"mock structural input only")
+    inventory = _inventory(tmp_path, complete=False, dependencies=[{"rule_id": "uvvis_spectrum"}])
+    receipt_path = _review_and_receipt(tmp_path, inventory)
+    receipt = json.loads(receipt_path.read_text())
+    receipt["events"][0]["nodeid"] = ""
+    receipt_path.write_text(json.dumps(receipt))
+    result = private_corpus_preflight(
+        repo_root=tmp_path, inventory_path=inventory, collected_nodeids={NODE, PUBLIC_SIBLING},
+        access_audit_path=receipt_path,
+    )
+    assert result["status"] == "BLOCKED"
+    assert result["issues"][0]["code"] == "unbound_private_access"

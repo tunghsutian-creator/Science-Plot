@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from sciplot_core._paths import local_reference_root, resolve_fixture_path
+
 
 def nodeids_sha256(nodeids: set[str] | list[str]) -> str:
     return hashlib.sha256(("\n".join(sorted(nodeids)) + "\n").encode()).hexdigest()
@@ -35,10 +37,37 @@ def implementation_sources_sha256(repo_root: Path) -> str:
     return digest.hexdigest()
 
 
+def _validate_collection_events(
+    events: object, *, repo_root: Path, fixture_roots: dict[Path, str | None] | None,
+) -> None:
+    """Keep collector directory enumeration separate from bound test accesses."""
+    if not isinstance(events, list):
+        raise ValueError("collection_events must be a list")
+    for event in events:
+        if (not isinstance(event, dict)
+                or event.get("classification") != "collector-directory-enumeration"
+                or event.get("event") not in {"os.scandir", "os.listdir"}
+                or event.get("nodeid") != "" or not isinstance(event.get("path"), str)):
+            raise ValueError("collection events may only record unbound collector directory enumeration")
+        path = Path(event["path"])
+        prefix = Path(*path.parts[:3])
+        if (path.is_absolute() or ".." in path.parts or fixture_roots is None
+                or prefix not in fixture_roots):
+            raise ValueError("collector directory escapes the allowed fixture namespaces")
+        resolved = resolve_fixture_path(path, repo_root=repo_root)
+        roots = [(repo_root / prefix).resolve()]
+        local_name = fixture_roots[prefix]
+        if local_name is not None:
+            roots.append((local_reference_root(repo_root=repo_root) / local_name).resolve())
+        if not resolved.is_dir() or not any(resolved.is_relative_to(root) for root in roots):
+            raise ValueError("collector directory is missing or resolves outside its fixture namespace")
+
+
 def validate_access_audit(
     *, inventory: dict[str, Any], inventory_path: Path, repo_root: Path,
     collected_nodeids: set[str] | None,
     dependencies: dict[str, list[tuple[str, str]]], access_audit_path: Path | None,
+    fixture_roots: dict[Path, str | None] | None = None,
 ) -> tuple[bool, list[tuple[str, str, str | None]]]:
     """Fail closed on incomplete execution, stale review, or unmapped access."""
     issues: list[tuple[str, str, str | None]] = []
@@ -86,6 +115,9 @@ def validate_access_audit(
                 raise ValueError("receipt must collect and attempt every current node exactly once")
         if receipt.get("capture_complete") is not True:
             raise ValueError("private-access capture was not confirmed complete, including child processes")
+        _validate_collection_events(
+            receipt.get("collection_events", []), repo_root=repo_root, fixture_roots=fixture_roots,
+        )
         events = receipt.get("events")
         if not isinstance(events, list):
             raise ValueError("receipt events must be a list")
