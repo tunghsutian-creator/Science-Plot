@@ -69,6 +69,16 @@ resolve the public test-tier boundary or provision the authorized corpus before
 claiming a full source-only CI pass. No clean Mac, independent human or external
 AI-client token/cost acceptance is implied by the local regression evidence.
 
+A saved pre-final-run `pytest -q -m focused` log (SHA-256
+`2d4279448fb7982047794eec198bee91e919901892ad1944ba7645cb3a75d91c`)
+records 3332 passed, 152 failed, 19 errors, 2 skipped and 192 deselected.
+Its 171 observed non-passes were classified from their tracebacks: 111 stop
+at the absent private original-data corpus, 50 at the missing compiled Veusz
+`qtloops` helper and 10 at denied AF_UNIX socket creation. No first traceback
+was classified as a product failure. This inventory comes from a pre-final
+commit, not a current-HEAD full-suite pass; blocked cases may expose further
+assertions after prerequisites are met.
+
 Remaining acceptance and candidate next slices. The first two have a bounded
 local implementation above; their broader native/client evidence gates remain
 open. Later additions should use existing document, patch and dependency
