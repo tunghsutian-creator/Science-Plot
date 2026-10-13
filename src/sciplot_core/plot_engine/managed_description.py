@@ -47,11 +47,14 @@ def describe_managed(root: Path, head: dict[str, Any], result: dict[str, Any], b
     native = Path(binding["document"])
     if str(native) in changed or not native.is_file():
         dirty.append("render")
+    dependencies = {"nodes": graph["nodes"]} if description is None else {}
+    if description is None:
+        dependencies["build_keys"] = build_keys(graph)
+    dependencies["invalidated"] = invalidated_nodes(graph, list(dict.fromkeys(dirty)))
     result.update({"authority": authority_status("ManagedPlot"), "ir_hash": binding["ir_hash"],
         "ir": binding["ir_path"], "artifact": str(native),
         "artifact_status": "missing" if not native.exists() else "changed" if str(native) in changed else "current",
-        "dependencies": {"nodes": graph["nodes"], "build_keys": build_keys(graph),
-                         "invalidated": invalidated_nodes(graph, list(dict.fromkeys(dirty)))}})
+        "dependencies": dependencies})
     if str(native) in changed:
         if description is not None and description["scope"] == "summary":
             # A compact rebuild read must not launch the native inspector merely
@@ -102,10 +105,9 @@ def _scoped_description(result: dict[str, Any], document: dict[str, Any], bindin
     compact["dependencies"] = {"invalidated": result["dependencies"]["invalidated"]}
     objects = document["presentation"]["objects"]
     if spec is not None:
-        from .figure_updates import patch_capabilities
+        from .figure_updates import figure_property_names
 
-        contracts = patch_capabilities(spec)
-        property_names = {target: list(properties) for target, properties in contracts.items()}
+        property_names = figure_property_names(spec)
     else:
         property_names = {target: list(obj["capabilities"]) for target, obj in objects.items()}
     compact["description_scope"] = description["scope"]
@@ -131,9 +133,9 @@ def _scoped_description(result: dict[str, Any], document: dict[str, Any], bindin
     compact["edit_target"] = target
     compact["edit_property"] = property_name
     if spec is not None:
-        from .figure_updates import current_edit_value
+        from .figure_updates import current_edit_value, figure_edit_descriptor
 
-        descriptor = contracts[target][property_name]
+        descriptor = figure_edit_descriptor(spec, target, property_name)
         compact["figure_edit_contract"] = {target: {property_name: descriptor}}
         compact["current_value"] = current_edit_value(spec, target, property_name)
         if property_name == "scale.domain":

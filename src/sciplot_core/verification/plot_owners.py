@@ -22,6 +22,7 @@ PLOT_TEST_PATHS = (
     "tests/test_plot_transforms.py",
     "tests/test_managed_sources.py",
     "tests/test_managed_description_scopes.py",
+    "tests/test_managed_description_performance.py",
     "tests/test_managed_backend.py",
     "tests/test_managed_backend_native.py",
     "tests/test_managed_engine_native.py",
