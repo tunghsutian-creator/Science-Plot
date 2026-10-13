@@ -48,8 +48,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
-            build-essential qt6-base-dev python3-dev python3-venv \
-            python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev
+            build-essential qt6-base-dev python3-dev python3-venv zsh \
+            python3-pyqt6 python3-pyqt6.qtsvg pyqt6-dev pyqt6-dev-tools
           # Ubuntu's PyQt6 and qmake use the same distribution Qt libraries.
           # A PyPI PyQt6 wheel carries a separate Qt runtime, so keep the
           # distribution interpreter and expose its bindings to this venv.
@@ -62,10 +62,12 @@ jobs:
         run: |
           python3 - <<'PY'
           import subprocess
+          import shutil
           import sys
           from pathlib import Path
           import PyQt6
-          from PyQt6 import QtCore, QtSvg, QtSvgWidgets
+          from PyQt6 import QtCore, QtGui, QtWidgets, QtPrintSupport, QtSvg, QtSvgWidgets, sip, uic
+          from PyQt6.uic import loadUi
 
           qmake = subprocess.check_output(["qmake6", "-query", "QT_VERSION"], text=True).strip()
           runtime = QtCore.qVersion()
@@ -74,6 +76,9 @@ jobs:
           assert binding.is_relative_to("/usr/lib/python3/dist-packages"), binding
           assert qmake == runtime, (qmake, runtime)
           assert (binding.parent / "bindings/QtCore/QtCore.toml").is_file(), binding
+          assert Path(uic.__file__).resolve().is_relative_to(binding.parent), uic.__file__
+          assert callable(loadUi) and all((QtGui, QtWidgets, QtPrintSupport, QtSvg, QtSvgWidgets, sip))
+          assert shutil.which("zsh"), "Delivery launchers require zsh"
           print(f"Python {sys.version.split()[0]}; PyQt {QtCore.PYQT_VERSION_STR}; Qt build/runtime {runtime}; {binding}")
           PY
       - name: Run lint gate
