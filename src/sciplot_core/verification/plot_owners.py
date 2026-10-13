@@ -18,6 +18,7 @@ PLOT_TEST_PATHS = (
     "tests/test_figure_document.py",
     "tests/test_figure_layout.py",
     "tests/test_figure_backend_native.py",
+    "tests/test_figure_qa_renderer_lifetime.py",
     "tests/test_plot_ir.py",
     "tests/test_plot_transforms.py",
     "tests/test_managed_sources.py",
