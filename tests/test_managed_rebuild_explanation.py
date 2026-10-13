@@ -170,6 +170,39 @@ def test_changed_native_summary_defers_inspection_and_preserves_resolution_guard
     assert not (root / "transform-cache").exists()
 
 
+def test_source_and_native_drift_keep_both_guards_without_read_side_effects(case, monkeypatch):
+    service, root, head, _backend, sources, native = case
+    from sciplot_core.plot_engine import managed_external
+
+    monkeypatch.setattr(managed_external, "inspect_managed_mutation",
+                        lambda *_: (_ for _ in ()).throw(AssertionError("native inspector launched")))
+    monkeypatch.setattr("sciplot_core.plot_engine.managed_sources.load_sources",
+                        lambda *_: (_ for _ in ()).throw(AssertionError("source parsed")))
+    sources["A"].write_bytes(b"changed source bytes, not a parsed table")
+    native.write_bytes(b"changed native artifact")
+    before_head = deepcopy(head)
+    before_files = {path: path.read_bytes() for path in (*sources.values(), native, root / "head.json")}
+
+    summary = service.describe(root, description={"scope": "summary"})
+
+    assert summary["status"] == "stale"
+    assert set(summary["changed_inputs"]) == {str(sources["A"]), str(native)}
+    assert summary["artifact_status"] == "changed"
+    assert summary["external_mutation_unavailable"]["reason_code"] == "native_inspection_deferred"
+    assert summary["next_step"] == {"action": "resolve_external_mutation", "automatic_adoption": False}
+    assert summary["rebuild_explanation"]["why_dirty"] == [
+        {"code": "source_changed", "input": str(sources["A"]), "node": "source:A"},
+        {"code": "native_artifact_changed", "input": str(native), "node": "render"},
+    ]
+    assert {"source_content_requires_validation", "native_receipt_requires_resolution"} <= set(
+        summary["rebuild_explanation"]["unknown"])
+    assert summary["rebuild_explanation"]["verified_reused_nodes"] == []
+    assert "figure_spec" not in summary and "figure_template_schema" not in summary
+    assert head == before_head
+    assert {path: path.read_bytes() for path in before_files} == before_files
+    assert not (root / "transform-cache").exists()
+
+
 def test_default_full_retains_existing_native_inspection(case, monkeypatch):
     service, root, _head, _backend, _sources, native = case
     from sciplot_core.plot_engine import managed_external

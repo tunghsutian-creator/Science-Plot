@@ -13,7 +13,7 @@ from sciplot_core.plot_engine.description_scope import selector_issues
 from sciplot_core.plot_engine.figure_updates import patch_capabilities
 from sciplot_core.plot_engine.service import PlotService
 from sciplot_core.plot_ir import create_managed_document
-from sciplot_core.plot_ir.figure_document import figure_spec
+from sciplot_core.plot_ir.figure_document import figure_spec, store_spec
 from sciplot_core.plot_protocol import rpc
 
 
@@ -111,6 +111,26 @@ def test_malformed_selector_is_rejected_before_open_writes(tmp_path, description
     assert not target.exists()
 
 
+@pytest.mark.parametrize("description", [
+    {"scope": "summary", 3: True},
+    {"scope": "summary", 3: True, "extra": 1},
+    {"scope": "edit", "target": "scale:x", "property": "scale.domain", 3: True, "extra": 1},
+])
+def test_non_string_selector_keys_fail_closed_before_project_open(tmp_path, description):
+    # A direct Python caller can pass keys impossible in JSON. They still
+    # receive a normal, bounded selector issue before any import.
+    issues = selector_issues(description)
+    allowed = ["scope"] if description["scope"] == "summary" else ["property", "scope", "target"]
+    assert issues == [{"path": "/description", "constraint": "additionalProperties", "allowed": allowed}]
+    service = PlotService(backend=object())
+    target = tmp_path / "not-created"
+    with pytest.raises(ValueError) as error:
+        service.open(target, description=description)
+    assert error.value.reason_code == "invalid_description_selector"
+    assert error.value.issues == issues
+    assert not target.exists()
+
+
 def test_unknown_target_and_property_fail_closed(tmp_path, monkeypatch):
     service, root, _ = _service(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match="target ID") as target_error:
@@ -119,6 +139,33 @@ def test_unknown_target_and_property_fail_closed(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="property advertised") as property_error:
         service.describe(root, description={"scope": "edit", "target": "scale:x", "property": "style"})
     assert property_error.value.reason_code == "description_unknown_property"
+
+
+def test_equal_axis_labels_still_require_stable_ids_and_exact_scientific_context(tmp_path, monkeypatch):
+    service, root, _ = _service(tmp_path, monkeypatch)
+    head = service_module.load_head(root)
+    spec = figure_spec(head["document"])
+    for axis in spec["views"][0]["axes"]:
+        axis["label"] = "frequency"
+    head["document"] = store_spec(head["document"], spec)
+
+    summary = service.describe(root, description={"scope": "summary"})
+    assert summary["edit_targets"]["axis:xb"]["label"] == summary["edit_targets"]["axis:yl"]["label"]
+    for axis_id, scale_id, unit, domain in (("axis:xb", "scale:x", "Hz", [0, 10]),
+                                            ("axis:yl", "scale:y", "Pa", [0, 20])):
+        edit = service.describe(root, description={"scope": "edit", "target": axis_id,
+                                                   "property": "axis.label"})
+        assert edit["edit_target"] == edit["next_step"]["target"] == axis_id
+        assert edit["target_context"]["scale_id"] == scale_id
+        assert edit["target_context"]["unit"] == unit
+        assert edit["target_context"]["domain"] == domain
+        assert edit["next_step"]["base_revision"] == summary["revision"]
+        assert edit["scientific_hash"] == summary["scientific_hash"]
+
+    with pytest.raises(ValueError) as error:
+        service.describe(root, description={"scope": "edit", "target": "frequency",
+                                            "property": "axis.label"})
+    assert error.value.reason_code == "description_unknown_target"
 
 
 def test_compact_reads_keep_native_stale_and_pending_guards(tmp_path, monkeypatch):
