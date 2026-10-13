@@ -102,6 +102,16 @@ def test_interrupted_typed_apply_requires_original_base_and_recovers_once(
     with pytest.raises(EngineError) as different_key:
         service.intent(root, _request(mode="apply", idempotency_key="second-edit"))
     assert different_key.value.reason_code == "document_transaction_pending"
+    assert different_key.value.repair == {
+        "action": "plot.describe", "plot": str(root), "description": {"scope": "summary"},
+        "pending": {"idempotency_key": "same-key", "phase": "applying"},
+    }
+    with pytest.raises(EngineError) as plan:
+        service.intent(root, _request(idempotency_key="second-edit"))
+    assert plan.value.reason_code == "document_transaction_pending"
+    assert plan.value.repair == different_key.value.repair
+    assert read(transaction_path(root, "same-key")) == saved
+    assert not transaction_path(root, "second-edit").exists()
     with pytest.raises(EngineError) as changed_intent:
         service.intent(root, _request(mode="apply", value="Unrelated text"))
     assert changed_intent.value.reason_code == "document_idempotency_conflict"
@@ -163,3 +173,20 @@ def test_typed_retry_after_completed_source_drift_fails_closed(tmp_path: Path) -
         service.intent(root, _request(mode="apply"))
     assert stale.value.reason_code == "document_inputs_changed"
     assert backend.native_writes == 1
+
+
+def test_pending_repair_survives_rpc_cli_and_mcp_error_adapters(tmp_path: Path) -> None:
+    from sciplot_core.cli.value_io import _cli_runtime_error_payload
+    from sciplot_core.mcp_server.errors import error_payload
+    from sciplot_core.plot_protocol.rpc import RemoteError, error_response
+
+    error = EngineError("document_transaction_pending", "Finish or reject the pending transaction first.",
+                        action="plot.describe", plot=str(tmp_path / "plot"),
+                        description={"scope": "summary"},
+                        pending={"idempotency_key": "original", "phase": "applying"})
+    wire = error_response(7, error)
+    remote = RemoteError(wire["error"])
+    assert wire["error"]["data"]["reason_code"] == "document_transaction_pending"
+    assert wire["error"]["data"]["repair"] == error.repair
+    assert _cli_runtime_error_payload(remote)["repair"] == error.repair
+    assert error_payload(remote)["repair"] == error.repair

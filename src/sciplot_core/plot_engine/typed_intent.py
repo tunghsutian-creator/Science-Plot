@@ -50,10 +50,12 @@ def compile_intent(document: dict[str, Any], request: dict[str, Any]) -> tuple[d
                           action="plot.describe")
     if request["plot_id"] != document["plot_id"]:
         raise EngineError("document_identity_conflict", "The edit belongs to a different plot.",
-                          action="plot.describe", current_plot_id=document["plot_id"])
+                          action="plot.describe", description={"scope": "summary"},
+                          current_plot_id=document["plot_id"])
     if request["base_revision"] != document["revision"]:
         raise EngineError("document_revision_conflict", "Read the current revision before changing this plot.",
-                          action="plot.describe", current_revision=document["revision"])
+                          action="plot.describe", description={"scope": "summary"},
+                          current_revision=document["revision"])
     prop = request["property"]
     kind = EDIT_KINDS[prop]
     objects = document["presentation"]["objects"]

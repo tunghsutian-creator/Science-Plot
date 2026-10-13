@@ -33,6 +33,15 @@ from .storage import (
 )
 
 
+def _pending_edit_error(root: Path, pending: dict[str, Any], message: str) -> EngineError:
+    """Point a competing edit at a read, never at replaying another request."""
+    return EngineError(
+        "document_transaction_pending", message,
+        action="plot.describe", plot=str(root), description={"scope": "summary"},
+        pending={"idempotency_key": pending["request"]["idempotency_key"], "phase": pending["phase"]},
+    )
+
+
 class PlotService:
     def __init__(self, backend: PlotBackend | None = None) -> None:
         if backend is None:
@@ -163,20 +172,19 @@ class PlotService:
             require_current(self.backend, head["binding"])
             pending = active(root)
             if pending and pending["phase"] not in {"complete", "rejected"}:
-                raise EngineError("document_transaction_pending", "Finish or reject the pending transaction first.",
-                                  action="retry_same_request", idempotency_key=pending["request"]["idempotency_key"])
+                raise _pending_edit_error(root, pending, "Finish or reject the pending transaction first.")
             current = load_head(root)["document"]
             if (current["plot_id"], current["revision"], current["scientific_hash"],
                     current["presentation_hash"]) != (head["document"]["plot_id"], head["document"]["revision"],
                                                      head["document"]["scientific_hash"],
                                                      head["document"]["presentation_hash"]):
                 raise EngineError("document_revision_conflict", "The plot changed while planning this edit.",
-                                  action="plot.describe", current_revision=current["revision"])
+                                  action="plot.describe", description={"scope": "summary"},
+                                  current_revision=current["revision"])
             require_current(self.backend, head["binding"])
             pending = active(root)
             if pending and pending["phase"] not in {"complete", "rejected"}:
-                raise EngineError("document_transaction_pending", "An edit began while planning this request.",
-                                  action="retry_same_request", idempotency_key=pending["request"]["idempotency_key"])
+                raise _pending_edit_error(root, pending, "An edit began while planning this request.")
             return {"plot": str(root), **plan}
         with external_project_session(root):
             saved = transaction_path(root, request["idempotency_key"])
@@ -196,7 +204,7 @@ class PlotService:
             if transaction["phase"] not in {"complete", "rejected"}:
                 pending = active(root)
                 if pending and pending["id"] != transaction["id"] and pending["phase"] not in {"complete", "rejected"}:
-                    raise EngineError("document_transaction_pending", "A different transaction is pending.")
+                    raise _pending_edit_error(root, pending, "A different transaction is pending.")
                 head = load_head(root)
                 if (head["document"]["revision"] != request["base_revision"]
                         and head["transaction"] != transaction["id"]):
@@ -218,9 +226,7 @@ class PlotService:
         require_current(self.backend, binding)
         pending = active(root)
         if pending and pending["phase"] not in {"complete", "rejected"}:
-            raise EngineError("document_transaction_pending", "Finish or reject the pending transaction first.",
-                              action="retry_same_request", idempotency_key=pending["request"]["idempotency_key"],
-                              phase=pending["phase"])
+            raise _pending_edit_error(root, pending, "Finish or reject the pending transaction first.")
         if diff:
             document["revision"] += 1
             document = seal_document(document)
