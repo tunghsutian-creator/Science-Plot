@@ -16,6 +16,7 @@ from typing import Any
 
 from sciplot_core._paths import local_reference_root, resolve_fixture_path
 from sciplot_core.materials_rules import get_rule
+from sciplot_core.verification.private_corpus_audit import validate_access_audit
 
 GATE = "private_corpus_preflight"
 INVENTORY = Path(__file__).with_name("private_corpus_inventory.json")
@@ -26,6 +27,12 @@ DIRECTORY_RULE_IDS = frozenset({
     "rheology_time_sweep", "tensile_curve", "torque_curve",
 })
 FIXTURE_PREFIX = Path("tests/fixtures/real_world")
+FIXTURE_ROOTS = {
+    FIXTURE_PREFIX: "real_world",
+    Path("tests/fixtures/polymer_corpus"): "polymer_corpus",
+    Path("tests/fixtures/archived_output_raw_data"): "archived_sources",
+    Path("tests/fixtures/rendering_profiles"): None,
+}
 
 
 def _issue(code: str, why: str, *, nodeid: str | None = None,
@@ -42,7 +49,8 @@ def _safe_fixture_identifier(value: object) -> Path | None:
     if not isinstance(value, str) or not value.strip():
         return None
     path = Path(value)
-    if path.is_absolute() or ".." in path.parts or path.parts[:3] != FIXTURE_PREFIX.parts:
+    if (path.is_absolute() or ".." in path.parts
+            or Path(*path.parts[:3]) not in FIXTURE_ROOTS):
         return None
     if len(path.parts) <= 3 or any(part in {"", "."} for part in path.parts):
         return None
@@ -59,9 +67,12 @@ def _within(path: Path, root: Path) -> bool:
 
 def _resolved_fixture(identifier: Path, repo_root: Path) -> Path | None:
     candidate = resolve_fixture_path(identifier, repo_root=repo_root)
-    tracked = repo_root / FIXTURE_PREFIX
-    local = local_reference_root(repo_root=repo_root) / "real_world"
-    return candidate if _within(candidate, tracked) or _within(candidate, local) else None
+    prefix = Path(*identifier.parts[:3])
+    local_name = FIXTURE_ROOTS[prefix]
+    roots = [repo_root / prefix]
+    if local_name is not None:
+        roots.append(local_reference_root(repo_root=repo_root) / local_name)
+    return candidate if any(_within(candidate, root) for root in roots) else None
 
 
 def _readable_nonempty_file(path: Path) -> bool:
@@ -123,7 +134,8 @@ def _load_inventory(path: Path) -> dict[str, Any]:
                         or dependency["kind"] not in {"file", "directory"}):
                     raise ValueError(f"unsafe or invalid path dependency for {nodeid}")
                 if "listed_sources" in dependency and (
-                    dependency["kind"] != "file" or dependency["listed_sources"] != "source_files"
+                    dependency["kind"] != "file"
+                    or dependency["listed_sources"] not in {"source_files", "profile_files"}
                 ):
                     raise ValueError(f"invalid listed_sources dependency for {nodeid}")
             else:
@@ -152,10 +164,17 @@ def _case_dependencies(case: dict[str, Any]) -> list[tuple[Path, str, str | None
 
 
 def _listed_source_issues(path: Path, identifier: Path, repo_root: Path,
-                          nodeid: str) -> list[dict[str, str]]:
+                          nodeid: str, listed_sources: str = "source_files",
+                          member_paths: list[str] | None = None) -> list[dict[str, str]]:
     try:
         provenance = json.loads(path.read_text(encoding="utf-8"))
-        records = provenance["source_files"]
+        if listed_sources == "profile_files":
+            files = provenance["files"]
+            if not isinstance(files, dict):
+                raise TypeError("profile files must be an object")
+            records = list(files.values())
+        else:
+            records = provenance["source_files"]
         if not isinstance(records, list) or not records:
             raise ValueError("source_files must be a nonempty list")
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
@@ -163,12 +182,15 @@ def _listed_source_issues(path: Path, identifier: Path, repo_root: Path,
                        nodeid=nodeid, path=identifier.as_posix())]
     issues: list[dict[str, str]] = []
     for record in records:
-        member = record.get("fixture_file") if isinstance(record, dict) else None
+        member_key = "path" if listed_sources == "profile_files" else "fixture_file"
+        member = record.get(member_key) if isinstance(record, dict) else None
         if not isinstance(member, str) or not member or Path(member).is_absolute() or ".." in Path(member).parts:
             issues.append(_issue("unsafe_source_member", f"invalid fixture_file: {member!r}",
                                  nodeid=nodeid, path=identifier.as_posix()))
             continue
         member_id = identifier.parent / member
+        if member_paths is not None:
+            member_paths.append(member_id.as_posix())
         try:
             resolved = _resolved_fixture(member_id, repo_root)
         except OSError as exc:
@@ -192,7 +214,8 @@ def _listed_source_issues(path: Path, identifier: Path, repo_root: Path,
 def private_corpus_preflight(*, repo_root: Path,
                              inventory_path: Path = INVENTORY,
                              selected_nodeids: list[str] | None = None,
-                             collected_nodeids: set[str] | None = None) -> dict[str, Any]:
+                             collected_nodeids: set[str] | None = None,
+                             access_audit_path: Path | None = None) -> dict[str, Any]:
     """Diagnose declared case inputs without claiming complete private acceptance."""
     issues: list[dict[str, str]] = []
     try:
@@ -213,6 +236,7 @@ def private_corpus_preflight(*, repo_root: Path,
     if len(set(selected)) != len(selected):
         issues.append(_issue("duplicate_selection", "selected node IDs contain duplicates"))
     rows: list[dict[str, Any]] = []
+    event_dependencies: dict[str, list[tuple[str, str]]] = {}
     for nodeid in dict.fromkeys(selected):
         case = cases.get(nodeid)
         if case is None:
@@ -225,8 +249,10 @@ def private_corpus_preflight(*, repo_root: Path,
             issues.append(_issue("invalid_dependency", str(exc), nodeid=nodeid))
             continue
         checked: list[dict[str, str]] = []
+        event_dependencies[nodeid] = []
         for identifier, kind, listed_sources in dependencies:
             relative = identifier.as_posix()
+            event_dependencies[nodeid].append((relative, kind))
             try:
                 resolved = _resolved_fixture(identifier, repo_root)
             except OSError as exc:
@@ -255,17 +281,29 @@ def private_corpus_preflight(*, repo_root: Path,
                 issues.append(_issue("missing_or_invalid_fixture", reason,
                                      nodeid=nodeid, path=relative))
             elif listed_sources:
-                issues.extend(_listed_source_issues(resolved, identifier, repo_root, nodeid))
+                members: list[str] = []
+                issues.extend(_listed_source_issues(
+                    resolved, identifier, repo_root, nodeid, listed_sources, members,
+                ))
+                event_dependencies[nodeid].extend((member, "file") for member in members)
         rows.append({"nodeid": nodeid, "evidence": case["evidence"],
                      "dependencies": checked})
     declared_present = not issues
-    if not inventory["inventory_complete"]:
+    complete = inventory["inventory_complete"]
+    if inventory.get("collection_audit") is not None or access_audit_path is not None:
+        complete, audit_issues = validate_access_audit(
+            inventory=inventory, inventory_path=inventory_path, repo_root=repo_root,
+            collected_nodeids=collected_nodeids, dependencies=event_dependencies,
+            access_audit_path=access_audit_path,
+        )
+        issues.extend(_issue(code, why, nodeid=nodeid) for code, why, nodeid in audit_issues)
+    if not complete:
         issues.append(_issue("inventory_incomplete",
                              "preliminary node-level mapping does not cover every private test or transitive source"))
     return {
         "kind": "sciplot_private_corpus_preflight", "version": 1, "gate": GATE,
         "status": "BLOCKED" if issues else "READY_FOR_SELECTED_TESTS",
-        "inventory_complete": inventory["inventory_complete"],
+        "inventory_complete": complete,
         "collection_verified": collected_nodeids is not None,
         "declared_inputs_status": "present" if declared_present else "blocked",
         "scientific_acceptance": False, "ordinary_runtime_required": False,
@@ -276,14 +314,13 @@ def private_corpus_preflight(*, repo_root: Path,
 def _collect_nodeids(repo_root: Path, inventory_path: Path) -> set[str]:
     if not inventory_path.is_file():
         raise ValueError("source-controlled private-corpus inventory is unavailable; run from a SciPlot source checkout")
-    inventory = _load_inventory(inventory_path)
-    modules = sorted({case["nodeid"].split("::", 1)[0] for case in inventory["cases"]})
+    _load_inventory(inventory_path)
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(
         (str(repo_root / "src"), str(repo_root / "tests"), env.get("PYTHONPATH", ""))
     )
     completed = subprocess.run(
-        [sys.executable, "-m", "pytest", "--collect-only", "-q", *modules],
+        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
         cwd=repo_root, env=env, capture_output=True, text=True, check=False,
         timeout=90,
     )
@@ -296,6 +333,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--nodeids-file", type=Path)
+    parser.add_argument("--access-audit", type=Path)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -305,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = private_corpus_preflight(
             repo_root=args.repo_root.resolve(), selected_nodeids=selected,
             collected_nodeids=collected,
+            access_audit_path=args.access_audit,
         )
     except (OSError, UnicodeError, TypeError, ValueError, subprocess.TimeoutExpired) as exc:
         payload = {"kind": "sciplot_private_corpus_preflight", "version": 1,

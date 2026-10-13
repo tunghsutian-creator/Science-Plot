@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -15,6 +16,11 @@ from sciplot_core.verification.private_corpus import (
     GATE,
     INVENTORY,
     private_corpus_preflight,
+)
+from sciplot_core.verification.private_corpus_audit import (
+    implementation_sources_sha256,
+    nodeids_sha256,
+    test_sources_sha256 as source_digest,
 )
 
 NODE = "tests/test_registered_single_curve_figure_plan.py::test_registered_paired_curve_directory_requires_exactly_one_supported_file[2]"
@@ -295,6 +301,7 @@ def test_preflight_files_have_changed_owner_and_focused_target() -> None:
     root = Path(__file__).resolve().parents[1]
     for path in (
         "src/sciplot_core/verification/private_corpus.py",
+        "src/sciplot_core/verification/private_corpus_audit.py",
         "src/sciplot_core/verification/private_corpus_inventory.json",
         "tests/test_private_corpus_preflight.py",
     ):
@@ -304,3 +311,79 @@ def test_preflight_files_have_changed_owner_and_focused_target() -> None:
         selected = next(check["command"] for check in plan["checks"]
                         if check["check_id"] == "pytest_changed_owners")
         assert "tests/test_private_corpus_preflight.py" in selected
+
+
+def _review_and_receipt(tmp_path: Path, inventory: Path) -> Path:
+    nodes = {NODE, PUBLIC_SIBLING}
+    payload = json.loads(inventory.read_text())
+    payload["collection_audit"] = {
+        "static_review_complete": True, "nodeid_count": len(nodes),
+        "nodeids_sha256": nodeids_sha256(nodes), "test_sources_sha256": source_digest(tmp_path),
+        "candidate_nodeids": sorted(nodes),
+        "synthetic_candidates": [{"nodeid": PUBLIC_SIBLING, "reason": "zero-copy branch"}],
+    }
+    inventory.write_text(json.dumps(payload))
+    path = tmp_path / "access-audit.json"
+    path.write_text(json.dumps({
+        "kind": "sciplot_private_corpus_access_audit", "version": 1,
+        "inventory_sha256": hashlib.sha256(inventory.read_bytes()).hexdigest(),
+        "test_sources_sha256": source_digest(tmp_path),
+        "implementation_sources_sha256": implementation_sources_sha256(tmp_path),
+        "capture_complete": True,
+        "capture_scope": ["python.open", "python.os.scandir", "python.os.listdir", "static.fixture_dependencies"],
+        "collected_nodeids": sorted(nodes), "executed_nodeids": sorted(nodes),
+        "events": [{"nodeid": NODE, "path": FIXTURE.as_posix(), "event": "open"}],
+    }))
+    return path
+
+
+@pytest.mark.parametrize("mutation", [
+    "none", "subset", "inventory_drift", "unmapped", "escape", "capture_incomplete",
+])
+def test_complete_inventory_requires_bound_full_access_evidence(
+    tmp_path: Path, mutation: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SCIPLOT_REFERENCE_DATA", str(tmp_path / "reference"))
+    source = tmp_path / "reference" / "real_world" / "uvvis_spectrum" / FIXTURE.name
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"mock structural input only")
+    inventory = _inventory(tmp_path, complete=False, dependencies=[{"rule_id": "uvvis_spectrum"}])
+    receipt_path = _review_and_receipt(tmp_path, inventory)
+    receipt = json.loads(receipt_path.read_text())
+    if mutation == "subset":
+        receipt["executed_nodeids"] = [NODE]
+    elif mutation == "inventory_drift":
+        receipt["inventory_sha256"] = "0" * 64
+    elif mutation == "unmapped":
+        receipt["events"][0]["nodeid"] = PUBLIC_SIBLING
+    elif mutation == "escape":
+        receipt["events"][0]["path"] = "tests/fixtures/real_world/../../outside.csv"
+    elif mutation == "capture_incomplete":
+        receipt["capture_complete"] = False
+    receipt_path.write_text(json.dumps(receipt))
+    result = private_corpus_preflight(
+        repo_root=tmp_path, inventory_path=inventory, collected_nodeids={NODE, PUBLIC_SIBLING},
+        access_audit_path=receipt_path,
+    )
+    assert (result["status"] == "READY_FOR_SELECTED_TESTS") is (mutation == "none")
+    assert result["scientific_acceptance"] is False
+
+
+def test_profile_manifest_members_are_checked_before_native_execution(tmp_path: Path) -> None:
+    relative = "tests/fixtures/rendering_profiles/profile/manifest.json"
+    manifest = tmp_path / relative
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"files": {"raw": {"path": "raw/data.csv", "sha256": "a" * 64}}}))
+    inventory = _inventory(tmp_path, complete=True, dependencies=[
+        {"path": relative, "kind": "file", "listed_sources": "profile_files"},
+    ])
+    missing = _run(tmp_path, inventory)
+    assert missing["issues"][0]["path"] == "tests/fixtures/rendering_profiles/profile/raw/data.csv"
+    (manifest.parent / "raw").mkdir()
+    (manifest.parent / "raw/data.csv").write_bytes(b"mock")
+    assert _run(tmp_path, inventory)["status"] == "READY_FOR_SELECTED_TESTS"
+    (manifest.parent / "raw/data.csv").unlink()
+    outside = tmp_path / "outside.csv"
+    outside.write_bytes(b"mock")
+    (manifest.parent / "raw/data.csv").symlink_to(outside)
+    assert _run(tmp_path, inventory)["status"] == "BLOCKED"
