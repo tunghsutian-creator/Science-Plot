@@ -3,7 +3,12 @@
 from pathlib import Path
 from typing import Any
 
-from sciplot_core.plot_document import apply_patch, seal_document, validate_document, validate_patch
+from sciplot_core.plot_document import (
+    apply_patch,
+    seal_document,
+    validate_document,
+    validate_patch,
+)
 from sciplot_core.studio_core.project_query import resolve_project_figure
 from sciplot_core.studio_core.project_query_paths import canonical_path
 from sciplot_core.studio_core.project_session import external_project_session
@@ -12,15 +17,27 @@ from .backend import PlotBackend
 from .cache_identity import build_key
 from .content_store import intern_document, referenced_files, verify_document_content
 from .current import changed_inputs, dependency_state, evidence_current, require_current
+from .description_scope import require_selector
 from .errors import EngineError
 from .execution import advance, replay
-from .storage import active, commit, digest, document_root, load_head, persist, read, reserve, transaction_path
+from .storage import (
+    active,
+    commit,
+    digest,
+    document_root,
+    load_head,
+    persist,
+    read,
+    reserve,
+    transaction_path,
+)
 
 
 class PlotService:
     def __init__(self, backend: PlotBackend | None = None) -> None:
         if backend is None:
             from sciplot_core.plot_backends.veusz import VeuszBackend
+
             from .backend_router import BackendRouter
 
             backend = BackendRouter(VeuszBackend())
@@ -31,14 +48,16 @@ class PlotService:
         if close is not None:
             close()
 
-    def open(self, target: Path, figure_id: str | None = None) -> dict[str, Any]:
-        return self._open(target, figure_id=figure_id)
+    def open(self, target: Path, figure_id: str | None = None, *,
+             description: dict[str, Any] | None = None) -> dict[str, Any]:
+        return self._open(target, figure_id=figure_id, description=require_selector(description))
 
     def open_created(self, target: Path, *, series_ids: dict[str, str], recipe: dict[str, Any],
                      figure_id: str | None = None) -> dict[str, Any]:
         return self._open(target, figure_id=figure_id, adoption=(series_ids, recipe))
 
     def _open(self, target: Path, *, figure_id: str | None,
+              description: dict[str, Any] | None = None,
               adoption: tuple[dict[str, str], dict[str, Any]] | None = None) -> dict[str, Any]:
         target = canonical_path(target)
         if (target / "head.json").is_file():
@@ -46,7 +65,7 @@ class PlotService:
                 from .adoption import require_adoption
 
                 require_adoption(load_head(target)["binding"], *adoption)
-            return self.describe(target)
+            return self.describe(target, description=description)
         selection = resolve_project_figure(target, figure_id)
         project = Path(selection["project"])
         selected_id = selection["figure_id"]
@@ -84,14 +103,15 @@ class PlotService:
                 from .adoption import require_adoption
 
                 require_adoption(load_head(root)["binding"], *adoption)
-            return self._describe(root)
+            return self._describe(root, description=description)
 
-    def describe(self, plot: Path) -> dict[str, Any]:
+    def describe(self, plot: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
+        description = require_selector(description)
         root = canonical_path(plot)
         with external_project_session(root):
-            return self._describe(root)
+            return self._describe(root, description=description)
 
-    def _describe(self, root: Path) -> dict[str, Any]:
+    def _describe(self, root: Path, *, description: dict[str, Any] | None = None) -> dict[str, Any]:
         head = load_head(root)
         document, binding = head["document"], head["binding"]
         changed = changed_inputs(self.backend, binding)
@@ -108,9 +128,12 @@ class PlotService:
         if document.get("plot_type") == "ManagedPlot":
             from .managed_description import describe_managed
 
-            return describe_managed(root, head, result, self.backend)
+            return describe_managed(root, head, result, self.backend, description=description)
         from .external_mutation import authority_status
 
+        if description is not None and description["scope"] == "edit":
+            raise EngineError("description_scope_unavailable", "Scoped edit contracts are available for ManagedPlot; use the full LegacyPlot description.",
+                              action="plot.describe")
         result["authority"] = authority_status("LegacyPlot")
         if changed and not result["pending"]:
             from .reimport import offer
@@ -147,8 +170,8 @@ class PlotService:
         binding = head["binding"]
         scientific_update = False
         if head["document"].get("plot_type") == "ManagedPlot":
-            from .managed_updates import prepare_update
             from .managed_state import scientific_binding
+            from .managed_updates import prepare_update
 
             document, diff, risk, scientific_update = prepare_update(head["document"], request)
             if scientific_update:
@@ -298,8 +321,8 @@ class PlotService:
             return render_head(root, head, self.backend)
 
     def create(self, request: dict[str, Any]) -> dict[str, Any]:
-        from .creation import create
         from .contracts import validate_create
+        from .creation import create
 
         request = validate_create(request)
         if "template_definition" in request and request.get("mode") != "legacy":

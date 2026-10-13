@@ -6,20 +6,31 @@ from typing import Any
 from sciplot_core.plot_document import build_keys, invalidated_nodes
 
 from .backend import PlotBackend
+from .errors import EngineError
 from .external_mutation import authority_status
 
 
-def describe_managed(root: Path, head: dict[str, Any], result: dict[str, Any], backend: PlotBackend) -> dict[str, Any]:
+def describe_managed(root: Path, head: dict[str, Any], result: dict[str, Any], backend: PlotBackend, *,
+                     description: dict[str, Any] | None = None) -> dict[str, Any]:
     document, binding = head["document"], head["binding"]
-    from sciplot_core.plot_ir.figure_document import is_figure, figure_spec, template_schema
     from sciplot_core.plot_backends.figure_plan import capability_profile
+    from sciplot_core.plot_ir.figure_document import (
+        figure_spec,
+        is_figure,
+        template_schema,
+    )
 
+    spec = None
     if is_figure(document):
-        from .figure_updates import patch_capabilities
+        spec = figure_spec(document)
+        if description is None:
+            from .figure_updates import patch_capabilities
 
-        result["figure_edit_contract"] = patch_capabilities(figure_spec(document))
-        result.update(figure_spec=figure_spec(document), figure_template_schema=template_schema(),
-                      backend_capabilities=capability_profile(), plot_ir_version=2)
+            result["figure_edit_contract"] = patch_capabilities(spec)
+            result.update(figure_spec=figure_spec(document), figure_template_schema=template_schema(),
+                          backend_capabilities=capability_profile(), plot_ir_version=2)
+        else:
+            result["plot_ir_version"] = 2
     changed = set(result["changed_inputs"])
     graph = binding["graph"]
     dirty = ["source:" + item["source_id"] for item in document["scientific"]["data_sources"] if item["path"] in changed]
@@ -67,4 +78,72 @@ def describe_managed(root: Path, head: dict[str, Any], result: dict[str, Any], b
                 result["next_step"]["value"] = builtin_executor()
             except OSError:
                 result["next_step"].update({"action": "restore_builtin_executor", "implementation_available": False})
+    if description is not None:
+        return _scoped_description(result, document, spec, description)
     return result
+
+
+def _scoped_description(result: dict[str, Any], document: dict[str, Any], spec: dict[str, Any] | None,
+                        description: dict[str, Any]) -> dict[str, Any]:
+    """Project only advertised edit state; keep every safety and currentness guard."""
+    kept = ("kind", "version", "status", "plot_type", "plot", "plot_id", "revision",
+            "scientific_hash", "presentation_hash", "coverage", "authority", "changed_inputs",
+            "pending", "ir_hash", "artifact", "artifact_status", "plot_ir_version",
+            "next_step", "external_mutation", "external_mutation_unavailable")
+    compact = {key: result[key] for key in kept if key in result}
+    compact["dependencies"] = {"invalidated": result["dependencies"]["invalidated"]}
+    objects = document["presentation"]["objects"]
+    if spec is not None:
+        from .figure_updates import patch_capabilities
+
+        contracts = patch_capabilities(spec)
+        property_names = {target: list(properties) for target, properties in contracts.items()}
+    else:
+        property_names = {target: list(obj["capabilities"]) for target, obj in objects.items()}
+    compact["description_scope"] = description["scope"]
+    if description["scope"] == "summary":
+        compact["edit_targets"] = {target: {"kind": objects[target]["kind"], "label": objects[target]["label"],
+                                            "properties": properties} for target, properties in property_names.items()}
+        if "next_step" not in compact and result["status"] == "current" and compact["pending"] is None and property_names:
+            compact["next_step"] = {"action": "plot.describe", "plot": result["plot"],
+                                    "description_scope": "edit", "choose_from": "edit_targets",
+                                    "requires": ["target", "property"]}
+        return compact
+
+    target, property_name = description["target"], description["property"]
+    if target not in property_names:
+        raise EngineError("description_unknown_target", "Choose an exact stable target ID from a current summary.",
+                          action="plot.describe", available_targets=list(property_names))
+    if property_name not in property_names[target]:
+        raise EngineError("description_unknown_property", "Choose a property advertised for this target in the current summary.",
+                          action="plot.describe", target=target, available_properties=property_names[target])
+    compact["edit_target"] = target
+    compact["edit_property"] = property_name
+    if spec is not None:
+        from .figure_updates import current_edit_value
+
+        descriptor = contracts[target][property_name]
+        compact["figure_edit_contract"] = {target: {property_name: descriptor}}
+        compact["current_value"] = current_edit_value(spec, target, property_name)
+        if property_name == "scale.domain":
+            scale = next(scale for scale in spec["scales"] if scale["id"] == target)
+            compact["target_context"] = {key: scale[key] for key in
+                                         ("dimension", "quantity", "unit", "transform", "direction")}
+        elif property_name in {"axis.ticks", "axis.label"}:
+            axis = next(axis for view in spec["views"] for axis in view["axes"] if axis["id"] == target)
+            scale = next(scale for scale in spec["scales"] if scale["id"] == axis["scale_id"])
+            compact["target_context"] = {"scale_id": scale["id"], **{key: scale[key] for key in
+                                         ("dimension", "quantity", "unit", "transform", "direction", "domain")}}
+        risk = descriptor["risk"]
+    else:
+        obj = objects[target]
+        descriptor = obj["capabilities"][property_name]
+        compact["object_edit_contract"] = {target: {property_name: descriptor}}
+        compact["current_value"] = obj["properties"][property_name]
+        risk = descriptor["risk"]
+    if "next_step" not in compact and result["status"] == "current" and compact["pending"] is None:
+        compact["next_step"] = {"action": "plot.patch", "plot": result["plot"], "plot_id": result["plot_id"],
+                                "base_revision": result["revision"], "intent_class": risk,
+                                "target": target, "property": property_name,
+                                "requires": ["authorized_value", "idempotency_key"]}
+    return compact
