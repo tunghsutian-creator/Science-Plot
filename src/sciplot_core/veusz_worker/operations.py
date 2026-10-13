@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+
 from sciplot_core.foundation.file_hashing import file_sha256
 from sciplot_core.terminal_source_binding_wire import (
     consume_terminal_source_binding_environment,
@@ -83,7 +84,9 @@ def audit_documents(document_paths: list[Path]) -> dict[str, Any]:
             app.quit()
 
 
-def inspect_document_state(document_path: Path) -> dict[str, Any]:
+def inspect_document_state(
+    document_path: Path, *, include_font_evidence: bool = False
+) -> dict[str, Any]:
     """Reopen exact saved state and advertise the shared safe setting subset."""
     from sciplot_core.native_settings import editable_fields
     from sciplot_core.veusz_worker.document_edit import loaded_native_document
@@ -102,13 +105,20 @@ def inspect_document_state(document_path: Path) -> dict[str, Any]:
             }
 
         loaded_document.walkNodes(collect, nodetypes=("widget",))
+        if include_font_evidence:
+            from sciplot_core.veusz_worker.font_evidence import collect_font_preflight
+
+            font_evidence = collect_font_preflight(loaded_document, materialized_widgets)
     if file_sha256(resolved_document) != before:
         raise ValueError("The source document changed during native inspection.")
-    return {
+    result = {
         "kind": "sciplot_veusz_document_state", "version": 1, "status": "passed",
         "document": {"path": str(resolved_document), "sha256": before},
         "widgets": materialized_widgets, "widget_count": len(materialized_widgets),
     }
+    if include_font_evidence:
+        result["font_evidence"] = font_evidence
+    return result
 
 
 def migrate_unit_labels(document_path: Path) -> dict[str, Any]:
