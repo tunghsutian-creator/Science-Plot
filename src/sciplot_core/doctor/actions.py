@@ -19,10 +19,21 @@ def _next_actions(required_failures: list[dict[str, Any]]) -> list[str]:
     if "veusz_vendor" in failed_ids:
         actions.append("Restore the vendored Veusz source tree.")
     if "veusz_qt_runtime" in failed_ids:
-        actions.append(
-            "Build the vendored Veusz qtloops helper for this Python/PyQt6/Qt runtime; "
-            "check the optional Qt 6 qmake, sip-build, and C++ source-build diagnostics."
+        runtime_detail = next(
+            str(check.get("detail") or "")
+            for check in required_failures
+            if check["id"] == "veusz_qt_runtime"
         )
+        if runtime_detail.startswith("PyQt6/Qt runtime cannot load"):
+            actions.append(
+                "Repair the PyQt6/Qt runtime shared-library load in this Python "
+                "environment before checking or rebuilding Veusz qtloops."
+            )
+        elif runtime_detail != "PyQt6 is not importable.":
+            actions.append(
+                "Build the vendored Veusz qtloops helper for this Python/PyQt6/Qt runtime; "
+                "check the optional Qt 6 qmake, sip-build, and C++ source-build diagnostics."
+            )
     if "python_version" in failed_ids:
         actions.append("Use Python 3.11 or newer.")
     if "ready_rules" in failed_ids:

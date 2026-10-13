@@ -262,6 +262,9 @@ def test_doctor_does_not_mislabel_pyqt_load_failure_as_missing_qtloops(
     assert ok is False
     assert "PyQt6/Qt runtime cannot load" in detail
     assert "qtloops" not in detail
+    actions = _next_actions([{"id": "veusz_qt_runtime", "detail": detail}])
+    assert any("Repair the PyQt6/Qt runtime" in action for action in actions)
+    assert not any("Build the vendored Veusz" in action for action in actions)
 
 
 def test_doctor_source_build_check_requires_working_qt6_tools(

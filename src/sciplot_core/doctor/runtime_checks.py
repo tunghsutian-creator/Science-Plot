@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-import importlib.machinery
 import importlib.util
 import os
 import shutil
@@ -50,8 +49,10 @@ def _veusz_qt_runtime_status() -> tuple[bool, str]:
         from veusz.helpers import qtloops  # noqa: F401
     except Exception as exc:  # noqa: BLE001 - Doctor must report any native-load failure.
         helper = VEUSZ_ROOT / "veusz" / "helpers" / "qtloops"
-        suffixes = importlib.machinery.EXTENSION_SUFFIXES
-        built = any(helper.with_name(helper.name + suffix).is_file() for suffix in suffixes)
+        built = any(
+            candidate.is_file() and candidate.suffix in {".so", ".pyd"}
+            for candidate in helper.parent.glob("qtloops*")
+        )
         if not built:
             return False, (
                 f"Vendored Veusz qtloops compiled helper is absent under {helper.parent}; "
