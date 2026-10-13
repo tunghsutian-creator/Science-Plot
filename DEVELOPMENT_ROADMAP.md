@@ -28,6 +28,12 @@ Implemented on the local integration branch, not yet published or released:
   UTF-8 bytes from re-encoded MCP/RPC result bytes and retains three warm
   same-operation RPC observations. No cross-transport or before/after speedup
   is inferred from them.
+- The saved-figure AI entry now chooses the compact summary first for a
+  previously identified ManagedPlot, then the exact selected edit contract or
+  literal typed text-intent plan. Unknown authority and LegacyPlot still start
+  with the full response. A fixture-scoped MCP serialization comparison is
+  recorded separately from the unchanged full tool-definition payload; it is
+  not external-client token, cost or end-to-end latency evidence.
 - An opt-in `plot.intent` route now resolves only Managed FigureSpec v2 axis
   labels and annotation text from an exact stable ID or unique current label.
   Its plan shows the literal before/after value and unit or anchor context;
@@ -42,6 +48,17 @@ Implemented on the local integration branch, not yet published or released:
   original full description still follows its prior inspection path. This is
   an explanation of current evidence, not a second scheduler or a guaranteed
   future execution plan.
+- The local Doctor now distinguishes missing or unloadable vendored Qt helpers,
+  optional source-build tools, unavailable AF_UNIX transport and the separate
+  optional private acceptance corpus. It diagnoses this cloud runner's blockers;
+  it does not provision dependencies, create substitute data or skip failed
+  tests. The ordinary runtime does not require the private corpus.
+- An opt-in native-document font preflight records saved requested settings
+  and a specifically qualified Qt screen-font match. The painter-used face,
+  glyph fallback and resolved font-file bytes remain unobserved, so cross-host
+  rendering portability is unestablished. Default inspection, cache/build
+  identities and scientific state remain unchanged; this environment cannot
+  execute the full native Qt path.
 
 Verification still open: the current cloud sandbox lacks compiled vendored
 Veusz Qt helpers and denies AF_UNIX sockets, so native workflow/socket tests and
@@ -66,8 +83,9 @@ owners rather than another grammar, cache or renderer:
    before claiming predictive accuracy. [DVC status](https://doc.dvc.org/command-reference/status)
    and [repro](https://doc.dvc.org/command-reference/repro) are UX references,
    not a second SciPlot scheduler.
-3. Record the resolved font-file identity where the native runtime can prove
-   it, leaving unobserved identity explicitly unknown. [Matplotlib's font
+3. The opt-in screen-font preflight above is partial identity evidence. Record
+   the font face/file actually used by native painting only where the runtime
+   can prove it, leaving unresolved identity explicitly unknown. [Matplotlib's font
    manager](https://matplotlib.org/stable/api/font_manager_api.html) illustrates
    why a family name alone is not portability evidence. Exit only after
    cross-environment visual and resource-identity checks.
